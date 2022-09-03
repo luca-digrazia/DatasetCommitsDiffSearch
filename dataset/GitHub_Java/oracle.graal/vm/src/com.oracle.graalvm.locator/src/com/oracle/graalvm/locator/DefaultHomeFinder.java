@@ -367,16 +367,13 @@ public final class DefaultHomeFinder extends HomeFinder {
     private static Path getGraalVMHomeFromLanguageHome(Path languageHome) {
         // jre/<languages_or_tools>/<comp_id>
         Path languagesOrTools = languageHome.getParent();
-        String languagesOrToolsString = languagesOrTools != null ? getFileName(languagesOrTools) : null;
-        if (!"languages".equals(languagesOrToolsString) && !"tools".equals(languagesOrToolsString)) {
+        String languagesOrToolsString = languagesOrTools.getFileName().toString();
+        if (!languagesOrToolsString.equals("languages") && !languagesOrToolsString.equals("tools")) {
             return null;
         }
         Path jreOrJdk = languagesOrTools.getParent();
-        if (jreOrJdk == null) {
-            return null;
-        }
         Path home;
-        if ("jre".equals(getFileName(jreOrJdk))) {
+        if (jreOrJdk.getFileName().toString().equals("jre")) {
             home = jreOrJdk.getParent();
         } else {
             home = jreOrJdk;
@@ -392,12 +389,12 @@ public final class DefaultHomeFinder extends HomeFinder {
      */
     private static Path getGraalVmHomeFallBack(Path executable) {
         Path bin = executable.getParent();
-        if (!"bin".equals(getFileName(bin))) {
+        if (!bin.getFileName().toString().equals("bin")) {
             return null;
         }
         Path jreOrJdk = bin.getParent();
         Path home;
-        if (jreOrJdk != null && "jre".equals(getFileName(jreOrJdk))) {
+        if (jreOrJdk != null && jreOrJdk.getFileName().toString().equals("jre")) {
             home = jreOrJdk.getParent();
         } else if (jreOrJdk != null) {
             if (isJdkHome(jreOrJdk)) {
@@ -405,9 +402,9 @@ public final class DefaultHomeFinder extends HomeFinder {
             } else {
                 // maybe we are in the language home?
                 Path languages = jreOrJdk.getParent();
-                if (languages != null && "languages".equals(getFileName(languages))) {
+                if (languages != null && languages.getFileName().toString().equals("languages")) {
                     Path jre = languages.getParent();
-                    if (jre != null && "jre".equals(getFileName(jre))) {
+                    if (jre != null && jre.getFileName().toString().equals("jre")) {
                         home = jre.getParent();
                     } else {
                         home = null;
@@ -434,17 +431,17 @@ public final class DefaultHomeFinder extends HomeFinder {
     private static Path getGraalVmHomeLibPolyglotFallBack(Path objectFile) {
         // <home>/jre/lib/polyglot/libpolyglot.so
         Path parent = objectFile.getParent();
-        if (parent == null || !"polyglot".equals(getFileName(parent))) {
+        if (parent == null || !parent.getFileName().toString().equals("polyglot")) {
             return null;
         }
         parent = parent.getParent();
-        if (parent == null || !"lib".equals(getFileName(parent))) {
+        if (parent == null || !parent.getFileName().toString().equals("lib")) {
             return null;
         }
         Path home = null;
         Path jreOrJdk = parent.getParent();
         if (jreOrJdk != null) {
-            if ("jre".equals(getFileName(jreOrJdk))) {
+            if (jreOrJdk.getFileName().toString().equals("jre")) {
                 home = jreOrJdk.getParent();
             } else {
                 home = jreOrJdk;
@@ -486,11 +483,6 @@ public final class DefaultHomeFinder extends HomeFinder {
 
     private static Path getCurrentExecutablePath() {
         return Paths.get(ProcessProperties.getExecutableName());
-    }
-
-    private static String getFileName(Path path) {
-        Path fileName = path.getFileName();
-        return fileName == null ? null : fileName.toString();
     }
 
     private boolean isVerbose() {
