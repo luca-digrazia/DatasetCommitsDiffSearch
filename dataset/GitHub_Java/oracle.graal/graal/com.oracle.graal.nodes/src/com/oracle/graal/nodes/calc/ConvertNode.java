@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -54,17 +54,6 @@ public interface ConvertNode extends ArithmeticOperation, NodeInterface {
      */
     default boolean preservesOrder(Condition op) {
         return isLossless();
-    }
-
-    /**
-     * Check whether a conversion preserves comparison order against a particular constant value.
-     *
-     * @param op a comparison operator
-     * @param value
-     * @return true iff (c1 op value) == (convert(c1) op convert(value)) for value and all c1
-     */
-    default boolean preservesOrder(Condition op, Constant value) {
-        return preservesOrder(op);
     }
 
     ValueNode asNode();

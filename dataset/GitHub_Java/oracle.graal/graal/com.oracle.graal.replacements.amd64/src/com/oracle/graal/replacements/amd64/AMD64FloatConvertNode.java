@@ -41,7 +41,11 @@ public class AMD64FloatConvertNode extends UnaryArithmeticNode<FloatConvertOp> i
 
     protected final FloatConvert op;
 
-    public AMD64FloatConvertNode(FloatConvert op, ValueNode value) {
+    public static AMD64FloatConvertNode create(FloatConvert op, ValueNode value) {
+        return USE_GENERATED_NODES ? new AMD64FloatConvertNodeGen(op, value) : new AMD64FloatConvertNode(op, value);
+    }
+
+    protected AMD64FloatConvertNode(FloatConvert op, ValueNode value) {
         super(table -> table.getFloatConvert(op), value);
         this.op = op;
     }

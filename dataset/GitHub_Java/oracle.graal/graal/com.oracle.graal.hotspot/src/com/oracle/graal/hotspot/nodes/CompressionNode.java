@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,7 +42,7 @@ import com.oracle.graal.nodes.type.*;
 @NodeInfo(nameTemplate = "{p#op/s}")
 public class CompressionNode extends UnaryNode implements ConvertNode, LIRLowerable {
 
-    public enum CompressionOp {
+    enum CompressionOp {
         Compress,
         Uncompress
     }
@@ -51,7 +51,7 @@ public class CompressionNode extends UnaryNode implements ConvertNode, LIRLowera
     protected final CompressEncoding encoding;
 
     public static CompressionNode create(CompressionOp op, ValueNode input, CompressEncoding encoding) {
-        return new CompressionNode(op, input, encoding);
+        return USE_GENERATED_NODES ? new CompressionNodeGen(op, input, encoding) : new CompressionNode(op, input, encoding);
     }
 
     protected CompressionNode(CompressionOp op, ValueNode input, CompressEncoding encoding) {
@@ -74,13 +74,13 @@ public class CompressionNode extends UnaryNode implements ConvertNode, LIRLowera
     }
 
     private static Constant compress(Constant c, CompressEncoding encoding) {
-        if (JavaConstant.NULL_OBJECT.equals(c)) {
+        if (Constant.NULL_OBJECT.equals(c)) {
             return HotSpotCompressedNullConstant.COMPRESSED_NULL;
         } else if (c instanceof HotSpotObjectConstant) {
             return ((HotSpotObjectConstant) c).compress();
         } else if (c instanceof HotSpotMetaspaceConstant) {
-            assert ((HotSpotMetaspaceConstant) c).getKind() == Kind.Long;
-            return ((HotSpotMetaspaceConstant) c).compress(encoding);
+            assert c.getKind() == Kind.Long;
+            return HotSpotMetaspaceConstant.forMetaspaceObject(Kind.Int, encoding.compress(c.asLong()), HotSpotMetaspaceConstant.getMetaspaceObject(c));
         } else {
             throw GraalInternalError.shouldNotReachHere("invalid constant input for compress op: " + c);
         }
@@ -88,12 +88,12 @@ public class CompressionNode extends UnaryNode implements ConvertNode, LIRLowera
 
     private static Constant uncompress(Constant c, CompressEncoding encoding) {
         if (HotSpotCompressedNullConstant.COMPRESSED_NULL.equals(c)) {
-            return JavaConstant.NULL_OBJECT;
+            return Constant.NULL_OBJECT;
         } else if (c instanceof HotSpotObjectConstant) {
             return ((HotSpotObjectConstant) c).uncompress();
         } else if (c instanceof HotSpotMetaspaceConstant) {
-            assert ((HotSpotMetaspaceConstant) c).getKind() == Kind.Int;
-            return ((HotSpotMetaspaceConstant) c).uncompress(encoding);
+            assert c.getKind() == Kind.Int;
+            return HotSpotMetaspaceConstant.forMetaspaceObject(Kind.Long, encoding.uncompress(c.asInt()), HotSpotMetaspaceConstant.getMetaspaceObject(c));
         } else {
             throw GraalInternalError.shouldNotReachHere("invalid constant input for uncompress op: " + c);
         }
@@ -162,7 +162,7 @@ public class CompressionNode extends UnaryNode implements ConvertNode, LIRLowera
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
         if (forValue.isConstant()) {
-            return ConstantNode.forConstant(stamp(), convert(forValue.asJavaConstant()), tool.getMetaAccess());
+            return ConstantNode.forConstant(stamp(), convert(forValue.asConstant()), tool.getMetaAccess());
         } else if (forValue instanceof CompressionNode) {
             CompressionNode other = (CompressionNode) forValue;
             if (op != other.op && encoding.equals(other.encoding)) {
@@ -196,7 +196,4 @@ public class CompressionNode extends UnaryNode implements ConvertNode, LIRLowera
         }
         gen.setResult(this, result);
     }
-
-    @NodeIntrinsic
-    public static native Object compression(@ConstantNodeParameter CompressionOp op, Object object, @ConstantNodeParameter CompressEncoding encoding);
 }

@@ -47,7 +47,7 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
 
     protected final BinaryOp<OP> getOp(ValueNode forX, ValueNode forY) {
         ArithmeticOpTable table = ArithmeticOpTable.forStamp(forX.stamp());
-        assert table.toString().equals(ArithmeticOpTable.forStamp(forY.stamp()).toString());
+        assert table == ArithmeticOpTable.forStamp(forY.stamp());
         return getOp.apply(table);
     }
 

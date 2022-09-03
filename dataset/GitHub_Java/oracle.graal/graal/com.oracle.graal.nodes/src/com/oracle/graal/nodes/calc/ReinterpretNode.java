@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import java.nio.*;
-
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
@@ -41,7 +40,7 @@ import com.oracle.graal.nodes.spi.*;
 public class ReinterpretNode extends UnaryNode implements ArithmeticLIRLowerable {
 
     public static ReinterpretNode create(Kind to, ValueNode value) {
-        return new ReinterpretNode(to, value);
+        return USE_GENERATED_NODES ? new ReinterpretNodeGen(to, value) : new ReinterpretNode(to, value);
     }
 
     protected ReinterpretNode(Kind to, ValueNode value) {
@@ -49,32 +48,49 @@ public class ReinterpretNode extends UnaryNode implements ArithmeticLIRLowerable
     }
 
     public static ReinterpretNode create(Stamp to, ValueNode value) {
-        return new ReinterpretNode(to, value);
+        return USE_GENERATED_NODES ? new ReinterpretNodeGen(to, value) : new ReinterpretNode(to, value);
     }
 
     protected ReinterpretNode(Stamp to, ValueNode value) {
         super(to, value);
-        assert to instanceof ArithmeticStamp;
+        assert to instanceof PrimitiveStamp;
     }
 
-    private SerializableConstant evalConst(SerializableConstant c) {
-        /*
-         * We don't care about byte order here. Either would produce the correct result.
-         */
-        ByteBuffer buffer = ByteBuffer.wrap(new byte[c.getSerializedSize()]).order(ByteOrder.nativeOrder());
-        c.serialize(buffer);
-
-        buffer.rewind();
-        SerializableConstant ret = ((ArithmeticStamp) stamp()).deserialize(buffer);
-
-        assert !buffer.hasRemaining();
-        return ret;
+    private Constant evalConst(Constant c) {
+        assert c.getKind().getBitCount() == ((PrimitiveStamp) stamp()).getBits();
+        switch (c.getKind()) {
+            case Int:
+                if (stamp() instanceof FloatStamp) {
+                    return Constant.forFloat(Float.intBitsToFloat(c.asInt()));
+                } else {
+                    return c;
+                }
+            case Long:
+                if (stamp() instanceof FloatStamp) {
+                    return Constant.forDouble(Double.longBitsToDouble(c.asLong()));
+                } else {
+                    return c;
+                }
+            case Float:
+                if (stamp() instanceof IntegerStamp) {
+                    return Constant.forInt(Float.floatToRawIntBits(c.asFloat()));
+                } else {
+                    return c;
+                }
+            case Double:
+                if (stamp() instanceof IntegerStamp) {
+                    return Constant.forLong(Double.doubleToRawLongBits(c.asDouble()));
+                } else {
+                    return c;
+                }
+        }
+        throw GraalInternalError.shouldNotReachHere();
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
         if (forValue.isConstant()) {
-            return ConstantNode.forConstant(stamp(), evalConst((SerializableConstant) forValue.asConstant()), null);
+            return ConstantNode.forConstant(evalConst(forValue.asConstant()), null);
         }
         if (stamp().isCompatible(forValue.stamp())) {
             return forValue;

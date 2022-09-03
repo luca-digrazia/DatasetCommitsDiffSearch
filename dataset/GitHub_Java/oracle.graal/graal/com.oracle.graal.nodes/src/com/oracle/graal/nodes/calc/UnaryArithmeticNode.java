@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,10 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import java.io.*;
 import java.util.function.*;
 
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.UnaryOp;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -36,15 +34,10 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public abstract class UnaryArithmeticNode<OP> extends UnaryNode implements ArithmeticLIRLowerable {
 
-    public static final NodeClass TYPE = NodeClass.get(UnaryArithmeticNode.class);
+    protected final Function<ArithmeticOpTable, UnaryOp<OP>> getOp;
 
-    protected interface SerializableUnaryFunction<T> extends Function<ArithmeticOpTable, UnaryOp<T>>, Serializable {
-    }
-
-    protected final SerializableUnaryFunction<OP> getOp;
-
-    protected UnaryArithmeticNode(NodeClass c, SerializableUnaryFunction<OP> getOp, ValueNode value) {
-        super(c, getOp.apply(ArithmeticOpTable.forStamp(value.stamp())).foldStamp(value.stamp()), value);
+    protected UnaryArithmeticNode(Function<ArithmeticOpTable, UnaryOp<OP>> getOp, ValueNode value) {
+        super(getOp.apply(ArithmeticOpTable.forStamp(value.stamp())).foldStamp(value.stamp()), value);
         this.getOp = getOp;
     }
 
@@ -59,17 +52,9 @@ public abstract class UnaryArithmeticNode<OP> extends UnaryNode implements Arith
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        ValueNode synonym = findSynonym(forValue, getOp(forValue));
-        if (synonym != null) {
-            return synonym;
+        if (forValue.isConstant()) {
+            return ConstantNode.forPrimitive(stamp(), getOp(forValue).foldConstant(forValue.asConstant()));
         }
         return this;
-    }
-
-    protected static <OP> ValueNode findSynonym(ValueNode forValue, UnaryOp<OP> op) {
-        if (forValue.isConstant()) {
-            return ConstantNode.forPrimitive(op.foldStamp(forValue.stamp()), op.foldConstant(forValue.asConstant()));
-        }
-        return null;
     }
 }

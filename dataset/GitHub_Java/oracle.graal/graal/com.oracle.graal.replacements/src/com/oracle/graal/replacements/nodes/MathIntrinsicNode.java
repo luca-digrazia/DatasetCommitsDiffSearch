@@ -38,6 +38,8 @@ public class MathIntrinsicNode extends UnaryNode implements ArithmeticLIRLowerab
     protected final Operation operation;
 
     public enum Operation {
+        ABS,
+        SQRT,
         LOG,
         LOG10,
         SIN,
@@ -50,7 +52,7 @@ public class MathIntrinsicNode extends UnaryNode implements ArithmeticLIRLowerab
     }
 
     public static MathIntrinsicNode create(ValueNode value, Operation op) {
-        return new MathIntrinsicNode(value, op);
+        return USE_GENERATED_NODES ? new MathIntrinsicNodeGen(value, op) : new MathIntrinsicNode(value, op);
     }
 
     protected MathIntrinsicNode(ValueNode value, Operation op) {
@@ -64,6 +66,12 @@ public class MathIntrinsicNode extends UnaryNode implements ArithmeticLIRLowerab
         Value input = builder.operand(getValue());
         Value result;
         switch (operation()) {
+            case ABS:
+                result = gen.emitMathAbs(input);
+                break;
+            case SQRT:
+                result = gen.emitMathSqrt(input);
+                break;
             case LOG:
                 result = gen.emitMathLog(input, false);
                 break;
@@ -88,7 +96,7 @@ public class MathIntrinsicNode extends UnaryNode implements ArithmeticLIRLowerab
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
         if (forValue.isConstant()) {
-            double ret = doCompute(forValue.asJavaConstant().asDouble(), operation());
+            double ret = doCompute(forValue.asConstant().asDouble(), operation());
             return ConstantNode.forDouble(ret);
         }
         return this;
@@ -101,6 +109,10 @@ public class MathIntrinsicNode extends UnaryNode implements ArithmeticLIRLowerab
 
     private static double doCompute(double value, Operation op) {
         switch (op) {
+            case ABS:
+                return Math.abs(value);
+            case SQRT:
+                return Math.sqrt(value);
             case LOG:
                 return Math.log(value);
             case LOG10:
