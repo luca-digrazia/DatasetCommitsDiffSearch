@@ -26,14 +26,16 @@ import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.graph.*;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
+import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
+import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * The {@code ArrayLength} instruction gets the length of an array.
  */
-public final class ArrayLength extends FloatingNode implements Node.GlobalValueNumberable {
+public final class ArrayLength extends FloatingNode {
     private static final ArrayLengthCanonicalizerOp CANONICALIZER = new ArrayLengthCanonicalizerOp();
 
     @Input    private Value array;
@@ -60,6 +62,16 @@ public final class ArrayLength extends FloatingNode implements Node.GlobalValueN
     @Override
     public void accept(ValueVisitor v) {
         v.visitArrayLength(this);
+    }
+
+    @Override
+    public int valueNumber() {
+        return Util.hash1(Bytecodes.ARRAYLENGTH, array());
+    }
+
+    @Override
+    public boolean valueEqual(Node i) {
+        return i instanceof ArrayLength;
     }
 
     @Override

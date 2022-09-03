@@ -25,13 +25,15 @@ package com.oracle.max.graal.compiler.ir;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
+import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
+import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 
 /**
  * The {@code NegateOp} instruction negates its operand.
  */
-public final class Negate extends FloatingNode implements Node.GlobalValueNumberable {
+public final class Negate extends FloatingNode {
     private static final NegateCanonicalizerOp CANONICALIZER = new NegateCanonicalizerOp();
 
     @Input    private Value x;
@@ -62,6 +64,20 @@ public final class Negate extends FloatingNode implements Node.GlobalValueNumber
     @Override
     public void accept(ValueVisitor v) {
         v.visitNegate(this);
+    }
+
+    @Override
+    public int valueNumber() {
+        return Util.hash1(Bytecodes.INEG, x());
+    }
+
+    @Override
+    public boolean valueEqual(Node i) {
+        if (i instanceof Negate) {
+            Negate o = (Negate) i;
+            return x() == o.x();
+        }
+        return false;
     }
 
     @Override

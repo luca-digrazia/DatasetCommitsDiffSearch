@@ -56,4 +56,11 @@ public final class ValueAnchor extends FixedNodeWithNext {
     public void print(LogStream out) {
         out.print("value_anchor ").print(object());
     }
+
+    @Override
+    public Node copy(Graph into) {
+        ValueAnchor x = new ValueAnchor(null, into);
+        super.copyInto(x);
+        return x;
+    }
 }

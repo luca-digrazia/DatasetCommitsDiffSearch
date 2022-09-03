@@ -92,4 +92,11 @@ public final class Anchor extends FixedNodeWithNext {
             }
         };
     }
+
+    @Override
+    public Node copy(Graph into) {
+        Anchor x = new Anchor(into);
+        super.copyInto(x);
+        return x;
+    }
 }

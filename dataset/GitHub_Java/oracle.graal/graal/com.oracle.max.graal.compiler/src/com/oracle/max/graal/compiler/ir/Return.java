@@ -71,4 +71,11 @@ public final class Return extends FixedNode {
             out.print(kind.typeChar).print("return ").print(result());
         }
     }
+
+    @Override
+    public Node copy(Graph into) {
+        Return x = new Return(kind, into);
+        super.copyInto(x);
+        return x;
+    }
 }

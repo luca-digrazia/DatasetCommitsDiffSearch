@@ -81,4 +81,9 @@ public final class LoopCounter extends FloatingNode {
 
     }
 
+    @Override
+    public Node copy(Graph into) {
+        return new LoopCounter(kind, null, null, null, into);
+    }
+
 }

@@ -37,7 +37,7 @@ import com.sun.cri.ci.*;
  */
 public class Merge extends StateSplit{
 
-    @Input    private final NodeInputList<EndNode> ends = new NodeInputList<EndNode>(this);
+    @Input    private final NodeInputList<Node> ends = new NodeInputList<Node>(this);
 
     public Merge(Graph graph) {
         super(CiKind.Illegal, graph);
@@ -66,16 +66,31 @@ public class Merge extends StateSplit{
     }
 
     public EndNode endAt(int index) {
-        return ends.get(index);
-    }
-
-    public Iterable<? extends Node> phiPredecessors() {
-        return ends;
+        return (EndNode) ends.get(index);
     }
 
     @Override
     public Iterable<EndNode> cfgPredecessors() {
-        return ends;
+        return new Iterable<EndNode>() {
+            @Override
+            public Iterator<EndNode> iterator() {
+                return new Iterator<EndNode>() {
+                    int i = 0;
+                    @Override
+                    public void remove() {
+                        throw new UnsupportedOperationException();
+                    }
+                    @Override
+                    public EndNode next() {
+                        return Merge.this.endAt(i++);
+                    }
+                    @Override
+                    public boolean hasNext() {
+                        return i < Merge.this.endCount();
+                    }
+                };
+            }
+        };
     }
 
     @Override
@@ -300,5 +315,9 @@ public class Merge extends StateSplit{
 
     public Collection<Phi> phis() {
         return Util.filter(this.usages(), Phi.class);
+    }
+
+    public Iterable<Node> phiPredecessors() {
+        return ends;
     }
 }

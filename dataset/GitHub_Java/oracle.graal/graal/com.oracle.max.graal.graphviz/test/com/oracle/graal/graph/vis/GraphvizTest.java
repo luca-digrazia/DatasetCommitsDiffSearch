@@ -99,6 +99,11 @@ public class GraphvizTest {
             successors.set(idx, n);
         }
 
+        @Override
+        public Node copy(Graph into) {
+            return new DummyNode(name, inputs.size(), successors.size(), into);
+        }
+
         private final String name;
 
         @Override

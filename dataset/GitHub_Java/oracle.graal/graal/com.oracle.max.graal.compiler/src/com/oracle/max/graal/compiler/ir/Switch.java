@@ -32,30 +32,15 @@ import com.sun.cri.ci.*;
  */
 public abstract class Switch extends ControlSplit {
 
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_VALUE = 0;
+    @Input    private Value value;
 
-    private static final int SUCCESSOR_COUNT = 0;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public Value value() {
+        return value;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
-    }
-
-    /**
-     * The instruction that provides the input value to this switch.
-     */
-     public Value value() {
-        return (Value) inputs().get(super.inputCount() + INPUT_VALUE);
-    }
-
-    public Value setValue(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_VALUE, n);
+    public void setValue(Value x) {
+        updateUsages(value, x);
+        value = x;
     }
 
     /**
@@ -65,8 +50,8 @@ public abstract class Switch extends ControlSplit {
      * @param stateAfter the state after the switch
      * @param graph
      */
-    public Switch(Value value, List<? extends FixedNode> successors, int inputCount, int successorCount, Graph graph) {
-        super(CiKind.Illegal, successors, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
+    public Switch(Value value, List<? extends FixedNode> successors, double[] probability, int inputCount, int successorCount, Graph graph) {
+        super(CiKind.Illegal, successors, probability, graph);
         setValue(value);
     }
 

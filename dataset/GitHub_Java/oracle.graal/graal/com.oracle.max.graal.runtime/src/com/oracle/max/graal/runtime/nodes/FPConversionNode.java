@@ -31,7 +31,7 @@ import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
 
-public final class FPConversionNode extends FloatingNode implements Node.GlobalValueNumberable {
+public final class FPConversionNode extends FloatingNode {
     @Input private Value value;
 
     public Value value() {
@@ -59,6 +59,11 @@ public final class FPConversionNode extends FloatingNode implements Node.GlobalV
             return (T) CANON;
         }
         return super.lookup(clazz);
+    }
+
+    @Override
+    public boolean valueEqual(Node i) {
+        return i instanceof FPConversionNode && ((FPConversionNode) i).kind == kind;
     }
 
     @Override

@@ -110,4 +110,11 @@ public final class RegisterFinalizer extends StateSplit {
     public void print(LogStream out) {
         out.print("register finalizer ").print(object());
     }
+
+    @Override
+    public Node copy(Graph into) {
+        RegisterFinalizer x = new RegisterFinalizer(null, into);
+        super.copyInto(x);
+        return x;
+    }
 }

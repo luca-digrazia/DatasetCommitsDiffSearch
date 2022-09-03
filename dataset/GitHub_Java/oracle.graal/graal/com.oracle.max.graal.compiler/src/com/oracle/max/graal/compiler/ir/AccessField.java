@@ -23,6 +23,7 @@
 package com.oracle.max.graal.compiler.ir;
 
 import java.lang.reflect.*;
+import java.util.*;
 
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
@@ -33,30 +34,15 @@ import com.sun.cri.ri.*;
  */
 public abstract class AccessField extends StateSplit {
 
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_OBJECT = 0;
+    @Input    private Value object;
 
-    private static final int SUCCESSOR_COUNT = 0;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public Value object() {
+        return object;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
-    }
-
-    /**
-     * The instruction that produces the receiver object of this field access (for instance field accesses).
-     */
-     public Value object() {
-        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
-    }
-
-    public Value setObject(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_OBJECT, n);
+    public void setObject(Value x) {
+        updateUsages(object, x);
+        object = x;
     }
 
     protected final RiField field;
@@ -66,14 +52,14 @@ public abstract class AccessField extends StateSplit {
      * @param kind the result kind of the access
      * @param object the instruction producing the receiver object
      * @param field the compiler interface representation of the field
-     * @param inputCount
-     * @param successorCount
      * @param graph
      */
-    public AccessField(CiKind kind, Value object, RiField field, int inputCount, int successorCount, Graph graph) {
-        super(kind, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
+    public AccessField(CiKind kind, Value object, RiField field, Graph graph) {
+        super(kind, graph);
         this.field = field;
         setObject(object);
+        assert field.isResolved();
+        assert field.holder().isInitialized();
     }
 
     /**
@@ -93,18 +79,17 @@ public abstract class AccessField extends StateSplit {
     }
 
     /**
-     * Checks whether the class of the field of this access is loaded.
-     * @return {@code true} if the class is loaded
-     */
-    public boolean isLoaded() {
-        return field.isResolved();
-    }
-
-    /**
      * Checks whether this field is declared volatile.
      * @return {@code true} if the field is resolved and declared volatile
      */
     public boolean isVolatile() {
-        return isLoaded() && Modifier.isVolatile(field.accessFlags());
+        return Modifier.isVolatile(field.accessFlags());
+    }
+
+    @Override
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> properties = super.getDebugProperties();
+        properties.put("field", field);
+        return properties;
     }
 }

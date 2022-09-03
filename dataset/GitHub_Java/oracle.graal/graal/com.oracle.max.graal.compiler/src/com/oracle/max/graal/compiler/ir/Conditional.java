@@ -26,10 +26,10 @@ import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.gen.*;
 import com.oracle.max.graal.compiler.gen.LIRGenerator.LIRGeneratorOp;
-import com.oracle.max.graal.compiler.ir.Phi.*;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.CanonicalizerOp;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.compiler.util.*;
+import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
@@ -41,6 +41,7 @@ import com.sun.cri.ci.*;
  */
 public class Conditional extends Binary {
     @Input private BooleanNode condition;
+    @Input private FrameState stateDuring;
 
     public BooleanNode condition() {
         return condition;
@@ -49,6 +50,15 @@ public class Conditional extends Binary {
     public void setCondition(BooleanNode n) {
         updateUsages(condition, n);
         condition = n;
+    }
+
+    public FrameState stateDuring() {
+        return stateDuring;
+    }
+
+    public void setStateDuring(FrameState n) {
+        updateUsages(stateDuring, n);
+        stateDuring = n;
     }
 
     /**
@@ -125,38 +135,6 @@ public class Conditional extends Binary {
         return super.lookup(clazz);
     }
 
-    public static class ConditionalStructure {
-        public final If ifNode;
-        public final Phi phi;
-        public final Merge merge;
-        public ConditionalStructure(If ifNode, Phi phi, Merge merge) {
-            this.ifNode = ifNode;
-            this.phi = phi;
-            this.merge = merge;
-        }
-    }
-
-    public static ConditionalStructure createConditionalStructure(BooleanNode condition, Value trueValue, Value falseValue) {
-        return createConditionalStructure(condition, trueValue, falseValue, 0.5);
-    }
-
-    public static ConditionalStructure createConditionalStructure(BooleanNode condition, Value trueValue, Value falseValue, double trueProbability) {
-        Graph graph = condition.graph();
-        CiKind kind = trueValue.kind.meet(falseValue.kind);
-        If ifNode = new If(condition, trueProbability, graph);
-        EndNode trueEnd = new EndNode(graph);
-        EndNode falseEnd = new EndNode(graph);
-        ifNode.setTrueSuccessor(trueEnd);
-        ifNode.setFalseSuccessor(falseEnd);
-        Merge merge = new Merge(graph);
-        merge.addEnd(trueEnd);
-        merge.addEnd(falseEnd);
-        Phi phi = new Phi(kind, merge, PhiType.Value, graph);
-        phi.addInput(trueValue);
-        phi.addInput(falseValue);
-        return new ConditionalStructure(ifNode, phi, merge);
-    }
-
     private static final CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {
         @Override
         public Node canonical(Node node, NotifyReProcess reProcess) {
@@ -184,12 +162,16 @@ public class Conditional extends Binary {
                         TTY.println("> Conditional canon'ed to ~Materialize");
                     }
                     reProcess.reProccess(condition); // because we negate it
-                    return new MaterializeNode(new NegateBooleanNode(condition, node.graph()), node.graph());
+                    MaterializeNode materializeNode = new MaterializeNode(new NegateBooleanNode(condition, node.graph()), node.graph());
+                    materializeNode.setStateDuring(conditional.stateDuring());
+                    return materializeNode;
                 } else if (trueInt == 1 && falseInt == 0) {
                     if (GraalOptions.TraceCanonicalizer) {
                         TTY.println("> Conditional canon'ed to Materialize");
                     }
-                    return new MaterializeNode(condition, node.graph());
+                    MaterializeNode materializeNode = new MaterializeNode(condition, node.graph());
+                    materializeNode.setStateDuring(conditional.stateDuring());
+                    return materializeNode;
                 }
             } else if (falseValue instanceof Constant && !(trueValue instanceof Constant)) {
                 conditional.setTrueValue(falseValue);

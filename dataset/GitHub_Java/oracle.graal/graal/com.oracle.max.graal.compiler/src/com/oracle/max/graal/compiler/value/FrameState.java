@@ -690,4 +690,9 @@ public final class FrameState extends Value implements FrameStateAccess {
     public void setRethrowException(boolean b) {
         rethrowException = b;
     }
+
+    @Override
+    public Node copy(Graph into) {
+        return new FrameState(method, bci, localsSize, stackSize, locksSize, rethrowException, into);
+    }
 }

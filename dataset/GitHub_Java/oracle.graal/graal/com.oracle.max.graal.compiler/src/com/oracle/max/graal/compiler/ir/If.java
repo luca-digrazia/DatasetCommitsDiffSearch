@@ -114,6 +114,13 @@ public final class If extends ControlSplit {
         return "If";
     }
 
+    @Override
+    public Node copy(Graph into) {
+        If x = new If(null, probability(0), into);
+        super.copyInto(x);
+        return x;
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public <T extends Op> T lookup(Class<T> clazz) {
