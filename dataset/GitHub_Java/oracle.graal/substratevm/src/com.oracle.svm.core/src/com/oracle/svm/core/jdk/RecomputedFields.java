@@ -26,6 +26,7 @@ package com.oracle.svm.core.jdk;
 
 //Checkstyle: stop
 
+import static com.oracle.svm.core.annotate.RecomputeFieldValue.Kind.ArrayBaseOffset;
 import static com.oracle.svm.core.annotate.RecomputeFieldValue.Kind.AtomicFieldUpdaterOffset;
 import static com.oracle.svm.core.annotate.RecomputeFieldValue.Kind.FromAlias;
 import static com.oracle.svm.core.annotate.RecomputeFieldValue.Kind.Reset;
@@ -102,6 +103,11 @@ final class Target_sun_util_calendar_ZoneInfoFile {
 @TargetClass(className = "java.nio.DirectByteBuffer")
 @SuppressWarnings("unused")
 final class Target_java_nio_DirectByteBuffer {
+    @Alias //
+    @TargetElement(onlyWith = JDK8OrEarlier.class) //
+    @RecomputeFieldValue(kind = ArrayBaseOffset, declClass = byte[].class) //
+    static long arrayBaseOffset;
+
     @Alias @RecomputeFieldValue(kind = Kind.Reset) //
     Target_jdk_internal_ref_Cleaner cleaner;
 
