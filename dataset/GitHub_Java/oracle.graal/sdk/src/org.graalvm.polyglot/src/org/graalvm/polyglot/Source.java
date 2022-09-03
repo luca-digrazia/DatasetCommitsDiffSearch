@@ -381,9 +381,9 @@ public final class Source {
         return newBuilder(source).setName(name).build();
     }
 
-    public static final class LiteralBuilder extends Builder {
+    public static class LiteralBuilder extends Builder {
 
-        LiteralBuilder(CharSequence origin) {
+        private LiteralBuilder(CharSequence origin) {
             super(origin);
         }
 
@@ -462,7 +462,7 @@ public final class Source {
         private boolean internal;
         private String content;
 
-        Builder(Object origin) {
+        private Builder(Object origin) {
             this.origin = origin;
         }
 
