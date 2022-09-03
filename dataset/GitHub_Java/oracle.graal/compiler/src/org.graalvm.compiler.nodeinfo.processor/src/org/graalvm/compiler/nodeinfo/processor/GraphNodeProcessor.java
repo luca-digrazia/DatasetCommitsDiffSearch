@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,12 +31,13 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.FilerException;
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
-import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.Modifier;
@@ -44,16 +45,11 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic.Kind;
 
-import org.graalvm.compiler.processor.AbstractProcessor;
+import org.graalvm.compiler.nodeinfo.NodeInfo;
 
-/**
- * Processor for {@value #NODE_INFO_CLASS_NAME} annotation.
- */
 @SupportedSourceVersion(SourceVersion.RELEASE_8)
 @SupportedAnnotationTypes({"org.graalvm.compiler.nodeinfo.NodeInfo"})
 public class GraphNodeProcessor extends AbstractProcessor {
-    private static final String NODE_INFO_CLASS_NAME = "org.graalvm.compiler.nodeinfo.NodeInfo";
-
     @Override
     public SourceVersion getSupportedSourceVersion() {
         return SourceVersion.latest();
@@ -110,6 +106,10 @@ public class GraphNodeProcessor extends AbstractProcessor {
         message(kind, element, "Exception thrown during processing: %s", buf.toString());
     }
 
+    ProcessingEnvironment getProcessingEnv() {
+        return processingEnv;
+    }
+
     boolean isNodeType(Element element) {
         if (element.getKind() != ElementKind.CLASS) {
             return false;
@@ -134,17 +134,17 @@ public class GraphNodeProcessor extends AbstractProcessor {
 
         GraphNodeVerifier verifier = new GraphNodeVerifier(this);
 
-        for (Element element : roundEnv.getElementsAnnotatedWith(getTypeElement(NODE_INFO_CLASS_NAME))) {
+        for (Element element : roundEnv.getElementsAnnotatedWith(NodeInfo.class)) {
             scope = element;
             try {
                 if (!isNodeType(element)) {
-                    errorMessage(element, "%s can only be applied to Node subclasses", getSimpleName(NODE_INFO_CLASS_NAME));
+                    errorMessage(element, "%s can only be applied to Node subclasses", NodeInfo.class.getSimpleName());
                     continue;
                 }
 
-                AnnotationMirror nodeInfo = getAnnotation(element, getType(NODE_INFO_CLASS_NAME));
+                NodeInfo nodeInfo = element.getAnnotation(NodeInfo.class);
                 if (nodeInfo == null) {
-                    errorMessage(element, "Cannot get %s annotation from annotated element", getSimpleName(NODE_INFO_CLASS_NAME));
+                    errorMessage(element, "Cannot get %s annotation from annotated element", NodeInfo.class.getSimpleName());
                     continue;
                 }
 
@@ -154,7 +154,7 @@ public class GraphNodeProcessor extends AbstractProcessor {
                 if (!modifiers.contains(Modifier.FINAL) && !modifiers.contains(Modifier.ABSTRACT)) {
                     // TODO(thomaswue): Reenable this check.
                     // errorMessage(element, "%s annotated class must be either final or abstract",
-                    // getSimpleName(NODE_INFO_CLASS_NAME));
+                    // NodeInfo.class.getSimpleName());
                     // continue;
                 }
                 boolean found = false;
@@ -167,7 +167,7 @@ public class GraphNodeProcessor extends AbstractProcessor {
                     }
                 }
                 if (!found) {
-                    errorMessage(element, "%s annotated class must have a field named TYPE", getSimpleName(NODE_INFO_CLASS_NAME));
+                    errorMessage(element, "%s annotated class must have a field named TYPE", NodeInfo.class.getSimpleName());
                 }
 
                 if (!typeElement.equals(verifier.Node) && !modifiers.contains(Modifier.ABSTRACT)) {

@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -133,7 +131,7 @@ public class ConstantTree extends PrintableDominatorOptimizationProblem<Constant
     NodeCost getOrInitCost(AbstractBlockBase<?> block) {
         NodeCost cost = getCost(block);
         if (cost == null) {
-            cost = new NodeCost(block.getRelativeFrequency(), blockMap.get(block), 1);
+            cost = new NodeCost(block.probability(), blockMap.get(block), 1);
             setCost(block, cost);
         }
         return cost;
