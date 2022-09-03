@@ -54,6 +54,7 @@ import java.io.IOException;
 public abstract class LLVMPolyglotEval extends LLVMIntrinsic {
 
     @Child GetSourceNode getSource;
+    @Child ForeignToLLVM toLLVM = ForeignToLLVM.create(ForeignToLLVMType.POINTER);
 
     public static LLVMPolyglotEval create(LLVMExpressionNode id, LLVMExpressionNode code) {
         return LLVMPolyglotEvalNodeGen.create(GetSourceStringNodeGen.create(false), id, code);
@@ -74,8 +75,7 @@ public abstract class LLVMPolyglotEval extends LLVMIntrinsic {
     @Specialization
     protected Object doEval(Object idPointer, Object srcPointer,
                     @Cached("createReadString()") LLVMReadStringNode readId,
-                    @Cached("createReadString()") LLVMReadStringNode readSrc,
-                    @Cached("createForeignToLLVM()") ForeignToLLVM toLLVM) {
+                    @Cached("createReadString()") LLVMReadStringNode readSrc) {
         try {
             CallTarget callTarget = getSource.execute(readId.executeWithTarget(idPointer), readSrc.executeWithTarget(srcPointer));
             Object foreign = callTarget.call();
@@ -85,11 +85,6 @@ public abstract class LLVMPolyglotEval extends LLVMIntrinsic {
             CompilerDirectives.transferToInterpreter();
             throw new LLVMPolyglotException(this, e.getMessage());
         }
-    }
-
-    @TruffleBoundary
-    protected ForeignToLLVM createForeignToLLVM() {
-        return getNodeFactory().createForeignToLLVM(ForeignToLLVMType.POINTER);
     }
 
     abstract static class GetSourceNode extends LLVMNode {
