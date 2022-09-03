@@ -253,13 +253,9 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             if (arrayType != null && StampTool.isExactType(array)) {
                 ResolvedJavaType elementType = arrayType.getComponentType();
                 if (!elementType.isJavaLangObject()) {
-                    ValueNode storeCheck = CheckCastNode.create(elementType, value, null, true, graph.getAssumptions());
-                    if (storeCheck.graph() == null) {
-                        checkCastNode = (CheckCastNode) storeCheck;
-                        checkCastNode = graph.add(checkCastNode);
-                        graph.addBeforeFixed(storeIndexed, checkCastNode);
-                    }
-                    value = storeCheck;
+                    checkCastNode = graph.add(new CheckCastNode(elementType, value, null, true));
+                    graph.addBeforeFixed(storeIndexed, checkCastNode);
+                    value = checkCastNode;
                 }
             } else {
                 ValueNode arrayClass = createReadHub(graph, array, boundsCheck);

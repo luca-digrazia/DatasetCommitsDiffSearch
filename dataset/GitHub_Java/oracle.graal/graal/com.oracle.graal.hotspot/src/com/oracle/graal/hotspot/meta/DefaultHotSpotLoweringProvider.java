@@ -26,14 +26,9 @@ import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.hotspot.meta.HotSpotForeignCallsProviderImpl.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.hotspot.replacements.NewObjectSnippets.*;
-import static jdk.internal.jvmci.meta.LocationIdentity.*;
+import static com.oracle.jvmci.meta.LocationIdentity.*;
 
 import java.lang.ref.*;
-
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
@@ -54,6 +49,10 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.nodes.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.hotspot.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * HotSpot implementation of {@link LoweringProvider}.
@@ -158,9 +157,9 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         } else if (n instanceof ArrayCopyNode) {
             arraycopySnippets.lower((ArrayCopyNode) n, tool);
         } else if (n instanceof ArrayCopySlowPathNode) {
-            arraycopySnippets.lower((ArrayCopySlowPathNode) n, tool);
-        } else if (n instanceof ArrayCopyUnrollNode) {
-            arraycopySnippets.lower((ArrayCopyUnrollNode) n, tool);
+            ArrayCopySlowPathNode slowpath = (ArrayCopySlowPathNode) n;
+            // FrameState stateAfter = slowpath.stateAfter();
+            arraycopySnippets.lower(slowpath, tool);
         } else if (n instanceof G1PreWriteBarrier) {
             writeBarrierSnippets.lower((G1PreWriteBarrier) n, registers, tool);
         } else if (n instanceof G1PostWriteBarrier) {
@@ -194,31 +193,8 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             lowerHubGetClassNode((HubGetClassNode) n, tool);
         } else if (n instanceof KlassLayoutHelperNode) {
             lowerKlassLayoutHelperNode((KlassLayoutHelperNode) n, tool);
-        } else if (n instanceof ComputeObjectAddressNode) {
-            if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-                lowerComputeObjectAddressNode((ComputeObjectAddressNode) n);
-            }
         } else {
             super.lower(n, tool);
-        }
-    }
-
-    private static void lowerComputeObjectAddressNode(ComputeObjectAddressNode n) {
-        /*
-         * Lower the node into a ComputeObjectAddress node and an Add but ensure that it's below any
-         * potential safepoints and above it's uses.
-         */
-        for (Node use : n.usages().snapshot()) {
-            if (use instanceof FixedNode) {
-                FixedNode fixed = (FixedNode) use;
-                StructuredGraph graph = n.graph();
-                GetObjectAddressNode address = graph.add(new GetObjectAddressNode(n.getObject()));
-                graph.addBeforeFixed(fixed, address);
-                AddNode add = graph.addOrUnique(new AddNode(address, n.getOffset()));
-                graph.replaceFixedWithFloating(n, add);
-            } else {
-                throw JVMCIError.shouldNotReachHere("Unexpected floating use of ComputeObjectAddressNode");
-            }
         }
     }
 
@@ -554,5 +530,14 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     @Override
     protected LocationIdentity initLocationIdentity() {
         return INIT_LOCATION;
+    }
+
+    @Override
+    public int getSizeInBytes(Stamp stamp) {
+        if (stamp instanceof NarrowOopStamp || (stamp instanceof KlassPointerStamp && ((KlassPointerStamp) stamp).isCompressed())) {
+            return Kind.Int.getByteCount();
+        } else {
+            return super.getSizeInBytes(stamp);
+        }
     }
 }
