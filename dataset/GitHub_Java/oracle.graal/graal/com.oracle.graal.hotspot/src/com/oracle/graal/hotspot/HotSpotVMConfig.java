@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
 
 /**
  * Used to communicate configuration details, runtime offsets, etc. to graal upon compileMethod.
@@ -32,6 +32,7 @@ public final class HotSpotVMConfig extends CompilerObject {
     private static final long serialVersionUID = -4744897993263044184L;
 
     private HotSpotVMConfig() {
+        super(null);
     }
 
     // os information, register layout, code generation, ...
@@ -89,6 +90,7 @@ public final class HotSpotVMConfig extends CompilerObject {
     public long debugStub;
     public long instanceofStub;
     public long newInstanceStub;
+    public long unresolvedNewInstanceStub;
     public long newTypeArrayStub;
     public long newObjectArrayStub;
     public long newMultiArrayStub;
@@ -110,7 +112,7 @@ public final class HotSpotVMConfig extends CompilerObject {
         assert stackShadowPages > 0;
     }
 
-    public int getArrayOffset(Kind kind) {
+    public int getArrayOffset(CiKind kind) {
         return arrayOffsets[kind.ordinal()];
     }
 }

@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -45,7 +45,7 @@ public final class IndexedLocationNode extends LocationNode implements LIRLowera
         return index;
     }
 
-    public static Object getArrayLocation(Kind elementKind) {
+    public static Object getArrayLocation(CiKind elementKind) {
         return elementKind;
     }
 
@@ -56,11 +56,11 @@ public final class IndexedLocationNode extends LocationNode implements LIRLowera
         return indexScalingEnabled;
     }
 
-    public static IndexedLocationNode create(Object identity, Kind kind, int displacement, ValueNode index, Graph graph, boolean indexScalingEnabled) {
+    public static IndexedLocationNode create(Object identity, CiKind kind, int displacement, ValueNode index, Graph graph, boolean indexScalingEnabled) {
         return graph.unique(new IndexedLocationNode(identity, kind, index, displacement, indexScalingEnabled));
     }
 
-    private IndexedLocationNode(Object identity, Kind kind, ValueNode index, int displacement, boolean indexScalingEnabled) {
+    private IndexedLocationNode(Object identity, CiKind kind, ValueNode index, int displacement, boolean indexScalingEnabled) {
         super(identity, kind, displacement);
         this.index = index;
         this.indexScalingEnabled = indexScalingEnabled;
@@ -68,9 +68,9 @@ public final class IndexedLocationNode extends LocationNode implements LIRLowera
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        Constant constantIndex = index.asConstant();
-        if (constantIndex != null) {
-            long constantIndexLong = constantIndex.asLong();
+        CiConstant constantIndex = index.asConstant();
+        if (constantIndex != null && constantIndex.kind.stackKind().isInt()) {
+            long constantIndexLong = constantIndex.asInt();
             if (indexScalingEnabled) {
                 if (tool.target() == null) {
                     return this;
