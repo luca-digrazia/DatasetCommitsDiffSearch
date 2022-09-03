@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
 import com.oracle.graal.api.meta.ProfilingInfo.TriState;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
@@ -149,27 +148,65 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             LogicNegationNode negation = (LogicNegationNode) condition();
             IfNode newIfNode = graph().add(new IfNode(negation.getInput(), falseSucc, trueSucc, 1 - trueSuccessorProbability));
             predecessor().replaceFirstSuccessor(this, newIfNode);
-            GraphUtil.killWithUnusedFloatingInputs(this);
+            this.safeDelete();
             return;
         }
+        if (trueSuccessor().usages().isEmpty() && falseSuccessor().usages().isEmpty()) {
+            // push similar nodes upwards through the if, thereby deduplicating them
+            do {
+                BeginNode trueSucc = trueSuccessor();
+                BeginNode falseSucc = falseSuccessor();
+                if (trueSucc.getClass() == BeginNode.class && falseSucc.getClass() == BeginNode.class && trueSucc.next() instanceof FixedWithNextNode && falseSucc.next() instanceof FixedWithNextNode) {
+                    FixedWithNextNode trueNext = (FixedWithNextNode) trueSucc.next();
+                    FixedWithNextNode falseNext = (FixedWithNextNode) falseSucc.next();
+                    NodeClass nodeClass = trueNext.getNodeClass();
+                    if (trueNext.getClass() == falseNext.getClass()) {
+                        if (nodeClass.inputsEqual(trueNext, falseNext) && nodeClass.valueEqual(trueNext, falseNext)) {
+                            falseNext.replaceAtUsages(trueNext);
+                            graph().removeFixed(falseNext);
+                            FixedNode next = trueNext.next();
+                            trueNext.setNext(null);
+                            trueNext.replaceAtPredecessor(next);
+                            graph().addBeforeFixed(this, trueNext);
+                            for (Node usage : trueNext.usages().snapshot()) {
+                                if (usage.getNodeClass().valueNumberable() && !usage.getNodeClass().isLeafNode()) {
+                                    Node newNode = graph().findDuplicate(usage);
+                                    if (newNode != null) {
+                                        usage.replaceAtUsages(newNode);
+                                        usage.safeDelete();
+                                    }
+                                }
+                                if (usage.isAlive()) {
+                                    tool.addToWorkList(usage);
+                                }
+                            }
+                            continue;
+                        }
+                    }
+                }
+            } while (false);
+        }
+
+        if (checkForUnsignedCompare(tool)) {
+            return;
+        }
+
         if (condition() instanceof LogicConstantNode) {
             LogicConstantNode c = (LogicConstantNode) condition();
             if (c.getValue()) {
                 tool.deleteBranch(falseSuccessor());
                 tool.addToWorkList(trueSuccessor());
                 graph().removeSplit(this, trueSuccessor());
+                return;
             } else {
                 tool.deleteBranch(trueSuccessor());
                 tool.addToWorkList(falseSuccessor());
                 graph().removeSplit(this, falseSuccessor());
+                return;
             }
-            return;
-        }
-        if (trueSuccessor().usages().isEmpty() && falseSuccessor().usages().isEmpty()) {
+        } else if (trueSuccessor().usages().isEmpty() && falseSuccessor().usages().isEmpty()) {
 
-            pushNodesThroughIf(tool);
-
-            if (checkForUnsignedCompare(tool) || removeOrMaterializeIf(tool)) {
+            if (removeOrMaterializeIf(tool)) {
                 return;
             }
         }
@@ -210,43 +247,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         }
     }
 
-    private void pushNodesThroughIf(SimplifierTool tool) {
-        assert trueSuccessor().usages().isEmpty() && falseSuccessor().usages().isEmpty();
-        // push similar nodes upwards through the if, thereby deduplicating them
-        do {
-            BeginNode trueSucc = trueSuccessor();
-            BeginNode falseSucc = falseSuccessor();
-            if (trueSucc.getClass() == BeginNode.class && falseSucc.getClass() == BeginNode.class && trueSucc.next() instanceof FixedWithNextNode && falseSucc.next() instanceof FixedWithNextNode) {
-                FixedWithNextNode trueNext = (FixedWithNextNode) trueSucc.next();
-                FixedWithNextNode falseNext = (FixedWithNextNode) falseSucc.next();
-                NodeClass nodeClass = trueNext.getNodeClass();
-                if (trueNext.getClass() == falseNext.getClass()) {
-                    if (nodeClass.inputsEqual(trueNext, falseNext) && nodeClass.valueEqual(trueNext, falseNext)) {
-                        falseNext.replaceAtUsages(trueNext);
-                        graph().removeFixed(falseNext);
-                        FixedNode next = trueNext.next();
-                        trueNext.setNext(null);
-                        trueNext.replaceAtPredecessor(next);
-                        graph().addBeforeFixed(this, trueNext);
-                        for (Node usage : trueNext.usages().snapshot()) {
-                            if (usage.getNodeClass().valueNumberable() && !usage.getNodeClass().isLeafNode()) {
-                                Node newNode = graph().findDuplicate(usage);
-                                if (newNode != null) {
-                                    usage.replaceAtUsages(newNode);
-                                    usage.safeDelete();
-                                }
-                            }
-                            if (usage.isAlive()) {
-                                tool.addToWorkList(usage);
-                            }
-                        }
-                        continue;
-                    }
-                }
-            }
-        } while (false);
-    }
-
     /**
      * Recognize a couple patterns that can be merged into an unsigned compare.
      *
@@ -254,8 +254,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
      * @return true if a replacement was done.
      */
     private boolean checkForUnsignedCompare(SimplifierTool tool) {
-        assert trueSuccessor().usages().isEmpty() && falseSuccessor().usages().isEmpty();
-        if (condition() instanceof IntegerLessThanNode) {
+        if (condition() instanceof IntegerLessThanNode && trueSuccessor().usages().isEmpty() && falseSuccessor().usages().isEmpty()) {
             IntegerLessThanNode lessThan = (IntegerLessThanNode) condition();
             Constant y = lessThan.y().stamp().asConstant();
             if (y != null && y.asLong() == 0 && falseSuccessor().next() instanceof IfNode) {
@@ -478,7 +477,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
      * @return true if a transformation was made, false otherwise
      */
     private boolean removeOrMaterializeIf(SimplifierTool tool) {
-        assert trueSuccessor().usages().isEmpty() && falseSuccessor().usages().isEmpty();
         if (trueSuccessor().next() instanceof AbstractEndNode && falseSuccessor().next() instanceof AbstractEndNode) {
             AbstractEndNode trueEnd = (AbstractEndNode) trueSuccessor().next();
             AbstractEndNode falseEnd = (AbstractEndNode) falseSuccessor().next();
@@ -622,11 +620,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
      * @return true if a transformation was made, false otherwise
      */
     private boolean removeIntermediateMaterialization(SimplifierTool tool) {
-        if (!(predecessor() instanceof MergeNode) || predecessor() instanceof LoopBeginNode) {
-            return false;
-        }
-        MergeNode merge = (MergeNode) predecessor();
-
         if (!(condition() instanceof CompareNode)) {
             return false;
         }
@@ -635,6 +628,16 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         if (compare.usages().count() != 1) {
             return false;
         }
+
+        if (!(predecessor() instanceof MergeNode)) {
+            return false;
+        }
+
+        if (predecessor() instanceof LoopBeginNode) {
+            return false;
+        }
+
+        MergeNode merge = (MergeNode) predecessor();
 
         // Only consider merges with a single usage that is both a phi and an operand of the
         // comparison
@@ -699,18 +702,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         connectEnds(falseEnds, phiValues, oldFalseSuccessor, merge, tool);
         connectEnds(trueEnds, phiValues, oldTrueSuccessor, merge, tool);
 
-        if (this.trueSuccessorProbability == 0.0) {
-            for (AbstractEndNode endNode : trueEnds) {
-                propagateZeroProbability(endNode);
-            }
-        }
-
-        if (this.trueSuccessorProbability == 1.0) {
-            for (AbstractEndNode endNode : falseEnds) {
-                propagateZeroProbability(endNode);
-            }
-        }
-
         /*
          * Remove obsolete ends only after processing all ends, otherwise oldTrueSuccessor or
          * oldFalseSuccessor might have been removed if it is a LoopExitNode.
@@ -730,42 +721,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         assert !this.isAlive() : this;
 
         return true;
-    }
-
-    private void propagateZeroProbability(FixedNode startNode) {
-        Node prev = null;
-        for (FixedNode node : GraphUtil.predecessorIterable(startNode)) {
-            if (node instanceof IfNode) {
-                IfNode ifNode = (IfNode) node;
-                if (ifNode.trueSuccessor() == prev) {
-                    if (ifNode.trueSuccessorProbability == 0.0) {
-                        return;
-                    } else if (ifNode.trueSuccessorProbability == 1.0) {
-                        continue;
-                    } else {
-                        ifNode.setTrueSuccessorProbability(0.0);
-                        return;
-                    }
-                } else if (ifNode.falseSuccessor() == prev) {
-                    if (ifNode.trueSuccessorProbability == 1.0) {
-                        return;
-                    } else if (ifNode.trueSuccessorProbability == 0.0) {
-                        continue;
-                    } else {
-                        ifNode.setTrueSuccessorProbability(1.0);
-                        return;
-                    }
-                } else {
-                    throw new GraalInternalError("Illegal state");
-                }
-            } else if (node instanceof MergeNode && !(node instanceof LoopBeginNode)) {
-                for (AbstractEndNode endNode : ((MergeNode) node).cfgPredecessors()) {
-                    propagateZeroProbability(endNode);
-                }
-                return;
-            }
-            prev = node;
-        }
     }
 
     private static boolean checkFrameState(FixedNode start) {
