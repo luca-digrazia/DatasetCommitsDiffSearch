@@ -1404,7 +1404,7 @@ public class Debug {
     }
 
     private static boolean findMatch(Set<String> haystack, Set<String> haystackSubstrings, String needle) {
-        if (haystack.isEmpty() && haystackSubstrings.isEmpty()) {
+        if (haystack.isEmpty()) {
             // Empty haystack means match all
             return true;
         }
