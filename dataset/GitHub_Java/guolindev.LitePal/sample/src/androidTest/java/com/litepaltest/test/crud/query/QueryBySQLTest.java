@@ -1,20 +1,24 @@
 package com.litepaltest.test.crud.query;
 
-import org.litepal.crud.DataSupport;
-import org.litepal.exceptions.DataSupportException;
-
 import android.database.Cursor;
 import android.test.AndroidTestCase;
 
 import com.litepaltest.model.Book;
 
+import org.litepal.LitePal;
+import org.litepal.exceptions.DataSupportException;
+import org.litepal.util.DBUtility;
+
 public class QueryBySQLTest extends AndroidTestCase {
 
 	private Book book;
 
+    private String bookTable;
+
 	@Override
 	protected void setUp() throws Exception {
 		super.setUp();
+        bookTable = DBUtility.getTableNameByClassName(Book.class.getName());
 		book = new Book();
 		book.setBookName("数据库");
 		book.setPages(300);
@@ -22,14 +26,14 @@ public class QueryBySQLTest extends AndroidTestCase {
 	}
 
 	public void testQueryBySQL() {
-		Cursor cursor = DataSupport.findBySQL("select * from Book");
+		Cursor cursor = LitePal.findBySQL("select * from " + bookTable);
 		assertTrue(cursor.getCount() > 0);
 		cursor.close();
 	}
 
 	public void testQueryBySQLWithPlaceHolder() {
-		Cursor cursor = DataSupport.findBySQL(
-				"select * from Book where id=? and bookname=? and pages=?",
+		Cursor cursor = LitePal.findBySQL(
+				"select * from " + bookTable + " where id=? and bookname=? and pages=?",
 				String.valueOf(book.getId()), "数据库", "300");
 		assertTrue(cursor.getCount() == 1);
 		cursor.moveToFirst();
@@ -42,15 +46,15 @@ public class QueryBySQLTest extends AndroidTestCase {
 
 	public void testQueryBySQLWithWrongParams() {
 		try {
-			DataSupport.findBySQL("select * from Book where id=? and bookname=? and pages=?",
+            LitePal.findBySQL("select * from " + bookTable + " where id=? and bookname=? and pages=?",
 					String.valueOf(book.getId()), "数据库");
 			fail();
 		} catch (DataSupportException e) {
 			assertEquals("The parameters in conditions are incorrect.", e.getMessage());
 		}
-		Cursor cursor = DataSupport.findBySQL(new String[] {});
+		Cursor cursor = LitePal.findBySQL(new String[] {});
 		assertNull(cursor);
-		cursor = DataSupport.findBySQL();
+		cursor = LitePal.findBySQL();
 		assertNull(cursor);
 	}
 
