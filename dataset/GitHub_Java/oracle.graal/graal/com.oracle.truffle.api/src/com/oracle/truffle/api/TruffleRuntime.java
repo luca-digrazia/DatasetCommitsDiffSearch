@@ -50,20 +50,7 @@ public interface TruffleRuntime {
      */
     RootCallTarget createCallTarget(RootNode rootNode);
 
-    /**
-     * Creates a new runtime specific version of {@link DirectCallNode}.
-     *
-     * @param target the direct {@link CallTarget} to call
-     * @return the new call node
-     */
-    DirectCallNode createDirectCallNode(CallTarget target);
-
-    /**
-     * Creates a new runtime specific version of {@link IndirectCallNode}.
-     *
-     * @return the new call node
-     */
-    IndirectCallNode createIndirectCallNode();
+    CallNode createCallNode(CallTarget target);
 
     /**
      * Creates a new assumption object that can be checked and invalidated.
@@ -106,8 +93,7 @@ public interface TruffleRuntime {
 
     /**
      * Accesses the current stack, i.e., the contents of the {@link Frame}s and the associated
-     * {@link CallTarget}s. Iteration starts at the caller frame, i.e., it does not include the
-     * current frame.
+     * {@link CallTarget}s.
      *
      * @return a lazy collection of {@link FrameInstance}.
      */
@@ -118,5 +104,4 @@ public interface TruffleRuntime {
      * important to note that this {@link FrameInstance} supports only slow path access.
      */
     FrameInstance getCurrentFrame();
-
 }

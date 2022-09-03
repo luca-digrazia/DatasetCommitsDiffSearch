@@ -25,22 +25,39 @@
 package com.oracle.truffle.api.impl;
 
 import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.CompilerDirectives.*;
 import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.frame.FrameInstance.*;
 import com.oracle.truffle.api.nodes.*;
 
-public class DefaultCallNode extends CallNode {
+public class DefaultCallNode extends CallNode implements MaterializedFrameNotify {
+
+    @CompilationFinal private FrameAccess outsideFrameAccess = FrameAccess.NONE;
+
+    private boolean inliningForced;
 
     public DefaultCallNode(CallTarget target) {
         super(target);
     }
 
     @Override
-    public Object call(PackedFrame caller, Arguments arguments) {
-        return getCallTarget().call(caller, arguments);
+    public Object call(VirtualFrame frame, Object[] arguments) {
+        return getCurrentCallTarget().call(arguments);
     }
 
     @Override
-    public void inline() {
+    public FrameAccess getOutsideFrameAccess() {
+        return outsideFrameAccess;
+    }
+
+    @Override
+    public void setOutsideFrameAccess(FrameAccess outsideFrameAccess) {
+        this.outsideFrameAccess = outsideFrameAccess;
+    }
+
+    @Override
+    public void forceInlining() {
+        inliningForced = true;
     }
 
     @Override
@@ -54,8 +71,18 @@ public class DefaultCallNode extends CallNode {
     }
 
     @Override
+    public boolean isInlined() {
+        return false;
+    }
+
+    @Override
     public boolean isSplittable() {
         return false;
+    }
+
+    @Override
+    public boolean isInliningForced() {
+        return inliningForced;
     }
 
     @Override
@@ -64,17 +91,7 @@ public class DefaultCallNode extends CallNode {
     }
 
     @Override
-    public RootNode getInlinedRoot() {
-        return null;
-    }
-
-    @Override
-    public boolean isInlined() {
-        return false;
-    }
-
-    @Override
     public String toString() {
-        return getParent() != null ? getParent().toString() : super.toString();
+        return (getParent() != null ? getParent().toString() : super.toString()) + " call " + getCurrentCallTarget().toString();
     }
 }
