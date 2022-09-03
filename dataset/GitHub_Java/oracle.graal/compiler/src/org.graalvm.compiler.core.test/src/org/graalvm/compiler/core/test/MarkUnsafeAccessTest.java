@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -37,6 +35,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import org.graalvm.compiler.nodes.StructuredGraph;
+import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.inlining.InliningPhase;
 import org.graalvm.compiler.phases.common.inlining.policy.InlineEverythingPolicy;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
@@ -124,8 +123,8 @@ public class MarkUnsafeAccessTest extends GraalCompilerTest {
         Assert.assertNotNull(getMethodImpl);
         StructuredGraph graph = parseForCompile(getMethodImpl);
         HighTierContext highContext = getDefaultHighTierContext();
-        createCanonicalizerPhase().apply(graph, highContext);
-        new InliningPhase(new InlineEverythingPolicy(), createCanonicalizerPhase()).apply(graph, highContext);
+        new CanonicalizerPhase().apply(graph, highContext);
+        new InliningPhase(new InlineEverythingPolicy(), new CanonicalizerPhase()).apply(graph, highContext);
         InstalledCode compiledCode = getCode(getMethodImpl, graph);
         testMappedByteBuffer(mbb -> {
             try {
