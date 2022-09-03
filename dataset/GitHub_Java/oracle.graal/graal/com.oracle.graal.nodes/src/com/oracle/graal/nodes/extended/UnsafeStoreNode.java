@@ -23,16 +23,15 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.cri.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
  * Store of a value at a location specified as an offset relative to an object.
- * No null check is performed before the store.
  */
-public class UnsafeStoreNode extends FixedWithNextNode implements StateSplit, Lowerable, Virtualizable {
+public class UnsafeStoreNode extends FixedWithNextNode implements StateSplit, Lowerable {
 
     @Input private ValueNode object;
     @Input private ValueNode offset;
@@ -93,51 +92,63 @@ public class UnsafeStoreNode extends FixedWithNextNode implements StateSplit, Lo
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(CiLoweringTool tool) {
         tool.getRuntime().lower(this, tool);
     }
 
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        VirtualObjectNode virtual = tool.getVirtualState(object());
-        if (virtual != null) {
-            ValueNode indexValue = tool.getReplacedValue(offset());
-            if (indexValue.isConstant()) {
-                int fieldIndex = virtual.fieldIndexForOffset(indexValue.asConstant().asLong());
-                if (fieldIndex != -1) {
-                    tool.setVirtualEntry(virtual, fieldIndex, value());
-                    tool.delete();
-                }
-            }
-        }
+    // specialized on value type until boxing/unboxing is sorted out in intrinsification
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static void store(Object object, @ConstantNodeParameter int displacement, long offset, Object value, @ConstantNodeParameter Kind kind) {
+        throw new UnsupportedOperationException();
     }
 
-    // specialized on value type until boxing/unboxing is sorted out in intrinsification
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native void store(Object object, @ConstantNodeParameter int displacement, long offset, Object value, @ConstantNodeParameter Kind kind);
+    public static void store(Object object, @ConstantNodeParameter int displacement, long offset, boolean value, @ConstantNodeParameter Kind kind) {
+        throw new UnsupportedOperationException();
+    }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native void store(Object object, @ConstantNodeParameter int displacement, long offset, boolean value, @ConstantNodeParameter Kind kind);
+    public static void store(Object object, @ConstantNodeParameter int displacement, long offset, byte value, @ConstantNodeParameter Kind kind) {
+        throw new UnsupportedOperationException();
+    }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native void store(Object object, @ConstantNodeParameter int displacement, long offset, byte value, @ConstantNodeParameter Kind kind);
+    public static void store(Object object, @ConstantNodeParameter int displacement, long offset, char value, @ConstantNodeParameter Kind kind) {
+        throw new UnsupportedOperationException();
+    }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native void store(Object object, @ConstantNodeParameter int displacement, long offset, char value, @ConstantNodeParameter Kind kind);
+    public static void store(Object object, @ConstantNodeParameter int displacement, long offset, double value, @ConstantNodeParameter Kind kind) {
+        throw new UnsupportedOperationException();
+    }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native void store(Object object, @ConstantNodeParameter int displacement, long offset, double value, @ConstantNodeParameter Kind kind);
+    public static void store(Object object, @ConstantNodeParameter int displacement, long offset, float value, @ConstantNodeParameter Kind kind) {
+        throw new UnsupportedOperationException();
+    }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native void store(Object object, @ConstantNodeParameter int displacement, long offset, float value, @ConstantNodeParameter Kind kind);
+    public static void store(Object object, @ConstantNodeParameter int displacement, long offset, int value, @ConstantNodeParameter Kind kind) {
+        throw new UnsupportedOperationException();
+    }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native void store(Object object, @ConstantNodeParameter int displacement, long offset, int value, @ConstantNodeParameter Kind kind);
+    public static void store(Object object, @ConstantNodeParameter int displacement, long offset, long value, @ConstantNodeParameter Kind kind) {
+        throw new UnsupportedOperationException();
+    }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native void store(Object object, @ConstantNodeParameter int displacement, long offset, long value, @ConstantNodeParameter Kind kind);
-
-    @NodeIntrinsic
-    public static native void store(Object object, @ConstantNodeParameter int displacement, long offset, short value, @ConstantNodeParameter Kind kind);
+    public static void store(Object object, @ConstantNodeParameter int displacement, long offset, short value, @ConstantNodeParameter Kind kind) {
+        throw new UnsupportedOperationException();
+    }
 
 }
