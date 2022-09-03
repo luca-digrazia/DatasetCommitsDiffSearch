@@ -25,10 +25,13 @@ package com.oracle.truffle.espresso.runtime;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Method;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.classfile.StringTable;
@@ -36,7 +39,6 @@ import com.oracle.truffle.espresso.classfile.SymbolTable;
 import com.oracle.truffle.espresso.impl.ClassRegistries;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.jni.JniEnv;
-import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.MetaUtil;
@@ -64,9 +66,11 @@ public class EspressoContext {
     private Meta meta;
     private StaticObject mainThread;
 
-    @CompilerDirectives.CompilationFinal private JniEnv jniEnv;
+    @CompilerDirectives.CompilationFinal
+    private JniEnv jniEnv;
 
-    @CompilerDirectives.CompilationFinal private VM vm;
+    @CompilerDirectives.CompilationFinal
+    private VM vm;
 
     public EspressoContext(TruffleLanguage.Env env, EspressoLanguage language) {
         this.env = env;
@@ -114,19 +118,20 @@ public class EspressoContext {
         this.mainArguments = mainArguments;
     }
 
+    public Classpath getClasspath() {
+        return classpath;
+    }
+
+    public void setClasspath(Classpath classpath) {
+        this.classpath = classpath;
+    }
+
     public Classpath getBootClasspath() {
-        if (bootClasspath == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            bootClasspath = new Classpath(getVmProperties().getBootClasspath());
-        }
         return bootClasspath;
     }
 
-    public EspressoProperties getVmProperties() {
-        if (vmProperties == null) {
-            throw EspressoError.shouldNotReachHere();
-        }
-        return vmProperties;
+    public void setBootClasspath(Classpath bootClasspath) {
+        this.bootClasspath = bootClasspath;
     }
 
     /**
@@ -142,6 +147,7 @@ public class EspressoContext {
 
     public void initializeContext() {
         assert !this.initialized;
+        this.meta = new Meta(this);
         createVm();
         this.initialized = true;
     }
@@ -152,12 +158,10 @@ public class EspressoContext {
 
     private void createVm() {
         // FIXME(peterssen): Contextualize the JniENv, even if shared libraries are isolated,
-        // currently we assume a singleton context.
-
-        initVmProperties();
-
-        this.meta = new Meta(this);
-
+        // currently
+        // we assume a singleton context.
+        // initialize native context
+        // TODO(peterssen): Combine these 2.
         this.interpreterToVM = new InterpreterToVM(language);
         // Spawn JNI first, then the VM.
         this.vm = VM.create(getJNI()); // Mokapot is loaded
@@ -202,12 +206,6 @@ public class EspressoContext {
 
         // Load system class loader.
         appClassLoader = meta.knownKlass(ClassLoader.class).staticMethod("getSystemClassLoader", ClassLoader.class).invokeDirect();
-    }
-
-    private EspressoProperties vmProperties;
-
-    private void initVmProperties() {
-        vmProperties = EspressoProperties.getDefault().processOptions(getEnv().getOptions());
     }
 
     private void initializeClass(Class<?> clazz) {
