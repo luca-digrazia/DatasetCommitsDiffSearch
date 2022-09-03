@@ -51,7 +51,6 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.source.MissingNameException;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.api.vm.PolyglotEngine.Builder;
@@ -84,17 +83,17 @@ public class LLVM {
                 Node findContext = LLVMLanguage.INSTANCE.createFindContextNode0();
                 LLVMContext context = LLVMLanguage.INSTANCE.findContext0(findContext);
                 parseDynamicBitcodeLibraries(context);
-                final CallTarget[] mainFunction = new CallTarget[]{null};
+                CallTarget mainFunction;
                 if (code.getMimeType().equals(LLVMLanguage.LLVM_IR_MIME_TYPE)) {
                     LLVMParserResult parserResult = parseFile(code.getPath(), context);
-                    mainFunction[0] = parserResult.getMainFunction();
+                    mainFunction = parserResult.getMainFunction();
                     handleParserResult(context, parserResult);
                 } else if (code.getMimeType().equals(LLVMLanguage.SULONG_LIBRARY_MIME_TYPE)) {
                     final SulongLibrary library = new SulongLibrary(new File(code.getPath()));
 
                     try {
                         library.readContents(dependentLibrary -> {
-                            context.addLibraryToNativeLookup(dependentLibrary);
+                            throw new UnsupportedOperationException();
                         }, source -> {
                             LLVMParserResult parserResult;
                             try {
@@ -104,23 +103,21 @@ public class LLVM {
                             }
                             handleParserResult(context, parserResult);
                             if (parserResult.getMainFunction() != null) {
-                                mainFunction[0] = parserResult.getMainFunction();
+                                throw new IllegalArgumentException("main function in library");
                             }
                         });
                     } catch (IOException e) {
                         throw new UncheckedIOException(e);
                     }
 
-                    if (mainFunction[0] == null) {
-                        mainFunction[0] = Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(null));
-                    }
+                    mainFunction = Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(null));
                 } else {
                     throw new IllegalArgumentException("undeclared mime type");
                 }
                 if (context.isParseOnly()) {
                     return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(mainFunction));
                 } else {
-                    return mainFunction[0];
+                    return mainFunction;
                 }
             }
 
@@ -229,7 +226,7 @@ public class LLVM {
         LLVMLogger.info("current file: " + file.getAbsolutePath());
         Source fileSource;
         try {
-            fileSource = Source.newBuilder(file).build();
+            fileSource = Source.fromFileName(file.getAbsolutePath());
             return evaluateFromSource(fileSource, args);
         } catch (IOException e) {
             throw new AssertionError(e);
@@ -237,13 +234,9 @@ public class LLVM {
     }
 
     public static int executeMain(String codeString, Object... args) {
-        try {
-            Source fromText = Source.newBuilder(codeString).mimeType(LLVMLanguage.LLVM_IR_MIME_TYPE).build();
-            LLVMLogger.info("current code string: " + codeString);
-            return evaluateFromSource(fromText, args);
-        } catch (MissingNameException e) {
-            throw new AssertionError(e);
-        }
+        Source fromText = Source.fromText(codeString, "code string").withMimeType(LLVMLanguage.LLVM_IR_MIME_TYPE);
+        LLVMLogger.info("current code string: " + codeString);
+        return evaluateFromSource(fromText, args);
     }
 
     private static int evaluateFromSource(Source fileSource, Object... args) {

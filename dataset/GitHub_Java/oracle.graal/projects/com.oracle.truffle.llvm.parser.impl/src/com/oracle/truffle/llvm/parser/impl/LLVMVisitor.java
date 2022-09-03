@@ -128,16 +128,15 @@ import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMBooleanNuller;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMByteNuller;
-import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMDoubleNuller;
+import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMDoubleNull;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMFloatNuller;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMIntNuller;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMLongNuller;
-import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMAddressNuller;
+import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller.LLVMObjectNuller;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMParserResult;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
-import com.oracle.truffle.llvm.parser.impl.LLVMLifeTimeAnalysisVisitor.LifeTimeAnalysisResult;
 import com.oracle.truffle.llvm.parser.impl.LLVMPhiVisitor.Phi;
 import com.oracle.truffle.llvm.parser.impl.layout.DataLayoutConverter;
 import com.oracle.truffle.llvm.parser.impl.layout.DataLayoutConverter.DataSpecConverter;
@@ -480,9 +479,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         isGlobalScope = false;
         frameDescriptor = new FrameDescriptor();
         isGlobalScope = false;
-        if (!resolve(def.getHeader().getRettype()).isVoid()) {
-            retSlot = frameDescriptor.addFrameSlot(FUNCTION_RETURN_VALUE_FRAME_SLOT_ID);
-        }
+        retSlot = frameDescriptor.addFrameSlot(FUNCTION_RETURN_VALUE_FRAME_SLOT_ID);
         stackPointerSlot = frameDescriptor.addFrameSlot(STACK_ADDRESS_FRAME_SLOT_ID, FrameSlotKind.Object);
         functionEpilogue = new ArrayList<>();
         LLVMAttributeVisitor.visitFunctionHeader(def.getHeader());
@@ -513,25 +510,14 @@ public final class LLVMVisitor implements LLVMParserRuntime {
             currentIndex++;
             allFunctionNodes.add(statementNodes);
         }
-
-        Map<BasicBlock, FrameSlot[]> deadSlotsAtBeginBlock;
+        LLVMStackFrameNuller[][] indexToSlotNuller = new LLVMStackFrameNuller[currentIndex][];
+        i = 0;
         Map<BasicBlock, FrameSlot[]> deadSlotsAfterBlock;
         if (LLVMBaseOptionFacade.lifeTimeAnalysisEnabled()) {
-            LifeTimeAnalysisResult analysisResult = LLVMLifeTimeAnalysisVisitor.visit(def, frameDescriptor);
-            deadSlotsAtBeginBlock = analysisResult.getBeginDead();
-            deadSlotsAfterBlock = analysisResult.getEndDead();
+            deadSlotsAfterBlock = LLVMLifeTimeAnalysisVisitor.visit(def, frameDescriptor);
         } else {
             deadSlotsAfterBlock = new HashMap<>();
-            deadSlotsAtBeginBlock = new HashMap<>();
         }
-        LLVMStackFrameNuller[][] slotNullerBeginNodes = getSlotNuller(def, currentIndex, basicBlockIndices, deadSlotsAtBeginBlock);
-        LLVMStackFrameNuller[][] slotNullerAfterNodes = getSlotNuller(def, currentIndex, basicBlockIndices, deadSlotsAfterBlock);
-        return factoryFacade.createFunctionBlockNode(retSlot, allFunctionNodes, slotNullerBeginNodes, slotNullerAfterNodes);
-    }
-
-    private static LLVMStackFrameNuller[][] getSlotNuller(FunctionDef def, int size, int[] basicBlockIndices, Map<BasicBlock, FrameSlot[]> deadSlotsAfterBlock) {
-        LLVMStackFrameNuller[][] indexToSlotNuller = new LLVMStackFrameNuller[size][];
-        int i = 0;
         for (BasicBlock basicBlock : def.getBasicBlocks()) {
             FrameSlot[] deadSlots = deadSlotsAfterBlock.get(basicBlock);
             if (deadSlots != null) {
@@ -539,7 +525,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
                 indexToSlotNuller[basicBlockIndices[i++]] = getSlotNullerNode(deadSlots);
             }
         }
-        return indexToSlotNuller;
+        return factoryFacade.createFunctionBlockNode(retSlot, allFunctionNodes, indexToSlotNuller);
     }
 
     private static LLVMStackFrameNuller[] getSlotNullerNode(FrameSlot[] deadSlots) {
@@ -568,16 +554,9 @@ public final class LLVMVisitor implements LLVMParserRuntime {
             case Float:
                 return new LLVMFloatNuller(slot);
             case Double:
-                return new LLVMDoubleNuller(slot);
+                return new LLVMDoubleNull(slot);
             case Object:
-                /**
-                 * It would be cleaner do not distinct between the frame slot kinds but the variable
-                 * type. We cannot simply set the object to null, since phis that have null and
-                 * other Object's inside escape and are allocated. We set a null address here, since
-                 * other Sulong data types that use Object are implement inefficiently anyway. In
-                 * the long term, they should have their own stack nuller.
-                 */
-                return new LLVMAddressNuller(slot);
+                return new LLVMObjectNuller(slot);
             case Illegal:
                 throw new AssertionError("illegal");
             default:
@@ -1048,18 +1027,6 @@ public final class LLVMVisitor implements LLVMParserRuntime {
                 GlobalVariable globalVariable = (GlobalVariable) constant.getRef();
                 String globalVarName = globalVariable.getName();
                 String linkage = globalVariable.getLinkage();
-
-                /*
-                 * Global variables in C can be 'extern', but still managed because they're defined
-                 * in another managed file. We should be able to detect that by looking for existing
-                 * global variables with the same name, so I would think that we should just need to
-                 * add
-                 * 
-                 * && !globalVars.containsKey(globalVariable)
-                 * 
-                 * to the condition below, but if I do that things go pretty badly wrong and we end
-                 * up crashing.
-                 */
                 if ("external".equals(linkage)) {
                     long getNativeSymbol = nativeLookup.getNativeHandle(globalVarName);
                     LLVMAddress nativeSymbolAddress = LLVMAddress.fromLong(getNativeSymbol);
