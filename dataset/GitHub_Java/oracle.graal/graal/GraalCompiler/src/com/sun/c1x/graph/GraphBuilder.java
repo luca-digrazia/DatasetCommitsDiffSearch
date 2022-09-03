@@ -901,7 +901,7 @@ public final class GraphBuilder {
 
     private void appendInvoke(int opcode, RiMethod target, Value[] args, int cpi, RiConstantPool constantPool) {
         CiKind resultType = returnKind(target);
-        Value result = append(new Invoke(opcode, resultType.stackKind(), args, target, target.signature().returnType(compilation.method.holder()), null, graph));
+        Value result = append(new Invoke(opcode, resultType.stackKind(), args, target, target.signature().returnType(compilation.method.holder()), null));
         pushReturn(resultType, result);
     }
 
@@ -1021,7 +1021,7 @@ public final class GraphBuilder {
                 lockAddress = new MonitorAddress(lockNumber);
                 append(lockAddress);
             }
-            append(new MonitorExit(rootMethodSynchronizedObject, lockAddress, lockNumber, stateBefore, graph));
+            append(new MonitorExit(rootMethodSynchronizedObject, lockAddress, lockNumber, stateBefore));
             curState.unlock();
         }
         append(new Return(x, !noSafepoints()));
@@ -1041,7 +1041,7 @@ public final class GraphBuilder {
             lockAddress = new MonitorAddress(lockNumber);
             append(lockAddress);
         }
-        MonitorEnter monitorEnter = new MonitorEnter(x, lockAddress, lockNumber, null, graph);
+        MonitorEnter monitorEnter = new MonitorEnter(x, lockAddress, lockNumber, null);
         appendWithoutOptimization(monitorEnter, bci);
         curState.lock(ir, x, lockNumber + 1);
         monitorEnter.setStateAfter(curState.immutableCopy(bci));
@@ -1058,7 +1058,7 @@ public final class GraphBuilder {
             lockAddress = new MonitorAddress(lockNumber);
             append(lockAddress);
         }
-        appendWithoutOptimization(new MonitorExit(x, lockAddress, lockNumber, null, graph), bci);
+        appendWithoutOptimization(new MonitorExit(x, lockAddress, lockNumber, null), bci);
         curState.unlock();
         killMemoryMap(); // prevent any optimizations across synchronization
     }
