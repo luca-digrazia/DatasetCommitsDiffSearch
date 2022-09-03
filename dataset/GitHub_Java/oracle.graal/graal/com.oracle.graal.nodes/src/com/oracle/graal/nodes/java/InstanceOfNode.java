@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.spi.*;
@@ -78,13 +77,12 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
             if (result != null) {
                 return result;
             }
-            Assumptions assumptions = graph().getAssumptions();
-            if (assumptions != null) {
+            if (tool.assumptions() != null && tool.assumptions().useOptimisticAssumptions()) {
                 ResolvedJavaType exact = stampType.findUniqueConcreteSubtype();
                 if (exact != null) {
                     result = checkInstanceOf(forValue, exact, objectStamp.nonNull(), true);
                     if (result != null) {
-                        assumptions.recordConcreteSubtype(stampType, exact);
+                        tool.assumptions().recordConcreteSubtype(stampType, exact);
                         return result;
                     }
                 }

@@ -27,8 +27,8 @@ import static com.oracle.graal.compiler.GraalCompiler.*;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.Assumptions.Assumption;
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.Assumptions.Assumption;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
@@ -40,9 +40,7 @@ import com.oracle.graal.debug.DebugMemUseTracker.Closeable;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
@@ -61,7 +59,6 @@ public class TruffleCompilerImpl {
 
     private final Providers providers;
     private final Suites suites;
-    private final LIRSuites lirSuites;
     private final PartialEvaluator partialEvaluator;
     private final Backend backend;
     private final GraphBuilderConfiguration config;
@@ -84,7 +81,6 @@ public class TruffleCompilerImpl {
         ConstantReflectionProvider constantReflection = new TruffleConstantReflectionProvider(backend.getProviders().getConstantReflection(), backend.getProviders().getMetaAccess());
         this.providers = backend.getProviders().copyWith(truffleReplacements).copyWith(constantReflection);
         this.suites = backend.getSuites().getDefaultSuites();
-        this.lirSuites = backend.getSuites().getDefaultLIRSuites();
 
         ResolvedJavaType[] skippedExceptionTypes = getSkippedExceptionTypes(providers.getMetaAccess());
         GraphBuilderConfiguration eagerConfig = GraphBuilderConfiguration.getEagerDefault().withSkippedExceptionTypes(skippedExceptionTypes);
@@ -120,10 +116,10 @@ public class TruffleCompilerImpl {
         compilationNotify.notifyCompilationStarted(compilable);
 
         try {
-            GraphBuilderSuiteInfo info = createGraphBuilderSuite();
+            Assumptions assumptions = new Assumptions(true);
 
             try (TimerCloseable a = PartialEvaluationTime.start(); Closeable c = PartialEvaluationMemUse.start()) {
-                graph = partialEvaluator.createGraph(compilable, AllowAssumptions.YES, info.plugins);
+                graph = partialEvaluator.createGraph(compilable, assumptions);
             }
 
             if (Thread.currentThread().isInterrupted()) {
@@ -138,7 +134,7 @@ public class TruffleCompilerImpl {
             }
 
             compilationNotify.notifyCompilationTruffleTierFinished(compilable, graph);
-            CompilationResult compilationResult = compileMethodHelper(graph, compilable.toString(), info.suite, compilable.getSpeculationLog(), compilable);
+            CompilationResult compilationResult = compileMethodHelper(graph, assumptions, compilable.toString(), compilable.getSpeculationLog(), compilable);
             compilationNotify.notifyCompilationSuccess(compilable, graph, compilationResult);
         } catch (Throwable t) {
             compilationNotify.notifyCompilationFailed(compilable, graph, t);
@@ -146,7 +142,7 @@ public class TruffleCompilerImpl {
         }
     }
 
-    public CompilationResult compileMethodHelper(StructuredGraph graph, String name, PhaseSuite<HighTierContext> graphBuilderSuite, SpeculationLog speculationLog, InstalledCode predefinedInstalledCode) {
+    public CompilationResult compileMethodHelper(StructuredGraph graph, Assumptions assumptions, String name, SpeculationLog speculationLog, InstalledCode predefinedInstalledCode) {
         try (Scope s = Debug.scope("TruffleFinal")) {
             Debug.dump(1, graph, "After TruffleTier");
         } catch (Throwable e) {
@@ -158,34 +154,29 @@ public class TruffleCompilerImpl {
             CodeCacheProvider codeCache = providers.getCodeCache();
             CallingConvention cc = getCallingConvention(codeCache, Type.JavaCallee, graph.method(), false);
             CompilationResult compilationResult = new CompilationResult(name);
-            result = compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), null, graphBuilderSuite == null ? createGraphBuilderSuite().suite : graphBuilderSuite,
-                            Optimizations, getProfilingInfo(graph), speculationLog, suites, lirSuites, compilationResult, CompilationResultBuilderFactory.Default);
+            result = compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), null, createGraphBuilderSuite(), Optimizations, getProfilingInfo(graph), speculationLog,
+                            suites, compilationResult, CompilationResultBuilderFactory.Default);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
 
         compilationNotify.notifyCompilationGraalTierFinished((OptimizedCallTarget) predefinedInstalledCode, graph);
 
-        if (graph.isMethodRecordingEnabled()) {
-            Set<ResolvedJavaMethod> methods = graph.getMethods();
-            result.setMethods(methods.toArray(new ResolvedJavaMethod[methods.size()]));
-        } else {
-            assert result.getMethods() == null;
-        }
-
         List<AssumptionValidAssumption> validAssumptions = new ArrayList<>();
-        Set<Assumption> newAssumptions = new HashSet<>();
-        for (Assumption assumption : graph.getAssumptions()) {
-            processAssumption(newAssumptions, assumption, validAssumptions);
-        }
-
-        if (result.getAssumptions() != null) {
-            for (Assumption assumption : result.getAssumptions()) {
+        Assumptions newAssumptions = new Assumptions(true);
+        if (assumptions != null) {
+            for (Assumption assumption : assumptions.getAssumptions()) {
                 processAssumption(newAssumptions, assumption, validAssumptions);
             }
         }
 
-        result.setAssumptions(newAssumptions.toArray(new Assumption[newAssumptions.size()]));
+        if (result.getAssumptions() != null) {
+            for (Assumption assumption : result.getAssumptions().getAssumptions()) {
+                processAssumption(newAssumptions, assumption, validAssumptions);
+            }
+        }
+
+        result.setAssumptions(newAssumptions);
 
         InstalledCode installedCode;
         try (Scope s = Debug.scope("CodeInstall", providers.getCodeCache()); TimerCloseable a = CodeInstallationTime.start(); Closeable c = CodeInstallationMemUse.start()) {
@@ -204,33 +195,22 @@ public class TruffleCompilerImpl {
         return result;
     }
 
-    static class GraphBuilderSuiteInfo {
-        final PhaseSuite<HighTierContext> suite;
-        final GraphBuilderPlugins plugins;
-
-        public GraphBuilderSuiteInfo(PhaseSuite<HighTierContext> suite, GraphBuilderPlugins plugins) {
-            this.suite = suite;
-            this.plugins = plugins;
-        }
-    }
-
-    private GraphBuilderSuiteInfo createGraphBuilderSuite() {
+    private PhaseSuite<HighTierContext> createGraphBuilderSuite() {
         PhaseSuite<HighTierContext> suite = backend.getSuites().getDefaultGraphBuilderSuite().copy();
         ListIterator<BasePhase<? super HighTierContext>> iterator = suite.findPhase(GraphBuilderPhase.class);
         GraphBuilderPhase graphBuilderPhase = (GraphBuilderPhase) iterator.previous();
         iterator.remove();
-        GraphBuilderPlugins plugins = graphBuilderPhase.getGraphBuilderPlugins();
-        iterator.add(new GraphBuilderPhase(config, plugins));
-        return new GraphBuilderSuiteInfo(suite, plugins);
+        iterator.add(new GraphBuilderPhase(config, graphBuilderPhase.getGraphBuilderPlugins()));
+        return suite;
     }
 
-    public void processAssumption(Set<Assumption> newAssumptions, Assumption assumption, List<AssumptionValidAssumption> manual) {
+    public void processAssumption(Assumptions newAssumptions, Assumption assumption, List<AssumptionValidAssumption> manual) {
         if (assumption != null) {
             if (assumption instanceof AssumptionValidAssumption) {
                 AssumptionValidAssumption assumptionValidAssumption = (AssumptionValidAssumption) assumption;
                 manual.add(assumptionValidAssumption);
             } else {
-                newAssumptions.add(assumption);
+                newAssumptions.record(assumption);
             }
         }
     }

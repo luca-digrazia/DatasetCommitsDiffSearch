@@ -37,8 +37,6 @@ import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
-import com.oracle.graal.java.GraphBuilderPlugin.InvocationPlugin;
-import com.oracle.graal.java.GraphBuilderPlugin.LoadFieldPlugin;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
@@ -701,7 +699,7 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
         Kind kind = field.getKind();
         T receiver = frameState.apop();
         if ((field instanceof ResolvedJavaField) && ((ResolvedJavaField) field).getDeclaringClass().isInitialized()) {
-            LoadFieldPlugin loadFieldPlugin = this.graphBuilderConfig.getLoadFieldPlugin();
+            GraphBuilderPlugins.LoadFieldPlugin loadFieldPlugin = this.graphBuilderConfig.getLoadFieldPlugin();
             if (loadFieldPlugin == null || !loadFieldPlugin.apply((GraphBuilderContext) this, (ValueNode) receiver, (ResolvedJavaField) field)) {
                 appendOptimizedLoadField(kind, genLoadField(receiver, (ResolvedJavaField) field));
             }
@@ -750,7 +748,7 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
     private void genGetStatic(JavaField field) {
         Kind kind = field.getKind();
         if (field instanceof ResolvedJavaField && ((ResolvedJavaType) field.getDeclaringClass()).isInitialized()) {
-            InvocationPlugin.LoadFieldPlugin loadFieldPlugin = this.graphBuilderConfig.getLoadFieldPlugin();
+            GraphBuilderPlugins.LoadFieldPlugin loadFieldPlugin = this.graphBuilderConfig.getLoadFieldPlugin();
             if (loadFieldPlugin == null || !loadFieldPlugin.apply((GraphBuilderContext) this, (ResolvedJavaField) field)) {
                 appendOptimizedLoadField(kind, genLoadField(null, (ResolvedJavaField) field));
             }
@@ -844,9 +842,9 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
 
         Map<Integer, SuccessorInfo> bciToBlockSuccessorIndex = new HashMap<>();
         for (int i = 0; i < currentBlock.getSuccessorCount(); i++) {
-            assert !bciToBlockSuccessorIndex.containsKey(currentBlock.getSuccessor(i).startBci);
-            if (!bciToBlockSuccessorIndex.containsKey(currentBlock.getSuccessor(i).startBci)) {
-                bciToBlockSuccessorIndex.put(currentBlock.getSuccessor(i).startBci, new SuccessorInfo(i));
+            assert !bciToBlockSuccessorIndex.containsKey(currentBlock.getSuccessors().get(i).startBci);
+            if (!bciToBlockSuccessorIndex.containsKey(currentBlock.getSuccessors().get(i).startBci)) {
+                bciToBlockSuccessorIndex.put(currentBlock.getSuccessors().get(i).startBci, new SuccessorInfo(i));
             }
         }
 
@@ -871,7 +869,7 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
                 SuccessorInfo info = bciToBlockSuccessorIndex.get(targetBci);
                 if (info.actualIndex < 0) {
                     info.actualIndex = nextSuccessorIndex++;
-                    actualSuccessors.add(currentBlock.getSuccessor(info.blockIndex));
+                    actualSuccessors.add(currentBlock.getSuccessors().get(info.blockIndex));
                 }
                 keySuccessors[i] = info.actualIndex;
             }
@@ -1150,11 +1148,10 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
         return frameState;
     }
 
-    protected boolean traceInstruction(int bci, int opcode, boolean blockStart) {
+    protected void traceInstruction(int bci, int opcode, boolean blockStart) {
         if (Debug.isEnabled() && Options.TraceBytecodeParserLevel.getValue() >= TRACELEVEL_INSTRUCTIONS && Debug.isLogEnabled()) {
             traceInstructionHelper(bci, opcode, blockStart);
         }
-        return true;
     }
 
     private void traceInstructionHelper(int bci, int opcode, boolean blockStart) {
