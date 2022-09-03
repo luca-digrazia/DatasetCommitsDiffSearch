@@ -35,7 +35,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class NewMultiArrayNode extends DeoptimizingFixedWithNextNode implements Lowerable, ArrayLengthProvider {
 
-    @Input protected NodeInputList<ValueNode> dimensions;
+    @Input NodeInputList<ValueNode> dimensions;
     private final ResolvedJavaType type;
 
     public ValueNode dimension(int index) {
@@ -60,7 +60,7 @@ public class NewMultiArrayNode extends DeoptimizingFixedWithNextNode implements 
         return USE_GENERATED_NODES ? new NewMultiArrayNodeGen(type, dimensions) : new NewMultiArrayNode(type, dimensions);
     }
 
-    protected NewMultiArrayNode(ResolvedJavaType type, ValueNode[] dimensions) {
+    NewMultiArrayNode(ResolvedJavaType type, ValueNode[] dimensions) {
         super(StampFactory.exactNonNull(type));
         this.type = type;
         this.dimensions = new NodeInputList<>(this, dimensions);

@@ -106,13 +106,13 @@ public class NewFrameNode extends FixedWithNextNode implements IterableNodeType,
     @NodeInfo
     public static class VirtualOnlyInstanceNode extends VirtualInstanceNode {
 
-        protected boolean allowMaterialization;
+        private boolean allowMaterialization;
 
         public static VirtualOnlyInstanceNode create(ResolvedJavaType type, ResolvedJavaField[] fields) {
             return USE_GENERATED_NODES ? new NewFrameNode_VirtualOnlyInstanceNodeGen(type, fields) : new VirtualOnlyInstanceNode(type, fields);
         }
 
-        protected VirtualOnlyInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields) {
+        VirtualOnlyInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields) {
             super(type, fields, false);
         }
 

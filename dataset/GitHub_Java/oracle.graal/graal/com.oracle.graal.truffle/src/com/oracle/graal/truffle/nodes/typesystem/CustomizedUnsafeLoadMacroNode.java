@@ -35,8 +35,7 @@ import com.oracle.graal.truffle.nodes.asserts.*;
 import com.oracle.truffle.api.*;
 
 /**
- * Macro node for {@link CompilerDirectives#unsafeGetInt(Object, long, boolean, Object)} and
- * friends.
+ * Macro node for method {@link CompilerDirectives#unsafeCast(Object, Class, boolean)}.
  */
 @NodeInfo
 public class CustomizedUnsafeLoadMacroNode extends NeverPartOfCompilationNode implements Canonicalizable {
@@ -48,7 +47,7 @@ public class CustomizedUnsafeLoadMacroNode extends NeverPartOfCompilationNode im
     private static final int LOCATION_ARGUMENT_INDEX = 3;
 
     public static CustomizedUnsafeLoadMacroNode create(Invoke invoke) {
-        return new CustomizedUnsafeLoadMacroNode(invoke);
+        return USE_GENERATED_NODES ? new CustomizedUnsafeLoadMacroNodeGen(invoke) : new CustomizedUnsafeLoadMacroNode(invoke);
     }
 
     protected CustomizedUnsafeLoadMacroNode(Invoke invoke) {
@@ -64,10 +63,10 @@ public class CustomizedUnsafeLoadMacroNode extends NeverPartOfCompilationNode im
             ValueNode offsetArgument = arguments.get(OFFSET_ARGUMENT_INDEX);
             ValueNode conditionArgument = arguments.get(CONDITION_ARGUMENT_INDEX);
             LocationIdentity locationIdentity;
-            if (locationArgument.asJavaConstant().isNull()) {
+            if (locationArgument.asConstant().isNull()) {
                 locationIdentity = LocationIdentity.ANY_LOCATION;
             } else {
-                locationIdentity = ObjectLocationIdentity.create(locationArgument.asJavaConstant());
+                locationIdentity = ObjectLocationIdentity.create(locationArgument.asConstant());
             }
             CompareNode compare = CompareNode.createCompareNode(Condition.EQ, conditionArgument, ConstantNode.forBoolean(true));
             Kind returnKind = this.getTargetMethod().getSignature().getReturnKind();

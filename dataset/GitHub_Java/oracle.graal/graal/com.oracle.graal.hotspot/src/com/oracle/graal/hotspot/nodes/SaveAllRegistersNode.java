@@ -37,9 +37,13 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
 public class SaveAllRegistersNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Single {
 
-    protected SaveRegistersOp saveRegistersOp;
+    private SaveRegistersOp saveRegistersOp;
 
-    public SaveAllRegistersNode() {
+    public static SaveAllRegistersNode create() {
+        return USE_GENERATED_NODES ? new SaveAllRegistersNodeGen() : new SaveAllRegistersNode();
+    }
+
+    protected SaveAllRegistersNode() {
         super(StampFactory.forKind(Kind.Long));
     }
 

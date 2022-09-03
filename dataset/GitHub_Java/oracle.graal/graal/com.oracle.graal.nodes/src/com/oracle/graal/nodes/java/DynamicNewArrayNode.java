@@ -46,7 +46,7 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode {
         return USE_GENERATED_NODES ? new DynamicNewArrayNodeGen(elementType, length) : new DynamicNewArrayNode(elementType, length);
     }
 
-    protected DynamicNewArrayNode(ValueNode elementType, ValueNode length) {
+    DynamicNewArrayNode(ValueNode elementType, ValueNode length) {
         this(elementType, length, true);
     }
 
@@ -54,7 +54,7 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode {
         return USE_GENERATED_NODES ? new DynamicNewArrayNodeGen(elementType, length, fillContents) : new DynamicNewArrayNode(elementType, length, fillContents);
     }
 
-    protected DynamicNewArrayNode(ValueNode elementType, ValueNode length, boolean fillContents) {
+    DynamicNewArrayNode(ValueNode elementType, ValueNode length, boolean fillContents) {
         super(StampFactory.objectNonNull(), length, fillContents);
         this.elementType = elementType;
     }

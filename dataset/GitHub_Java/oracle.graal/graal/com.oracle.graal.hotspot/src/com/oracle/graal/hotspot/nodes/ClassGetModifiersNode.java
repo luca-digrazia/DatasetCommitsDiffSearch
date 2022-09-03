@@ -39,7 +39,7 @@ import com.oracle.graal.replacements.nodes.*;
 public class ClassGetModifiersNode extends MacroNode implements Canonicalizable {
 
     public static ClassGetModifiersNode create(Invoke invoke) {
-        return new ClassGetModifiersNode(invoke);
+        return USE_GENERATED_NODES ? new ClassGetModifiersNodeGen(invoke) : new ClassGetModifiersNode(invoke);
     }
 
     protected ClassGetModifiersNode(Invoke invoke) {
@@ -54,7 +54,7 @@ public class ClassGetModifiersNode extends MacroNode implements Canonicalizable 
     public Node canonical(CanonicalizerTool tool) {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
-            Class<?> c = (Class<?>) HotSpotObjectConstantImpl.asObject(javaClass.asJavaConstant());
+            Class<?> c = (Class<?>) HotSpotObjectConstant.asObject(javaClass.asConstant());
             if (c != null) {
                 return ConstantNode.forInt(c.getModifiers());
             }

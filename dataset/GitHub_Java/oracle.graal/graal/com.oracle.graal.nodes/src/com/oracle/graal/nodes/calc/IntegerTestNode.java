@@ -35,14 +35,24 @@ import com.oracle.graal.nodes.*;
 @NodeInfo
 public class IntegerTestNode extends BinaryOpLogicNode {
 
-    public IntegerTestNode(ValueNode x, ValueNode y) {
+    /**
+     * Constructs a new Test instruction.
+     *
+     * @param x the instruction producing the first input to the instruction
+     * @param y the instruction that produces the second input to this instruction
+     */
+    public static IntegerTestNode create(ValueNode x, ValueNode y) {
+        return USE_GENERATED_NODES ? new IntegerTestNodeGen(x, y) : new IntegerTestNode(x, y);
+    }
+
+    protected IntegerTestNode(ValueNode x, ValueNode y) {
         super(x, y);
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
         if (forX.isConstant() && forY.isConstant()) {
-            return LogicConstantNode.forBoolean((forX.asJavaConstant().asLong() & forY.asJavaConstant().asLong()) == 0);
+            return LogicConstantNode.forBoolean((forX.asConstant().asLong() & forY.asConstant().asLong()) == 0);
         }
         if (getX().stamp() instanceof IntegerStamp && getY().stamp() instanceof IntegerStamp) {
             IntegerStamp xStamp = (IntegerStamp) forX.stamp();

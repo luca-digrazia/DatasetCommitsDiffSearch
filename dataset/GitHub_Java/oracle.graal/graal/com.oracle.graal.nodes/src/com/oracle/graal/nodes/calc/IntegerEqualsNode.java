@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -41,7 +41,7 @@ public class IntegerEqualsNode extends CompareNode {
      * @param y the instruction that produces the second input to this instruction
      */
     public static IntegerEqualsNode create(ValueNode x, ValueNode y) {
-        return new IntegerEqualsNode(x, y);
+        return USE_GENERATED_NODES ? new IntegerEqualsNodeGen(x, y) : new IntegerEqualsNode(x, y);
     }
 
     protected IntegerEqualsNode(ValueNode x, ValueNode y) {
@@ -62,8 +62,7 @@ public class IntegerEqualsNode extends CompareNode {
 
     @Override
     protected ValueNode optimizeNormalizeCmp(Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
-        PrimitiveConstant primitive = (PrimitiveConstant) constant;
-        if (primitive.getKind() == Kind.Int && primitive.asInt() == 0) {
+        if (constant.getKind() == Kind.Int && constant.asInt() == 0) {
             ValueNode a = mirrored ? normalizeNode.getY() : normalizeNode.getX();
             ValueNode b = mirrored ? normalizeNode.getX() : normalizeNode.getY();
 
@@ -98,16 +97,16 @@ public class IntegerEqualsNode extends CompareNode {
 
     @Override
     protected ValueNode canonicalizeSymmetricConstant(CanonicalizerTool tool, Constant constant, ValueNode nonConstant, boolean mirrored) {
-        if (constant instanceof PrimitiveConstant && ((PrimitiveConstant) constant).asLong() == 0) {
+        if (constant.asLong() == 0) {
             if (nonConstant instanceof AndNode) {
                 AndNode andNode = (AndNode) nonConstant;
                 return IntegerTestNode.create(andNode.getX(), andNode.getY());
-            } else if (nonConstant instanceof ShiftNode && nonConstant.stamp() instanceof IntegerStamp) {
+            } else if (nonConstant instanceof ShiftNode) {
                 if (nonConstant instanceof LeftShiftNode) {
                     LeftShiftNode shift = (LeftShiftNode) nonConstant;
                     if (shift.getY().isConstant()) {
                         int mask = shift.getShiftAmountMask();
-                        int amount = shift.getY().asJavaConstant().asInt() & mask;
+                        int amount = shift.getY().asConstant().asInt() & mask;
                         if (shift.getX().getKind() == Kind.Int) {
                             return IntegerTestNode.create(shift.getX(), ConstantNode.forInt(-1 >>> amount));
                         } else {
@@ -119,7 +118,7 @@ public class IntegerEqualsNode extends CompareNode {
                     RightShiftNode shift = (RightShiftNode) nonConstant;
                     if (shift.getY().isConstant() && ((IntegerStamp) shift.getX().stamp()).isPositive()) {
                         int mask = shift.getShiftAmountMask();
-                        int amount = shift.getY().asJavaConstant().asInt() & mask;
+                        int amount = shift.getY().asConstant().asInt() & mask;
                         if (shift.getX().getKind() == Kind.Int) {
                             return IntegerTestNode.create(shift.getX(), ConstantNode.forInt(-1 << amount));
                         } else {
@@ -131,7 +130,7 @@ public class IntegerEqualsNode extends CompareNode {
                     UnsignedRightShiftNode shift = (UnsignedRightShiftNode) nonConstant;
                     if (shift.getY().isConstant()) {
                         int mask = shift.getShiftAmountMask();
-                        int amount = shift.getY().asJavaConstant().asInt() & mask;
+                        int amount = shift.getY().asConstant().asInt() & mask;
                         if (shift.getX().getKind() == Kind.Int) {
                             return IntegerTestNode.create(shift.getX(), ConstantNode.forInt(-1 << amount));
                         } else {

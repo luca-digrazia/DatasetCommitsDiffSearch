@@ -29,10 +29,10 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = "Deopt", nameTemplate = "Deopt {p#reason/s}")
 public class DeoptimizeNode extends AbstractDeoptimizeNode implements Lowerable, LIRLowerable {
 
-    protected DeoptimizationAction action;
-    protected DeoptimizationReason reason;
-    protected int debugId;
-    protected Constant speculation;
+    private final DeoptimizationAction action;
+    private final DeoptimizationReason reason;
+    private final int debugId;
+    private final Constant speculation;
 
     public static DeoptimizeNode create(DeoptimizationAction action, DeoptimizationReason reason) {
         return USE_GENERATED_NODES ? new DeoptimizeNodeGen(action, reason) : new DeoptimizeNode(action, reason);

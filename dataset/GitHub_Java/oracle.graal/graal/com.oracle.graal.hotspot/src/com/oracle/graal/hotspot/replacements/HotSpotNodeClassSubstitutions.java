@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -48,7 +48,7 @@ public class HotSpotNodeClassSubstitutions {
     public static class NodeClassGetNode extends PureFunctionMacroNode {
 
         public static NodeClassGetNode create(Invoke invoke) {
-            return new NodeClassGetNode(invoke);
+            return USE_GENERATED_NODES ? new HotSpotNodeClassSubstitutions_NodeClassGetNodeGen(invoke) : new NodeClassGetNode(invoke);
         }
 
         protected NodeClassGetNode(Invoke invoke) {
@@ -56,11 +56,11 @@ public class HotSpotNodeClassSubstitutions {
         }
 
         @Override
-        protected JavaConstant evaluate(JavaConstant param, MetaAccessProvider metaAccess) {
+        protected Constant evaluate(Constant param, MetaAccessProvider metaAccess) {
             if (param.isNull() || ImmutableCode.getValue()) {
                 return null;
             }
-            return HotSpotObjectConstantImpl.forObject(NodeClass.get((Class<?>) HotSpotObjectConstantImpl.asObject(param)));
+            return HotSpotObjectConstant.forObject(NodeClass.get((Class<?>) HotSpotObjectConstant.asObject(param)));
         }
     }
 

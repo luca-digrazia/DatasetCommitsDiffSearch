@@ -33,7 +33,7 @@ import com.oracle.graal.nodes.spi.*;
 public class FixedGuardNode extends AbstractFixedGuardNode implements Lowerable, IterableNodeType {
 
     public static FixedGuardNode create(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action) {
-        return new FixedGuardNode(condition, deoptReason, action);
+        return USE_GENERATED_NODES ? new FixedGuardNodeGen(condition, deoptReason, action) : new FixedGuardNode(condition, deoptReason, action);
     }
 
     protected FixedGuardNode(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action) {
@@ -41,7 +41,7 @@ public class FixedGuardNode extends AbstractFixedGuardNode implements Lowerable,
     }
 
     public static FixedGuardNode create(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated) {
-        return new FixedGuardNode(condition, deoptReason, action, negated);
+        return USE_GENERATED_NODES ? new FixedGuardNodeGen(condition, deoptReason, action, negated) : new FixedGuardNode(condition, deoptReason, action, negated);
     }
 
     protected FixedGuardNode(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated) {
@@ -66,12 +66,6 @@ public class FixedGuardNode extends AbstractFixedGuardNode implements Lowerable,
             }
             this.replaceAtUsages(null);
             graph().removeFixed(this);
-        } else if (condition() instanceof ShortCircuitOrNode) {
-            ShortCircuitOrNode shortCircuitOr = (ShortCircuitOrNode) condition();
-            if (isNegated() && usages().isEmpty()) {
-                graph().addAfterFixed(this, graph().add(FixedGuardNode.create(shortCircuitOr.getY(), getReason(), getAction(), !shortCircuitOr.isYNegated())));
-                graph().replaceFixedWithFixed(this, graph().add(FixedGuardNode.create(shortCircuitOr.getX(), getReason(), getAction(), !shortCircuitOr.isXNegated())));
-            }
         }
     }
 

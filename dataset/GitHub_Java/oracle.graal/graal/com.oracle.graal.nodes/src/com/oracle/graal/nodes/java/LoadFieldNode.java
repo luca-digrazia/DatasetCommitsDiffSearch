@@ -37,9 +37,19 @@ import com.oracle.graal.nodes.virtual.*;
  * The {@code LoadFieldNode} represents a read of a static or instance field.
  */
 @NodeInfo(nameTemplate = "LoadField#{p#field/s}")
-public class LoadFieldNode extends AccessFieldNode implements Canonicalizable.Unary<ValueNode>, VirtualizableRoot, UncheckedInterfaceProvider {
+public class LoadFieldNode extends AccessFieldNode implements Canonicalizable.Unary<ValueNode>, VirtualizableRoot {
 
-    public LoadFieldNode(ValueNode object, ResolvedJavaField field) {
+    /**
+     * Creates a new LoadFieldNode instance.
+     *
+     * @param object the receiver object
+     * @param field the compiler interface field
+     */
+    public static LoadFieldNode create(ValueNode object, ResolvedJavaField field) {
+        return USE_GENERATED_NODES ? new LoadFieldNodeGen(object, field) : new LoadFieldNode(object, field);
+    }
+
+    protected LoadFieldNode(ValueNode object, ResolvedJavaField field) {
         super(createStamp(field), object, field);
     }
 
@@ -57,23 +67,22 @@ public class LoadFieldNode extends AccessFieldNode implements Canonicalizable.Un
     }
 
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forObject) {
-        if (usages().isEmpty() && !isVolatile() && (isStatic() || StampTool.isPointerNonNull(forObject.stamp()))) {
+        if (usages().isEmpty() && !isVolatile() && (isStatic() || StampTool.isObjectNonNull(forObject.stamp()))) {
             return null;
         }
         MetaAccessProvider metaAccess = tool.getMetaAccess();
-        ConstantReflectionProvider constantReflection = tool.getConstantReflection();
         if (tool.canonicalizeReads() && metaAccess != null) {
-            ConstantNode constant = asConstant(metaAccess, constantReflection, forObject);
+            ConstantNode constant = asConstant(metaAccess, forObject);
             if (constant != null) {
                 return constant;
             }
-            PhiNode phi = asPhi(metaAccess, constantReflection, forObject);
+            PhiNode phi = asPhi(metaAccess, forObject);
             if (phi != null) {
                 return phi;
             }
         }
         if (!isStatic() && forObject.isNullConstant()) {
-            return new DeoptimizeNode(DeoptimizationAction.None, DeoptimizationReason.NullCheckException);
+            return DeoptimizeNode.create(DeoptimizationAction.None, DeoptimizationReason.NullCheckException);
         }
         return this;
     }
@@ -81,12 +90,12 @@ public class LoadFieldNode extends AccessFieldNode implements Canonicalizable.Un
     /**
      * Gets a constant value for this load if possible.
      */
-    public ConstantNode asConstant(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ValueNode forObject) {
-        JavaConstant constant = null;
+    public ConstantNode asConstant(MetaAccessProvider metaAccess, ValueNode forObject) {
+        Constant constant = null;
         if (isStatic()) {
-            constant = constantReflection.readConstantFieldValue(field(), null);
+            constant = field().readConstantValue(null);
         } else if (forObject.isConstant() && !forObject.isNullConstant()) {
-            constant = constantReflection.readConstantFieldValue(field(), forObject.asJavaConstant());
+            constant = field().readConstantValue(forObject.asConstant());
         }
         if (constant != null) {
             return ConstantNode.forConstant(constant, metaAccess);
@@ -94,12 +103,12 @@ public class LoadFieldNode extends AccessFieldNode implements Canonicalizable.Un
         return null;
     }
 
-    private PhiNode asPhi(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ValueNode forObject) {
+    private PhiNode asPhi(MetaAccessProvider metaAccess, ValueNode forObject) {
         if (!isStatic() && field.isFinal() && forObject instanceof ValuePhiNode && ((ValuePhiNode) forObject).values().filter(isNotA(ConstantNode.class)).isEmpty()) {
             PhiNode phi = (PhiNode) forObject;
-            JavaConstant[] constants = new JavaConstant[phi.valueCount()];
+            Constant[] constants = new Constant[phi.valueCount()];
             for (int i = 0; i < phi.valueCount(); i++) {
-                JavaConstant constantValue = constantReflection.readConstantFieldValue(field(), phi.valueAt(i).asJavaConstant());
+                Constant constantValue = field().readConstantValue(phi.valueAt(i).asConstant());
                 if (constantValue == null) {
                     return null;
                 }
@@ -109,7 +118,7 @@ public class LoadFieldNode extends AccessFieldNode implements Canonicalizable.Un
             for (int i = 0; i < phi.valueCount(); i++) {
                 constantNodes[i] = ConstantNode.forConstant(constants[i], metaAccess);
             }
-            return new ValuePhiNode(stamp(), phi.merge(), constantNodes);
+            return ValuePhiNode.create(stamp(), phi.merge(), constantNodes);
         }
         return null;
     }
@@ -123,9 +132,5 @@ public class LoadFieldNode extends AccessFieldNode implements Canonicalizable.Un
                 tool.replaceWith(state.getEntry(fieldIndex));
             }
         }
-    }
-
-    public Stamp uncheckedStamp() {
-        return UncheckedInterfaceProvider.uncheckedOrNull(field().getType(), stamp());
     }
 }

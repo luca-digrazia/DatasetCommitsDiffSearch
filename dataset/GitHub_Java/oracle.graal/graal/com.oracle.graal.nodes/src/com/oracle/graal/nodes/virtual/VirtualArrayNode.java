@@ -32,14 +32,14 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(nameTemplate = "VirtualArray {p#componentType/s}[{p#length}]")
 public class VirtualArrayNode extends VirtualObjectNode implements ArrayLengthProvider {
 
-    protected final ResolvedJavaType componentType;
-    protected final int length;
+    private final ResolvedJavaType componentType;
+    private final int length;
 
     public static VirtualArrayNode create(ResolvedJavaType componentType, int length) {
         return USE_GENERATED_NODES ? new VirtualArrayNodeGen(componentType, length) : new VirtualArrayNode(componentType, length);
     }
 
-    protected VirtualArrayNode(ResolvedJavaType componentType, int length) {
+    VirtualArrayNode(ResolvedJavaType componentType, int length) {
         super(componentType.getArrayClass(), true);
         this.componentType = componentType;
         this.length = length;

@@ -41,13 +41,13 @@ import com.oracle.graal.word.*;
 @NodeInfo
 public class DimensionsNode extends FixedWithNextNode implements LIRLowerable {
 
-    protected final int rank;
+    private final int rank;
 
     public static DimensionsNode create(int rank) {
         return USE_GENERATED_NODES ? new DimensionsNodeGen(rank) : new DimensionsNode(rank);
     }
 
-    protected DimensionsNode(int rank) {
+    DimensionsNode(int rank) {
         super(null);
         this.rank = rank;
     }

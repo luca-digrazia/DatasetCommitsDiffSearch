@@ -30,10 +30,13 @@ import com.oracle.graal.replacements.nodes.*;
 @NodeInfo
 public class NeverInlineMacroNode extends MacroStateSplitNode implements com.oracle.graal.graph.IterableNodeType {
 
-    public NeverInlineMacroNode(Invoke invoke) {
-        super(invoke);
+    public static NeverInlineMacroNode create(Invoke invoke) {
+        return USE_GENERATED_NODES ? new NeverInlineMacroNodeGen(invoke) : new NeverInlineMacroNode(invoke);
     }
 
+    protected NeverInlineMacroNode(Invoke invoke) {
+        super(invoke);
+    }
 
     @Override
     public void lower(LoweringTool tool) {

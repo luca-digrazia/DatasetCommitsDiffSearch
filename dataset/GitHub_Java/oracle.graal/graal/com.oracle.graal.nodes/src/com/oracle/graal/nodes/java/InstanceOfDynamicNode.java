@@ -48,7 +48,7 @@ public class InstanceOfDynamicNode extends LogicNode implements Canonicalizable.
         return USE_GENERATED_NODES ? new InstanceOfDynamicNodeGen(mirror, object) : new InstanceOfDynamicNode(mirror, object);
     }
 
-    protected InstanceOfDynamicNode(ValueNode mirror, ValueNode object) {
+    InstanceOfDynamicNode(ValueNode mirror, ValueNode object) {
         this.mirror = mirror;
         this.object = object;
         assert mirror.getKind() == Kind.Object : mirror.getKind();

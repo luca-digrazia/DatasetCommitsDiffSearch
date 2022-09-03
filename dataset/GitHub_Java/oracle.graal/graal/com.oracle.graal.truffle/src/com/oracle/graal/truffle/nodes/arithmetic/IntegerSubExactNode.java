@@ -29,6 +29,7 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.truffle.api.*;
 
@@ -37,9 +38,13 @@ import com.oracle.truffle.api.*;
  * case the addition would overflow the 32 bit range.
  */
 @NodeInfo
-public class IntegerSubExactNode extends SubNode implements IntegerExactArithmeticNode {
+public class IntegerSubExactNode extends IntegerSubNode implements IntegerExactArithmeticNode {
 
-    public IntegerSubExactNode(ValueNode x, ValueNode y) {
+    public static IntegerSubExactNode create(ValueNode x, ValueNode y) {
+        return USE_GENERATED_NODES ? new IntegerSubExactNodeGen(x, y) : new IntegerSubExactNode(x, y);
+    }
+
+    protected IntegerSubExactNode(ValueNode x, ValueNode y) {
         super(x, y);
         assert x.stamp().isCompatible(y.stamp()) && x.stamp() instanceof IntegerStamp;
     }
@@ -47,7 +52,7 @@ public class IntegerSubExactNode extends SubNode implements IntegerExactArithmet
     @Override
     public boolean inferStamp() {
         // TODO Should probably use a specialized version which understands that it can't overflow
-        return super.inferStamp();
+        return updateStamp(StampTool.sub(getX().stamp(), getY().stamp()));
     }
 
     @Override
@@ -58,7 +63,7 @@ public class IntegerSubExactNode extends SubNode implements IntegerExactArithmet
         if (forX.isConstant() && forY.isConstant()) {
             return canonicalXYconstant(forX, forY);
         } else if (forY.isConstant()) {
-            long c = forY.asJavaConstant().asLong();
+            long c = forY.asConstant().asLong();
             if (c == 0) {
                 return forX;
             }
@@ -67,8 +72,8 @@ public class IntegerSubExactNode extends SubNode implements IntegerExactArithmet
     }
 
     private ValueNode canonicalXYconstant(ValueNode forX, ValueNode forY) {
-        JavaConstant xConst = forX.asJavaConstant();
-        JavaConstant yConst = forY.asJavaConstant();
+        Constant xConst = forX.asConstant();
+        Constant yConst = forY.asConstant();
         assert xConst.getKind() == yConst.getKind();
         try {
             if (xConst.getKind() == Kind.Int) {
@@ -85,7 +90,7 @@ public class IntegerSubExactNode extends SubNode implements IntegerExactArithmet
 
     @Override
     public IntegerExactArithmeticSplitNode createSplit(BeginNode next, BeginNode deopt) {
-        return graph().add(new IntegerSubExactSplitNode(stamp(), getX(), getY(), next, deopt));
+        return graph().add(IntegerSubExactSplitNode.create(stamp(), getX(), getY(), next, deopt));
     }
 
     @Override

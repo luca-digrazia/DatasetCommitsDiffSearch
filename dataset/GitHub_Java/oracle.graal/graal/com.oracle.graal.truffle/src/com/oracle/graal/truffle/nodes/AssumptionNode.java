@@ -38,7 +38,7 @@ import com.oracle.graal.truffle.*;
 public class AssumptionNode extends MacroNode implements com.oracle.graal.graph.IterableNodeType, Simplifiable {
 
     public static AssumptionNode create(Invoke invoke) {
-        return new AssumptionNode(invoke);
+        return USE_GENERATED_NODES ? new AssumptionNodeGen(invoke) : new AssumptionNode(invoke);
     }
 
     protected AssumptionNode(Invoke invoke) {
@@ -67,9 +67,9 @@ public class AssumptionNode extends MacroNode implements com.oracle.graal.graph.
     public void simplify(SimplifierTool tool) {
         ValueNode assumption = getAssumption();
         if (tool.assumptions() != null && assumption.isConstant()) {
-            JavaConstant c = assumption.asJavaConstant();
+            Constant c = assumption.asConstant();
             assert c.getKind() == Kind.Object;
-            Object object = getSnippetReflection().asObject(Object.class, c);
+            Object object = getSnippetReflection().asObject(c);
             OptimizedAssumption assumptionObject = (OptimizedAssumption) object;
             StructuredGraph graph = graph();
             if (assumptionObject.isValid()) {

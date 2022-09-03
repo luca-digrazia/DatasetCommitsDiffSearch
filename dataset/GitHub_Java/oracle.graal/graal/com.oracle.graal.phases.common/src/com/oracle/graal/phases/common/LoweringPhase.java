@@ -146,9 +146,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                 graph.addBeforeFixed(before, fixedGuard);
                 DummyGuardHandle handle = graph.add(DummyGuardHandle.create(fixedGuard));
                 fixedGuard.lower(this);
-                GuardingNode result = handle.getGuard();
-                handle.safeDelete();
-                return result;
+                return handle.getGuard();
             } else {
                 GuardNode newGuard = graph.unique(GuardNode.create(condition, guardAnchor, deoptReason, action, negated, Constant.NULL_OBJECT));
                 if (OptEliminateGuards.getValue()) {

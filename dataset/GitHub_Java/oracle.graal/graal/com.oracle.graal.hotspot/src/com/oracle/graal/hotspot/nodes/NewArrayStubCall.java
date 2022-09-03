@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -46,7 +46,7 @@ public class NewArrayStubCall extends DeoptimizingStubCall implements LIRLowerab
     @Input ValueNode length;
 
     public static NewArrayStubCall create(ValueNode hub, ValueNode length) {
-        return new NewArrayStubCall(hub, length);
+        return USE_GENERATED_NODES ? new NewArrayStubCallGen(hub, length) : new NewArrayStubCall(hub, length);
     }
 
     protected NewArrayStubCall(ValueNode hub, ValueNode length) {
@@ -58,7 +58,7 @@ public class NewArrayStubCall extends DeoptimizingStubCall implements LIRLowerab
     @Override
     public boolean inferStamp() {
         if (stamp() == defaultStamp && hub.isConstant()) {
-            updateStamp(StampFactory.exactNonNull(HotSpotResolvedObjectTypeImpl.fromMetaspaceKlass(hub.asJavaConstant())));
+            updateStamp(StampFactory.exactNonNull(HotSpotResolvedObjectType.fromMetaspaceKlass(hub.asConstant())));
             return true;
         }
         return false;

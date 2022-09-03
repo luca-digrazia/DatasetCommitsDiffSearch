@@ -32,7 +32,17 @@ import com.oracle.graal.nodes.util.*;
 @NodeInfo(shortName = "|<|")
 public class IntegerBelowNode extends CompareNode {
 
-    public IntegerBelowNode(ValueNode x, ValueNode y) {
+    /**
+     * Constructs a new unsigned integer comparison node.
+     *
+     * @param x the instruction producing the first input to the instruction
+     * @param y the instruction that produces the second input to this instruction
+     */
+    public static IntegerBelowNode create(ValueNode x, ValueNode y) {
+        return USE_GENERATED_NODES ? new IntegerBelowNodeGen(x, y) : new IntegerBelowNode(x, y);
+    }
+
+    protected IntegerBelowNode(ValueNode x, ValueNode y) {
         super(x, y);
         assert x.stamp() instanceof IntegerStamp;
         assert y.stamp() instanceof IntegerStamp;
@@ -67,15 +77,15 @@ public class IntegerBelowNode extends CompareNode {
                 }
             }
         }
-        if (forX.isConstant() && forX.asJavaConstant().asLong() == 0) {
+        if (forX.isConstant() && forX.asConstant().asLong() == 0) {
             // 0 |<| y is the same as 0 != y
-            return new LogicNegationNode(CompareNode.createCompareNode(Condition.EQ, forX, forY));
+            return LogicNegationNode.create(CompareNode.createCompareNode(Condition.EQ, forX, forY));
         }
         return this;
     }
 
     @Override
     protected CompareNode duplicateModified(ValueNode newX, ValueNode newY) {
-        return new IntegerBelowNode(newX, newY);
+        return IntegerBelowNode.create(newX, newY);
     }
 }

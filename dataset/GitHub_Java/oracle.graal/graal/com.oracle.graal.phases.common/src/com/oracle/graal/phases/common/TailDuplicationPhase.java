@@ -33,6 +33,7 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
 import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.VirtualState.NodeClosure;
@@ -60,10 +61,10 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
 
     private final CanonicalizerPhase canonicalizer;
 
-    @NodeInfo(allowedUsageTypes = {InputType.Guard, InputType.Anchor})
-    static class DummyAnchorNode extends FixedWithNextNode implements GuardingNode, AnchoringNode {
+    @NodeInfo
+    static class DummyAnchorNode extends FixedWithNextNode implements GuardingNode {
         public static DummyAnchorNode create() {
-            return new DummyAnchorNode();
+            return USE_GENERATED_NODES ? new TailDuplicationPhase_DummyAnchorNodeGen() : new DummyAnchorNode();
         }
 
         protected DummyAnchorNode() {
@@ -434,7 +435,7 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
 
             // build the intersection
             belowBound.intersect(aboveBound);
-            HashSet<Node> result = Node.newNodeHashSet();
+            HashSet<Node> result = new HashSet<>();
             for (Node node : belowBound) {
                 result.add(node);
             }
@@ -491,16 +492,16 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
         }
 
         private void processUsages(Node duplicated, HashSet<Node> duplicatedNodes, MergeNode newBottomMerge, Deque<Node> worklist) {
-            HashSet<Node> unique = Node.newNodeHashSet();
+            HashSet<Node> unique = new HashSet<>();
             duplicated.usages().snapshotTo(unique);
             Node newOutsideClone = null;
             for (Node usage : unique) {
                 if (!duplicatedNodes.contains(usage)) {
-                    NodePosIterator iter = usage.inputs().iterator();
+                    NodeClassIterator iter = usage.inputs().iterator();
                     while (iter.hasNext()) {
                         Position pos = iter.nextPosition();
                         if (pos.get(usage) == duplicated) {
-                            switch (pos.getInputType()) {
+                            switch (pos.getInputType(usage)) {
                                 case Extension:
                                 case Condition:
                                 case State:
@@ -544,12 +545,12 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
 
         private void processInputs(Node duplicated, HashSet<Node> duplicatedNodes, Deque<Node> worklist) {
             // check if this node has an input that lies outside and cannot be shared
-            NodePosIterator iter = duplicated.inputs().iterator();
+            NodeClassIterator iter = duplicated.inputs().iterator();
             while (iter.hasNext()) {
                 Position pos = iter.nextPosition();
                 Node input = pos.get(duplicated);
                 if (input != null && !duplicatedNodes.contains(input)) {
-                    switch (pos.getInputType()) {
+                    switch (pos.getInputType(duplicated)) {
                         case Extension:
                         case Condition:
                         case State:

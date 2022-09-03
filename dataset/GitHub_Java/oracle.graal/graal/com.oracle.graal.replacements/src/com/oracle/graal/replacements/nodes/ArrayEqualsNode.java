@@ -39,7 +39,7 @@ import com.oracle.graal.nodes.util.*;
 public class ArrayEqualsNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable, Virtualizable, MemoryAccess {
 
     /** {@link Kind} of the arrays to compare. */
-    protected Kind kind;
+    private final Kind kind;
 
     /** One array to be tested for equality. */
     @Input ValueNode array1;
@@ -58,8 +58,8 @@ public class ArrayEqualsNode extends FixedWithNextNode implements LIRLowerable, 
         super(StampFactory.forKind(Kind.Boolean));
 
         assert array1.stamp().equals(array2.stamp());
-        ObjectStamp array1Stamp = (ObjectStamp) array1.stamp();
-        ResolvedJavaType componentType = array1Stamp.type().getComponentType();
+        ObjectStamp stamp = (ObjectStamp) array1.stamp();
+        ResolvedJavaType componentType = stamp.type().getComponentType();
         this.kind = componentType.getKind();
 
         this.array1 = array1;

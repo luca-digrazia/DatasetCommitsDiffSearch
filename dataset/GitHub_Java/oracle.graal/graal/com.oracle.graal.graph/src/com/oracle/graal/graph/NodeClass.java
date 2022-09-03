@@ -54,7 +54,8 @@ public final class NodeClass extends FieldIntrospection {
      */
     @SuppressWarnings("unchecked")
     public static NodeClass get(Class<?> c) {
-        Class<? extends Node> key = (Class<? extends Node>) c;
+        GeneratedNode gen = c.getAnnotation(GeneratedNode.class);
+        Class<? extends Node> key = gen == null ? (Class<? extends Node>) c : (Class<? extends Node>) gen.value();
 
         NodeClass value = (NodeClass) allClasses.get(key);
         // The fact that {@link ConcurrentHashMap#put} and {@link ConcurrentHashMap#get}
@@ -65,14 +66,7 @@ public final class NodeClass extends FieldIntrospection {
             synchronized (GetNodeClassLock) {
                 value = (NodeClass) allClasses.get(key);
                 if (value == null) {
-                    GeneratedNode gen = c.getAnnotation(GeneratedNode.class);
-                    if (gen != null) {
-                        Class<? extends Node> genKey = (Class<? extends Node>) gen.value();
-                        value = (NodeClass) allClasses.get(genKey);
-                        assert value != null;
-                    } else {
-                        value = new NodeClass(key);
-                    }
+                    value = new NodeClass(key);
                     Object old = allClasses.putIfAbsent(key, value);
                     assert old == null : old + "   " + key;
                 }
@@ -164,12 +158,15 @@ public final class NodeClass extends FieldIntrospection {
         }
         String newNameTemplate = null;
         NodeInfo info = clazz.getAnnotation(NodeInfo.class);
-        assert info != null : "missing " + NodeInfo.class.getSimpleName() + " annotation on " + clazz;
-        if (!info.shortName().isEmpty()) {
-            newShortName = info.shortName();
-        }
-        if (!info.nameTemplate().isEmpty()) {
-            newNameTemplate = info.nameTemplate();
+        if (info != null) {
+            if (!info.shortName().isEmpty()) {
+                newShortName = info.shortName();
+            }
+            if (!info.nameTemplate().isEmpty()) {
+                newNameTemplate = info.nameTemplate();
+            }
+        } else {
+            System.out.println("No NodeInfo for " + clazz);
         }
         EnumSet<InputType> newAllowedUsageTypes = EnumSet.noneOf(InputType.class);
         Class<?> current = clazz;
@@ -237,12 +234,14 @@ public final class NodeClass extends FieldIntrospection {
         fieldTypes.putAll(scanner.fieldTypes);
     }
 
-    /**
-     * Determines if a given {@link Node} class is described by the {@link NodeClass} object.
-     */
-    public boolean is(Class<? extends Node> nodeClass) {
-        assert nodeClass.getAnnotation(GeneratedNode.class) == null;
-        return nodeClass.equals(getClazz());
+    private boolean isNodeClassFor(Node n) {
+        if (Node.USE_GENERATED_NODES) {
+            GeneratedNode gen = n.getClass().getAnnotation(GeneratedNode.class);
+            assert gen != null;
+            return gen.value() == getClazz();
+        } else {
+            return n.getNodeClass().getClazz() == n.getClass();
+        }
     }
 
     public String shortName() {
@@ -1215,7 +1214,7 @@ public final class NodeClass extends FieldIntrospection {
      * @param newNode the node to which the inputs should be copied.
      */
     public void copyInputs(Node node, Node newNode) {
-        assert node.getNodeClass() == this && newNode.getNodeClass() == this;
+        assert isNodeClassFor(node) && isNodeClassFor(newNode);
 
         int index = 0;
         while (index < directInputCount) {
@@ -1237,7 +1236,7 @@ public final class NodeClass extends FieldIntrospection {
      * @param newNode the node to which the successors should be copied.
      */
     public void copySuccessors(Node node, Node newNode) {
-        assert node.getNodeClass() == this && newNode.getNodeClass() == this;
+        assert isNodeClassFor(node) && isNodeClassFor(newNode);
 
         int index = 0;
         while (index < directSuccessorCount) {
@@ -1256,7 +1255,7 @@ public final class NodeClass extends FieldIntrospection {
     }
 
     public boolean inputsEqual(Node node, Node other) {
-        assert node.getNodeClass() == this && other.getNodeClass() == this;
+        assert isNodeClassFor(node) && isNodeClassFor(other);
         int index = 0;
         while (index < directInputCount) {
             if (getNode(other, inputOffsets[index]) != getNode(node, inputOffsets[index])) {
@@ -1275,7 +1274,7 @@ public final class NodeClass extends FieldIntrospection {
     }
 
     public boolean successorsEqual(Node node, Node other) {
-        assert node.getNodeClass() == this && other.getNodeClass() == this;
+        assert isNodeClassFor(node) && isNodeClassFor(other);
         int index = 0;
         while (index < directSuccessorCount) {
             if (getNode(other, successorOffsets[index]) != getNode(node, successorOffsets[index])) {
@@ -1294,7 +1293,7 @@ public final class NodeClass extends FieldIntrospection {
     }
 
     public boolean inputContains(Node node, Node other) {
-        assert node.getNodeClass() == this;
+        assert isNodeClassFor(node);
 
         int index = 0;
         while (index < directInputCount) {
@@ -1314,7 +1313,7 @@ public final class NodeClass extends FieldIntrospection {
     }
 
     public boolean successorContains(Node node, Node other) {
-        assert node.getNodeClass() == this;
+        assert isNodeClassFor(node);
 
         int index = 0;
         while (index < directSuccessorCount) {

@@ -29,6 +29,7 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.truffle.api.*;
 
 /**
@@ -36,9 +37,13 @@ import com.oracle.truffle.api.*;
  * case the addition would overflow the 32 bit range.
  */
 @NodeInfo
-public class IntegerAddExactNode extends AddNode implements IntegerExactArithmeticNode {
+public class IntegerAddExactNode extends IntegerAddNode implements IntegerExactArithmeticNode {
 
-    public IntegerAddExactNode(ValueNode x, ValueNode y) {
+    public static IntegerAddExactNode create(ValueNode x, ValueNode y) {
+        return USE_GENERATED_NODES ? new IntegerAddExactNodeGen(x, y) : new IntegerAddExactNode(x, y);
+    }
+
+    protected IntegerAddExactNode(ValueNode x, ValueNode y) {
         super(x, y);
         assert x.stamp().isCompatible(y.stamp()) && x.stamp() instanceof IntegerStamp;
     }
@@ -46,18 +51,18 @@ public class IntegerAddExactNode extends AddNode implements IntegerExactArithmet
     @Override
     public boolean inferStamp() {
         // TODO Should probably use a specialized version which understands that it can't overflow
-        return super.inferStamp();
+        return updateStamp(StampTool.add(getX().stamp(), getY().stamp()));
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
         if (forX.isConstant() && !forY.isConstant()) {
-            return new IntegerAddExactNode(forY, forX);
+            return IntegerAddExactNode.create(forY, forX);
         }
         if (forX.isConstant()) {
             return canonicalXconstant(forX, forY);
         } else if (forY.isConstant()) {
-            long c = forY.asJavaConstant().asLong();
+            long c = forY.asConstant().asLong();
             if (c == 0) {
                 return forX;
             }
@@ -66,8 +71,8 @@ public class IntegerAddExactNode extends AddNode implements IntegerExactArithmet
     }
 
     private ValueNode canonicalXconstant(ValueNode forX, ValueNode forY) {
-        JavaConstant xConst = forX.asJavaConstant();
-        JavaConstant yConst = forY.asJavaConstant();
+        Constant xConst = forX.asConstant();
+        Constant yConst = forY.asConstant();
         assert xConst.getKind() == yConst.getKind();
         try {
             if (xConst.getKind() == Kind.Int) {
@@ -84,7 +89,7 @@ public class IntegerAddExactNode extends AddNode implements IntegerExactArithmet
 
     @Override
     public IntegerExactArithmeticSplitNode createSplit(BeginNode next, BeginNode deopt) {
-        return graph().add(new IntegerAddExactSplitNode(stamp(), getX(), getY(), next, deopt));
+        return graph().add(IntegerAddExactSplitNode.create(stamp(), getX(), getY(), next, deopt));
     }
 
     @Override

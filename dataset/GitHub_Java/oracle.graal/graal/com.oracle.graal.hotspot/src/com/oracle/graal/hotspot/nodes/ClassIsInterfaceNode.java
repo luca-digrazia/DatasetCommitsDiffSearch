@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,7 +39,7 @@ import com.oracle.graal.replacements.nodes.*;
 public class ClassIsInterfaceNode extends MacroNode implements Canonicalizable {
 
     public static ClassIsInterfaceNode create(Invoke invoke) {
-        return new ClassIsInterfaceNode(invoke);
+        return USE_GENERATED_NODES ? new ClassIsInterfaceNodeGen(invoke) : new ClassIsInterfaceNode(invoke);
     }
 
     protected ClassIsInterfaceNode(Invoke invoke) {
@@ -54,7 +54,7 @@ public class ClassIsInterfaceNode extends MacroNode implements Canonicalizable {
     public Node canonical(CanonicalizerTool tool) {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
-            Class<?> c = (Class<?>) HotSpotObjectConstantImpl.asObject(javaClass.asJavaConstant());
+            Class<?> c = (Class<?>) HotSpotObjectConstant.asObject(javaClass.asConstant());
             if (c != null) {
                 return ConstantNode.forBoolean(c.isInterface());
             }

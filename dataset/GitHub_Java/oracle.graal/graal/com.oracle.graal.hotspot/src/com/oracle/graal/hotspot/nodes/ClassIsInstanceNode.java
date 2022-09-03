@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -41,7 +41,7 @@ import com.oracle.graal.replacements.nodes.*;
 public class ClassIsInstanceNode extends MacroNode implements Canonicalizable {
 
     public static ClassIsInstanceNode create(Invoke invoke) {
-        return new ClassIsInstanceNode(invoke);
+        return USE_GENERATED_NODES ? new ClassIsInstanceNodeGen(invoke) : new ClassIsInstanceNode(invoke);
     }
 
     protected ClassIsInstanceNode(Invoke invoke) {
@@ -61,16 +61,16 @@ public class ClassIsInstanceNode extends MacroNode implements Canonicalizable {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
             ValueNode object = getObject();
-            ConstantReflectionProvider constantReflection = tool.getConstantReflection();
-            ResolvedJavaType type = constantReflection.asJavaType(javaClass.asJavaConstant());
-            if (type != null) {
-                if (type.isPrimitive()) {
+            Class<?> c = (Class<?>) HotSpotObjectConstant.asObject(javaClass.asConstant());
+            if (c != null) {
+                if (c.isPrimitive()) {
                     return ConstantNode.forBoolean(false);
                 }
                 if (object.isConstant()) {
-                    JavaConstant c = object.asJavaConstant();
-                    return ConstantNode.forBoolean(c.isNonNull() && type.isInstance(c));
+                    Object o = HotSpotObjectConstant.asObject(object.asConstant());
+                    return ConstantNode.forBoolean(o != null && c.isInstance(o));
                 }
+                HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromClass(c);
                 InstanceOfNode instanceOf = InstanceOfNode.create(type, object, null);
                 return ConditionalNode.create(instanceOf, ConstantNode.forBoolean(true), ConstantNode.forBoolean(false));
             }

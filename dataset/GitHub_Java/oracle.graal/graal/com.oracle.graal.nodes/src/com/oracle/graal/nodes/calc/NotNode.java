@@ -22,21 +22,34 @@
  */
 package com.oracle.graal.nodes.calc;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * Binary negation of long or integer values.
  */
 @NodeInfo
-public class NotNode extends UnaryArithmeticNode implements ArithmeticLIRLowerable, NarrowableArithmeticNode {
+public class NotNode extends UnaryNode implements ArithmeticLIRLowerable, NarrowableArithmeticNode {
+
+    @Override
+    public boolean inferStamp() {
+        return updateStamp(StampTool.not(getValue().stamp()));
+    }
+
+    @Override
+    public Constant evalConst(Constant... inputs) {
+        assert inputs.length == 1;
+        return Constant.forPrimitiveInt(PrimitiveStamp.getBits(stamp()), ~inputs[0].asLong());
+    }
 
     /**
-     * Creates new NotNode instance.
+     * Creates new NegateNode instance.
      *
      * @param x the instruction producing the value that is input to this instruction
      */
@@ -45,14 +58,13 @@ public class NotNode extends UnaryArithmeticNode implements ArithmeticLIRLowerab
     }
 
     protected NotNode(ValueNode x) {
-        super(ArithmeticOpTable::getNot, x);
+        super(StampTool.not(x.stamp()), x);
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        ValueNode ret = super.canonical(tool, forValue);
-        if (ret != this) {
-            return ret;
+        if (forValue.isConstant()) {
+            return ConstantNode.forConstant(evalConst(forValue.asConstant()), null);
         }
         if (forValue instanceof NotNode) {
             return ((NotNode) forValue).getValue();

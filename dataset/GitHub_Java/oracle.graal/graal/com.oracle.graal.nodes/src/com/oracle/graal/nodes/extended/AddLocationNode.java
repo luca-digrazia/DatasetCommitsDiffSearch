@@ -31,6 +31,7 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * Location node that is the sum of two other location nodes. Can represent locations in the form of
@@ -59,7 +60,7 @@ public class AddLocationNode extends LocationNode implements Canonicalizable.Bin
         return USE_GENERATED_NODES ? new AddLocationNodeGen(x, y) : new AddLocationNode(x, y);
     }
 
-    protected AddLocationNode(ValueNode x, ValueNode y) {
+    AddLocationNode(ValueNode x, ValueNode y) {
         super(StampFactory.forVoid());
         this.x = x;
         this.y = y;
@@ -87,7 +88,7 @@ public class AddLocationNode extends LocationNode implements Canonicalizable.Bin
             IndexedLocationNode yIdx = (IndexedLocationNode) forY;
             if (xIdx.getIndexScaling() == yIdx.getIndexScaling()) {
                 long displacement = xIdx.getDisplacement() + yIdx.getDisplacement();
-                ValueNode index = BinaryArithmeticNode.add(xIdx.getIndex(), yIdx.getIndex());
+                ValueNode index = IntegerArithmeticNode.add(xIdx.getIndex(), yIdx.getIndex());
                 return IndexedLocationNode.create(getLocationIdentity(), getValueKind(), displacement, index, xIdx.getIndexScaling());
             }
         }
@@ -119,7 +120,7 @@ public class AddLocationNode extends LocationNode implements Canonicalizable.Bin
 
     @Override
     public IntegerStamp getDisplacementStamp() {
-        return (IntegerStamp) IntegerStamp.OPS.getAdd().foldStamp(getX().getDisplacementStamp(), getY().getDisplacementStamp());
+        return StampTool.add(getX().getDisplacementStamp(), getY().getDisplacementStamp());
     }
 
     @NodeIntrinsic

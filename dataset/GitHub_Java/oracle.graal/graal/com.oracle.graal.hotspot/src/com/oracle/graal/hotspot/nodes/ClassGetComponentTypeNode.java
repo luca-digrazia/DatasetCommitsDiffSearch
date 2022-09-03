@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,7 +39,7 @@ import com.oracle.graal.replacements.nodes.*;
 public class ClassGetComponentTypeNode extends MacroNode implements Canonicalizable {
 
     public static ClassGetComponentTypeNode create(Invoke invoke) {
-        return new ClassGetComponentTypeNode(invoke);
+        return USE_GENERATED_NODES ? new ClassGetComponentTypeNodeGen(invoke) : new ClassGetComponentTypeNode(invoke);
     }
 
     protected ClassGetComponentTypeNode(Invoke invoke) {
@@ -54,10 +54,10 @@ public class ClassGetComponentTypeNode extends MacroNode implements Canonicaliza
     public Node canonical(CanonicalizerTool tool) {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
-            Class<?> c = (Class<?>) HotSpotObjectConstantImpl.asObject(javaClass.asJavaConstant());
+            Class<?> c = (Class<?>) HotSpotObjectConstant.asObject(javaClass.asConstant());
             if (c != null) {
                 Class<?> componentType = c.getComponentType();
-                return ConstantNode.forConstant(HotSpotObjectConstantImpl.forObject(componentType), tool.getMetaAccess());
+                return ConstantNode.forConstant(HotSpotObjectConstant.forObject(componentType), tool.getMetaAccess());
             }
         }
         return this;

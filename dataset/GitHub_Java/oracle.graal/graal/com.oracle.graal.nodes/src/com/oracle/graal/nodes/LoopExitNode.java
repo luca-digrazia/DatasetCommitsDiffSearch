@@ -46,11 +46,6 @@ public class LoopExitNode extends BeginStateSplitNode implements IterableNodeTyp
 
     @Override
     public void simplify(SimplifierTool tool) {
-        Node prev = this.predecessor();
-        while (prev.getNodeClass().is(BeginNode.class) && prev.usages().isEmpty()) {
-            BeginNode begin = (BeginNode) prev;
-            prev = prev.predecessor();
-            graph().removeFixed(begin);
-        }
+        //
     }
 }

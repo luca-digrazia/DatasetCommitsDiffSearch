@@ -28,34 +28,39 @@ import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "%")
 public class IntegerRemNode extends FixedBinaryNode implements Lowerable, LIRLowerable {
 
-    public IntegerRemNode(ValueNode x, ValueNode y) {
-        super(IntegerStamp.OPS.getRem().foldStamp(x.stamp(), y.stamp()), x, y);
+    public static IntegerRemNode create(ValueNode x, ValueNode y) {
+        return USE_GENERATED_NODES ? new IntegerRemNodeGen(x, y) : new IntegerRemNode(x, y);
+    }
+
+    protected IntegerRemNode(ValueNode x, ValueNode y) {
+        super(StampTool.rem(x.stamp(), y.stamp()), x, y);
     }
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(IntegerStamp.OPS.getRem().foldStamp(getX().stamp(), getY().stamp()));
+        return updateStamp(StampTool.rem(getX().stamp(), getY().stamp()));
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
         if (forX.isConstant() && forY.isConstant()) {
             @SuppressWarnings("hiding")
-            long y = forY.asJavaConstant().asLong();
+            long y = forY.asConstant().asLong();
             if (y == 0) {
                 return this; // this will trap, can not canonicalize
             }
-            return ConstantNode.forIntegerStamp(stamp(), forX.asJavaConstant().asLong() % y);
+            return ConstantNode.forIntegerStamp(stamp(), forX.asConstant().asLong() % y);
         } else if (forY.isConstant()) {
-            long c = forY.asJavaConstant().asLong();
+            long c = forY.asConstant().asLong();
             if (c == 1 || c == -1) {
                 return ConstantNode.forIntegerStamp(stamp(), 0);
             } else if (c > 0 && CodeUtil.isPowerOf2(c) && forX.stamp() instanceof IntegerStamp && ((IntegerStamp) forX.stamp()).isPositive()) {
-                return new AndNode(forX, ConstantNode.forIntegerStamp(stamp(), c - 1));
+                return AndNode.create(forX, ConstantNode.forIntegerStamp(stamp(), c - 1));
             }
         }
         return this;

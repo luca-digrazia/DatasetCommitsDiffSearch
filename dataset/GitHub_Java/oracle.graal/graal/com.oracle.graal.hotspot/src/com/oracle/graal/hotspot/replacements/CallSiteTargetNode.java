@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,7 +38,7 @@ import com.oracle.graal.replacements.nodes.*;
 public class CallSiteTargetNode extends MacroStateSplitNode implements Canonicalizable, Lowerable {
 
     public static CallSiteTargetNode create(Invoke invoke) {
-        return new CallSiteTargetNode(invoke);
+        return USE_GENERATED_NODES ? new CallSiteTargetNodeGen(invoke) : new CallSiteTargetNode(invoke);
     }
 
     protected CallSiteTargetNode(Invoke invoke) {
@@ -51,7 +51,7 @@ public class CallSiteTargetNode extends MacroStateSplitNode implements Canonical
 
     private ConstantNode getConstantCallTarget(MetaAccessProvider metaAccess, Assumptions assumptions) {
         if (getCallSite().isConstant() && !getCallSite().isNullConstant()) {
-            CallSite callSite = (CallSite) HotSpotObjectConstantImpl.asObject(getCallSite().asJavaConstant());
+            CallSite callSite = (CallSite) HotSpotObjectConstant.asObject(getCallSite().asConstant());
             MethodHandle target = callSite.getTarget();
             if (!(callSite instanceof ConstantCallSite)) {
                 if (assumptions == null || !assumptions.useOptimisticAssumptions()) {
@@ -59,7 +59,7 @@ public class CallSiteTargetNode extends MacroStateSplitNode implements Canonical
                 }
                 assumptions.record(new Assumptions.CallSiteTargetValue(callSite, target));
             }
-            return ConstantNode.forConstant(HotSpotObjectConstantImpl.forObject(target), metaAccess, graph());
+            return ConstantNode.forConstant(HotSpotObjectConstant.forObject(target), metaAccess, graph());
         }
         return null;
     }

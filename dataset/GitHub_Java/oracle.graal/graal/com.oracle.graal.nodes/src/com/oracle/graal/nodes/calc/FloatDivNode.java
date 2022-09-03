@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,35 +24,62 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "/")
-public final class FloatDivNode extends FloatArithmeticNode implements Canonicalizable {
+public class FloatDivNode extends FloatArithmeticNode {
 
-    public FloatDivNode(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP) {
-        super(kind, x, y, isStrictFP);
+    public static FloatDivNode create(ValueNode x, ValueNode y, boolean isStrictFP) {
+        return USE_GENERATED_NODES ? new FloatDivNodeGen(x, y, isStrictFP) : new FloatDivNode(x, y, isStrictFP);
+    }
+
+    protected FloatDivNode(ValueNode x, ValueNode y, boolean isStrictFP) {
+        super(x.stamp().unrestricted(), x, y, isStrictFP);
+    }
+
+    public Constant evalConst(Constant... inputs) {
+        assert inputs.length == 2;
+        assert inputs[0].getKind() == inputs[1].getKind();
+        if (inputs[0].getKind() == Kind.Float) {
+            return Constant.forFloat(inputs[0].asFloat() / inputs[1].asFloat());
+        } else {
+            assert inputs[0].getKind() == Kind.Double;
+            return Constant.forDouble(inputs[0].asDouble() / inputs[1].asDouble());
+        }
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (x().isConstant() && y().isConstant()) {
-            if (kind() == Kind.Float) {
-                if (y().asConstant().asFloat() != 0) {
-                    return ConstantNode.forFloat(x().asConstant().asFloat() / y().asConstant().asFloat(), graph());
-                }
-            } else {
-                assert kind() == Kind.Double;
-                if (y().asConstant().asDouble() != 0) {
-                    return ConstantNode.forDouble(x().asConstant().asDouble() / y().asConstant().asDouble(), graph());
-                }
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        if (forX.isConstant() && forY.isConstant()) {
+            return ConstantNode.forPrimitive(evalConst(forX.asConstant(), forY.asConstant()));
+        }
+        if (forY.isConstant()) {
+            @SuppressWarnings("hiding")
+            Constant y = forY.asConstant();
+            switch (y.getKind()) {
+                case Float:
+                    if (y.asFloat() == 1.0f) {
+                        return forX;
+                    }
+                    break;
+                case Double:
+                    if (y.asDouble() == 1.0) {
+                        return forX;
+                    }
+                    break;
+                default:
+                    throw GraalGraphInternalError.shouldNotReachHere();
             }
         }
         return this;
     }
 
     @Override
-    public void generate(ArithmeticLIRGenerator gen) {
-        gen.setResult(this, gen.emitDiv(gen.operand(x()), gen.operand(y()), null));
+    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
+        builder.setResult(this, gen.emitDiv(builder.operand(getX()), builder.operand(getY()), null));
     }
 }

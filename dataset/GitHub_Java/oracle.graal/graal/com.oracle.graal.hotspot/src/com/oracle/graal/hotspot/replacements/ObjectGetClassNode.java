@@ -22,8 +22,13 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -33,9 +38,14 @@ import com.oracle.graal.replacements.nodes.*;
  * This macro node will replace itself with the correct Java {@link Class} as soon as the object's
  * type is known (exact).
  */
+@NodeInfo
 public class ObjectGetClassNode extends MacroNode implements Virtualizable, Canonicalizable {
 
-    public ObjectGetClassNode(Invoke invoke) {
+    public static ObjectGetClassNode create(Invoke invoke) {
+        return USE_GENERATED_NODES ? new ObjectGetClassNodeGen(invoke) : new ObjectGetClassNode(invoke);
+    }
+
+    protected ObjectGetClassNode(Invoke invoke) {
         super(invoke);
     }
 
@@ -45,6 +55,9 @@ public class ObjectGetClassNode extends MacroNode implements Virtualizable, Cano
 
     @Override
     public void virtualize(VirtualizerTool tool) {
+        if (ImmutableCode.getValue()) {
+            return;
+        }
         State state = tool.getObjectState(getObject());
         if (state != null) {
             Constant clazz = state.getVirtualObject().type().getEncoding(Representation.JavaClass);
@@ -52,17 +65,28 @@ public class ObjectGetClassNode extends MacroNode implements Virtualizable, Cano
         }
     }
 
-    public ValueNode canonical(CanonicalizerTool tool) {
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        if (ImmutableCode.getValue()) {
+            return this;
+        }
         if (usages().isEmpty()) {
             return null;
         } else {
-            ObjectStamp stamp = getObject().objectStamp();
-            if (stamp.isExactType()) {
-                Constant clazz = stamp.type().getEncoding(Representation.JavaClass);
-                return ConstantNode.forConstant(clazz, tool.runtime(), graph());
-            } else {
-                return this;
+            ResolvedJavaType type = StampTool.typeOrNull(getObject());
+            if (StampTool.isExactType(getObject())) {
+                Constant clazz = type.getEncoding(Representation.JavaClass);
+                return ConstantNode.forConstant(clazz, tool.getMetaAccess());
             }
+            if (type != null && tool.assumptions().useOptimisticAssumptions()) {
+                ResolvedJavaType exactType = type.findUniqueConcreteSubtype();
+                if (exactType != null) {
+                    tool.assumptions().recordConcreteSubtype(type, exactType);
+                    Constant clazz = exactType.getEncoding(Representation.JavaClass);
+                    return ConstantNode.forConstant(clazz, tool.getMetaAccess());
+                }
+            }
+            return this;
         }
     }
 }

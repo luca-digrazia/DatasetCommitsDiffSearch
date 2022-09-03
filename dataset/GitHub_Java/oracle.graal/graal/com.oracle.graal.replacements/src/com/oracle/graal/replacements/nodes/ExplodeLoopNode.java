@@ -39,7 +39,11 @@ import com.oracle.graal.replacements.Snippet.VarargsParameter;
 @NodeInfo
 public class ExplodeLoopNode extends FixedWithNextNode {
 
-    public ExplodeLoopNode() {
+    public static ExplodeLoopNode create() {
+        return USE_GENERATED_NODES ? new ExplodeLoopNodeGen() : new ExplodeLoopNode();
+    }
+
+    protected ExplodeLoopNode() {
         super(StampFactory.forVoid());
     }
 

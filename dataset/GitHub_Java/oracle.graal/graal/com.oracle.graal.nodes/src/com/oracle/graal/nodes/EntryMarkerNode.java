@@ -39,7 +39,7 @@ public class EntryMarkerNode extends BeginStateSplitNode implements IterableNode
         return USE_GENERATED_NODES ? new EntryMarkerNodeGen() : new EntryMarkerNode();
     }
 
-    protected EntryMarkerNode() {
+    EntryMarkerNode() {
     }
 
     @Override

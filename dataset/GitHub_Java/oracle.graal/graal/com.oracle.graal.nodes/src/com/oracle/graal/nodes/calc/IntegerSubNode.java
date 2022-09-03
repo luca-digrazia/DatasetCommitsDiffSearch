@@ -39,6 +39,10 @@ public class IntegerSubNode extends IntegerArithmeticNode implements NarrowableA
         return USE_GENERATED_NODES ? new IntegerSubNodeGen(x, y) : new IntegerSubNode(x, y);
     }
 
+    public static Class<? extends IntegerSubNode> getGenClass() {
+        return USE_GENERATED_NODES ? IntegerSubNodeGen.class : IntegerSubNode.class;
+    }
+
     protected IntegerSubNode(ValueNode x, ValueNode y) {
         super(StampTool.sub(x.stamp(), y.stamp()), x, y);
     }

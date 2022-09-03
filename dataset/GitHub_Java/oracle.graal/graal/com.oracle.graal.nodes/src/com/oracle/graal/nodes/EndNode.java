@@ -30,6 +30,10 @@ public class EndNode extends AbstractEndNode {
         return USE_GENERATED_NODES ? new EndNodeGen() : new EndNode();
     }
 
+    public static Class<? extends EndNode> getGenClass() {
+        return USE_GENERATED_NODES ? EndNodeGen.class : EndNode.class;
+    }
+
     EndNode() {
     }
 }

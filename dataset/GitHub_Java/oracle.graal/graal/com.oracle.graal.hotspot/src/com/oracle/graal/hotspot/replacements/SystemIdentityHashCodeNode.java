@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,7 +34,7 @@ import com.oracle.graal.replacements.nodes.*;
 public class SystemIdentityHashCodeNode extends PureFunctionMacroNode {
 
     public static SystemIdentityHashCodeNode create(Invoke invoke) {
-        return new SystemIdentityHashCodeNode(invoke);
+        return USE_GENERATED_NODES ? new SystemIdentityHashCodeNodeGen(invoke) : new SystemIdentityHashCodeNode(invoke);
     }
 
     protected SystemIdentityHashCodeNode(Invoke invoke) {
@@ -42,7 +42,7 @@ public class SystemIdentityHashCodeNode extends PureFunctionMacroNode {
     }
 
     @Override
-    protected JavaConstant evaluate(JavaConstant param, MetaAccessProvider metaAccess) {
-        return ImmutableCode.getValue() || param.isNull() ? null : JavaConstant.forInt(System.identityHashCode(HotSpotObjectConstantImpl.asObject(param)));
+    protected Constant evaluate(Constant param, MetaAccessProvider metaAccess) {
+        return ImmutableCode.getValue() || param.isNull() ? null : Constant.forInt(System.identityHashCode(HotSpotObjectConstant.asObject(param)));
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -48,7 +48,7 @@ public class CompositeValueClassSubstitutions {
     public static class CompositeValueClassGetNode extends PureFunctionMacroNode {
 
         public static CompositeValueClassGetNode create(Invoke invoke) {
-            return new CompositeValueClassGetNode(invoke);
+            return USE_GENERATED_NODES ? new CompositeValueClassSubstitutions_CompositeValueClassGetNodeGen(invoke) : new CompositeValueClassGetNode(invoke);
         }
 
         protected CompositeValueClassGetNode(Invoke invoke) {
@@ -57,11 +57,11 @@ public class CompositeValueClassSubstitutions {
 
         @SuppressWarnings("unchecked")
         @Override
-        protected JavaConstant evaluate(JavaConstant param, MetaAccessProvider metaAccess) {
+        protected Constant evaluate(Constant param, MetaAccessProvider metaAccess) {
             if (param.isNull() || ImmutableCode.getValue()) {
                 return null;
             }
-            return HotSpotObjectConstantImpl.forObject(CompositeValueClass.get((Class<? extends CompositeValue>) HotSpotObjectConstantImpl.asObject(param)));
+            return HotSpotObjectConstant.forObject(CompositeValueClass.get((Class<? extends CompositeValue>) HotSpotObjectConstant.asObject(param)));
         }
     }
 

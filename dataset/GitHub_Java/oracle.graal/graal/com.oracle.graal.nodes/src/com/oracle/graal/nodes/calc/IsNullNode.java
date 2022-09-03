@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.nodes.calc;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
@@ -35,7 +36,16 @@ import com.oracle.graal.nodes.type.*;
 @NodeInfo
 public class IsNullNode extends UnaryOpLogicNode implements LIRLowerable, Virtualizable, PiPushable {
 
-    public IsNullNode(ValueNode object) {
+    /**
+     * Constructs a new IsNullNode instruction.
+     *
+     * @param object the instruction producing the object to check against null
+     */
+    public static IsNullNode create(ValueNode object) {
+        return USE_GENERATED_NODES ? new IsNullNodeGen(object) : new IsNullNode(object);
+    }
+
+    protected IsNullNode(ValueNode object) {
         super(object);
     }
 
@@ -47,15 +57,18 @@ public class IsNullNode extends UnaryOpLogicNode implements LIRLowerable, Virtua
     @Override
     public boolean verify() {
         assertTrue(getValue() != null, "is null input must not be null");
-        assertTrue(getValue().stamp() instanceof AbstractPointerStamp, "is null input must be a pointer");
+        assertTrue(getValue().stamp() instanceof AbstractObjectStamp, "is null input must be an object");
         return super.verify();
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        if (StampTool.isPointerAlwaysNull(forValue)) {
-            return LogicConstantNode.tautology();
-        } else if (StampTool.isPointerNonNull(forValue)) {
+        Constant constant = forValue.asConstant();
+        if (constant != null) {
+            assert constant.getKind() == Kind.Object;
+            return LogicConstantNode.forBoolean(constant.isNull());
+        }
+        if (StampTool.isObjectNonNull(forValue.stamp())) {
             return LogicConstantNode.contradiction();
         }
         return this;

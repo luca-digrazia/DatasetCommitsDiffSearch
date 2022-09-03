@@ -33,7 +33,7 @@ import com.oracle.graal.truffle.nodes.asserts.*;
 import com.oracle.truffle.api.*;
 
 /**
- * Macro node for method {@link CompilerDirectives#unsafePutInt(Object, long, int, Object)} et al.
+ * Macro node for method {@link CompilerDirectives#unsafeCast(Object, Class, boolean)}.
  */
 @NodeInfo
 public class CustomizedUnsafeStoreMacroNode extends NeverPartOfCompilationNode implements Canonicalizable, StateSplit {
@@ -43,7 +43,11 @@ public class CustomizedUnsafeStoreMacroNode extends NeverPartOfCompilationNode i
     private static final int VALUE_ARGUMENT_INDEX = 2;
     private static final int LOCATION_ARGUMENT_INDEX = 3;
 
-    public CustomizedUnsafeStoreMacroNode(Invoke invoke) {
+    public static CustomizedUnsafeStoreMacroNode create(Invoke invoke) {
+        return USE_GENERATED_NODES ? new CustomizedUnsafeStoreMacroNodeGen(invoke) : new CustomizedUnsafeStoreMacroNode(invoke);
+    }
+
+    protected CustomizedUnsafeStoreMacroNode(Invoke invoke) {
         super(invoke, "The location argument could not be resolved to a constant.");
         assert arguments.size() == ARGUMENT_COUNT;
     }
@@ -56,13 +60,13 @@ public class CustomizedUnsafeStoreMacroNode extends NeverPartOfCompilationNode i
             ValueNode offsetArgument = arguments.get(OFFSET_ARGUMENT_INDEX);
             ValueNode valueArgument = arguments.get(VALUE_ARGUMENT_INDEX);
             LocationIdentity locationIdentity;
-            if (locationArgument.isNullConstant()) {
+            if (locationArgument.asConstant().isNull()) {
                 locationIdentity = LocationIdentity.ANY_LOCATION;
             } else {
-                locationIdentity = ObjectLocationIdentity.create(locationArgument.asJavaConstant());
+                locationIdentity = ObjectLocationIdentity.create(locationArgument.asConstant());
             }
 
-            return new UnsafeStoreNode(objectArgument, offsetArgument, valueArgument, this.getTargetMethod().getSignature().getParameterKind(VALUE_ARGUMENT_INDEX), locationIdentity, stateAfter());
+            return UnsafeStoreNode.create(objectArgument, offsetArgument, valueArgument, this.getTargetMethod().getSignature().getParameterKind(VALUE_ARGUMENT_INDEX), locationIdentity, stateAfter());
         }
         return this;
     }

@@ -50,7 +50,11 @@ public class BreakpointNode extends FixedWithNextNode implements LIRLowerable {
 
     @Input NodeInputList<ValueNode> arguments;
 
-    public BreakpointNode(ValueNode[] arguments) {
+    public static BreakpointNode create(ValueNode[] arguments) {
+        return USE_GENERATED_NODES ? new BreakpointNodeGen(arguments) : new BreakpointNode(arguments);
+    }
+
+    protected BreakpointNode(ValueNode... arguments) {
         super(StampFactory.forVoid());
         this.arguments = new NodeInputList<>(this, arguments);
     }
@@ -63,7 +67,4 @@ public class BreakpointNode extends FixedWithNextNode implements LIRLowerable {
     public NodeInputList<ValueNode> arguments() {
         return arguments;
     }
-
-    @NodeIntrinsic
-    public static native void breakpoint();
 }

@@ -97,7 +97,7 @@ public class IntegerDivNode extends FixedBinaryNode implements Lowerable, LIRLow
         }
 
         if (next() instanceof IntegerDivNode) {
-            NodeClass nodeClass = getNodeClass();
+            NodeClass nodeClass = NodeClass.get(this.getClass());
             if (next().getClass() == this.getClass() && nodeClass.inputsEqual(this, next()) && nodeClass.valueEqual(this, next())) {
                 return next();
             }

@@ -34,13 +34,13 @@ public class TypedNodeIteratorTest2 {
     @NodeInfo
     static class NodeA extends Node implements TestNodeInterface {
 
-        protected final String name;
+        private final String name;
 
         public static NodeA create(String name) {
             return USE_GENERATED_NODES ? new TypedNodeIteratorTest2_NodeAGen(name) : new NodeA(name);
         }
 
-        protected NodeA(String name) {
+        NodeA(String name) {
             this.name = name;
         }
 
@@ -56,7 +56,7 @@ public class TypedNodeIteratorTest2 {
             return USE_GENERATED_NODES ? new TypedNodeIteratorTest2_NodeBGen(name) : new NodeB(name);
         }
 
-        protected NodeB(String name) {
+        NodeB(String name) {
             super(name);
         }
     }
@@ -67,7 +67,7 @@ public class TypedNodeIteratorTest2 {
             return USE_GENERATED_NODES ? new TypedNodeIteratorTest2_NodeCGen(name) : new NodeC(name);
         }
 
-        protected NodeC(String name) {
+        NodeC(String name) {
             super(name);
         }
     }
@@ -78,7 +78,7 @@ public class TypedNodeIteratorTest2 {
             return USE_GENERATED_NODES ? new TypedNodeIteratorTest2_NodeDGen(name) : new NodeD(name);
         }
 
-        protected NodeD(String name) {
+        NodeD(String name) {
             super(name);
         }
     }

@@ -25,6 +25,7 @@ package com.oracle.graal.truffle.nodes.arithmetic;
 import java.util.function.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
@@ -35,22 +36,35 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.truffle.api.*;
 
 @NodeInfo(shortName = "*H")
-public class IntegerMulHighNode extends BinaryNode implements ArithmeticLIRLowerable {
+public class IntegerMulHighNode extends IntegerArithmeticNode {
 
     public static IntegerMulHighNode create(ValueNode x, ValueNode y) {
         return USE_GENERATED_NODES ? new IntegerMulHighNodeGen(x, y) : new IntegerMulHighNode(x, y);
     }
 
     protected IntegerMulHighNode(ValueNode x, ValueNode y) {
-        this((IntegerStamp) x.stamp().unrestricted(), x, y);
+        this(x.stamp().unrestricted(), x, y);
     }
 
-    public static IntegerMulHighNode create(IntegerStamp stamp, ValueNode x, ValueNode y) {
+    public static IntegerMulHighNode create(Stamp stamp, ValueNode x, ValueNode y) {
         return USE_GENERATED_NODES ? new IntegerMulHighNodeGen(stamp, x, y) : new IntegerMulHighNode(stamp, x, y);
     }
 
-    protected IntegerMulHighNode(IntegerStamp stamp, ValueNode x, ValueNode y) {
+    protected IntegerMulHighNode(Stamp stamp, ValueNode x, ValueNode y) {
         super(stamp, x, y);
+    }
+
+    @Override
+    public Constant evalConst(Constant... inputs) {
+        assert inputs.length == 2 && inputs[0].getKind() == inputs[1].getKind();
+        switch (inputs[0].getKind()) {
+            case Int:
+                return Constant.forInt(ExactMath.multiplyHigh(inputs[0].asInt(), inputs[1].asInt()));
+            case Long:
+                return Constant.forLong(ExactMath.multiplyHigh(inputs[0].asLong(), inputs[1].asLong()));
+            default:
+                throw GraalInternalError.unimplemented();
+        }
     }
 
     /**

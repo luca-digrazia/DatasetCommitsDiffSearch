@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -40,7 +40,7 @@ import com.oracle.graal.replacements.nodes.*;
 public class ClassGetClassLoader0Node extends MacroStateSplitNode implements Canonicalizable {
 
     public static ClassGetClassLoader0Node create(Invoke invoke) {
-        return new ClassGetClassLoader0Node(invoke);
+        return USE_GENERATED_NODES ? new ClassGetClassLoader0NodeGen(invoke) : new ClassGetClassLoader0Node(invoke);
     }
 
     protected ClassGetClassLoader0Node(Invoke invoke) {
@@ -55,14 +55,14 @@ public class ClassGetClassLoader0Node extends MacroStateSplitNode implements Can
     public Node canonical(CanonicalizerTool tool) {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
-            Class<?> c = (Class<?>) HotSpotObjectConstantImpl.asObject(javaClass.asJavaConstant());
+            Class<?> c = (Class<?>) HotSpotObjectConstant.asObject(javaClass.asConstant());
             if (c != null) {
                 /*
                  * This is an intrinsic for getClassLoader0, which occurs after any security checks.
                  * We can't call that directly so just call getClassLoader.
                  */
                 ClassLoader classLoader = c.getClassLoader();
-                return ConstantNode.forConstant(HotSpotObjectConstantImpl.forObject(classLoader), tool.getMetaAccess());
+                return ConstantNode.forConstant(HotSpotObjectConstant.forObject(classLoader), tool.getMetaAccess());
             }
         }
         return this;

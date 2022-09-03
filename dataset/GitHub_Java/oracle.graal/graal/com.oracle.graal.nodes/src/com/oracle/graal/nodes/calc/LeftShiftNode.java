@@ -46,12 +46,14 @@ public class LeftShiftNode extends ShiftNode {
         return updateStamp(StampTool.leftShift(getX().stamp(), getY().stamp()));
     }
 
-    private static Constant evalConst(Constant a, Constant b) {
-        if (a.getKind() == Kind.Int) {
-            return Constant.forInt(a.asInt() << b.asInt());
+    @Override
+    public Constant evalConst(Constant... inputs) {
+        assert inputs.length == 2;
+        if (getKind() == Kind.Int) {
+            return Constant.forInt(inputs[0].asInt() << inputs[1].asInt());
         } else {
-            assert a.getKind() == Kind.Long;
-            return Constant.forLong(a.asLong() << b.asLong());
+            assert getKind() == Kind.Long;
+            return Constant.forLong(inputs[0].asLong() << inputs[1].asLong());
         }
     }
 

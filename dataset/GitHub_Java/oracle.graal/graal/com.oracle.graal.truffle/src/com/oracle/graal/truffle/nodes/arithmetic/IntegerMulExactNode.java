@@ -36,9 +36,13 @@ import com.oracle.truffle.api.*;
  * in case the addition would overflow the 32 bit range.
  */
 @NodeInfo
-public class IntegerMulExactNode extends MulNode implements IntegerExactArithmeticNode {
+public class IntegerMulExactNode extends IntegerMulNode implements IntegerExactArithmeticNode {
 
-    public IntegerMulExactNode(ValueNode x, ValueNode y) {
+    public static IntegerMulExactNode create(ValueNode x, ValueNode y) {
+        return USE_GENERATED_NODES ? new IntegerMulExactNodeGen(x, y) : new IntegerMulExactNode(x, y);
+    }
+
+    protected IntegerMulExactNode(ValueNode x, ValueNode y) {
         super(x, y);
         assert x.stamp().isCompatible(y.stamp()) && x.stamp() instanceof IntegerStamp;
     }
@@ -46,12 +50,12 @@ public class IntegerMulExactNode extends MulNode implements IntegerExactArithmet
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
         if (forX.isConstant() && !forY.isConstant()) {
-            return new IntegerMulExactNode(forY, forX);
+            return IntegerMulExactNode.create(forY, forX);
         }
         if (forX.isConstant()) {
             return canonicalXconstant(forX, forY);
         } else if (forY.isConstant()) {
-            long c = forY.asJavaConstant().asLong();
+            long c = forY.asConstant().asLong();
             if (c == 1) {
                 return forX;
             }
@@ -63,8 +67,8 @@ public class IntegerMulExactNode extends MulNode implements IntegerExactArithmet
     }
 
     private ValueNode canonicalXconstant(ValueNode forX, ValueNode forY) {
-        JavaConstant xConst = forX.asJavaConstant();
-        JavaConstant yConst = forY.asJavaConstant();
+        Constant xConst = forX.asConstant();
+        Constant yConst = forY.asConstant();
         assert xConst.getKind() == yConst.getKind();
         try {
             if (xConst.getKind() == Kind.Int) {
@@ -81,7 +85,7 @@ public class IntegerMulExactNode extends MulNode implements IntegerExactArithmet
 
     @Override
     public IntegerExactArithmeticSplitNode createSplit(BeginNode next, BeginNode deopt) {
-        return graph().add(new IntegerMulExactSplitNode(stamp(), getX(), getY(), next, deopt));
+        return graph().add(IntegerMulExactSplitNode.create(stamp(), getX(), getY(), next, deopt));
     }
 
     @Override

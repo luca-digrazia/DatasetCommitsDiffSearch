@@ -32,7 +32,7 @@ import com.oracle.graal.nodes.spi.*;
 public class IntegerSubExactSplitNode extends IntegerExactArithmeticSplitNode {
 
     public static IntegerSubExactSplitNode create(Stamp stamp, ValueNode x, ValueNode y, BeginNode next, BeginNode overflowSuccessor) {
-        return new IntegerSubExactSplitNode(stamp, x, y, next, overflowSuccessor);
+        return USE_GENERATED_NODES ? new IntegerSubExactSplitNodeGen(stamp, x, y, next, overflowSuccessor) : new IntegerSubExactSplitNode(stamp, x, y, next, overflowSuccessor);
     }
 
     protected IntegerSubExactSplitNode(Stamp stamp, ValueNode x, ValueNode y, BeginNode next, BeginNode overflowSuccessor) {
@@ -41,6 +41,6 @@ public class IntegerSubExactSplitNode extends IntegerExactArithmeticSplitNode {
 
     @Override
     protected Value generateArithmetic(NodeLIRBuilderTool gen) {
-        return gen.getLIRGeneratorTool().emitSub(gen.operand(getX()), gen.operand(getY()), true);
+        return gen.getLIRGeneratorTool().emitSub(gen.operand(getX()), gen.operand(getY()));
     }
 }

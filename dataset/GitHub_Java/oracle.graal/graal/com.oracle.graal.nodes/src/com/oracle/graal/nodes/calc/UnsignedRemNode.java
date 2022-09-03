@@ -32,24 +32,28 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = "|%|")
 public class UnsignedRemNode extends FixedBinaryNode implements Lowerable, LIRLowerable {
 
-    public UnsignedRemNode(ValueNode x, ValueNode y) {
+    public static UnsignedRemNode create(ValueNode x, ValueNode y) {
+        return USE_GENERATED_NODES ? new UnsignedRemNodeGen(x, y) : new UnsignedRemNode(x, y);
+    }
+
+    protected UnsignedRemNode(ValueNode x, ValueNode y) {
         super(x.stamp().unrestricted(), x, y);
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
         if (forX.isConstant() && forY.isConstant()) {
-            long yConst = forY.asJavaConstant().asLong();
+            long yConst = forY.asConstant().asLong();
             if (yConst == 0) {
                 return this; // this will trap, cannot canonicalize
             }
-            return ConstantNode.forIntegerStamp(stamp(), UnsignedMath.remainder(forX.asJavaConstant().asLong(), yConst));
+            return ConstantNode.forIntegerStamp(stamp(), UnsignedMath.remainder(forX.asConstant().asLong(), yConst));
         } else if (forY.isConstant()) {
-            long c = forY.asJavaConstant().asLong();
+            long c = forY.asConstant().asLong();
             if (c == 1) {
                 return ConstantNode.forIntegerStamp(stamp(), 0);
             } else if (CodeUtil.isPowerOf2(c)) {
-                return new AndNode(forX, ConstantNode.forIntegerStamp(stamp(), c - 1));
+                return AndNode.create(forX, ConstantNode.forIntegerStamp(stamp(), c - 1));
             }
         }
         return this;

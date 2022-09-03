@@ -39,7 +39,7 @@ import com.oracle.graal.replacements.nodes.*;
 public class ClassIsArrayNode extends MacroNode implements Canonicalizable {
 
     public static ClassIsArrayNode create(Invoke invoke) {
-        return new ClassIsArrayNode(invoke);
+        return USE_GENERATED_NODES ? new ClassIsArrayNodeGen(invoke) : new ClassIsArrayNode(invoke);
     }
 
     protected ClassIsArrayNode(Invoke invoke) {
@@ -54,7 +54,7 @@ public class ClassIsArrayNode extends MacroNode implements Canonicalizable {
     public Node canonical(CanonicalizerTool tool) {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
-            Class<?> c = (Class<?>) HotSpotObjectConstantImpl.asObject(javaClass.asJavaConstant());
+            Class<?> c = (Class<?>) HotSpotObjectConstant.asObject(javaClass.asConstant());
             if (c != null) {
                 return ConstantNode.forBoolean(c.isArray());
             }

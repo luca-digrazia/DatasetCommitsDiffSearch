@@ -41,9 +41,9 @@ import com.oracle.graal.nodes.spi.*;
 public class StubForeignCallNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Multi {
 
     @Input NodeInputList<ValueNode> arguments;
-    protected ForeignCallsProvider foreignCalls;
+    private final ForeignCallsProvider foreignCalls;
 
-    protected ForeignCallDescriptor descriptor;
+    private final ForeignCallDescriptor descriptor;
 
     public static StubForeignCallNode create(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, ValueNode... arguments) {
         return USE_GENERATED_NODES ? new StubForeignCallNodeGen(foreignCalls, descriptor, arguments) : new StubForeignCallNode(foreignCalls, descriptor, arguments);
