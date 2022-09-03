@@ -77,7 +77,7 @@ final class JavaInteropReflect {
             }
             throw (NoSuchFieldError) new NoSuchFieldError(ex.getMessage()).initCause(ex);
         }
-        if (ToPrimitiveNode.temporary().isPrimitive(val)) {
+        if (ToPrimitiveNode.shared().isPrimitive(val)) {
             return val;
         }
         return JavaInterop.asTruffleObject(val);
@@ -104,7 +104,7 @@ final class JavaInteropReflect {
         for (Constructor<?> constructor : clazz.getConstructors()) {
             try {
                 Object ret = constructor.newInstance(args);
-                if (ToPrimitiveNode.temporary().isPrimitive(ret)) {
+                if (ToPrimitiveNode.shared().isPrimitive(ret)) {
                     return ret;
                 }
                 return JavaInterop.asTruffleObject(ret);
@@ -217,7 +217,7 @@ final class JavaInteropReflect {
                 if (args[i] instanceof TruffleObject) {
                     continue;
                 }
-                if (ToPrimitiveNode.temporary().isPrimitive(args[i])) {
+                if (ToPrimitiveNode.shared().isPrimitive(args[i])) {
                     continue;
                 }
                 arguments[i] = JavaInterop.asTruffleObject(args[i]);
