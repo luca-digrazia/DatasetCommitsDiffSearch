@@ -28,7 +28,6 @@ import java.util.NoSuchElementException;
 import java.util.Queue;
 
 public class NodeWorkList implements Iterable<Node> {
-
     private final NodeBitMap visited;
     private final NodeBitMap inQueue;
     private final Queue<Node> worklist;
@@ -140,7 +139,6 @@ public class NodeWorkList implements Iterable<Node> {
     }
 
     private class QueueConsumingIterator implements Iterator<Node> {
-
         private final Queue<Node> queue;
 
         public QueueConsumingIterator(Queue<Node> queue) {
@@ -186,7 +184,6 @@ public class NodeWorkList implements Iterable<Node> {
     }
 
     private static class UnmarkedNodeIterator implements Iterator<Node> {
-
         private final NodeBitMap visited;
         private Iterator<Node> nodes;
         private Node nextNode;
@@ -230,7 +227,6 @@ public class NodeWorkList implements Iterable<Node> {
 
     public Iterable<Node> unmarkedNodes() {
         return new Iterable<Node>() {
-
             @Override
             public Iterator<Node> iterator() {
                 return new UnmarkedNodeIterator(visited, visited.graph().getNodes().iterator());
@@ -239,13 +235,10 @@ public class NodeWorkList implements Iterable<Node> {
     }
 
     public static class InfiniteWorkException extends RuntimeException {
-
         private static final long serialVersionUID = -5319329402219396658L;
-
         public InfiniteWorkException() {
             super();
         }
-
         public InfiniteWorkException(String message) {
             super(message);
         }
