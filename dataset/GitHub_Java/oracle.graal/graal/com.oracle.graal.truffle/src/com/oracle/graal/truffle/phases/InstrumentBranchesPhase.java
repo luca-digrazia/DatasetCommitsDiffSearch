@@ -22,28 +22,10 @@
  */
 package com.oracle.graal.truffle.phases;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleInstrumentBranches;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleInstrumentBranchesCount;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleInstrumentBranchesFilter;
-
-import java.lang.reflect.Field;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.regex.Pattern;
-
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.MethodFilter;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaUtil;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.TypeReference;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeSourcePosition;
 import com.oracle.graal.nodes.AbstractBeginNode;
 import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.IfNode;
@@ -51,10 +33,23 @@ import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.java.StoreIndexedNode;
 import com.oracle.graal.phases.BasePhase;
 import com.oracle.graal.phases.tiers.HighTierContext;
+import jdk.vm.ci.code.BytecodePosition;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
+import java.lang.reflect.Field;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.regex.Pattern;
+
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleInstrumentBranchesCount;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleInstrumentBranchesFilter;
 
 public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
 
-    private static final MethodFilter[] METHOD_FILTER;
+    private static final Pattern METHOD_REGEX_FILTER = Pattern.compile(TruffleInstrumentBranchesFilter.getValue());
     private static final int ACCESS_TABLE_SIZE = TruffleInstrumentBranchesCount.getValue();
     private static final Field ACCESS_TABLE_JAVA_FIELD;
     public static final boolean[] ACCESS_TABLE = new boolean[ACCESS_TABLE_SIZE];
@@ -68,18 +63,11 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
             throw new RuntimeException(e);
         }
         ACCESS_TABLE_JAVA_FIELD = javaField;
-
-        String filterValue = TruffleInstrumentBranchesFilter.getValue();
-        if (filterValue != null) {
-            METHOD_FILTER = MethodFilter.parse(filterValue);
-        } else {
-            METHOD_FILTER = new MethodFilter[0];
-        }
     }
 
     @Override
     protected void run(StructuredGraph graph, HighTierContext context) {
-        if (MethodFilter.matches(METHOD_FILTER, graph.method())) {
+        if (METHOD_REGEX_FILTER.matcher(graph.method().getName()).matches()) {
             ResolvedJavaField tableField = context.getMetaAccess().lookupJavaField(ACCESS_TABLE_JAVA_FIELD);
             JavaConstant tableConstant = context.getConstantReflection().readConstantFieldValue(tableField, null);
             try {
@@ -109,6 +97,22 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
         graph.addAfterFixed(beginNode, store);
     }
 
+    public static void addNodeSourceLocation(Node node, BytecodePosition pos) {
+        node.setNodeContext(new SourceLocation(pos));
+    }
+
+    public static class SourceLocation {
+        private BytecodePosition position;
+
+        public SourceLocation(BytecodePosition position) {
+            this.position = position;
+        }
+
+        public BytecodePosition getPosition() {
+            return position;
+        }
+    }
+
     public static class BranchInstrumentation {
 
         public Map<String, Point> pointMap = new LinkedHashMap<>();
@@ -120,9 +124,9 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
          * source location key.
          */
         private static String encode(Node ifNode) {
-            NodeSourcePosition pos = ifNode.getNodeSourcePosition();
-            if (pos != null) {
-                return MetaUtil.appendLocation(new StringBuilder(), pos.getMethod(), pos.getBCI()).toString();
+            SourceLocation loc = ifNode.getNodeContext(SourceLocation.class);
+            if (loc != null) {
+                return loc.getPosition().toString().replace("\n", ",");
             } else {
                 // IfNode has no position information, and is probably synthetic, so we do not
                 // instrument it.
@@ -132,10 +136,10 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
 
         public synchronized void dumpAccessTable() {
             // Dump accumulated profiling information.
-            TTY.println("Branch execution profile");
-            TTY.println("========================");
+            System.out.println("Branch execution profile");
+            System.out.println("========================");
             for (Map.Entry<String, Point> entry : pointMap.entrySet()) {
-                TTY.println(entry.getKey() + ": " + entry.getValue());
+                System.out.println(entry.getKey() + ": " + entry.getValue());
             }
         }
 
