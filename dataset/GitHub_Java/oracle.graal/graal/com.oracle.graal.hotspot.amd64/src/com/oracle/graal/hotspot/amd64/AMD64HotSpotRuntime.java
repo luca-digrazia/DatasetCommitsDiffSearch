@@ -75,13 +75,13 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                 /* arg1:         b */ arg(1, Kind.Double));
 
         addRuntimeCall(MONITORENTER, config.monitorEnterStub,
-                /*        temps */ null,
+                /*        temps */ new Register[] {rax, rbx},
                 /*          ret */ ret(Kind.Void),
                 /* arg0: object */ arg(0, Kind.Object),
                 /* arg1:   lock */ arg(1, word));
 
         addRuntimeCall(MONITOREXIT, c.monitorExitStub,
-                /*        temps */ null,
+                /*        temps */ new Register[] {rax, rbx},
                 /*          ret */ ret(Kind.Void),
                 /* arg0: object */ arg(0, Kind.Object),
                 /* arg1:   lock */ arg(1, word));

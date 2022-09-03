@@ -33,7 +33,6 @@ import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.util.*;
 import com.oracle.graal.snippets.Word.Opcode;
 import com.oracle.graal.snippets.Word.Operation;
 
@@ -54,7 +53,7 @@ public class WordTypeRewriterPhase extends Phase {
 
     @Override
     protected void run(StructuredGraph graph) {
-        for (Node n : GraphOrder.forwardGraph(graph)) {
+        for (Node n : graph.getNodes()) {
             if (n instanceof ValueNode) {
                 ValueNode valueNode = (ValueNode) n;
                 if (isWord(valueNode)) {
@@ -314,5 +313,16 @@ public class WordTypeRewriterPhase extends Phase {
     private void changeToWord(ValueNode valueNode) {
         assert !(valueNode instanceof ConstantNode) : "boxed Word constants should not appear in a snippet graph: " + valueNode + ", stamp: " + valueNode.stamp();
         valueNode.setStamp(StampFactory.forKind(wordKind));
+
+        // Propagate word kind.
+        for (Node n : valueNode.usages()) {
+            if (n instanceof PhiNode) {
+                changeToWord((ValueNode) n);
+                PhiNode phi = (PhiNode) n;
+                assert phi.type() == PhiType.Value;
+            } else if (n instanceof ReturnNode) {
+                changeToWord((ValueNode) n);
+            }
+        }
     }
 }

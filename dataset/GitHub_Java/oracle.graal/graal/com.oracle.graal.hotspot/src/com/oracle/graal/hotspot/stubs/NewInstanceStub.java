@@ -55,7 +55,7 @@ public class NewInstanceStub extends Stub {
     protected void populateKey(Key key) {
         HotSpotResolvedObjectType intArrayType = (HotSpotResolvedObjectType) runtime.lookupJavaType(int[].class);
         Constant intArrayHub = intArrayType.klass();
-        key.add("intArrayHub", intArrayHub).add("log", Boolean.getBoolean("graal.logNewInstanceStub"));
+        key.add("intArrayHub", intArrayHub);
     }
 
     /**
@@ -65,20 +65,20 @@ public class NewInstanceStub extends Stub {
      * @param intArrayHub the hub for {@code int[].class}
      */
     @Snippet
-    private static Object newInstance(
-                    @Parameter("hub") Word hub,
-                    @ConstantParameter("intArrayHub") Word intArrayHub,
-                    @ConstantParameter("log") boolean log) {
+    private static Object newInstance(@Parameter("hub") Word hub, @ConstantParameter("intArrayHub") Word intArrayHub) {
         int sizeInBytes = loadIntFromWord(hub, klassInstanceSizeOffset());
+        logf("newInstance: size %d\n", sizeInBytes);
         if (inlineContiguousAllocationSupported()) {
             if (loadIntFromWord(hub, klassStateOffset()) == klassStateFullyInitialized()) {
                 Word memory;
-                if (refillTLAB(intArrayHub, Word.fromLong(tlabIntArrayMarkWord()), tlabAlignmentReserveInHeapWords() * wordSize(), log)) {
+                if (refillTLAB(intArrayHub, Word.fromLong(tlabIntArrayMarkWord()), tlabAlignmentReserveInHeapWords() * wordSize())) {
                     memory = allocate(sizeInBytes);
                 } else {
-                    memory = edenAllocate(Word.fromInt(sizeInBytes), log);
+                    logf("newInstance: allocating directly in eden\n", 0L);
+                    memory = edenAllocate(Word.fromInt(sizeInBytes));
                 }
                 if (memory != Word.zero()) {
+                    logf("newInstance: allocated new object at %p\n", memory.toLong());
                     Word prototypeMarkWord = loadWordFromWord(hub, prototypeMarkWordOffset());
                     storeWord(memory, 0, markOffset(), prototypeMarkWord);
                     storeWord(memory, 0, hubOffset(), hub);
@@ -89,6 +89,7 @@ public class NewInstanceStub extends Stub {
                 }
             }
         }
+        logf("newInstance: calling new_instance_slow", 0L);
         return verifyOop(NewInstanceSlowStubCall.call(hub));
     }
 
@@ -98,10 +99,9 @@ public class NewInstanceStub extends Stub {
      * @param intArrayHub the hub for {@code int[].class}
      * @param intArrayMarkWord the mark word for the int array placed in the left over TLAB space
      * @param alignmentReserveInBytes the amount of extra bytes to reserve in a new TLAB
-     * @param log specifies if logging is enabled
      * @return whether or not a new TLAB was allocated
      */
-    static boolean refillTLAB(Word intArrayHub, Word intArrayMarkWord, int alignmentReserveInBytes, boolean log) {
+    static boolean refillTLAB(Word intArrayHub, Word intArrayMarkWord, int alignmentReserveInBytes) {
 
         Word thread = thread();
         Word top = loadWordFromWord(thread, threadTlabTopOffset());
@@ -110,26 +110,24 @@ public class NewInstanceStub extends Stub {
         // calculate amount of free space
         Word tlabFreeSpaceInBytes = end.minus(top);
 
-        log(log, "refillTLAB: thread=%p\n", thread.toLong());
-        log(log, "refillTLAB: top=%p\n", top.toLong());
-        log(log, "refillTLAB: end=%p\n", end.toLong());
-        log(log, "refillTLAB: tlabFreeSpaceInBytes=%d\n", tlabFreeSpaceInBytes.toLong());
+        logf("refillTLAB: thread=%p\n", thread.toLong());
+        logf("refillTLAB: top=%p\n", top.toLong());
+        logf("refillTLAB: end=%p\n", end.toLong());
+        logf("refillTLAB: tlabFreeSpaceInBytes=%d\n", tlabFreeSpaceInBytes.toLong());
 
         // a DIV or SHR operations on Words would be handy here...
         Word tlabFreeSpaceInWords = Word.fromLong(tlabFreeSpaceInBytes.toLong() >>> log2WordSize());
 
         // Retain TLAB and allocate object in shared space if
         // the amount free in the TLAB is too large to discard.
-        Word refillWasteLimit = loadWordFromWord(thread, tlabRefillWasteLimitOffset());
-        if (tlabFreeSpaceInWords.belowOrEqual(refillWasteLimit)) {
+        if (tlabFreeSpaceInWords.belowOrEqual(loadWordFromWord(thread, tlabRefillWasteLimitOffset()))) {
+            logf("refillTLAB: discarding TLAB\n", 0L);
+
             if (tlabStats()) {
                 // increment number of refills
                 storeInt(thread, 0, tlabNumberOfRefillsOffset(), loadIntFromWord(thread, tlabNumberOfRefillsOffset()) + 1);
-                log(log, "thread: %p -- number_of_refills %d\n", thread.toLong(), loadIntFromWord(thread, tlabNumberOfRefillsOffset()));
                 // accumulate wastage
-                Word wastage = loadWordFromWord(thread, tlabFastRefillWasteOffset()).plus(tlabFreeSpaceInWords);
-                log(log, "thread: %p -- accumulated wastage %d\n", thread.toLong(), wastage.toLong());
-                storeWord(thread, 0, tlabFastRefillWasteOffset(), wastage);
+                storeWord(thread, 0, tlabFastRefillWasteOffset(), loadWordFromWord(thread, tlabFastRefillWasteOffset()).plus(tlabFreeSpaceInWords));
             }
 
             // if TLAB is currently allocated (top or end != null) then
@@ -139,6 +137,9 @@ public class NewInstanceStub extends Stub {
                 // just like the HotSpot assembler stubs, assumes that tlabFreeSpaceInInts fits in an int
                 int tlabFreeSpaceInInts = (int) tlabFreeSpaceInBytes.toLong() >>> 2;
                 int length = ((alignmentReserveInBytes - headerSize) >>> 2) + tlabFreeSpaceInInts;
+                logf("refillTLAB: alignmentReserveInBytes %d\n", alignmentReserveInBytes);
+                logf("refillTLAB: headerSize %d\n", headerSize);
+                logf("refillTLAB: filler.length %d\n", length);
                 NewObjectSnippets.formatArray(intArrayHub, -1, length, headerSize, top, intArrayMarkWord, false);
 
                 Word allocated = loadWordFromWord(thread, threadAllocatedBytesOffset());
@@ -150,22 +151,25 @@ public class NewInstanceStub extends Stub {
             Word tlabRefillSizeInWords = loadWordFromWord(thread, threadTlabSizeOffset());
             Word tlabRefillSizeInBytes = Word.fromLong(tlabRefillSizeInWords.toLong() * wordSize());
             // allocate new TLAB, address returned in top
-            top = edenAllocate(tlabRefillSizeInBytes, log);
+            top = edenAllocate(tlabRefillSizeInBytes);
             if (top != Word.zero()) {
                 storeWord(thread, 0, threadTlabStartOffset(), top);
                 storeWord(thread, 0, threadTlabTopOffset(), top);
 
                 end = top.plus(tlabRefillSizeInBytes.minus(alignmentReserveInBytes));
                 storeWord(thread, 0, threadTlabEndOffset(), end);
+                logf("refillTLAB: top'=%p\n", top.toLong());
+                logf("refillTLAB: start'=%p\n", top.toLong());
+                logf("refillTLAB: end'=%p\n", end.toLong());
                 return true;
             } else {
                 return false;
             }
         } else {
             // Retain TLAB
-            Word newRefillWasteLimit = refillWasteLimit.plus(tlabRefillWasteIncrement());
+            Word newRefillWasteLimit = loadWordFromWord(thread, tlabRefillWasteLimitOffset()).plus(tlabRefillWasteIncrement());
             storeWord(thread, 0, tlabRefillWasteLimitOffset(), newRefillWasteLimit);
-            log(log, "refillTLAB: retaining TLAB - newRefillWasteLimit=%p\n", newRefillWasteLimit.toLong());
+            logf("refillTLAB: retaining TLAB - newRefillWasteLimit=%p\n", newRefillWasteLimit.toLong());
 
             if (tlabStats()) {
                 storeInt(thread, 0, tlabSlowAllocationsOffset(), loadIntFromWord(thread, tlabSlowAllocationsOffset()) + 1);
@@ -179,44 +183,43 @@ public class NewInstanceStub extends Stub {
      * Attempts to allocate a chunk of memory from Eden space.
      *
      * @param sizeInBytes the size of the chunk to allocate
-     * @param log specifies if logging is enabled
      * @return the allocated chunk or {@link Word#zero()} if allocation fails
      */
-    static Word edenAllocate(Word sizeInBytes, boolean log) {
+    static Word edenAllocate(Word sizeInBytes) {
         Word heapTopAddress = Word.fromLong(heapTopAddress());
         Word heapEndAddress = Word.fromLong(heapEndAddress());
+        logf("edenAllocate: heapTopAddress %p\n", heapTopAddress.toLong());
+        logf("edenAllocate: heapEndAddress %p\n", heapEndAddress.toLong());
 
         while (true) {
             Word heapTop = loadWordFromWord(heapTopAddress, 0);
             Word newHeapTop = heapTop.plus(sizeInBytes);
+            logf("edenAllocate: heapTop %p\n", heapTop.toLong());
+            logf("edenAllocate: newHeapTop %p\n", newHeapTop.toLong());
             if (newHeapTop.belowOrEqual(heapTop)) {
+                logf("edenAllocate: fail 1\n", 0L);
                 return Word.zero();
             }
 
             Word heapEnd = loadWordFromWord(heapEndAddress, 0);
+            logf("edenAllocate: heapEnd %p\n", heapEnd.toLong());
             if (newHeapTop.above(heapEnd)) {
+                logf("edenAllocate: fail 2\n", 0L);
                 return Word.zero();
             }
 
             if (compareAndSwap(heapTopAddress, 0, heapTop, newHeapTop) == heapTop) {
+                logf("edenAllocate: success %p\n", heapTop.toLong());
                 return heapTop;
             }
         }
     }
 
-    static void log(boolean enabled, String format, long value) {
-        if (enabled) {
+    private static final boolean LOGGING_ENABLED = Boolean.getBoolean("graal.logNewInstanceStub");
+
+    private static void logf(String format, long value) {
+        if (LOGGING_ENABLED) {
             Log.printf(format, value);
-        }
-    }
-    static void log(boolean enabled, String format, long v1, long v2) {
-        if (enabled) {
-            Log.printf(format, v1, v2);
-        }
-    }
-    static void log(boolean enabled, String format, long v1, long v2, long v3) {
-        if (enabled) {
-            Log.printf(format, v1, v2, v3);
         }
     }
 }
