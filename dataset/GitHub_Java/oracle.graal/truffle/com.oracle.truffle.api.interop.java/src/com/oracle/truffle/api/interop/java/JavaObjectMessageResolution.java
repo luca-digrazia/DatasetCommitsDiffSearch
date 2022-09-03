@@ -138,20 +138,18 @@ class JavaObjectMessageResolution {
 
     @Resolve(message = "IS_BOXED")
     abstract static class BoxedCheckNode extends Node {
-        @Child private ToPrimitiveNode primitive = new ToPrimitiveNode();
 
         public Object access(JavaObject object) {
-            return primitive.isPrimitive(object.obj);
+            return ToJavaNode.isPrimitive(object.obj);
         }
 
     }
 
     @Resolve(message = "UNBOX")
     abstract static class UnboxNode extends Node {
-        @Child private ToPrimitiveNode primitive = new ToPrimitiveNode();
 
         public Object access(JavaObject object) {
-            return primitive.toPrimitive(object.obj, null);
+            return ToJavaNode.toPrimitive(object.obj, null);
         }
 
     }
@@ -226,7 +224,7 @@ class JavaObjectMessageResolution {
                     fields[i++] = Objects.toString(key, null);
                 }
             } else {
-                fields = TruffleOptions.AOT ? new String[0] : JavaInteropReflect.findPublicFieldsNames(receiver.clazz, receiver.obj != null);
+                fields = TruffleOptions.AOT ? new String[0] : JavaInteropReflect.findPublicMemberNames(receiver.clazz, receiver.obj != null);
             }
             return JavaInterop.asTruffleObject(fields);
         }
