@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,7 +25,6 @@ package org.graalvm.compiler.nodes.java;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_8;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_8;
 
-import jdk.vm.ci.meta.Value;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
@@ -58,8 +55,6 @@ public final class ValueCompareAndSwapNode extends AbstractCompareAndSwapNode {
         assert getNewValue().stamp(NodeView.DEFAULT).isCompatible(getExpectedValue().stamp(NodeView.DEFAULT));
         LIRGeneratorTool tool = gen.getLIRGeneratorTool();
         assert !this.canDeoptimize();
-        Value result = tool.emitValueCompareAndSwap(tool.getLIRKind(getAccessStamp(NodeView.DEFAULT)),
-                        gen.operand(getAddress()), gen.operand(getExpectedValue()), gen.operand(getNewValue()), false);
-        gen.setResult(this, result);
+        gen.setResult(this, tool.emitValueCompareAndSwap(tool.getLIRKind(getAccessStamp()), gen.operand(getAddress()), gen.operand(getExpectedValue()), gen.operand(getNewValue())));
     }
 }
