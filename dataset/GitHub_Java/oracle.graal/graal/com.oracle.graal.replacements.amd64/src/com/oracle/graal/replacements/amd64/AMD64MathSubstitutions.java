@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,62 +22,29 @@
  */
 package com.oracle.graal.replacements.amd64;
 
-import static com.oracle.graal.compiler.target.Backend.*;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_COS;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_SIN;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_TAN;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.ClassSubstitution;
+import com.oracle.graal.api.replacements.MethodSubstitution;
+import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.replacements.amd64.AMD64MathIntrinsicNode.Operation;
+import com.oracle.graal.nodes.extended.ForeignCallNode;
+import com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode;
+import com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation;
+
+// JaCoCo Exclude
 
 /**
  * Substitutions for some {@link java.lang.Math} methods that leverage AMD64 instructions for
  * selected input values.
  */
+@ClassSubstitution(Math.class)
 public class AMD64MathSubstitutions {
 
     private static final double PI_4 = Math.PI / 4;
-
-    /**
-     * Special cases from {@link Math#pow} and __ieee754_pow (in sharedRuntimeTrans.cpp).
-     */
-    public static double pow(double x, double y) {
-        // If the second argument is positive or negative zero, then the result is 1.0.
-        if (y == 0.0D) {
-            return 1;
-        }
-
-        // If the second argument is 1.0, then the result is the same as the first argument.
-        if (y == 1.0D) {
-            return x;
-        }
-
-        // If the second argument is NaN, then the result is NaN.
-        if (Double.isNaN(y)) {
-            return Double.NaN;
-        }
-
-        // If the first argument is NaN and the second argument is nonzero, then the result is NaN.
-        if (Double.isNaN(x) && y != 0.0D) {
-            return Double.NaN;
-        }
-
-        // x**-1 = 1/x
-        if (y == -1.0D) {
-            return 1 / x;
-        }
-
-        // x**2 = x*x
-        if (y == 2.0D) {
-            return x * x;
-        }
-
-        // x**0.5 = sqrt(x)
-        if (y == 0.5D && x >= 0.0D) {
-            return Math.sqrt(x);
-        }
-        return callDouble2(ARITHMETIC_POW, x, y);
-    }
 
     // NOTE on snippets below:
     // Math.sin(), .cos() and .tan() guarantee a value within 1 ULP of the
@@ -85,33 +52,36 @@ public class AMD64MathSubstitutions {
     // accurate within [-pi/4, pi/4]. Examine the passed value and provide
     // a slow path for inputs outside of that interval.
 
+    @MethodSubstitution
     public static double sin(double x) {
         if (Math.abs(x) < PI_4) {
-            return AMD64MathIntrinsicNode.compute(x, Operation.SIN);
+            return UnaryMathIntrinsicNode.compute(x, UnaryOperation.SIN);
         } else {
             return callDouble1(ARITHMETIC_SIN, x);
         }
     }
 
+    @MethodSubstitution
     public static double cos(double x) {
         if (Math.abs(x) < PI_4) {
-            return AMD64MathIntrinsicNode.compute(x, Operation.COS);
+            return UnaryMathIntrinsicNode.compute(x, UnaryOperation.COS);
         } else {
             return callDouble1(ARITHMETIC_COS, x);
         }
     }
 
+    @MethodSubstitution
     public static double tan(double x) {
         if (Math.abs(x) < PI_4) {
-            return AMD64MathIntrinsicNode.compute(x, Operation.TAN);
+            return UnaryMathIntrinsicNode.compute(x, UnaryOperation.TAN);
         } else {
             return callDouble1(ARITHMETIC_TAN, x);
         }
     }
 
-    @NodeIntrinsic(value = ForeignCallNode.class, setStampFromReturnType = true)
+    @NodeIntrinsic(value = ForeignCallNode.class)
     private static native double callDouble1(@ConstantNodeParameter ForeignCallDescriptor descriptor, double value);
 
-    @NodeIntrinsic(value = ForeignCallNode.class, setStampFromReturnType = true)
+    @NodeIntrinsic(value = ForeignCallNode.class)
     private static native double callDouble2(@ConstantNodeParameter ForeignCallDescriptor descriptor, double a, double b);
 }

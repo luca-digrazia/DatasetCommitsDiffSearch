@@ -22,8 +22,13 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_DREM;
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_FREM;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_COS;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_EXP;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_LOG;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_LOG10;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_POW;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_SIN;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_TAN;
 import static com.oracle.graal.hotspot.HotSpotBackend.DECRYPT;
 import static com.oracle.graal.hotspot.HotSpotBackend.DECRYPT_BLOCK;
 import static com.oracle.graal.hotspot.HotSpotBackend.DECRYPT_BLOCK_WITH_ORIGINAL_KEY;
@@ -40,6 +45,7 @@ import static com.oracle.graal.hotspot.HotSpotBackend.UNCOMMON_TRAP;
 import static com.oracle.graal.hotspot.HotSpotBackend.UNPACK_FRAMES;
 import static com.oracle.graal.hotspot.HotSpotBackend.UNWIND_EXCEPTION_TO_CALLER;
 import static com.oracle.graal.hotspot.HotSpotBackend.VM_ERROR;
+import static com.oracle.graal.hotspot.HotSpotBackend.Options.GraalArithmeticStubs;
 import static com.oracle.graal.hotspot.HotSpotBackend.Options.PreferGraalStubs;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.DESTROYS_REGISTERS;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.PRESERVES_REGISTERS;
@@ -62,6 +68,8 @@ import static com.oracle.graal.hotspot.replacements.MonitorSnippets.MONITOREXIT;
 import static com.oracle.graal.hotspot.replacements.NewObjectSnippets.DYNAMIC_NEW_ARRAY;
 import static com.oracle.graal.hotspot.replacements.NewObjectSnippets.DYNAMIC_NEW_INSTANCE;
 import static com.oracle.graal.hotspot.replacements.NewObjectSnippets.INIT_LOCATION;
+import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.JAVA_TIME_MILLIS;
+import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.JAVA_TIME_NANOS;
 import static com.oracle.graal.hotspot.replacements.ThreadSubstitutions.THREAD_IS_INTERRUPTED;
 import static com.oracle.graal.hotspot.replacements.WriteBarrierSnippets.G1WBPOSTCALL;
 import static com.oracle.graal.hotspot.replacements.WriteBarrierSnippets.G1WBPRECALL;
@@ -76,13 +84,6 @@ import static com.oracle.graal.nodes.java.ForeignCallDescriptors.REGISTER_FINALI
 import static com.oracle.graal.replacements.Log.LOG_OBJECT;
 import static com.oracle.graal.replacements.Log.LOG_PRIMITIVE;
 import static com.oracle.graal.replacements.Log.LOG_PRINTF;
-import static com.oracle.graal.replacements.nodes.BinaryMathIntrinsicNode.BinaryOperation.POW;
-import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.COS;
-import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.EXP;
-import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.LOG;
-import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.LOG10;
-import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.SIN;
-import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.TAN;
 import static jdk.vm.ci.hotspot.HotSpotCallingConventionType.NativeCall;
 
 import java.util.EnumMap;
@@ -93,9 +94,9 @@ import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
 import com.oracle.graal.debug.GraalError;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
 import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.hotspot.stubs.ArrayStoreExceptionStub;
 import com.oracle.graal.hotspot.stubs.ClassCastExceptionStub;
 import com.oracle.graal.hotspot.stubs.CreateExceptionStub;
@@ -120,9 +121,6 @@ import jdk.vm.ci.meta.MetaAccessProvider;
  * HotSpot implementation of {@link ForeignCallsProvider}.
  */
 public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCallsProviderImpl {
-
-    public static final ForeignCallDescriptor JAVA_TIME_MILLIS = new ForeignCallDescriptor("javaTimeMillis", long.class);
-    public static final ForeignCallDescriptor JAVA_TIME_NANOS = new ForeignCallDescriptor("javaTimeNanos", long.class);
 
     public HotSpotHostForeignCallsProvider(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, CodeCacheProvider codeCache,
                     WordTypes wordTypes) {
@@ -237,16 +235,15 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
 
         registerForeignCall(JAVA_TIME_MILLIS, c.javaTimeMillisAddress, NativeCall, DESTROYS_REGISTERS, LEAF_NOFP, REEXECUTABLE, NO_LOCATIONS);
         registerForeignCall(JAVA_TIME_NANOS, c.javaTimeNanosAddress, NativeCall, DESTROYS_REGISTERS, LEAF_NOFP, REEXECUTABLE, NO_LOCATIONS);
-        registerForeignCall(SIN.foreignCallDescriptor, c.arithmeticSinAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
-        registerForeignCall(COS.foreignCallDescriptor, c.arithmeticCosAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
-        registerForeignCall(TAN.foreignCallDescriptor, c.arithmeticTanAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
-        registerForeignCall(EXP.foreignCallDescriptor, c.arithmeticExpAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
-        registerForeignCall(LOG.foreignCallDescriptor, c.arithmeticLogAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
-        registerForeignCall(LOG10.foreignCallDescriptor, c.arithmeticLog10Address, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
-        registerForeignCall(POW.foreignCallDescriptor, c.arithmeticPowAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
-        registerForeignCall(ARITHMETIC_FREM, c.fremAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
-        registerForeignCall(ARITHMETIC_DREM, c.dremAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
-
+        registerForeignCall(ARITHMETIC_SIN, c.arithmeticSinAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
+        registerForeignCall(ARITHMETIC_COS, c.arithmeticCosAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
+        registerForeignCall(ARITHMETIC_TAN, c.arithmeticTanAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
+        registerForeignCall(ARITHMETIC_EXP, c.arithmeticExpAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
+        if (!GraalArithmeticStubs.getValue()) {
+            registerForeignCall(ARITHMETIC_LOG, c.arithmeticLogAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
+            registerForeignCall(ARITHMETIC_LOG10, c.arithmeticLog10Address, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
+        }
+        registerForeignCall(ARITHMETIC_POW, c.arithmeticPowAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
         registerForeignCall(LOAD_AND_CLEAR_EXCEPTION, c.loadAndClearExceptionAddress, NativeCall, DESTROYS_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE, any());
 
         registerForeignCall(EXCEPTION_HANDLER_FOR_PC, c.exceptionHandlerForPcAddress, NativeCall, DESTROYS_REGISTERS, SAFEPOINT, REEXECUTABLE, any());

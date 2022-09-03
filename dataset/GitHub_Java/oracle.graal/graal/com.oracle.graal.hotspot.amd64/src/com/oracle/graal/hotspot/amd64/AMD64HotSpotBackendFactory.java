@@ -23,20 +23,20 @@
 package com.oracle.graal.hotspot.amd64;
 
 import static jdk.vm.ci.common.InitTimer.timer;
-import static com.oracle.graal.hotspot.HotSpotBackend.Options.GraalArithmeticStubs;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.compiler.amd64.AMD64SuitesProvider;
 import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
 import com.oracle.graal.hotspot.DefaultHotSpotGraalCompilerFactory;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.hotspot.HotSpotBackend;
 import com.oracle.graal.hotspot.HotSpotBackendFactory;
 import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
 import com.oracle.graal.hotspot.HotSpotReplacementsImpl;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.hotspot.meta.HotSpotForeignCallsProvider;
 import com.oracle.graal.hotspot.meta.HotSpotGraalConstantFieldProvider;
 import com.oracle.graal.hotspot.meta.HotSpotGraphBuilderPlugins;
@@ -143,7 +143,7 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
                     HotSpotMetaAccessProvider metaAccess, HotSpotSnippetReflectionProvider snippetReflection, HotSpotReplacementsImpl replacements, HotSpotWordTypes wordTypes,
                     HotSpotStampProvider stampProvider) {
         Plugins plugins = HotSpotGraphBuilderPlugins.create(config, wordTypes, metaAccess, constantReflection, snippetReflection, foreignCalls, stampProvider, replacements);
-        AMD64GraphBuilderPlugins.register(plugins, (AMD64) target.arch, GraalArithmeticStubs.getValue());
+        AMD64GraphBuilderPlugins.register(plugins, (AMD64) target.arch);
         return plugins;
     }
 
@@ -180,7 +180,7 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
     }
 
     protected Value[] createNativeABICallerSaveRegisters(GraalHotSpotVMConfig config, RegisterConfig regConfig) {
-        List<Register> callerSave = new ArrayList<>(regConfig.getAllocatableRegisters().asList());
+        List<Register> callerSave = new ArrayList<>(Arrays.asList(regConfig.getAllocatableRegisters()));
         if (config.windowsOs) {
             // http://msdn.microsoft.com/en-us/library/9z1stfyw.aspx
             callerSave.remove(AMD64.rdi);
