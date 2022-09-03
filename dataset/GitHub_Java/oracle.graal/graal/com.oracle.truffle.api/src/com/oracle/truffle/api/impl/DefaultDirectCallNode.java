@@ -40,8 +40,32 @@ public final class DefaultDirectCallNode extends DirectCallNode {
     }
 
     @Override
-    public Object call(VirtualFrame frame, Object[] arguments) {
-        return getCurrentCallTarget().call(arguments);
+    public Object call(final VirtualFrame frame, Object[] arguments) {
+        final CallTarget currentCallTarget = defaultTruffleRuntime().getCurrentFrame().getCallTarget();
+        FrameInstance frameInstance = new FrameInstance() {
+
+            public Frame getFrame(FrameAccess access, boolean slowPath) {
+                return frame;
+            }
+
+            public boolean isVirtualFrame() {
+                return false;
+            }
+
+            public Node getCallNode() {
+                return DefaultDirectCallNode.this;
+            }
+
+            public CallTarget getCallTarget() {
+                return currentCallTarget;
+            }
+        };
+        defaultTruffleRuntime().pushFrame(frameInstance);
+        try {
+            return getCurrentCallTarget().call(arguments);
+        } finally {
+            defaultTruffleRuntime().popFrame();
+        }
     }
 
     @Override
@@ -55,22 +79,17 @@ public final class DefaultDirectCallNode extends DirectCallNode {
     }
 
     @Override
-    public CallTarget getSplitCallTarget() {
+    public CallTarget getClonedCallTarget() {
         return null;
     }
 
     @Override
-    public boolean split() {
+    public boolean cloneCallTarget() {
         return false;
     }
 
     @Override
-    public boolean isInlined() {
-        return false;
-    }
-
-    @Override
-    public boolean isSplittable() {
+    public boolean isCallTargetCloningAllowed() {
         return false;
     }
 
@@ -79,8 +98,7 @@ public final class DefaultDirectCallNode extends DirectCallNode {
         return false;
     }
 
-    @Override
-    public String toString() {
-        return (getParent() != null ? getParent().toString() : super.toString()) + " call " + getCurrentCallTarget().toString();
+    private static DefaultTruffleRuntime defaultTruffleRuntime() {
+        return (DefaultTruffleRuntime) Truffle.getRuntime();
     }
 }
