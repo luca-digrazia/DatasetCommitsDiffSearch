@@ -27,6 +27,7 @@ import java.util.*;
 import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.ir.*;
+import com.sun.cri.ci.*;
 
 
 public class Schedule {
@@ -66,18 +67,12 @@ public class Schedule {
     private Block assignBlock(Node n, Block b) {
         assert nodeToBlock.get(n) == null;
         nodeToBlock.set(n, b);
-        if (n != n.graph().start()) {
-            b.getInstructions().add((Instruction) n);
-        }
+        b.getInstructions().add(n);
         return b;
     }
 
-    private static boolean isCFG(Node n) {
+    private boolean isCFG(Node n) {
         return n != null && ((n instanceof Instruction) || n == n.graph().start());
-    }
-
-    public static boolean isBlockEnd(Node n) {
-        return trueSuccessorCount(n) > 1 || n instanceof Anchor || n instanceof Return || n instanceof Throw;
     }
 
     private void identifyBlocks() {
@@ -110,7 +105,27 @@ public class Schedule {
                     blockBeginNodes.add(n);
                 } else {
                     // We have a single predecessor => check its successor count.
-                    if (isBlockEnd(singlePred)) {
+                    int successorCount = 0;
+                    for (Node succ : singlePred.successors()) {
+                        if (isCFG(succ)) {
+                            successorCount++;
+                            if (successorCount > 1) {
+                                // Our predecessor is a split => we need a new block.
+                                if (singlePred instanceof ExceptionEdgeInstruction) {
+                                    ExceptionEdgeInstruction e = (ExceptionEdgeInstruction) singlePred;
+                                    if (e.exceptionEdge() != n) {
+                                        break;
+                                    }
+                                }
+                                Block b = assignBlock(n);
+                                b.setExceptionEntry(singlePred instanceof ExceptionEdgeInstruction);
+                                blockBeginNodes.add(n);
+                                return true;
+                            }
+                        }
+                    }
+
+                    if (singlePred instanceof BlockEnd) {
                         Block b = assignBlock(n);
                         b.setExceptionEntry(singlePred instanceof Throw);
                         blockBeginNodes.add(n);
@@ -133,20 +148,101 @@ public class Schedule {
             }
         }
 
-        orderBlocks();
+        //computeDominators();
+        //sortNodesWithinBlocks();
         //print();
     }
 
-    private void orderBlocks() {
-       /* List<Block> orderedBlocks = new ArrayList<Block>();
-        Block startBlock = nodeToBlock.get(graph.start().start());
-        List<Block> toSchedule = new ArrayList<Block>();
-        toSchedule.add(startBlock);
+    private void sortNodesWithinBlocks() {
+        NodeBitMap map = graph.createNodeBitMap();
+        for (Block b : blocks) {
+            sortNodesWithinBlocks(b, map);
+        }
+    }
 
-        while (toSchedule.size() != 0) {
+    private void sortNodesWithinBlocks(Block b, NodeBitMap map) {
+        List<Node> instructions = b.getInstructions();
+        Collections.shuffle(instructions);
 
+        List<Node> sortedInstructions = new ArrayList<Node>();
+        sortedInstructions.addAll(instructions);
+        b.setInstructions(sortedInstructions);
 
-        }*/
+        for (Node i : instructions) {
+            if (!map.isMarked(i)) {
+
+            }
+        }
+    }
+
+    private void computeDominators() {
+        Block dominatorRoot = nodeToBlock.get(graph.start());
+        assert dominatorRoot.getPredecessors().size() == 0;
+        CiBitMap visited = new CiBitMap(blocks.size());
+        visited.set(dominatorRoot.blockID());
+        LinkedList<Block> workList = new LinkedList<Block>();
+        workList.add(dominatorRoot);
+
+        while (!workList.isEmpty()) {
+            Block b = workList.remove();
+
+            TTY.println("processing" + b);
+            List<Block> predecessors = b.getPredecessors();
+            if (predecessors.size() == 1) {
+                b.setDominator(predecessors.get(0));
+            } else if (predecessors.size() > 0) {
+                boolean delay = false;
+                for (Block pred : predecessors) {
+                    if (pred != dominatorRoot && pred.dominator() == null) {
+                        delay = true;
+                        break;
+                    }
+                }
+
+                if (delay) {
+                    workList.add(b);
+                    continue;
+                }
+
+                Block dominator = null;
+                for (Block pred : predecessors) {
+                    if (dominator == null) {
+                        dominator = pred;
+                    } else {
+                        dominator = commonDominator(dominator, pred);
+                    }
+                }
+                b.setDominator(dominator);
+            }
+
+            for (Block succ : b.getSuccessors()) {
+                if (!visited.get(succ.blockID())) {
+                    visited.set(succ.blockID());
+                    workList.add(succ);
+                }
+            }
+        }
+    }
+
+    public Block commonDominator(Block a, Block b) {
+        CiBitMap bitMap = new CiBitMap(blocks.size());
+        Block cur = a;
+        while (cur != null) {
+            bitMap.set(cur.blockID());
+            cur = cur.dominator();
+        }
+
+        cur = b;
+        while (cur != null) {
+            if (bitMap.get(cur.blockID())) {
+                return cur;
+            }
+            cur = cur.dominator();
+        }
+
+        print();
+        assert false : "no common dominator between " + a + " and " + b;
+        return null;
     }
 
     private void print() {
@@ -169,6 +265,10 @@ public class Schedule {
            for (Block pred : b.getPredecessors()) {
                TTY.print(pred + ";");
            }
+
+           if (b.dominator() != null) {
+               TTY.print(" dom=" + b.dominator());
+           }
            TTY.println();
 
            if (b.getInstructions().size() > 0) {
@@ -190,15 +290,5 @@ public class Schedule {
                 TTY.println();
             }
         }*/
-    }
-
-    public static int trueSuccessorCount(Node n) {
-        int i = 0;
-        for (Node s : n.successors()) {
-            if (isCFG(s)) {
-                i++;
-            }
-        }
-        return i;
     }
 }

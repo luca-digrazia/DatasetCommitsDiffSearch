@@ -22,51 +22,48 @@
  */
 package com.sun.c1x.debug;
 
+import com.oracle.graal.graph.*;
+import com.oracle.max.graal.schedule.*;
 import com.sun.c1x.graph.*;
 import com.sun.c1x.ir.*;
 import com.sun.c1x.util.*;
 import com.sun.c1x.value.*;
 
 /**
- * Prints a listing for a {@linkplain BlockBegin block}.
- *
- * @author Doug Simon
+ * Prints a listing for a {@linkplain Merge block}.
  */
 public class BlockPrinter implements BlockClosure {
 
     private final InstructionPrinter ip;
     private final boolean cfgOnly;
-    private final boolean liveOnly;
 
-    public BlockPrinter(IR ir, InstructionPrinter ip, boolean cfgOnly, boolean liveOnly) {
+    public BlockPrinter(IR ir, InstructionPrinter ip, boolean cfgOnly) {
         this.ip = ip;
         this.cfgOnly = cfgOnly;
-        this.liveOnly = liveOnly;
     }
 
-    public void apply(BlockBegin block) {
+    public void apply(Block block) {
         if (cfgOnly) {
-            ip.printInstruction(block);
+            if (block.getInstructions().size() > 0) {
+                ip.printInstruction((Instruction) block.getInstructions().get(0));
+            } else {
+                ip.out().println("Empty block");
+            }
             ip.out().println();
         } else {
-            printBlock(block, liveOnly);
+            printBlock(block);
         }
     }
 
-    public void printBlock(BlockBegin block, boolean liveOnly) {
-        ip.printInstruction(block);
+    public void printBlock(Block block) {
         LogStream out = ip.out();
         out.println();
-        printFrameState(block.stateBefore(), out);
-        out.println();
-
-        out.println("inlining depth " + block.stateBefore().scope().level);
 
         ip.printInstructionListingHeader();
 
-        for (Instruction i = block.next(); i != null; i = i.next()) {
-            if (!liveOnly || i.isLive()) {
-                ip.printInstructionListing(i);
+        for (Node i : block.getInstructions()) {
+            if (i instanceof Instruction) {
+                ip.printInstructionListing((Instruction) i);
             }
         }
         out.println();
@@ -75,7 +72,7 @@ public class BlockPrinter implements BlockClosure {
 
     private static void printFrameState(FrameState newFrameState, LogStream out) {
         int startPosition = out.position();
-        if (newFrameState.stackEmpty()) {
+        if (newFrameState.stackSize() == 0) {
           out.print("empty stack");
         } else {
           out.print("stack [");
