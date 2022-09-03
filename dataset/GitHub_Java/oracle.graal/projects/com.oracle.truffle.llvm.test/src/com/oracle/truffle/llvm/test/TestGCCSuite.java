@@ -58,11 +58,11 @@ public class TestGCCSuite extends TestSuiteBase {
     public static List<TestCaseFiles[]> getTestFiles() throws IOException {
         File configFile = LLVMPaths.GCC_TEST_SUITE_CONFIG;
         File testSuite = LLVMPaths.GCC_TEST_SUITE;
-        if (LLVMOptions.debugEnabled()) {
+        if (LLVMOptions.isDebug()) {
             System.out.println("...start to read and compile files");
         }
         List<TestCaseFiles[]> files = getTestCasesFromConfigFile(configFile, testSuite, new TestCaseGeneratorImpl());
-        if (LLVMOptions.debugEnabled()) {
+        if (LLVMOptions.isDebug()) {
             System.out.println("...finished reading and compiling files!");
         }
         return files;
@@ -71,7 +71,7 @@ public class TestGCCSuite extends TestSuiteBase {
     @Test
     public void test() {
         try {
-            if (LLVMOptions.debugEnabled()) {
+            if (LLVMOptions.isDebug()) {
                 System.out.println("original file: " + tuple.getOriginalFile());
             }
             int expectedResult;

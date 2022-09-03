@@ -120,8 +120,8 @@ public abstract class TestSuiteBase {
 
     @After
     public void displaySummary() {
-        if (LLVMOptions.debugEnabled()) {
-            if (LLVMOptions.discoveryTestModeEnabled()) {
+        if (LLVMOptions.isDebug()) {
+            if (LLVMOptions.isDiscoveryTestMode()) {
                 printList("succeeding tests:", succeedingTests);
             } else {
                 printList("failing tests:", failingTests);
@@ -135,7 +135,7 @@ public abstract class TestSuiteBase {
 
     @AfterClass
     public static void displayEndSummary() {
-        if (!LLVMOptions.discoveryTestModeEnabled()) {
+        if (!LLVMOptions.isDiscoveryTestMode()) {
             printList("failing tests:", failingTests);
         }
     }
@@ -184,11 +184,11 @@ public abstract class TestSuiteBase {
     static List<TestCaseFiles[]> getTestCasesFromConfigFile(File configFile, File testSuite, TestCaseGenerator gen) throws IOException, AssertionError {
         TestSpecification testSpecification = SpecificationFileReader.readSpecificationFolder(configFile, testSuite);
         List<File> includedFiles = testSpecification.getIncludedFiles();
-        if (LLVMOptions.discoveryTestModeEnabled()) {
+        if (LLVMOptions.isDiscoveryTestMode()) {
             List<File> excludedFiles = testSpecification.getExcludedFiles();
             File absoluteDiscoveryPath = new File(testSuite.getAbsolutePath(), LLVMOptions.getTestDiscoveryPath());
             assert absoluteDiscoveryPath.exists() : absoluteDiscoveryPath.toString();
-            if (LLVMOptions.debugEnabled()) {
+            if (LLVMOptions.isDebug()) {
                 System.out.println("\tcollect files");
             }
             List<File> filesToRun = getFilesRecursively(absoluteDiscoveryPath, gen);
@@ -210,7 +210,7 @@ public abstract class TestSuiteBase {
                     }
                 }
             }
-            if (LLVMOptions.debugEnabled()) {
+            if (LLVMOptions.isDebug()) {
                 System.out.println("\tfinished collecting files");
             }
             return discoveryTestCases;
