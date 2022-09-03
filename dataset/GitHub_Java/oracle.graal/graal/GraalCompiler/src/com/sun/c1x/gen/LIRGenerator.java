@@ -216,7 +216,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         public final LIRDebugInfo info;
 
         public DeoptimizationStub(FrameState state) {
-            info = new LIRDebugInfo(state);
+            info = new LIRDebugInfo(state, null);
         }
     }
 
@@ -477,9 +477,6 @@ public abstract class LIRGenerator extends ValueVisitor {
         RiMethod target = x.target();
         LIRDebugInfo info = stateFor(x, stateBeforeInvokeWithArguments(x));
         LIRDebugInfo info2 = stateFor(x, stateBeforeInvokeReturn(x));
-        if (x.exceptionEdge() != null) {
-            info2.setExceptionEdge(getLIRBlock(x.exceptionEdge()));
-        }
 
         XirSnippet snippet = null;
 
@@ -883,6 +880,20 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     @Override
+    public void visitThrow(Throw x) {
+        setNoResult(x);
+        CiValue exceptionOpr = load(x.exception());
+        LIRDebugInfo info = stateFor(x, x.stateBefore());
+
+        // move exception oop into fixed register
+        CiCallingConvention callingConvention = compilation.frameMap().getCallingConvention(new CiKind[]{CiKind.Object}, RuntimeCall);
+        CiValue argumentOperand = callingConvention.locations[0];
+        lir.move(exceptionOpr, argumentOperand);
+
+        lir.throwException(CiValue.IllegalValue, argumentOperand, info);
+    }
+
+    @Override
     public void visitDeoptimize(Deoptimize deoptimize) {
         DeoptimizationStub stub = new DeoptimizationStub(lastState);
         addDeoptimizationStub(stub);
@@ -1269,7 +1280,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             Phi phi = (Phi) suxVal;
 
             // curVal can be null without phi being null in conjunction with inlining
-            if (!phi.isDead() && curVal != null && curVal != phi) {
+            if (!phi.isDeadPhi() && curVal != null && curVal != phi) {
 
                 assert phis.contains(phi);
                 if (phi.valueAt(predIndex) != curVal) {
@@ -1277,7 +1288,7 @@ public abstract class LIRGenerator extends ValueVisitor {
                 }
                 assert phi.valueAt(predIndex) == curVal : "curVal=" + curVal + "valueAt(" + predIndex + ")=" + phi.valueAt(predIndex);
 
-                assert !phi.isDead() : "illegal phi cannot be marked as live";
+                assert !phi.isIllegal() : "illegal phi cannot be marked as live";
                 if (curVal instanceof Phi) {
                     operandForPhi((Phi) curVal);
                 }
@@ -1332,7 +1343,7 @@ public abstract class LIRGenerator extends ValueVisitor {
 
                     PhiResolver resolver = new PhiResolver(this);
                     for (Phi phi : phis) {
-                        if (!phi.isDead()) {
+                        if (!phi.isDeadPhi()) {
                             Value curVal = phi.valueAt(predIndex);
                             if (curVal != null && curVal != phi) {
                                 if (curVal instanceof Phi) {
@@ -1378,7 +1389,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     private CiValue operandForPhi(Phi phi) {
-        assert !phi.isDead();
+        assert !phi.isDeadPhi();
         if (phi.operand().isIllegal()) {
             // allocate a variable for this phi
             CiVariable operand = newVariable(phi.kind);
@@ -1448,7 +1459,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         for (int index = 0; index < state.localsSize(); index++) {
             final Value value = state.localAt(index);
             if (value != null) {
-                if (!(value instanceof Phi && ((Phi) value).isDead())) {
+                if (!value.isIllegal()) {
                     walkStateValue(value);
                 }
             }
@@ -1457,7 +1468,7 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     private void walkStateValue(Value value) {
         if (value != null) {
-            if (value instanceof Phi && !((Phi) value).isDead()) {
+            if (value instanceof Phi && !value.isIllegal()) {
                 // phi's are special
                 operandForPhi((Phi) value);
             } else if (value.operand().isIllegal()) {
@@ -1477,7 +1488,16 @@ public abstract class LIRGenerator extends ValueVisitor {
         if (compilation.placeholderState != null) {
             state = compilation.placeholderState;
         }
-        return new LIRDebugInfo(state);
+
+        assert state != null;
+        LIRBlock exceptionEdge = null;
+        if (x instanceof ExceptionEdgeInstruction) {
+            Instruction begin = ((ExceptionEdgeInstruction) x).exceptionEdge();
+            if (begin != null) {
+                exceptionEdge = getLIRBlock(begin);
+            }
+        }
+        return new LIRDebugInfo(state, exceptionEdge);
     }
 
     List<CiValue> visitInvokeArguments(CiCallingConvention cc, Invoke x, List<CiValue> pointerSlots) {
