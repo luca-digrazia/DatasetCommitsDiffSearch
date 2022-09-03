@@ -160,9 +160,6 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native long readUnsafeKlassPointer(Object o);
 
     @Override
-    public native Object readUnsafeOop(Object base, long displacement, boolean compressed);
-
-    @Override
     public native void doNotInlineOrCompile(long metaspaceMethod);
 
     @Override

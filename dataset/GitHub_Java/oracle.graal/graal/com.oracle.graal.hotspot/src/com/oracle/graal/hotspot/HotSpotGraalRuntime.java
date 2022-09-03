@@ -370,32 +370,32 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
     }
 
     /**
-     * Converts a name to a Java type. This method attempts to resolve {@code name} to a
-     * {@link ResolvedJavaType}.
+     * Converts a name to a Java type.
      *
      * @param name a well formed Java type in {@linkplain JavaType#getName() internal} format
-     * @param accessingType the context of resolution which must be non-null
-     * @param resolve specifies whether resolution failure results in an unresolved type being
-     *            return or a {@link LinkageError} being thrown
+     * @param accessingType the context of resolution (may be null)
+     * @param resolve force resolution to a {@link ResolvedJavaType}. If true, this method will
+     *            either return a {@link ResolvedJavaType} or throw an exception
      * @return a Java type for {@code name} which is guaranteed to be of type
      *         {@link ResolvedJavaType} if {@code resolve == true}
      * @throws LinkageError if {@code resolve == true} and the resolution failed
      */
     public JavaType lookupType(String name, HotSpotResolvedObjectType accessingType, boolean resolve) {
-        if (accessingType == null) {
-            throw new GraalInternalError("cannot resolve " + name + " without an accessing class");
-        }
         // If the name represents a primitive type we can short-circuit the lookup.
         if (name.length() == 1) {
             Kind kind = Kind.fromPrimitiveOrVoidTypeChar(name.charAt(0));
             return HotSpotResolvedPrimitiveType.fromKind(kind);
         }
 
-        // Resolve non-primitive types in the VM.
-        final long metaspaceKlass = compilerToVm.lookupType(name, accessingType != null ? accessingType.mirror() : null, resolve);
+        // Handle non-primitive types.
+        Class<?> accessingClass = null;
+        if (accessingType != null) {
+            accessingClass = accessingType.mirror();
+        }
 
-        if (metaspaceKlass == 0L) {
-        	assert resolve == false;
+        // Resolve the type in the VM.
+        final long metaspaceKlass = compilerToVm.lookupType(name, accessingClass, resolve);
+        if (metaspaceKlass == 0) {
             return HotSpotUnresolvedJavaType.create(name);
         }
         return HotSpotResolvedObjectType.fromMetaspaceKlass(metaspaceKlass);
