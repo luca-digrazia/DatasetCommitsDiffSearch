@@ -45,12 +45,7 @@ public abstract class Phase {
     }
 
     public final void apply(final StructuredGraph graph) {
-        Debug.scope(name, this, new Runnable() {
-            public void run() {
-                Phase.this.run(graph);
-                Debug.dump(graph, "After phase %s", name);
-            }
-        });
+        Debug.scope(name, this, new Runnable() { public void run() { Phase.this.run(graph); }});
     }
 
     public final String getName() {

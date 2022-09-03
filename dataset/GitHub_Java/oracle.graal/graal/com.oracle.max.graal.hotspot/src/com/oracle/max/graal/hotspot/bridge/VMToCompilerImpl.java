@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -47,6 +47,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
 
     private final Compiler compiler;
     private int compiledMethodCount;
+    private DebugConfig debugConfig;
 
     public final HotSpotTypePrimitive typeBoolean;
     public final HotSpotTypePrimitive typeChar;
@@ -73,11 +74,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
 
         @Override
         public void run() {
-            if (GraalOptions.Debug) {
-                Debug.enable();
-                HotSpotDebugConfig hotspotDebugConfig = new HotSpotDebugConfig(GraalOptions.Log, GraalOptions.Meter, GraalOptions.Time, GraalOptions.Dump, GraalOptions.MethodFilter);
-                Debug.setConfig(hotspotDebugConfig);
-            }
+            Debug.setConfig(debugConfig);
             super.run();
         }
     }
@@ -105,8 +102,8 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
         HotSpotRuntime runtime = (HotSpotRuntime) compiler.getCompiler().runtime;
         if (GraalOptions.Intrinsify) {
             GraalIntrinsics.installIntrinsics(runtime, runtime.getCompiler().getTarget(), PhasePlan.DEFAULT);
-            Snippets.install(runtime, runtime.getCompiler().getTarget(), new SystemSnippets(), PhasePlan.DEFAULT);
-            Snippets.install(runtime, runtime.getCompiler().getTarget(), new UnsafeSnippets(), PhasePlan.DEFAULT);
+            Snippets.install(runtime, runtime.getCompiler().getTarget(), new SystemSnippets(), GraalOptions.PlotSnippets, PhasePlan.DEFAULT);
+            Snippets.install(runtime, runtime.getCompiler().getTarget(), new UnsafeSnippets(), GraalOptions.PlotSnippets, PhasePlan.DEFAULT);
         }
 
         // Create compilation queue.
@@ -129,17 +126,13 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
             t.setDaemon(true);
             t.start();
         }
-    }
 
-    /**
-     * This method is the first method compiled during bootstrapping. Put any code in there that
-     * warms up compiler paths that are otherwise no exercised during bootstrapping and lead to later
-     * deoptimization when application code is compiled.
-     */
-    @SuppressWarnings("unused")
-    @Deprecated
-    private synchronized void compileWarmup() {
-        // Method is synchronized to exercise the synchronization code in the compiler.
+        if (GraalOptions.Debug) {
+            Debug.enable();
+            HotSpotDebugConfig hotspotDebugConfig = new HotSpotDebugConfig(GraalOptions.Log, GraalOptions.Meter, GraalOptions.Time, GraalOptions.Dump, GraalOptions.MethodFilter);
+            System.out.println(hotspotDebugConfig);
+            this.debugConfig = hotspotDebugConfig;
+        }
     }
 
     public void bootstrap() throws Throwable {
@@ -149,13 +142,12 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
 
         // Initialize compile queue with a selected set of methods.
         Class<Object> objectKlass = Object.class;
-        enqueue(getClass().getDeclaredMethod("compileWarmup"));
         enqueue(objectKlass.getDeclaredMethod("equals", Object.class));
         enqueue(objectKlass.getDeclaredMethod("toString"));
 
         // Compile until the queue is empty.
         int z = 0;
-        while (compileQueue.getCompletedTaskCount() < Math.max(3, compileQueue.getTaskCount())) {
+        while (compileQueue.getCompletedTaskCount() < Math.max(2, compileQueue.getTaskCount())) {
             Thread.sleep(100);
             while (z < compileQueue.getCompletedTaskCount() / 100) {
                 ++z;

@@ -22,10 +22,7 @@
  */
 package com.oracle.max.graal.debug;
 
-
-public interface DebugConfig {
-    boolean isLogEnabled();
-    boolean isMeterEnabled();
-    boolean isDumpEnabled();
-    boolean isTimerEnabled();
+public interface DebugMetric {
+    void increment();
+    void add(int value);
 }
