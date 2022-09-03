@@ -123,6 +123,14 @@ public class PartialEscapeAnalysisPhase extends Phase {
                 }
             });
         }
+
+        if (DynamicCounterNode.enabled && readElimination) {
+            for (Node node : graph.getNodes()) {
+                if (node instanceof LoadFieldNode) {
+                    DynamicCounterNode.addCounterBefore("load non-elim", 1, false, (FixedNode) node);
+                }
+            }
+        }
     }
 
     private static boolean matches(StructuredGraph graph, String filter) {
@@ -183,7 +191,7 @@ public class PartialEscapeAnalysisPhase extends Phase {
                 }
             }
         }
-        // CheckStyle: stop system..print check
+
         boolean success = true;
         for (Node node : obsoleteNodes) {
             if (flood.isMarked(node)) {
@@ -199,7 +207,6 @@ public class PartialEscapeAnalysisPhase extends Phase {
                 success = false;
             }
         }
-        // CheckStyle: resume system..print check
         return success;
     }
 

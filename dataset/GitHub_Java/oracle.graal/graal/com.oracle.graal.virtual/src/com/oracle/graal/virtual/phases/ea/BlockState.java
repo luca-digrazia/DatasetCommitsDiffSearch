@@ -26,11 +26,14 @@ import static com.oracle.graal.virtual.phases.ea.PartialEscapeAnalysisPhase.*;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.Virtualizable.EscapeState;
 import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.virtual.nodes.*;
 
 class BlockState {
 
@@ -148,50 +151,63 @@ class BlockState {
 
     public void materializeBefore(FixedNode fixed, VirtualObjectNode virtual, EscapeState state, GraphEffectList materializeEffects) {
         PartialEscapeClosure.METRIC_MATERIALIZATIONS.increment();
-        List<AllocatedObjectNode> objects = new ArrayList<>(2);
-        List<ValueNode> values = new ArrayList<>(8);
-        List<int[]> locks = new ArrayList<>(2);
-        List<ValueNode> otherAllocations = new ArrayList<>(2);
-        materializeWithCommit(virtual, objects, locks, values, otherAllocations, state);
-
-        materializeEffects.addMaterializationBefore(fixed, objects, locks, values, otherAllocations);
+        HashSet<VirtualObjectNode> deferred = new HashSet<>();
+        GraphEffectList deferredStores = new GraphEffectList();
+        materializeChangedBefore(fixed, virtual, state, deferred, deferredStores, materializeEffects);
+        materializeEffects.addAll(deferredStores);
     }
 
-    private void materializeWithCommit(VirtualObjectNode virtual, List<AllocatedObjectNode> objects, List<int[]> locks, List<ValueNode> values, List<ValueNode> otherAllocations, EscapeState state) {
-        trace("materializing %s", virtual);
+    private void materializeChangedBefore(FixedNode fixed, VirtualObjectNode virtual, EscapeState state, HashSet<VirtualObjectNode> deferred, GraphEffectList deferredStores,
+                    GraphEffectList materializeEffects) {
+        trace("materializing %s at %s", virtual, fixed);
         ObjectState obj = getObjectState(virtual);
-
-        ValueNode[] entries = obj.getEntries();
-        ValueNode representation = virtual.getMaterializedRepresentation(entries, obj.getLocks());
-        obj.escape(representation, state);
-        if (representation instanceof AllocatedObjectNode) {
-            objects.add((AllocatedObjectNode) representation);
-            locks.add(obj.getLocks());
-            int pos = values.size();
-            while (values.size() < pos + entries.length) {
-                values.add(null);
-            }
-            for (int i = 0; i < entries.length; i++) {
-                ObjectState entryObj = getObjectState(entries[i]);
-                if (entryObj != null) {
-                    if (entryObj.isVirtual()) {
-                        materializeWithCommit(entryObj.getVirtualObject(), objects, locks, values, otherAllocations, state);
-                    }
-                    values.set(pos + i, entryObj.getMaterializedValue());
-                } else {
-                    values.set(pos + i, entries[i]);
-                }
-            }
-            if (virtual instanceof VirtualInstanceNode) {
-                VirtualInstanceNode instance = (VirtualInstanceNode) virtual;
-                for (int i = 0; i < entries.length; i++) {
-                    readCache.put(new ReadCacheEntry(instance.field(i), representation), values.get(pos + i));
-                }
-            }
-        } else {
-            otherAllocations.add(representation);
-            assert obj.getLocks().length == 0;
+        if (obj.getLockCount() > 0 && obj.virtual.type().isArray()) {
+            throw new BailoutException("array materialized with lock");
         }
+
+        ValueNode[] fieldState = obj.getEntries();
+
+        MaterializeObjectNode materialize = new MaterializeObjectNode(virtual, obj.getLockCount());
+        ValueNode[] values = new ValueNode[obj.getEntries().length];
+        materialize.setProbability(fixed.probability());
+        obj.escape(materialize, state);
+        deferred.add(virtual);
+        for (int i = 0; i < fieldState.length; i++) {
+            ObjectState valueObj = getObjectState(fieldState[i]);
+            if (valueObj != null) {
+                if (valueObj.isVirtual()) {
+                    materializeChangedBefore(fixed, valueObj.virtual, state, deferred, deferredStores, materializeEffects);
+                }
+                if (deferred.contains(valueObj.virtual)) {
+                    Kind fieldKind;
+                    CyclicMaterializeStoreNode store;
+                    if (virtual instanceof VirtualArrayNode) {
+                        store = new CyclicMaterializeStoreNode(materialize, valueObj.getMaterializedValue(), i);
+                        fieldKind = ((VirtualArrayNode) virtual).componentType().getKind();
+                    } else {
+                        VirtualInstanceNode instanceObject = (VirtualInstanceNode) virtual;
+                        store = new CyclicMaterializeStoreNode(materialize, valueObj.getMaterializedValue(), instanceObject.field(i));
+                        fieldKind = instanceObject.field(i).getType().getKind();
+                    }
+                    deferredStores.addFixedNodeBefore(store, fixed);
+                    values[i] = ConstantNode.defaultForKind(fieldKind, fixed.graph());
+                } else {
+                    values[i] = valueObj.getMaterializedValue();
+                }
+            } else {
+                values[i] = fieldState[i];
+            }
+        }
+        deferred.remove(virtual);
+
+        if (virtual instanceof VirtualInstanceNode) {
+            VirtualInstanceNode instance = (VirtualInstanceNode) virtual;
+            for (int i = 0; i < fieldState.length; i++) {
+                readCache.put(new ReadCacheEntry(instance.field(i), materialize), fieldState[i]);
+            }
+        }
+
+        materializeEffects.addMaterialization(materialize, fixed, values);
     }
 
     void addAndMarkAlias(VirtualObjectNode virtual, ValueNode node, NodeBitMap usages) {
