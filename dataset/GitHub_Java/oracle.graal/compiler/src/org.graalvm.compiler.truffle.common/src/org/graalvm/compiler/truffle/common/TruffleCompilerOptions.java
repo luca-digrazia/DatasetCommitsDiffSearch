@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -126,6 +128,9 @@ public class TruffleCompilerOptions {
     @Option(help = "Restrict compilation to comma-separated list of includes (or excludes prefixed with tilde)", type = OptionType.Debug)
     public static final OptionKey<String> TruffleCompileOnly = new OptionKey<>(null);
 
+    @Option(help = "Enable or disable truffle compilation.", type = OptionType.Debug)
+    public static final OptionKey<Boolean> TruffleCompilation = new OptionKey<>(true);
+
     @Option(help = "Compile immediately to test truffle compiler", type = OptionType.Debug)
     public static final OptionKey<Boolean> TruffleCompileImmediately = new OptionKey<>(false);
 
@@ -137,12 +142,6 @@ public class TruffleCompilerOptions {
      */
     @Option(help = "Compile call target when call count exceeds this threshold", type = OptionType.User)
     public static final OptionKey<Integer> TruffleCompilationThreshold = new OptionKey<>(1000);
-
-    /**
-     * deprecated use {@code PolyglotCompilerOptions.QueueTimeThreshold} instead.
-     */
-    @Option(help = "Defines the maximum timespan in milliseconds that is required for a call target to be queued for compilation.", type = OptionType.User)
-    public static final OptionKey<Integer> TruffleTimeThreshold = new OptionKey<>(50000);
 
     @Option(help = "Minimum number of calls before a call target is compiled", type = OptionType.Expert)
     public static final OptionKey<Integer> TruffleMinInvokeThreshold = new OptionKey<>(3);
@@ -174,11 +173,26 @@ public class TruffleCompilerOptions {
     @Option(help = "Disable call target splitting if tree size exceeds this limit", type = OptionType.Debug)
     public static final OptionKey<Integer> TruffleSplittingMaxCalleeSize = new OptionKey<>(100);
 
-    @Option(help = "Increase the splitting budget by this much when a new call target is created", type = OptionType.Debug)
-    public static final OptionKey<Integer> TruffleSplittingLimitGrowth = new OptionKey<>(2);
+    @Option(help = "Disable call target splitting if the number of nodes created by splitting exceeds this factor times node count", type = OptionType.Debug)
+    public static final OptionKey<Double> TruffleSplittingGrowthLimit = new OptionKey<>(1.5);
 
-    @Option(help = "Disable call target splitting if number of splits exceeds this limit", type = OptionType.Debug)
-    public static final OptionKey<Integer> TruffleSplittingMaxNumberOfSplits = new OptionKey<>(5000);
+    @Option(help = "Disable call target splitting if number of nodes created by splitting exceeds this limit", type = OptionType.Debug)
+    public static final OptionKey<Integer> TruffleSplittingMaxNumberOfSplitNodes = new OptionKey<>(500_000);
+
+    @Option(help = "Propagate info about a polymorphic specialize through maximum this many call targets", type = OptionType.Debug)
+    public static final OptionKey<Integer> TruffleExperimentalSplittingMaxPropagationDepth = new OptionKey<>(5);
+
+    @Option(help = "Use the splitting strategy that relies on language implementations reporting polymorphic specializations. Disables forced splits.", type = OptionType.Expert)
+    public static final OptionKey<Boolean> TruffleExperimentalSplitting = new OptionKey<>(false);
+
+    @Option(help = "Used for debugging the splitting implementation. Prints splitting summary directly to stdout on shutdown", type = OptionType.Expert)
+    public static final OptionKey<Boolean> TruffleTraceSplittingSummary = new OptionKey<>(false);
+
+    @Option(help = "Dumps to IGV information on polymorphic events", type = OptionType.Expert)
+    public static final OptionKey<Boolean> TruffleExperimentalSplittingDumpDecisions = new OptionKey<>(false);
+
+    @Option(help = "Should forced splits be allowed (when using experimental splitting)", type = OptionType.Expert)
+    public static final OptionKey<Boolean> TruffleExperimentalSplittingAllowForcedSplits = new OptionKey<>(true);
 
     @Option(help = "Enable asynchronous truffle compilation in background thread", type = OptionType.Expert)
     public static final OptionKey<Boolean> TruffleBackgroundCompilation = new OptionKey<>(true);
@@ -211,13 +225,13 @@ public class TruffleCompilerOptions {
     @Option(help = "Print all polymorphic and generic nodes after each compilation", type = OptionType.Debug)
     public static final OptionKey<Boolean> TraceTruffleCompilationPolymorphism = new OptionKey<>(false);
 
-    @Option(help = "Print all polymorphic and generic nodes after each compilation", type = OptionType.Debug)
+    @Option(help = "Print the entire AST after each compilation", type = OptionType.Debug)
     public static final OptionKey<Boolean> TraceTruffleCompilationAST = new OptionKey<>(false);
 
     @Option(help = "Print the inlined call tree for each compiled method", type = OptionType.Debug)
     public static final OptionKey<Boolean> TraceTruffleCompilationCallTree = new OptionKey<>(false);
 
-    @Option(help = "Print source secions for printed expansion trees", type = OptionType.Debug)
+    @Option(help = "Print source sections for printed expansion trees", type = OptionType.Debug)
     public static final OptionKey<Boolean> TraceTruffleExpansionSource = new OptionKey<>(false);
 
     @Option(help = "Prints a histogram of all expanded Java methods.", type = OptionType.Debug)
@@ -256,6 +270,8 @@ public class TruffleCompilerOptions {
     @Option(help = "Print additional more verbose Truffle compilation statistics at the end of a run.", type = OptionType.Debug)
     public static final OptionKey<Boolean> TruffleCompilationStatisticDetails = new OptionKey<>(false);
 
+    @Option(help = "Enable support for simple infopoints in truffle partial evaluations.", type = OptionType.Expert)
+    public static final OptionKey<Boolean> TruffleEnableInfopoints = new OptionKey<>(false);
 
     @Option(help = "Run the partial escape analysis iteratively in Truffle compilation.", type = OptionType.Debug)
     public static final OptionKey<Boolean> TruffleIterativePartialEscape = new OptionKey<>(false);

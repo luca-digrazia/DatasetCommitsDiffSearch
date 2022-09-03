@@ -24,8 +24,8 @@
  */
 package org.graalvm.compiler.truffle.runtime.debug;
 
-import static org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions.TruffleCompilationStatisticDetails;
-import static org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions.TruffleCompilationStatistics;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleCompilationStatisticDetails;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleCompilationStatistics;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -42,6 +42,7 @@ import java.util.function.Function;
 
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.CompilationResultInfo;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.GraphInfo;
+import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.AbstractGraalTruffleRuntimeListener;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
@@ -50,8 +51,6 @@ import org.graalvm.compiler.truffle.runtime.OptimizedDirectCallNode;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining.CallTreeNodeVisitor;
 import org.graalvm.compiler.truffle.runtime.TruffleInliningDecision;
-import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
-import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
 
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
@@ -119,8 +118,7 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
     private final ThreadLocal<Times> compilationTimes = new ThreadLocal<>();
 
     public static void install(GraalTruffleRuntime runtime) {
-        if (TruffleRuntimeOptions.getValue(TruffleCompilationStatistics) ||
-                        TruffleRuntimeOptions.getValue(TruffleCompilationStatisticDetails)) {
+        if (TruffleCompilerOptions.getValue(TruffleCompilationStatistics) || TruffleCompilerOptions.getValue(TruffleCompilationStatisticDetails)) {
             runtime.addListener(new StatisticsListener(runtime));
         }
     }
@@ -187,7 +185,7 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
         loopCount.accept(callTargetStat.getLoopCount());
 
         truffleTierNodeCount.accept(graph.getNodeCount());
-        if (TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleCompilationStatisticDetails)) {
+        if (TruffleCompilerOptions.getValue(TruffleCompilationStatisticDetails)) {
             truffleTierNodeStatistics.accept(Arrays.asList(graph.getNodeTypes(true)));
         }
     }
@@ -207,7 +205,7 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
         final Times times = compilationTimes.get();
         times.graalTierFinished = System.nanoTime();
         graalTierNodeCount.accept(graph.getNodeCount());
-        if (TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleCompilationStatisticDetails)) {
+        if (TruffleCompilerOptions.getValue(TruffleCompilationStatisticDetails)) {
             graalTierNodeStatistics.accept(Arrays.asList(graph.getNodeTypes(true)));
         }
     }
@@ -298,7 +296,7 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
         printStatistic(rt, "  Marks", compilationResultMarks);
         printStatistic(rt, "  Data references", compilationResultDataPatches);
 
-        if (TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleCompilationStatisticDetails)) {
+        if (TruffleCompilerOptions.getValue(TruffleCompilationStatisticDetails)) {
             printStatistic(rt, "Truffle nodes");
             nodeStatistics.printStatistics(rt, Class::getSimpleName);
             printStatistic(rt, "Graal nodes after Truffle tier");
