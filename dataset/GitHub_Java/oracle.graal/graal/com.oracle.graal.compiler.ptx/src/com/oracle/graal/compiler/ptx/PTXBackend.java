@@ -30,7 +30,6 @@ import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.ptx.*;
 import com.oracle.graal.nodes.*;
 
 /**
@@ -40,11 +39,6 @@ public class PTXBackend extends Backend {
 
     public PTXBackend(CodeCacheProvider runtime, TargetDescription target) {
         super(runtime, target);
-    }
-
-    @Override
-    public FrameMap newFrameMap() {
-        return new PTXFrameMap(runtime(), target, runtime().lookupRegisterConfig());
     }
 
     @Override
