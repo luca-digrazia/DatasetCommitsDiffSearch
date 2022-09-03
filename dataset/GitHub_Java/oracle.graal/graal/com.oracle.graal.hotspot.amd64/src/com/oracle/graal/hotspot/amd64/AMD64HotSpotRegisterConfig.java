@@ -22,84 +22,164 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.max.asm.amd64.AMD64.*;
+import static com.oracle.graal.amd64.AMD64.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 
 import java.util.*;
+import java.util.concurrent.*;
 
-import com.oracle.max.asm.amd64.*;
+import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CallingConvention.*;
-import com.oracle.graal.api.code.Register.*;
+import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.hotspot.*;
 
 public class AMD64HotSpotRegisterConfig implements RegisterConfig {
 
-    // be careful - the contents of this array are duplicated in graal_CodeInstaller.cpp
-    private final Register[] allocatable = {
-        rax, rbx, rcx, rdx, rsi, rdi, r8, r9, /* r10, */r11, r12, r13, r14, /*r15*/
-        xmm0, xmm1, xmm2,  xmm3,  xmm4,  xmm5,  xmm6,  xmm7,
-        xmm8, xmm9, xmm10, xmm11, xmm12, xmm13, xmm14, xmm15
-    };
+    private final Architecture architecture;
 
-    private final EnumMap<RegisterFlag, Register[]> categorized = Register.categorize(allocatable);
+    private final Register[] allocatable;
+
+    private final int maxFrameSize;
+
+    /**
+     * The same as {@link #allocatable}, except if parameter registers are removed with the
+     * {@link GraalOptions#RegisterPressure} option. The caller saved registers always include all
+     * parameter registers.
+     */
+    private final Register[] callerSaved;
+
+    private final boolean allAllocatableAreCallerSaved;
+
+    private final Map<PlatformKind.Key, Register[]> categorized = new ConcurrentHashMap<>();
 
     private final RegisterAttributes[] attributesMap;
 
-    @Override
-    public Register[] getAllocatableRegisters() {
-        return allocatable;
+    public int getMaximumFrameSize() {
+        return maxFrameSize;
     }
 
     @Override
-    public EnumMap<RegisterFlag, Register[]> getCategorizedAllocatableRegisters() {
-        return categorized;
+    public Register[] getAllocatableRegisters() {
+        return allocatable.clone();
+    }
+
+    public Register[] getAllocatableRegisters(PlatformKind kind) {
+        PlatformKind.Key key = kind.getKey();
+        if (categorized.containsKey(key)) {
+            Register[] val = categorized.get(key);
+            return val;
+        }
+
+        ArrayList<Register> list = new ArrayList<>();
+        for (Register reg : getAllocatableRegisters()) {
+            if (architecture.canStoreValue(reg.getRegisterCategory(), kind)) {
+                list.add(reg);
+            }
+        }
+
+        Register[] ret = list.toArray(new Register[list.size()]);
+        categorized.put(key, ret);
+        return ret;
     }
 
     @Override
     public RegisterAttributes[] getAttributesMap() {
-        return attributesMap;
+        return attributesMap.clone();
     }
 
-    private final Register[] generalParameterRegisters;
+    private final Register[] javaGeneralParameterRegisters;
+    private final Register[] nativeGeneralParameterRegisters;
     private final Register[] xmmParameterRegisters = {xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7};
-    private final Register[] allParameterRegisters;
+
+    /*
+     * Some ABIs (e.g. Windows) require a so-called "home space", that is a save area on the stack
+     * to store the argument registers
+     */
+    private final boolean needsNativeStackHomeSpace;
 
     private final CalleeSaveLayout csl;
 
-    public AMD64HotSpotRegisterConfig(HotSpotVMConfig config, boolean globalStubConfig) {
+    private static Register findRegister(String name, Register[] all) {
+        for (Register reg : all) {
+            if (reg.name.equals(name)) {
+                return reg;
+            }
+        }
+        throw new IllegalArgumentException("register " + name + " is not allocatable");
+    }
+
+    private static Register[] initAllocatable(boolean reserveForHeapBase) {
+        Register[] registers = null;
+        // @formatter:off
+        if (reserveForHeapBase) {
+            registers = new Register[] {
+                        rax, rbx, rcx, rdx, /*rsp,*/ rbp, rsi, rdi, r8, r9,  r10, r11, /*r12,*/ r13, r14, /*r15, */
+                        xmm0, xmm1, xmm2,  xmm3,  xmm4,  xmm5,  xmm6,  xmm7,
+                        xmm8, xmm9, xmm10, xmm11, xmm12, xmm13, xmm14, xmm15
+                      };
+        } else {
+            registers = new Register[] {
+                        rax, rbx, rcx, rdx, /*rsp,*/ rbp, rsi, rdi, r8, r9,  r10, r11, r12, r13, r14, /*r15, */
+                        xmm0, xmm1, xmm2,  xmm3,  xmm4,  xmm5,  xmm6,  xmm7,
+                        xmm8, xmm9, xmm10, xmm11, xmm12, xmm13, xmm14, xmm15
+                      };
+        }
+       // @formatter:on
+
+        if (RegisterPressure.getValue() != null) {
+            String[] names = RegisterPressure.getValue().split(",");
+            Register[] regs = new Register[names.length];
+            for (int i = 0; i < names.length; i++) {
+                regs[i] = findRegister(names[i], registers);
+            }
+            return regs;
+        }
+
+        return registers;
+    }
+
+    public AMD64HotSpotRegisterConfig(Architecture architecture, HotSpotVMConfig config) {
+        this(architecture, config, initAllocatable(config.useCompressedOops));
+        assert callerSaved.length == allocatable.length || RegisterPressure.getValue() != null;
+    }
+
+    public AMD64HotSpotRegisterConfig(Architecture architecture, HotSpotVMConfig config, Register[] allocatable) {
+        this.architecture = architecture;
+        this.maxFrameSize = config.maxFrameSize;
+
         if (config.windowsOs) {
-            generalParameterRegisters = new Register[] {rdx, r8, r9, rdi, rsi, rcx};
+            javaGeneralParameterRegisters = new Register[]{rdx, r8, r9, rdi, rsi, rcx};
+            nativeGeneralParameterRegisters = new Register[]{rcx, rdx, r8, r9};
+            this.needsNativeStackHomeSpace = true;
         } else {
-            generalParameterRegisters = new Register[] {rsi, rdx, rcx, r8, r9, rdi};
+            javaGeneralParameterRegisters = new Register[]{rsi, rdx, rcx, r8, r9, rdi};
+            nativeGeneralParameterRegisters = new Register[]{rdi, rsi, rdx, rcx, r8, r9};
+            this.needsNativeStackHomeSpace = false;
         }
 
-        if (globalStubConfig) {
-            Register[] regs = {
-                rax,  rcx,  rdx,   rbx,   rsp,   rbp,   rsi,   rdi,
-                r8,   r9,   r10,   r11,   r12,   r13,   r14,   r15,
-                xmm0, xmm1, xmm2,  xmm3,  xmm4,  xmm5,  xmm6,  xmm7,
-                xmm8, xmm9, xmm10, xmm11, xmm12, xmm13, xmm14, xmm15
-            };
-            csl = new CalleeSaveLayout(0, -1, 8, regs);
-        } else {
-            // We reserve space for saving RBP but don't explicitly specify
-            // it as a callee save register since we explicitly do the saving
-            // with push and pop in HotSpotFrameContext
-            final int size = 8;
-            final Register[] regs = {};
-            csl = new CalleeSaveLayout(0, size, 8, regs);
-        }
+        csl = null;
+        this.allocatable = allocatable.clone();
+        Set<Register> callerSaveSet = new HashSet<>();
+        Collections.addAll(callerSaveSet, allocatable);
+        Collections.addAll(callerSaveSet, xmmParameterRegisters);
+        Collections.addAll(callerSaveSet, javaGeneralParameterRegisters);
+        Collections.addAll(callerSaveSet, nativeGeneralParameterRegisters);
+        callerSaved = callerSaveSet.toArray(new Register[callerSaveSet.size()]);
 
+        allAllocatableAreCallerSaved = true;
         attributesMap = RegisterAttributes.createMap(this, AMD64.allRegisters);
-        allParameterRegisters = Arrays.copyOf(generalParameterRegisters, generalParameterRegisters.length + xmmParameterRegisters.length);
-        System.arraycopy(xmmParameterRegisters, 0, allParameterRegisters, generalParameterRegisters.length, xmmParameterRegisters.length);
     }
 
     @Override
     public Register[] getCallerSaveRegisters() {
-        return getAllocatableRegisters();
+        return callerSaved;
+    }
+
+    @Override
+    public boolean areAllAllocatableRegistersCallerSaved() {
+        return allAllocatableAreCallerSaved;
     }
 
     @Override
@@ -108,26 +188,32 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
     }
 
     @Override
-    public CallingConvention getCallingConvention(Type type, Kind returnKind, Kind[] parameters, TargetDescription target, boolean stackOnly) {
+    public CallingConvention getCallingConvention(Type type, JavaType returnType, JavaType[] parameterTypes, TargetDescription target, boolean stackOnly) {
         if (type == Type.NativeCall) {
-            throw new UnsupportedOperationException();
+            return callingConvention(nativeGeneralParameterRegisters, returnType, parameterTypes, type, target, stackOnly);
         }
-        return callingConvention(returnKind, parameters, type, target, stackOnly);
+        // On x64, parameter locations are the same whether viewed
+        // from the caller or callee perspective
+        return callingConvention(javaGeneralParameterRegisters, returnType, parameterTypes, type, target, stackOnly);
     }
 
-    public Register[] getCallingConventionRegisters(Type type, RegisterFlag flag) {
-        return allParameterRegisters;
+    public Register[] getCallingConventionRegisters(Type type, Kind kind) {
+        if (architecture.canStoreValue(XMM, kind)) {
+            return xmmParameterRegisters;
+        }
+        assert architecture.canStoreValue(CPU, kind);
+        return type == Type.NativeCall ? nativeGeneralParameterRegisters : javaGeneralParameterRegisters;
     }
 
-    private CallingConvention callingConvention(Kind returnKind, Kind[] kinds, Type type, TargetDescription target, boolean stackOnly) {
-        Value[] locations = new Value[kinds.length];
+    private CallingConvention callingConvention(Register[] generalParameterRegisters, JavaType returnType, JavaType[] parameterTypes, Type type, TargetDescription target, boolean stackOnly) {
+        AllocatableValue[] locations = new AllocatableValue[parameterTypes.length];
 
         int currentGeneral = 0;
         int currentXMM = 0;
-        int currentStackOffset = 0;
+        int currentStackOffset = type == Type.NativeCall && needsNativeStackHomeSpace ? generalParameterRegisters.length * target.wordSize : 0;
 
-        for (int i = 0; i < kinds.length; i++) {
-            final Kind kind = kinds[i];
+        for (int i = 0; i < parameterTypes.length; i++) {
+            final Kind kind = parameterTypes[i].getKind();
 
             switch (kind) {
                 case Byte:
@@ -139,14 +225,14 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
                 case Object:
                     if (!stackOnly && currentGeneral < generalParameterRegisters.length) {
                         Register register = generalParameterRegisters[currentGeneral++];
-                        locations[i] = register.asValue(kind);
+                        locations[i] = register.asValue(target.getLIRKind(kind));
                     }
                     break;
                 case Float:
                 case Double:
                     if (!stackOnly && currentXMM < xmmParameterRegisters.length) {
                         Register register = xmmParameterRegisters[currentXMM++];
-                        locations[i] = register.asValue(kind);
+                        locations[i] = register.asValue(target.getLIRKind(kind));
                     }
                     break;
                 default:
@@ -154,12 +240,13 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
             }
 
             if (locations[i] == null) {
-                locations[i] = StackSlot.get(kind.stackKind(), currentStackOffset, !type.out);
-                currentStackOffset += Math.max(target.sizeInBytes(kind), target.wordSize);
+                locations[i] = StackSlot.get(target.getLIRKind(kind.getStackKind()), currentStackOffset, !type.out);
+                currentStackOffset += Math.max(target.getSizeInBytes(kind), target.wordSize);
             }
         }
 
-        Value returnLocation = returnKind.isVoid() ? Value.IllegalValue : getReturnRegister(returnKind).asValue(returnKind);
+        Kind returnKind = returnType == null ? Kind.Void : returnType.getKind();
+        AllocatableValue returnLocation = returnKind == Kind.Void ? Value.ILLEGAL : getReturnRegister(returnKind).asValue(target.getLIRKind(returnKind.getStackKind()));
         return new CallingConvention(currentStackOffset, returnLocation, locations);
     }
 
@@ -186,11 +273,6 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
     }
 
     @Override
-    public Register getScratchRegister() {
-        return r10;
-    }
-
-    @Override
     public Register getFrameRegister() {
         return rsp;
     }
@@ -201,11 +283,6 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
 
     @Override
     public String toString() {
-        String res = String.format(
-             "Allocatable: " + Arrays.toString(getAllocatableRegisters()) + "%n" +
-             "CallerSave:  " + Arrays.toString(getCallerSaveRegisters()) + "%n" +
-             "CalleeSave:  " + getCalleeSaveLayout() + "%n" +
-             "Scratch:     " + getScratchRegister() + "%n");
-        return res;
+        return String.format("Allocatable: " + Arrays.toString(getAllocatableRegisters()) + "%n" + "CallerSave:  " + Arrays.toString(getCallerSaveRegisters()) + "%n");
     }
 }

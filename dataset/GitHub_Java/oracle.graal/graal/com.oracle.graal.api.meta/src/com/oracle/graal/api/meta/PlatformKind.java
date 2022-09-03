@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.api.meta;
 
+import com.sun.javafx.collections.MappingChange.Map;
+
 /**
  * Represents a platform-specific low-level type for values.
  */
@@ -62,9 +64,9 @@ public interface PlatformKind {
     }
 
     /**
-     * Gets a value associated with this object that can be used as a stable key in a map. The
-     * {@link Object#hashCode()} implementation of the returned value should be stable between VM
-     * executions.
+     * Gets a value associated with this object that can be used as a stable key in a {@link Map}.
+     * The {@link Object#hashCode()} implementation of the returned value should be stable between
+     * VM executions.
      */
     Key getKey();
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,99 +22,149 @@
  */
 package com.oracle.graal.api.meta;
 
-import static com.oracle.graal.api.meta.Kind.Flags.*;
-
 import java.lang.reflect.*;
 
-import sun.misc.*;
+//JaCoCo Exclude
 
 /**
- * Denotes the basic kinds of types in CRI, including the all the Java primitive types,
- * for example, {@link Kind#Int} for {@code int} and {@link Kind#Object}
- * for all object types.
- * A kind has a single character short name, a Java name, and a set of flags
- * further describing its behavior.
+ * Denotes the basic kinds of types in CRI, including the all the Java primitive types, for example,
+ * {@link Kind#Int} for {@code int} and {@link Kind#Object} for all object types. A kind has a
+ * single character short name, a Java name, and a set of flags further describing its behavior.
  */
-public enum Kind {
-    Boolean('z', "boolean", PRIMITIVE | STACK_INT),
-    Byte   ('b', "byte",    PRIMITIVE | STACK_INT),
-    Short  ('s', "short",   PRIMITIVE | STACK_INT),
-    Char   ('c', "char",    PRIMITIVE | STACK_INT),
-    Int    ('i', "int",     PRIMITIVE | STACK_INT),
-    Float  ('f', "float",   PRIMITIVE),
-    Long   ('j', "long",    PRIMITIVE),
-    Double ('d', "double",  PRIMITIVE),
-    Object ('a', "Object",  0),
-    Void   ('v', "void",    0),
-    /** Denote a bytecode address in a {@code JSR} bytecode. */
-    Jsr    ('r', "jsr",     0),
+public enum Kind implements PlatformKind {
+    /** The primitive boolean kind, represented as an int on the stack. */
+    Boolean('z', "boolean", true, java.lang.Boolean.TYPE, java.lang.Boolean.class),
+
+    /** The primitive byte kind, represented as an int on the stack. */
+    Byte('b', "byte", true, java.lang.Byte.TYPE, java.lang.Byte.class),
+
+    /** The primitive short kind, represented as an int on the stack. */
+    Short('s', "short", true, java.lang.Short.TYPE, java.lang.Short.class),
+
+    /** The primitive char kind, represented as an int on the stack. */
+    Char('c', "char", true, java.lang.Character.TYPE, java.lang.Character.class),
+
+    /** The primitive int kind, represented as an int on the stack. */
+    Int('i', "int", true, java.lang.Integer.TYPE, java.lang.Integer.class),
+
+    /** The primitive float kind. */
+    Float('f', "float", false, java.lang.Float.TYPE, java.lang.Float.class),
+
+    /** The primitive long kind. */
+    Long('j', "long", false, java.lang.Long.TYPE, java.lang.Long.class),
+
+    /** The primitive double kind. */
+    Double('d', "double", false, java.lang.Double.TYPE, java.lang.Double.class),
+
+    /** The Object kind, also used for arrays. */
+    Object('a', "Object", false, null, null),
+
+    /** The void float kind. */
+    Void('v', "void", false, java.lang.Void.TYPE, java.lang.Void.class),
+
     /** The non-type. */
-    Illegal('-', "illegal", 0);
+    Illegal('-', "illegal", false, null, null);
 
-    public static final Kind[] VALUES = values();
-    public static final Kind[] JAVA_VALUES = new Kind[] {Kind.Boolean, Kind.Byte, Kind.Short, Kind.Char, Kind.Int, Kind.Float, Kind.Long, Kind.Double, Kind.Object};
+    private final char typeChar;
+    private final String javaName;
+    private final boolean isStackInt;
+    private final Class<?> primitiveJavaClass;
+    private final Class<?> boxedJavaClass;
+    private final EnumKey key = new EnumKey(this);
 
-    Kind(char ch, String name, int flags) {
-        this.typeChar = ch;
-        this.javaName = name;
-        this.flags = flags;
-    }
-
-    static class Flags {
-        /**
-         * Behaves as an integer when on Java evaluation stack.
-         */
-        public static final int STACK_INT   = 0x0004;
-        /**
-         * Represents a Java primitive type.
-         */
-        public static final int PRIMITIVE   = 0x0008;
+    private Kind(char typeChar, String javaName, boolean isStackInt, Class<?> primitiveJavaClass, Class<?> boxedJavaClass) {
+        this.typeChar = typeChar;
+        this.javaName = javaName;
+        this.isStackInt = isStackInt;
+        this.primitiveJavaClass = primitiveJavaClass;
+        this.boxedJavaClass = boxedJavaClass;
+        assert primitiveJavaClass == null || javaName.equals(primitiveJavaClass.getName());
     }
 
     /**
-     * The flags for this kind.
+     * Returns the name of the kind as a single character.
      */
-    private final int flags;
+    public char getTypeChar() {
+        return typeChar;
+    }
 
     /**
-     * The name of the kind as a single character.
+     * Returns the name of this kind which will also be it Java programming language name if it is
+     * {@linkplain #isPrimitive() primitive} or {@code void}.
      */
-    public final char typeChar;
+    public String getJavaName() {
+        return javaName;
+    }
 
-    /**
-     * The name of this kind which will also be it Java programming language name if
-     * it is {@linkplain #isPrimitive() primitive} or {@code void}.
-     */
-    public final String javaName;
-
-    /**
-     * Checks whether this type is valid as an {@code int} on the Java operand stack.
-     * @return {@code true} if this type is represented by an {@code int} on the operand stack
-     */
-    public boolean isInt() {
-        return (flags & STACK_INT) != 0;
+    public Key getKey() {
+        return key;
     }
 
     /**
      * Checks whether this type is a Java primitive type.
-     * @return {@code true} if this is {@link #Boolean}, {@link #Byte}, {@link #Char}, {@link #Short},
-     *                                 {@link #Int}, {@link #Long}, {@link #Float} or {@link #Double}.
+     *
+     * @return {@code true} if this is {@link #Boolean}, {@link #Byte}, {@link #Char},
+     *         {@link #Short}, {@link #Int}, {@link #Long}, {@link #Float}, {@link #Double}, or
+     *         {@link #Void}.
      */
     public boolean isPrimitive() {
-        return (flags & PRIMITIVE) != 0;
+        return primitiveJavaClass != null;
     }
 
     /**
-     * Gets the kind that represents this kind when on the Java operand stack.
+     * Returns the kind that represents this kind when on the Java operand stack.
+     *
      * @return the kind used on the operand stack
      */
-    public Kind stackKind() {
-        if (isInt()) {
+    public Kind getStackKind() {
+        if (isStackInt) {
             return Int;
         }
         return this;
     }
 
+    /**
+     * Checks whether this type is a Java primitive type representing an integer number.
+     *
+     * @return {@code true} if the stack kind is {@link #Int} or {@link #Long}.
+     */
+    public boolean isNumericInteger() {
+        return isStackInt || this == Kind.Long;
+    }
+
+    /**
+     * Checks whether this type is a Java primitive type representing an unsigned number.
+     *
+     * @return {@code true} if the kind is {@link #Boolean} or {@link #Char}.
+     */
+    public boolean isUnsigned() {
+        return this == Kind.Boolean || this == Kind.Char;
+    }
+
+    /**
+     * Checks whether this type is a Java primitive type representing a floating point number.
+     *
+     * @return {@code true} if this is {@link #Float} or {@link #Double}.
+     */
+    public boolean isNumericFloat() {
+        return this == Kind.Float || this == Kind.Double;
+    }
+
+    /**
+     * Checks whether this represent an Object of some sort.
+     *
+     * @return {@code true} if this is {@link #Object}.
+     */
+    public boolean isObject() {
+        return this == Kind.Object;
+    }
+
+    /**
+     * Returns the kind corresponding to the Java type string.
+     *
+     * @param typeString the Java type string
+     * @return the kind
+     */
     public static Kind fromTypeString(String typeString) {
         assert typeString.length() > 0;
         final char first = typeString.charAt(0);
@@ -125,115 +175,96 @@ public enum Kind {
     }
 
     /**
-     * Gets the kind from the character describing a primitive or void.
+     * Returns the kind of a word given the size of a word in bytes.
+     *
+     * @param wordSizeInBytes the size of a word in bytes
+     * @return the kind representing a word value
+     */
+    public static Kind fromWordSize(int wordSizeInBytes) {
+        if (wordSizeInBytes == 8) {
+            return Kind.Long;
+        } else {
+            assert wordSizeInBytes == 4 : "Unsupported word size!";
+            return Kind.Int;
+        }
+    }
+
+    /**
+     * Returns the kind from the character describing a primitive or void.
+     *
      * @param ch the character
      * @return the kind
      */
     public static Kind fromPrimitiveOrVoidTypeChar(char ch) {
-        // Checkstyle: stop
         switch (ch) {
-            case 'Z': return Boolean;
-            case 'C': return Char;
-            case 'F': return Float;
-            case 'D': return Double;
-            case 'B': return Byte;
-            case 'S': return Short;
-            case 'I': return Int;
-            case 'J': return Long;
-            case 'V': return Void;
+            case 'Z':
+                return Boolean;
+            case 'C':
+                return Char;
+            case 'F':
+                return Float;
+            case 'D':
+                return Double;
+            case 'B':
+                return Byte;
+            case 'S':
+                return Short;
+            case 'I':
+                return Int;
+            case 'J':
+                return Long;
+            case 'V':
+                return Void;
         }
-        // Checkstyle: resume
         throw new IllegalArgumentException("unknown primitive or void type character: " + ch);
     }
 
-    public Class< ? > toJavaClass() {
-        // Checkstyle: stop
-        switch(this) {
-            case Void:      return java.lang.Void.TYPE;
-            case Long:      return java.lang.Long.TYPE;
-            case Int:       return java.lang.Integer.TYPE;
-            case Byte:      return java.lang.Byte.TYPE;
-            case Char:      return java.lang.Character.TYPE;
-            case Double:    return java.lang.Double.TYPE;
-            case Float:     return java.lang.Float.TYPE;
-            case Short:     return java.lang.Short.TYPE;
-            case Boolean:   return java.lang.Boolean.TYPE;
-            default:        return null;
+    /**
+     * Returns the Kind representing the given Java class.
+     *
+     * @param klass the class
+     * @return the kind
+     */
+    public static Kind fromJavaClass(Class<?> klass) {
+        if (klass == Boolean.primitiveJavaClass) {
+            return Boolean;
+        } else if (klass == Byte.primitiveJavaClass) {
+            return Byte;
+        } else if (klass == Short.primitiveJavaClass) {
+            return Short;
+        } else if (klass == Char.primitiveJavaClass) {
+            return Char;
+        } else if (klass == Int.primitiveJavaClass) {
+            return Int;
+        } else if (klass == Long.primitiveJavaClass) {
+            return Long;
+        } else if (klass == Float.primitiveJavaClass) {
+            return Float;
+        } else if (klass == Double.primitiveJavaClass) {
+            return Double;
+        } else if (klass == Void.primitiveJavaClass) {
+            return Void;
+        } else {
+            return Object;
         }
-        // Checkstyle: resume
-    }
-
-    public Class< ? > toBoxedJavaClass() {
-        // Checkstyle: stop
-        switch(this) {
-            case Void:      return null;
-            case Long:      return java.lang.Long.class;
-            case Int:       return java.lang.Integer.class;
-            case Byte:      return java.lang.Byte.class;
-            case Char:      return java.lang.Character.class;
-            case Double:    return java.lang.Double.class;
-            case Float:     return java.lang.Float.class;
-            case Short:     return java.lang.Short.class;
-            case Boolean:   return java.lang.Boolean.class;
-            default:        return null;
-        }
-        // Checkstyle: resume
     }
 
     /**
-     * Checks whether this value type is void.
-     * @return {@code true} if this type is void
+     * Returns the Java class representing this kind.
+     *
+     * @return the Java class
      */
-    public final boolean isVoid() {
-        return this == Kind.Void;
+    public Class<?> toJavaClass() {
+        return primitiveJavaClass;
     }
 
     /**
-     * Checks whether this value type is long.
-     * @return {@code true} if this type is long
+     * Returns the Java class for instances of boxed values of this kind.
+     *
+     * @return the Java class
      */
-    public final boolean isLong() {
-        return this == Kind.Long;
-    }
-
-    /**
-     * Checks whether this value type is float.
-     * @return {@code true} if this type is float
-     */
-    public final boolean isFloat() {
-        return this == Kind.Float;
-    }
-
-    /**
-     * Checks whether this value type is double.
-     * @return {@code true} if this type is double
-     */
-    public final boolean isDouble() {
-        return this == Kind.Double;
-    }
-
-    /**
-     * Checks whether this value type is float or double.
-     * @return {@code true} if this type is float or double
-     */
-    public final boolean isFloatOrDouble() {
-        return this == Kind.Double || this == Kind.Float;
-    }
-
-   /**
-     * Checks whether this value type is an object type.
-     * @return {@code true} if this type is an object
-     */
-    public final boolean isObject() {
-        return this == Kind.Object;
-    }
-
-    /**
-     * Checks whether this value type is an address type.
-     * @return {@code true} if this type is an address
-     */
-    public boolean isJsr() {
-        return this == Kind.Jsr;
+    public Class<?> toBoxedJavaClass() {
+        return boxedJavaClass;
     }
 
     /**
@@ -245,10 +276,19 @@ public enum Kind {
     }
 
     /**
-     * Marker interface for types that should be {@linkplain Kind#format(Object) formatted}
-     * with their {@link Object#toString()} value.
+     * Marker interface for types that should be {@linkplain Kind#format(Object) formatted} with
+     * their {@link Object#toString()} value. Calling {@link Object#toString()} on other objects
+     * poses a security risk because it can potentially call user code.
      */
-    public interface FormatWithToString {}
+    public interface FormatWithToString {
+    }
+
+    /**
+     * Classes for which invoking {@link Object#toString()} does not run user code.
+     */
+    private static boolean isToStringSafe(Class<?> c) {
+        return c == Boolean.class || c == Byte.class || c == Character.class || c == Short.class || c == Integer.class || c == Float.class || c == Long.class || c == Double.class;
+    }
 
     /**
      * Gets a formatted string for a given value of this kind.
@@ -257,44 +297,46 @@ public enum Kind {
      * @return a formatted string for {@code value} based on this kind
      */
     public String format(Object value) {
-        if (isObject()) {
+        if (isPrimitive()) {
+            assert isToStringSafe(value.getClass());
+            return value.toString();
+        } else {
             if (value == null) {
                 return "null";
             } else {
                 if (value instanceof String) {
                     String s = (String) value;
                     if (s.length() > 50) {
-                        return "\"" + s.substring(0, 30) + "...\"";
+                        return "String:\"" + s.substring(0, 30) + "...\"";
                     } else {
-                        return " \"" + s + '"';
+                        return "String:\"" + s + '"';
                     }
                 } else if (value instanceof JavaType) {
-                    return "class " + MetaUtil.toJavaName((JavaType) value);
-                } else if (value instanceof Enum || value instanceof FormatWithToString) {
-                    return String.valueOf(value);
-                } else if (value instanceof Class< ? >) {
-                    return ((Class< ? >) value).getName() + ".class";
+                    return "JavaType:" + ((JavaType) value).toJavaName();
+                } else if (value instanceof Enum) {
+                    return MetaUtil.getSimpleName(value.getClass(), true) + ":" + ((Enum<?>) value).name();
+                } else if (value instanceof FormatWithToString) {
+                    return MetaUtil.getSimpleName(value.getClass(), true) + ":" + String.valueOf(value);
+                } else if (value instanceof Class<?>) {
+                    return "Class:" + ((Class<?>) value).getName();
+                } else if (isToStringSafe(value.getClass())) {
+                    return value.toString();
                 } else if (value.getClass().isArray()) {
                     return formatArray(value);
                 } else {
                     return MetaUtil.getSimpleName(value.getClass(), true) + "@" + System.identityHashCode(value);
                 }
             }
-        } else {
-            return value.toString();
         }
     }
 
-    private static final int MAX_FORMAT_ARRAY_LENGTH = Integer.getInteger("maxFormatArrayLength", 5);
+    private static final int MAX_FORMAT_ARRAY_LENGTH = 5;
 
     private static String formatArray(Object array) {
-        Class< ? > componentType = array.getClass().getComponentType();
+        Class<?> componentType = array.getClass().getComponentType();
         assert componentType != null;
         int arrayLength = Array.getLength(array);
-        StringBuilder buf = new StringBuilder(MetaUtil.getSimpleName(componentType, true)).
-                        append('[').
-                        append(arrayLength).
-                        append("]{");
+        StringBuilder buf = new StringBuilder(MetaUtil.getSimpleName(componentType, true)).append('[').append(arrayLength).append("]{");
         int length = Math.min(MAX_FORMAT_ARRAY_LENGTH, arrayLength);
         boolean primitive = componentType.isPrimitive();
         for (int i = 0; i < length; i++) {
@@ -314,91 +356,12 @@ public enum Kind {
         return buf.append('}').toString();
     }
 
-    public final char signatureChar() {
-        return Character.toUpperCase(typeChar);
-    }
-
-    public final int arrayBaseOffset() {
-        switch(this) {
-            case Boolean:
-                return Unsafe.ARRAY_BOOLEAN_BASE_OFFSET;
-            case Byte:
-                return Unsafe.ARRAY_BYTE_BASE_OFFSET;
-            case Char:
-                return Unsafe.ARRAY_CHAR_BASE_OFFSET;
-            case Short:
-                return Unsafe.ARRAY_SHORT_BASE_OFFSET;
-            case Int:
-                return Unsafe.ARRAY_INT_BASE_OFFSET;
-            case Long:
-                return Unsafe.ARRAY_LONG_BASE_OFFSET;
-            case Float:
-                return Unsafe.ARRAY_FLOAT_BASE_OFFSET;
-            case Double:
-                return Unsafe.ARRAY_DOUBLE_BASE_OFFSET;
-            case Object:
-                return Unsafe.ARRAY_OBJECT_BASE_OFFSET;
-            default:
-                assert false : "unexpected kind: " + this;
-                return -1;
-        }
-    }
-
-    public final int arrayIndexScale() {
-        switch(this) {
-            case Boolean:
-                return Unsafe.ARRAY_BOOLEAN_INDEX_SCALE;
-            case Byte:
-                return Unsafe.ARRAY_BYTE_INDEX_SCALE;
-            case Char:
-                return Unsafe.ARRAY_CHAR_INDEX_SCALE;
-            case Short:
-                return Unsafe.ARRAY_SHORT_INDEX_SCALE;
-            case Int:
-                return Unsafe.ARRAY_INT_INDEX_SCALE;
-            case Long:
-                return Unsafe.ARRAY_LONG_INDEX_SCALE;
-            case Float:
-                return Unsafe.ARRAY_FLOAT_INDEX_SCALE;
-            case Double:
-                return Unsafe.ARRAY_DOUBLE_INDEX_SCALE;
-            case Object:
-                return Unsafe.ARRAY_OBJECT_INDEX_SCALE;
-            default:
-                assert false : "unexpected kind: " + this;
-                return -1;
-        }
-    }
-
-    public Constant readUnsafeConstant(Object value, long displacement) {
-        assert value != null;
-        Unsafe u = Unsafe.getUnsafe();
-        switch(this) {
-            case Boolean:
-                return Constant.forBoolean(u.getBoolean(value, displacement));
-            case Byte:
-                return Constant.forByte(u.getByte(value, displacement));
-            case Char:
-                return Constant.forChar(u.getChar(value, displacement));
-            case Short:
-                return Constant.forShort(u.getShort(value, displacement));
-            case Int:
-                return Constant.forInt(u.getInt(value, displacement));
-            case Long:
-                return Constant.forLong(u.getLong(value, displacement));
-            case Float:
-                return Constant.forFloat(u.getFloat(value, displacement));
-            case Double:
-                return Constant.forDouble(u.getDouble(value, displacement));
-            case Object:
-                return Constant.forObject(u.getObject(value, displacement));
-            default:
-                assert false : "unexpected kind: " + this;
-                return null;
-        }
-    }
-
-    public long minValue() {
+    /**
+     * The minimum value that can be represented as a value of this kind.
+     *
+     * @return the minimum value
+     */
+    public long getMinValue() {
         switch (this) {
             case Boolean:
                 return 0;
@@ -408,7 +371,6 @@ public enum Kind {
                 return java.lang.Character.MIN_VALUE;
             case Short:
                 return java.lang.Short.MIN_VALUE;
-            case Jsr:
             case Int:
                 return java.lang.Integer.MIN_VALUE;
             case Long:
@@ -418,7 +380,12 @@ public enum Kind {
         }
     }
 
-    public long maxValue() {
+    /**
+     * The maximum value that can be represented as a value of this kind.
+     *
+     * @return the maximum value
+     */
+    public long getMaxValue() {
         switch (this) {
             case Boolean:
                 return 1;
@@ -428,7 +395,6 @@ public enum Kind {
                 return java.lang.Character.MAX_VALUE;
             case Short:
                 return java.lang.Short.MAX_VALUE;
-            case Jsr:
             case Int:
                 return java.lang.Integer.MAX_VALUE;
             case Long:
@@ -438,4 +404,66 @@ public enum Kind {
         }
     }
 
+    /**
+     * Number of bytes that are necessary to represent a value of this kind.
+     *
+     * @return the number of bytes
+     */
+    public int getByteCount() {
+        if (this == Boolean) {
+            return 1;
+        } else {
+            return getBitCount() >> 3;
+        }
+    }
+
+    /**
+     * Number of bits that are necessary to represent a value of this kind.
+     *
+     * @return the number of bits
+     */
+    public int getBitCount() {
+        switch (this) {
+            case Boolean:
+                return 1;
+            case Byte:
+                return 8;
+            case Char:
+            case Short:
+                return 16;
+            case Float:
+                return 32;
+            case Int:
+                return 32;
+            case Double:
+                return 64;
+            case Long:
+                return 64;
+            default:
+                throw new IllegalArgumentException("illegal call to bits on " + this);
+        }
+    }
+
+    public JavaConstant getDefaultValue() {
+        switch (this) {
+            case Boolean:
+                return JavaConstant.FALSE;
+            case Int:
+                return JavaConstant.INT_0;
+            case Long:
+                return JavaConstant.LONG_0;
+            case Float:
+                return JavaConstant.FLOAT_0;
+            case Double:
+                return JavaConstant.DOUBLE_0;
+            case Object:
+                return JavaConstant.NULL_POINTER;
+            case Byte:
+            case Char:
+            case Short:
+                return new PrimitiveConstant(this, 0);
+            default:
+                throw new IllegalArgumentException("illegal call to getDefaultValue on " + this);
+        }
+    }
 }
