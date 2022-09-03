@@ -24,7 +24,6 @@ package com.oracle.graal.compiler.common.alloc;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
 import java.util.Deque;
@@ -41,7 +40,9 @@ import com.oracle.graal.debug.Indent;
 public final class BiDirectionalTraceBuilder<T extends AbstractBlockBase<T>> {
 
     public static <T extends AbstractBlockBase<T>> TraceBuilderResult<T> computeTraces(T startBlock, List<T> blocks) {
-        return new BiDirectionalTraceBuilder<>(blocks).build(startBlock, blocks);
+        TraceBuilderResult<T> traceBuilderResult = new BiDirectionalTraceBuilder<>(blocks).build(startBlock);
+        traceBuilderResult.numberTraces();
+        return traceBuilderResult;
     }
 
     private final Deque<T> worklist;
@@ -69,10 +70,10 @@ public final class BiDirectionalTraceBuilder<T extends AbstractBlockBase<T>> {
     }
 
     @SuppressWarnings("try")
-    private TraceBuilderResult<T> build(T startBlock, List<T> blocks) {
+    private TraceBuilderResult<T> build(T startBlock) {
         try (Indent indent = Debug.logAndIndent("start trace building: %s", startBlock)) {
             ArrayList<Trace<T>> traces = buildTraces(startBlock);
-            return TraceBuilderResult.create(blocks, traces, blockToTrace);
+            return new TraceBuilderResult<>(traces, blockToTrace);
         }
     }
 
@@ -143,7 +144,7 @@ public final class BiDirectionalTraceBuilder<T extends AbstractBlockBase<T>> {
     }
 
     private boolean isBackEdge(T from, T to) {
-        assert Arrays.asList(from.getSuccessors()).contains(to) : "No edge from " + from + " to " + to;
+        assert from.getSuccessors().contains(to) : "No edge from " + from + " to " + to;
         return from.isLoopEnd() && to.isLoopHeader() && from.getLoop().equals(to.getLoop());
     }
 

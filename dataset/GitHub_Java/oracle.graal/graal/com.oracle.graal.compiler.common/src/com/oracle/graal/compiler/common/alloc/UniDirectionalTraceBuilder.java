@@ -37,7 +37,9 @@ import com.oracle.graal.debug.Indent;
 public final class UniDirectionalTraceBuilder<T extends AbstractBlockBase<T>> {
 
     public static <T extends AbstractBlockBase<T>> TraceBuilderResult<T> computeTraces(T startBlock, List<T> blocks) {
-        return new UniDirectionalTraceBuilder<>(blocks).build(startBlock, blocks);
+        TraceBuilderResult<T> traceBuilderResult = new UniDirectionalTraceBuilder<>(blocks).build(startBlock);
+        traceBuilderResult.numberTraces();
+        return traceBuilderResult;
     }
 
     private final PriorityQueue<T> worklist;
@@ -75,10 +77,10 @@ public final class UniDirectionalTraceBuilder<T extends AbstractBlockBase<T>> {
     }
 
     @SuppressWarnings("try")
-    private TraceBuilderResult<T> build(T startBlock, List<T> blocks) {
+    private TraceBuilderResult<T> build(T startBlock) {
         try (Indent indent = Debug.logAndIndent("start trace building: %s", startBlock)) {
             ArrayList<Trace<T>> traces = buildTraces(startBlock);
-            return TraceBuilderResult.create(blocks, traces, blockToTrace);
+            return new TraceBuilderResult<>(traces, blockToTrace);
         }
     }
 
@@ -119,7 +121,8 @@ public final class UniDirectionalTraceBuilder<T extends AbstractBlockBase<T>> {
     }
 
     private boolean checkPredecessorsProcessed(T block) {
-        for (T pred : block.getPredecessors()) {
+        List<T> predecessors = block.getPredecessors();
+        for (T pred : predecessors) {
             if (!processed(pred)) {
                 assert false : "Predecessor unscheduled: " + pred;
                 return false;
