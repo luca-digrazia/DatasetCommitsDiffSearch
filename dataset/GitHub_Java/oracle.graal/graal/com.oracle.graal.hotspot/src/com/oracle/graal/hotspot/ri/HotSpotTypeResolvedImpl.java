@@ -26,7 +26,6 @@ import java.lang.annotation.*;
 import java.lang.reflect.*;
 import java.util.*;
 
-import com.oracle.graal.hotspot.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 
@@ -43,7 +42,6 @@ public final class HotSpotTypeResolvedImpl extends HotSpotType implements HotSpo
     private boolean hasFinalizer;
     private boolean hasSubclass;
     private boolean hasFinalizableSubclass;
-    private int superCheckOffset;
     private boolean isArrayClass;
     private boolean isInstanceClass;
     private boolean isInterface;
@@ -120,9 +118,11 @@ public final class HotSpotTypeResolvedImpl extends HotSpotType implements HotSpo
             case JavaClass:
                 return CiConstant.forObject(javaMirror);
             case ObjectHub:
-                return CiConstant.forObject(klassOop());
+                return CiConstant.forObject(this);
             case StaticFields:
                 return CiConstant.forObject(javaMirror);
+            case TypeInfo:
+                return CiConstant.forObject(this);
             default:
                 return null;
         }
@@ -220,7 +220,7 @@ public final class HotSpotTypeResolvedImpl extends HotSpotType implements HotSpo
 
         long id = offset + ((long) flags << 32);
 
-        // (thomaswue) Must cache the fields, because the local load elimination only works if the objects from two field lookups are identical.
+        // (thomaswue) Must cache the fields, because the local load elimination only works if the objects from two field lookups are equal.
         if (fieldCache == null) {
             fieldCache = new HashMap<>(8);
         } else {
@@ -264,26 +264,5 @@ public final class HotSpotTypeResolvedImpl extends HotSpotType implements HotSpo
     @Override
     public RiResolvedType resolve(RiResolvedType accessingClass) {
         return this;
-    }
-
-    // this value may require identity semantics so cache it
-    private HotSpotKlassOop klassOopCache;
-
-    @Override
-    public synchronized HotSpotKlassOop klassOop() {
-        if (klassOopCache == null) {
-            klassOopCache = new HotSpotKlassOop(compiler, javaMirror);
-        }
-        return klassOopCache;
-    }
-
-    private static final int SECONDARY_SUPER_CACHE_OFFSET = CompilerImpl.getInstance().getConfig().secondarySuperCacheOffset;
-
-    public boolean isPrimaryType() {
-        return SECONDARY_SUPER_CACHE_OFFSET != superCheckOffset;
-    }
-
-    public int superCheckOffset() {
-        return superCheckOffset;
     }
 }
