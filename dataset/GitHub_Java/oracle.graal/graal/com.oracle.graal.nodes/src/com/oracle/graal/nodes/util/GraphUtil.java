@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,8 +27,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 
-import com.oracle.graal.code.SourceStackTrace;
-import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeWorkList;
 import com.oracle.graal.graph.iterators.NodeIterable;
@@ -54,6 +52,7 @@ import com.oracle.graal.nodes.spi.ValueProxy;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.BytecodePosition;
+import jdk.vm.ci.code.SourceStackTrace;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -244,11 +243,9 @@ public class GraphUtil {
     public static void removeFixedWithUnusedInputs(FixedWithNextNode fixed) {
         if (fixed instanceof StateSplit) {
             FrameState stateAfter = ((StateSplit) fixed).stateAfter();
-            if (stateAfter != null) {
-                ((StateSplit) fixed).setStateAfter(null);
-                if (stateAfter.hasNoUsages()) {
-                    killWithUnusedFloatingInputs(stateAfter);
-                }
+            ((StateSplit) fixed).setStateAfter(null);
+            if (stateAfter.hasNoUsages()) {
+                killWithUnusedFloatingInputs(stateAfter);
             }
         }
         unlinkFixedNode(fixed);
@@ -643,15 +640,12 @@ public class GraphUtil {
     private static final class DefaultSimplifierTool implements SimplifierTool {
         private final MetaAccessProvider metaAccess;
         private final ConstantReflectionProvider constantReflection;
-        private final ConstantFieldProvider constantFieldProvider;
         private final boolean canonicalizeReads;
         private final Assumptions assumptions;
 
-        DefaultSimplifierTool(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider, boolean canonicalizeReads,
-                        Assumptions assumptions) {
+        DefaultSimplifierTool(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, boolean canonicalizeReads, Assumptions assumptions) {
             this.metaAccess = metaAccess;
             this.constantReflection = constantReflection;
-            this.constantFieldProvider = constantFieldProvider;
             this.canonicalizeReads = canonicalizeReads;
             this.assumptions = assumptions;
         }
@@ -664,11 +658,6 @@ public class GraphUtil {
         @Override
         public ConstantReflectionProvider getConstantReflection() {
             return constantReflection;
-        }
-
-        @Override
-        public ConstantFieldProvider getConstantFieldProvider() {
-            return constantFieldProvider;
         }
 
         @Override
@@ -706,8 +695,7 @@ public class GraphUtil {
         }
     }
 
-    public static SimplifierTool getDefaultSimplifier(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
-                    boolean canonicalizeReads, Assumptions assumptions) {
-        return new DefaultSimplifierTool(metaAccess, constantReflection, constantFieldProvider, canonicalizeReads, assumptions);
+    public static SimplifierTool getDefaultSimplifier(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, boolean canonicalizeReads, Assumptions assumptions) {
+        return new DefaultSimplifierTool(metaAccess, constantReflection, canonicalizeReads, assumptions);
     }
 }

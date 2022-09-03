@@ -23,12 +23,14 @@
 package com.oracle.graal.hotspot.phases;
 
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.Required;
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.runtime.JVMCICompiler;
 
-import com.oracle.graal.compiler.common.cfg.Loop;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.iterators.NodeIterable;
+import com.oracle.graal.loop.LoopEx;
 import com.oracle.graal.loop.LoopsData;
 import com.oracle.graal.loop.phases.LoopTransformations;
 import com.oracle.graal.nodeinfo.InputType;
@@ -41,15 +43,11 @@ import com.oracle.graal.nodes.FrameState;
 import com.oracle.graal.nodes.StartNode;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.cfg.Block;
 import com.oracle.graal.nodes.extended.OSRLocalNode;
 import com.oracle.graal.nodes.extended.OSRStartNode;
 import com.oracle.graal.nodes.util.GraphUtil;
 import com.oracle.graal.phases.Phase;
 import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
-
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.runtime.JVMCICompiler;
 
 public class OnStackReplacementPhase extends Phase {
 
@@ -58,7 +56,6 @@ public class OnStackReplacementPhase extends Phase {
         if (graph.getEntryBCI() == JVMCICompiler.INVOCATION_ENTRY_BCI) {
             // This happens during inlining in a OSR method, because the same phase plan will be
             // used.
-            assert graph.getNodes(EntryMarkerNode.TYPE).isEmpty();
             return;
         }
         Debug.dump(Debug.INFO_LOG_LEVEL, graph, "OnStackReplacement initial");
@@ -70,7 +67,7 @@ public class OnStackReplacementPhase extends Phase {
                 throw new BailoutException("No OnStackReplacementNode generated");
             }
             if (osrNodes.count() > 1) {
-                throw new GraalError("Multiple OnStackReplacementNodes generated");
+                throw new JVMCIError("Multiple OnStackReplacementNodes generated");
             }
             if (osr.stateAfter().locksSize() != 0) {
                 throw new BailoutException("OSR with locks not supported");
@@ -78,18 +75,19 @@ public class OnStackReplacementPhase extends Phase {
             if (osr.stateAfter().stackSize() != 0) {
                 throw new BailoutException("OSR with stack entries not supported: %s", osr.stateAfter().toString(Verbosity.Debugger));
             }
+            LoopEx osrLoop = null;
             LoopsData loops = new LoopsData(graph);
-            // Find the loop that contains the EntryMarker
-            Loop<Block> l = loops.getCFG().getNodeToBlock().get(osr).getLoop();
-            if (l == null) {
+            for (LoopEx loop : loops.loops()) {
+                if (loop.inside().contains(osr)) {
+                    osrLoop = loop;
+                    break;
+                }
+            }
+            if (osrLoop == null) {
                 break;
             }
-            // Peel the outermost loop first
-            while (l.getParent() != null) {
-                l = l.getParent();
-            }
 
-            LoopTransformations.peel(loops.loop(l));
+            LoopTransformations.peel(osrLoop);
             osr.replaceAtUsages(InputType.Guard, AbstractBeginNode.prevBegin((FixedNode) osr.predecessor()));
             for (Node usage : osr.usages().snapshot()) {
                 EntryProxyNode proxy = (EntryProxyNode) usage;
@@ -129,10 +127,5 @@ public class OnStackReplacementPhase extends Phase {
 
         Debug.dump(Debug.INFO_LOG_LEVEL, graph, "OnStackReplacement result");
         new DeadCodeEliminationPhase(Required).apply(graph);
-    }
-
-    @Override
-    public float codeSizeIncrease() {
-        return 5.0f;
     }
 }
