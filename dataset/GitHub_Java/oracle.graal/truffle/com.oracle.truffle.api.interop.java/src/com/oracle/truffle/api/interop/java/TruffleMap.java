@@ -24,74 +24,135 @@
  */
 package com.oracle.truffle.api.interop.java;
 
-import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
 import java.util.AbstractMap;
+import java.util.AbstractSet;
 import java.util.Collections;
-import java.util.LinkedHashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
-final class TruffleMap<K, V> extends AbstractMap<K, V> {
-    private final Class<K> keyType;
-    private final Class<V> valueType;
-    private final TruffleObject obj;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
 
-    private TruffleMap(Class<K> keyType, Class<V> valueType, TruffleObject obj) {
+final class TruffleMap<K, V> extends AbstractMap<K, V> {
+    private final TypeAndClass<K> keyType;
+    private final TypeAndClass<V> valueType;
+    private final TruffleObject obj;
+    private final CallTarget callKeys;
+    private final CallTarget callHasSize;
+    private final CallTarget callGetSize;
+    private final CallTarget callRead;
+    private final CallTarget callWrite;
+
+    private TruffleMap(TypeAndClass<K> keyType, TypeAndClass<V> valueType, TruffleObject obj) {
         this.keyType = keyType;
         this.valueType = valueType;
         this.obj = obj;
+        this.callKeys = initializeMapCall(obj, Message.KEYS);
+        this.callHasSize = initializeMapCall(obj, Message.HAS_SIZE);
+        this.callGetSize = initializeMapCall(obj, Message.GET_SIZE);
+        this.callRead = initializeMapCall(obj, Message.READ);
+        this.callWrite = initializeMapCall(obj, Message.WRITE);
     }
 
-    static <K, V> Map<K, V> create(Class<K> keyType, Class<V> valueType, TruffleObject foreignObject) {
+    static <K, V> Map<K, V> create(TypeAndClass<K> keyType, TypeAndClass<V> valueType, TruffleObject foreignObject) {
         return new TruffleMap<>(keyType, valueType, foreignObject);
     }
 
     @Override
     public Set<Entry<K, V>> entrySet() {
-        try {
-            Object props = ToJavaNode.message(Message.PROPERTIES, obj);
-            if (Boolean.TRUE.equals(ToJavaNode.message(Message.HAS_SIZE, props))) {
-                Number size = (Number)ToJavaNode.message(Message.GET_SIZE, props);
-                LinkedHashSet<Entry<K,V>> entries = new LinkedHashSet<>();
-                for (int i = 0; i < size.intValue(); i++) {
-                    Object key = ToJavaNode.message(Message.READ, props, i);
-                    entries.add(new TruffleEntry(keyType.cast(key)));
-                }
-                return entries;
-            }
-            return Collections.emptySet();
-        } catch (InteropException ex) {
-            throw new IllegalStateException(ex);
+        Object props = callKeys.call(null, obj);
+        if (Boolean.TRUE.equals(callHasSize.call(null, props))) {
+            Number size = (Number) callGetSize.call(null, props);
+            return new LazyEntries(props, size.intValue());
         }
+        return Collections.emptySet();
     }
 
     @Override
     public V get(Object key) {
         keyType.cast(key);
-        try {
-            return valueType.cast(ToJavaNode.message(Message.READ, obj, key));
-        } catch (InteropException e) {
-            throw new IllegalStateException(e);
-        }
+        final Object item = callRead.call(valueType, obj, key);
+        return valueType.cast(item);
     }
 
     @Override
     public V put(K key, V value) {
         keyType.cast(key);
         valueType.cast(value);
-        try {
-            return valueType.cast(ToJavaNode.message(Message.WRITE, obj, key, value));
-        } catch (InteropException e) {
-            throw new IllegalStateException(e);
+        V previous = get(key);
+        callWrite.call(valueType, obj, key, value);
+        return previous;
+    }
+
+    private static CallTarget initializeMapCall(TruffleObject obj, Message msg) {
+        CallTarget res = JavaInterop.ACCESSOR.engine().lookupOrRegisterComputation(obj, null, TruffleMap.class, msg);
+        if (res == null) {
+            res = JavaInterop.ACCESSOR.engine().lookupOrRegisterComputation(obj, new MapNode(msg), TruffleMap.class, msg);
+        }
+        return res;
+    }
+
+    private final class LazyEntries extends AbstractSet<Entry<K, V>> {
+
+        private final Object props;
+        private final int size;
+
+        LazyEntries(Object props, int size) {
+            this.props = props;
+            this.size = size;
+        }
+
+        @Override
+        public Iterator<Entry<K, V>> iterator() {
+            return new LazyIterator();
+        }
+
+        @Override
+        public int size() {
+            return size;
+        }
+
+        private final class LazyIterator implements Iterator<Entry<K, V>> {
+
+            private int index;
+
+            LazyIterator() {
+                index = 0;
+            }
+
+            @Override
+            public boolean hasNext() {
+                return index < size;
+            }
+
+            @Override
+            public Entry<K, V> next() {
+                Object key = callRead.call(keyType, props, index++);
+                return new TruffleEntry(keyType.cast(key));
+            }
+
+            @Override
+            public void remove() {
+                throw new UnsupportedOperationException("remove not supported.");
+            }
+
         }
     }
 
     private final class TruffleEntry implements Entry<K, V> {
         private final K key;
 
-        public TruffleEntry(K key) {
+        TruffleEntry(K key) {
             this.key = key;
         }
 
@@ -102,22 +163,67 @@ final class TruffleMap<K, V> extends AbstractMap<K, V> {
 
         @Override
         public V getValue() {
-            try {
-                return valueType.cast(ToJavaNode.message(Message.READ, obj, key));
-            } catch (InteropException ex) {
-                throw new IllegalStateException(ex);
-            }
+            final Object value = callRead.call(valueType, obj, key);
+            return valueType.cast(value);
         }
 
         @Override
         public V setValue(V value) {
+            V prev = getValue();
+            callWrite.call(null, obj, key, value);
+            return prev;
+        }
+    }
+
+    private static final class MapNode extends RootNode {
+        private final Message msg;
+        @Child private Node node;
+        @Child private ToJavaNode toJavaNode;
+
+        MapNode(Message msg) {
+            super(null);
+            this.msg = msg;
+            this.node = msg.createNode();
+            this.toJavaNode = ToJavaNodeGen.create();
+        }
+
+        @Override
+        public Object execute(VirtualFrame frame) {
+            final Object[] args = frame.getArguments();
+            TypeAndClass<?> type = (TypeAndClass<?>) args[0];
+            TruffleObject receiver = (TruffleObject) args[1];
+
+            Object ret;
             try {
-                V prev = getValue();
-                ToJavaNode.message(Message.WRITE, obj, key, value);
-                return prev;
+                if (msg == Message.HAS_SIZE) {
+                    ret = ForeignAccess.sendHasSize(node, receiver);
+                } else if (msg == Message.GET_SIZE) {
+                    ret = ForeignAccess.sendGetSize(node, receiver);
+                } else if (msg == Message.READ) {
+                    try {
+                        ret = ForeignAccess.sendRead(node, receiver, args[2]);
+                    } catch (UnknownIdentifierException uiex) {
+                        return null; // key not present in the map
+                    }
+                } else if (msg == Message.WRITE) {
+                    ret = ForeignAccess.sendWrite(node, receiver, args[2], JavaInterop.asTruffleValue(args[3]));
+                } else if (msg == Message.KEYS) {
+                    ret = ForeignAccess.sendKeys(node, receiver);
+                } else {
+                    CompilerDirectives.transferToInterpreter();
+                    throw UnsupportedMessageException.raise(msg);
+                }
             } catch (InteropException ex) {
-                throw new IllegalStateException(ex);
+                CompilerDirectives.transferToInterpreter();
+                throw ex.raise();
+            }
+
+            if (type != null) {
+                return toJavaNode.execute(ret, type);
+            } else {
+                return ret;
             }
         }
+
     }
 }
