@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -35,14 +35,15 @@ import java.util.List;
 import org.graalvm.options.OptionDescriptor;
 
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.llvm.parser.NodeFactory;
 import com.oracle.truffle.llvm.parser.factories.BasicNodeFactory;
 import com.oracle.truffle.llvm.parser.factories.BasicSystemContextExtension;
-import com.oracle.truffle.llvm.parser.factories.NFIIntrinsicsProvider;
+import com.oracle.truffle.llvm.parser.NodeFactory;
+import com.oracle.truffle.llvm.parser.factories.BasicIntrinsicsProvider;
 import com.oracle.truffle.llvm.runtime.ContextExtension;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.memory.LLVMNativeMemory;
 import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 
@@ -66,7 +67,7 @@ public final class BasicConfiguration implements Configuration {
     @Override
     public List<ContextExtension> createContextExtensions(com.oracle.truffle.api.TruffleLanguage.Env env, TruffleLanguage<?> language) {
         List<ContextExtension> result = new ArrayList<>();
-        result.add(new NFIIntrinsicsProvider(language).collectIntrinsics(new BasicNodeFactory()));
+        result.add(new BasicIntrinsicsProvider(language).collectIntrinsics(new BasicNodeFactory()));
         result.add(new BasicSystemContextExtension());
         if (env.getOptions().get(SulongEngineOption.ENABLE_NFI)) {
             result.add(new NFIContextExtension(env));
@@ -78,7 +79,7 @@ public final class BasicConfiguration implements Configuration {
     @SuppressWarnings("deprecation")
     public <E> E getCapability(Class<E> type) {
         if (type.equals(LLVMMemory.class)) {
-            return type.cast(LLVMMemory.getInstance());
+            return type.cast(LLVMNativeMemory.getInstance());
         } else if (type.equals(UnsafeArrayAccess.class)) {
             return type.cast(UnsafeArrayAccess.getInstance());
         }

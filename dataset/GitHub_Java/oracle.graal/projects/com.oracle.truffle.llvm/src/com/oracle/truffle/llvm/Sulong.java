@@ -34,7 +34,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.ServiceLoader;
 
-import com.oracle.truffle.llvm.runtime.debug.LLVMDebuggerValue;
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
 
@@ -50,7 +49,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.Runner.SulongLibrary;
-import com.oracle.truffle.llvm.runtime.Configuration;
+import com.oracle.truffle.llvm.parser.NodeFactory;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
@@ -90,7 +89,7 @@ public final class Sulong extends LLVMLanguage {
     @Override
     protected LLVMContext createContext(com.oracle.truffle.api.TruffleLanguage.Env env) {
         Configuration activeConfiguration = getActiveConfiguration(env);
-        LLVMContext newContext = new LLVMContext(this, env, activeConfiguration, getLanguageHome());
+        LLVMContext newContext = new LLVMContext(this, env, activeConfiguration.createContextExtensions(env, this), getNodeFactory(env), getLanguageHome());
         if (mainContext == null) {
             mainContext = newContext;
         } else {
@@ -109,7 +108,7 @@ public final class Sulong extends LLVMLanguage {
     protected CallTarget parse(com.oracle.truffle.api.TruffleLanguage.ParsingRequest request) throws Exception {
         Source source = request.getSource();
         LLVMContext context = findLLVMContext();
-        return new Runner(context).parse(source);
+        return new Runner(context, getNodeFactory(context.getEnv())).parse(source);
     }
 
     @Override
@@ -146,7 +145,7 @@ public final class Sulong extends LLVMLanguage {
     @Override
     protected boolean isObjectOfLanguage(Object object) {
         return LLVMPointer.isInstance(object) || object instanceof LLVMInternalTruffleObject || object instanceof SulongLibrary ||
-                        object instanceof LLVMDebuggerValue || object instanceof LLVMInteropType;
+                        object instanceof LLVMDebugObject || object instanceof LLVMSourceType || object instanceof LLVMInteropType;
     }
 
     @Override
@@ -178,6 +177,10 @@ public final class Sulong extends LLVMLanguage {
         return OptionDescriptors.create(optionDescriptors);
     }
 
+    private NodeFactory getNodeFactory(Env env) {
+        return getActiveConfiguration(env).getNodeFactory(findLLVMContext());
+    }
+
     @TruffleBoundary
     private static Configuration getActiveConfiguration(Env env) {
         String name = env.getOptions().get(SulongEngineOption.CONFIGURATION);
@@ -191,8 +194,8 @@ public final class Sulong extends LLVMLanguage {
 
     @Override
     protected Object findMetaObject(LLVMContext context, Object value) {
-        if (value instanceof LLVMDebuggerValue) {
-            return ((LLVMDebuggerValue) value).getMetaObject();
+        if (value instanceof LLVMDebugObject) {
+            return ((LLVMDebugObject) value).getType();
         } else if (LLVMPointer.isInstance(value)) {
             LLVMPointer ptr = LLVMPointer.cast(value);
             return ptr.getExportType();
@@ -228,10 +231,10 @@ public final class Sulong extends LLVMLanguage {
 
     @Override
     protected Iterable<Scope> findLocalScopes(LLVMContext context, Node node, Frame frame) {
-        if (context.getEnv().getOptions().get(SulongEngineOption.ENABLE_LVI)) {
-            return LLVMDebuggerScopeFactory.createSourceLevelScope(node, frame, context);
+        if (!context.getEnv().getOptions().get(SulongEngineOption.ENABLE_LVI)) {
+            return super.findLocalScopes(context, node, frame);
         } else {
-            return LLVMDebuggerScopeFactory.createIRLevelScope(node, frame, context);
+            return LLVMDebuggerScopeFactory.create(node, frame, context);
         }
     }
 }
