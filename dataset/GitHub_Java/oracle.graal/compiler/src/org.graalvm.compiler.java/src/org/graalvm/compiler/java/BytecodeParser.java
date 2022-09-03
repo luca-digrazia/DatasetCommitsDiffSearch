@@ -3544,11 +3544,6 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     @Override
-    public ValueNode pop(JavaKind slotKind) {
-        return frameState.pop(slotKind);
-    }
-
-    @Override
     public ConstantReflectionProvider getConstantReflection() {
         return constantReflection;
     }
@@ -4282,7 +4277,13 @@ public class BytecodeParser implements GraphBuilderContext {
 
         JavaKind fieldKind = resolvedField.getJavaKind();
 
-        pushLoadField(resolvedField, fieldRead, fieldKind);
+        if (resolvedField.isVolatile() && fieldRead instanceof LoadFieldNode) {
+            StateSplitProxyNode readProxy = append(genVolatileFieldReadProxy(fieldRead));
+            frameState.push(fieldKind, readProxy);
+            readProxy.setStateAfter(frameState.create(stream.nextBCI(), readProxy));
+        } else {
+            frameState.push(fieldKind, fieldRead);
+        }
     }
 
     /**
@@ -4416,25 +4417,7 @@ public class BytecodeParser implements GraphBuilderContext {
             }
         }
 
-        ValueNode fieldRead = append(genLoadField(null, resolvedField));
-        JavaKind fieldKind = resolvedField.getJavaKind();
-
-        pushLoadField(resolvedField, fieldRead, fieldKind);
-    }
-
-    /**
-     * Pushes a loaded field onto the stack. If the loaded field is volatile, a
-     * {@link StateSplitProxyNode} is appended so that deoptimization does not deoptimize to a point
-     * before the field load.
-     */
-    private void pushLoadField(ResolvedJavaField resolvedField, ValueNode fieldRead, JavaKind fieldKind) {
-        if (resolvedField.isVolatile() && fieldRead instanceof LoadFieldNode) {
-            StateSplitProxyNode readProxy = append(genVolatileFieldReadProxy(fieldRead));
-            frameState.push(fieldKind, readProxy);
-            readProxy.setStateAfter(frameState.create(stream.nextBCI(), readProxy));
-        } else {
-            frameState.push(fieldKind, fieldRead);
-        }
+        frameState.push(field.getJavaKind(), append(genLoadField(null, resolvedField)));
     }
 
     private ResolvedJavaField resolveStaticFieldAccess(JavaField field, ValueNode value) {
