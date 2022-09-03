@@ -24,10 +24,14 @@
  */
 package com.oracle.truffle.tools.profiler.impl;
 
+import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
+import com.oracle.truffle.api.instrumentation.StandardTags;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.tools.utils.json.JSONObject;
+import org.graalvm.options.OptionType;
+
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.PrintStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -38,19 +42,9 @@ import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
-import org.graalvm.options.OptionKey;
-import org.graalvm.options.OptionType;
-
-import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
-import com.oracle.truffle.api.instrumentation.StandardTags;
-import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.tools.utils.json.JSONObject;
-
 abstract class ProfilerCLI {
 
-    static final OptionType<Object[]> WILDCARD_FILTER_TYPE = new OptionType<>("Expression",
+    static final OptionType<Object[]> WILDCARD_FILTER_TYPE = new OptionType<>("Expression", new Object[0],
                     new Function<String, Object[]>() {
                         @Override
                         public Object[] apply(String filterWildcardExpression) {
@@ -83,17 +77,16 @@ abstract class ProfilerCLI {
                     });
 
     static SourceSectionFilter buildFilter(boolean roots, boolean statements, boolean calls, boolean internals,
-                    Object[] filterRootName, Object[] filterFile, String filterMimeType, String filterLanguage) {
+                    Object[] filterRootName, Object[] filterFile, String filterLanguage) {
         SourceSectionFilter.Builder builder = SourceSectionFilter.newBuilder();
-        if (!internals || filterFile != null || filterMimeType != null || filterLanguage != null) {
+        if (!internals || filterFile != null || filterLanguage != null) {
             builder.sourceIs(new SourceSectionFilter.SourcePredicate() {
                 @Override
                 public boolean test(Source source) {
                     boolean internal = (internals || !source.isInternal());
                     boolean file = testWildcardExpressions(source.getPath(), filterFile);
-                    boolean mimeType = filterMimeType.equals("") || filterMimeType.equals(source.getMimeType());
-                    final boolean languageId = filterLanguage.equals("") || filterMimeType.equals(source.getLanguage());
-                    return internal && file && mimeType && languageId;
+                    boolean mimeType = filterLanguage.equals("") || filterLanguage.equals(source.getMimeType());
+                    return internal && file && mimeType;
                 }
             });
         }
@@ -134,9 +127,6 @@ abstract class ProfilerCLI {
 
     // custom version of SourceSection#getShortDescription
     static String getShortDescription(SourceSection sourceSection) {
-        if (sourceSection == null) {
-            return "unknown";
-        }
         if (sourceSection.getSource() == null) {
             // TODO the source == null branch can be removed if the deprecated
             // SourceSection#createUnavailable has be removed.
@@ -161,9 +151,6 @@ abstract class ProfilerCLI {
     }
 
     static String formatIndices(SourceSection sourceSection, boolean needsColumnSpecifier) {
-        if (sourceSection == null) {
-            return "unknown";
-        }
         StringBuilder b = new StringBuilder();
         boolean singleLine = sourceSection.getStartLine() == sourceSection.getEndLine();
         if (singleLine) {
@@ -303,23 +290,6 @@ abstract class ProfilerCLI {
             int result = sourceSection != null ? sourceSection.hashCode() : 0;
             result = 31 * result + (rootName != null ? rootName.hashCode() : 0);
             return result;
-        }
-    }
-
-    protected static PrintStream chooseOutputStream(TruffleInstrument.Env env, OptionKey<String> option) {
-        try {
-            if (option.hasBeenSet(env.getOptions())) {
-                final String outputPath = option.getValue(env.getOptions());
-                final File file = new File(outputPath);
-                if (file.exists()) {
-                    throw new IllegalArgumentException("Cannot redirect output to an existing file!");
-                }
-                return new PrintStream(new FileOutputStream(file));
-            } else {
-                return new PrintStream(env.out());
-            }
-        } catch (FileNotFoundException e) {
-            throw new IllegalArgumentException("Cannot redirect output to a directory");
         }
     }
 }
