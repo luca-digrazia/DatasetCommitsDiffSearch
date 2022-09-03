@@ -29,37 +29,18 @@
  */
 package com.oracle.truffle.llvm.parser.scanner;
 
-import com.oracle.truffle.llvm.parser.listeners.ParserListener;
+final class BuiltinIDs {
 
-import java.util.List;
+    static final int END_BLOCK = 0;
 
-final class ScannerState {
+    static final int ENTER_SUBBLOCK = 1;
 
-    private final List<List<AbbreviatedRecord>> abbreviatedRecords;
-    private final Block block;
-    private final int idSize;
-    private final ParserListener parser;
+    static final int DEFINE_ABBREV = 2;
 
-    ScannerState(List<List<AbbreviatedRecord>> abbreviatedRecords, Block block, int idSize, ParserListener parser) {
-        this.abbreviatedRecords = abbreviatedRecords;
-        this.block = block;
-        this.idSize = idSize;
-        this.parser = parser;
-    }
+    static final int UNABBREV_RECORD = 3;
 
-    List<List<AbbreviatedRecord>> getAbbreviatedRecords() {
-        return abbreviatedRecords;
-    }
+    static final int CUSTOM_ABBREV_OFFSET = 4;
 
-    Block getBlock() {
-        return block;
-    }
-
-    int getIdSize() {
-        return idSize;
-    }
-
-    ParserListener getParser() {
-        return parser;
+    private BuiltinIDs() {
     }
 }

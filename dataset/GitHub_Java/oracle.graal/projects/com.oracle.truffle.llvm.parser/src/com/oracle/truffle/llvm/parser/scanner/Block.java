@@ -49,11 +49,7 @@ public enum Block {
     MODULE_STRTAB(19),
     FUNCTION_SUMMARY(20),
     OPERAND_BUNDLE_TAGS(21),
-    METADATA_KIND(22),
-    STRTAB(23),
-    FULL_LTO_GLOBALVAR_SUMMARY(24),
-    SYMTAB(25),
-    SYNC_SCOPE_NAMES(26);
+    METADATA_KIND(22);
 
     private final int id;
 
@@ -61,7 +57,8 @@ public enum Block {
         this.id = id;
     }
 
-    static Block lookup(long id) {
+    public static Block lookup(long id) {
+        // TODO set private when removing the old scanner
         for (Block block : values()) {
             if (block.id == id) {
                 return block;

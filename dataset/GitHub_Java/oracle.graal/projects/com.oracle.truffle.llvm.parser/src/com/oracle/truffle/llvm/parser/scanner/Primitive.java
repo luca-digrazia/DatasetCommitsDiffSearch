@@ -29,37 +29,37 @@
  */
 package com.oracle.truffle.llvm.parser.scanner;
 
-import com.oracle.truffle.llvm.parser.listeners.ParserListener;
+enum Primitive {
+    CHAR6(true, 6),
 
-import java.util.List;
+    ABBREVIATED_RECORD_OPERANDS(false, 5),
+    SUBBLOCK_ID(false, 8),
+    SUBBLOCK_ID_SIZE(false, 4),
+    UNABBREVIATED_RECORD_ID(false, 6),
+    UNABBREVIATED_RECORD_OPERAND(false, 6),
+    UNABBREVIATED_RECORD_OPS(false, 6),
 
-final class ScannerState {
+    USER_OPERAND_ARRAY_LENGTH(false, 6),
+    USER_OPERAND_BLOB_LENGTH(false, 6),
+    USER_OPERAND_DATA(false, 5),
+    USER_OPERAND_LITERAL(false, 8),
+    USER_OPERAND_TYPE(true, 3),
+    USER_OPERAND_LITERALBIT(true, 1);
 
-    private final List<List<AbbreviatedRecord>> abbreviatedRecords;
-    private final Block block;
-    private final int idSize;
-    private final ParserListener parser;
+    private final boolean isFixed;
 
-    ScannerState(List<List<AbbreviatedRecord>> abbreviatedRecords, Block block, int idSize, ParserListener parser) {
-        this.abbreviatedRecords = abbreviatedRecords;
-        this.block = block;
-        this.idSize = idSize;
-        this.parser = parser;
+    private final int bits;
+
+    Primitive(boolean isFixed, int bits) {
+        this.isFixed = isFixed;
+        this.bits = bits;
     }
 
-    List<List<AbbreviatedRecord>> getAbbreviatedRecords() {
-        return abbreviatedRecords;
+    public int getBits() {
+        return bits;
     }
 
-    Block getBlock() {
-        return block;
-    }
-
-    int getIdSize() {
-        return idSize;
-    }
-
-    ParserListener getParser() {
-        return parser;
+    public boolean isFixed() {
+        return isFixed;
     }
 }

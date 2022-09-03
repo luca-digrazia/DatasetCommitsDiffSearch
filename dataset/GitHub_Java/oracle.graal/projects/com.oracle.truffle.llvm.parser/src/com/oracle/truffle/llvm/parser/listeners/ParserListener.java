@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -27,39 +27,22 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.parser.scanner;
+package com.oracle.truffle.llvm.parser.listeners;
 
-import com.oracle.truffle.llvm.parser.listeners.ParserListener;
+import com.oracle.truffle.llvm.parser.records.Records;
+import com.oracle.truffle.llvm.parser.scanner.Block;
+import com.oracle.truffle.llvm.runtime.LLVMLogger;
 
-import java.util.List;
+public interface ParserListener {
 
-final class ScannerState {
-
-    private final List<List<AbbreviatedRecord>> abbreviatedRecords;
-    private final Block block;
-    private final int idSize;
-    private final ParserListener parser;
-
-    ScannerState(List<List<AbbreviatedRecord>> abbreviatedRecords, Block block, int idSize, ParserListener parser) {
-        this.abbreviatedRecords = abbreviatedRecords;
-        this.block = block;
-        this.idSize = idSize;
-        this.parser = parser;
+    default ParserListener enter(@SuppressWarnings("unused") Block block) {
+        return this;
     }
 
-    List<List<AbbreviatedRecord>> getAbbreviatedRecords() {
-        return abbreviatedRecords;
+    default void exit() {
     }
 
-    Block getBlock() {
-        return block;
-    }
+    void record(long id, long[] args);
 
-    int getIdSize() {
-        return idSize;
-    }
-
-    ParserListener getParser() {
-        return parser;
-    }
+    ParserListener DEFAULT = (id, args) -> LLVMLogger.info("Unknown Record: " + Records.describe(id, args));
 }

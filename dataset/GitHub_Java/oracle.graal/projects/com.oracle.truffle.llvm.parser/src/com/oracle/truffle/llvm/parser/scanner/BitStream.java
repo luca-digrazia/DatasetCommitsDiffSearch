@@ -29,55 +29,54 @@
  */
 package com.oracle.truffle.llvm.parser.scanner;
 
-import java.nio.ByteBuffer;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 
-public final class BitStream {
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Base64;
 
-    private static final long BYTE_MASK = 0xffL;
-    private final ByteBuffer bitstream;
+final class BitStream {
 
-    private BitStream(ByteBuffer bitstream) {
-        this.bitstream = bitstream;
-    }
+    public static BitStream create(Source source) {
+        byte[] bytes;
+        switch (source.getMimeType()) {
+            case LLVMLanguage.LLVM_BITCODE_MIME_TYPE:
+                bytes = read(source.getPath());
+                break;
 
-    public static BitStream create(ByteBuffer bytes) {
+            case LLVMLanguage.LLVM_BITCODE_BASE64_MIME_TYPE:
+                bytes = Base64.getDecoder().decode(source.getCode());
+                break;
 
+            default:
+                throw new UnsupportedOperationException();
+        }
         return new BitStream(bytes);
     }
 
-    public static BitStream createFromBlob(long[] args, int blobStartIndex) {
-        final byte[] blob = new byte[(args.length - 2) * Long.BYTES];
-        int to = 0;
-        for (int from = blobStartIndex; from < args.length; from++) {
-            final long l = args[from];
-            for (int i = 0; i < Long.BYTES; i++) {
-                blob[to++] = (byte) ((l >> (Byte.SIZE * i)) & BYTE_MASK);
-            }
-        }
-        return new BitStream(ByteBuffer.wrap(blob));
-    }
-
-    public static long widthVBR(long value, long width) {
-        long total = 0;
-        long v = value;
-        do {
-            total += width;
-            v >>>= (width - 1);
-        } while (v != 0);
-        return total;
-    }
-
-    public long read(long offset, long bits) {
-        final long l = read(offset);
-        if (bits < Long.SIZE) {
-            // shifting 1L << 64 would cause an overflow
-            return l & ((1L << bits) - 1L);
-        } else {
-            return l;
+    private static byte[] read(String filename) {
+        try {
+            return Files.readAllBytes(Paths.get(filename));
+        } catch (IOException ignore) {
+            return new byte[0];
         }
     }
 
-    public long readVBR(long offset, long width) {
+    private static final long BYTE_MASK = 0xffL;
+
+    private final byte[] bitstream;
+
+    private BitStream(byte[] bitstream) {
+        this.bitstream = bitstream;
+    }
+
+    long read(long offset, long bits) {
+        return read(offset) & ((1L << bits) - 1L);
+    }
+
+    long readVBR(long offset, long width) {
         long value = 0;
         long shift = 0;
         long datum;
@@ -93,7 +92,17 @@ public final class BitStream {
     }
 
     public long size() {
-        return bitstream.limit() * Byte.SIZE;
+        return bitstream.length * Byte.SIZE;
+    }
+
+    static long widthVBR(long value, long width) {
+        long total = 0;
+        long v = value;
+        do {
+            total += width;
+            v >>>= (width - 1);
+        } while (v != 0);
+        return total;
     }
 
     private long read(long offset) {
@@ -111,10 +120,6 @@ public final class BitStream {
     }
 
     private long readAlignedByte(long i) {
-        return i < bitstream.capacity() ? bitstream.get((int) i) & BYTE_MASK : 0;
-    }
-
-    public ByteBuffer getBitstream() {
-        return bitstream;
+        return i < bitstream.length ? bitstream[(int) i] & BYTE_MASK : 0;
     }
 }

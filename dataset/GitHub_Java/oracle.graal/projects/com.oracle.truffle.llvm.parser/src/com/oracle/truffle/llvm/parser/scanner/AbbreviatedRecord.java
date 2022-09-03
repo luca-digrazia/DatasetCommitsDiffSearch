@@ -29,37 +29,9 @@
  */
 package com.oracle.truffle.llvm.parser.scanner;
 
-import com.oracle.truffle.llvm.parser.listeners.ParserListener;
+@FunctionalInterface
+interface AbbreviatedRecord {
 
-import java.util.List;
+    void scan();
 
-final class ScannerState {
-
-    private final List<List<AbbreviatedRecord>> abbreviatedRecords;
-    private final Block block;
-    private final int idSize;
-    private final ParserListener parser;
-
-    ScannerState(List<List<AbbreviatedRecord>> abbreviatedRecords, Block block, int idSize, ParserListener parser) {
-        this.abbreviatedRecords = abbreviatedRecords;
-        this.block = block;
-        this.idSize = idSize;
-        this.parser = parser;
-    }
-
-    List<List<AbbreviatedRecord>> getAbbreviatedRecords() {
-        return abbreviatedRecords;
-    }
-
-    Block getBlock() {
-        return block;
-    }
-
-    int getIdSize() {
-        return idSize;
-    }
-
-    ParserListener getParser() {
-        return parser;
-    }
 }
