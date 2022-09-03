@@ -40,7 +40,6 @@ import com.intel.llvm.ireditor.types.ResolvedType;
 import com.intel.llvm.ireditor.types.ResolvedVectorType;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMFunctionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
@@ -133,10 +132,5 @@ public interface NodeFactoryFacade {
      * @return the zero vector initializer
      */
     LLVMExpressionNode createZeroVectorInitializer(int nrElements, LLVMExpressionNode target, LLVMBaseType llvmType);
-
-    // TODO we do want to have a LLVM node here or merge with createStructLiteralNode
-    Node createStructWriteNode(LLVMExpressionNode node, ResolvedType type);
-
-    LLVMExpressionNode createStructLiteralNode(int[] offsets, Node[] nodes, LLVMExpressionNode alloc);
 
 }
