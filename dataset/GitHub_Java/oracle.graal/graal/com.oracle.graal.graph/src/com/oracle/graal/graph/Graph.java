@@ -318,9 +318,8 @@ public class Graph {
     }
 
     public Node findDuplicate(Node node) {
-        NodeClass nodeClass = node.getNodeClass();
-        assert nodeClass.valueNumberable();
-        if (nodeClass.isLeafNode()) {
+        assert node.getNodeClass().valueNumberable();
+        if (node.getNodeClass().isLeafNode()) {
             Node cachedNode = findNodeInCache(node);
             if (cachedNode != null) {
                 return cachedNode;
@@ -328,27 +327,15 @@ public class Graph {
                 return null;
             }
         } else {
-
-            int minCount = Integer.MAX_VALUE;
-            Node minCountNode = null;
             for (Node input : node.inputs()) {
                 if (input != null) {
-                    int estimate = input.getUsageCountUpperBound();
-                    if (estimate == 0) {
-                        return null;
-                    } else if (estimate < minCount) {
-                        minCount = estimate;
-                        minCountNode = input;
+                    for (Node usage : input.usages()) {
+                        if (usage != node && node.getNodeClass().valueEqual(node, usage) && node.getNodeClass().edgesEqual(node, usage)) {
+                            return usage;
+                        }
                     }
+                    return null;
                 }
-            }
-            if (minCountNode != null) {
-                for (Node usage : minCountNode.usages()) {
-                    if (usage != node && nodeClass == usage.getNodeClass() && nodeClass.valueEqual(node, usage) && node.getNodeClass().edgesEqual(node, usage)) {
-                        return usage;
-                    }
-                }
-                return null;
             }
             return null;
         }
