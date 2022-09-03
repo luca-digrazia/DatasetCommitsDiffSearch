@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,18 @@
  */
 package com.oracle.truffle.api.test.vm;
 
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.TruffleVM;
-import java.io.IOException;
-import java.io.Reader;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
 import static org.junit.Assert.*;
-import org.junit.Before;
-import org.junit.Test;
+
+import java.io.*;
+import java.util.*;
+
+import org.junit.*;
+
+import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.debug.*;
+import com.oracle.truffle.api.instrument.*;
+import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.api.vm.*;
 
 public class ImplicitExplicitExportTest {
     private TruffleVM vm;
@@ -159,27 +159,37 @@ public class ImplicitExplicitExportTest {
         protected boolean isObjectOfLanguage(Object object) {
             return false;
         }
+
+        @Override
+        protected ToolSupportProvider getToolSupport() {
+            return null;
+        }
+
+        @Override
+        protected DebugSupportProvider getDebugSupport() {
+            return null;
+        }
     }
 
     private static final String L1 = "application/x-test-import-export-1";
     private static final String L2 = "application/x-test-import-export-2";
     private static final String L3 = "application/x-test-import-export-3";
 
-    @TruffleLanguage.Registration(mimeType = L1, name = "ImportExport1")
+    @TruffleLanguage.Registration(mimeType = L1, name = "ImportExport1", version = "0")
     public static final class ExportImportLanguage1 extends AbstractExportImportLanguage {
         public ExportImportLanguage1(Env env) {
             super(env);
         }
     }
 
-    @TruffleLanguage.Registration(mimeType = L2, name = "ImportExport2")
+    @TruffleLanguage.Registration(mimeType = L2, name = "ImportExport2", version = "0")
     public static final class ExportImportLanguage2 extends AbstractExportImportLanguage {
         public ExportImportLanguage2(Env env) {
             super(env);
         }
     }
 
-    @TruffleLanguage.Registration(mimeType = L3, name = "ImportExport3")
+    @TruffleLanguage.Registration(mimeType = L3, name = "ImportExport3", version = "0")
     public static final class ExportImportLanguage3 extends AbstractExportImportLanguage {
         public ExportImportLanguage3(Env env) {
             super(env);
