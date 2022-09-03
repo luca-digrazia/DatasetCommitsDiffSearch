@@ -58,5 +58,10 @@ public class HotSpotGraphBuilderPluginsProvider implements GraphBuilderPluginsPr
         public ResolvedJavaMethod getInvocationTarget(MetaAccessProvider metaAccess) {
             return GraphBuilderPlugin.resolveTarget(metaAccess, Object.class, name());
         }
+
+        @Override
+        public String toString() {
+            return Object.class.getName() + "." + name() + "()";
+        }
     }
 }
