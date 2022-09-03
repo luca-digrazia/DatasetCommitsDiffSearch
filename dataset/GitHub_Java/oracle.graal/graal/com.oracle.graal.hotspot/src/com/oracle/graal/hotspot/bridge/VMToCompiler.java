@@ -26,6 +26,8 @@ package com.oracle.graal.hotspot.bridge;
 import java.io.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.hotspot.debug.*;
+import com.oracle.graal.hotspot.meta.*;
 
 /**
  * Calls from HotSpot into Java.
@@ -61,10 +63,15 @@ public interface VMToCompiler {
     /**
      * Creates a resolved Java type.
      * 
+     * @param metaspaceKlass the metaspace Klass object for the type
+     * @param name the {@linkplain JavaType#getName() name} of the type
+     * @param simpleName a simple, unqualified name for the type
      * @param javaMirror the {@link Class} mirror
      * @return the resolved type associated with {@code javaMirror} which may not be the type
      *         instantiated by this call in the case of another thread racing to create the same
      *         type
      */
-    ResolvedJavaType createResolvedJavaType(Class javaMirror);
+    ResolvedJavaType createResolvedJavaType(long metaspaceKlass, String name, String simpleName, Class javaMirror, int sizeOrSpecies);
+
+    LocalImpl createLocalImpl(String name, String type, HotSpotResolvedObjectType holder, int bciStart, int bciEnd, int slot);
 }
