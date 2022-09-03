@@ -23,14 +23,13 @@
 package com.oracle.graal.phases.schedule;
 
 import static com.oracle.graal.api.meta.LocationIdentity.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.nodes.cfg.ControlFlowGraph.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.Verbosity;
@@ -896,16 +895,13 @@ public final class SchedulePhase extends Phase {
     private List<ScheduledNode> sortNodesWithinBlockLatest(Block b, NodeBitMap visited, NodeBitMap beforeLastLocation) {
         List<ScheduledNode> instructions = blockToNodesMap.get(b);
         List<ScheduledNode> sortedInstructions = new ArrayList<>(blockToNodesMap.get(b).size() + 2);
-        List<FloatingReadNode> reads = null;
+        List<FloatingReadNode> reads = new ArrayList<>();
 
         if (memsched == MemoryScheduling.OPTIMAL) {
             for (ScheduledNode i : instructions) {
                 if (i instanceof FloatingReadNode) {
                     FloatingReadNode frn = (FloatingReadNode) i;
                     if (frn.location().getLocationIdentity() != FINAL_LOCATION) {
-                        if (reads == null) {
-                            reads = new ArrayList<>();
-                        }
                         reads.add(frn);
                         if (nodesFor(b).contains(frn.getLastLocationAccess())) {
                             assert !beforeLastLocation.isMarked(frn);
@@ -918,7 +914,7 @@ public final class SchedulePhase extends Phase {
         for (ScheduledNode i : instructions) {
             addToLatestSorting(b, i, sortedInstructions, visited, reads, beforeLastLocation);
         }
-        assert reads == null || reads.size() == 0 : "not all reads are scheduled";
+        assert reads.size() == 0 : "not all reads are scheduled";
 
         // Make sure that last node gets really last (i.e. when a frame state successor hangs off
         // it).
@@ -934,7 +930,7 @@ public final class SchedulePhase extends Phase {
             }
             if (canNotMove) {
                 if (b.getEndNode() instanceof ControlSplitNode) {
-                    throw new GraalGraphInternalError("Schedule is not possible : needs to move a node after the last node of the block which can not be move").addContext(lastSorted).addContext(
+                    throw new GraalInternalError("Schedule is not possible : needs to move a node after the last node of the block which can not be move").addContext(lastSorted).addContext(
                                     b.getEndNode());
                 }
 
@@ -949,7 +945,7 @@ public final class SchedulePhase extends Phase {
 
     private void processKillLocation(Block b, Node node, LocationIdentity identity, List<ScheduledNode> sortedInstructions, NodeBitMap visited, List<FloatingReadNode> reads,
                     NodeBitMap beforeLastLocation) {
-        for (FloatingReadNode frn : new ArrayList<>(reads)) {
+        for (FloatingReadNode frn : new ArrayList<>(reads)) { // TODO: change to iterator?
             LocationIdentity readLocation = frn.location().getLocationIdentity();
             assert readLocation != FINAL_LOCATION;
             if (frn.getLastLocationAccess() == node) {
@@ -989,25 +985,17 @@ public final class SchedulePhase extends Phase {
             stateAfter = ((StateSplit) i).stateAfter();
         }
 
-        if (i instanceof LoopExitNode) {
-            for (ProxyNode proxy : ((LoopExitNode) i).proxies()) {
-                addToLatestSorting(b, proxy, sortedInstructions, visited, reads, beforeLastLocation);
-            }
-        }
-
         for (Node input : i.inputs()) {
             if (input instanceof FrameState) {
                 if (input != stateAfter) {
                     addUnscheduledToLatestSorting(b, (FrameState) input, sortedInstructions, visited, reads, beforeLastLocation);
                 }
             } else {
-                if (!(i instanceof ProxyNode && input instanceof LoopExitNode)) {
-                    addToLatestSorting(b, (ScheduledNode) input, sortedInstructions, visited, reads, beforeLastLocation);
-                }
+                addToLatestSorting(b, (ScheduledNode) input, sortedInstructions, visited, reads, beforeLastLocation);
             }
         }
 
-        if (memsched == MemoryScheduling.OPTIMAL && reads != null) {
+        if (memsched == MemoryScheduling.OPTIMAL && reads.size() != 0) {
             if (i instanceof MemoryCheckpoint.Single) {
                 LocationIdentity identity = ((MemoryCheckpoint.Single) i).getLocationIdentity();
                 processKillLocation(b, i, identity, sortedInstructions, visited, reads, beforeLastLocation);
