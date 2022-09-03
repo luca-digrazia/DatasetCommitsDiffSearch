@@ -1444,7 +1444,6 @@ public class HotSpotVMConfig extends CompilerObject {
     @HotSpotVMValue(expression = "SharedRuntime::dsin", get = HotSpotVMValue.Type.ADDRESS) @Stable public long arithmeticSinAddress;
     @HotSpotVMValue(expression = "SharedRuntime::dcos", get = HotSpotVMValue.Type.ADDRESS) @Stable public long arithmeticCosAddress;
     @HotSpotVMValue(expression = "SharedRuntime::dtan", get = HotSpotVMValue.Type.ADDRESS) @Stable public long arithmeticTanAddress;
-    @HotSpotVMValue(expression = "SharedRuntime::dpow", get = HotSpotVMValue.Type.ADDRESS) @Stable public long arithmeticPowAddress;
 
     @HotSpotVMValue(expression = "(jint) GraalCounterSize") @Stable public int graalCountersSize;
 
