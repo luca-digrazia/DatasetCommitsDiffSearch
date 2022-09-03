@@ -31,12 +31,11 @@ import com.oracle.graal.nodes.spi.*;
 /**
  * The {@code MonitorEnterNode} represents the acquisition of a monitor.
  */
-@NodeInfo
-public class MonitorEnterNode extends AccessMonitorNode implements Virtualizable, Lowerable, IterableNodeType, MonitorEnter, MemoryCheckpoint.Single {
+public final class MonitorEnterNode extends AccessMonitorNode implements Virtualizable, Lowerable, IterableNodeType, MonitorEnter, MemoryCheckpoint.Single {
 
     /**
      * Creates a new MonitorEnterNode.
-     *
+     * 
      * @param object the instruction producing the object
      */
     public MonitorEnterNode(ValueNode object, MonitorIdNode monitorId) {
