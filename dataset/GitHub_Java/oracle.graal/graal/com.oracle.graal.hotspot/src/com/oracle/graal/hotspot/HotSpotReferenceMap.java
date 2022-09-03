@@ -28,129 +28,67 @@ import java.util.*;
 import com.oracle.graal.api.code.CodeUtil.RefMapFormatter;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.hotspot.nodes.type.*;
 
 public class HotSpotReferenceMap implements ReferenceMap, Serializable {
 
     private static final long serialVersionUID = -1052183095979496819L;
 
-    private static final int BITS_PER_WORD = 3;
-
     /**
-     * Contains 3 bits per scalar register, and n*3 bits per n-word vector register (e.g., on a
-     * 64-bit system, a 256-bit vector register requires 12 reference map bits).
-     * <p>
-     * These bits can have the following values (LSB first):
-     *
-     * <pre>
-     * 000 - contains no references
-     * 100 - contains a wide oop
-     * 110 - contains a narrow oop in the lower half
-     * 101 - contains a narrow oop in the upper half
-     * 111 - contains two narrow oops
-     * </pre>
+     * Contains 2 bits per register.
+     * <ul>
+     * <li>bit0 = 0: contains no references</li>
+     * <li>bit0 = 1, bit1 = 0: contains a wide oop</li>
+     * <li>bit0 = 1, bit1 = 1: contains a narrow oop</li>
+     * </ul>
      */
     private final BitSet registerRefMap;
 
     /**
-     * Contains 3 bits per stack word.
-     * <p>
-     * These bits can have the following values (LSB first):
-     *
-     * <pre>
-     * 000 - contains no references
-     * 100 - contains a wide oop
-     * 110 - contains a narrow oop in the lower half
-     * 101 - contains a narrow oop in the upper half
-     * 111 - contains two narrow oops
-     * </pre>
+     * Contains 3 bits per stack slot.
+     * <ul>
+     * <li>bit0 = 0: contains no references</li>
+     * <li>bit0 = 1, bit1+2 = 0: contains a wide oop</li>
+     * <li>bit0 = 1, bit1 = 1: contains a narrow oop in the lower half</li>
+     * <li>bit0 = 1, bit2 = 1: contains a narrow oop in the upper half</li>
+     * </ul>
      */
     private final BitSet frameRefMap;
 
-    private final TargetDescription target;
+    private final int frameSlotSize;
 
-    public HotSpotReferenceMap(int registerCount, int frameSlotCount, TargetDescription target) {
+    public HotSpotReferenceMap(int registerCount, int frameSlotCount, int frameSlotSize) {
         if (registerCount > 0) {
-            this.registerRefMap = new BitSet(registerCount * BITS_PER_WORD);
+            this.registerRefMap = new BitSet(registerCount * 2);
         } else {
             this.registerRefMap = null;
         }
-        this.frameRefMap = new BitSet(frameSlotCount * BITS_PER_WORD);
-        this.target = target;
+        this.frameRefMap = new BitSet(frameSlotCount * 3);
+        this.frameSlotSize = frameSlotSize;
     }
 
-    private static void setOop(BitSet map, int startIdx, LIRKind kind) {
-        int length = kind.getPlatformKind().getVectorLength();
-        map.clear(BITS_PER_WORD * startIdx, BITS_PER_WORD * (startIdx + length) - 1);
-        for (int i = 0, idx = BITS_PER_WORD * startIdx; i < length; i++, idx += BITS_PER_WORD) {
-            if (kind.isReference(i)) {
-                map.set(idx);
-            }
-        }
-    }
-
-    private static void setNarrowOop(BitSet map, int idx, LIRKind kind) {
-        int length = kind.getPlatformKind().getVectorLength();
-        int nextIdx = idx + (length + 1) / 2;
-        map.clear(BITS_PER_WORD * idx, BITS_PER_WORD * nextIdx - 1);
-        for (int i = 0, regIdx = BITS_PER_WORD * idx; i < length; i += 2, regIdx += BITS_PER_WORD) {
-            if (kind.isReference(i)) {
-                map.set(regIdx);
-                map.set(regIdx + 1);
-            }
-            if ((i + 1) < length && kind.isReference(i + 1)) {
-                map.set(regIdx);
-                map.set(regIdx + 2);
-            }
+    public void setRegister(int idx, PlatformKind kind) {
+        if (kind == Kind.Object) {
+            registerRefMap.set(2 * idx);
+        } else if (kind == NarrowOopStamp.NarrowOop) {
+            registerRefMap.set(2 * idx);
+            registerRefMap.set(2 * idx + 1);
         }
     }
 
-    public void setRegister(int idx, LIRKind kind) {
-        if (kind.isDerivedReference()) {
-            throw GraalInternalError.shouldNotReachHere("derived reference cannot be inserted in ReferenceMap");
-        }
-
-        PlatformKind platformKind = kind.getPlatformKind();
-        int bytesPerElement = target.getSizeInBytes(platformKind) / platformKind.getVectorLength();
-
-        if (bytesPerElement == target.wordSize) {
-            setOop(registerRefMap, idx, kind);
-        } else if (bytesPerElement == target.wordSize / 2) {
-            setNarrowOop(registerRefMap, idx, kind);
-        } else {
-            assert kind.isValue() : "unsupported reference kind " + kind;
-        }
-    }
-
-    public void setStackSlot(int offset, LIRKind kind) {
-        if (kind.isDerivedReference()) {
-            throw GraalInternalError.shouldNotReachHere("derived reference cannot be inserted in ReferenceMap");
-        }
-
-        PlatformKind platformKind = kind.getPlatformKind();
-        int bytesPerElement = target.getSizeInBytes(platformKind) / platformKind.getVectorLength();
-        assert offset % bytesPerElement == 0 : "unaligned value in ReferenceMap";
-
-        if (bytesPerElement == target.wordSize) {
-            setOop(frameRefMap, offset / target.wordSize, kind);
-        } else if (bytesPerElement == target.wordSize / 2) {
-            if (platformKind.getVectorLength() > 1) {
-                setNarrowOop(frameRefMap, offset / target.wordSize, kind);
+    public void setStackSlot(int offset, PlatformKind kind) {
+        int idx = offset / frameSlotSize;
+        if (kind == Kind.Object) {
+            assert offset % frameSlotSize == 0;
+            frameRefMap.set(3 * idx);
+        } else if (kind == NarrowOopStamp.NarrowOop) {
+            frameRefMap.set(3 * idx);
+            if (offset % frameSlotSize == 0) {
+                frameRefMap.set(3 * idx + 1);
             } else {
-                // in this case, offset / target.wordSize may not divide evenly
-                // so setNarrowOop won't work correctly
-                int idx = offset / target.wordSize;
-                if (kind.isReference(0)) {
-                    frameRefMap.set(BITS_PER_WORD * idx);
-                    if (offset % target.wordSize == 0) {
-                        frameRefMap.set(BITS_PER_WORD * idx + 1);
-                    } else {
-                        frameRefMap.set(BITS_PER_WORD * idx + 2);
-                    }
-                }
+                assert offset % frameSlotSize == frameSlotSize / 2;
+                frameRefMap.set(3 * idx + 2);
             }
-        } else {
-            assert kind.isValue() : "unknown reference kind " + kind;
         }
     }
 
@@ -163,14 +101,14 @@ public class HotSpotReferenceMap implements ReferenceMap, Serializable {
     }
 
     public void appendRegisterMap(StringBuilder sb, RefMapFormatter formatter) {
-        for (int reg = registerRefMap.nextSetBit(0); reg >= 0; reg = registerRefMap.nextSetBit(reg + BITS_PER_WORD)) {
-            sb.append(' ').append(formatter.formatRegister(reg / BITS_PER_WORD));
+        for (int reg = registerRefMap.nextSetBit(0); reg >= 0; reg = registerRefMap.nextSetBit(reg + 2)) {
+            sb.append(' ').append(formatter.formatRegister(reg / 2));
         }
     }
 
     public void appendFrameMap(StringBuilder sb, RefMapFormatter formatter) {
-        for (int slot = frameRefMap.nextSetBit(0); slot >= 0; slot = frameRefMap.nextSetBit(slot + BITS_PER_WORD)) {
-            sb.append(' ').append(formatter.formatStackSlot(slot / BITS_PER_WORD));
+        for (int slot = frameRefMap.nextSetBit(0); slot >= 0; slot = frameRefMap.nextSetBit(slot + 3)) {
+            sb.append(' ').append(formatter.formatStackSlot(slot / 3));
         }
     }
 }

@@ -160,79 +160,68 @@ public class CompilationResult implements Serializable {
         public abstract void emit(TargetDescription target, ByteBuffer buffer);
     }
 
-    public abstract static class ConstantData extends Data {
-
-        private final Constant constant;
-
-        protected ConstantData(Constant constant, int alignment) {
-            super(alignment);
-            this.constant = constant;
-        }
-
-        public Constant getConstant() {
-            return constant;
-        }
-    }
-
     /**
      * Represents a Java primitive value used in a {@link DataPatch}. This implementation uses
      * {@link Kind#getByteCount()} bytes to encode each value.
      */
-    public static final class PrimitiveData extends ConstantData {
+    public static final class PrimitiveData extends Data {
+
+        public final Constant constant;
 
         public PrimitiveData(Constant constant, int alignment) {
-            super(constant, alignment);
+            super(alignment);
             assert constant.getKind().isPrimitive();
+            this.constant = constant;
         }
 
         @Override
         public int getSize(TargetDescription target) {
-            return getConstant().getKind().getByteCount();
+            return constant.getKind().getByteCount();
         }
 
         @Override
         public Kind getKind() {
-            return getConstant().getKind();
+            return constant.getKind();
         }
 
         @Override
         public void emit(TargetDescription target, ByteBuffer buffer) {
-            switch (getConstant().getKind()) {
+            switch (constant.getKind()) {
                 case Boolean:
-                    buffer.put(getConstant().asBoolean() ? (byte) 1 : (byte) 0);
+                    buffer.put(constant.asBoolean() ? (byte) 1 : (byte) 0);
                     break;
                 case Byte:
-                    buffer.put((byte) getConstant().asInt());
+                    buffer.put((byte) constant.asInt());
                     break;
                 case Char:
-                    buffer.putChar((char) getConstant().asInt());
+                    buffer.putChar((char) constant.asInt());
                     break;
                 case Short:
-                    buffer.putShort((short) getConstant().asInt());
+                    buffer.putShort((short) constant.asInt());
                     break;
                 case Int:
-                    buffer.putInt(getConstant().asInt());
+                    buffer.putInt(constant.asInt());
                     break;
                 case Long:
-                    buffer.putLong(getConstant().asLong());
+                    buffer.putLong(constant.asLong());
                     break;
                 case Float:
-                    buffer.putFloat(getConstant().asFloat());
+                    buffer.putFloat(constant.asFloat());
                     break;
                 case Double:
-                    buffer.putDouble(getConstant().asDouble());
+                    buffer.putDouble(constant.asDouble());
                     break;
             }
         }
 
         @Override
         public String toString() {
-            return getConstant().toString();
+            return constant.toString();
         }
 
         @Override
         public int hashCode() {
-            return getConstant().hashCode();
+            return constant.hashCode();
         }
 
         @Override
@@ -242,7 +231,7 @@ public class CompilationResult implements Serializable {
             }
             if (obj instanceof PrimitiveData) {
                 PrimitiveData other = (PrimitiveData) obj;
-                return getConstant().equals(other.getConstant());
+                return constant.equals(other.constant);
             } else {
                 return false;
             }
@@ -602,15 +591,7 @@ public class CompilationResult implements Serializable {
         addInfopoint(new Infopoint(codePos, debugInfo, reason));
     }
 
-    /**
-     * Records a custom infopoint in the code section.
-     * 
-     * Compiler implementations can use this method to record non-standard infopoints, which are not
-     * handled by the dedicated methods like {@link #recordCall}.
-     * 
-     * @param infopoint the infopoint to record, usually a derived class from {@link Infopoint}
-     */
-    public void addInfopoint(Infopoint infopoint) {
+    private void addInfopoint(Infopoint infopoint) {
         // The infopoints list must always be sorted
         if (!infopoints.isEmpty() && infopoints.get(infopoints.size() - 1).pcOffset >= infopoint.pcOffset) {
             // This re-sorting should be very rare
