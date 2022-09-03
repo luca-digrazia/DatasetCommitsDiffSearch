@@ -22,45 +22,28 @@
  */
 package com.oracle.graal.phases.common;
 
-import static com.oracle.graal.compiler.common.GraalOptions.OptImplicitNullChecks;
+import com.oracle.jvmci.meta.JavaConstant;
 
-import java.util.Iterator;
-import java.util.Map;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+
+import java.util.*;
 import java.util.Map.Entry;
 
-import jdk.vm.ci.meta.JavaConstant;
-
-import com.oracle.graal.compiler.common.cfg.Loop;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugMetric;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.BeginNode;
-import com.oracle.graal.nodes.DeoptimizeNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.GuardNode;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.LoopExitNode;
-import com.oracle.graal.nodes.PiNode;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.IsNullNode;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.memory.Access;
-import com.oracle.graal.nodes.memory.FixedAccessNode;
-import com.oracle.graal.nodes.memory.FloatingAccessNode;
-import com.oracle.graal.nodes.memory.MemoryNode;
-import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.phases.BasePhase;
-import com.oracle.graal.phases.graph.ScheduledNodeIterator;
-import com.oracle.graal.phases.schedule.SchedulePhase;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.graph.*;
+import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.phases.schedule.SchedulePhase.SchedulingStrategy;
-import com.oracle.graal.phases.tiers.MidTierContext;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.jvmci.debug.*;
 
 /**
  * This phase lowers {@link GuardNode GuardNodes} into corresponding control-flow structure and
@@ -99,23 +82,16 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
             if (node instanceof StateSplit && ((StateSplit) node).stateAfter() != null) {
                 nullGuarded.clear();
             } else {
-                /*
-                 * The OffsetAddressNode itself never forces materialization of a null check, even
-                 * if its input is a PiNode. The null check will be folded into the first usage of
-                 * the OffsetAddressNode, so we need to keep it in the nullGuarded map.
-                 */
-                if (!(node instanceof OffsetAddressNode)) {
-                    Iterator<Entry<ValueNode, ValueNode>> it = nullGuarded.entrySet().iterator();
-                    while (it.hasNext()) {
-                        Entry<ValueNode, ValueNode> entry = it.next();
-                        ValueNode guard = entry.getValue();
-                        if (guard.usages().contains(node)) {
+                Iterator<Entry<ValueNode, ValueNode>> it = nullGuarded.entrySet().iterator();
+                while (it.hasNext()) {
+                    Entry<ValueNode, ValueNode> entry = it.next();
+                    ValueNode guard = entry.getValue();
+                    if (guard.usages().contains(node)) {
+                        it.remove();
+                    } else if (guard instanceof PiNode && guard != node) {
+                        PiNode piNode = (PiNode) guard;
+                        if (piNode.getGuard().asNode().usages().contains(node)) {
                             it.remove();
-                        } else if (guard instanceof PiNode && guard != node) {
-                            PiNode piNode = (PiNode) guard;
-                            if (piNode.getGuard().asNode().usages().contains(node)) {
-                                it.remove();
-                            }
                         }
                     }
                 }
@@ -132,21 +108,21 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
         }
 
         private void processAccess(Access access) {
-            if (access.canNullCheck() && access.getAddress() instanceof OffsetAddressNode) {
-                OffsetAddressNode address = (OffsetAddressNode) access.getAddress();
-                check(access, address);
+            if (access.canNullCheck()) {
+                ValueNode object = access.object();
+                check(access, object);
             }
         }
 
-        private void check(Access access, OffsetAddressNode address) {
-            ValueNode base = address.getBase();
-            ValueNode guard = nullGuarded.get(base);
-            if (guard != null && isImplicitNullCheck(address.getOffset())) {
+        private void check(Access access, ValueNode object) {
+            ValueNode guard = nullGuarded.get(object);
+            if (guard != null && isImplicitNullCheck(access.accessLocation())) {
                 if (guard instanceof PiNode) {
                     PiNode piNode = (PiNode) guard;
-                    assert guard == address.getBase();
+                    assert guard == object;
                     assert piNode.getGuard() instanceof GuardNode : piNode;
-                    address.setBase(piNode.getOriginalNode());
+                    assert access.object() == guard;
+                    access.asNode().replaceFirstInput(piNode, piNode.getOriginalNode());
                 } else {
                     assert guard instanceof GuardNode;
                 }
@@ -173,27 +149,26 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
                     PiNode piNode = (PiNode) guard;
                     guardNode = (GuardNode) piNode.getGuard();
                 }
-                LogicNode condition = guardNode.getCondition();
+                LogicNode condition = guardNode.condition();
                 guardNode.replaceAndDelete(fixedAccess);
                 if (condition.hasNoUsages()) {
                     GraphUtil.killWithUnusedFloatingInputs(condition);
                 }
-                nullGuarded.remove(base);
+                nullGuarded.remove(object);
             }
         }
 
         private void processGuard(Node node) {
             GuardNode guard = (GuardNode) node;
-            if (guard.isNegated() && guard.getCondition() instanceof IsNullNode && (guard.getSpeculation() == null || guard.getSpeculation().equals(JavaConstant.NULL_POINTER))) {
-                ValueNode obj = ((IsNullNode) guard.getCondition()).getValue();
+            if (guard.isNegated() && guard.condition() instanceof IsNullNode && (guard.getSpeculation() == null || guard.getSpeculation().equals(JavaConstant.NULL_POINTER))) {
+                ValueNode obj = ((IsNullNode) guard.condition()).getValue();
                 nullGuarded.put(obj, guard);
             }
         }
 
-        private boolean isImplicitNullCheck(ValueNode offset) {
-            JavaConstant c = offset.asJavaConstant();
-            if (c != null) {
-                return c.asLong() < implicitNullCheckLimit;
+        private boolean isImplicitNullCheck(LocationNode location) {
+            if (location instanceof ConstantLocationNode) {
+                return ((ConstantLocationNode) location).getDisplacement() < implicitNullCheckLimit;
             } else {
                 return false;
             }
@@ -228,7 +203,7 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
             AbstractBeginNode fastPath = graph.add(new BeginNode());
             @SuppressWarnings("deprecation")
             int debugId = useGuardIdAsDebugId ? guard.getId() : DeoptimizeNode.DEFAULT_DEBUG_ID;
-            DeoptimizeNode deopt = graph.add(new DeoptimizeNode(guard.getAction(), guard.getReason(), debugId, guard.getSpeculation(), null));
+            DeoptimizeNode deopt = graph.add(new DeoptimizeNode(guard.action(), guard.reason(), debugId, guard.getSpeculation(), null));
             AbstractBeginNode deoptBranch = BeginNode.begin(deopt);
             AbstractBeginNode trueSuccessor;
             AbstractBeginNode falseSuccessor;
@@ -240,7 +215,7 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
                 trueSuccessor = fastPath;
                 falseSuccessor = deoptBranch;
             }
-            IfNode ifNode = graph.add(new IfNode(guard.getCondition(), trueSuccessor, falseSuccessor, trueSuccessor == fastPath ? 1 : 0));
+            IfNode ifNode = graph.add(new IfNode(guard.condition(), trueSuccessor, falseSuccessor, trueSuccessor == fastPath ? 1 : 0));
             guard.replaceAndDelete(fastPath);
             insert(ifNode, fastPath);
         }
