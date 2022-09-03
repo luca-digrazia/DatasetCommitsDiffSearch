@@ -95,6 +95,11 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime implements 
         return HotSpotGraalOptionValues.HOTSPOT_OPTIONS;
     }
 
+    @Override
+    public String getName() {
+        return "Graal Truffle Runtime";
+    }
+
     private volatile Lazy lazy;
 
     private Lazy lazy() {
