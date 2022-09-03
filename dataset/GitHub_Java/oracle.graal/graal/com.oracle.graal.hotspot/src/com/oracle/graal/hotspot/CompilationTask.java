@@ -24,7 +24,6 @@ package com.oracle.graal.hotspot;
 
 import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.nodes.StructuredGraph.*;
-import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.lang.reflect.*;
 import java.util.concurrent.*;
@@ -38,16 +37,10 @@ import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 
 public final class CompilationTask implements Runnable, Comparable<CompilationTask> {
-
-    //@formatter:off
-    @Option(help = "")
-    public static final OptionValue<Integer> SlowQueueCutoff = new OptionValue<>(100000);
-    //@formatter:on
 
     public static final ThreadLocal<Boolean> withinEnqueue = new ThreadLocal<Boolean>() {
 
@@ -115,8 +108,8 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
                 return;
             }
             inProgress = true;
-            if (DynamicCompilePriority.getValue()) {
-                int threadPriority = priority < SlowQueueCutoff.getValue() ? Thread.NORM_PRIORITY : Thread.MIN_PRIORITY;
+            if (GraalOptions.DynamicCompilePriority) {
+                int threadPriority = priority < GraalOptions.SlowQueueCutoff ? Thread.NORM_PRIORITY : Thread.MIN_PRIORITY;
                 if (Thread.currentThread().getPriority() != threadPriority) {
                     Thread.currentThread().setPriority(threadPriority);
                 }
@@ -140,17 +133,17 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
     public void runCompilation() {
         CompilationStatistics stats = CompilationStatistics.create(method, entryBCI != StructuredGraph.INVOCATION_ENTRY_BCI);
         try (TimerCloseable a = CompilationTime.start()) {
-            final boolean printCompilation = PrintCompilation.getValue() && !TTY.isSuppressed();
+            final boolean printCompilation = GraalOptions.PrintCompilation && !TTY.isSuppressed();
             if (printCompilation) {
                 TTY.println(String.format("%-6d Graal %-70s %-45s %-50s %s...", id, method.getDeclaringClass().getName(), method.getName(), method.getSignature(),
                                 entryBCI == StructuredGraph.INVOCATION_ENTRY_BCI ? "" : "(OSR@" + entryBCI + ") "));
             }
-            if (HotSpotPrintCompilation.getValue()) {
+            if (GraalOptions.HotSpotPrintCompilation) {
                 printCompilation();
             }
 
             CompilationResult result = null;
-            TTY.Filter filter = new TTY.Filter(PrintFilter.getValue(), method);
+            TTY.Filter filter = new TTY.Filter(GraalOptions.PrintFilter, method);
             long start = System.currentTimeMillis();
             try {
                 result = Debug.scope("Compiling", new DebugDumpScope(String.valueOf(id), true), new Callable<CompilationResult>() {
@@ -183,19 +176,19 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
             installMethod(result);
         } catch (BailoutException bailout) {
             Debug.metric("Bailouts").increment();
-            if (ExitVMOnBailout.getValue()) {
+            if (GraalOptions.ExitVMOnBailout) {
                 TTY.cachedOut.println(MetaUtil.format("Bailout in %H.%n(%p)", method));
                 bailout.printStackTrace(TTY.cachedOut);
                 System.exit(-1);
-            } else if (PrintBailout.getValue()) {
+            } else if (GraalOptions.PrintBailout) {
                 TTY.cachedOut.println(MetaUtil.format("Bailout in %H.%n(%p)", method));
                 bailout.printStackTrace(TTY.cachedOut);
             }
         } catch (Throwable t) {
-            if (PrintStackTraceOnException.getValue() || ExitVMOnException.getValue()) {
+            if (GraalOptions.PrintStackTraceOnException || GraalOptions.ExitVMOnException) {
                 t.printStackTrace(TTY.cachedOut);
             }
-            if (ExitVMOnException.getValue()) {
+            if (GraalOptions.ExitVMOnException) {
                 System.exit(-1);
             }
         }
