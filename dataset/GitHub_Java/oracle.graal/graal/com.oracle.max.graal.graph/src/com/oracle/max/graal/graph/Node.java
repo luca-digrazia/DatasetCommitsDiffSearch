@@ -120,7 +120,7 @@ public abstract class Node implements Cloneable, Formattable {
         nodeClass = NodeClass.get(getClass());
     }
 
-    protected int id() {
+    int id() {
         return id;
     }
 
@@ -496,11 +496,11 @@ public abstract class Node implements Cloneable, Formattable {
     @Override
     public void formatTo(Formatter formatter, int flags, int width, int precision) {
         if ((flags & FormattableFlags.ALTERNATE) == FormattableFlags.ALTERNATE) {
-            formatter.format("%s", toString(Verbosity.Id));
+            formatter.format(toString(Verbosity.Id));
         } else if ((flags & FormattableFlags.UPPERCASE) == FormattableFlags.UPPERCASE) {
-            formatter.format("%s", toString(Verbosity.Long));
+            formatter.format(toString(Verbosity.Long));
         } else {
-            formatter.format("%s", toString(Verbosity.Short));
+            formatter.format(toString(Verbosity.Short));
         }
 
         boolean neighborsAlternate = ((flags & FormattableFlags.LEFT_JUSTIFY) == FormattableFlags.LEFT_JUSTIFY);
