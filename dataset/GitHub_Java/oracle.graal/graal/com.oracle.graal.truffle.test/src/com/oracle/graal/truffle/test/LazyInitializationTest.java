@@ -45,6 +45,7 @@ import com.oracle.graal.options.OptionDescriptor;
 import com.oracle.graal.options.OptionDescriptors;
 import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.options.OptionsParser;
+import com.oracle.graal.options.OptionsParser.OptionDescriptorsProvider;
 import com.oracle.graal.test.SubprocessUtil;
 
 import jdk.vm.ci.runtime.services.JVMCICompilerFactory;
@@ -57,14 +58,12 @@ public class LazyInitializationTest {
 
     private final Class<?> hotSpotVMEventListener;
     private final Class<?> hotSpotGraalCompilerFactoryOptions;
-    private final Class<?> jvmciVersionCheck;
 
     private static boolean Java8OrEarlier = System.getProperty("java.specification.version").compareTo("1.9") < 0;
 
     public LazyInitializationTest() {
         hotSpotVMEventListener = forNameOrNull("jdk.vm.ci.hotspot.services.HotSpotVMEventListener");
         hotSpotGraalCompilerFactoryOptions = forNameOrNull("com.oracle.graal.hotspot.HotSpotGraalCompilerFactory$Options");
-        jvmciVersionCheck = forNameOrNull("com.oracle.graal.hotspot.JVMCIVersionCheck");
     }
 
     private static Class<?> forNameOrNull(String name) {
@@ -228,17 +227,7 @@ public class LazyInitializationTest {
         }
 
         if (cls.equals(hotSpotGraalCompilerFactoryOptions)) {
-            // Graal initialization needs to access this class.
-            return true;
-        }
-
-        if (cls.equals(Util.class)) {
-            // Provider of the Java runtime check utility used during Graal initialization.
-            return true;
-        }
-
-        if (cls.equals(jvmciVersionCheck)) {
-            // The Graal initialization needs to check the JVMCI version.
+            // The JVMCI initialization code needs to accesses an option defined in this class.
             return true;
         }
 
@@ -252,7 +241,7 @@ public class LazyInitializationTest {
             return true;
         }
 
-        if (cls == OptionsParser.class) {
+        if (OptionDescriptorsProvider.class.isAssignableFrom(cls) || cls == OptionsParser.class) {
             // Classes implementing Graal option loading
             return true;
         }
