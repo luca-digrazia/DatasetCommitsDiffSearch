@@ -22,14 +22,11 @@
  */
 package com.oracle.graal.lir.phases;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.ListIterator;
+import java.util.*;
 
-import jdk.vm.ci.code.TargetDescription;
-
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.lir.gen.*;
 
 public class LIRPhaseSuite<C> extends LIRPhase<C> {
     private final List<LIRPhase<C>> phases;
@@ -59,17 +56,6 @@ public class LIRPhaseSuite<C> extends LIRPhase<C> {
         } else {
             return null;
         }
-    }
-
-    public final <T extends LIRPhase<C>> T findPhaseInstance(Class<T> phaseClass) {
-        ListIterator<LIRPhase<C>> it = phases.listIterator();
-        while (it.hasNext()) {
-            LIRPhase<C> phase = it.next();
-            if (phaseClass.isInstance(phase)) {
-                return phaseClass.cast(phase);
-            }
-        }
-        return null;
     }
 
     public static <C> boolean findNextPhase(ListIterator<LIRPhase<C>> it, Class<? extends LIRPhase<C>> phaseClass) {
