@@ -37,6 +37,7 @@ import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 
+import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.TriState;
 
 @NodeInfo(shortName = "==", cycles = NodeCycles.CYCLES_3)
@@ -49,8 +50,8 @@ public final class FloatEqualsNode extends CompareNode implements BinaryCommutat
         assert x.stamp().isCompatible(y.stamp());
     }
 
-    public static LogicNode create(ValueNode x, ValueNode y) {
-        LogicNode result = CompareNode.tryConstantFoldPrimitive(Condition.EQ, x, y, false);
+    public static LogicNode create(ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection) {
+        LogicNode result = CompareNode.tryConstantFold(Condition.EQ, x, y, constantReflection, false);
         if (result != null) {
             return result;
         } else {
