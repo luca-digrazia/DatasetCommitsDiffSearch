@@ -218,7 +218,7 @@ public interface CompilerToVM {
 
     long readUnsafeKlassPointer(Object o);
 
-    void doNotInlineOrCompile(long metaspaceMethod);
+    void dontInline(long metaspaceMethod);
 
     /**
      * Invalidates the profiling information and restarts profiling upon the next invocation.
