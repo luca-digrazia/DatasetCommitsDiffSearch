@@ -64,34 +64,13 @@ public class StructuredGraph extends Graph {
 
     private StructuredGraph(String name, RiResolvedMethod method, long graphId) {
         super(name);
-        this.start = add(new StartNode());
+        this.start = add(new BeginNode());
         this.method = method;
         this.graphId = graphId;
     }
 
     public StructuredGraph(RiResolvedMethod method) {
         this(null, method);
-    }
-
-    @Override
-    public String toString() {
-        StringBuilder buf = new StringBuilder(getClass().getSimpleName() + ":" + graphId);
-        String sep = "{";
-        if (name != null) {
-            buf.append(sep);
-            buf.append(name);
-            sep = ", ";
-        }
-        if (method != null) {
-            buf.append(sep);
-            buf.append(method);
-            sep = ", ";
-        }
-
-        if (!sep.equals("{")) {
-            buf.append("}");
-        }
-        return buf.toString();
     }
 
     public BeginNode start() {
