@@ -28,7 +28,6 @@ import com.oracle.max.cri.ci.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.alloc.util.*;
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.cfg.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.lir.LIRInstruction.ValueProcedure;
 
@@ -51,7 +50,7 @@ public abstract class AssignRegisters {
 
         assert trace("==== start assign registers ====");
         for (int i = lir.linearScanOrder().size() - 1; i >= 0; i--) {
-            Block block = lir.linearScanOrder().get(i);
+            LIRBlock block = lir.linearScanOrder().get(i);
             assert trace("start block %s", block);
             assert block.phis == null : "Register assignment must run after phi functions have been replaced by moves";
 
@@ -61,8 +60,8 @@ public abstract class AssignRegisters {
             // Put all values live at the end of the block into the reference map.
             locationsForBlockEnd(block).forEachLocation(setReferenceProc);
 
-            for (int j = block.lir.size() - 1; j >= 0; j--) {
-                LIRInstruction op = block.lir.get(j);
+            for (int j = block.lir().size() - 1; j >= 0; j--) {
+                LIRInstruction op = block.lir().get(j);
                 assert trace("  op %d %s", op.id(), op);
 
                 op.forEachOutput(defProc);
@@ -121,7 +120,7 @@ public abstract class AssignRegisters {
         return value;
     }
 
-    protected abstract LocationMap locationsForBlockEnd(Block block);
+    protected abstract LocationMap locationsForBlockEnd(LIRBlock block);
 
     private static boolean trace(String format, Object...args) {
         if (GraalOptions.TraceRegisterAllocation) {

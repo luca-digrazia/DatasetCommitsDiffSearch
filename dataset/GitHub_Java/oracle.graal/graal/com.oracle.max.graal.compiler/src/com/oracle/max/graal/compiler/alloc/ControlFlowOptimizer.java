@@ -24,10 +24,10 @@ package com.oracle.max.graal.compiler.alloc;
 
 import java.util.*;
 
-import com.oracle.max.graal.compiler.cfg.*;
+import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.lir.*;
+import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.oracle.max.graal.debug.*;
 
 /**
  * This class performs basic optimizations on the control flow graph after LIR generation.
@@ -38,9 +38,9 @@ final class ControlFlowOptimizer {
      * Performs control flow optimizations on the given LIR graph.
      * @param ir the LIR graph that should be optimized
      */
-    public static void optimize(LIR ir) {
-        ControlFlowOptimizer optimizer = new ControlFlowOptimizer(ir);
-        List<Block> code = ir.codeEmittingOrder();
+    public static void optimize(LIR ir, GraalContext context) {
+        ControlFlowOptimizer optimizer = new ControlFlowOptimizer(ir, context);
+        List<LIRBlock> code = ir.codeEmittingOrder();
         //optimizer.reorderShortLoops(code);
         optimizer.deleteEmptyBlocks(code);
         ControlFlowOptimizer.deleteUnnecessaryJumps(code);
@@ -48,9 +48,11 @@ final class ControlFlowOptimizer {
     }
 
     private final LIR ir;
+    private final GraalContext context;
 
-    private ControlFlowOptimizer(LIR ir) {
+    private ControlFlowOptimizer(LIR ir, GraalContext context) {
         this.ir = ir;
+        this.context = context;
     }
 /*
     private void reorderShortLoop(List<LIRBlock> code, LIRBlock headerBlock, int headerIdx) {
@@ -90,49 +92,38 @@ final class ControlFlowOptimizer {
 
     // only blocks with exactly one successor can be deleted. Such blocks
     // must always end with an unconditional branch to its successor
-    private boolean canDeleteBlock(Block block) {
+    private boolean canDeleteBlock(LIRBlock block) {
         if (block.numberOfSux() != 1 ||
-            block == ir.cfg.getStartBlock() ||
+            block == ir.startBlock() ||
             block.suxAt(0) == block) {
             return false;
         }
 
-        List<LIRInstruction> instructions = block.lir;
+        List<LIRInstruction> instructions = block.lir();
 
         assert instructions.size() >= 2 : "block must have label and branch";
         assert instructions.get(0) instanceof StandardOp.LabelOp : "first instruction must always be a label";
         assert instructions.get(instructions.size() - 1) instanceof StandardOp.JumpOp : "last instruction must always be a branch";
-        assert ((StandardOp.JumpOp) instructions.get(instructions.size() - 1)).destination().label() == ((StandardOp.LabelOp) block.suxAt(0).lir.get(0)).getLabel() : "branch target must be the successor";
+        assert ((StandardOp.JumpOp) instructions.get(instructions.size() - 1)).destination().label() == block.suxAt(0).label() : "branch target must be the successor";
 
         // block must have exactly one successor
 
         return instructions.size() == 2 && instructions.get(instructions.size() - 1).info == null;
     }
 
-    private void deleteEmptyBlocks(List<Block> code) {
+    private void deleteEmptyBlocks(List<LIRBlock> code) {
         int oldPos = 0;
         int newPos = 0;
         int numBlocks = code.size();
 
         assert verify(code);
         while (oldPos < numBlocks) {
-            Block block = code.get(oldPos);
+            LIRBlock block = code.get(oldPos);
 
             if (canDeleteBlock(block)) {
                 // adjust successor and predecessor lists
-                Block other = block.suxAt(0);
-                for (Block pred : block.getPredecessors()) {
-                    Util.replaceAllInList(block, other, pred.getSuccessors());
-                }
-                for (int i = 0; i < other.getPredecessors().size(); i++) {
-                    if (other.getPredecessors().get(i) == block) {
-                        other.getPredecessors().remove(i);
-                        other.getPredecessors().addAll(i, block.getPredecessors());
-                    }
-                }
-                block.getSuccessors().clear();
-                block.getPredecessors().clear();
-                Debug.metric("BlocksDeleted").increment();
+                block.replaceWith(block.suxAt(0));
+                context.metrics.BlocksDeleted++;
             } else {
                 // adjust position of this block in the block list if blocks before
                 // have been deleted
@@ -149,18 +140,18 @@ final class ControlFlowOptimizer {
         assert verify(code);
     }
 
-    private static void deleteUnnecessaryJumps(List<Block> code) {
+    private static void deleteUnnecessaryJumps(List<LIRBlock> code) {
         // skip the last block because there a branch is always necessary
         for (int i = code.size() - 2; i >= 0; i--) {
-            Block block = code.get(i);
-            List<LIRInstruction> instructions = block.lir;
+            LIRBlock block = code.get(i);
+            List<LIRInstruction> instructions = block.lir();
 
             LIRInstruction lastOp = instructions.get(instructions.size() - 1);
             if (lastOp instanceof StandardOp.JumpOp) {
                 StandardOp.JumpOp lastJump = (StandardOp.JumpOp) lastOp;
 
                 if (lastOp.info == null) {
-                    if (lastJump.destination().label() == ((StandardOp.LabelOp) code.get(i + 1).lir.get(0)).getLabel()) {
+                    if (lastJump.destination().label() == code.get(i + 1).label()) {
                         // delete last branch instruction
                         Util.truncate(instructions, instructions.size() - 1);
 
@@ -169,7 +160,7 @@ final class ControlFlowOptimizer {
                         if (prevOp instanceof StandardOp.BranchOp) {
                             StandardOp.BranchOp prevBranch = (StandardOp.BranchOp) prevOp;
 
-                            if (prevBranch.destination().label() == ((StandardOp.LabelOp) code.get(i + 1).lir.get(0)).getLabel() && prevOp.info == null) {
+                            if (prevBranch.destination().label() == code.get(i + 1).label && prevOp.info == null) {
                                 // eliminate a conditional branch to the immediate successor
                                 prevBranch.negate(lastJump.destination());
                                 Util.truncate(instructions, instructions.size() - 1);
@@ -223,8 +214,8 @@ final class ControlFlowOptimizer {
     }
 */
 
-    private static boolean verify(List<Block> code) {
-        for (Block block : code) {
+    private static boolean verify(List<LIRBlock> code) {
+        for (LIRBlock block : code) {
             for (Block sux : block.getSuccessors()) {
                 assert code.contains(sux) : "missing successor from: " + block + "to: " + sux;
             }

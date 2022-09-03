@@ -24,12 +24,14 @@ package com.oracle.max.graal.compiler.util;
 
 import java.lang.reflect.*;
 import java.util.*;
+import java.util.concurrent.*;
 
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.cri.*;
+import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.DeoptimizeNode.DeoptAction;
@@ -108,19 +110,13 @@ public class InliningUtil {
         }
 
         @Override
-        public Node inline(StructuredGraph compilerGraph, GraalRuntime runtime, InliningCallback callback) {
-            StructuredGraph graph = null; // TODO: Solve graph caching differently! GraphBuilderPhase.cachedGraphs.get(concrete);
-//            if (graph != null) {
-//                if (GraalOptions.TraceInlining) {
-//                    TTY.println("Reusing graph for %s", methodName(concrete, invoke));
-//                }
-//            } else {
-                if (GraalOptions.TraceInlining) {
-                    TTY.println("Building graph for %s, locals: %d, stack: %d", methodName(concrete, invoke), concrete.maxLocals(), concrete.maxStackSize());
+        public Node inline(StructuredGraph compilerGraph, GraalRuntime runtime, final InliningCallback callback) {
+            StructuredGraph graph = Debug.scope("Inlining", concrete, new Callable<StructuredGraph>() {
+                @Override
+                public StructuredGraph call() throws Exception {
+                    return callback.buildGraph(concrete);
                 }
-                graph = callback.buildGraph(concrete);
-//            }
-
+            });
             return InliningUtil.inline(invoke, graph, true);
         }
 
@@ -409,18 +405,7 @@ public class InliningUtil {
         } else {
             if (unwindNode != null) {
                 UnwindNode unwindDuplicate = (UnwindNode) duplicates.get(unwindNode);
-                DeoptimizeNode deoptimizeNode = new DeoptimizeNode(DeoptAction.InvalidateRecompile);
-                unwindDuplicate.replaceAndDelete(graph.add(deoptimizeNode));
-                // move the deopt upwards if there is a monitor exit that tries to use the "after exception" frame state
-                // (because there is no "after exception" frame state!)
-                if (deoptimizeNode.predecessor() instanceof MonitorExitNode) {
-                    MonitorExitNode monitorExit = (MonitorExitNode) deoptimizeNode.predecessor();
-                    if (monitorExit.stateAfter() != null && monitorExit.stateAfter().bci == FrameState.AFTER_EXCEPTION_BCI) {
-                        FrameState monitorFrameState = monitorExit.stateAfter();
-                        graph.removeFixed(monitorExit);
-                        monitorFrameState.safeDelete();
-                    }
-                }
+                unwindDuplicate.replaceAndDelete(graph.add(new DeoptimizeNode(DeoptAction.InvalidateRecompile)));
             }
         }
 
@@ -443,12 +428,8 @@ public class InliningUtil {
                 } else if (frameState.bci == FrameState.AFTER_BCI) {
                     frameState.replaceAndDelete(stateAfter);
                 } else if (frameState.bci == FrameState.AFTER_EXCEPTION_BCI) {
-                    if (frameState.isAlive()) {
-                        assert stateAtExceptionEdge != null;
-                        frameState.replaceAndDelete(stateAtExceptionEdge);
-                    } else {
-                        assert stateAtExceptionEdge == null;
-                    }
+                    assert stateAtExceptionEdge != null;
+                    frameState.replaceAndDelete(stateAtExceptionEdge);
                 }
             }
         }
@@ -471,15 +452,7 @@ public class InliningUtil {
             returnDuplicate.clearInputs();
             Node n = invoke.next();
             invoke.setNext(null);
-            if (n instanceof BeginNode) {
-                BeginNode begin = (BeginNode) n;
-                FixedNode next = begin.next();
-                begin.setNext(null);
-                returnDuplicate.replaceAndDelete(next);
-                begin.safeDelete();
-            } else {
-                returnDuplicate.replaceAndDelete(n);
-            }
+            returnDuplicate.replaceAndDelete(n);
         }
 
         invoke.node().clearInputs();

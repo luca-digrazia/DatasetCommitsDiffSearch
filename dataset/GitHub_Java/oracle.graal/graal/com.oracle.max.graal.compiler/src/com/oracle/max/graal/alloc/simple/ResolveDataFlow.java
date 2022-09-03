@@ -30,7 +30,6 @@ import com.oracle.max.cri.ci.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.alloc.util.*;
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.cfg.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.lir.LIRInstruction.ValueProcedure;
 import com.oracle.max.graal.compiler.lir.LIRPhiMapping.PhiValueProcedure;
@@ -47,7 +46,7 @@ public abstract class ResolveDataFlow {
         this.dataFlow = dataFlow;
     }
 
-    private Block curToBlock;
+    private LIRBlock curToBlock;
     private LocationMap curFromLocations;
 
     public void execute() {
@@ -55,10 +54,10 @@ public abstract class ResolveDataFlow {
         PhiValueProcedure phiMappingProc = new PhiValueProcedure() { @Override public CiValue doValue(CiValue input, CiValue output) { return phiMapping(input, output); } };
 
         assert trace("==== start resolve data flow ====");
-        for (Block toBlock : lir.linearScanOrder()) {
+        for (LIRBlock toBlock : lir.linearScanOrder()) {
             curToBlock = toBlock;
 
-            for (Block fromBlock : toBlock.getPredecessors()) {
+            for (LIRBlock fromBlock : toBlock.getLIRPredecessors()) {
                 assert trace("start edge %s -> %s", fromBlock, toBlock);
                 findInsertPos(fromBlock, toBlock);
 
@@ -99,18 +98,18 @@ public abstract class ResolveDataFlow {
         return input;
     }
 
-    private void findInsertPos(Block fromBlock, Block toBlock) {
+    private void findInsertPos(LIRBlock fromBlock, LIRBlock toBlock) {
         assert fromBlock.getSuccessors().contains(toBlock) && toBlock.getPredecessors().contains(fromBlock);
 
         if (fromBlock.numberOfSux() == 1) {
-            List<LIRInstruction> instructions = fromBlock.lir;
+            List<LIRInstruction> instructions = fromBlock.lir();
             LIRInstruction instr = instructions.get(instructions.size() - 1);
             assert instr instanceof StandardOp.JumpOp : "block does not end with an unconditional jump";
             moveResolver.init(instructions, instructions.size() - 1);
             assert trace("  insert at end of %s before %d", fromBlock, instructions.size() - 1);
 
         } else if (toBlock.numberOfPreds() == 1) {
-            moveResolver.init(toBlock.lir, 1);
+            moveResolver.init(toBlock.lir(), 1);
             assert trace("  insert at beginning of %s before %d", toBlock, 1);
 
         } else {
@@ -118,8 +117,8 @@ public abstract class ResolveDataFlow {
         }
     }
 
-    protected abstract LocationMap locationsForBlockBegin(Block block);
-    protected abstract LocationMap locationsForBlockEnd(Block block);
+    protected abstract LocationMap locationsForBlockBegin(LIRBlock block);
+    protected abstract LocationMap locationsForBlockEnd(LIRBlock block);
 
 
     private static boolean trace(String format, Object...args) {

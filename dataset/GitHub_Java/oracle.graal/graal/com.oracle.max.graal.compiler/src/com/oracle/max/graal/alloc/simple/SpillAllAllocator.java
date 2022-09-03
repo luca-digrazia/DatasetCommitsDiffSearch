@@ -32,22 +32,23 @@ import com.oracle.max.cri.ci.CiRegister.RegisterFlag;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.alloc.util.*;
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.cfg.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.lir.LIRInstruction.OperandFlag;
 import com.oracle.max.graal.compiler.lir.LIRInstruction.OperandMode;
 import com.oracle.max.graal.compiler.lir.LIRInstruction.ValueProcedure;
 import com.oracle.max.graal.compiler.lir.LIRPhiMapping.PhiValueProcedure;
+import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.oracle.max.graal.debug.*;
 
 public class SpillAllAllocator {
+    private final GraalContext context;
     private final LIR lir;
     private final FrameMap frameMap;
 
     private final DataFlowAnalysis dataFlow;
 
-    public SpillAllAllocator(LIR lir, FrameMap frameMap) {
+    public SpillAllAllocator(GraalContext context, LIR lir, FrameMap frameMap) {
+        this.context = context;
         this.lir = lir;
         this.frameMap = frameMap;
 
@@ -80,13 +81,13 @@ public class SpillAllAllocator {
         }
 
         @Override
-        protected LocationMap locationsForBlockBegin(Block block) {
-            assert block.numberOfPreds() > 0 && block.getDominator() != null;
-            return locationsFor(block.getDominator());
+        protected LocationMap locationsForBlockBegin(LIRBlock block) {
+            assert block.numberOfPreds() > 0 && block.dominator() != null;
+            return locationsFor(block.dominator());
         }
 
         @Override
-        protected LocationMap locationsForBlockEnd(Block block) {
+        protected LocationMap locationsForBlockEnd(LIRBlock block) {
             return locationsFor(block);
         }
     }
@@ -97,7 +98,7 @@ public class SpillAllAllocator {
         }
 
         @Override
-        protected LocationMap locationsForBlockEnd(Block block) {
+        protected LocationMap locationsForBlockEnd(LIRBlock block) {
             return locationsFor(block);
         }
     }
@@ -115,10 +116,10 @@ public class SpillAllAllocator {
     private final LocationMap[] blockLocations;
 
     private LocationMap locationsFor(Block block) {
-        return blockLocations[block.getId()];
+        return blockLocations[block.blockID()];
     }
     private void setLocationsFor(Block block, LocationMap locations) {
-        blockLocations[block.getId()] = locations;
+        blockLocations[block.blockID()] = locations;
     }
 
     private MoveResolver moveResolver;
@@ -133,23 +134,23 @@ public class SpillAllAllocator {
         assert LIRVerifier.verify(true, lir, frameMap);
 
         dataFlow.execute();
-        IntervalPrinter.printBeforeAllocation("Before register allocation", lir, frameMap.registerConfig, dataFlow);
+        IntervalPrinter.printBeforeAllocation("Before register allocation", context, lir, frameMap.registerConfig, dataFlow);
 
         allocate();
 
-        IntervalPrinter.printAfterAllocation("After spill all allocation", lir, frameMap.registerConfig, dataFlow, blockLocations);
+        IntervalPrinter.printAfterAllocation("After spill all allocation", context, lir, frameMap.registerConfig, dataFlow, blockLocations);
 
         ResolveDataFlow resolveDataFlow = new ResolveDataFlowImpl(lir, moveResolver, dataFlow);
         resolveDataFlow.execute();
         frameMap.finish();
 
-        IntervalPrinter.printAfterAllocation("After resolve data flow", lir, frameMap.registerConfig, dataFlow, blockLocations);
+        IntervalPrinter.printAfterAllocation("After resolve data flow", context, lir, frameMap.registerConfig, dataFlow, blockLocations);
         assert RegisterVerifier.verify(lir, frameMap);
 
         AssignRegisters assignRegisters = new AssignRegistersImpl(lir, frameMap);
         assignRegisters.execute();
 
-        Debug.dump(lir, "After register asignment");
+        context.observable.fireCompilationEvent("After register asignment", lir);
         assert LIRVerifier.verify(false, lir, frameMap);
     }
 
@@ -168,12 +169,12 @@ public class SpillAllAllocator {
         curInRegisterState = new Object[maxRegisterNum()];
         curOutRegisterState = new Object[maxRegisterNum()];
         curRegisterLocations = new LocationMap(lir.numVariables());
-        for (Block block : lir.linearScanOrder()) {
-            assert trace("start block %s %s", block, block.getLoop());
+        for (LIRBlock block : lir.linearScanOrder()) {
+            assert trace("start block %s  loop %d depth %d", block, block.loopIndex(), block.loopDepth());
             assert checkEmpty(curOutRegisterState);
 
-            if (block.getDominator() != null) {
-                LocationMap dominatorState = locationsFor(block.getDominator());
+            if (block.dominator() != null) {
+                LocationMap dominatorState = locationsFor(block.dominator());
                 curStackLocations = new LocationMap(dominatorState);
                 // Clear out all variables that are not live at the begin of this block
                 curLiveIn = dataFlow.liveIn(block);
@@ -189,8 +190,8 @@ public class SpillAllAllocator {
                 block.phis.forEachOutput(defSlotProc);
             }
 
-            for (int opIdx = 0; opIdx < block.lir.size(); opIdx++) {
-                LIRInstruction op = block.lir.get(opIdx);
+            for (int opIdx = 0; opIdx < block.lir().size(); opIdx++) {
+                LIRInstruction op = block.lir().get(opIdx);
                 curInstruction = op;
                 assert trace("  op %d %s", op.id(), op);
 
@@ -202,7 +203,7 @@ public class SpillAllAllocator {
                 op.forEachTemp(blockProc);
                 op.forEachOutput(blockProc);
 
-                moveResolver.init(block.lir, opIdx);
+                moveResolver.init(block.lir(), opIdx);
                 // Process Alive before Input because they are more restricted and the same variable can be Alive and Input.
                 op.forEachAlive(loadProc);
                 op.forEachInput(loadProc);
@@ -212,7 +213,7 @@ public class SpillAllAllocator {
                 dataFlow.forEachKilled(op, false, killBeginProc);
                 assert !op.hasCall() || checkNoCallerSavedRegister() : "caller saved register in use accross call site";
 
-                moveResolver.init(block.lir, opIdx + 1);
+                moveResolver.init(block.lir(), opIdx + 1);
                 op.forEachTemp(spillProc);
                 op.forEachOutput(spillProc);
                 moveResolver.resolve();
@@ -225,7 +226,7 @@ public class SpillAllAllocator {
             }
             assert checkEmpty(curOutRegisterState);
 
-            for (Block sux : block.getSuccessors()) {
+            for (LIRBlock sux : block.getLIRSuccessors()) {
                 if (sux.phis != null) {
                     assert trace("  phis of successor %s", sux);
                     sux.phis.forEachInput(block, useSlotProc);
@@ -434,7 +435,7 @@ public class SpillAllAllocator {
         return loc;
     }
 
-    private boolean checkInputState(final Block block) {
+    private boolean checkInputState(final LIRBlock block) {
         final BitSet liveState = new BitSet();
         curStackLocations.forEachLocation(new ValueProcedure() {
             @Override

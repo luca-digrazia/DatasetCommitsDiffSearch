@@ -37,10 +37,6 @@ public class Debug {
         DebugScope.initialize();
     }
 
-    public static boolean isEnabled() {
-        return ENABLED;
-    }
-
     public static void sandbox(String name, Runnable runnable) {
         if (ENABLED) {
             DebugScope.getInstance().scope(name, runnable, null, true, new Object[0]);
@@ -130,7 +126,7 @@ public class Debug {
         }
     }
 
-    public static DebugConfig fixedConfig(final boolean isLogEnabled, final boolean isDumpEnabled, final boolean isMeterEnabled, final boolean isTimerEnabled) {
+    public static DebugConfig fixedConfix(final boolean isLogEnabled, final boolean isDumpEnabled, final boolean isMeterEnabled, final boolean isTimerEnabled) {
         return new DebugConfig() {
 
             @Override

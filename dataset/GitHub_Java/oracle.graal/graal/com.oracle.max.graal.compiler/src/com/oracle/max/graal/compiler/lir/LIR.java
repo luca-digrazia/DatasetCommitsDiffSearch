@@ -28,7 +28,6 @@ import com.oracle.max.cri.ci.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.asm.*;
-import com.oracle.max.graal.compiler.cfg.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
 
@@ -38,23 +37,22 @@ import com.oracle.max.graal.graph.*;
  */
 public class LIR {
 
-    public final ControlFlowGraph cfg;
-
     /**
-     * The nodes for the blocks.
-     * TODO: This should go away, we want all nodes connected with a next-pointer.
+     * The start block of this LIR.
      */
-    private final BlockMap<List<Node>> nodesFor;
+    private final LIRBlock startBlock;
 
     /**
      * The linear-scan ordered list of blocks.
      */
-    private final List<Block> linearScanOrder;
+    private final List<LIRBlock> linearScanOrder;
 
     /**
      * The order in which the code is emitted.
      */
-    private final List<Block> codeEmittingOrder;
+    private final List<LIRBlock> codeEmittingOrder;
+
+    private final NodeMap<LIRBlock> valueToBlock;
 
 
     public final List<SlowPath> slowPaths;
@@ -67,6 +65,8 @@ public class LIR {
     public SlowPath methodEndMarker;
 
     private int numVariables;
+
+    private final int loopCount;
 
     public SpillMoveFactory spillMoveFactory;
 
@@ -81,33 +81,42 @@ public class LIR {
 
     /**
      * Creates a new LIR instance for the specified compilation.
-     * @param numLoops number of loops
+     * @param loopCount number of loops
      * @param compilation the compilation
      */
-    public LIR(ControlFlowGraph cfg, BlockMap<List<Node>> nodesFor, List<Block> linearScanOrder, List<Block> codeEmittingOrder) {
-        this.cfg = cfg;
-        this.nodesFor = nodesFor;
+    public LIR(LIRBlock startBlock, List<LIRBlock> linearScanOrder, List<LIRBlock> codeEmittingOrder, NodeMap<LIRBlock> valueToBlock, int loopCount) {
         this.codeEmittingOrder = codeEmittingOrder;
         this.linearScanOrder = linearScanOrder;
+        this.startBlock = startBlock;
+        this.valueToBlock = valueToBlock;
+        this.loopCount = loopCount;
 
         slowPaths = new ArrayList<>();
         deoptimizationStubs = new ArrayList<>();
-    }
-
-    public List<Node> nodesFor(Block block) {
-        return nodesFor.get(block);
     }
 
     /**
      * Gets the linear scan ordering of blocks as a list.
      * @return the blocks in linear scan order
      */
-    public List<Block> linearScanOrder() {
+    public List<LIRBlock> linearScanOrder() {
         return linearScanOrder;
     }
 
-    public List<Block> codeEmittingOrder() {
+    public List<LIRBlock> codeEmittingOrder() {
         return codeEmittingOrder;
+    }
+
+    public LIRBlock startBlock() {
+        return startBlock;
+    }
+
+    public NodeMap<LIRBlock> valueToBlock() {
+        return valueToBlock;
+    }
+
+    public int loopCount() {
+        return loopCount;
     }
 
     public int numVariables() {
@@ -123,7 +132,7 @@ public class LIR {
             printLIR(codeEmittingOrder());
         }
 
-        for (Block b : codeEmittingOrder()) {
+        for (LIRBlock b : codeEmittingOrder()) {
             emitBlock(tasm, b);
         }
 
@@ -139,16 +148,16 @@ public class LIR {
         emitSlowPath(tasm, methodEndMarker);
     }
 
-    private void emitBlock(TargetMethodAssembler tasm, Block block) {
+    private void emitBlock(TargetMethodAssembler tasm, LIRBlock block) {
         if (GraalOptions.PrintLIRWithAssembly) {
-            TTY.println(block.toString());
+            block.printWithoutPhis(TTY.out());
         }
 
         if (GraalOptions.CommentedAssembly) {
-            tasm.blockComment(String.format("block B%d %s", block.getId(), block.getLoop()));
+            tasm.blockComment(String.format("block B%d loop %d depth %d", block.blockID(), block.loopIndex(), block.loopDepth()));
         }
 
-        for (LIRInstruction op : block.lir) {
+        for (LIRInstruction op : block.lir()) {
             if (GraalOptions.CommentedAssembly) {
                 tasm.blockComment(String.format("%d %s", op.id(), op));
             }
@@ -204,9 +213,9 @@ public class LIR {
     }
 
 
-    public static void printBlock(Block x) {
+    public static void printBlock(LIRBlock x) {
         // print block id
-        TTY.print("B%d ", x.getId());
+        TTY.print("B%d ", x.blockID());
 
         // print flags
         if (x.isLoopHeader()) {
@@ -223,31 +232,31 @@ public class LIR {
         if (x.numberOfPreds() > 0) {
             TTY.print("preds: ");
             for (int i = 0; i < x.numberOfPreds(); i++) {
-                TTY.print("B%d ", x.predAt(i).getId());
+                TTY.print("B%d ", x.predAt(i).blockID());
             }
         }
 
         if (x.numberOfSux() > 0) {
             TTY.print("sux: ");
             for (int i = 0; i < x.numberOfSux(); i++) {
-                TTY.print("B%d ", x.suxAt(i).getId());
+                TTY.print("B%d ", x.suxAt(i).blockID());
             }
         }
 
         TTY.println();
     }
 
-    public static void printLIR(List<Block> blocks) {
+    public static void printLIR(List<LIRBlock> blocks) {
         if (TTY.isSuppressed()) {
             return;
         }
         TTY.println("LIR:");
         int i;
         for (i = 0; i < blocks.size(); i++) {
-            Block bb = blocks.get(i);
+            LIRBlock bb = blocks.get(i);
             printBlock(bb);
             TTY.println("__id_Instruction___________________________________________");
-            for (LIRInstruction op : bb.lir) {
+            for (LIRInstruction op : bb.lir()) {
                 TTY.println(op.toStringWithIdPrefix());
                 TTY.println();
             }

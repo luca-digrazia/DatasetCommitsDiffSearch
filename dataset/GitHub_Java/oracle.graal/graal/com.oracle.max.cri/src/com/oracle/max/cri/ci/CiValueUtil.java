@@ -47,6 +47,11 @@ public class CiValueUtil {
         return value instanceof CiConstant;
     }
 
+    public static CiConstant asConstant(CiValue value) {
+        assert value != null;
+        return (CiConstant) value;
+    }
+
 
     public static boolean isStackSlot(CiValue value) {
         assert value != null;
@@ -56,6 +61,16 @@ public class CiValueUtil {
     public static CiStackSlot asStackSlot(CiValue value) {
         assert value != null;
         return (CiStackSlot) value;
+    }
+
+    public static boolean isAddress(CiValue value) {
+        assert value != null;
+        return value instanceof CiAddress;
+    }
+
+    public static CiAddress asAddress(CiValue value) {
+        assert value != null;
+        return (CiAddress) value;
     }
 
 
@@ -92,5 +107,22 @@ public class CiValueUtil {
     public static CiRegister asDoubleReg(CiValue value) {
         assert value.kind == CiKind.Double;
         return asRegister(value);
+    }
+
+
+    public static boolean sameRegister(CiValue v1, CiValue v2) {
+        return isRegister(v1) && isRegister(v2) && asRegister(v1) == asRegister(v2);
+    }
+
+    public static boolean sameRegister(CiValue v1, CiValue v2, CiValue v3) {
+        return sameRegister(v1, v2) && sameRegister(v1, v3);
+    }
+
+    public static boolean differentRegisters(CiValue v1, CiValue v2) {
+        return !isRegister(v1) || !isRegister(v2) || asRegister(v1) != asRegister(v2);
+    }
+
+    public static boolean differentRegisters(CiValue v1, CiValue v2, CiValue v3) {
+        return differentRegisters(v1, v2) && differentRegisters(v1, v3) && differentRegisters(v2, v3);
     }
 }

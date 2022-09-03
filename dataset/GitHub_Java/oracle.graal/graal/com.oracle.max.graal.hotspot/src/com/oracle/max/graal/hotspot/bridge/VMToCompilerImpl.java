@@ -224,7 +224,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
                                                 (result != null ? result.targetCodeSize() : -1)));
                             }
                         }
-                        compiler.getRuntime().installMethod(method, result);
+                        HotSpotTargetMethod.installMethod(compiler, method, result, true);
                     } catch (CiBailout bailout) {
                         if (GraalOptions.ExitVMOnBailout) {
                             bailout.printStackTrace(TTY.cachedOut);

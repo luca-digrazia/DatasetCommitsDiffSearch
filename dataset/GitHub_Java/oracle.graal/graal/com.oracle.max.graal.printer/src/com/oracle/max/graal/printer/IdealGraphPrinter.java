@@ -28,37 +28,67 @@ import java.util.Map.Entry;
 
 import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.compiler.schedule.*;
+import com.oracle.max.graal.compiler.util.*;
+import com.oracle.max.graal.compiler.util.LoopUtil.Loop;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.graph.Node.Verbosity;
 import com.oracle.max.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.max.graal.graph.NodeClass.Position;
 import com.oracle.max.graal.java.*;
 import com.oracle.max.graal.nodes.*;
+import com.oracle.max.graal.nodes.loop.*;
+import com.oracle.max.graal.printer.BasicIdealGraphPrinter.*;
 
 /**
  * Generates a representation of {@link Graph Graphs} that can be visualized and inspected with the <a
  * href="http://kenai.com/projects/igv">Ideal Graph Visualizer</a>.
  */
-class IdealGraphPrinter extends BasicIdealGraphPrinter {
+class IdealGraphPrinter {
+
+    private final BasicIdealGraphPrinter printer;
+    private final HashSet<Class<?>> omittedClasses = new HashSet<>();
+    private final Set<Node> noBlockNodes = new HashSet<>();
+
     /**
      * Creates a new {@link IdealGraphPrinter} that writes to the specified output stream.
      */
     public IdealGraphPrinter(OutputStream stream) {
-        super(stream);
+        this.printer = new BasicIdealGraphPrinter(stream);
+    }
+
+    /**
+     * Adds a node class that is omitted in the output.
+     */
+    public void addOmittedClass(Class<?> clazz) {
+        omittedClasses.add(clazz);
+    }
+
+    /**
+     * Flushes any buffered output.
+     */
+    public void flush() {
+        printer.flush();
+    }
+
+    /**
+     * Starts a new graph document.
+     */
+    public void begin() {
+        printer.begin();
     }
 
     /**
      * Starts a new group of graphs with the given name, short name and method byte code index (BCI) as properties.
      */
     public void beginGroup(String name, String shortName, RiResolvedMethod method, int bci, String origin) {
-        beginGroup();
-        beginProperties();
-        printProperty("name", name);
-        printProperty("origin", origin);
-        endProperties();
-        beginMethod(name, shortName, bci);
+        printer.beginGroup();
+        printer.beginProperties();
+        printer.printProperty("name", name);
+        printer.printProperty("origin", origin);
+        printer.endProperties();
+        printer.beginMethod(name, shortName, bci);
         if (method != null) {
-            beginBytecodes();
+            printer.beginBytecodes();
             BytecodeStream bytecodes = new BytecodeStream(method.code());
             while (bytecodes.currentBC() != Bytecodes.END) {
                 int startBCI = bytecodes.currentBCI();
@@ -70,24 +100,38 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter {
                         extra[i] = bytecodes.readUByte(startBCI + 1 + i);
                     }
                 }
-                printBytecode(startBCI, mnemonic, extra);
+                printer.printBytecode(startBCI, mnemonic, extra);
                 bytecodes.next();
             }
-            endBytecodes();
+            printer.endBytecodes();
         }
-        endMethod();
+        printer.endMethod();
     }
 
-    public void print(Graph graph, String title) {
-        print(graph, title, null);
+    /**
+     * Ends the current group.
+     */
+    public void endGroup() {
+        printer.endGroup();
+    }
+
+    /**
+     * Finishes the graph document and flushes the output stream.
+     */
+    public void end() {
+        printer.end();
+    }
+
+    public void print(Graph graph, String title, boolean shortNames) {
+        print(graph, title, shortNames, null);
     }
 
     /**
      * Prints an entire {@link Graph} with the specified title, optionally using short names for nodes.
      */
-    public void print(Graph graph, String title, IdentifyBlocksPhase predefinedSchedule) {
-        beginGraph(title);
-        Set<Node> noBlockNodes = new HashSet<>();
+    public void print(Graph graph, String title, boolean shortNames, IdentifyBlocksPhase predefinedSchedule) {
+        printer.beginGraph(title);
+        noBlockNodes.clear();
         IdentifyBlocksPhase schedule = predefinedSchedule;
         if (schedule == null) {
             try {
@@ -97,58 +141,102 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter {
                 // nothing to do here...
             }
         }
-
-        beginNodes();
-        List<Edge> edges = printNodes(graph, schedule == null ? null : schedule.getNodeToBlock(), noBlockNodes);
-        endNodes();
-
-        beginEdges();
-        for (Edge edge : edges) {
-            printEdge(edge);
+        List<Loop> loops = null;
+        try {
+            loops = LoopUtil.computeLoops((StructuredGraph) graph);
+            // loop.nodes() does some more calculations which may fail, so execute this here as well (result is cached)
+            if (loops != null) {
+                for (Loop loop : loops) {
+                    loop.nodes();
+                }
+            }
+        } catch (Throwable t) {
+            t.printStackTrace();
+            loops = null;
         }
-        endEdges();
+
+        printer.beginNodes();
+        List<Edge> edges = printNodes(graph, shortNames, schedule == null ? null : schedule.getNodeToBlock(), loops);
+        printer.endNodes();
+
+        printer.beginEdges();
+        for (Edge edge : edges) {
+            printer.printEdge(edge);
+        }
+        printer.endEdges();
 
         if (schedule != null) {
-            beginControlFlow();
+            printer.beginControlFlow();
             for (Block block : schedule.getBlocks()) {
                 printBlock(graph, block, schedule.getNodeToBlock());
             }
-            printNoBlock(noBlockNodes);
-            endControlFlow();
+            printNoBlock();
+            printer.endControlFlow();
         }
 
-        endGraph();
+        printer.endGraph();
         flush();
     }
 
-    private List<Edge> printNodes(Graph graph, NodeMap<Block> nodeToBlock, Set<Node> noBlockNodes) {
+    private List<Edge> printNodes(Graph graph, boolean shortNames, NodeMap<Block> nodeToBlock, List<Loop> loops) {
         ArrayList<Edge> edges = new ArrayList<>();
+        NodeBitMap loopExits = graph.createNodeBitMap();
+        if (loops != null) {
+            for (Loop loop : loops) {
+                loopExits.setUnion(loop.exits());
+            }
+        }
 
         NodeMap<Set<Entry<String, Integer>>> colors = graph.createNodeMap();
         NodeMap<Set<Entry<String, String>>> colorsToString = graph.createNodeMap();
         NodeMap<Set<String>> bits = graph.createNodeMap();
 
         for (Node node : graph.getNodes()) {
+            if (omittedClasses.contains(node.getClass())) {
+                continue;
+            }
 
-            beginNode(node.toString(Verbosity.Id));
-            beginProperties();
-            printProperty("idx", node.toString(Verbosity.Id));
+            printer.beginNode(node.toString(Verbosity.Id));
+            printer.beginProperties();
+            printer.printProperty("idx", node.toString(Verbosity.Id));
 
             Map<Object, Object> props = node.getDebugProperties();
             if (!props.containsKey("name") || props.get("name").toString().trim().length() == 0) {
-                String name = node.toString(Verbosity.Name);
-                printProperty("name", name);
+                String name;
+                if (shortNames) {
+                    name = node.toString(Verbosity.Name);
+                } else {
+                    name = node.toString();
+                }
+                printer.printProperty("name", name);
             }
-            printProperty("class", node.getClass().getSimpleName());
+            printer.printProperty("class", node.getClass().getSimpleName());
             Block block = nodeToBlock == null ? null : nodeToBlock.get(node);
             if (block != null) {
-                printProperty("block", Integer.toString(block.blockID()));
-                if (!(node instanceof PhiNode || node instanceof FrameState || node instanceof LocalNode) && !block.getInstructions().contains(node)) {
-                    printProperty("notInOwnBlock", "true");
+                printer.printProperty("block", Integer.toString(block.blockID()));
+                if (!(node instanceof PhiNode || node instanceof FrameState || node instanceof LocalNode || node instanceof InductionVariableNode) && !block.getInstructions().contains(node)) {
+                    printer.printProperty("notInOwnBlock", "true");
                 }
             } else {
-                printProperty("block", "noBlock");
+                printer.printProperty("block", "noBlock");
                 noBlockNodes.add(node);
+            }
+            if (loopExits.isMarked(node)) {
+                printer.printProperty("loopExit", "true");
+            }
+            StringBuilder sb = new StringBuilder();
+            if (loops != null) {
+                for (Loop loop : loops) {
+                    if (loop.nodes().isMarked(node)) {
+                        if (sb.length() > 0) {
+                            sb.append(", ");
+                        }
+                        sb.append(loop.loopBegin().toString(Verbosity.Id));
+                    }
+                }
+            }
+            if (sb.length() > 0) {
+                printer.printProperty("loops", sb.toString());
             }
 
             Set<Entry<String, Integer>> nodeColors = colors.get(node);
@@ -156,7 +244,7 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter {
                 for (Entry<String, Integer> color : nodeColors) {
                     String name = color.getKey();
                     Integer value = color.getValue();
-                    printProperty(name, Integer.toString(value));
+                    printer.printProperty(name, Integer.toString(value));
                 }
             }
             Set<Entry<String, String>> nodeColorStrings = colorsToString.get(node);
@@ -164,24 +252,24 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter {
                 for (Entry<String, String> color : nodeColorStrings) {
                     String name = color.getKey();
                     String value = color.getValue();
-                    printProperty(name, value);
+                    printer.printProperty(name, value);
                 }
             }
             Set<String> nodeBits = bits.get(node);
             if (nodeBits != null) {
                 for (String bit : nodeBits) {
-                    printProperty(bit, "true");
+                    printer.printProperty(bit, "true");
                 }
             }
 
             for (Entry<Object, Object> entry : props.entrySet()) {
                 String key = entry.getKey().toString();
                 String value = entry.getValue() == null ? "null" : entry.getValue().toString();
-                printProperty(key, value);
+                printer.printProperty(key, value);
             }
 
-            endProperties();
-            endNode();
+            printer.endProperties();
+            printer.endNode();
 
             // successors
             int fromIndex = 0;
@@ -189,7 +277,7 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter {
             while (succIter.hasNext()) {
                 Position position = succIter.nextPosition();
                 Node successor = node.getNodeClass().get(node, position);
-                if (successor != null) {
+                if (successor != null && !omittedClasses.contains(successor.getClass())) {
                     edges.add(new Edge(node.toString(Verbosity.Id), fromIndex, successor.toString(Verbosity.Id), 0, node.getNodeClass().getName(position)));
                 }
                 fromIndex++;
@@ -201,7 +289,7 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter {
             while (inputIter.hasNext()) {
                 Position position = inputIter.nextPosition();
                 Node input = node.getNodeClass().get(node, position);
-                if (input != null) {
+                if (input != null && !omittedClasses.contains(input.getClass())) {
                     edges.add(new Edge(input.toString(Verbosity.Id), input.successors().explicitCount(), node.toString(Verbosity.Id), toIndex, node.getNodeClass().getName(position)));
                 }
                 toIndex++;
@@ -212,15 +300,15 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter {
     }
 
     private void printBlock(Graph graph, Block block, NodeMap<Block> nodeToBlock) {
-        beginBlock(Integer.toString(block.blockID()));
-        beginSuccessors();
+        printer.beginBlock(Integer.toString(block.blockID()));
+        printer.beginSuccessors();
         for (Block sux : block.getSuccessors()) {
             if (sux != null) {
-                printSuccessor(Integer.toString(sux.blockID()));
+                printer.printSuccessor(Integer.toString(sux.blockID()));
             }
         }
-        endSuccessors();
-        beginBlockNodes();
+        printer.endSuccessors();
+        printer.beginBlockNodes();
 
         Set<Node> nodes = new HashSet<>(block.getInstructions());
 
@@ -252,26 +340,33 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter {
                     for (PhiNode phi : ((MergeNode) node).phis()) {
                         nodes.add(phi);
                     }
+                    if (node instanceof LoopBeginNode) {
+                        for (InductionVariableNode iv : ((LoopBeginNode) node).inductionVariables()) {
+                            nodes.add(iv);
+                        }
+                    }
                 }
             }
 
             for (Node node : nodes) {
-                printBlockNode(node.toString(Verbosity.Id));
+                if (!omittedClasses.contains(node.getClass())) {
+                    printer.printBlockNode(node.toString(Verbosity.Id));
+                }
             }
         }
-        endBlockNodes();
-        endBlock();
+        printer.endBlockNodes();
+        printer.endBlock();
     }
 
-    private void printNoBlock(Set<Node> noBlockNodes) {
+    private void printNoBlock() {
         if (!noBlockNodes.isEmpty()) {
-            beginBlock("noBlock");
-            beginBlockNodes();
+            printer.beginBlock("noBlock");
+            printer.beginBlockNodes();
             for (Node node : noBlockNodes) {
-                printBlockNode(node.toString(Verbosity.Id));
+                printer.printBlockNode(node.toString(Verbosity.Id));
             }
-            endBlockNodes();
-            endBlock();
+            printer.endBlockNodes();
+            printer.endBlock();
         }
     }
 

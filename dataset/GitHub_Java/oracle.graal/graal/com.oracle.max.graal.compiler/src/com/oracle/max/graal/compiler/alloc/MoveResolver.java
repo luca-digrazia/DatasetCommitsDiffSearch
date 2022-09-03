@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,21 @@
  */
 package com.oracle.max.graal.compiler.alloc;
 
+import static com.oracle.max.cri.ci.CiValueUtil.*;
+
 import java.util.*;
 
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.lir.*;
-import com.oracle.max.graal.compiler.util.*;
-import com.sun.cri.ci.*;
 
 /**
- *
- * @author Thomas Wuerthinger
  */
 final class MoveResolver {
 
     private final LinearScan allocator;
 
-    private LIRList insertList;
     private int insertIdx;
     private LIRInsertionBuffer insertionBuffer; // buffer where moves are inserted
 
@@ -69,9 +67,9 @@ final class MoveResolver {
 
         this.allocator = allocator;
         this.multipleReadsAllowed = false;
-        this.mappingFrom = new ArrayList<Interval>(8);
-        this.mappingFromOpr = new ArrayList<CiValue>(8);
-        this.mappingTo = new ArrayList<Interval>(8);
+        this.mappingFrom = new ArrayList<>(8);
+        this.mappingFromOpr = new ArrayList<>(8);
+        this.mappingTo = new ArrayList<>(8);
         this.insertIdx = -1;
         this.insertionBuffer = new LIRInsertionBuffer();
         this.registerBlocked = new int[allocator.registers.length];
@@ -90,7 +88,7 @@ final class MoveResolver {
     private boolean verifyBeforeResolve() {
         assert mappingFrom.size() == mappingFromOpr.size() : "length must be equal";
         assert mappingFrom.size() == mappingTo.size() : "length must be equal";
-        assert insertList != null && insertIdx != -1 : "insert position not set";
+        assert insertIdx != -1 : "insert position not set";
 
         int i;
         int j;
@@ -108,7 +106,7 @@ final class MoveResolver {
             }
         }
 
-        HashSet<CiValue> usedRegs = new HashSet<CiValue>();
+        HashSet<CiValue> usedRegs = new HashSet<>();
         if (!multipleReadsAllowed) {
             for (i = 0; i < mappingFrom.size(); i++) {
                 Interval interval = mappingFrom.get(i);
@@ -129,7 +127,7 @@ final class MoveResolver {
         usedRegs.clear();
         for (i = 0; i < mappingFrom.size(); i++) {
             Interval interval = mappingFrom.get(i);
-            if (interval != null && !interval.location().isRegister()) {
+            if (interval != null && !isRegister(interval.location())) {
                 usedRegs.add(interval.location());
             }
         }
@@ -144,8 +142,8 @@ final class MoveResolver {
     // mark assignedReg and assignedRegHi of the interval as blocked
     private void blockRegisters(Interval interval) {
         CiValue location = interval.location();
-        if (location.isRegister()) {
-            int reg = location.asRegister().number;
+        if (isRegister(location)) {
+            int reg = asRegister(location).number;
             assert multipleReadsAllowed || registerBlocked(reg) == 0 : "register already marked as used";
             setRegisterBlocked(reg, 1);
         }
@@ -154,8 +152,8 @@ final class MoveResolver {
     // mark assignedReg and assignedRegHi of the interval as unblocked
     private void unblockRegisters(Interval interval) {
         CiValue location = interval.location();
-        if (location.isRegister()) {
-            int reg = location.asRegister().number;
+        if (isRegister(location)) {
+            int reg = asRegister(location).number;
             assert registerBlocked(reg) > 0 : "register already marked as unused";
             setRegisterBlocked(reg, -1);
         }
@@ -169,8 +167,8 @@ final class MoveResolver {
         CiValue fromReg = from != null ? from.location() : null;
 
         CiValue reg = to.location();
-        if (reg.isRegister()) {
-            if (registerBlocked(reg.asRegister().number) > 1 || (registerBlocked(reg.asRegister().number) == 1 && reg != fromReg)) {
+        if (isRegister(reg)) {
+            if (registerBlocked(asRegister(reg).number) > 1 || (registerBlocked(asRegister(reg).number) == 1 && reg != fromReg)) {
                 return false;
             }
         }
@@ -178,52 +176,48 @@ final class MoveResolver {
         return true;
     }
 
-    private void createInsertionBuffer(LIRList list) {
+    private void createInsertionBuffer(List<LIRInstruction> list) {
         assert !insertionBuffer.initialized() : "overwriting existing buffer";
         insertionBuffer.init(list);
     }
 
     private void appendInsertionBuffer() {
         if (insertionBuffer.initialized()) {
-            insertionBuffer.lirList().append(insertionBuffer);
+            insertionBuffer.finish();
         }
         assert !insertionBuffer.initialized() : "must be uninitialized now";
 
-        insertList = null;
         insertIdx = -1;
     }
 
     private void insertMove(Interval fromInterval, Interval toInterval) {
         assert fromInterval.operand != toInterval.operand : "from and to interval equal: " + fromInterval;
-        assert Util.archKindsEqual(fromInterval.kind(), toInterval.kind()) : "move between different types";
-        assert insertList != null && insertIdx != -1 : "must setup insert position first";
-        assert insertionBuffer.lirList() == insertList : "wrong insertion buffer";
+        assert fromInterval.kind() == toInterval.kind() : "move between different types";
+        assert insertIdx != -1 : "must setup insert position first";
 
         CiValue fromOpr = fromInterval.operand;
         CiValue toOpr = toInterval.operand;
 
-        insertionBuffer.move(insertIdx, fromOpr, toOpr, null);
+        insertionBuffer.append(insertIdx, allocator.ir.spillMoveFactory.createMove(toOpr, fromOpr));
 
-        if (C1XOptions.TraceLinearScanLevel >= 4) {
+        if (GraalOptions.TraceLinearScanLevel >= 4) {
             TTY.println("MoveResolver: inserted move from %d (%s) to %d (%s)", fromInterval.operandNumber, fromInterval.location(), toInterval.operandNumber, toInterval.location());
         }
     }
 
     private void insertMove(CiValue fromOpr, Interval toInterval) {
-        assert Util.archKindsEqual(fromOpr.kind, toInterval.kind()) : "move between different types";
-        assert insertList != null && insertIdx != -1 : "must setup insert position first";
-        assert insertionBuffer.lirList() == insertList : "wrong insertion buffer";
+        assert fromOpr.kind == toInterval.kind() : "move between different types";
+        assert insertIdx != -1 : "must setup insert position first";
 
         CiValue toOpr = toInterval.operand;
-        insertionBuffer.move(insertIdx, fromOpr, toOpr, null);
+        insertionBuffer.append(insertIdx, allocator.ir.spillMoveFactory.createMove(toOpr, fromOpr));
 
-        if (C1XOptions.TraceLinearScanLevel >= 4) {
+        if (GraalOptions.TraceLinearScanLevel >= 4) {
             TTY.print("MoveResolver: inserted move from constant %s to %d (%s)", fromOpr, toInterval.operandNumber, toInterval.location());
         }
     }
 
     private void resolveMappings() {
-        //if (C1XOptions.TraceLinearScanLevel >= 4) TTY.println("MoveResolver: resolving mappings for Block B%d, index %d", insertList.block() != null ? insertList.block().blockID : -1, insertIdx);
         assert verifyBeforeResolve();
 
         // Block all registers that are used as input operands of a move.
@@ -258,7 +252,7 @@ final class MoveResolver {
                     mappingTo.remove(i);
 
                     processedInterval = true;
-                } else if (fromInterval != null && fromInterval.location().isRegister()) {
+                } else if (fromInterval != null && isRegister(fromInterval.location())) {
                     // this interval cannot be processed now because target is not free
                     // it starts in a register, so it is a possible candidate for spilling
                     spillCandidate = i;
@@ -284,12 +278,12 @@ final class MoveResolver {
                 // one stack slot to another can happen (not allowed by LIRAssembler
                 CiStackSlot spillSlot = fromInterval.spillSlot();
                 if (spillSlot == null) {
-                    spillSlot = allocator.allocateSpillSlot(spillInterval.kind());
+                    spillSlot = allocator.frameMap.allocateSpillSlot(spillInterval.kind());
                     fromInterval.setSpillSlot(spillSlot);
                 }
                 spillInterval.assignLocation(spillSlot);
 
-                if (C1XOptions.TraceLinearScanLevel >= 4) {
+                if (GraalOptions.TraceLinearScanLevel >= 4) {
                     TTY.println("created new Interval %s for spilling", spillInterval.operand);
                 }
 
@@ -307,51 +301,46 @@ final class MoveResolver {
         assert checkEmpty();
     }
 
-    void setInsertPosition(LIRList insertList, int insertIdx) {
-        //if (C1XOptions.TraceLinearScanLevel >= 4) TTY.println("MoveResolver: setting insert position to Block B%d, index %d", insertList.block() != null ? insertList.block().blockID : -1, insertIdx);
-        assert this.insertList == null && this.insertIdx == -1 : "use moveInsertPosition instead of setInsertPosition when data already set";
+    void setInsertPosition(List<LIRInstruction> insertList, int insertIdx) {
+        assert this.insertIdx == -1 : "use moveInsertPosition instead of setInsertPosition when data already set";
 
         createInsertionBuffer(insertList);
-        this.insertList = insertList;
         this.insertIdx = insertIdx;
     }
 
-    void moveInsertPosition(LIRList insertList, int insertIdx) {
-        //if (C1XOptions.TraceLinearScanLevel >= 4) TTY.println("MoveResolver: moving insert position to Block B%d, index %d", (insertList != null && insertList.block() != null) ? insertList.block().blockID : -1, insertIdx);
-
-        if (this.insertList != null && (this.insertList != insertList || this.insertIdx != insertIdx)) {
+    void moveInsertPosition(List<LIRInstruction> newInsertList, int newInsertIdx) {
+        if (insertionBuffer.lirList() != null && (insertionBuffer.lirList() != newInsertList || this.insertIdx != newInsertIdx)) {
             // insert position changed . resolve current mappings
             resolveMappings();
         }
 
-        if (this.insertList != insertList) {
+        if (insertionBuffer.lirList() != newInsertList) {
             // block changed . append insertionBuffer because it is
             // bound to a specific block and create a new insertionBuffer
             appendInsertionBuffer();
-            createInsertionBuffer(insertList);
+            createInsertionBuffer(newInsertList);
         }
 
-        this.insertList = insertList;
-        this.insertIdx = insertIdx;
+        this.insertIdx = newInsertIdx;
     }
 
     void addMapping(Interval fromInterval, Interval toInterval) {
-        if (C1XOptions.TraceLinearScanLevel >= 4) {
+        if (GraalOptions.TraceLinearScanLevel >= 4) {
             TTY.println("MoveResolver: adding mapping from interval %d (%s) to interval %d (%s)", fromInterval.operandNumber, fromInterval.location(), toInterval.operandNumber, toInterval.location());
         }
 
         assert fromInterval.operand != toInterval.operand : "from and to interval equal: " + fromInterval;
-        assert Util.archKindsEqual(fromInterval.kind(), toInterval.kind());
+        assert fromInterval.kind() == toInterval.kind();
         mappingFrom.add(fromInterval);
         mappingFromOpr.add(CiValue.IllegalValue);
         mappingTo.add(toInterval);
     }
 
     void addMapping(CiValue fromOpr, Interval toInterval) {
-        if (C1XOptions.TraceLinearScanLevel >= 4) {
+        if (GraalOptions.TraceLinearScanLevel >= 4) {
             TTY.println("MoveResolver: adding mapping from %s to %d (%s)", fromOpr, toInterval.operandNumber, toInterval.location());
         }
-        assert fromOpr.isConstant() : "only for constants";
+        assert isConstant(fromOpr) : "only for constants";
 
         mappingFrom.add(null);
         mappingFromOpr.add(fromOpr);

@@ -34,6 +34,7 @@ import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
 
 public abstract class MoveResolver {
+    private final LIR lir;
     private final FrameMap frameMap;
     private final int[] registersBlocked;
     private final Map<CiValue, Integer> valuesBlocked;
@@ -42,7 +43,8 @@ public abstract class MoveResolver {
     private final LIRInsertionBuffer insertionBuffer;
     private int insertPos;
 
-    public MoveResolver(FrameMap frameMap) {
+    public MoveResolver(LIR lir, FrameMap frameMap) {
+        this.lir = lir;
         this.frameMap = frameMap;
 
         registersBlocked = new int[frameMap.target.arch.registers.length];
@@ -74,7 +76,7 @@ public abstract class MoveResolver {
         assert isLocation(from) || isConstant(from);
         assert from != to;
 
-        trace(3, "mr    add mapping from %s to %s", from, to);
+        assert trace("mr    add mapping from %s to %s", from, to);
         mappingFrom.add(from);
         mappingTo.add(to);
 
@@ -86,12 +88,12 @@ public abstract class MoveResolver {
 
         if (mappingFrom.size() == 1) {
             // If there is only one mapping, it is trivial that this mapping is safe to resolve.
-            trace(3, "mr    resolve  mappings: %d", mappingFrom.size());
+            assert trace("mr    resolve  mappings: %d", mappingFrom.size());
             insertMove(mappingFrom.get(0), mappingTo.get(0));
             mappingFrom.remove(0);
             mappingTo.remove(0);
         } else if (mappingFrom.size() > 1) {
-            trace(3, "mr    resolve  mappings: %d", mappingFrom.size());
+            assert trace("mr    resolve  mappings: %d", mappingFrom.size());
             doResolve();
         }
         insertPos = -1;
@@ -147,7 +149,7 @@ public abstract class MoveResolver {
         int exchangeCandidate = -1;
         int exchangeOther = -1;
 
-        for (int i = mappingFrom.size(); i >= 0; i--) {
+        for (int i = mappingFrom.size() - 1; i >= 0; i--) {
             CiValue from = mappingFrom.get(i);
             Location to = mappingTo.get(i);
             assert !safeToProcessMove(from, to) : "would not be in this code otherwise";
@@ -258,7 +260,7 @@ public abstract class MoveResolver {
     }
 
     private void insertExchange(Location from, Location to) {
-        trace(3, "mr      XCHG %s, %s", from, to);
+        assert trace("mr      XCHG %s, %s", from, to);
         // TODO create XCHG instruction and use it here
         insertionBuffer.append(insertPos, null);
         throw Util.unimplemented();
@@ -291,15 +293,15 @@ public abstract class MoveResolver {
             }
 
         } else {
-            trace(3, "mr      MOV %s -> %s", src, dst);
-            insertionBuffer.append(insertPos, StandardOpcode.MOVE.create(dst,  src));
+            assert trace("mr      MOV %s -> %s", src, dst);
+            insertionBuffer.append(insertPos, lir.spillMoveFactory.createMove(dst,  src));
         }
     }
 
     /**
-     * Provides a register that can be used by the move resolver. If the returned value is a 
+     * Provides a register that can be used by the move resolver. If the returned value is a
      * {@link CiRegisterValue}, the register can be overwritten without precautions. If the
-     * returned value is a {@link Location}, it needs to be spilled and rescued itself. 
+     * returned value is a {@link Location}, it needs to be spilled and rescued itself.
      */
     protected abstract CiValue scratchRegister(Variable spilled);
 
@@ -326,7 +328,6 @@ public abstract class MoveResolver {
             Location to = mappingTo.get(i);
 
             assert from.kind.stackKind() == to.kind;
-            assert !isLocation(from) || asLocation(from).location != to.location;
 
             for (int j = i + 1; j < mappingTo.size(); j++) {
                 Location otherTo = mappingTo.get(j);
@@ -337,9 +338,10 @@ public abstract class MoveResolver {
     }
 
 
-    private static void trace(int level, String format, Object...args) {
-        if (GraalOptions.TraceRegisterAllocationLevel >= level) {
+    private static boolean trace(String format, Object...args) {
+        if (GraalOptions.TraceRegisterAllocation) {
             TTY.println(format, args);
         }
+        return true;
     }
 }
