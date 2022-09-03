@@ -188,10 +188,6 @@ public class SpecializationData extends TemplateMethod {
         return order;
     }
 
-    public boolean isSpecialized() {
-        return !isGeneric() && !isUninitialized() && !isPolymorphic();
-    }
-
     public boolean isGeneric() {
         return generic;
     }
