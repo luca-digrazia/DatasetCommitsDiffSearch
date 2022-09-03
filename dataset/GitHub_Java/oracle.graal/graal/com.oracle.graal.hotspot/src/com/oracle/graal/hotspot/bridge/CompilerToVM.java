@@ -192,4 +192,6 @@ public interface CompilerToVM {
     long[] getDeoptedLeafGraphIds();
 
     String decodePC(long pc);
+
+    long getPrototypeMarkWord(HotSpotResolvedObjectType hotSpotResolvedJavaType);
 }
