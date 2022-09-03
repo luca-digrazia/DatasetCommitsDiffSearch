@@ -26,7 +26,8 @@ package com.oracle.graal.compiler.hsail.test;
 import java.util.*;
 
 import org.junit.*;
-import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
+
+import com.oracle.graal.compiler.hsail.test.infra.*;
 
 /**
  * Unit test of NBody demo app.
@@ -47,7 +48,7 @@ public class StaticNBodyTest extends GraalKernelTester {
     @Result private float[] invxyz = new float[bodies * 3];
     @Result private float[] outvxyz = new float[bodies * 3];
     static float[] seedxyz = new float[bodies * 3];
-    {
+    static {
         final float maxDist = width / 4;
         for (int body = 0; body < (bodies * 3); body += 3) {
             final float theta = (float) (Math.random() * Math.PI * 2);
@@ -95,7 +96,7 @@ public class StaticNBodyTest extends GraalKernelTester {
     }
 
     @Test
-    public void test() {
+    public void test() throws Exception {
         testGeneratedHsail();
     }
 }
