@@ -104,8 +104,8 @@ public class Upgrader extends AssociationUpdater {
      * @return True if has new unique or not null column. False otherwise.
      */
     private boolean hasNewUniqueOrNotNullColumn() {
-        Collection<ColumnModel> columnModels = mTableModel.getColumnModels();
-        for (ColumnModel columnModel : columnModels) {
+        List<ColumnModel> columnModelList = mTableModel.getColumnModels();
+        for (ColumnModel columnModel : columnModelList) {
             if (columnModel.isIdColumn()) continue; // id don't check unique or nullable, we never upgrade it.
             ColumnModel columnModelDB = mTableModelDB.getColumnModelByName(columnModel.getColumnName());
             if (columnModel.isUnique()) {
@@ -153,8 +153,8 @@ public class Upgrader extends AssociationUpdater {
 	private List<String> findColumnsToRemove() {
         String tableName = mTableModel.getTableName();
 		List<String> removeColumns = new ArrayList<String>();
-        Collection<ColumnModel> columnModels = mTableModelDB.getColumnModels();
-        for (ColumnModel columnModel : columnModels) {
+        List<ColumnModel> columnModelList = mTableModelDB.getColumnModels();
+        for (ColumnModel columnModel : columnModelList) {
             String dbColumnName = columnModel.getColumnName();
             if (isNeedToRemove(dbColumnName)) {
                 removeColumns.add(dbColumnName);
