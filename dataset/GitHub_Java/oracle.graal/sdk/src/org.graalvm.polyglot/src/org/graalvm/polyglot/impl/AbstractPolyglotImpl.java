@@ -41,6 +41,7 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Instrument;
 import org.graalvm.polyglot.Language;
+import org.graalvm.polyglot.PolyglotContext;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.PolyglotException.StackFrame;
 import org.graalvm.polyglot.Source;
@@ -67,6 +68,8 @@ public abstract class AbstractPolyglotImpl {
         public abstract Engine newEngine(AbstractEngineImpl impl);
 
         public abstract Context newContext(AbstractContextImpl impl, Language languageImpl);
+
+        public abstract PolyglotContext newPolyglotContext(Engine engine, AbstractContextImpl impl);
 
         public abstract PolyglotException newLanguageException(String message, AbstractExceptionImpl impl);
 
@@ -213,7 +216,7 @@ public abstract class AbstractPolyglotImpl {
 
         public abstract Engine getEngineImpl();
 
-        public abstract void close(boolean interuptExecution);
+        public abstract void close();
 
     }
 
@@ -229,7 +232,7 @@ public abstract class AbstractPolyglotImpl {
 
         // Runtime
 
-        public abstract void ensureClosed(boolean cancelIfExecuting, boolean ignoreCloseFailure);
+        public abstract void ensureClosed(boolean ignoreCloseFailure);
 
         public abstract Map<String, Instrument> getInstruments();
 
@@ -238,6 +241,8 @@ public abstract class AbstractPolyglotImpl {
         public abstract String getVersion();
 
         public abstract Language detectLanguage(Object sourceImpls);
+
+        public abstract PolyglotContext createPolyglotContext(OutputStream out, OutputStream err, InputStream in, Map<String, String[]> arguments, Map<String, String> options);
 
         public abstract OptionDescriptors getOptions();
 
@@ -251,7 +256,7 @@ public abstract class AbstractPolyglotImpl {
 
         public abstract boolean isInternalError();
 
-        public abstract boolean isCancelled();
+        public abstract boolean isTimeout();
 
         public abstract boolean isExit();
 
@@ -327,11 +332,9 @@ public abstract class AbstractPolyglotImpl {
             Objects.requireNonNull(engineImpl);
         }
 
-        public abstract Context createContext(OutputStream out, OutputStream err, InputStream in, Map<String, String> options, Map<String, String[]> arguments, boolean polyglot);
+        public abstract Context createContext(OutputStream out, OutputStream err, InputStream in, Map<String, String> options, Map<String, String[]> arguments);
 
         public abstract String getName();
-
-        public abstract String getImplementationName();
 
         public abstract boolean isInteractive();
 

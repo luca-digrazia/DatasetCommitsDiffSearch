@@ -131,7 +131,7 @@ class PolyglotLanguageImpl extends AbstractLanguageImpl implements VMObject {
 
     @Override
     @SuppressWarnings("hiding")
-    public Context createContext(OutputStream out, OutputStream err, InputStream in, Map<String, String> optionValues, Map<String, String[]> arguments, boolean polyglot) {
+    public Context createContext(OutputStream out, OutputStream err, InputStream in, Map<String, String> optionValues, Map<String, String[]> arguments) {
         synchronized (engine) {
             engine.checkState();
             PolyglotContextImpl contextImpl = new PolyglotContextImpl(engine, out, err, in, optionValues, arguments, this);
@@ -143,11 +143,6 @@ class PolyglotLanguageImpl extends AbstractLanguageImpl implements VMObject {
     @Override
     public String getName() {
         return cache.getName();
-    }
-
-    @Override
-    public String getImplementationName() {
-        return cache.getImplementationName();
     }
 
     @Override

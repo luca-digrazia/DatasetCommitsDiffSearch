@@ -34,10 +34,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractContextImpl;
 
-/**
- * @deprecated use {@link Context} instead.
- */
-@Deprecated
 public final class PolyglotContext implements AutoCloseable {
 
     private final Map<String, Context> contexts = new ConcurrentHashMap<>();
@@ -94,8 +90,8 @@ public final class PolyglotContext implements AutoCloseable {
         if (prevContext != null) {
             return prevContext;
         }
-        Context context = new Context(impl, language);
-        context.initialize(language);
+        Context context = new Context(impl, language, true);
+        context.initializeLanguage();
         contexts.put(language.getId(), context);
         return context;
     }
@@ -127,7 +123,7 @@ public final class PolyglotContext implements AutoCloseable {
      * @since 1.0
      */
     public void close() {
-        impl.close(false);
+        impl.close();
     }
 
     public static class Builder {
@@ -173,7 +169,11 @@ public final class PolyglotContext implements AutoCloseable {
          */
         public Builder setArguments(String languageId, String[] args) {
             Objects.requireNonNull(args);
-            return setArguments(engine.getLanguage(languageId), args);
+            Language language = engine.getLanguage(languageId);
+            if (language == null) {
+                throw new IllegalArgumentException("Invalid language id specified.");
+            }
+            return setArguments(language, args);
         }
 
         /**
