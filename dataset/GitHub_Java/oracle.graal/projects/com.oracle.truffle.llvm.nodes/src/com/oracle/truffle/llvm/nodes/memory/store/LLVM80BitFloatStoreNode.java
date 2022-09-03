@@ -65,14 +65,8 @@ public abstract class LLVM80BitFloatStoreNode extends LLVMStoreNodeCommon {
         return null;
     }
 
-    @Specialization(guards = "address.isNative()")
-    protected Object doOp(LLVMTruffleObject address, LLVM80BitFloat value,
-                    @Cached("getLLVMMemory()") LLVMMemory memory) {
-        return doOp(address.asNative(), value, memory);
-    }
-
     // TODO (chaeubl): we could store this in a more efficient way (short + long)
-    @Specialization(guards = "address.isManaged()")
+    @Specialization
     protected Object doForeign(LLVMTruffleObject address, LLVM80BitFloat value,
                     @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
         byte[] bytes = value.getBytes();

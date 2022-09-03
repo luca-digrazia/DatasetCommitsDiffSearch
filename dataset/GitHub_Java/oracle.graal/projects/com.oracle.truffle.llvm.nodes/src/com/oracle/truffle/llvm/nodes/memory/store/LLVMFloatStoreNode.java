@@ -74,13 +74,7 @@ public abstract class LLVMFloatStoreNode extends LLVMStoreNodeCommon {
         return null;
     }
 
-    @Specialization(guards = "address.isNative()")
-    protected Object doOp(LLVMTruffleObject address, float value,
-                    @Cached("getLLVMMemory()") LLVMMemory memory) {
-        return doOp(address.asNative(), value, memory);
-    }
-
-    @Specialization(guards = "address.isManaged()")
+    @Specialization
     protected Object doOp(LLVMTruffleObject address, float value,
                     @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
         foreignWrite.execute(address, value);

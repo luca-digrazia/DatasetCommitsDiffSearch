@@ -66,13 +66,7 @@ public abstract class LLVMIVarBitStoreNode extends LLVMStoreNodeCommon {
         return null;
     }
 
-    @Specialization(guards = "address.isNative()")
-    protected Object doOp(LLVMTruffleObject address, LLVMIVarBit value,
-                    @Cached("getLLVMMemory()") LLVMMemory memory) {
-        return doOp(address.asNative(), value, memory);
-    }
-
-    @Specialization(guards = "address.isManaged()")
+    @Specialization
     protected Object doForeign(LLVMTruffleObject address, LLVMIVarBit value,
                     @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
         byte[] bytes = value.getBytes();

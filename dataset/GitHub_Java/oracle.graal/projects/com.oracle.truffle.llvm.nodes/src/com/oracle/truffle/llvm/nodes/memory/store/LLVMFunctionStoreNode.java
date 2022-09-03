@@ -65,14 +65,7 @@ public abstract class LLVMFunctionStoreNode extends LLVMStoreNodeCommon {
         return null;
     }
 
-    @Specialization(guards = "address.isNative()")
-    protected Object doOp(LLVMTruffleObject address, Object value,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
-                    @Cached("getLLVMMemory()") LLVMMemory memory) {
-        return doOp(address.asNative(), value, toNative, memory);
-    }
-
-    @Specialization(guards = "address.isManaged()")
+    @Specialization
     protected Object doOp(LLVMTruffleObject address, Object value,
                     @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
         foreignWrite.execute(address, value);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,15 +30,15 @@
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm;
 
 import com.oracle.truffle.api.dsl.NodeField;
-import com.oracle.truffle.llvm.nodes.memory.LLVMGetElementPtrNode.LLVMIncrementPointerNode;
-import com.oracle.truffle.llvm.nodes.memory.LLVMGetElementPtrNodeGen.LLVMIncrementPointerNodeGen;
+import com.oracle.truffle.llvm.nodes.memory.LLVMAddressGetElementPtrNode.LLVMIncrementPointerNode;
+import com.oracle.truffle.llvm.nodes.memory.LLVMAddressGetElementPtrNodeGen.LLVMIncrementPointerNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMI16StoreNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMI1StoreNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMI32StoreNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMI64StoreNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.store.LLVMI8StoreNodeGen;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStoreNode;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 
 @NodeField(name = "sourceLocation", type = LLVMSourceLocation.class)
 public abstract class LLVMBuiltin extends LLVMIntrinsic {

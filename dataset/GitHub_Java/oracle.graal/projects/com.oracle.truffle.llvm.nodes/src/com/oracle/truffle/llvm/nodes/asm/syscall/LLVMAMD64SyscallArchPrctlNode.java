@@ -35,11 +35,13 @@ import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.profiles.IntValueProfile;
-import com.oracle.truffle.llvm.nodes.memory.store.LLVMPointerStoreNode;
-import com.oracle.truffle.llvm.nodes.memory.store.LLVMPointerStoreNodeGen;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVMAddressStoreNode;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVMAddressStoreNodeGen;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
+import com.oracle.truffle.llvm.runtime.types.PointerType;
 
 public abstract class LLVMAMD64SyscallArchPrctlNode extends LLVMSyscallOperationNode {
     private final IntValueProfile profile = IntValueProfile.createIdentityProfile();
@@ -52,23 +54,30 @@ public abstract class LLVMAMD64SyscallArchPrctlNode extends LLVMSyscallOperation
     @Specialization
     protected long doOp(long code, long addr,
                     @Cached("getContextReference()") ContextReference<LLVMContext> context,
-                    @Cached("createAddressStoreNode()") LLVMPointerStoreNode store) {
+                    @Cached("createAddressStoreNode()") LLVMAddressStoreNode store) {
         return exec(code, addr, context, store);
     }
 
     @Specialization
-    protected long doOp(long code, LLVMPointer addr,
+    protected long doOp(long code, LLVMAddress addr,
                     @Cached("getContextReference()") ContextReference<LLVMContext> context,
-                    @Cached("createAddressStoreNode()") LLVMPointerStoreNode store) {
+                    @Cached("createAddressStoreNode()") LLVMAddressStoreNode store) {
+        return exec(code, addr, context, store);
+    }
+
+    @Specialization
+    protected long doOp(long code, LLVMTruffleObject addr,
+                    @Cached("getContextReference()") ContextReference<LLVMContext> context,
+                    @Cached("createAddressStoreNode()") LLVMAddressStoreNode store) {
         return exec(code, addr, context, store);
     }
 
     @TruffleBoundary
-    protected LLVMPointerStoreNode createAddressStoreNode() {
-        return LLVMPointerStoreNodeGen.create(null, null);
+    protected LLVMAddressStoreNode createAddressStoreNode() {
+        return LLVMAddressStoreNodeGen.create(PointerType.VOID, null, null);
     }
 
-    private long exec(long code, Object addr, ContextReference<LLVMContext> context, LLVMPointerStoreNode store) throws AssertionError {
+    private long exec(long code, Object addr, ContextReference<LLVMContext> context, LLVMAddressStoreNode store) throws AssertionError {
         switch (profile.profile((int) code)) {
             case LLVMAMD64ArchPrctl.ARCH_SET_FS:
                 context.get().setThreadLocalStorage(addr);
