@@ -210,7 +210,8 @@ public class HotSpotConstantReflectionProvider implements ConstantReflectionProv
                 } else {
                     Class<?> clazz = object.getClass();
                     if (StableOptionValue.class.isAssignableFrom(clazz)) {
-                        if (hotspotField.isInObject(object) && hotspotField.getName().equals("value")) {
+                        if (hotspotField.isInObject(object)) {
+                            assert hotspotField.getName().equals("value") : "Unexpected field in " + StableOptionValue.class.getName() + " hierarchy:" + this;
                             StableOptionValue<?> option = (StableOptionValue<?>) object;
                             return HotSpotObjectConstantImpl.forObject(option.getValue());
                         }
