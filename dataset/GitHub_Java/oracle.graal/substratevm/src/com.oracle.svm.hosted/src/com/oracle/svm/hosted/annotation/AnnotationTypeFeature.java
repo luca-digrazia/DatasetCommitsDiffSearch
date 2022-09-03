@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -30,9 +28,9 @@ import java.lang.reflect.AnnotatedElement;
 import java.util.Objects;
 import java.util.stream.Stream;
 
-import org.graalvm.collections.EconomicSet;
-import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.util.EconomicSet;
 
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.meta.AnalysisUniverse;
@@ -68,7 +66,7 @@ public class AnnotationTypeFeature implements Feature {
          */
         universe.getTypes().stream()
                         .filter(AnalysisType::isAnnotation)
-                        .filter(AnalysisType::isReachable)
+                        .filter(AnalysisType::isInTypeCheck)
                         .map(type -> universe.lookup(type.getWrapped()).getArrayClass())
                         .filter(annotationArray -> !annotationArray.isInstantiated())
                         .forEach(annotationArray -> {
