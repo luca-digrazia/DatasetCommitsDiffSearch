@@ -55,7 +55,7 @@ class JNIGraphKit extends HostedGraphKit {
         InvokeWithExceptionNode invoke = startInvokeWithException(method, InvokeKind.Static, getFrameState(), invokeBci, exceptionEdgeBci, args);
         exceptionPart();
         ExceptionObjectNode exception = exceptionObject();
-        setPendingException(exception);
+        retainPendingException(exception);
         endInvokeWithException();
         return invoke;
     }
@@ -99,12 +99,8 @@ class JNIGraphKit extends HostedGraphKit {
         return createStaticInvoke("getStaticObjectFieldsArray");
     }
 
-    public InvokeWithExceptionNode setPendingException(ValueNode obj) {
-        return createStaticInvoke("setPendingException", obj);
-    }
-
-    public InvokeWithExceptionNode getAndClearPendingException() {
-        return createStaticInvoke("getAndClearPendingException");
+    public InvokeWithExceptionNode retainPendingException(ValueNode obj) {
+        return createStaticInvoke("retainPendingException", obj);
     }
 
     public InvokeWithExceptionNode rethrowPendingException() {

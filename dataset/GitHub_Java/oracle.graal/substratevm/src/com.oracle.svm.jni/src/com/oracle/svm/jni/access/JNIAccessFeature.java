@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -42,8 +40,6 @@ import java.util.stream.Stream;
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.impl.ReflectionRegistry;
-import org.graalvm.nativeimage.impl.RuntimeReflectionSupport;
 
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.flow.FieldTypeFlow;
@@ -51,6 +47,8 @@ import com.oracle.graal.pointsto.flow.TypeFlow;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
+import com.oracle.svm.core.RuntimeReflection;
+import com.oracle.svm.core.RuntimeReflection.RuntimeReflectionSupport;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.FeatureImpl.AfterRegistrationAccessImpl;
 import com.oracle.svm.hosted.FeatureImpl.BeforeAnalysisAccessImpl;
@@ -114,7 +112,7 @@ public class JNIAccessFeature implements Feature {
         parser.parseAndRegisterConfigurations("JNI", JNIConfigurationFiles, JNIConfigurationResources);
     }
 
-    private class JNIRuntimeAccessibilitySupportImpl implements JNIRuntimeAccessibilitySupport, ReflectionRegistry {
+    private class JNIRuntimeAccessibilitySupportImpl implements JNIRuntimeAccessibilitySupport, RuntimeReflection.ReflectionRegistry {
         @Override
         public void register(Class<?>... classes) {
             abortIfSealed();
@@ -236,7 +234,7 @@ public class JNIAccessFeature implements Feature {
             JNIJavaCallWrapperMethod varargsNonvirtualCallWrapper = null;
             JNIJavaCallWrapperMethod arrayNonvirtualCallWrapper = null;
             JNIJavaCallWrapperMethod valistNonvirtualCallWrapper = null;
-            if (!Modifier.isStatic(method.getModifiers()) && !Modifier.isAbstract(method.getModifiers())) {
+            if (!Modifier.isStatic(method.getModifiers())) {
                 varargsNonvirtualCallWrapper = new JNIJavaCallWrapperMethod(method, CallVariant.VARARGS, true, wrappedMetaAccess, nativeLibraries);
                 arrayNonvirtualCallWrapper = new JNIJavaCallWrapperMethod(method, CallVariant.ARRAY, true, wrappedMetaAccess, nativeLibraries);
                 valistNonvirtualCallWrapper = new JNIJavaCallWrapperMethod(method, CallVariant.VA_LIST, true, wrappedMetaAccess, nativeLibraries);
