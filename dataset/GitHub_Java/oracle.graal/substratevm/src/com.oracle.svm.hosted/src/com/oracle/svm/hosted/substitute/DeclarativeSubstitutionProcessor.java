@@ -66,7 +66,6 @@ import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.option.HostedOptionKey;
-import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.ImageClassLoader;
@@ -83,10 +82,10 @@ public class DeclarativeSubstitutionProcessor extends AnnotationSubstitutionProc
 
     public static class Options {
         @Option(help = "Comma-separated list of file names with declarative substitutions", type = OptionType.User)//
-        public static final HostedOptionKey<String[]> SubstitutionFiles = new HostedOptionKey<>(null);
+        public static final HostedOptionKey<String[]> SubstitutionFiles = new HostedOptionKey<>(new String[0]);
 
         @Option(help = "Comma-separated list of resource file names with declarative substitutions", type = OptionType.User)//
-        public static final HostedOptionKey<String[]> SubstitutionResources = new HostedOptionKey<>(null);
+        public static final HostedOptionKey<String[]> SubstitutionResources = new HostedOptionKey<>(new String[0]);
     }
 
     private final Map<Class<?>, ClassDescriptor> classDescriptors;
@@ -100,24 +99,28 @@ public class DeclarativeSubstitutionProcessor extends AnnotationSubstitutionProc
         methodDescriptors = new HashMap<>();
         fieldDescriptors = new HashMap<>();
 
-        for (String substitutionFileName : OptionUtils.flatten(",", Options.SubstitutionFiles.getValue())) {
+        for (String substitutionFileName : Options.SubstitutionFiles.getValue()) {
             try {
-                loadFile(new FileReader(substitutionFileName));
+                if (!substitutionFileName.isEmpty()) {
+                    loadFile(new FileReader(substitutionFileName));
+                }
             } catch (FileNotFoundException ex) {
                 throw UserError.abort("Substitution file " + substitutionFileName + " not found.");
             } catch (IOException | JSONParserException ex) {
                 throw UserError.abort("Could not parse substitution file " + substitutionFileName + ": " + ex.getMessage());
             }
         }
-        for (String substitutionResourceName : OptionUtils.flatten(",", Options.SubstitutionResources.getValue())) {
-            try {
-                InputStream substitutionStream = imageClassLoader.findResourceAsStreamByName(substitutionResourceName);
-                if (substitutionStream == null) {
-                    throw UserError.abort("Substitution resource not found: " + substitutionResourceName);
+        for (String substitutionResourceName : Options.SubstitutionResources.getValue()) {
+            if (!substitutionResourceName.isEmpty()) {
+                try {
+                    InputStream substitutionStream = imageClassLoader.findResourceAsStreamByName(substitutionResourceName);
+                    if (substitutionStream == null) {
+                        throw UserError.abort("Substitution resource not found: " + substitutionResourceName);
+                    }
+                    loadFile(new InputStreamReader(substitutionStream));
+                } catch (IOException | JSONParserException ex) {
+                    throw UserError.abort("Could not parse substitution resource " + substitutionResourceName + ": " + ex.getMessage());
                 }
-                loadFile(new InputStreamReader(substitutionStream));
-            } catch (IOException | JSONParserException ex) {
-                throw UserError.abort("Could not parse substitution resource " + substitutionResourceName + ": " + ex.getMessage());
             }
         }
     }

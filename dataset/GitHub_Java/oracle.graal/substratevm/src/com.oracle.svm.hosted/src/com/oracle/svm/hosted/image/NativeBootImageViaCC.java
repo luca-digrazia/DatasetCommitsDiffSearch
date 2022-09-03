@@ -42,7 +42,6 @@ import com.oracle.objectfile.ObjectFile;
 import com.oracle.svm.core.LinkerInvocation;
 import com.oracle.svm.core.OS;
 import com.oracle.svm.core.SubstrateOptions;
-import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.FeatureImpl.BeforeImageWriteAccessImpl;
@@ -184,7 +183,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
         for (String libraryPath : nativeLibs.getLibraryPaths()) {
             inv.addLibPath(libraryPath);
         }
-        for (String rPath : OptionUtils.flatten(",", SubstrateOptions.LinkerRPath.getValue())) {
+        for (String rPath : SubstrateOptions.LinkerRPath.getValue()) {
             inv.addRPath(rPath);
         }
 

@@ -30,7 +30,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.function.Consumer;
 
-import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
@@ -39,7 +38,6 @@ import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.graal.GraalFeature;
 import com.oracle.svm.core.option.APIOption;
 import com.oracle.svm.core.option.HostedOptionKey;
-import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.FeatureImpl.IsInConfigurationAccessImpl;
@@ -52,7 +50,7 @@ public class FeatureHandler {
     public static class Options {
         @APIOption(name = "features") //
         @Option(help = "A comma-separated list of fully qualified Feature implementation classes")//
-        public static final HostedOptionKey<String[]> Features = new HostedOptionKey<>(null);
+        public static final HostedOptionKey<String[]> Features = new HostedOptionKey<>(new String[0]);
     }
 
     private final ArrayList<Feature> featureInstances = new ArrayList<>();
@@ -72,18 +70,20 @@ public class FeatureHandler {
         }
     }
 
-    public void registerFeatures(ImageClassLoader loader, DebugContext debug) {
-        IsInConfigurationAccessImpl access = new IsInConfigurationAccessImpl(this, loader, debug);
+    public void registerFeatures(ImageClassLoader loader) {
+        IsInConfigurationAccessImpl access = new IsInConfigurationAccessImpl(this, loader);
 
         for (Class<?> automaticFeature : loader.findAnnotatedClasses(AutomaticFeature.class)) {
             registerFeature(automaticFeature, access);
         }
 
-        for (String featureName : OptionUtils.flatten(",", Options.Features.getValue())) {
-            try {
-                registerFeature(Class.forName(featureName, true, loader.getClassLoader()), access);
-            } catch (ClassNotFoundException e) {
-                throw UserError.abort("feature " + featureName + " class not found on the classpath. Ensure that the name is correct and that the class is on the classpath.");
+        for (String featureName : Options.Features.getValue()) {
+            if (!featureName.isEmpty()) {
+                try {
+                    registerFeature(Class.forName(featureName, true, loader.getClassLoader()), access);
+                } catch (ClassNotFoundException e) {
+                    throw UserError.abort("feature " + featureName + " class not found on the classpath. Ensure that the name is correct and that the class is on the classpath.");
+                }
             }
         }
     }

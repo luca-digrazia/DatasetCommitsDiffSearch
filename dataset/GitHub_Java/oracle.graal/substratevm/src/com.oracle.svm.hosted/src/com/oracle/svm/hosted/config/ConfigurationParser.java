@@ -34,7 +34,6 @@ import java.util.List;
 import java.util.Map;
 
 import com.oracle.svm.core.option.HostedOptionKey;
-import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.ImageClassLoader;
 import com.oracle.svm.hosted.json.JSONParserException;
@@ -55,7 +54,8 @@ public abstract class ConfigurationParser {
      * @param featureName name of the feature using the configuration (e.g., "JNI")
      */
     public void parseAndRegisterConfigurations(String featureName, HostedOptionKey<String[]> configFilesOption, HostedOptionKey<String[]> configResourcesOption) {
-        for (String path : OptionUtils.flatten(",", configFilesOption.getValue())) {
+        String[] configFiles = configFilesOption.getValue();
+        for (String path : configFiles) {
             File file = new File(path).getAbsoluteFile();
             if (!file.exists()) {
                 throw UserError.abort("The " + featureName + " configuration file \"" + file + "\" does not exist.");
@@ -66,7 +66,8 @@ public abstract class ConfigurationParser {
                 throw UserError.abort("Could not open " + file + ": " + e.getMessage());
             }
         }
-        for (String resource : OptionUtils.flatten(",", configResourcesOption.getValue())) {
+        String[] configResources = configResourcesOption.getValue();
+        for (String resource : configResources) {
             URL url = classLoader.findResourceByName(resource);
             if (url == null) {
                 throw UserError.abort("Could not find " + featureName + " configuration resource \"" + resource + "\".");

@@ -47,7 +47,6 @@ import com.oracle.svm.core.hub.ClassInitializationInfo;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.option.APIOption;
 import com.oracle.svm.core.option.HostedOptionKey;
-import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.FeatureImpl.DuringAnalysisAccessImpl;
@@ -69,11 +68,11 @@ public final class ClassInitializationFeature implements Feature, RuntimeClassIn
     public static class Options {
         @APIOption(name = "delay-class-initialization-to-runtime")//
         @Option(help = "A comma-separated list of classes (and implicitly all of their subclasses) that are initialized at runtime and not during image building", type = OptionType.User)//
-        public static final HostedOptionKey<String[]> DelayClassInitialization = new HostedOptionKey<>(null);
+        public static final HostedOptionKey<String[]> DelayClassInitialization = new HostedOptionKey<>(new String[0]);
 
         @APIOption(name = "rerun-class-initialization-at-runtime") //
         @Option(help = "A comma-separated list of classes (and implicitly all of their subclasses) that are initialized both at runtime and during image building", type = OptionType.User)//
-        public static final HostedOptionKey<String[]> RerunClassInitialization = new HostedOptionKey<>(null);
+        public static final HostedOptionKey<String[]> RerunClassInitialization = new HostedOptionKey<>(new String[0]);
     }
 
     /**
@@ -160,7 +159,7 @@ public final class ClassInitializationFeature implements Feature, RuntimeClassIn
     }
 
     private static void processOption(AfterRegistrationAccess access, HostedOptionKey<String[]> option, Consumer<Class<?>[]> handler) {
-        for (String className : OptionUtils.flatten(",", option.getValue())) {
+        for (String className : option.getValue()) {
             if (className.length() > 0) {
                 Class<?> clazz = access.findClassByName(className);
                 if (clazz == null) {
