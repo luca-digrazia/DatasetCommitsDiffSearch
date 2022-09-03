@@ -30,15 +30,13 @@ import java.util.concurrent.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
+import com.oracle.max.graal.java.*;
 
 /**
  * Implementation of RiMethod for resolved HotSpot methods.
  */
 public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements HotSpotMethodResolved {
 
-    /**
-     *
-     */
     private static final long serialVersionUID = -5486975070147586588L;
 
     /** DO NOT USE IN JAVA CODE! */
@@ -58,6 +56,8 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
     private HotSpotMethodData methodData;
     private byte[] code;
     private boolean canBeInlined;
+    private CiGenericCallback callback;
+    private int compilationComplexity;
 
     private HotSpotMethodResolvedImpl() {
         super(null);
@@ -177,6 +177,10 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
         return compiler.getVMEntries().RiMethod_hasCompiledCode(this);
     }
 
+    public int compiledCodeSize() {
+        return compiler.getVMEntries().RiMethod_getCompiledCodeSize(this);
+    }
+
     @Override
     public RiResolvedType accessor() {
         return null;
@@ -193,12 +197,28 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
     }
 
     @Override
+    public int compilationComplexity() {
+        if (compilationComplexity <= 0 && codeSize() > 0) {
+            BytecodeStream s = new BytecodeStream(code());
+            int result = 0;
+            int currentBC;
+            while ((currentBC = s.currentBC()) != Bytecodes.END) {
+                result += Bytecodes.compilationComplexity(currentBC);
+                s.next();
+            }
+            assert result > 0;
+            compilationComplexity = result;
+        }
+        return compilationComplexity;
+    }
+
+    @Override
     public RiProfilingInfo profilingInfo() {
         if (methodData == null) {
             methodData = compiler.getVMEntries().RiMethod_methodData(this);
         }
 
-        if (methodData == null || !methodData.isMature()) {
+        if (methodData == null) {
             return new HotSpotNoProfilingInfo(compiler);
         } else {
             return new HotSpotProfilingInfo(compiler, methodData);
@@ -218,6 +238,7 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
         return ((HotSpotTypeResolvedImpl) holder()).constantPool();
     }
 
+    @Override
     public void dumpProfile() {
         TTY.println("profile info for %s", this);
         TTY.println("canBeStaticallyBound: " + canBeStaticallyBound());
@@ -241,8 +262,8 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
                 TTY.println();
             }
 
-            if (profilingInfo.getImplicitExceptionSeen(i)) {
-                TTY.println("  implicitExceptionSeen@%d: true", i);
+            if (profilingInfo.getExceptionSeen(i) != RiExceptionSeen.FALSE) {
+                TTY.println("  exceptionSeen@%d: %s", i, profilingInfo.getExceptionSeen(i).name());
             }
 
             RiTypeProfile typeProfile = profilingInfo.getTypeProfile(i);
@@ -255,13 +276,11 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
                     for (int j = 0; j < types.length; j++) {
                         TTY.print(" %s (%f)", types[j], probabilities[j]);
                     }
-                    TTY.println();
+                    TTY.println(" not recorded (%f)", typeProfile.getNotRecordedProbability());
                 }
             }
         }
     }
-
-
 
     @Override
     public Annotation[][] getParameterAnnotations() {
@@ -304,7 +323,7 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
 
     private Method toJava() {
         try {
-            return holder.toJava().getDeclaredMethod(name, CiUtil.signatureToTypes(signature, holder));
+            return holder.toJava().getDeclaredMethod(name, CiUtil.signatureToTypes(signature(), holder));
         } catch (NoSuchMethodException e) {
             return null;
         }
@@ -312,7 +331,7 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
 
     private Constructor toJavaConstructor() {
         try {
-            return holder.toJava().getDeclaredConstructor(CiUtil.signatureToTypes(signature, holder));
+            return holder.toJava().getDeclaredConstructor(CiUtil.signatureToTypes(signature(), holder));
         } catch (NoSuchMethodException e) {
             return null;
         }
@@ -320,10 +339,21 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
 
     @Override
     public boolean canBeInlined() {
-        return canBeInlined;
+        return canBeInlined && callback == null;
+    }
+    public void neverInline() {
+        this.canBeInlined = false;
     }
 
-    public void setCanBeInlined(boolean canBeInlined) {
-        this.canBeInlined = canBeInlined;
+    public CiGenericCallback callback() {
+        return callback;
+    }
+    public void setCallback(CiGenericCallback callback) {
+        this.callback = callback;
+    }
+
+    @Override
+    public int vtableEntryOffset() {
+        return compiler.getVMEntries().RiMethod_vtableEntryOffset(this);
     }
 }
