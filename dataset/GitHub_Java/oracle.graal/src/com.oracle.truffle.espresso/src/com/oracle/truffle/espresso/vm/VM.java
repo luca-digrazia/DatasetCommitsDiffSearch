@@ -29,10 +29,12 @@ import static com.oracle.truffle.espresso.jni.JniVersion.JNI_VERSION_1_6;
 import static com.oracle.truffle.espresso.jni.JniVersion.JNI_VERSION_1_8;
 import static com.oracle.truffle.espresso.meta.Meta.meta;
 
-import java.lang.reflect.Array;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.nio.ByteBuffer;
@@ -42,12 +44,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.graalvm.options.OptionValues;
-
-import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameInstance;
@@ -60,7 +58,6 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
-import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.Utils;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.MethodInfo;
@@ -76,12 +73,8 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.MetaUtil;
-import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.nodes.LinkedNode;
-import com.oracle.truffle.espresso.nodes.NativeRootNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.EspressoException;
-import com.oracle.truffle.espresso.runtime.EspressoExitException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 import com.oracle.truffle.espresso.runtime.StaticObjectClass;
@@ -90,9 +83,6 @@ import com.oracle.truffle.espresso.runtime.StaticObjectWrapper;
 import com.oracle.truffle.espresso.types.TypeDescriptor;
 import com.oracle.truffle.nfi.types.NativeSimpleType;
 
-/**
- * Espresso implementation of the VM interface (libjvm).
- */
 public class VM extends NativeEnv {
 
     private final TruffleObject initializeMokapotContext;
@@ -201,14 +191,12 @@ public class VM extends NativeEnv {
         return sb.toString();
     }
 
-    private static final int JVM_CALLER_DEPTH = -1;
-
     public TruffleObject lookupVmImpl(String methodName) {
         Method m = vmMethods.get(methodName);
         try {
             // Dummy placeholder for unimplemented/unknown methods.
             if (m == null) {
-                // System.err.println("Fetching unknown/unimplemented VM method: " + methodName);
+                System.err.println("Fetching unknown/unimplemented VM method: " + methodName);
                 return (TruffleObject) ForeignAccess.sendExecute(Message.EXECUTE.createNode(), jniEnv.dupClosureRefAndCast("(pointer): void"),
                                 new Callback(1, args -> {
                                     System.err.println("Calling unimplemented VM method: " + methodName);
@@ -221,8 +209,63 @@ public class VM extends NativeEnv {
             return (TruffleObject) ForeignAccess.sendExecute(Message.EXECUTE.createNode(), jniEnv.dupClosureRefAndCast(signature), target);
 
         } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
-            throw EspressoError.shouldNotReachHere(e);
+            throw new RuntimeException(e);
         }
+    }
+
+    public Callback vmMethodWrapper(Method m) {
+        int extraArg = (m.getAnnotation(JniImpl.class) != null) ? 1 : 0;
+
+        return new Callback(m.getParameterCount() + extraArg, args -> {
+            if (m.getAnnotation(JniImpl.class) != null) {
+                assert (long) args[0] == jniEnv.getNativePointer() : "Calling JVM_ method " + m + " from alien JniEnv";
+                args = Arrays.copyOfRange(args, 1, args.length); // Strip JNIEnv* pointer, replace
+                                                                 // by VM (this) receiver.
+            }
+
+            Class<?>[] params = m.getParameterTypes();
+
+            for (int i = 0; i < args.length; ++i) {
+                // FIXME(peterssen): Espresso should accept interop null objects, since it doesn't
+                // we must convert to Espresso null.
+                // FIXME(peterssen): Also, do use proper nodes.
+                if (args[i] instanceof TruffleObject) {
+                    if (ForeignAccess.sendIsNull(Message.IS_NULL.createNode(), (TruffleObject) args[i])) {
+                        args[i] = StaticObject.NULL;
+                    }
+                } else {
+                    // TruffleNFI pass booleans as byte, do the proper conversion.
+                    if (params[i] == boolean.class) {
+                        args[i] = ((byte) args[i]) != 0;
+                    }
+                }
+            }
+            try {
+                // Substitute raw pointer by proper `this` reference.
+// System.err.print("Call DEFINED method: " + m.getName() +
+// Arrays.toString(shiftedArgs));
+                Object ret = m.invoke(this, args);
+
+                if (ret instanceof Boolean) {
+                    return (boolean) ret ? (byte) 1 : (byte) 0;
+                }
+
+                if (ret == null && !m.getReturnType().isPrimitive()) {
+                    throw EspressoError.shouldNotReachHere("Cannot return host null, only Espresso NULL");
+                }
+
+                if (ret == null && m.getReturnType() == void.class) {
+                    // Cannot return host null to TruffleNFI.
+                    ret = StaticObject.NULL;
+                }
+
+// System.err.println(" -> " + ret);
+
+                return ret;
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 
     // region VM methods
@@ -301,80 +344,9 @@ public class VM extends NativeEnv {
         return ((StaticObjectImpl) self).copy();
     }
 
-    public Callback vmMethodWrapper(Method m) {
-        int extraArg = (m.getAnnotation(JniImpl.class) != null) ? 1 : 0;
-
-        return new Callback(m.getParameterCount() + extraArg, args -> {
-
-            boolean isJni = (m.getAnnotation(JniImpl.class) != null);
-
-            if (isJni) {
-                assert (long) args[0] == jniEnv.getNativePointer() : "Calling JVM_ method " + m + " from alien JniEnv";
-                args = Arrays.copyOfRange(args, 1, args.length); // Strip JNIEnv* pointer, replace
-                                                                 // by VM (this) receiver.
-            }
-
-            Class<?>[] params = m.getParameterTypes();
-
-            for (int i = 0; i < args.length; ++i) {
-                // FIXME(peterssen): Espresso should accept interop null objects, since it doesn't
-                // we must convert to Espresso null.
-                // FIXME(peterssen): Also, do use proper nodes.
-                if (args[i] instanceof TruffleObject) {
-                    if (ForeignAccess.sendIsNull(Message.IS_NULL.createNode(), (TruffleObject) args[i])) {
-                        args[i] = StaticObject.NULL;
-                    }
-                } else {
-                    // TruffleNFI pass booleans as byte, do the proper conversion.
-                    if (params[i] == boolean.class) {
-                        args[i] = ((byte) args[i]) != 0;
-                    }
-                }
-            }
-            try {
-                // Substitute raw pointer by proper `this` reference.
-// System.err.print("Call DEFINED method: " + m.getName() +
-// Arrays.toString(shiftedArgs));
-                Object ret = m.invoke(this, args);
-
-                if (ret instanceof Boolean) {
-                    return (boolean) ret ? (byte) 1 : (byte) 0;
-                }
-
-                if (ret == null && !m.getReturnType().isPrimitive()) {
-                    throw EspressoError.shouldNotReachHere("Cannot return host null, only Espresso NULL");
-                }
-
-                if (ret == null && m.getReturnType() == void.class) {
-                    // Cannot return host null to TruffleNFI.
-                    ret = StaticObject.NULL;
-                }
-
-// System.err.println(" -> " + ret);
-
-                return ret;
-            } catch (InvocationTargetException e) {
-                Throwable targetEx = e.getTargetException();
-                if (isJni) {
-                    if (targetEx instanceof EspressoException) {
-                        jniEnv.getThreadLocalPendingException().set(((EspressoException) targetEx).getException());
-                        return defaultValue(m.getReturnType());
-                    }
-                }
-                if (targetEx instanceof RuntimeException) {
-                    throw (RuntimeException) targetEx;
-                }
-                // FIXME(peterssen): Handle VME exceptions back to guest.
-                throw EspressoError.shouldNotReachHere(targetEx);
-            } catch (IllegalAccessException e) {
-                throw EspressoError.shouldNotReachHere(e);
-            }
-        });
-    }
-
     @VmImpl
     @JniImpl
-    @SuppressFBWarnings(value = {"IMSE"}, justification = "Not dubious, .notifyAll is just forwarded from the guest.")
+    @SuppressFBWarnings(value = {"IMSE"}, justification = "Not dubious, .notify is just forwarded from the guest.")
     public void JVM_MonitorNotifyAll(Object self) {
         try {
             MetaUtil.unwrap(self).notifyAll();
@@ -396,7 +368,7 @@ public class VM extends NativeEnv {
 
     @VmImpl
     @JniImpl
-    @SuppressFBWarnings(value = {"IMSE"}, justification = "Not dubious, .wait is just forwarded from the guest.")
+    @SuppressFBWarnings(value = {"IMSE"}, justification = "Not dubious, .notify is just forwarded from the guest.")
     public void JVM_MonitorWait(Object self, long timeout) {
         try {
             MetaUtil.unwrap(self).wait(timeout);
@@ -438,7 +410,7 @@ public class VM extends NativeEnv {
     @JniImpl
     // TODO(peterssen): @Type annotaion only for readability purposes.
     public @Type(String.class) StaticObject JVM_InternString(@Type(String.class) StaticObject self) {
-        return EspressoLanguage.getCurrentContext().getInterpreterToVM().intern(self);
+        return Utils.getVm().intern(self);
     }
 
     // endregion VM methods
@@ -655,130 +627,6 @@ public class VM extends NativeEnv {
             throw EspressoError.shouldNotReachHere("Cannot dispose Espresso libjvm (mokapot).");
         }
         assert vmPtr == 0L;
-    }
-
-    @VmImpl
-    public long JVM_TotalMemory() {
-        // TODO(peterssen): What to report here?
-        return Runtime.getRuntime().totalMemory();
-    }
-
-    @VmImpl
-    public void JVM_GC() {
-        System.gc();
-    }
-
-    @VmImpl
-    public void JVM_Exit(int code) {
-        // TODO(peterssen): Kill the context, not the whole VM; maybe not even the context.
-        // unlike Halt, runs finalizers
-        // System.exit(code);
-        throw new EspressoExitException(code);
-    }
-
-    @VmImpl
-    @JniImpl
-    public @Type(Properties.class) StaticObject JVM_InitProperties(@Type(Properties.class) StaticObject properties) {
-        Meta.Method.WithInstance setProperty = meta(properties).method("setProperty", Object.class, String.class, String.class);
-        OptionValues options = EspressoLanguage.getCurrentContext().getEnv().getOptions();
-
-        String[] inheritedProps = {
-                        "java.home",
-                        "sun.boot.class.path",
-                        "java.library.path",
-                        "sun.boot.library.path"};
-
-        // Classpath
-        setProperty.invoke("java.class.path", options.get(EspressoOptions.Classpath));
-        if (options.hasBeenSet(EspressoOptions.BootClasspath)) {
-            setProperty.invoke("sun.boot.class.path", options.get(EspressoOptions.BootClasspath));
-        }
-
-        for (String prop : inheritedProps) {
-            setProperty.invoke(prop, System.getProperty(prop));
-        }
-
-        for (Map.Entry<String, String> entry : EspressoLanguage.getCurrentContext().getEnv().getOptions().get(EspressoOptions.Properties).entrySet()) {
-            setProperty.invoke(entry.getKey(), entry.getValue());
-        }
-
-        return properties;
-    }
-
-    @VmImpl
-    @JniImpl
-    public int JVM_GetArrayLength(Object array) {
-        try {
-            return Array.getLength(MetaUtil.unwrap(array));
-        } catch (IllegalArgumentException | NullPointerException e) {
-            EspressoContext context = EspressoLanguage.getCurrentContext();
-            throw context.getMeta().throwEx(e.getClass(), e.getMessage());
-        }
-    }
-
-    @VmImpl
-    @JniImpl
-    public boolean JVM_DesiredAssertionStatus(@Type(Class.class) StaticObject unused, @Type(Class.class) StaticObject cls) {
-        // TODO(peterssen): Assertions are always disabled, use the VM arguments.
-        return false;
-    }
-
-    @VmImpl
-    @JniImpl
-    public @Type(Class.class) StaticObject JVM_GetCallerClass(int depth) {
-        // TODO(peterssen): HotSpot verifies that the method is marked as @CallerSensitive.
-        // Non-Espresso frames (e.g TruffleNFI) are ignored.
-        // The call stack should look like this:
-        // 2 : the @CallerSensitive annotated method.
-        // ... : skipped non-Espresso frames.
-        // 1 : getCallerClass method.
-        // ... :
-        // 0 : the callee.
-        //
-        // JVM_CALLER_DEPTH => the caller.
-        int callerDepth = (depth == JVM_CALLER_DEPTH) ? 2 : depth + 1;
-
-        final int[] depthCounter = new int[]{callerDepth};
-        CallTarget caller = Truffle.getRuntime().iterateFrames(
-                        frameInstance -> {
-                            if (frameInstance.getCallTarget() instanceof RootCallTarget) {
-                                RootCallTarget callTarget = (RootCallTarget) frameInstance.getCallTarget();
-                                RootNode rootNode = callTarget.getRootNode();
-                                if (rootNode instanceof LinkedNode) {
-                                    if (--depthCounter[0] < 0) {
-                                        return frameInstance.getCallTarget();
-                                    }
-                                }
-                            }
-                            return null;
-                        });
-
-        RootCallTarget callTarget = (RootCallTarget) caller;
-        RootNode rootNode = callTarget.getRootNode();
-        if (rootNode instanceof LinkedNode) {
-            return ((LinkedNode) rootNode).getOriginalMethod().getDeclaringClass().rawKlass().mirror();
-        }
-
-        throw EspressoError.shouldNotReachHere();
-    }
-
-    @VmImpl
-    @JniImpl
-    public int JVM_GetClassAccessFlags(@Type(Class.class) StaticObject clazz) {
-        Meta.Klass klass = Meta.meta(((StaticObjectClass) clazz).getMirror());
-        return klass.getModifiers();
-    }
-
-    @VmImpl
-    @JniImpl
-    public @Type(Class.class) StaticObject JVM_FindClassFromBootLoader(String name) {
-        EspressoContext context = EspressoLanguage.getCurrentContext();
-        Klass klass = context.getRegistries().resolve(
-                        context.getTypeDescriptors().make(MetaUtil.toInternalName(name)), null);
-        if (klass == null) {
-            return StaticObject.NULL;
-        }
-        return klass.mirror();
     }
 
     public TruffleObject getLibrary(long handle) {
