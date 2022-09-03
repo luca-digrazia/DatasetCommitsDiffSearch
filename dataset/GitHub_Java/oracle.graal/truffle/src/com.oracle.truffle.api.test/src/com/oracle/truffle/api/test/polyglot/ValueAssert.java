@@ -2,41 +2,25 @@
  * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.oracle.truffle.api.test.polyglot;
 
@@ -53,11 +37,11 @@ import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.PROXY_OBJEC
 import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.STRING;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.fail;
 
 import java.lang.reflect.Modifier;
@@ -72,6 +56,7 @@ import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.TypeLiteral;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.Proxy;
@@ -101,31 +86,27 @@ public class ValueAssert {
     private static final TypeLiteral<Function<Object, Object>> FUNCTION = new TypeLiteral<Function<Object, Object>>() {
     };
 
-    public static void assertValue(Value value) {
-        assertValue(value, detectSupportedTypes(value));
+    public static void assertValue(Context context, Value value) {
+        assertValue(context, value, detectSupportedTypes(value));
     }
 
-    public static void assertValue(Value value, Trait... expectedTypes) {
+    public static void assertValue(Context context, Value value, Trait... expectedTypes) {
         try {
-            assertValueImpl(value, 0, expectedTypes);
+            assertValueImpl(context, value, 0, expectedTypes);
         } catch (AssertionError e) {
             throw new AssertionError(String.format("assertValue: %s traits: %s", value, Arrays.asList(expectedTypes)), e);
         }
     }
 
     @SuppressWarnings("unchecked")
-    private static void assertValueImpl(Value value, int depth, Trait... expectedTypes) {
+    private static void assertValueImpl(Context context, Value value, int depth, Trait... expectedTypes) {
         if (depth > 10) {
             // stop at a certain recursion depth for recursive data structures
             return;
         }
 
         assertNotNull(value.toString());
-        Value metaObject = value.getMetaObject();
-        if (metaObject != null && depth == 0) { // meta-object may be null
-            assertValueImpl(metaObject, depth + 1, detectSupportedTypes(metaObject));
-            assertNotNull(metaObject.toString());
-        }
+        assertNotNull(value.getMetaObject());
 
         assertSame(value, value.as(Value.class));
 
@@ -155,7 +136,7 @@ public class ValueAssert {
                     break;
                 case ARRAY_ELEMENTS:
                     assertTrue(msg, value.hasArrayElements());
-                    assertValueArrayElements(value, depth);
+                    assertValueArrayElements(context, value, depth);
                     break;
                 case EXECUTABLE:
                     assertTrue(msg, value.canExecute());
@@ -173,13 +154,13 @@ public class ValueAssert {
                     assertTrue(msg, value.isHostObject());
                     Object hostObject = value.asHostObject();
                     assertFalse(hostObject instanceof Proxy);
-                    if (hostObject != null && value.hasMembers() && !java.lang.reflect.Proxy.isProxyClass(hostObject.getClass())) {
+                    if (hostObject != null && !java.lang.reflect.Proxy.isProxyClass(hostObject.getClass())) {
                         if (hostObject instanceof Class) {
-                            boolean isStaticClass = value.hasMember("class");
-                            if (isStaticClass) {
-                                assertClassMembers(value, (Class<?>) hostObject, true);
-                            } else {
+                            boolean isInstanceClass = value.hasMember("isInterface");
+                            if (isInstanceClass) {
                                 assertClassMembers(value, Class.class, false);
+                            } else {
+                                assertClassMembers(value, (Class<?>) hostObject, true);
                             }
                         } else {
                             assertClassMembers(value, hostObject.getClass(), false);
@@ -197,7 +178,7 @@ public class ValueAssert {
                     Map<Object, Object> expectedValues = new HashMap<>();
                     for (String key : value.getMemberKeys()) {
                         Value child = value.getMember(key);
-                        assertValueImpl(child, depth + 1, detectSupportedTypes(child));
+                        assertValueImpl(context, child, depth + 1, detectSupportedTypes(child));
                         expectedValues.put(key, value.getMember(key).as(Object.class));
                     }
 
@@ -366,9 +347,7 @@ public class ValueAssert {
                     if (value.isNull()) {
                         assertNull(value.as(Map.class));
                     } else {
-                        if (!value.isHostObject() || (!(value.asHostObject() instanceof Map))) {
-                            assertFails(() -> value.as(Map.class), ClassCastException.class);
-                        }
+                        assertFails(() -> value.as(Map.class), ClassCastException.class);
                     }
 
                     break;
@@ -382,10 +361,11 @@ public class ValueAssert {
                         if (value.hasMembers()) {
                             assertFails(() -> value.as(FUNCTION).apply(null), UnsupportedOperationException.class);
                             assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class).foobarbaz(123), UnsupportedOperationException.class);
-                        } else if (!value.isHostObject() || (!(value.asHostObject() instanceof Function))) {
+                        } else {
                             assertFails(() -> value.as(FUNCTION), ClassCastException.class);
                             assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class), ClassCastException.class);
                         }
+
                     }
                     break;
                 case INSTANTIABLE:
@@ -398,7 +378,7 @@ public class ValueAssert {
                         if (value.hasMembers()) {
                             assertFails(() -> value.as(FUNCTION).apply(null), UnsupportedOperationException.class);
                             assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class).foobarbaz(123), UnsupportedOperationException.class);
-                        } else if (!value.isHostObject() || (!(value.asHostObject() instanceof Function))) {
+                        } else {
                             assertFails(() -> value.as(FUNCTION), ClassCastException.class);
                             assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class), ClassCastException.class);
                         }
@@ -413,10 +393,8 @@ public class ValueAssert {
                     assertFails(() -> value.setArrayElement(0, null), UnsupportedOperationException.class);
                     assertFails(() -> value.getArraySize(), UnsupportedOperationException.class);
                     if (!value.isNull()) {
-                        if ((!value.isHostObject() || (!(value.asHostObject() instanceof List) && !(value.asHostObject() instanceof Object[])))) {
-                            assertFails(() -> value.as(List.class), ClassCastException.class);
-                            assertFails(() -> value.as(Object[].class), ClassCastException.class);
-                        }
+                        assertFails(() -> value.as(List.class), ClassCastException.class);
+                        assertFails(() -> value.as(Object[].class), ClassCastException.class);
                     } else {
                         assertNull(value.as(List.class));
                         assertNull(value.as(Object[].class));
@@ -441,7 +419,7 @@ public class ValueAssert {
     }
 
     @SuppressWarnings("unchecked")
-    private static void assertValueArrayElements(Value value, int depth) {
+    private static void assertValueArrayElements(Context context, Value value, int depth) {
         assertTrue(value.hasArrayElements());
 
         List<Object> receivedObjects = new ArrayList<>();
@@ -452,7 +430,7 @@ public class ValueAssert {
             receivedObjects.add(arrayElement.as(Object.class));
             receivedObjectsLongMap.put(i, arrayElement.as(Object.class));
             receivedObjectsIntMap.put((int) i, arrayElement.as(Object.class));
-            assertValueImpl(arrayElement, depth + 1, detectSupportedTypes(arrayElement));
+            assertValueImpl(context, arrayElement, depth + 1, detectSupportedTypes(arrayElement));
         }
 
         List<Object> objectList1 = value.as(OBJECT_LIST);
@@ -540,7 +518,7 @@ public class ValueAssert {
         fail("expected " + exceptionType.getName() + " but no exception was thrown");
     }
 
-    public static void assertFails(Callable<?> callable, Class<? extends Throwable> exceptionType) {
+    static void assertFails(Callable<?> callable, Class<? extends Throwable> exceptionType) {
         try {
             callable.call();
         } catch (Throwable t) {
@@ -610,10 +588,8 @@ public class ValueAssert {
     }
 
     public interface NonFunctionalInterface {
-        void foobarbaz();
-
-        // rare name that has no conflicts
-        void oldmacdonaldhadafarm();
+        default void foobarbaz() {
+        }
     }
 
     @FunctionalInterface
@@ -655,7 +631,7 @@ public class ValueAssert {
 
     }
 
-    static Trait[] detectSupportedTypes(Value value) {
+    private static Trait[] detectSupportedTypes(Value value) {
         List<Trait> valueTypes = new ArrayList<>();
         if (value.isBoolean()) {
             valueTypes.add(BOOLEAN);
