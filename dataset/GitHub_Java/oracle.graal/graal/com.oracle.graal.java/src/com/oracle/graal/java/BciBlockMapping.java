@@ -92,6 +92,8 @@ public final class BciBlockMapping {
         public FixedWithNextNode firstInstruction;
         public AbstractFrameStateBuilder<?, ?> entryState;
 
+        public long exits;
+
         private boolean visited;
         private boolean active;
         public long loops;
@@ -208,6 +210,17 @@ public final class BciBlockMapping {
             return new Iterable<Integer>() {
                 public Iterator<Integer> iterator() {
                     return idIterator(loops);
+                }
+            };
+        }
+
+        /**
+         * Iterate over exit ids.
+         */
+        public Iterable<Integer> exitIdIterable() {
+            return new Iterable<Integer>() {
+                public Iterator<Integer> iterator() {
+                    return idIterator(exits);
                 }
             };
         }
@@ -779,6 +792,10 @@ public final class BciBlockMapping {
                 for (int pos : b.loopIdIterable()) {
                     sb.append("B").append(loopHeaders[pos].getId()).append(" ");
                 }
+                sb.append(n).append("  Exits : ");
+                for (int pos : b.exitIdIterable()) {
+                    sb.append("B").append(loopHeaders[pos].getId()).append(" ");
+                }
                 sb.append(n);
             }
             Debug.log("%s", sb);
@@ -895,6 +912,9 @@ public final class BciBlockMapping {
         for (BciBlock successor : block.getSuccessors()) {
             // Recursively process successors.
             loops |= fixLoopBits(successor);
+        }
+        for (BciBlock successor : block.getSuccessors()) {
+            successor.exits = loops & ~successor.loops;
         }
         if (block.loops != loops) {
             loopChanges = true;
