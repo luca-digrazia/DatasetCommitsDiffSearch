@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -48,6 +46,7 @@ import org.graalvm.compiler.nodes.java.MonitorIdNode;
 
 import com.oracle.graal.pointsto.infrastructure.WrappedJavaMethod;
 import com.oracle.graal.pointsto.meta.HostedProviders;
+import com.oracle.svm.core.hub.ClassSynchronizationSupport;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.hosted.annotation.CustomSubstitutionMethod;
@@ -171,7 +170,8 @@ class JNINativeCallWrapperMethod extends CustomSubstitutionMethod {
             if (method.isStatic()) {
                 Constant hubConstant = providers.getConstantReflection().asObjectHub(method.getDeclaringClass());
                 DynamicHub hub = (DynamicHub) SubstrateObjectConstant.asObject(hubConstant);
-                monitorObject = ConstantNode.forConstant(SubstrateObjectConstant.forObject(hub), providers.getMetaAccess(), graph);
+                Object synchronizationTarget = ClassSynchronizationSupport.synchronizationTarget(hub);
+                monitorObject = ConstantNode.forConstant(SubstrateObjectConstant.forObject(synchronizationTarget), providers.getMetaAccess(), graph);
             } else {
                 monitorObject = javaArguments.get(0);
             }
@@ -184,7 +184,7 @@ class JNINativeCallWrapperMethod extends CustomSubstitutionMethod {
         kit.getFrameState().clearLocals();
 
         Signature jniSignature = new JNISignature(jniArgumentTypes, jniReturnType);
-        ValueNode returnValue = kit.createCFunctionCall(callAddress, jniArguments, jniSignature, true, false);
+        ValueNode returnValue = kit.createCFunctionCall(callAddress, method, jniArguments, jniSignature, true, false);
 
         if (getOriginal().isSynchronized()) {
             MonitorIdNode monitorId = kit.getFrameState().peekMonitorId();

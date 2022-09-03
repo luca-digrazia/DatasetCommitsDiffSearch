@@ -87,10 +87,6 @@ class JNIGraphKit extends HostedGraphKit {
         return createStaticInvoke("unboxHandle", handle);
     }
 
-    public InvokeWithExceptionNode getFieldOffsetFromId(ValueNode fieldId) {
-        return createStaticInvoke("getFieldOffsetFromId", fieldId);
-    }
-
     public InvokeWithExceptionNode getStaticPrimitiveFieldsArray() {
         return createStaticInvoke("getStaticPrimitiveFieldsArray");
     }

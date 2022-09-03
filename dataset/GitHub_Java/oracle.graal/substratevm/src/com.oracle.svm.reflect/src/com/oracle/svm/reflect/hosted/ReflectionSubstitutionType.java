@@ -260,7 +260,7 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
 
         switch (to) {
             case Object:
-                // boxing can be possible
+                // boxing is always possible
                 return true;
             case Boolean:
             case Char:
@@ -434,14 +434,9 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
                         graphKit.createReturn(null, JavaKind.Void);
                     }
                 } else {
-                    // kind == PrimitiveKind
-                    if (fieldKind == JavaKind.Object && !field.getType().equals(kind.toBoxedJavaClass())) {
-                        throwIllegalArgumentException(graphKit, "cannot write field of type " + targetField.getJavaKind() + " with Field." + method.getName());
-                    } else {
-                        value = doImplicitCast(graphKit, kind, fieldKind, value);
-                        graphKit.append(new StoreFieldNode(receiver, targetField, value));
-                        graphKit.createReturn(null, JavaKind.Void);
-                    }
+                    value = doImplicitCast(graphKit, kind, fieldKind, value);
+                    graphKit.append(new StoreFieldNode(receiver, targetField, value));
+                    graphKit.createReturn(null, JavaKind.Void);
                 }
 
             } else {
