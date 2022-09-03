@@ -31,7 +31,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.stubs.*;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.LIRInstruction.Opcode;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.asm.*;
 
@@ -51,15 +51,15 @@ final class AMD64HotSpotUnwindOp extends AMD64HotSpotEpilogueOp {
     public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
         leaveFrameAndRestoreRbp(tasm, masm);
 
-        ForeignCallLinkage linkage = tasm.runtime.lookupForeignCall(UNWIND_EXCEPTION_TO_CALLER);
-        CallingConvention cc = linkage.getCallingConvention();
+        RuntimeCallTarget stub = tasm.runtime.lookupRuntimeCall(UNWIND_EXCEPTION_TO_CALLER);
+        CallingConvention cc = stub.getCallingConvention();
         assert cc.getArgumentCount() == 2;
-        assert exception.equals(cc.getArgument(0));
+        assert exception == cc.getArgument(0);
 
         // Get return address (is on top of stack after leave).
         Register returnAddress = asRegister(cc.getArgument(1));
         masm.movq(returnAddress, new AMD64Address(rsp, 0));
 
-        AMD64Call.directJmp(tasm, masm, tasm.runtime.lookupForeignCall(HotSpotBackend.UNWIND_EXCEPTION_TO_CALLER));
+        AMD64Call.directJmp(tasm, masm, tasm.runtime.lookupRuntimeCall(HotSpotBackend.UNWIND_EXCEPTION_TO_CALLER));
     }
 }

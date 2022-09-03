@@ -23,12 +23,10 @@
 package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.hotspot.meta.HotSpotRuntime.*;
 import static com.oracle.graal.replacements.nodes.BranchProbabilityNode.*;
 import sun.misc.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
@@ -670,13 +668,7 @@ public class HotSpotReplacementsUtil {
             }
         }
 
-        return identityHashCode(IDENTITY_HASHCODE, x);
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic(RuntimeCallNode.class)
-    public static int identityHashCode(@ConstantNodeParameter Descriptor descriptor, Object object) {
-        return System.identityHashCode(object);
+        return IdentityHashCodeStubCall.call(x);
     }
 
     @Fold

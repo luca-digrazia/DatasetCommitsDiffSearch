@@ -35,6 +35,7 @@ import static com.oracle.graal.hotspot.nodes.NewArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewInstanceStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewMultiArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.ThreadIsInterruptedStubCall.*;
+import static com.oracle.graal.hotspot.phases.OnStackReplacementPhase.*;
 import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.*;
 import static com.oracle.graal.hotspot.stubs.ExceptionHandlerStub.*;
 import static com.oracle.graal.hotspot.stubs.IdentityHashCodeStub.*;
@@ -88,8 +89,6 @@ import com.oracle.graal.word.*;
  * HotSpot implementation of {@link GraalCodeCacheProvider}.
  */
 public abstract class HotSpotRuntime implements GraalCodeCacheProvider, DisassemblerProvider, BytecodeDisassemblerProvider {
-
-    public static final Descriptor OSR_MIGRATION_END = new Descriptor("OSR_migration_end", true, void.class, long.class);
 
     public final HotSpotVMConfig config;
 
@@ -869,30 +868,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             graph.removeFixed(commit);
         } else if (n instanceof CheckCastNode) {
             checkcastSnippets.lower((CheckCastNode) n, tool);
-        } else if (n instanceof OSRStartNode) {
-            OSRStartNode osrStart = (OSRStartNode) n;
-            StartNode newStart = graph.add(new StartNode());
-            LocalNode buffer = graph.unique(new LocalNode(0, StampFactory.forKind(wordKind())));
-            RuntimeCallNode migrationEnd = graph.add(new RuntimeCallNode(OSR_MIGRATION_END, buffer));
-            migrationEnd.setStateAfter(osrStart.stateAfter());
-
-            newStart.setNext(migrationEnd);
-            FixedNode next = osrStart.next();
-            osrStart.setNext(null);
-            migrationEnd.setNext(next);
-            graph.setStart(newStart);
-
-            // mirroring the calculations in c1_GraphBuilder.cpp (setup_osr_entry_block)
-            int localsOffset = (graph.method().getMaxLocals() - 1) * 8;
-            for (OSRLocalNode osrLocal : graph.getNodes(OSRLocalNode.class)) {
-                int size = FrameStateBuilder.stackSlots(osrLocal.kind());
-                int offset = localsOffset - (osrLocal.index() + size - 1) * 8;
-                UnsafeLoadNode load = graph.add(new UnsafeLoadNode(buffer, offset, ConstantNode.forInt(0, graph), osrLocal.kind()));
-                osrLocal.replaceAndDelete(load);
-                graph.addBeforeFixed(migrationEnd, load);
-            }
-            osrStart.replaceAtUsages(newStart);
-            osrStart.safeDelete();
         } else if (n instanceof CheckCastDynamicNode) {
             checkcastSnippets.lower((CheckCastDynamicNode) n);
         } else if (n instanceof InstanceOfNode) {
