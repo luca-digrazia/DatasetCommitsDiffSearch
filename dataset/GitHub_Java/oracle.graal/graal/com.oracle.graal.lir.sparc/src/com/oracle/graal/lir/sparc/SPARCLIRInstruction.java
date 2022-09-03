@@ -29,9 +29,9 @@ import com.oracle.graal.lir.asm.*;
 /**
  * Convenience class to provide SPARCMacroAssembler for the {@link #emitCode} method.
  */
-public abstract class SPARCLIRInstruction extends LIRInstruction implements SPARCLIRInstructionMixin {
+public abstract class SPARCLIRInstruction extends LIRInstruction {
     public static final LIRInstructionClass<SPARCLIRInstruction> TYPE = LIRInstructionClass.create(SPARCLIRInstruction.class);
-    private final SPARCLIRInstructionMixinStore store;
+    private final SizeEstimate size;
 
     protected SPARCLIRInstruction(LIRInstructionClass<? extends LIRInstruction> c) {
         this(c, null);
@@ -39,17 +39,72 @@ public abstract class SPARCLIRInstruction extends LIRInstruction implements SPAR
 
     protected SPARCLIRInstruction(LIRInstructionClass<? extends LIRInstruction> c, SizeEstimate size) {
         super(c);
-        store = new SPARCLIRInstructionMixinStore(size);
+        this.size = size;
     }
 
+    protected SPARCDelayedControlTransfer delayedControlTransfer = SPARCDelayedControlTransfer.DUMMY;
+
     @Override
-    public void emitCode(CompilationResultBuilder crb) {
+    public final void emitCode(CompilationResultBuilder crb) {
         emitCode(crb, (SPARCMacroAssembler) crb.asm);
     }
 
-    protected abstract void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm);
+    public abstract void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm);
 
-    public SPARCLIRInstructionMixinStore getSPARCLIRInstructionStore() {
-        return store;
+    public boolean leavesRegisterWindow() {
+        return false;
+    }
+
+    public void setDelayedControlTransfer(SPARCDelayedControlTransfer holder) {
+        this.delayedControlTransfer = holder;
+    }
+
+    public SizeEstimate estimateSize() {
+        return size;
+    }
+
+    /**
+     * This class represents a size estimation of a particular LIR instruction. It contains a
+     * pessimistic estimate of emitted SPARC instructions and emitted bytes into the constant
+     * section.
+     */
+    public static class SizeEstimate {
+        /**
+         * Cache the first size definition (with just 0 as constant size).
+         */
+        private static final SizeEstimate[] cache = new SizeEstimate[5];
+        static {
+            for (int i = 0; i < cache.length; i++) {
+                cache[i] = new SizeEstimate(i, 0);
+            }
+        }
+        public final int instructionSize;
+        public final int constantSize;
+
+        public SizeEstimate(int instructionSize, int constantSize) {
+            this.instructionSize = instructionSize;
+            this.constantSize = constantSize;
+        }
+
+        public static SizeEstimate create(int instructionSize, int constantSize) {
+            if (constantSize == 0 && instructionSize < cache.length) {
+                return cache[instructionSize];
+            } else {
+                return new SizeEstimate(instructionSize, constantSize);
+            }
+        }
+
+        public static SizeEstimate create(int instructionSize) {
+            if (instructionSize < cache.length) {
+                return cache[instructionSize];
+            } else {
+                return new SizeEstimate(instructionSize, 0);
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "SE[i=" + instructionSize + ", c=" + constantSize + "]";
+        }
     }
 }
