@@ -234,7 +234,6 @@ public class AMD64Call {
             // indirect call with a 64-bit immediate
             masm.movq(scratch, 0L);
             callPCOffset = masm.position();
-            masm.jmp(scratch);
         } else {
             callPCOffset = masm.position();
             masm.jmp(0, true);
