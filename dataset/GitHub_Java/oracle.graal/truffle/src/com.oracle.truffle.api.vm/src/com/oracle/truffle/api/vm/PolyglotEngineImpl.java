@@ -374,24 +374,9 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
         checkState();
         Language language = idToPublicLanguage.get(id);
         if (language == null) {
-            String misspelledGuess = matchSpellingError(idToPublicLanguage.keySet(), id);
-            String didYouMean = "";
-            if (misspelledGuess != null) {
-                didYouMean = String.format("Did you mean '%s'? ", misspelledGuess);
-            }
-            throw new IllegalArgumentException(String.format("A language with id '%s' is not installed. %sInstalled languages are: %s.", id, didYouMean, getLanguages().keySet()));
+            throw new IllegalArgumentException(String.format("A language with id '%s' is not installed. Installed languages are: %s.", id, getLanguages().keySet()));
         }
         return language;
-    }
-
-    private static String matchSpellingError(Set<String> allIds, String enteredId) {
-        String lowerCaseEnteredId = enteredId.toLowerCase();
-        for (String id : allIds) {
-            if (id.toLowerCase().equals(lowerCaseEnteredId)) {
-                return id;
-            }
-        }
-        return null;
     }
 
     @Override
@@ -399,12 +384,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
         checkState();
         Instrument instrument = idToPublicInstrument.get(id);
         if (instrument == null) {
-            String misspelledGuess = matchSpellingError(idToPublicInstrument.keySet(), id);
-            String didYouMean = "";
-            if (misspelledGuess != null) {
-                didYouMean = String.format("Did you mean '%s'? ", misspelledGuess);
-            }
-            throw new IllegalArgumentException(String.format("An instrument with id '%s' is not installed. %sInstalled instruments are: %s.", id, didYouMean, getInstruments().keySet()));
+            throw new IllegalArgumentException(String.format("An instrument with id '%s' is not installed. Installed instruments are: %s.", id, getInstruments().keySet()));
         }
         return instrument;
     }
@@ -557,8 +537,8 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
                     Thread thread = context.boundThread.get();
                     if (thread != null && context.closingLatch != null) {
                         /*
-                         * We send an interrupt to the thread to wake up and to run some guest language code in case they
-                         * are waiting in some async primitive.
+                         * We send an interrupt to the thread to wake up and to run some guest
+                         * language code in case they are waiting in some async primitive.
                          */
                         thread.interrupt();
                     }
