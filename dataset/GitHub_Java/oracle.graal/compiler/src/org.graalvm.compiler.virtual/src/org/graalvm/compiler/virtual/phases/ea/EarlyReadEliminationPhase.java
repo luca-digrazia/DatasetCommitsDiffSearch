@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -29,12 +27,12 @@ import static org.graalvm.compiler.core.common.GraalOptions.EscapeAnalyzeOnly;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.ScheduleResult;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
+import org.graalvm.compiler.phases.tiers.PhaseContext;
 
-public class EarlyReadEliminationPhase extends EffectsPhase<CoreProviders> {
+public class EarlyReadEliminationPhase extends EffectsPhase<PhaseContext> {
 
-    protected final boolean considerGuards;
+    private final boolean considerGuards;
 
     public EarlyReadEliminationPhase(CanonicalizerPhase canonicalizer) {
         super(1, canonicalizer, true);
@@ -47,14 +45,14 @@ public class EarlyReadEliminationPhase extends EffectsPhase<CoreProviders> {
     }
 
     @Override
-    protected void run(StructuredGraph graph, CoreProviders context) {
+    protected void run(StructuredGraph graph, PhaseContext context) {
         if (VirtualUtil.matches(graph, EscapeAnalyzeOnly.getValue(graph.getOptions()))) {
             runAnalysis(graph, context);
         }
     }
 
     @Override
-    protected Closure<?> createEffectsClosure(CoreProviders context, ScheduleResult schedule, ControlFlowGraph cfg) {
+    protected Closure<?> createEffectsClosure(PhaseContext context, ScheduleResult schedule, ControlFlowGraph cfg) {
         assert schedule == null;
         return new ReadEliminationClosure(cfg, considerGuards);
     }
