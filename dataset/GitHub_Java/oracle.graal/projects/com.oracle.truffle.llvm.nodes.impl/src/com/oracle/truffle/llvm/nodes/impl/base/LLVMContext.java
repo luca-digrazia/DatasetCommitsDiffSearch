@@ -29,8 +29,6 @@
  */
 package com.oracle.truffle.llvm.nodes.impl.base;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
 import com.oracle.nfi.api.NativeFunctionHandle;
@@ -43,12 +41,10 @@ import com.oracle.truffle.llvm.nativeint.NativeLookup;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
 import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.types.LLVMFunction;
 import com.oracle.truffle.llvm.types.memory.LLVMStack;
 
 public class LLVMContext extends ExecutionContext {
-
-    private final List<RootCallTarget> staticDestructors = new ArrayList<>();
 
     private final LLVMFunctionRegistry registry;
 
@@ -67,7 +63,7 @@ public class LLVMContext extends ExecutionContext {
         lastContext = this;
     }
 
-    public RootCallTarget getFunction(LLVMFunctionDescriptor function) {
+    public RootCallTarget getFunction(LLVMFunction function) {
         return registry.lookup(function);
     }
 
@@ -76,7 +72,7 @@ public class LLVMContext extends ExecutionContext {
         return registry;
     }
 
-    public NativeFunctionHandle getNativeHandle(LLVMFunctionDescriptor function, LLVMExpressionNode[] args) {
+    public NativeFunctionHandle getNativeHandle(LLVMFunction function, LLVMExpressionNode[] args) {
         return nativeLookup.getNativeHandle(function, args);
     }
 
@@ -84,7 +80,7 @@ public class LLVMContext extends ExecutionContext {
         return nativeLookup.getNativeHandle(functionName);
     }
 
-    public Map<LLVMFunctionDescriptor, Integer> getNativeFunctionLookupStats() {
+    public Map<LLVMFunction, Integer> getNativeFunctionLookupStats() {
         return nativeLookup.getNativeFunctionLookupStats();
     }
 
@@ -112,20 +108,12 @@ public class LLVMContext extends ExecutionContext {
 
     private static LLVMContext lastContext;
 
-    public static CallTarget getCallTarget(LLVMFunctionDescriptor function) {
+    public static CallTarget getCallTarget(LLVMFunction function) {
         return lastContext.registry.lookup(function);
     }
 
     public static LLVMStack getStaticStack() {
         return lastContext.stack;
-    }
-
-    public void registerStaticDestructor(RootCallTarget staticDestructor) {
-        getStaticDestructors().add(staticDestructor);
-    }
-
-    public List<RootCallTarget> getStaticDestructors() {
-        return staticDestructors;
     }
 
 }
