@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,13 +27,14 @@ import static com.oracle.graal.lir.LIRValueUtil.asConstant;
 import static com.oracle.graal.lir.LIRValueUtil.isConstantValue;
 import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
 
-import com.oracle.graal.compiler.aarch64.AArch64LIRGenerator.ConstantTableBaseProvider;
+import com.oracle.graal.asm.aarch64.AArch64MacroAssembler;
+import com.oracle.graal.compiler.common.type.DataPointerConstant;
 import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.aarch64.AArch64AddressValue;
+import com.oracle.graal.lir.aarch64.AArch64Move;
 import com.oracle.graal.lir.aarch64.AArch64Move.LoadAddressOp;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
 
-import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Constant;
@@ -41,14 +42,6 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.Value;
 
 public class AArch64MoveFactory implements MoveFactory {
-
-    private final CodeCacheProvider codeCache;
-    protected final ConstantTableBaseProvider constantTableBaseProvider;
-
-    public AArch64MoveFactory(CodeCacheProvider codeCache, ConstantTableBaseProvider constantTableBaseProvider) {
-        this.codeCache = codeCache;
-        this.constantTableBaseProvider = constantTableBaseProvider;
-    }
 
     @Override
     public LIRInstruction createMove(AllocatableValue dst, Value src) {
@@ -63,16 +56,14 @@ public class AArch64MoveFactory implements MoveFactory {
             if (srcIsSlot && dstIsSlot) {
                 throw JVMCIError.shouldNotReachHere(src.getClass() + " " + dst.getClass());
             } else {
-                // return new Move(dst, (AllocatableValue) src);
-                throw JVMCIError.unimplemented();
+                return new AArch64Move.Move(dst, (AllocatableValue) src);
             }
         }
     }
 
     @Override
     public LIRInstruction createStackMove(AllocatableValue result, AllocatableValue input) {
-        // return new AArch64Move.Move(result, input);
-        throw JVMCIError.unimplemented();
+        return new AArch64Move.Move(result, input);
     }
 
     @Override
@@ -80,15 +71,17 @@ public class AArch64MoveFactory implements MoveFactory {
         if (src instanceof JavaConstant) {
             JavaConstant javaConstant = (JavaConstant) src;
             if (canInlineConstant(javaConstant)) {
-                // return new AArch64Move.LoadInlineConstant(javaConstant, dst);
-                throw JVMCIError.unimplemented();
+                return new AArch64Move.LoadInlineConstant(javaConstant, dst);
             } else {
                 // return new AArch64Move.LoadConstantFromTable(javaConstant,
                 // constantTableBaseProvider.getConstantTableBase(), dst);
-                throw JVMCIError.unimplemented();
+                return new AArch64Move.LoadInlineConstant(javaConstant, dst);
             }
+        } else if (src instanceof DataPointerConstant) {
+            return new AArch64Move.LoadDataOp(dst, (DataPointerConstant) src);
         } else {
-            throw JVMCIError.shouldNotReachHere(src.getClass().toString());
+            // throw JVMCIError.shouldNotReachHere(src.getClass().toString());
+            throw JVMCIError.unimplemented();
         }
     }
 
@@ -100,13 +93,9 @@ public class AArch64MoveFactory implements MoveFactory {
             case Char:
             case Short:
             case Int:
-                // return SPARCAssembler.isSimm13(c.asInt()) && !codeCache.needsDataPatch(c);
-                boolean x = !codeCache.needsDataPatch(c);
-                throw JVMCIError.unimplemented("needsDataPatch=" + x);
+                return AArch64MacroAssembler.isMovableImmediate(c.asInt());
             case Long:
-                // return SPARCAssembler.isSimm13(c.asLong()) && !codeCache.needsDataPatch(c);
-                boolean y = !codeCache.needsDataPatch(c);
-                throw JVMCIError.unimplemented("needsDataPatch=" + y);
+                return AArch64MacroAssembler.isMovableImmediate(c.asLong());
             case Object:
                 return c.isNull();
             default:

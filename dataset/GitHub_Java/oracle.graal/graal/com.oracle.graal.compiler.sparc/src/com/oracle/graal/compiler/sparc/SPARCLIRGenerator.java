@@ -35,6 +35,16 @@ import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
 import static jdk.vm.ci.sparc.SPARCKind.SINGLE;
 import static jdk.vm.ci.sparc.SPARCKind.WORD;
 import static jdk.vm.ci.sparc.SPARCKind.XWORD;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.PlatformKind;
+import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.sparc.SPARC;
+import jdk.vm.ci.sparc.SPARCKind;
 
 import com.oracle.graal.asm.sparc.SPARCAssembler;
 import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
@@ -42,11 +52,9 @@ import com.oracle.graal.asm.sparc.SPARCAssembler.CMOV;
 import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Op3s;
 import com.oracle.graal.asm.sparc.SPARCAssembler.Opfs;
-import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
 import com.oracle.graal.compiler.common.spi.LIRKindTool;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.lir.LIR;
 import com.oracle.graal.lir.LIRFrameState;
 import com.oracle.graal.lir.LIRValueUtil;
@@ -77,16 +85,6 @@ import com.oracle.graal.lir.sparc.SPARCMove.StackLoadAddressOp;
 import com.oracle.graal.lir.sparc.SPARCOP3Op;
 import com.oracle.graal.lir.sparc.SPARCPauseOp;
 import com.oracle.graal.phases.util.Providers;
-
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.PlatformKind;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.meta.ValueKind;
-import jdk.vm.ci.sparc.SPARC;
-import jdk.vm.ci.sparc.SPARCKind;
 
 /**
  * This class implements the SPARC specific portion of the LIR generator.
@@ -144,7 +142,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
      * integer kinds to WORD.
      */
     @Override
-    public <K extends ValueKind<K>> K toRegisterKind(K kind) {
+    public LIRKind toRegisterKind(LIRKind kind) {
         switch ((SPARCKind) kind.getPlatformKind()) {
             case BYTE:
             case HWORD:
@@ -158,7 +156,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         if (address instanceof SPARCAddressValue) {
             return (SPARCAddressValue) address;
         } else {
-            ValueKind<?> kind = address.getValueKind();
+            LIRKind kind = address.getLIRKind();
             if (address instanceof JavaConstant) {
                 long displacement = ((JavaConstant) address).asLong();
                 if (SPARCAssembler.isSimm13(displacement)) {
@@ -180,7 +178,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     public void emitReturn(JavaKind javaKind, Value input) {
         AllocatableValue operand = Value.ILLEGAL;
         if (input != null) {
-            operand = resultOperandFor(javaKind, input.getValueKind());
+            operand = resultOperandFor(javaKind, input.getLIRKind());
             emitMove(operand, input);
         }
         append(new ReturnOp(operand));
@@ -215,7 +213,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             ConditionFlag cf = SPARCControlFlow.fromCondition(false, cond, unorderedIsTrue);
             append(new SPARCControlFlow.BranchOp(cf, trueDestination, falseDestination, actualCmpKind, trueDestinationProbability));
         } else {
-            throw GraalError.shouldNotReachHere();
+            throw JVMCIError.shouldNotReachHere();
         }
     }
 
@@ -270,9 +268,9 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             actualFalseValue = loadSimm11(falseValue);
             cmove = MOVicc;
         } else {
-            throw GraalError.shouldNotReachHere();
+            throw JVMCIError.shouldNotReachHere();
         }
-        Variable result = newVariable(trueValue.getValueKind());
+        Variable result = newVariable(trueValue.getLIRKind());
         ConditionFlag finalCondition = SPARCControlFlow.fromCondition(cmpSPARCKind.isInteger(), mirrored ? cond.mirror() : cond, unorderedIsTrue);
         CC cc = CC.forKind(cmpSPARCKind);
         append(new CondMoveOp(cmove, cc, finalCondition, actualTrueValue, actualFalseValue, result));
@@ -296,7 +294,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             mirrored = false; // No mirroring done on floats
             emitFloatCompare(cmpKind, a, b, Fcc0);
         } else {
-            throw GraalError.shouldNotReachHere();
+            throw JVMCIError.shouldNotReachHere();
         }
         return mirrored;
     }
@@ -338,7 +336,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 floatCompareOpcode = Fcmps;
                 break;
             default:
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
         append(new SPARCFloatCompareOp(floatCompareOpcode, cc, load(a), load(b)));
     }
@@ -346,7 +344,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     @Override
     public Variable emitIntegerTestMove(Value left, Value right, Value trueValue, Value falseValue) {
         emitIntegerTest(left, right);
-        Variable result = newVariable(trueValue.getValueKind());
+        Variable result = newVariable(trueValue.getLIRKind());
         ConditionFlag flag = SPARCControlFlow.fromCondition(true, Condition.EQ, false);
         CC cc = CC.forKind(left.getPlatformKind());
         append(new CondMoveOp(MOVicc, cc, flag, loadSimm11(trueValue), loadSimm11(falseValue), result));
@@ -365,7 +363,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget) {
-        AllocatableValue scratchValue = newVariable(key.getValueKind());
+        AllocatableValue scratchValue = newVariable(key.getLIRKind());
         AllocatableValue base = AllocatableValue.ILLEGAL;
         for (Constant c : strategy.getKeyConstants()) {
             if (!(c instanceof JavaConstant) || !getMoveFactory().canInlineConstant((JavaConstant) c)) {
@@ -384,7 +382,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     protected void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, Value key) {
         // Making a copy of the switch value is necessary because jump table destroys the input
         // value
-        Variable tmp = newVariable(key.getValueKind());
+        Variable tmp = newVariable(key.getLIRKind());
         emitMove(tmp, key);
         append(new TableSwitchOp(lowKey, defaultTarget, targets, tmp, newVariable(LIRKind.value(target().arch.getWordKind()))));
     }
@@ -420,21 +418,13 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         append(new ReturnOp(Value.ILLEGAL));
     }
 
-    public Value emitSignExtendLoad(LIRKind kind, LIRKind resultKind, Value address, LIRFrameState state) {
+    public Value emitSignExtendLoad(LIRKind kind, Value address, LIRFrameState state) {
         SPARCAddressValue loadAddress = asAddressValue(address);
-        Variable result = newVariable(resultKind);
+        Variable result = newVariable(kind);
         append(new LoadOp(kind.getPlatformKind(), result, loadAddress, state, true));
         return result;
     }
 
-    public Value emitZeroExtendLoad(LIRKind kind, LIRKind resultKind, Value address, LIRFrameState state) {
-        SPARCAddressValue loadAddress = asAddressValue(address);
-        Variable result = newVariable(resultKind);
-        append(new LoadOp(kind.getPlatformKind(), result, loadAddress, state));
-        return result;
-    }
-
-    @Override
     public void emitNullCheck(Value address, LIRFrameState state) {
         PlatformKind kind = address.getPlatformKind();
         assert kind == XWORD : address + " - " + kind + " not an object!";

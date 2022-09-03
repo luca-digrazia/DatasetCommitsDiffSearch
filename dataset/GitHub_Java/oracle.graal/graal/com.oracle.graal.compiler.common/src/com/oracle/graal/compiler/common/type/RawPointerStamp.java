@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,6 +27,7 @@ import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.LIRKind;
 import jdk.vm.ci.meta.MemoryAccessProvider;
 import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.PrimitiveConstant;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 import com.oracle.graal.compiler.common.spi.LIRKindTool;
@@ -99,6 +100,15 @@ public class RawPointerStamp extends AbstractPointerStamp {
     @Override
     public boolean isCompatible(Stamp other) {
         return other instanceof RawPointerStamp;
+    }
+
+    @Override
+    public boolean isCompatible(Constant constant) {
+        if (constant instanceof PrimitiveConstant) {
+            return ((PrimitiveConstant) constant).getJavaKind().isNumericInteger();
+        } else {
+            return constant instanceof DataPointerConstant;
+        }
     }
 
     @Override

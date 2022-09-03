@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,37 +27,37 @@ import static com.oracle.graal.lir.LIRValueUtil.asConstant;
 import static com.oracle.graal.lir.LIRValueUtil.isConstantValue;
 import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
+
+import com.oracle.graal.asm.NumUtil;
+import com.oracle.graal.compiler.common.type.DataPointerConstant;
+import com.oracle.graal.lir.amd64.AMD64AddressValue;
+import com.oracle.graal.lir.amd64.AMD64LIRInstruction;
+import com.oracle.graal.lir.amd64.AMD64Move.AMD64StackMove;
+import com.oracle.graal.lir.amd64.AMD64Move.LeaDataOp;
+import com.oracle.graal.lir.amd64.AMD64Move.LeaOp;
+import com.oracle.graal.lir.amd64.AMD64Move.MoveFromConstOp;
+import com.oracle.graal.lir.amd64.AMD64Move.MoveFromRegOp;
+import com.oracle.graal.lir.amd64.AMD64Move.MoveToRegOp;
+
 import jdk.vm.ci.amd64.AMD64Kind;
 import jdk.vm.ci.code.Register;
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.Value;
 
-import com.oracle.graal.asm.NumUtil;
-import com.oracle.graal.lir.amd64.AMD64AddressValue;
-import com.oracle.graal.lir.amd64.AMD64LIRInstruction;
-import com.oracle.graal.lir.amd64.AMD64Move.AMD64StackMove;
-import com.oracle.graal.lir.amd64.AMD64Move.LeaOp;
-import com.oracle.graal.lir.amd64.AMD64Move.MoveFromConstOp;
-import com.oracle.graal.lir.amd64.AMD64Move.MoveFromRegOp;
-import com.oracle.graal.lir.amd64.AMD64Move.MoveToRegOp;
-import com.oracle.graal.lir.framemap.FrameMapBuilder;
-
 public abstract class AMD64MoveFactory extends AMD64MoveFactoryBase {
 
-    private final FrameMapBuilder frameMapBuilder;
-
-    public AMD64MoveFactory(BackupSlotProvider backupSlotProvider, FrameMapBuilder frameMapBuilder) {
+    public AMD64MoveFactory(BackupSlotProvider backupSlotProvider) {
         super(backupSlotProvider);
-        this.frameMapBuilder = frameMapBuilder;
     }
 
     @Override
     public boolean canInlineConstant(JavaConstant c) {
         switch (c.getJavaKind()) {
             case Long:
-                return NumUtil.isInt(c.asLong()) && !frameMapBuilder.getCodeCache().needsDataPatch(c);
+                return NumUtil.isInt(c.asLong());
             case Object:
                 return c.isNull();
             default:
@@ -85,6 +85,12 @@ public abstract class AMD64MoveFactory extends AMD64MoveFactoryBase {
 
     @Override
     public AMD64LIRInstruction createLoad(AllocatableValue dst, Constant src) {
-        return new MoveFromConstOp(dst, (JavaConstant) src);
+        if (src instanceof JavaConstant) {
+            return new MoveFromConstOp(dst, (JavaConstant) src);
+        } else if (src instanceof DataPointerConstant) {
+            return new LeaDataOp(dst, (DataPointerConstant) src);
+        } else {
+            throw JVMCIError.shouldNotReachHere(String.format("unsupported constant: %s", src));
+        }
     }
 }

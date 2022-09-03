@@ -72,7 +72,7 @@ import java.util.Set;
 public abstract class TruffleLanguage<C> {
     /**
      * Constructor to be called by subclasses.
-     *
+     * 
      * @since 0.8 or earlier
      */
     protected TruffleLanguage() {
@@ -85,7 +85,7 @@ public abstract class TruffleLanguage<C> {
      * <em>one JAR drop to the class path</em> away from your users. Once they include your JAR in
      * their application, your language will be available to the
      * {@link com.oracle.truffle.api.vm.PolyglotEngine Truffle virtual machine}.
-     *
+     * 
      * @since 0.8 or earlier
      */
     @Retention(RetentionPolicy.SOURCE)
@@ -237,7 +237,7 @@ public abstract class TruffleLanguage<C> {
 
     /**
      * Gets visualization services for language-specific information.
-     *
+     * 
      * @since 0.8 or earlier
      */
     @Deprecated
@@ -250,7 +250,7 @@ public abstract class TruffleLanguage<C> {
      * {@linkplain Instrumenter#probe(Node) probing}.
      * <p>
      * <b>Note:</b> instrumentation requires a appropriate {@link WrapperNode}
-     *
+     * 
      * @see WrapperNode
      * @since 0.8 or earlier
      */
@@ -376,7 +376,7 @@ public abstract class TruffleLanguage<C> {
      * {@link TruffleLanguage} receives instance of the environment before any code is executed upon
      * it. The environment has knowledge of all active languages and can exchange symbols between
      * them.
-     *
+     * 
      * @since 0.8 or earlier
      */
     public static final class Env {
@@ -523,7 +523,7 @@ public abstract class TruffleLanguage<C> {
          * straight-forward way to pass implementation-level arguments, as typically specified on a
          * command line, to the languages.
          *
-         * {@codesnippet config.specify}
+         * {@link com.oracle.truffle.api.vm.PolyglotEngineSnippets#initializeWithParameters}
          *
          * In contrast to {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#globalSymbol
          * global symbols} the provided values are passed in exactly as specified, because these
@@ -535,7 +535,7 @@ public abstract class TruffleLanguage<C> {
          * context} to make it possible to take them into account before the language gets ready for
          * execution. This is the most common way to access them:
          *
-         * {@codesnippet config.read}
+         * {@link TruffleLanguageSnippets.MyLanguage#createContext}
          *
          * @return read-only view of configuration options for this language
          * @since 0.11
@@ -582,7 +582,7 @@ public abstract class TruffleLanguage<C> {
             }
             try {
                 return target.call();
-            } catch (KillException ex) {
+            } catch (KillException | QuitException ex) {
                 throw ex;
             } catch (Throwable ex) {
                 throw new IOException(ex);
@@ -656,4 +656,26 @@ public abstract class TruffleLanguage<C> {
         }
     }
 
+}
+
+class TruffleLanguageSnippets {
+    class Context {
+        final String[] args;
+
+        Context(String[] args) {
+            this.args = args;
+        }
+    }
+
+    // @formatter:off
+    abstract
+    // BEGIN: TruffleLanguageSnippets.MyLanguage#createContext
+    class MyLanguage extends TruffleLanguage<Context> {
+        @Override
+        protected Context createContext(Env env) {
+            String[] args = (String[]) env.getConfig().get("CMD_ARGS");
+            return new Context(args);
+        }
+    }
+    // END: TruffleLanguageSnippets.MyLanguage#createContext
 }

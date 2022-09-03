@@ -32,6 +32,18 @@ import static com.oracle.graal.lir.LIRValueUtil.asConstantValue;
 import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
 import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
 import static jdk.vm.ci.code.ValueUtil.isAllocatableValue;
+import jdk.vm.ci.amd64.AMD64;
+import jdk.vm.ci.amd64.AMD64Kind;
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.PlatformKind;
+import jdk.vm.ci.meta.VMConstant;
+import jdk.vm.ci.meta.Value;
 
 import com.oracle.graal.asm.NumUtil;
 import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MIOp;
@@ -39,18 +51,15 @@ import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64RMOp;
 import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
 import com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize;
 import com.oracle.graal.asm.amd64.AMD64Assembler.SSEOp;
-import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
 import com.oracle.graal.compiler.common.spi.LIRKindTool;
 import com.oracle.graal.compiler.common.util.Util;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.lir.ConstantValue;
 import com.oracle.graal.lir.LIRFrameState;
 import com.oracle.graal.lir.LIRValueUtil;
 import com.oracle.graal.lir.LabelRef;
 import com.oracle.graal.lir.StandardOp.JumpOp;
-import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.lir.SwitchStrategy;
 import com.oracle.graal.lir.Variable;
 import com.oracle.graal.lir.amd64.AMD64AddressValue;
@@ -71,23 +80,9 @@ import com.oracle.graal.lir.amd64.AMD64Move.CompareAndSwapOp;
 import com.oracle.graal.lir.amd64.AMD64Move.MembarOp;
 import com.oracle.graal.lir.amd64.AMD64Move.StackLeaOp;
 import com.oracle.graal.lir.amd64.AMD64PauseOp;
-import com.oracle.graal.lir.amd64.AMD64ZapRegistersOp;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.gen.LIRGenerator;
 import com.oracle.graal.phases.util.Providers;
-
-import jdk.vm.ci.amd64.AMD64;
-import jdk.vm.ci.amd64.AMD64Kind;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.PlatformKind;
-import jdk.vm.ci.meta.VMConstant;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.meta.ValueKind;
 
 /**
  * This class implements the AMD64 specific portion of the LIR generator.
@@ -147,10 +142,10 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
             if (address instanceof JavaConstant) {
                 long displacement = ((JavaConstant) address).asLong();
                 if (NumUtil.isInt(displacement)) {
-                    return new AMD64AddressValue(address.getValueKind(), Value.ILLEGAL, (int) displacement);
+                    return new AMD64AddressValue(address.getLIRKind(), Value.ILLEGAL, (int) displacement);
                 }
             }
-            return new AMD64AddressValue(address.getValueKind(), asAllocatable(address), 0);
+            return new AMD64AddressValue(address.getLIRKind(), asAllocatable(address), 0);
         }
     }
 
@@ -167,7 +162,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
      * DWORD.
      */
     @Override
-    public <K extends ValueKind<K>> K toRegisterKind(K kind) {
+    public LIRKind toRegisterKind(LIRKind kind) {
         switch ((AMD64Kind) kind.getPlatformKind()) {
             case BYTE:
             case WORD:
@@ -179,8 +174,8 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
-        ValueKind<?> kind = newValue.getValueKind();
-        assert kind.equals(expectedValue.getValueKind());
+        LIRKind kind = newValue.getLIRKind();
+        assert kind.equals(expectedValue.getLIRKind());
         AMD64Kind memKind = (AMD64Kind) kind.getPlatformKind();
 
         AMD64AddressValue addressValue = asAddressValue(address);
@@ -188,15 +183,15 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         emitMove(raxRes, expectedValue);
         append(new CompareAndSwapOp(memKind, raxRes, addressValue, raxRes, asAllocatable(newValue)));
 
-        assert trueValue.getValueKind().equals(falseValue.getValueKind());
-        Variable result = newVariable(trueValue.getValueKind());
+        assert trueValue.getLIRKind().equals(falseValue.getLIRKind());
+        Variable result = newVariable(trueValue.getLIRKind());
         append(new CondMoveOp(result, Condition.EQ, asAllocatable(trueValue), falseValue));
         return result;
     }
 
     @Override
     public Value emitAtomicReadAndAdd(Value address, Value delta) {
-        ValueKind<?> kind = delta.getValueKind();
+        LIRKind kind = delta.getLIRKind();
         Variable result = newVariable(kind);
         AMD64AddressValue addressValue = asAddressValue(address);
         append(new AMD64Move.AtomicReadAndAddOp((AMD64Kind) kind.getPlatformKind(), result, addressValue, asAllocatable(delta)));
@@ -205,7 +200,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Value emitAtomicReadAndWrite(Value address, Value newValue) {
-        ValueKind<?> kind = newValue.getValueKind();
+        LIRKind kind = newValue.getLIRKind();
         Variable result = newVariable(kind);
         AMD64AddressValue addressValue = asAddressValue(address);
         append(new AMD64Move.AtomicReadAndWriteOp((AMD64Kind) kind.getPlatformKind(), result, addressValue, asAllocatable(newValue)));
@@ -261,7 +256,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         boolean mirrored = emitCompare(cmpKind, left, right);
         Condition finalCondition = mirrored ? cond.mirror() : cond;
 
-        Variable result = newVariable(trueValue.getValueKind());
+        Variable result = newVariable(trueValue.getLIRKind());
         if (cmpKind == AMD64Kind.SINGLE || cmpKind == AMD64Kind.DOUBLE) {
             append(new FloatCondMoveOp(result, finalCondition, unorderedIsTrue, load(trueValue), load(falseValue)));
         } else {
@@ -273,7 +268,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     @Override
     public Variable emitIntegerTestMove(Value left, Value right, Value trueValue, Value falseValue) {
         emitIntegerTest(left, right);
-        Variable result = newVariable(trueValue.getValueKind());
+        Variable result = newVariable(trueValue.getLIRKind());
         append(new CondMoveOp(result, Condition.EQ, load(trueValue), loadNonConst(falseValue)));
         return result;
     }
@@ -321,7 +316,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
                 append(new AMD64BinaryConsumer.MemoryRMOp(SSEOp.UCOMIS, PD, asAllocatable(a), b, state));
                 return false;
             default:
-                throw GraalError.shouldNotReachHere("unexpected kind: " + cmpKind);
+                throw JVMCIError.shouldNotReachHere("unexpected kind: " + cmpKind);
         }
 
         if (isJavaConstant(a)) {
@@ -419,7 +414,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     public void emitReturn(JavaKind kind, Value input) {
         AllocatableValue operand = Value.ILLEGAL;
         if (input != null) {
-            operand = resultOperandFor(kind, input.getValueKind());
+            operand = resultOperandFor(kind, input.getLIRKind());
             emitMove(operand, input);
         }
         append(new ReturnOp(operand));
@@ -432,22 +427,17 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     @Override
     public void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget) {
         // a temp is needed for loading object constants
-        boolean needsTemp = !LIRKind.isValue(key);
-        append(createStrategySwitchOp(strategy, keyTargets, defaultTarget, key, needsTemp ? newVariable(key.getValueKind()) : Value.ILLEGAL));
+        boolean needsTemp = !key.getLIRKind().isValue();
+        append(createStrategySwitchOp(strategy, keyTargets, defaultTarget, key, needsTemp ? newVariable(key.getLIRKind()) : Value.ILLEGAL));
     }
 
     @Override
     protected void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, Value key) {
-        append(new TableSwitchOp(lowKey, defaultTarget, targets, key, newVariable(LIRKind.value(target().arch.getWordKind())), newVariable(key.getValueKind())));
+        append(new TableSwitchOp(lowKey, defaultTarget, targets, key, newVariable(LIRKind.value(target().arch.getWordKind())), newVariable(key.getLIRKind())));
     }
 
     @Override
     public void emitPause() {
         append(new AMD64PauseOp());
-    }
-
-    @Override
-    public SaveRegistersOp createZapRegisters(Register[] zappedRegisters, JavaConstant[] zapValues) {
-        return new AMD64ZapRegistersOp(zappedRegisters, zapValues);
     }
 }

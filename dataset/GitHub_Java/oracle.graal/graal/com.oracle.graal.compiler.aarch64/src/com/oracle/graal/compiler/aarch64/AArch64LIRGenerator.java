@@ -30,10 +30,8 @@ import java.util.function.Function;
 import com.oracle.graal.asm.aarch64.AArch64Address.AddressingMode;
 import com.oracle.graal.asm.aarch64.AArch64Assembler.ConditionFlag;
 import com.oracle.graal.asm.aarch64.AArch64MacroAssembler;
-import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.common.spi.LIRKindTool;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.lir.LIRFrameState;
 import com.oracle.graal.lir.LIRValueUtil;
 import com.oracle.graal.lir.LabelRef;
@@ -42,31 +40,29 @@ import com.oracle.graal.lir.SwitchStrategy;
 import com.oracle.graal.lir.Variable;
 import com.oracle.graal.lir.aarch64.AArch64AddressValue;
 import com.oracle.graal.lir.aarch64.AArch64ArithmeticOp;
-import com.oracle.graal.lir.aarch64.AArch64ByteSwapOp;
 import com.oracle.graal.lir.aarch64.AArch64Compare;
 import com.oracle.graal.lir.aarch64.AArch64ControlFlow;
 import com.oracle.graal.lir.aarch64.AArch64ControlFlow.BranchOp;
 import com.oracle.graal.lir.aarch64.AArch64ControlFlow.CondMoveOp;
 import com.oracle.graal.lir.aarch64.AArch64ControlFlow.StrategySwitchOp;
-import com.oracle.graal.lir.aarch64.AArch64ControlFlow.TableSwitchOp;
 import com.oracle.graal.lir.aarch64.AArch64Move;
 import com.oracle.graal.lir.aarch64.AArch64Move.CompareAndSwapOp;
 import com.oracle.graal.lir.aarch64.AArch64Move.MembarOp;
 import com.oracle.graal.lir.aarch64.AArch64PauseOp;
-import com.oracle.graal.lir.aarch64.AArch64SignExtendOp;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.gen.LIRGenerator;
 import com.oracle.graal.phases.util.Providers;
 
 import jdk.vm.ci.aarch64.AArch64Kind;
 import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LIRKind;
 import jdk.vm.ci.meta.PlatformKind;
 import jdk.vm.ci.meta.PrimitiveConstant;
 import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.meta.ValueKind;
 
 public abstract class AArch64LIRGenerator extends LIRGenerator {
 
@@ -93,7 +89,7 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
      * AArch64 cannot use anything smaller than a word in any instruction other than load and store.
      */
     @Override
-    public <K extends ValueKind<K>> K toRegisterKind(K kind) {
+    public LIRKind toRegisterKind(LIRKind kind) {
         switch ((AArch64Kind) kind.getPlatformKind()) {
             case BYTE:
             case WORD:
@@ -119,18 +115,15 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
         if (address instanceof AArch64AddressValue) {
             return (AArch64AddressValue) address;
         } else {
-            return new AArch64AddressValue(address.getValueKind(), asAllocatable(address), Value.ILLEGAL, 0, false, AddressingMode.BASE_REGISTER_ONLY);
+            return new AArch64AddressValue(address.getLIRKind(), asAllocatable(address), Value.ILLEGAL, 0, false, AddressingMode.BASE_REGISTER_ONLY);
         }
     }
 
     @Override
     public Variable emitCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
-        Variable prevValue = newVariable(expectedValue.getValueKind());
-        Variable scratch = newVariable(LIRKind.value(AArch64Kind.DWORD));
-        append(new CompareAndSwapOp(prevValue, loadReg(expectedValue), loadReg(newValue), asAllocatable(address), scratch));
-        assert trueValue.getValueKind().equals(falseValue.getValueKind());
-        Variable result = newVariable(trueValue.getValueKind());
-        append(new CondMoveOp(result, ConditionFlag.EQ, asAllocatable(trueValue), asAllocatable(falseValue)));
+        Variable result = newVariable(trueValue.getLIRKind());
+        Variable scratch = newVariable(LIRKind.value(AArch64Kind.WORD));
+        append(new CompareAndSwapOp(result, loadNonCompareConst(expectedValue), loadReg(newValue), asAllocatable(address), scratch));
         return result;
     }
 
@@ -190,7 +183,7 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
         Condition finalCondition = mirrored ? cond.mirror() : cond;
         boolean finalUnorderedIsTrue = mirrored ? !unorderedIsTrue : unorderedIsTrue;
         ConditionFlag cmpCondition = toConditionFlag(((AArch64Kind) cmpKind).isInteger(), finalCondition, finalUnorderedIsTrue);
-        Variable result = newVariable(trueValue.getValueKind());
+        Variable result = newVariable(trueValue.getLIRKind());
         append(new CondMoveOp(result, cmpCondition, loadReg(trueValue), loadReg(falseValue)));
         return result;
     }
@@ -229,7 +222,7 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
             case NE:
                 return ConditionFlag.NE;
             default:
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
     }
 
@@ -259,7 +252,7 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
             case BT:
                 return ConditionFlag.LO;
             default:
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
     }
 
@@ -277,16 +270,6 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
         boolean mirrored;
         AArch64Kind kind = (AArch64Kind) cmpKind;
         if (kind.isInteger()) {
-
-            int compareBytes = cmpKind.getSizeInBytes();
-            // AArch64 compares 32 or 64 bits
-            if (compareBytes < a.getPlatformKind().getSizeInBytes()) {
-                a = arithmeticLIRGen.emitSignExtend(a, compareBytes * 8, 64);
-            }
-            if (compareBytes < b.getPlatformKind().getSizeInBytes()) {
-                b = arithmeticLIRGen.emitSignExtend(b, compareBytes * 8, 64);
-            }
-
             if (LIRValueUtil.isVariable(b)) {
                 left = load(b);
                 right = loadNonConst(a);
@@ -313,7 +296,7 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
             }
             append(new AArch64Compare.FloatCompareOp(left, asAllocatable(right), condition, unorderedIsTrue));
         } else {
-            throw GraalError.shouldNotReachHere();
+            throw JVMCIError.shouldNotReachHere();
         }
         return mirrored;
     }
@@ -360,7 +343,7 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
                         maskedValue = longValue;
                         break;
                     default:
-                        throw GraalError.shouldNotReachHere();
+                        throw JVMCIError.shouldNotReachHere();
                 }
                 return AArch64MacroAssembler.isArithmeticImmediate(maskedValue);
             } else {
@@ -383,15 +366,15 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
     public Variable emitIntegerTestMove(Value left, Value right, Value trueValue, Value falseValue) {
         assert ((AArch64Kind) left.getPlatformKind()).isInteger() && ((AArch64Kind) right.getPlatformKind()).isInteger();
         assert ((AArch64Kind) trueValue.getPlatformKind()).isInteger() && ((AArch64Kind) falseValue.getPlatformKind()).isInteger();
-        ((AArch64ArithmeticLIRGenerator) getArithmetic()).emitBinary(left.getValueKind(), AArch64ArithmeticOp.ANDS, true, left, right);
-        Variable result = newVariable(trueValue.getValueKind());
+        ((AArch64ArithmeticLIRGenerator) getArithmetic()).emitBinary(trueValue.getLIRKind(), AArch64ArithmeticOp.ANDS, true, left, right);
+        Variable result = newVariable(trueValue.getLIRKind());
         append(new CondMoveOp(result, ConditionFlag.EQ, load(trueValue), load(falseValue)));
         return result;
     }
 
     @Override
     public void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget) {
-        append(createStrategySwitchOp(strategy, keyTargets, defaultTarget, key, newVariable(key.getValueKind()), AArch64LIRGenerator::toIntConditionFlag));
+        append(createStrategySwitchOp(strategy, keyTargets, defaultTarget, key, newVariable(key.getLIRKind()), AArch64LIRGenerator::toIntConditionFlag));
     }
 
     protected StrategySwitchOp createStrategySwitchOp(SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Variable key, AllocatableValue scratchValue,
@@ -401,20 +384,22 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
 
     @Override
     protected void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, Value key) {
-        append(new TableSwitchOp(lowKey, defaultTarget, targets, key, newVariable(LIRKind.value(target().arch.getWordKind())), newVariable(key.getValueKind())));
+        // Make copy of key since the TableSwitch destroys its input.
+        Variable tmp = emitMove(key);
+        Variable scratch = newVariable(LIRKind.value(AArch64Kind.WORD));
+        append(new AArch64ControlFlow.TableSwitchOp(lowKey, defaultTarget, targets, tmp, scratch));
     }
 
     @Override
-    public Variable emitByteSwap(Value input) {
-        Variable result = newVariable(LIRKind.combine(input));
-        append(new AArch64ByteSwapOp(result, input));
-        return result;
+    public Variable emitByteSwap(Value operand) {
+        // TODO (das) Do not generate until we support vector instructions
+        throw JVMCIError.unimplemented("Do not generate until we support vector instructions");
     }
 
     @Override
     public Variable emitArrayEquals(JavaKind kind, Value array1, Value array2, Value length) {
         // TODO (das) Do not generate until we support vector instructions
-        throw GraalError.unimplemented("Do not generate until we support vector instructions");
+        throw JVMCIError.unimplemented("Do not generate until we support vector instructions");
     }
 
     @Override
@@ -434,7 +419,7 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
             case DOUBLE:
                 return JavaConstant.forDouble(Double.longBitsToDouble(dead));
             default:
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
     }
 
