@@ -32,15 +32,12 @@ import com.oracle.graal.graph.Graph.InputChangedListener;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 
 public class CanonicalizerPhase extends Phase {
     private static final int MAX_ITERATION_PER_NODE = 10;
     private static final DebugMetric METRIC_CANONICALIZED_NODES = Debug.metric("CanonicalizedNodes");
     private static final DebugMetric METRIC_CANONICALIZATION_CONSIDERED_NODES = Debug.metric("CanonicalizationConsideredNodes");
-    private static final DebugMetric METRIC_INFER_STAMP_CALLED = Debug.metric("InferStampCalled");
-    private static final DebugMetric METRIC_STAMP_CHANGED = Debug.metric("StampChanged");
     private static final DebugMetric METRIC_SIMPLIFICATION_CONSIDERED_NODES = Debug.metric("SimplificationConsideredNodes");
     public static final DebugMetric METRIC_GLOBAL_VALUE_NUMBERING_HITS = Debug.metric("GlobalValueNumberingHits");
 
@@ -132,30 +129,29 @@ public class CanonicalizerPhase extends Phase {
         graph.stopTrackingInputChange();
     }
 
-    private void processNode(Node node, StructuredGraph graph) {
-        if (node.isAlive()) {
+    private void processNode(Node n, StructuredGraph graph) {
+        if (n.isAlive()) {
             METRIC_PROCESSED_NODES.increment();
 
-            if (tryGlobalValueNumbering(node, graph)) {
+            if (tryGlobalValueNumbering(n, graph)) {
                 return;
             }
             int mark = graph.getMark();
-            tryCanonicalize(node, graph, tool);
-            tryInferStamp(node, graph);
+            tryCanonicalize(n, graph, tool);
 
-            for (Node newNode : graph.getNewNodes(mark)) {
-                workList.add(newNode);
+            for (Node node : graph.getNewNodes(mark)) {
+                workList.add(node);
             }
         }
     }
 
-    public static boolean tryGlobalValueNumbering(Node node, StructuredGraph graph) {
-        if (node.getNodeClass().valueNumberable()) {
-            Node newNode = graph.findDuplicate(node);
+    public static boolean tryGlobalValueNumbering(Node n, StructuredGraph graph) {
+        if (n.getNodeClass().valueNumberable()) {
+            Node newNode = graph.findDuplicate(n);
             if (newNode != null) {
-                assert !(node instanceof FixedNode || newNode instanceof FixedNode);
-                node.replaceAtUsages(newNode);
-                node.safeDelete();
+                assert !(n instanceof FixedNode || newNode instanceof FixedNode);
+                n.replaceAtUsages(newNode);
+                n.safeDelete();
                 METRIC_GLOBAL_VALUE_NUMBERING_HITS.increment();
                 Debug.log("GVN applied and new node is %1s", newNode);
                 return true;
@@ -227,30 +223,6 @@ public class CanonicalizerPhase extends Phase {
             Debug.log("Canonicalizer: simplifying %s", node);
             METRIC_SIMPLIFICATION_CONSIDERED_NODES.increment();
             ((Simplifiable) node).simplify(tool);
-        }
-    }
-
-    /**
-     * Calls {@link ValueNode#inferStamp()} on the node and, if it returns true (which means that the stamp has
-     * changed), re-queues the node's usages . If the stamp has changed then this method also checks if the stamp
-     * now describes a constant integer value, in which case the node is replaced with a constant.
-     */
-    private void tryInferStamp(Node node, StructuredGraph graph) {
-        if (node.isAlive() && node instanceof ValueNode) {
-            ValueNode valueNode = (ValueNode) node;
-            METRIC_INFER_STAMP_CALLED.increment();
-            if (valueNode.inferStamp()) {
-                METRIC_STAMP_CHANGED.increment();
-                if (valueNode.stamp() instanceof IntegerStamp && valueNode.integerStamp().lowerBound() == valueNode.integerStamp().upperBound()) {
-                    ValueNode replacement = ConstantNode.forIntegerKind(valueNode.kind(), valueNode.integerStamp().lowerBound(), graph);
-                    Debug.log("Canonicalizer: replacing %s with %s (inferStamp)", valueNode, replacement);
-                    valueNode.replaceAtUsages(replacement);
-                } else {
-                    for (Node usage : valueNode.usages()) {
-                        workList.addAgain(usage);
-                    }
-                }
-            }
         }
     }
 
