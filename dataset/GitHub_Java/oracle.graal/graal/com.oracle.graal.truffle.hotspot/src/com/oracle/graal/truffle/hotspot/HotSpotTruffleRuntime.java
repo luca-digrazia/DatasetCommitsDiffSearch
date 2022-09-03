@@ -22,22 +22,6 @@
  */
 package com.oracle.graal.truffle.hotspot;
 
-import static com.oracle.graal.compiler.GraalCompiler.compileGraph;
-import static com.oracle.graal.hotspot.meta.HotSpotSuitesProvider.withNodeSourcePosition;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleStackTraceLimit;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleTransferToInterpreter;
-import static com.oracle.graal.truffle.hotspot.UnsafeAccess.UNSAFE;
-import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
-
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.ListIterator;
-import java.util.Map;
-import java.util.WeakHashMap;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
-
 import com.oracle.graal.api.runtime.GraalRuntime;
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.target.Backend;
@@ -45,7 +29,6 @@ import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.DebugEnvironment;
 import com.oracle.graal.debug.GraalDebugConfig;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.hotspot.HotSpotBackend;
 import com.oracle.graal.hotspot.HotSpotCompiledCodeBuilder;
@@ -76,6 +59,7 @@ import com.oracle.graal.truffle.InterpreterOnlyCompilationPolicy;
 import com.oracle.graal.truffle.OptimizedCallTarget;
 import com.oracle.graal.truffle.TruffleCallBoundary;
 import com.oracle.graal.truffle.TruffleCompiler;
+import com.oracle.graal.truffle.TruffleCompilerOptions;
 import com.oracle.graal.truffle.TruffleTreeDumpHandler;
 import com.oracle.graal.truffle.hotspot.nfi.HotSpotNativeFunctionInterface;
 import com.oracle.graal.truffle.hotspot.nfi.RawNativeCallNodeFactory;
@@ -83,10 +67,10 @@ import com.oracle.nfi.api.NativeFunctionInterface;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.nodes.RootNode;
-
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.CompiledCode;
 import jdk.vm.ci.code.stack.StackIntrospection;
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
@@ -97,6 +81,22 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog;
 import jdk.vm.ci.runtime.JVMCI;
+
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.ListIterator;
+import java.util.Map;
+import java.util.WeakHashMap;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
+import static com.oracle.graal.compiler.GraalCompiler.compileGraph;
+import static com.oracle.graal.hotspot.meta.HotSpotSuitesProvider.withNodeSourcePosition;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleStackTraceLimit;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleTransferToInterpreter;
+import static com.oracle.graal.truffle.hotspot.UnsafeAccess.UNSAFE;
+import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
 
 /**
  * Implementation of the Truffle runtime when running on top of Graal.
@@ -260,8 +260,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         HotSpotCodeCacheProvider codeCache = providers.getCodeCache();
         boolean infoPoints = codeCache.shouldDebugNonSafepoints();
         GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault(plugins).withEagerResolving(true).withNodeSourcePosition(infoPoints);
-        new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(), providers.getConstantReflection(), providers.getConstantFieldProvider(), config, OptimisticOptimizations.ALL,
-                        null).apply(graph);
+        new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(), providers.getConstantReflection(), config, OptimisticOptimizations.ALL, null).apply(graph);
 
         PhaseSuite<HighTierContext> graphBuilderSuite = getGraphBuilderSuite(codeCache, suitesProvider);
         Backend backend = getHotSpotBackend();
@@ -376,7 +375,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
             try {
                 THREAD_EETOP_OFFSET = UNSAFE.objectFieldOffset(Thread.class.getDeclaredField("eetop"));
             } catch (Exception e) {
-                throw new GraalError(e);
+                throw new JVMCIError(e);
             }
         }
 
