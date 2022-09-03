@@ -122,17 +122,15 @@ public class IR {
                 valueToBlock.put(i, b);
             }
         }
-        startBlock = lirBlocks.get(0);
+        startBlock = valueToBlock.get(getHIRStartBlock());
         assert startBlock != null;
-        assert startBlock.blockPredecessors().size() == 0;
 
-/*        if (startBlock.blockPredecessors().size() > 0) {
+        if (startBlock.blockPredecessors().size() > 0) {
             LIRBlock oldStartBlock = startBlock;
             startBlock = new LIRBlock(orderedBlocks.size());
             startBlock.blockSuccessors().add(oldStartBlock);
-
             orderedBlocks.add(startBlock);
-        }*/
+        }
 
         ComputeLinearScanOrder clso = new ComputeLinearScanOrder(lirBlocks.size(), startBlock);
         orderedBlocks = clso.linearScanOrder();
