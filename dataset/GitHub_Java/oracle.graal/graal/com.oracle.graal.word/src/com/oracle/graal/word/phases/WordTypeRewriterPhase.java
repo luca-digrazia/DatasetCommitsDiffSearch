@@ -185,7 +185,7 @@ public class WordTypeRewriterPhase extends Phase {
 
         Invoke invoke = callTargetNode.invoke();
         if (!callTargetNode.isStatic()) {
-            assert callTargetNode.receiver().getKind() == wordKind : "changeToWord() missed the receiver " + callTargetNode.receiver();
+            assert callTargetNode.receiver().getKind() == wordKind : "changeToWord() missed the receiver";
             targetMethod = wordImplType.resolveMethod(targetMethod, invoke.getContextType());
         }
         Operation operation = targetMethod.getAnnotation(Word.Operation.class);
@@ -335,13 +335,8 @@ public class WordTypeRewriterPhase extends Phase {
      */
     private static ValueNode createBinaryNodeInstance(Class<? extends ValueNode> nodeClass, ValueNode left, ValueNode right) {
         try {
-            try {
-                Constructor<? extends ValueNode> constructor = nodeClass.getConstructor(ValueNode.class, ValueNode.class);
-                return constructor.newInstance(left, right);
-            } catch (NoSuchMethodException e) {
-                Method create = nodeClass.getDeclaredMethod("create", ValueNode.class, ValueNode.class);
-                return (ValueNode) create.invoke(null, left, right);
-            }
+            Constructor<? extends ValueNode> constructor = nodeClass.getConstructor(ValueNode.class, ValueNode.class);
+            return constructor.newInstance(left, right);
         } catch (Throwable ex) {
             throw new GraalInternalError(ex).addContext(nodeClass.getName());
         }
@@ -360,7 +355,7 @@ public class WordTypeRewriterPhase extends Phase {
         if (condition == Condition.EQ || condition == Condition.NE) {
             comparison = new IntegerEqualsNode(a, b);
         } else if (condition.isUnsigned()) {
-            comparison = new IntegerBelowNode(a, b);
+            comparison = new IntegerBelowThanNode(a, b);
         } else {
             comparison = new IntegerLessThanNode(a, b);
         }

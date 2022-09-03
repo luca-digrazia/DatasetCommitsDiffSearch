@@ -37,7 +37,7 @@ import com.oracle.graal.nodes.virtual.*;
  * The {@code LoadFieldNode} represents a read of a static or instance field.
  */
 @NodeInfo(nameTemplate = "LoadField#{p#field/s}")
-public class LoadFieldNode extends AccessFieldNode implements Canonicalizable.Unary<ValueNode>, VirtualizableRoot {
+public final class LoadFieldNode extends AccessFieldNode implements Canonicalizable.Unary<ValueNode>, VirtualizableRoot {
 
     /**
      * Creates a new LoadFieldNode instance.
@@ -60,6 +60,11 @@ public class LoadFieldNode extends AccessFieldNode implements Canonicalizable.Un
         } else {
             return StampFactory.forKind(kind);
         }
+    }
+
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        return canonical(tool, getValue());
     }
 
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forObject) {
