@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -110,11 +108,6 @@ public class InjectedFieldsType implements ResolvedJavaType, OriginalClassProvid
     @Override
     public boolean isPrimitive() {
         return original.isPrimitive();
-    }
-
-    @Override
-    public boolean isEnum() {
-        return original.isEnum();
     }
 
     @Override
@@ -255,21 +248,6 @@ public class InjectedFieldsType implements ResolvedJavaType, OriginalClassProvid
     @Override
     public boolean isLinked() {
         return original.isLinked();
-    }
-
-    @Override
-    public void link() {
-        original.link();
-    }
-
-    @Override
-    public boolean hasDefaultMethods() {
-        return original.hasDefaultMethods();
-    }
-
-    @Override
-    public boolean declaresDefaultMethods() {
-        return original.declaresDefaultMethods();
     }
 
     @Override

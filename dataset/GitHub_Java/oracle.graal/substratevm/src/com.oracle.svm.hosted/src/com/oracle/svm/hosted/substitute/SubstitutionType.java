@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,8 +26,8 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Modifier;
 
 import com.oracle.graal.pointsto.infrastructure.OriginalClassProvider;
-import com.oracle.svm.hosted.c.GraalAccess;
 
+import com.oracle.svm.hosted.c.GraalAccess;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.Assumptions.AssumptionResult;
 import jdk.vm.ci.meta.JavaConstant;
@@ -99,11 +97,6 @@ public class SubstitutionType implements ResolvedJavaType, OriginalClassProvider
     @Override
     public boolean isPrimitive() {
         return annotated.isPrimitive();
-    }
-
-    @Override
-    public boolean isEnum() {
-        return annotated.isEnum();
     }
 
     @Override
@@ -272,23 +265,6 @@ public class SubstitutionType implements ResolvedJavaType, OriginalClassProvider
     public boolean isLinked() {
         assert original.isLinked() && annotated.isLinked();
         return true;
-    }
-
-    @Override
-    public void link() {
-        assert isLinked();
-    }
-
-    @Override
-    public boolean hasDefaultMethods() {
-        assert !isInterface() : "only interfaces can have default methods";
-        return false;
-    }
-
-    @Override
-    public boolean declaresDefaultMethods() {
-        assert !isInterface() : "only interfaces can have default methods";
-        return false;
     }
 
     @Override

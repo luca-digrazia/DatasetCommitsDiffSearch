@@ -34,7 +34,8 @@ import org.graalvm.nativeimage.Platforms;
 public final class GenericInfo {
 
     private static final TypeVariable<?>[] EMPTY_TYPE_VARIABLE_ARRAY = new TypeVariable<?>[0];
-    private static final GenericInfo EMPTY_GENERIC_INFO = new GenericInfo(EMPTY_TYPE_VARIABLE_ARRAY, null, null);
+    private static final Type[] EMPTY_TYPE_ARRAY = new Type[0];
+    private static final GenericInfo EMPTY_GENERIC_INFO = new GenericInfo(EMPTY_TYPE_VARIABLE_ARRAY, EMPTY_TYPE_ARRAY, null);
 
     @Platforms(Platform.HOSTED_ONLY.class)
     static GenericInfo forEmpty() {
