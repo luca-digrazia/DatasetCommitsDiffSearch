@@ -28,16 +28,10 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Inherited;
 import java.lang.annotation.Target;
 
-/**
- * TODO: Javadoc.
- */
 @Target(ElementType.TYPE)
 @Inherited
 public @interface ReportPolymorphism {
 
-    /**
-     * TODO: Javadoc.
-     */
     @Target({ElementType.METHOD, ElementType.TYPE})
     @Inherited
     @interface Exclude {
