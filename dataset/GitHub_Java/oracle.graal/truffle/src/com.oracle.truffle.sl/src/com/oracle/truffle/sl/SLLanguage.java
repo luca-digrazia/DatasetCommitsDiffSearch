@@ -67,12 +67,11 @@ import com.oracle.truffle.sl.runtime.SLFunction;
 import com.oracle.truffle.sl.runtime.SLFunctionRegistry;
 import com.oracle.truffle.sl.runtime.SLNull;
 
-@TruffleLanguage.Registration(id = SLLanguage.ID, name = "SL", version = "0.30", mimeType = SLLanguage.MIME_TYPE)
+@TruffleLanguage.Registration(id = "sl", name = "SL", version = "0.12", mimeType = SLLanguage.MIME_TYPE)
 @ProvidedTags({StandardTags.CallTag.class, StandardTags.StatementTag.class, StandardTags.RootTag.class, DebuggerTags.AlwaysHalt.class})
 public final class SLLanguage extends TruffleLanguage<SLContext> {
     public static volatile int counter;
 
-    public static final String ID = "sl";
     public static final String MIME_TYPE = "application/x-sl";
 
     public SLLanguage() {
@@ -205,6 +204,9 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
     @Override
     public Iterable<Scope> findLocalScopes(SLContext context, Node node, Frame frame) {
         final SLLexicalScope scope = SLLexicalScope.createScope(node);
+        if (scope == null) {
+            return Collections.emptyList();
+        }
         return new Iterable<Scope>() {
             @Override
             public Iterator<Scope> iterator() {

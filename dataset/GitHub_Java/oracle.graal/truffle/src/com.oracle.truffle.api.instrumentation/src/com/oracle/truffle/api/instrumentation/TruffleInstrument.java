@@ -31,9 +31,12 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
@@ -522,18 +525,34 @@ public abstract class TruffleInstrument {
         /**
          * Returns the polyglot scope - symbols explicitly exported by languages.
          *
-         * @return a read-only map of symbol names and their values
          * @since 0.30
          */
         public Map<String, ? extends Object> getExportedSymbols() {
-            return AccessorInstrumentHandler.engineAccess().getExportedSymbols(vmObject);
+            return new AbstractMap<String, Object>() {
+                private final Map<String, ?> symbols = AccessorInstrumentHandler.engineAccess().getExportedSymbols(vmObject);
+
+                @Override
+                public Set<Map.Entry<String, Object>> entrySet() {
+                    Set<Map.Entry<String, Object>> entries = new LinkedHashSet<>();
+                    for (Map.Entry<String, ?> symbol : symbols.entrySet()) {
+                        Object value = AccessorInstrumentHandler.engineAccess().toGuestValue(symbol.getValue(), vmObject);
+                        entries.add(new SimpleImmutableEntry<>(symbol.getKey(), value));
+                    }
+                    return entries;
+                }
+
+                @Override
+                public Object remove(Object key) {
+                    throw new UnsupportedOperationException();
+                }
+
+            };
         }
 
         /**
-         * Find a list of local scopes enclosing the given {@link Node node}. The scopes contain
-         * variables that are valid at the provided node and that have a relation to it. Unless the
-         * node is in a global scope, it is expected that there is at least one scope provided, that
-         * corresponds to the enclosing function. Global top scopes are provided by
+         * Find a list of local scopes enclosing the given {@link Node node}. There is at least one
+         * scope provided, that corresponds to the enclosing function. The scopes contain variables
+         * valid at the provided node and have a relation to it. Global top scopes are provided by
          * {@link #findTopScopes(java.lang.String)}. The iteration order corresponds with the scope
          * nesting, from the inner-most to the outer-most.
          * <p>
