@@ -46,7 +46,7 @@ public final class IsTypeNode extends BooleanNode implements Canonicalizable, LI
      * @param type the type for this check
      */
     public IsTypeNode(ValueNode objectClass, RiResolvedType type) {
-        super(StampFactory.condition());
+        super(StampFactory.illegal());
         assert objectClass == null || objectClass.kind() == CiKind.Object;
         this.type = type;
         this.objectClass = objectClass;
@@ -70,12 +70,16 @@ public final class IsTypeNode extends BooleanNode implements Canonicalizable, LI
             return ConstantNode.forBoolean(constant.equivalent(typeHub), graph());
         }
         // TODO(ls) since a ReadHubNode with an exactType should canonicalize itself to a constant this should actually never happen, maybe turn into an assertion?
-        if (objectClass() instanceof ReadHubNode) {
-            ObjectStamp stamp = ((ReadHubNode) objectClass()).object().objectStamp();
-            if (stamp.isExactType()) {
-                return ConstantNode.forBoolean(stamp.type() == type(), graph());
-            }
+        RiResolvedType exactType = objectClass() instanceof ReadHubNode ? ((ReadHubNode) objectClass()).object().exactType() : null;
+        if (exactType != null) {
+            return ConstantNode.forBoolean(exactType == type(), graph());
         }
+        // constants return the correct exactType, so they are handled by the code above
         return this;
+    }
+
+    @Override
+    public BooleanNode negate() {
+        throw new Error("unimplemented");
     }
 }
