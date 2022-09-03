@@ -50,26 +50,31 @@ final class SourceLocation {
         this.tags = instrumenter.queryTags(context.getInstrumentedNode());
         this.sourceSection = context.getInstrumentedSourceSection();
         this.instrumentedNode = context.getInstrumentedNode();
-        rootName = extractRootName(instrumentedNode);
+        RootNode rootNode = instrumentedNode.getRootNode();
+        if (rootNode != null) {
+            if (rootNode.getName() == null) {
+                this.rootName = rootNode.toString();
+            } else {
+                this.rootName = rootNode.getName();
+            }
+        } else {
+            this.rootName = "<Unknown>";
+        }
     }
 
     SourceLocation(Node node, SourceSection sourceSection) {
         this.tags = Collections.emptySet();
         this.sourceSection = sourceSection;
         this.instrumentedNode = node;
-        rootName = extractRootName(instrumentedNode);
-    }
-
-    private static String extractRootName(Node instrumentedNode) {
-        RootNode rootNode = instrumentedNode.getRootNode();
+        RootNode rootNode = node.getRootNode();
         if (rootNode != null) {
             if (rootNode.getName() == null) {
-                return rootNode.toString();
+                this.rootName = rootNode.toString();
             } else {
-                return  rootNode.getName();
+                this.rootName = rootNode.getName();
             }
         } else {
-            return "<Unknown>";
+            this.rootName = "<Unknown>";
         }
     }
 
