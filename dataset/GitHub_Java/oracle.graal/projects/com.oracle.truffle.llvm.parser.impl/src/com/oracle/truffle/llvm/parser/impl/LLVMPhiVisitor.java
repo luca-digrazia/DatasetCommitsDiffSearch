@@ -44,15 +44,16 @@ import com.intel.llvm.ireditor.lLVM_IR.Instruction_phi;
 import com.intel.llvm.ireditor.lLVM_IR.StartingInstruction;
 import com.intel.llvm.ireditor.lLVM_IR.Type;
 import com.intel.llvm.ireditor.lLVM_IR.ValueRef;
+import com.intel.llvm.ireditor.lLVM_IR.impl.LocalValueRefImpl;
 
 /**
  * This class finds a list of phis that reference a given block.
  */
-public class LLVMPhiVisitor {
+public final class LLVMPhiVisitor {
 
     private final Map<BasicBlock, List<Phi>> basicBlockReferences = new HashMap<>();
 
-    static class Phi {
+    public static class Phi {
 
         private final ValueRef valueRef;
         private final Type type;
@@ -80,6 +81,23 @@ public class LLVMPhiVisitor {
 
         public StartingInstruction getStartingInstr() {
             return startingInstr;
+        }
+
+        public LocalValueRefImpl getLocalVariablesInPhi(BasicBlock block) {
+            int i = 0;
+            Instruction_phi instruction = getStartingInstr().getInstruction();
+            for (BasicBlockRef label : instruction.getLabels()) {
+                if (label.getRef().equals(block)) {
+                    break;
+                }
+                i++;
+            }
+            ValueRef value = instruction.getValues().get(i);
+            if (value instanceof LocalValueRefImpl) {
+                return (LocalValueRefImpl) value;
+            } else {
+                return null;
+            }
         }
 
     }

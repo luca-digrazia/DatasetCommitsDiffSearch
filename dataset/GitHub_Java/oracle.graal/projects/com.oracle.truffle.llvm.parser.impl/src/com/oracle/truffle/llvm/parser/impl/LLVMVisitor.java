@@ -35,7 +35,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -610,20 +609,13 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         }
     }
 
-    private boolean needsStackPointerArgument() {
-        Optional<Boolean> hasStackPointerArgument = factoryFacade.hasStackPointerArgument();
-        return hasStackPointerArgument.isPresent() && hasStackPointerArgument.get();
-    }
-
     private List<LLVMNode> getFormalParametersInit(FunctionDef def) {
         // add formal parameters
         List<LLVMNode> formalParamInits = new ArrayList<>();
         FunctionHeader functionHeader = def.getHeader();
         EList<Parameter> pars = functionHeader.getParameters().getParameters();
-        if (needsStackPointerArgument()) {
-            LLVMExpressionNode stackPointerNode = factoryFacade.createFunctionArgNode(0, LLVMBaseType.ADDRESS);
-            formalParamInits.add(factoryFacade.createFrameWrite(LLVMBaseType.ADDRESS, stackPointerNode, getStackPointerSlot()));
-        }
+        LLVMExpressionNode stackPointerNode = factoryFacade.createFunctionArgNode(0, LLVMBaseType.ADDRESS);
+        formalParamInits.add(factoryFacade.createFrameWrite(LLVMBaseType.ADDRESS, stackPointerNode, getStackPointerSlot()));
         int argIndex = factoryFacade.getArgStartIndex().get();
         if (resolve(functionHeader.getRettype()).isStruct()) {
             LLVMExpressionNode functionRetParNode = factoryFacade.createFunctionArgNode(argIndex++, LLVMBaseType.STRUCT);
@@ -713,10 +705,8 @@ public final class LLVMVisitor implements LLVMParserRuntime {
 
     private LLVMNode visitFunctionCall(Callee callee, EList<Argument> args, ResolvedType retType) throws AssertionError {
         List<LLVMExpressionNode> argNodes = new ArrayList<>(args.size());
-        if (needsStackPointerArgument()) {
-            LLVMExpressionNode stackPointerRead = factoryFacade.createFrameRead(LLVMBaseType.ADDRESS, getStackPointerSlot());
-            argNodes.add(stackPointerRead);
-        }
+        LLVMExpressionNode stackPointerRead = factoryFacade.createFrameRead(LLVMBaseType.ADDRESS, getStackPointerSlot());
+        argNodes.add(stackPointerRead);
         if (retType.isStruct()) {
             argNodes.add(allocateFunctionLifetime(retType));
         }
