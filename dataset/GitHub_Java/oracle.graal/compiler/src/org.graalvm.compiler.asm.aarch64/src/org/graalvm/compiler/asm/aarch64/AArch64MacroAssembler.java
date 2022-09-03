@@ -504,8 +504,8 @@ public class AArch64MacroAssembler extends AArch64Assembler {
      * @param dst general purpose register. May not be null or stackpointer.
      * @param condition any condition. May not be null.
      */
-    public void cset(int size, Register dst, ConditionFlag condition) {
-        super.csinc(size, dst, zr, zr, condition.negate());
+    public void cset(Register dst, ConditionFlag condition) {
+        super.csinc(32, dst, zr, zr, condition.negate());
     }
 
     /**
@@ -1049,6 +1049,95 @@ public class AArch64MacroAssembler extends AArch64Assembler {
      */
     public void not(int size, Register dst, Register src) {
         super.orn(size, dst, zr, src, ShiftType.LSL, 0);
+    }
+
+    /**
+     * dst = src1 & shiftType(src2, imm).
+     *
+     * @param size register size. Has to be 32 or 64.
+     * @param dst general purpose register. May not be null or stackpointer.
+     * @param src1 general purpose register. May not be null or stackpointer.
+     * @param src2 general purpose register. May not be null or stackpointer.
+     * @param shiftType all types allowed, may not be null.
+     * @param shiftAmt must be in range 0 to size - 1.
+     */
+    @Override
+    public void and(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
+        super.and(size, dst, src1, src2, shiftType, shiftAmt);
+    }
+
+    /**
+     * dst = src1 ^ shiftType(src2, imm).
+     *
+     * @param size register size. Has to be 32 or 64.
+     * @param dst general purpose register. May not be null or stackpointer.
+     * @param src1 general purpose register. May not be null or stackpointer.
+     * @param src2 general purpose register. May not be null or stackpointer.
+     * @param shiftType all types allowed, may not be null.
+     * @param shiftAmt must be in range 0 to size - 1.
+     */
+    @Override
+    public void eor(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
+        super.eor(size, dst, src1, src2, shiftType, shiftAmt);
+    }
+
+    /**
+     * dst = src1 | shiftType(src2, imm).
+     *
+     * @param size register size. Has to be 32 or 64.
+     * @param dst general purpose register. May not be null or stackpointer.
+     * @param src1 general purpose register. May not be null or stackpointer.
+     * @param src2 general purpose register. May not be null or stackpointer.
+     * @param shiftType all types allowed, may not be null.
+     * @param shiftAmt must be in range 0 to size - 1.
+     */
+    public void or(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
+        super.orr(size, dst, src1, src2, shiftType, shiftAmt);
+    }
+
+    /**
+     * dst = src1 & ~(shiftType(src2, imm)).
+     *
+     * @param size register size. Has to be 32 or 64.
+     * @param dst general purpose register. May not be null or stackpointer.
+     * @param src1 general purpose register. May not be null or stackpointer.
+     * @param src2 general purpose register. May not be null or stackpointer.
+     * @param shiftType all types allowed, may not be null.
+     * @param shiftAmt must be in range 0 to size - 1.
+     */
+    @Override
+    public void bic(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
+        super.bic(size, dst, src1, src2, shiftType, shiftAmt);
+    }
+
+    /**
+     * dst = src1 ^ ~(shiftType(src2, imm)).
+     *
+     * @param size register size. Has to be 32 or 64.
+     * @param dst general purpose register. May not be null or stackpointer.
+     * @param src1 general purpose register. May not be null or stackpointer.
+     * @param src2 general purpose register. May not be null or stackpointer.
+     * @param shiftType all types allowed, may not be null.
+     * @param shiftAmt must be in range 0 to size - 1.
+     */
+    @Override
+    public void eon(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
+        super.eon(size, dst, src1, src2, shiftType, shiftAmt);
+    }
+
+    /**
+     * dst = src1 | ~(shiftType(src2, imm)).
+     *
+     * @param size register size. Has to be 32 or 64.
+     * @param dst general purpose register. May not be null or stackpointer.
+     * @param src1 general purpose register. May not be null or stackpointer.
+     * @param src2 general purpose register. May not be null or stackpointer.
+     * @param shiftType all types allowed, may not be null.
+     * @param shiftAmt must be in range 0 to size - 1.
+     */
+    @Override
+    public void orn(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
+        super.orn(size, dst, src1, src2, shiftType, shiftAmt);
     }
 
     /**

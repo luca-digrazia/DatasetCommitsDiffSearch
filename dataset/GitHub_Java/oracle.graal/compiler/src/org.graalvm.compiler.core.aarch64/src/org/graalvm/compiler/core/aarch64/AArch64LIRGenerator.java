@@ -24,8 +24,8 @@
  */
 package org.graalvm.compiler.core.aarch64;
 
+import static jdk.vm.ci.aarch64.AArch64.sp;
 import static org.graalvm.compiler.lir.LIRValueUtil.asJavaConstant;
-import static org.graalvm.compiler.lir.LIRValueUtil.isIntConstant;
 import static org.graalvm.compiler.lir.LIRValueUtil.isJavaConstant;
 
 import java.util.function.Function;
@@ -52,7 +52,6 @@ import org.graalvm.compiler.lir.aarch64.AArch64Compare;
 import org.graalvm.compiler.lir.aarch64.AArch64ControlFlow;
 import org.graalvm.compiler.lir.aarch64.AArch64ControlFlow.BranchOp;
 import org.graalvm.compiler.lir.aarch64.AArch64ControlFlow.CondMoveOp;
-import org.graalvm.compiler.lir.aarch64.AArch64ControlFlow.CondSetOp;
 import org.graalvm.compiler.lir.aarch64.AArch64ControlFlow.StrategySwitchOp;
 import org.graalvm.compiler.lir.aarch64.AArch64ControlFlow.TableSwitchOp;
 import org.graalvm.compiler.lir.aarch64.AArch64LIRFlagsVersioned;
@@ -99,6 +98,18 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
         // not we can inline a constant without knowing what kind of operation we execute. Let's be
         // optimistic here and fix up mistakes later.
         return true;
+    }
+
+    /**
+     * If val denotes the stackpointer, move it to another location. This is necessary since most
+     * ops cannot handle the stackpointer as input or output.
+     */
+    public AllocatableValue moveSp(AllocatableValue val) {
+        if (val instanceof RegisterValue && ((RegisterValue) val).getRegister().equals(sp)) {
+            assert val.getPlatformKind() == AArch64Kind.QWORD : "Stackpointer must be long";
+            return emitMove(val);
+        }
+        return val;
     }
 
     /**
@@ -230,14 +241,7 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
         boolean finalUnorderedIsTrue = mirrored ? !unorderedIsTrue : unorderedIsTrue;
         ConditionFlag cmpCondition = toConditionFlag(((AArch64Kind) cmpKind).isInteger(), finalCondition, finalUnorderedIsTrue);
         Variable result = newVariable(trueValue.getValueKind());
-
-        if (isIntConstant(trueValue, 1) && isIntConstant(falseValue, 0)) {
-            append(new CondSetOp(result, cmpCondition));
-        } else if (isIntConstant(trueValue, 0) && isIntConstant(falseValue, 1)) {
-            append(new CondSetOp(result, cmpCondition.negate()));
-        } else {
-            append(new CondMoveOp(result, cmpCondition, loadReg(trueValue), loadReg(falseValue)));
-        }
+        append(new CondMoveOp(result, cmpCondition, loadReg(trueValue), loadReg(falseValue)));
         return result;
     }
 
@@ -433,14 +437,7 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
         assert ((AArch64Kind) trueValue.getPlatformKind()).isInteger() && ((AArch64Kind) falseValue.getPlatformKind()).isInteger();
         ((AArch64ArithmeticLIRGenerator) getArithmetic()).emitBinary(left.getValueKind(), AArch64ArithmeticOp.ANDS, true, left, right);
         Variable result = newVariable(trueValue.getValueKind());
-
-        if (isIntConstant(trueValue, 1) && isIntConstant(falseValue, 0)) {
-            append(new CondSetOp(result, ConditionFlag.EQ));
-        } else if (isIntConstant(trueValue, 0) && isIntConstant(falseValue, 1)) {
-            append(new CondSetOp(result, ConditionFlag.NE));
-        } else {
-            append(new CondMoveOp(result, ConditionFlag.EQ, load(trueValue), load(falseValue)));
-        }
+        append(new CondMoveOp(result, ConditionFlag.EQ, load(trueValue), load(falseValue)));
         return result;
     }
 
