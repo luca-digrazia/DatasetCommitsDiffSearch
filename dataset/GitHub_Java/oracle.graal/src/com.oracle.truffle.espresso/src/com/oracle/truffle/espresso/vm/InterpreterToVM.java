@@ -112,6 +112,10 @@ public class InterpreterToVM {
         }
     }
 
+    private InterpreterToVM(EspressoLanguage language, Class<?>... intrinsics) {
+        this(language, Arrays.asList(intrinsics));
+    }
+
     public InterpreterToVM(EspressoLanguage language) {
         this(language, DEFAULTS);
     }
