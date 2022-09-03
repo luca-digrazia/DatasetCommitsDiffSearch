@@ -29,9 +29,9 @@
  */
 package com.oracle.truffle.llvm.nodes.memory.load;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -39,61 +39,67 @@ import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.FloatValueProfile;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.intrinsics.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.types.FloatingPointType;
 
 @NodeChild(type = LLVMExpressionNode.class)
 public abstract class LLVMFloatLoadNode extends LLVMExpressionNode {
     @Child protected Node foreignRead = Message.READ.createNode();
-    @Child protected ToLLVMNode toLLVM = ToLLVMNode.createNode(float.class);
+    @Child protected ToLLVMNode toLLVM = new ToLLVMNode();
 
-    protected float doForeignAccess(LLVMTruffleObject addr) {
+    protected float doForeignAccess(VirtualFrame frame, LLVMTruffleObject addr) {
         try {
             int index = (int) (addr.getOffset() / LLVMExpressionNode.FLOAT_SIZE_IN_BYTES);
-            Object value = ForeignAccess.sendRead(foreignRead, addr.getObject(), index);
-            return (float) toLLVM.executeWithTarget(value);
+            Object value = ForeignAccess.sendRead(foreignRead, frame, addr.getObject(), index);
+            return toLLVM.convert(frame, value, float.class);
         } catch (UnknownIdentifierException | UnsupportedMessageException e) {
             throw new IllegalStateException(e);
         }
     }
 
-    private final FloatValueProfile profile = FloatValueProfile.createRawIdentityProfile();
+    public abstract static class LLVMFloatDirectLoadNode extends LLVMFloatLoadNode {
 
-    @Specialization
-    public float executeFloat(LLVMGlobalVariable addr) {
-        return profile.profile(addr.getFloat());
-    }
-
-    @Specialization
-    public float executeFloat(LLVMAddress addr) {
-        float val = LLVMMemory.getFloat(addr);
-        return profile.profile(val);
-    }
-
-    @Specialization
-    public float executeFloat(LLVMTruffleObject addr) {
-        return doForeignAccess(addr);
-    }
-
-    @Specialization
-    public float executeLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
-        if (addr.getValue() instanceof Long) {
-            return LLVMMemory.getFloat((long) addr.getValue());
-        } else {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalAccessError("Cannot access address: " + addr.getValue());
+        @Specialization
+        public float executeFloat(LLVMAddress addr) {
+            return LLVMMemory.getFloat(addr);
         }
+
+        @Specialization
+        public float executeFloat(VirtualFrame frame, LLVMTruffleObject addr) {
+            return doForeignAccess(frame, addr);
+        }
+
+        @Specialization
+        public float executeFloat(VirtualFrame frame, TruffleObject addr) {
+            return executeFloat(frame, new LLVMTruffleObject(addr, FloatingPointType.FLOAT));
+        }
+
     }
 
-    @Specialization(guards = "notLLVM(addr)")
-    public float executeFloat(TruffleObject addr) {
-        return executeFloat(new LLVMTruffleObject(addr, PrimitiveType.FLOAT));
+    public abstract static class LLVMFloatProfilingLoadNode extends LLVMFloatLoadNode {
+
+        private final FloatValueProfile profile = FloatValueProfile.createRawIdentityProfile();
+
+        @Specialization
+        public float executeFloat(LLVMAddress addr) {
+            float val = LLVMMemory.getFloat(addr);
+            return profile.profile(val);
+        }
+
+        @Specialization
+        public float executeFloat(VirtualFrame frame, LLVMTruffleObject addr) {
+            return doForeignAccess(frame, addr);
+        }
+
+        @Specialization
+        public float executeFloat(VirtualFrame frame, TruffleObject addr) {
+            return executeFloat(frame, new LLVMTruffleObject(addr, FloatingPointType.FLOAT));
+        }
+
     }
 
 }

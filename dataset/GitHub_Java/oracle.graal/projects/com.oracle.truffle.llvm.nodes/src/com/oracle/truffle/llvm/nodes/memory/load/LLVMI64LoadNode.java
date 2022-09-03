@@ -29,9 +29,9 @@
  */
 package com.oracle.truffle.llvm.nodes.memory.load;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -39,62 +39,68 @@ import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.LongValueProfile;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.intrinsics.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.types.IntegerType;
 
 @NodeChild(type = LLVMExpressionNode.class)
 public abstract class LLVMI64LoadNode extends LLVMExpressionNode {
 
     @Child protected Node foreignRead = Message.READ.createNode();
-    @Child protected ToLLVMNode toLLVM = ToLLVMNode.createNode(long.class);
+    @Child protected ToLLVMNode toLLVM = new ToLLVMNode();
 
-    protected long doForeignAccess(LLVMTruffleObject addr) {
+    protected long doForeignAccess(VirtualFrame frame, LLVMTruffleObject addr) {
         try {
             int index = (int) addr.getOffset() / LLVMExpressionNode.I64_SIZE_IN_BYTES;
-            Object value = ForeignAccess.sendRead(foreignRead, addr.getObject(), index);
-            return (long) toLLVM.executeWithTarget(value);
+            Object value = ForeignAccess.sendRead(foreignRead, frame, addr.getObject(), index);
+            return toLLVM.convert(frame, value, long.class);
         } catch (UnknownIdentifierException | UnsupportedMessageException e) {
             throw new IllegalStateException(e);
         }
     }
 
-    private final LongValueProfile profile = LongValueProfile.createIdentityProfile();
+    public abstract static class LLVMI64DirectLoadNode extends LLVMI64LoadNode {
 
-    @Specialization
-    public long executeI64(LLVMAddress addr) {
-        long val = LLVMMemory.getI64(addr);
-        return profile.profile(val);
-    }
-
-    @Specialization
-    public long executeI64(LLVMGlobalVariable addr) {
-        return profile.profile(addr.getI64());
-    }
-
-    @Specialization
-    public long executeI64(LLVMTruffleObject addr) {
-        return doForeignAccess(addr);
-    }
-
-    @Specialization
-    public long executeLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
-        if (addr.getValue() instanceof Long) {
-            return LLVMMemory.getI64((long) addr.getValue());
-        } else {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalAccessError("Cannot access address: " + addr.getValue());
+        @Specialization
+        public long executeI64(LLVMAddress addr) {
+            return LLVMMemory.getI64(addr);
         }
+
+        @Specialization
+        public long executeI64(VirtualFrame frame, LLVMTruffleObject addr) {
+            return doForeignAccess(frame, addr);
+        }
+
+        @Specialization
+        public long executeI64(VirtualFrame frame, TruffleObject addr) {
+            return executeI64(frame, new LLVMTruffleObject(addr, IntegerType.LONG));
+        }
+
     }
 
-    @Specialization(guards = "notLLVM(addr)")
-    public long executeI64(TruffleObject addr) {
-        return executeI64(new LLVMTruffleObject(addr, PrimitiveType.I64));
+    public abstract static class LLVMI64ProfilingLoadNode extends LLVMI64LoadNode {
+
+        private final LongValueProfile profile = LongValueProfile.createIdentityProfile();
+
+        @Specialization
+        public long executeI64(LLVMAddress addr) {
+            long val = LLVMMemory.getI64(addr);
+            return profile.profile(val);
+        }
+
+        @Specialization
+        public long executeI64(VirtualFrame frame, LLVMTruffleObject addr) {
+            return doForeignAccess(frame, addr);
+        }
+
+        @Specialization
+        public long executeI64(VirtualFrame frame, TruffleObject addr) {
+            return executeI64(frame, new LLVMTruffleObject(addr, IntegerType.LONG));
+        }
+
     }
 
 }

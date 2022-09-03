@@ -29,9 +29,9 @@
  */
 package com.oracle.truffle.llvm.nodes.memory.load;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -39,61 +39,66 @@ import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.ByteValueProfile;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.intrinsics.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.types.IntegerType;
 
 @NodeChild(type = LLVMExpressionNode.class)
 public abstract class LLVMI8LoadNode extends LLVMExpressionNode {
     @Child protected Node foreignRead = Message.READ.createNode();
-    @Child protected ToLLVMNode toLLVM = ToLLVMNode.createNode(byte.class);
+    @Child protected ToLLVMNode toLLVM = new ToLLVMNode();
 
-    protected byte doForeignAccess(LLVMTruffleObject addr) {
+    protected byte doForeignAccess(VirtualFrame frame, LLVMTruffleObject addr) {
         try {
             int index = (int) addr.getOffset();
-            Object value = ForeignAccess.sendRead(foreignRead, addr.getObject(), index);
-            return (byte) toLLVM.executeWithTarget(value);
+            Object value = ForeignAccess.sendRead(foreignRead, frame, addr.getObject(), index);
+            return toLLVM.convert(frame, value, byte.class);
         } catch (UnknownIdentifierException | UnsupportedMessageException e) {
             throw new IllegalStateException(e);
         }
     }
 
-    private final ByteValueProfile profile = ByteValueProfile.createIdentityProfile();
+    public abstract static class LLVMI8DirectLoadNode extends LLVMI8LoadNode {
 
-    @Specialization
-    public byte executeI8(LLVMAddress addr) {
-        byte val = LLVMMemory.getI8(addr);
-        return profile.profile(val);
-    }
-
-    @Specialization
-    public byte executeI8(LLVMGlobalVariable addr) {
-        return profile.profile(addr.getI8());
-    }
-
-    @Specialization
-    public byte executeI8(LLVMTruffleObject addr) {
-        return doForeignAccess(addr);
-    }
-
-    @Specialization
-    public byte executeLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
-        if (addr.getValue() instanceof Long) {
-            return LLVMMemory.getI8((long) addr.getValue());
-        } else {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalAccessError("Cannot access address: " + addr.getValue());
+        @Specialization
+        public byte executeI8(LLVMAddress addr) {
+            return LLVMMemory.getI8(addr);
         }
+
+        @Specialization
+        public byte executeI8(VirtualFrame frame, LLVMTruffleObject addr) {
+            return doForeignAccess(frame, addr);
+        }
+
+        @Specialization
+        public byte executeI8(VirtualFrame frame, TruffleObject addr) {
+            return executeI8(frame, new LLVMTruffleObject(addr, IntegerType.BYTE));
+        }
+
     }
 
-    @Specialization(guards = "notLLVM(addr)")
-    public byte executeI8(TruffleObject addr) {
-        return executeI8(new LLVMTruffleObject(addr, PrimitiveType.I8));
+    public abstract static class LLVMI8ProfilingLoadNode extends LLVMI8LoadNode {
+
+        private final ByteValueProfile profile = ByteValueProfile.createIdentityProfile();
+
+        @Specialization
+        public byte executeI8(LLVMAddress addr) {
+            byte val = LLVMMemory.getI8(addr);
+            return profile.profile(val);
+        }
+
+        @Specialization
+        public byte executeI8(VirtualFrame frame, LLVMTruffleObject addr) {
+            return doForeignAccess(frame, addr);
+        }
+
+        @Specialization
+        public byte executeI8(VirtualFrame frame, TruffleObject addr) {
+            return executeI8(frame, new LLVMTruffleObject(addr, IntegerType.BYTE));
+        }
     }
 
 }

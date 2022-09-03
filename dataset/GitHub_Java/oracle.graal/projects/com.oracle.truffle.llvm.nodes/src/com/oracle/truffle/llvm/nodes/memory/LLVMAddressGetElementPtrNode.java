@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.nodes.memory;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.NodeField;
@@ -38,88 +37,65 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMGlobalVariableDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
-@NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
-@NodeFields({@NodeField(type = int.class, name = "typeWidth"), @NodeField(type = Type.class, name = "targetType")})
 public abstract class LLVMAddressGetElementPtrNode extends LLVMExpressionNode {
 
-    public abstract int getTypeWidth();
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+    @NodeFields({@NodeField(type = int.class, name = "typeWidth"), @NodeField(type = Type.class, name = "targetType")})
+    public abstract static class LLVMAddressI32GetElementPtrNode extends LLVMAddressGetElementPtrNode {
 
-    public abstract Type getTargetType();
+        public abstract int getTypeWidth();
 
-    @Specialization
-    public LLVMAddress executePointee(LLVMAddress addr, int val) {
-        int incr = getTypeWidth() * val;
-        return addr.increment(incr);
-    }
+        public abstract Type getTargetType();
 
-    @Specialization
-    public LLVMAddress executePointee(LLVMGlobalVariableDescriptor addr, int val) {
-        int incr = getTypeWidth() * val;
-        return addr.getNativeAddress().increment(incr);
-    }
-
-    @Specialization
-    public LLVMTruffleObject executeTruffleObject(LLVMTruffleObject addr, int val) {
-        int incr = getTypeWidth() * val;
-        return new LLVMTruffleObject(addr.getObject(), addr.getOffset() + incr, new PointerType(getTargetType()));
-    }
-
-    @Specialization
-    public LLVMAddress executeLLVMBoxedPrimitive(LLVMBoxedPrimitive addr, int val) {
-        if (addr.getValue() instanceof Long) {
+        @Specialization
+        public LLVMAddress executePointee(LLVMAddress addr, int val) {
             int incr = getTypeWidth() * val;
-            return LLVMAddress.fromLong((long) addr.getValue() + incr);
-        } else {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalAccessError("Cannot do pointer arithmetic with address: " + addr.getValue());
+            return addr.increment(incr, getTargetType());
         }
+
+        @Specialization
+        public LLVMTruffleObject executeTruffleObject(LLVMTruffleObject addr, int val) {
+            int incr = getTypeWidth() * val;
+            return new LLVMTruffleObject(addr.getObject(), addr.getOffset() + incr, getTargetType());
+        }
+
+        @Specialization
+        public LLVMTruffleObject executeTruffleObject(TruffleObject addr, int val) {
+            int incr = getTypeWidth() * val;
+            return new LLVMTruffleObject(addr, incr, getTargetType());
+        }
+
     }
 
-    @Specialization(guards = "notLLVM(addr)")
-    public LLVMTruffleObject executeTruffleObject(TruffleObject addr, int val) {
-        int incr = getTypeWidth() * val;
-        return new LLVMTruffleObject(addr, incr, new PointerType(getTargetType()));
-    }
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+    @NodeFields({@NodeField(type = int.class, name = "typeWidth"), @NodeField(type = Type.class, name = "targetType")})
+    public abstract static class LLVMAddressI64GetElementPtrNode extends LLVMAddressGetElementPtrNode {
 
-    @Specialization
-    public LLVMAddress executePointee(LLVMAddress addr, long val) {
-        long incr = getTypeWidth() * val;
-        return addr.increment(incr);
-    }
+        public abstract int getTypeWidth();
 
-    @Specialization
-    public LLVMTruffleObject executeTruffleObject(LLVMTruffleObject addr, long val) {
-        long incr = getTypeWidth() * val;
-        return new LLVMTruffleObject(addr.getObject(), addr.getOffset() + incr, new PointerType(getTargetType()));
-    }
+        public abstract Type getTargetType();
 
-    @Specialization
-    public LLVMAddress executeLLVMBoxedPrimitive(LLVMBoxedPrimitive addr, long val) {
-        if (addr.getValue() instanceof Long) {
+        @Specialization
+        public LLVMAddress executePointee(LLVMAddress addr, long val) {
             long incr = getTypeWidth() * val;
-            return LLVMAddress.fromLong((long) addr.getValue() + incr);
-        } else {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalAccessError("Cannot do pointer arithmetic with address: " + addr.getValue());
+            return addr.increment(incr, getTargetType());
         }
-    }
 
-    @Specialization(guards = "notLLVM(addr)")
-    public LLVMTruffleObject executeTruffleObject(TruffleObject addr, long val) {
-        long incr = getTypeWidth() * val;
-        return new LLVMTruffleObject(addr, incr, new PointerType(getTargetType()));
-    }
+        @Specialization
+        public LLVMTruffleObject executeTruffleObject(LLVMTruffleObject addr, long val) {
+            long incr = getTypeWidth() * val;
+            return new LLVMTruffleObject(addr.getObject(), addr.getOffset() + incr, getTargetType());
+        }
 
-    @Specialization
-    public LLVMAddress executePointee(LLVMGlobalVariableDescriptor addr, long val) {
-        long incr = getTypeWidth() * val;
-        return addr.getNativeAddress().increment(incr);
+        @Specialization
+        public LLVMTruffleObject executeTruffleObject(TruffleObject addr, long val) {
+            long incr = getTypeWidth() * val;
+            return new LLVMTruffleObject(addr, incr, getTargetType());
+        }
+
     }
 
 }

@@ -29,9 +29,9 @@
  */
 package com.oracle.truffle.llvm.nodes.memory.load;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -39,61 +39,67 @@ import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.IntValueProfile;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.intrinsics.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.types.IntegerType;
 
 @NodeChild(type = LLVMExpressionNode.class)
 public abstract class LLVMI32LoadNode extends LLVMExpressionNode {
     @Child protected Node foreignRead = Message.READ.createNode();
-    @Child protected ToLLVMNode toLLVM = ToLLVMNode.createNode(int.class);
+    @Child protected ToLLVMNode toLLVM = new ToLLVMNode();
 
-    protected int doForeignAccess(LLVMTruffleObject addr) {
+    protected int doForeignAccess(VirtualFrame frame, LLVMTruffleObject addr) {
         try {
             int index = (int) (addr.getOffset() / LLVMExpressionNode.I32_SIZE_IN_BYTES);
-            Object value = ForeignAccess.sendRead(foreignRead, addr.getObject(), index);
-            return (int) toLLVM.executeWithTarget(value);
+            Object value = ForeignAccess.sendRead(foreignRead, frame, addr.getObject(), index);
+            return toLLVM.convert(frame, value, int.class);
         } catch (UnknownIdentifierException | UnsupportedMessageException e) {
             throw new IllegalStateException(e);
         }
     }
 
-    private final IntValueProfile profile = IntValueProfile.createIdentityProfile();
+    public abstract static class LLVMI32DirectLoadNode extends LLVMI32LoadNode {
 
-    @Specialization
-    public int executeI32(LLVMAddress addr) {
-        int val = LLVMMemory.getI32(addr);
-        return profile.profile(val);
-    }
-
-    @Specialization
-    public int executeI32(LLVMGlobalVariable addr) {
-        return profile.profile(addr.getI32());
-    }
-
-    @Specialization
-    public int executeI32(LLVMTruffleObject addr) {
-        return doForeignAccess(addr);
-    }
-
-    @Specialization
-    public int executeLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
-        if (addr.getValue() instanceof Long) {
-            return LLVMMemory.getI32((long) addr.getValue());
-        } else {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalAccessError("Cannot access address: " + addr.getValue());
+        @Specialization
+        public int executeI32(LLVMAddress addr) {
+            return LLVMMemory.getI32(addr);
         }
+
+        @Specialization
+        public int executeI32(VirtualFrame frame, LLVMTruffleObject addr) {
+            return doForeignAccess(frame, addr);
+        }
+
+        @Specialization
+        public int executeI32(VirtualFrame frame, TruffleObject addr) {
+            return executeI32(frame, new LLVMTruffleObject(addr, IntegerType.INTEGER));
+        }
+
     }
 
-    @Specialization(guards = "notLLVM(addr)")
-    public int executeI32(TruffleObject addr) {
-        return executeI32(new LLVMTruffleObject(addr, PrimitiveType.I32));
+    public abstract static class LLVMI32ProfilingLoadNode extends LLVMI32LoadNode {
+
+        private final IntValueProfile profile = IntValueProfile.createIdentityProfile();
+
+        @Specialization
+        public int executeI32(LLVMAddress addr) {
+            int val = LLVMMemory.getI32(addr);
+            return profile.profile(val);
+        }
+
+        @Specialization
+        public int executeI32(VirtualFrame frame, LLVMTruffleObject addr) {
+            return doForeignAccess(frame, addr);
+        }
+
+        @Specialization
+        public int executeI32(VirtualFrame frame, TruffleObject addr) {
+            return executeI32(frame, new LLVMTruffleObject(addr, IntegerType.INTEGER));
+        }
+
     }
 
 }
