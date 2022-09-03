@@ -33,7 +33,6 @@ import java.util.Arrays;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -90,8 +89,10 @@ public class LLVMBasicBlockNode extends LLVMNode {
         for (LLVMNode statement : statements) {
             try {
                 if (TRACE) {
-                    trace(statement);
+                    SourceSection traceSourceSection = statement.getEncapsulatingSourceSection();
+                    LLVMLogger.unconditionalInfo(String.format("[sulong] %s in %s", traceSourceSection.getIdentifier(), traceSourceSection.getSource().getName()));
                 }
+
                 statement.executeVoid(frame);
             } catch (ControlFlowException e) {
                 controlFlowExceptionProfile.enter();
@@ -108,13 +109,6 @@ public class LLVMBasicBlockNode extends LLVMNode {
             }
         }
         return termInstruction.executeGetSuccessorIndex(frame);
-    }
-
-    @SuppressWarnings("deprecation")
-    @TruffleBoundary
-    private static void trace(LLVMNode statement) {
-        SourceSection traceSourceSection = statement.getEncapsulatingSourceSection();
-        LLVMLogger.unconditionalInfo(String.format("[sulong] %s in %s", traceSourceSection.getIdentifier(), traceSourceSection.getSource().getName()));
     }
 
     private void incrementCountAtIndex(int successorIndex) {
