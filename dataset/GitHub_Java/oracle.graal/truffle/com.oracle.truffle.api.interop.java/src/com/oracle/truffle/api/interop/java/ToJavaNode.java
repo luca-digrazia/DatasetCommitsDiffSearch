@@ -35,8 +35,6 @@ import java.util.Arrays;
 import java.util.List;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -46,6 +44,7 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
+import java.util.Map;
 
 final class ToJavaNode extends Node {
     private static final Object[] EMPTY = {};
@@ -76,7 +75,6 @@ final class ToJavaNode extends Node {
         return ForeignAccess.sendIsExecutable(isExecutable, frame, object);
     }
 
-    @TruffleBoundary
     private static boolean isJavaFunctionInterface(Class<?> type) {
         if (!type.isInterface()) {
             return false;
@@ -94,7 +92,6 @@ final class ToJavaNode extends Node {
         return false;
     }
 
-    @TruffleBoundary
     private static <T> T asJavaObject(Class<T> clazz, Type type, TruffleObject foreignObject) {
         Object obj;
         if (clazz.isInstance(foreignObject)) {
@@ -116,6 +113,20 @@ final class ToJavaNode extends Node {
                     }
                 }
                 obj = TruffleList.create(elementType, foreignObject);
+            } else if (clazz == Map.class) {
+                Class<?> keyType = Object.class;
+                Class<?> valueType = Object.class;
+                if (type instanceof ParameterizedType) {
+                    ParameterizedType parametrizedType = (ParameterizedType) type;
+                    final Type[] arr = parametrizedType.getActualTypeArguments();
+                    if (arr.length == 2 && arr[0] instanceof Class) {
+                        keyType = (Class<?>) arr[0];
+                    }
+                    if (arr.length == 2 && arr[1] instanceof Class) {
+                        valueType = (Class<?>) arr[1];
+                    }
+                }
+                obj = TruffleMap.create(keyType, valueType, foreignObject);
             } else {
                 obj = Proxy.newProxyInstance(clazz.getClassLoader(), new Class<?>[]{clazz}, new TruffleHandler(foreignObject));
             }
@@ -123,17 +134,12 @@ final class ToJavaNode extends Node {
         return clazz.cast(obj);
     }
 
-    @TruffleBoundary
     private static <T> T asJavaFunction(Class<T> functionalType, TruffleObject function) {
-        final SingleHandler handler = new SingleHandler(function);
-        if (functionalType == CallTarget.class) {
-            return functionalType.cast(handler);
-        }
-        Object obj = Proxy.newProxyInstance(functionalType.getClassLoader(), new Class<?>[]{functionalType}, handler);
+        Object obj = Proxy.newProxyInstance(functionalType.getClassLoader(), new Class<?>[]{functionalType}, new SingleHandler(function));
         return functionalType.cast(obj);
     }
 
-    private static final class SingleHandler implements InvocationHandler, CallTarget {
+    private static final class SingleHandler implements InvocationHandler {
         private final TruffleObject symbol;
         private CallTarget target;
 
@@ -143,20 +149,14 @@ final class ToJavaNode extends Node {
 
         @Override
         public Object invoke(Object proxy, Method method, Object[] arguments) throws Throwable {
-            Object ret = call(arguments);
-            return toJava(ret, method);
-        }
-
-        @Override
-        public Object call(Object... arguments) {
-            CompilerAsserts.neverPartOfCompilation();
             Object[] args = arguments == null ? EMPTY : arguments;
             if (target == null) {
                 Node executeMain = Message.createExecute(args.length).createNode();
                 RootNode symbolNode = new TemporaryRoot(TruffleLanguage.class, executeMain, symbol);
                 target = Truffle.getRuntime().createCallTarget(symbolNode);
             }
-            return target.call(args);
+            Object ret = target.call(args);
+            return toJava(ret, method);
         }
     }
 
@@ -169,7 +169,6 @@ final class ToJavaNode extends Node {
 
         @Override
         public Object invoke(Object proxy, Method method, Object[] arguments) throws Throwable {
-            CompilerAsserts.neverPartOfCompilation();
             Object[] args = arguments == null ? EMPTY : arguments;
             Object val;
             for (int i = 0; i < args.length; i++) {
@@ -284,7 +283,6 @@ final class ToJavaNode extends Node {
     }
 
     private static Message findMessage(MethodMessage mm) {
-        CompilerAsserts.neverPartOfCompilation();
         if (mm == null) {
             return null;
         }
@@ -292,7 +290,6 @@ final class ToJavaNode extends Node {
     }
 
     private static Object toJava(Object ret, Method method) {
-        CompilerAsserts.neverPartOfCompilation();
         Class<?> retType = method.getReturnType();
         Object primitiveRet = toPrimitive(ret, retType);
         if (primitiveRet != null) {
@@ -331,7 +328,6 @@ final class ToJavaNode extends Node {
         return toPrimitive(attr, null) != null;
     }
 
-    @TruffleBoundary
     private static Object toPrimitive(Object value, Class<?> requestedType) {
         Object attr;
         if (value instanceof TruffleObject) {
@@ -392,7 +388,6 @@ final class ToJavaNode extends Node {
     }
 
     @SuppressWarnings("unused")
-    @TruffleBoundary
     static Object message(final Message m, Object receiver, Object... arr) throws InteropException {
         Node n = m.createNode();
         CallTarget callTarget = Truffle.getRuntime().createCallTarget(new TemporaryRoot(TruffleLanguage.class, n, (TruffleObject) receiver));
