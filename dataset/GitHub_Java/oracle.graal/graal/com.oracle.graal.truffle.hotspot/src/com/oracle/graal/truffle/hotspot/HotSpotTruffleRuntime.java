@@ -127,6 +127,8 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         private final Map<RootCallTarget, Void> callTargets = Collections.synchronizedMap(new WeakHashMap<RootCallTarget, Void>());
 
         public Lazy(HotSpotTruffleRuntime runtime) {
+            setDontInlineCallBoundaryMethod();
+
             runtime.installDefaultListeners();
 
             // Create compilation queue.
@@ -157,7 +159,6 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     }
 
     private HotSpotTruffleRuntime() {
-        setDontInlineCallBoundaryMethod();
     }
 
     @Override
