@@ -4,7 +4,6 @@ import static com.oracle.truffle.espresso.meta.Meta.meta;
 
 import java.lang.reflect.Method;
 
-import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.impl.MethodInfo;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -24,10 +23,6 @@ public class Target_sun_reflect_NativeMethodAccessorImpl {
             }
         }
         Meta.Method m = meta(target);
-
-        return m.invokeDirect(receiver,
-                StaticObject.isNull(args)
-                        ? new Object[0]
-                        : ((StaticObjectArray) args).getWrapped());
+        return m.invokeDirect(receiver, ((StaticObjectArray) args).getWrapped());
     }
 }

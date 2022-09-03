@@ -23,29 +23,17 @@
 
 package com.oracle.truffle.espresso.classfile;
 
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.meta.ExceptionHandler;
-import com.oracle.truffle.espresso.runtime.Attribute;
+import com.oracle.truffle.espresso.runtime.AttributeInfo;
 
-public final class CodeAttribute extends Attribute {
-
-    public static final Symbol<Name> NAME = Name.Code;
-
+public class CodeAttribute extends AttributeInfo {
     private final int maxStack;
     private final int maxLocals;
-
-    @CompilationFinal(dimensions = 1) //
     private final byte[] code;
-
-    @CompilationFinal(dimensions = 1) //
     private final ExceptionHandler[] exceptionHandlerEntries;
+    private final AttributeInfo[] attributes;
 
-    @CompilationFinal(dimensions = 1) //
-    private final Attribute[] attributes;
-
-    public CodeAttribute(Symbol<Name> name, int maxStack, int maxLocals, byte[] code, ExceptionHandler[] exceptionHandlerEntries, Attribute[] attributes) {
+    public CodeAttribute(String name, int maxStack, int maxLocals, byte[] code, ExceptionHandler[] exceptionHandlerEntries, AttributeInfo[] attributes) {
         super(name, null);
         this.maxStack = maxStack;
         this.maxLocals = maxLocals;
@@ -62,7 +50,7 @@ public final class CodeAttribute extends Attribute {
         return maxLocals;
     }
 
-    public Attribute[] getAttributes() {
+    public AttributeInfo[] getAttributes() {
         return attributes;
     }
 
@@ -72,26 +60,5 @@ public final class CodeAttribute extends Attribute {
 
     public ExceptionHandler[] getExceptionHandlers() {
         return exceptionHandlerEntries;
-    }
-
-    public final CodeAttribute dupe() {
-        return new CodeAttribute(getName(), maxStack, maxLocals, code.clone(), exceptionHandlerEntries, attributes);
-    }
-
-    private LineNumberTable getLineNumberTableAttribute() {
-        for (Attribute attr : attributes) {
-            if (attr.getName() == Name.LineNumberTable) {
-                return (LineNumberTable) attr;
-            }
-        }
-        return null;
-    }
-
-    public final int BCItoLineNumber(int BCI) {
-        LineNumberTable lnt = getLineNumberTableAttribute();
-        if (lnt == null) {
-            return -1;
-        }
-        return lnt.getLineNumber(BCI);
     }
 }

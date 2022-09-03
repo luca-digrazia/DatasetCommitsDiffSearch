@@ -34,9 +34,6 @@ public final class BytecodeStream {
 
     @CompilerDirectives.CompilationFinal(dimensions = 1) private final byte[] code;
 
-    private final BytecodeLookupSwitch bytecodeLookupSwitch;
-    private final BytecodeTableSwitch bytecodeTableSwitch;
-
     /**
      * Creates a new {@code BytecodeStream} for the specified bytecode.
      *
@@ -45,8 +42,6 @@ public final class BytecodeStream {
     public BytecodeStream(final byte[] code) {
         assert code != null;
         this.code = code;
-        this.bytecodeLookupSwitch = new BytecodeLookupSwitch(this);
-        this.bytecodeTableSwitch = new BytecodeTableSwitch(this);
     }
 
     /**
@@ -214,10 +209,10 @@ public final class BytecodeStream {
         if (length == 0) {
             switch (opcode(curBCI)) {
                 case Bytecodes.TABLESWITCH: {
-                    return getBytecodeLookupSwitch().size(curBCI);
+                    return new BytecodeTableSwitch(this, curBCI).size();
                 }
                 case Bytecodes.LOOKUPSWITCH: {
-                    return getBytecodeLookupSwitch().size(curBCI);
+                    return new BytecodeLookupSwitch(this, curBCI).size();
                 }
                 case Bytecodes.WIDE: {
                     int opc = Bytes.beU1(code, curBCI + 1);
@@ -234,15 +229,6 @@ public final class BytecodeStream {
             }
         }
         return length;
-    }
-
-
-    public BytecodeTableSwitch getBytecodeTableSwitch() {
-        return bytecodeTableSwitch;
-    }
-
-    public BytecodeLookupSwitch getBytecodeLookupSwitch() {
-        return bytecodeLookupSwitch;
     }
 
     @CompilerDirectives.TruffleBoundary

@@ -88,7 +88,7 @@ public class Target_sun_misc_Unsafe {
 
     @Intrinsic(hasReceiver = true)
     public static int addressSize(@SuppressWarnings("unused") Object self) {
-        return 4;
+        return U.addressSize();
     }
 
     @Intrinsic(hasReceiver = true)

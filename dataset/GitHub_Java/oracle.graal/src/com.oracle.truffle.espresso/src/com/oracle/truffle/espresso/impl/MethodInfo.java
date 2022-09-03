@@ -23,6 +23,10 @@
 
 package com.oracle.truffle.espresso.impl;
 
+import static com.oracle.truffle.espresso.meta.Meta.meta;
+
+import java.lang.reflect.Modifier;
+
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
@@ -51,10 +55,6 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.types.SignatureDescriptor;
 import com.oracle.truffle.espresso.vm.VM;
 import com.oracle.truffle.nfi.types.NativeSimpleType;
-
-import java.lang.reflect.Modifier;
-
-import static com.oracle.truffle.espresso.meta.Meta.meta;
 
 public final class MethodInfo implements ModifiersProvider {
 

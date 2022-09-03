@@ -26,7 +26,6 @@ package com.oracle.truffle.espresso.impl;
 import java.lang.reflect.Modifier;
 
 import com.oracle.truffle.espresso.classfile.ConstantPool;
-import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -188,11 +187,6 @@ public final class PrimitiveKlass extends Klass {
     @Override
     public EspressoContext getContext() {
         return context;
-    }
-
-    @Override
-    public StaticObject getStatics() {
-        throw EspressoError.shouldNotReachHere("Primitives do not have static fields");
     }
 
     @Override

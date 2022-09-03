@@ -29,8 +29,6 @@ import com.oracle.truffle.espresso.meta.ModifiersProvider;
 import com.oracle.truffle.espresso.runtime.AttributeInfo;
 import com.oracle.truffle.espresso.types.TypeDescriptor;
 
-import java.lang.reflect.Modifier;
-
 /**
  * Represents a resolved Espresso field. FieldInfo instances can be safely compared using ==.
  */
@@ -42,7 +40,7 @@ public class FieldInfo implements ModifiersProvider {
     private final TypeDescriptor typeDescriptor;
     private final String name;
     private final int offset;
-    private final short slot;
+    private final short index;
     private AttributeInfo runtimeVisibleAnnotations;
 
     @CompilerDirectives.CompilationFinal private Klass type;
@@ -52,15 +50,15 @@ public class FieldInfo implements ModifiersProvider {
      */
     private final int modifiers;
 
-    FieldInfo(Klass holder, String name, TypeDescriptor typeDescriptor, long offset, int modifiers, int slot, AttributeInfo runtimeVisibleAnnotations) {
+    FieldInfo(Klass holder, String name, TypeDescriptor typeDescriptor, long offset, int modifiers, int index, AttributeInfo runtimeVisibleAnnotations) {
         this.holder = holder;
         this.name = name;
         this.typeDescriptor = typeDescriptor;
-        this.slot = (short) slot;
+        this.index = (short) index;
         this.offset = (int) offset;
         this.modifiers = modifiers;
         this.runtimeVisibleAnnotations = runtimeVisibleAnnotations;
-        assert this.slot == slot;
+        assert this.index == index;
         assert offset != -1;
         assert offset == (int) offset : "offset larger than int";
     }
@@ -87,10 +85,6 @@ public class FieldInfo implements ModifiersProvider {
 
     public String getName() {
         return name;
-    }
-
-    public int getSlot() {
-        return slot;
     }
 
     public TypeDescriptor getTypeDescriptor() {
@@ -125,7 +119,7 @@ public class FieldInfo implements ModifiersProvider {
         private TypeDescriptor type;
         private long offset;
         private int modifiers;
-        private int slot;
+        private int index;
         private AttributeInfo runtimeVisibleAnnotations;
 
         public Builder setDeclaringClass(Klass declaringClass) {
@@ -153,8 +147,8 @@ public class FieldInfo implements ModifiersProvider {
             return this;
         }
 
-        public Builder setSlot(int slot) {
-            this.slot = slot;
+        public Builder setIndex(int index) {
+            this.index = index;
             return this;
         }
 
@@ -165,11 +159,7 @@ public class FieldInfo implements ModifiersProvider {
 
         @Override
         public FieldInfo build() {
-            return new FieldInfo(declaringClass, name, type, offset, modifiers, slot, runtimeVisibleAnnotations);
-        }
-
-        public boolean isStatic() {
-            return Modifier.isStatic(modifiers);
+            return new FieldInfo(declaringClass, name, type, offset, modifiers, index, runtimeVisibleAnnotations);
         }
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -170,7 +170,7 @@ public final class FrameBoxedStack implements FrameOperandStack {
     private void popIllegal(final VirtualFrame frame) {
         assert peekTag(frame) == FrameSlotKind.Illegal;
         int stackSize = addAndGet(frame, -1);
-        // assert stackSize > 0;
+        assert stackSize >= 0;
     }
 
     private static int numberOfSlots(FrameSlotKind kind) {

@@ -66,7 +66,7 @@ public abstract class Klass implements ModifiersProvider {
     public StaticObject mirror() {
         if (mirrorCache == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            mirrorCache = new StaticObjectClass((ObjectKlass) getContext().getMeta().CLASS.rawKlass());
+            mirrorCache = new StaticObjectClass(getContext().getMeta().CLASS.rawKlass());
             mirrorCache.setMirror(this);
         }
         return mirrorCache;
@@ -106,7 +106,13 @@ public abstract class Klass implements ModifiersProvider {
         return findDeclaredConcreteMethod(klassName, signature);
     }
 
-    public abstract StaticObject getStatics();
+    public StaticObject getStatics() {
+        if (statics == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            statics = new StaticObjectImpl(this, true);
+        }
+        return statics;
+    }
 
     /**
      * Checks whether this type has a finalizer method.

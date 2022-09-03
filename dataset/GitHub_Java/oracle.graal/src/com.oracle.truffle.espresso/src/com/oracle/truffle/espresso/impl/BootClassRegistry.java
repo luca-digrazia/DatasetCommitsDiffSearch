@@ -23,6 +23,8 @@
 
 package com.oracle.truffle.espresso.impl;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 import com.oracle.truffle.espresso.classfile.ClassfileParser;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
@@ -30,8 +32,6 @@ import com.oracle.truffle.espresso.runtime.ClasspathFile;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.types.TypeDescriptor;
-
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A {@link GuestClassRegistry} maps class names to resolved {@link Klass} instances. Each class

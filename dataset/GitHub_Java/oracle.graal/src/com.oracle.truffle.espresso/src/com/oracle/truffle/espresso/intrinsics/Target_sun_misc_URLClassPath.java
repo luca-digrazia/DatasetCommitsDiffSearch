@@ -23,9 +23,9 @@
 
 package com.oracle.truffle.espresso.intrinsics;
 
-import com.oracle.truffle.espresso.runtime.StaticObject;
-
 import java.net.URL;
+
+import com.oracle.truffle.espresso.runtime.StaticObject;
 
 @EspressoIntrinsics
 public class Target_sun_misc_URLClassPath {
