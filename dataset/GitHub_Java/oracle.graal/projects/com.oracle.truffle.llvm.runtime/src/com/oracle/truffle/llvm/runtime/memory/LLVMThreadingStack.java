@@ -37,7 +37,6 @@ import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
 public final class LLVMThreadingStack {
 
@@ -102,6 +101,7 @@ public final class LLVMThreadingStack {
         }
     }
 
+    @SuppressWarnings("unused")
     public LLVMStack getStack() {
         if (singleThreading.isValid()) {
             assert Thread.currentThread() == defaultThread;
@@ -112,33 +112,17 @@ public final class LLVMThreadingStack {
                 return defaultStack;
             } else {
                 synchronized (this) {
-                    if (isKnownThread(currentThread)) {
-                        return getKnownThread(currentThread);
+                    if (threadToStack.containsKey(currentThread.getId())) {
+                        return threadToStack.get(currentThread.getId());
                     } else {
-                        return addNewThread(currentThread);
+                        LLVMStack newStack = new LLVMStack();
+                        threadToStack.put(currentThread.getId(), newStack);
+                        new ReferenceWithCleanup(currentThread);
+                        return newStack;
                     }
                 }
             }
         }
-    }
-
-    @SuppressWarnings("unused")
-    @TruffleBoundary
-    private LLVMStack addNewThread(Thread currentThread) {
-        LLVMStack newStack = new LLVMStack();
-        threadToStack.put(currentThread.getId(), newStack);
-        new ReferenceWithCleanup(currentThread);
-        return newStack;
-    }
-
-    @TruffleBoundary
-    private LLVMStack getKnownThread(Thread currentThread) {
-        return threadToStack.get(currentThread.getId());
-    }
-
-    @TruffleBoundary
-    private boolean isKnownThread(Thread currentThread) {
-        return threadToStack.containsKey(currentThread.getId());
     }
 
     public void freeStacks() {

@@ -35,7 +35,6 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
@@ -43,6 +42,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.LLVMPerformance;
 import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
@@ -126,18 +126,12 @@ abstract class LLVMForeignCallNode extends LLVMNode {
                     @Cached("create(getCallTarget(function))") DirectCallNode callNode,
                     @Cached("createFastPackArguments(function, arguments.length)") PackForeignArgumentsNode packNode,
                     @Cached("arguments.length") int cachedLength,
-                    @Cached("function.getContext()") LLVMContext context,
-                    @Cached("function.needsStackPointer()") boolean needsStackPointer) {
+                    @Cached("function.getContext()") LLVMContext context) {
         assert !(function.getType().getReturnType() instanceof StructureType);
-        Object result;
-        if (needsStackPointer) {
-            getThreadingStack(context).checkThread();
-            long stackPointer = getThreadingStack(context).getStack().getStackPointer();
-            result = callNode.call(packNode.pack(arguments, stackPointer));
-            getThreadingStack(context).getStack().setStackPointer(stackPointer);
-        } else {
-            result = callNode.call(packNode.pack(arguments, 0));
-        }
+        getThreadingStack(context).checkThread();
+        long stackPointer = getThreadingStack(context).getStack().getStackPointer();
+        Object result = callNode.call(packNode.pack(arguments, stackPointer));
+        getThreadingStack(context).getStack().setStackPointer(stackPointer);
         return prepareValueForEscape.executeWithTarget(result, context);
     }
 
@@ -145,6 +139,7 @@ abstract class LLVMForeignCallNode extends LLVMNode {
     public Object callIndirect(LLVMFunctionDescriptor function, Object[] arguments,
                     @Cached("create()") IndirectCallNode callNode, @Cached("createSlowPackArguments()") SlowPackForeignArgumentsNode slowPack) {
         assert !(function.getType().getReturnType() instanceof StructureType);
+        LLVMPerformance.warn(this);
         function.getContext().getThreadingStack().checkThread();
         long stackPointer = function.getContext().getThreadingStack().getStack().getStackPointer();
         Object result = callNode.call(getCallTarget(function), slowPack.pack(function, arguments, stackPointer));
@@ -164,6 +159,8 @@ abstract class LLVMForeignCallNode extends LLVMNode {
     }
 
     private static void throwArgLengthException(int minLength, int actualLength) {
-        throw ArityException.raise(minLength, actualLength);
+        StringBuilder sb = new StringBuilder();
+        sb.append("At least ").append(minLength).append(" arguments expected, but only ").append(actualLength).append(" arguments received.");
+        throw new IllegalStateException(sb.toString());
     }
 }
