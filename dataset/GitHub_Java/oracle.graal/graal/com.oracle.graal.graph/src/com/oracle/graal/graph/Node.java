@@ -25,6 +25,7 @@ package com.oracle.graal.graph;
 import java.lang.annotation.*;
 import java.util.*;
 
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.Graph.NodeChangedListener;
 import com.oracle.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.graal.graph.NodeClass.Position;
@@ -123,7 +124,10 @@ public abstract class Node implements Cloneable, Formattable {
     private Node predecessor;
     private int modCount;
 
+    private static final DebugMetric NODE_COUNT = Debug.metric("HIRNodes");
+
     public Node() {
+        NODE_COUNT.increment();
         this.graph = null;
         this.id = INITIAL_ID;
     }

@@ -30,8 +30,8 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.asm.*;
 
 /**
@@ -51,7 +51,7 @@ public abstract class LIRInstruction {
         /**
          * Iterator method to be overwritten. This version of the iterator does not take additional
          * parameters to keep the signature short.
-         *
+         * 
          * @param value The value that is iterated.
          * @return The new value to replace the value that was passed in.
          */
@@ -62,7 +62,7 @@ public abstract class LIRInstruction {
         /**
          * Iterator method to be overwritten. This version of the iterator gets additional
          * parameters about the processed value.
-         *
+         * 
          * @param value The value that is iterated.
          * @param mode The operand mode for the value.
          * @param flags A set of flags for the value.
@@ -70,38 +70,6 @@ public abstract class LIRInstruction {
          */
         public Value doValue(Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
             return doValue(value);
-        }
-    }
-
-    /**
-     * Similar to {@link ValueProcedure} but with an {@link LIRInstruction} parameter.
-     */
-    public abstract static class InstructionValueProcedure {
-
-        /**
-         * Iterator method to be overwritten. This version of the iterator does not take additional
-         * parameters to keep the signature short.
-         *
-         * @param instruction The current instruction.
-         * @param value The value that is iterated.
-         * @return The new value to replace the value that was passed in.
-         */
-        protected Value doValue(LIRInstruction instruction, Value value) {
-            throw GraalInternalError.shouldNotReachHere("One of the doValue() methods must be overwritten");
-        }
-
-        /**
-         * Iterator method to be overwritten. This version of the iterator gets additional
-         * parameters about the processed value.
-         *
-         * @param instruction The current instruction.
-         * @param value The value that is iterated.
-         * @param mode The operand mode for the value.
-         * @param flags A set of flags for the value.
-         * @return The new value to replace the value that was passed in.
-         */
-        public Value doValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
-            return doValue(instruction, value);
         }
     }
 
@@ -255,7 +223,7 @@ public abstract class LIRInstruction {
         id = -1;
     }
 
-    public abstract void emitCode(CompilationResultBuilder crb);
+    public abstract void emitCode(TargetMethodAssembler tasm);
 
     public final int id() {
         return id;
@@ -307,26 +275,6 @@ public abstract class LIRInstruction {
         instructionClass.forEachState(this, proc);
     }
 
-    public final void forEachInput(InstructionValueProcedure proc) {
-        instructionClass.forEachUse(this, proc);
-    }
-
-    public final void forEachAlive(InstructionValueProcedure proc) {
-        instructionClass.forEachAlive(this, proc);
-    }
-
-    public final void forEachTemp(InstructionValueProcedure proc) {
-        instructionClass.forEachTemp(this, proc);
-    }
-
-    public final void forEachOutput(InstructionValueProcedure proc) {
-        instructionClass.forEachDef(this, proc);
-    }
-
-    public final void forEachState(InstructionValueProcedure proc) {
-        instructionClass.forEachState(this, proc);
-    }
-
     public final void forEachState(StateProcedure proc) {
         instructionClass.forEachState(this, proc);
     }
@@ -338,7 +286,7 @@ public abstract class LIRInstruction {
      * Subclasses can override this method. The default implementation processes all Input operands
      * as the hints for an Output operand, and all Output operands as the hints for an Input
      * operand.
-     *
+     * 
      * @param value The value the hints are needed for.
      * @param mode The operand mode of the value.
      * @param proc The procedure invoked for all the hints. If the procedure returns a non-null
