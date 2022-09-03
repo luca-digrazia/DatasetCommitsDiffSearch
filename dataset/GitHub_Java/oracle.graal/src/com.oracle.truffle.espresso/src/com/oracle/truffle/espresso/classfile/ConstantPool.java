@@ -39,6 +39,7 @@ import java.util.Formatter;
 import java.util.List;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.types.TypeDescriptor;
 
@@ -114,12 +115,12 @@ public final class ConstantPool {
         return context;
     }
 
-    private final Object classLoader;
+    private final DynamicObject classLoader;
 
     /**
      * Creates a constant pool from a class file.
      */
-    public ConstantPool(EspressoContext context, Object classLoader, ClassfileStream stream, ClassfileParser parser) {
+    public ConstantPool(EspressoContext context, DynamicObject classLoader, ClassfileStream stream, ClassfileParser parser) {
         this.context = context;
         final int length = stream.readU2();
         if (length < 1) {
@@ -141,7 +142,12 @@ public final class ConstantPool {
             switch (tag) {
                 case CLASS: {
                     int classNameIndex = stream.readU2();
-                    entries[i] = new ClassConstant.Index(classNameIndex);
+                    if (classNameIndex < i) {
+                        String className = entries[classNameIndex].toString();
+                        entries[i] = new ClassConstant.Unresolved(getContext().getLanguage().getTypeDescriptors().make(className));
+                    } else {
+                        entries[i] = new ClassConstant.Index(classNameIndex);
+                    }
                     break;
                 }
                 case STRING: {
@@ -207,7 +213,7 @@ public final class ConstantPool {
                     break;
                 }
                 case UTF8: {
-                    entries[i] = context.getSymbolTable().make(stream.readString());
+                    entries[i] = context.getLanguage().getSymbols().make(stream.readString());
                     break;
                 }
                 case METHODHANDLE: {
@@ -249,7 +255,7 @@ public final class ConstantPool {
         constants = entries;
     }
 
-    public Object getClassLoader() {
+    public DynamicObject classLoader() {
         return classLoader;
     }
 
@@ -455,10 +461,6 @@ public final class ConstantPool {
 
     public TypeDescriptor makeTypeDescriptor(String value) {
         return context.getLanguage().getTypeDescriptors().make(value);
-    }
-
-    public int length() {
-        return constants.length;
     }
 
 }
