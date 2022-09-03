@@ -31,24 +31,19 @@ package com.oracle.truffle.llvm.runtime;
 
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.interop.LLVMGlobalVariableMessageResolutionForeign;
+import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
 
-public final class LLVMSharedGlobalVariable implements TruffleObject {
+public final class LLVMSharedGlobalVariable implements LLVMInternalTruffleObject {
 
-    private final LLVMGlobalVariable descriptor;
-    private final LLVMContext context;
+    private final LLVMGlobal descriptor;
 
-    public LLVMSharedGlobalVariable(LLVMGlobalVariable descriptor, LLVMContext context) {
+    public LLVMSharedGlobalVariable(LLVMGlobal descriptor) {
         this.descriptor = descriptor;
-        this.context = context;
     }
 
-    public LLVMContext getContext() {
-        return context;
-    }
-
-    public LLVMGlobalVariable getDescriptor() {
+    public LLVMGlobal getDescriptor() {
         return descriptor;
     }
 

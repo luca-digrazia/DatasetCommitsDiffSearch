@@ -38,7 +38,6 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
@@ -53,8 +52,6 @@ import com.oracle.truffle.llvm.runtime.types.VoidType;
 public abstract class ForeignToLLVM extends LLVMNode {
 
     public abstract Object executeWithTarget(Object value);
-
-    public abstract Object executeWithType(Object value, LLVMInteropType.Structured type);
 
     @Child protected Node isPointer = Message.IS_POINTER.createNode();
     @Child protected Node asPointer = Message.AS_POINTER.createNode();
@@ -188,29 +185,6 @@ public abstract class ForeignToLLVM extends LLVMNode {
         return create(convert(type));
     }
 
-    public static ForeignToLLVM create(LLVMInteropType.Value type) {
-        switch (type.getKind()) {
-            case I1:
-                return ToI1NodeGen.create();
-            case I8:
-                return ToI8NodeGen.create();
-            case I16:
-                return ToI16NodeGen.create();
-            case I32:
-                return ToI32NodeGen.create();
-            case I64:
-                return ToI64NodeGen.create();
-            case FLOAT:
-                return ToFloatNodeGen.create();
-            case DOUBLE:
-                return ToDoubleNodeGen.create();
-            case POINTER:
-                return ToPointer.create(type.getBaseType());
-            default:
-                throw new IllegalStateException("unexpected interop kind " + type.getKind());
-        }
-    }
-
     public static ForeignToLLVM create(ForeignToLLVMType type) {
         switch (type) {
             case VOID:
@@ -232,7 +206,7 @@ public abstract class ForeignToLLVM extends LLVMNode {
             case DOUBLE:
                 return ToDoubleNodeGen.create();
             case POINTER:
-                return ToPointer.create();
+                return ToPointerNodeGen.create();
             default:
                 throw new IllegalStateException(type.toString());
 
@@ -298,12 +272,6 @@ public abstract class ForeignToLLVM extends LLVMNode {
 
         @Override
         public Object executeWithTarget(Object value) {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalStateException("Use convert method.");
-        }
-
-        @Override
-        public Object executeWithType(Object value, LLVMInteropType.Structured type) {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException("Use convert method.");
         }

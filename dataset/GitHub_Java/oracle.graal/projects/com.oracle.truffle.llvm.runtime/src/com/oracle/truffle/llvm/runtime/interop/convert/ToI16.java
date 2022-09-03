@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,11 +31,19 @@ package com.oracle.truffle.llvm.runtime.interop.convert;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.LLVMSharedGlobalVariable;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 
 abstract class ToI16 extends ForeignToLLVM {
 
@@ -96,10 +104,27 @@ abstract class ToI16 extends ForeignToLLVM {
         return (short) getSingleStringCharacter(value);
     }
 
+    @Specialization
+    protected short fromLLVMFunctionDescriptor(LLVMFunctionDescriptor fd,
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
+        return (short) toNative.executeWithTarget(fd).getVal();
+    }
+
+    @Specialization
+    protected short fromLLVMTruffleAddress(LLVMTruffleAddress obj) {
+        return (short) obj.getAddress().getVal();
+    }
+
+    @Specialization
+    protected short fromSharedDescriptor(LLVMSharedGlobalVariable shared,
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode access) {
+        return (short) access.executeWithTarget(shared.getDescriptor()).getVal();
+    }
+
     private short recursiveConvert(Object o) {
         if (toI16 == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            toI16 = insert(ToI16NodeGen.create());
+            toI16 = ToI16NodeGen.create();
         }
         return (short) toI16.executeWithTarget(o);
     }
@@ -114,8 +139,15 @@ abstract class ToI16 extends ForeignToLLVM {
             return (short) (char) value;
         } else if (value instanceof String) {
             return (short) thiz.getSingleStringCharacter((String) value);
+        } else if (value instanceof LLVMFunctionDescriptor) {
+            return (short) ((LLVMFunctionDescriptor) value).toNative().asPointer();
         } else if (value instanceof LLVMBoxedPrimitive) {
             return slowPathPrimitiveConvert(memory, thiz, ((LLVMBoxedPrimitive) value).getValue());
+        } else if (value instanceof LLVMTruffleAddress) {
+            return (short) ((LLVMTruffleAddress) value).getAddress().getVal();
+        } else if (value instanceof LLVMSharedGlobalVariable) {
+            LLVMContext context = LLVMLanguage.getLLVMContextReference().get();
+            return (short) LLVMGlobal.toNative(context, memory, ((LLVMSharedGlobalVariable) value).getDescriptor()).getVal();
         } else if (value instanceof TruffleObject && notLLVM((TruffleObject) value)) {
             return slowPathPrimitiveConvert(memory, thiz, thiz.fromForeign((TruffleObject) value));
         } else {

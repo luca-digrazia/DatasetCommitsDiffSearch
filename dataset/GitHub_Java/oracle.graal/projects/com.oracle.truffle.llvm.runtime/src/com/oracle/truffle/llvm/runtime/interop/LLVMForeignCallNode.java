@@ -56,12 +56,16 @@ import com.oracle.truffle.llvm.runtime.types.Type;
 /**
  * Used when an LLVM bitcode method is called from another language.
  */
-public abstract class LLVMForeignCallNode extends Node {
+abstract class LLVMForeignCallNode extends Node {
 
-    @Child protected LLVMDataEscapeNode prepareValueForEscape = LLVMDataEscapeNode.create();
+    @Child protected LLVMDataEscapeNode prepareValueForEscape;
 
     protected LLVMMemory getLLVMMemory() {
         return LLVMLanguage.getLanguage().getCapability(LLVMMemory.class);
+    }
+
+    protected LLVMForeignCallNode(Type returnType) {
+        this.prepareValueForEscape = LLVMDataEscapeNodeGen.create(returnType);
     }
 
     public static class PackForeignArgumentsNode extends Node {

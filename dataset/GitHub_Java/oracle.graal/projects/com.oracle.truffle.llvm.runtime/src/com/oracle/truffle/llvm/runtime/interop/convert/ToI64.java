@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,11 +31,19 @@ package com.oracle.truffle.llvm.runtime.interop.convert;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.LLVMSharedGlobalVariable;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 
 abstract class ToI64 extends ForeignToLLVM {
 
@@ -96,10 +104,27 @@ abstract class ToI64 extends ForeignToLLVM {
         return getSingleStringCharacter(value);
     }
 
+    @Specialization
+    protected long fromLLVMTruffleAddress(LLVMTruffleAddress obj) {
+        return obj.getAddress().getVal();
+    }
+
+    @Specialization
+    protected long fromLLVMFunctionDescriptor(LLVMFunctionDescriptor fd,
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
+        return toNative.executeWithTarget(fd).getVal();
+    }
+
+    @Specialization
+    protected long fromSharedDescriptor(LLVMSharedGlobalVariable shared,
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode access) {
+        return access.executeWithTarget(shared.getDescriptor()).getVal();
+    }
+
     private long recursiveConvert(Object o) {
         if (toI64 == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            toI64 = insert(ToI64NodeGen.create());
+            toI64 = ToI64NodeGen.create();
         }
         return (long) toI64.executeWithTarget(o);
     }
@@ -114,8 +139,15 @@ abstract class ToI64 extends ForeignToLLVM {
             return (char) value;
         } else if (value instanceof String) {
             return thiz.getSingleStringCharacter((String) value);
+        } else if (value instanceof LLVMFunctionDescriptor) {
+            return ((LLVMFunctionDescriptor) value).toNative().asPointer();
         } else if (value instanceof LLVMBoxedPrimitive) {
             return slowPathPrimitiveConvert(memory, thiz, ((LLVMBoxedPrimitive) value).getValue());
+        } else if (value instanceof LLVMTruffleAddress) {
+            return ((LLVMTruffleAddress) value).getAddress().getVal();
+        } else if (value instanceof LLVMSharedGlobalVariable) {
+            LLVMContext context = LLVMLanguage.getLLVMContextReference().get();
+            return LLVMGlobal.toNative(context, memory, ((LLVMSharedGlobalVariable) value).getDescriptor()).getVal();
         } else if (value instanceof TruffleObject && notLLVM((TruffleObject) value)) {
             return slowPathPrimitiveConvert(memory, thiz, thiz.fromForeign((TruffleObject) value));
         } else {

@@ -51,13 +51,15 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMGetStackNode;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNode;
+import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNodeGen;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
 import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.types.Type;
 
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
 public abstract class LLVMTruffleInvoke extends LLVMIntrinsic {
@@ -67,12 +69,12 @@ public abstract class LLVMTruffleInvoke extends LLVMIntrinsic {
     @Child private ForeignToLLVM toLLVM;
     @Child private LLVMAsForeignNode asForeign = LLVMAsForeignNode.create();
 
-    public LLVMTruffleInvoke(ForeignToLLVM toLLVM, LLVMExpressionNode[] args) {
+    public LLVMTruffleInvoke(ForeignToLLVM toLLVM, LLVMExpressionNode[] args, Type[] argTypes) {
         this.toLLVM = toLLVM;
         this.args = args;
         this.prepareValuesForEscape = new LLVMDataEscapeNode[args.length];
         for (int i = 0; i < prepareValuesForEscape.length; i++) {
-            prepareValuesForEscape[i] = LLVMDataEscapeNode.create();
+            prepareValuesForEscape[i] = LLVMDataEscapeNodeGen.create(argTypes[i]);
         }
         this.foreignInvoke = Message.createInvoke(args.length).createNode();
     }
@@ -110,7 +112,7 @@ public abstract class LLVMTruffleInvoke extends LLVMIntrinsic {
 
     @SuppressWarnings("unused")
     @Specialization(limit = "2", guards = "idStr.equals(readStr.executeWithTarget(id))")
-    protected Object cachedId(VirtualFrame frame, LLVMManagedPointer value, Object id,
+    protected Object cachedId(VirtualFrame frame, LLVMTruffleObject value, Object id,
                     @Cached("createReadString()") LLVMReadStringNode readStr,
                     @Cached("readStr.executeWithTarget(id)") String idStr,
                     @Cached("getContextReference()") ContextReference<LLVMContext> context,
@@ -120,7 +122,7 @@ public abstract class LLVMTruffleInvoke extends LLVMIntrinsic {
     }
 
     @Specialization(replaces = "cachedId")
-    protected Object uncached(VirtualFrame frame, LLVMManagedPointer value, Object id,
+    protected Object uncached(VirtualFrame frame, LLVMTruffleObject value, Object id,
                     @Cached("createReadString()") LLVMReadStringNode readStr,
                     @Cached("getContextReference()") ContextReference<LLVMContext> context,
                     @Cached("create()") LLVMGetStackNode getStack) {

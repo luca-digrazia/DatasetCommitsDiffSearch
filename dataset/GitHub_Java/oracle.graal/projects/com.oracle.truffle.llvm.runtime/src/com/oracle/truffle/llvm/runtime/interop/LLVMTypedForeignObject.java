@@ -29,13 +29,18 @@
  */
 package com.oracle.truffle.llvm.runtime.interop;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropReadNode;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropWriteNode;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
+import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObjectFactory.ForeignWriteNodeGen;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
@@ -44,9 +49,9 @@ import com.oracle.truffle.llvm.runtime.types.PointerType;
 public final class LLVMTypedForeignObject implements LLVMObjectAccess, LLVMInternalTruffleObject {
 
     private final TruffleObject foreign;
-    private final LLVMInteropType.Structured type;
+    private final LLVMSourceType type;
 
-    public static LLVMTypedForeignObject create(TruffleObject foreign, LLVMInteropType.Structured type) {
+    public static LLVMTypedForeignObject create(TruffleObject foreign, LLVMSourceType type) {
         return new LLVMTypedForeignObject(foreign, type);
     }
 
@@ -54,7 +59,7 @@ public final class LLVMTypedForeignObject implements LLVMObjectAccess, LLVMInter
         return new LLVMTypedForeignObject(foreign, null);
     }
 
-    private LLVMTypedForeignObject(TruffleObject foreign, LLVMInteropType.Structured type) {
+    private LLVMTypedForeignObject(TruffleObject foreign, LLVMSourceType type) {
         this.foreign = foreign;
         this.type = type;
     }
@@ -63,7 +68,7 @@ public final class LLVMTypedForeignObject implements LLVMObjectAccess, LLVMInter
         return foreign;
     }
 
-    public LLVMInteropType.Structured getType() {
+    public LLVMSourceType getType() {
         return type;
     }
 
@@ -74,21 +79,26 @@ public final class LLVMTypedForeignObject implements LLVMObjectAccess, LLVMInter
 
     @Override
     public LLVMObjectWriteNode createWriteNode() {
-        return new ForeignWriteNode();
+        return ForeignWriteNodeGen.create();
     }
 
     static class ForeignReadNode extends LLVMObjectReadNode {
 
-        @Child LLVMInteropReadNode read;
+        @Child LLVMOffsetToNameNode offsetToName;
+        @Child ForeignToLLVM toLLVM;
+        @Child Node read = Message.READ.createNode();
 
         protected ForeignReadNode(ForeignToLLVMType type) {
-            this.read = LLVMInteropReadNode.create(type);
+            this.offsetToName = LLVMOffsetToNameNodeGen.create(type.getSizeInBytes());
+            this.toLLVM = ForeignToLLVM.create(type);
         }
 
         @Override
         public Object executeRead(Object obj, long offset) throws InteropException {
             LLVMTypedForeignObject object = (LLVMTypedForeignObject) obj;
-            return read.execute(object.getType(), object.getForeign(), offset);
+            Object identifier = offsetToName.execute(object.getType(), offset);
+            Object ret = ForeignAccess.sendRead(read, object.getForeign(), identifier);
+            return toLLVM.executeWithTarget(ret);
         }
 
         @Override
@@ -97,16 +107,47 @@ public final class LLVMTypedForeignObject implements LLVMObjectAccess, LLVMInter
         }
     }
 
-    static class ForeignWriteNode extends LLVMObjectWriteNode {
+    abstract static class ForeignWriteNode extends LLVMObjectWriteNode {
 
-        @Child LLVMInteropWriteNode write = LLVMInteropWriteNode.create();
         @Child LLVMDataEscapeNode dataEscape = LLVMDataEscapeNodeGen.create(PointerType.VOID);
+        @Child Node write = Message.WRITE.createNode();
 
-        @Override
-        public void executeWrite(Object obj, long offset, Object value) throws InteropException {
+        @Specialization(guards = "valueClass.isInstance(value)")
+        void doCachedType(Object obj, long offset, Object value,
+                        @Cached("value.getClass()") @SuppressWarnings("unused") Class<?> valueClass,
+                        @Cached("create(getSize(value))") LLVMOffsetToNameNode offsetToName) {
+            doWrite(obj, offset, value, offsetToName);
+        }
+
+        @Specialization(limit = "4", replaces = "doCachedType", guards = "valueSize == getSize(value)")
+        void doCachedSize(Object obj, long offset, Object value,
+                        @Cached("getSize(value)") @SuppressWarnings("unused") int valueSize,
+                        @Cached("create(valueSize)") LLVMOffsetToNameNode offsetToName) {
+            doWrite(obj, offset, value, offsetToName);
+        }
+
+        private void doWrite(Object obj, long offset, Object value, LLVMOffsetToNameNode offsetToName) {
             LLVMTypedForeignObject object = (LLVMTypedForeignObject) obj;
+            Object identifier = offsetToName.execute(object.getType(), offset);
             Object escapedValue = dataEscape.executeWithTarget(value);
-            write.execute(object.getType(), object.getForeign(), offset, escapedValue);
+            try {
+                ForeignAccess.sendWrite(write, object.getForeign(), identifier, escapedValue);
+            } catch (InteropException ex) {
+                CompilerDirectives.transferToInterpreter();
+                throw ex.raise();
+            }
+        }
+
+        protected static int getSize(Object value) {
+            if (value instanceof Byte || value instanceof Boolean) {
+                return 1;
+            } else if (value instanceof Short || value instanceof Character) {
+                return 2;
+            } else if (value instanceof Integer || value instanceof Float) {
+                return 4;
+            } else {
+                return 8;
+            }
         }
 
         @Override

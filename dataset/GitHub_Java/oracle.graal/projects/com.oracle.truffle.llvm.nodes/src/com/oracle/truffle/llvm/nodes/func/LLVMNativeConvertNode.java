@@ -48,6 +48,7 @@ import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMNativeFunctions.NullPointerNode;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
@@ -206,14 +207,14 @@ public abstract class LLVMNativeConvertNode extends LLVMNode {
                         @Cached("handle") LLVMAddress cachedHandle,
                         @Cached("doLookup(cachedHandle)") LLVMFunctionDescriptor descriptor,
                         @Cached("getContextReference()") ContextReference<LLVMContext> c) {
-            return handle;
+            return new LLVMTruffleAddress(handle, new PointerType(null));
         }
 
         @Specialization(replaces = {"doCachedHandle", "doCachedNative"}, guards = {"handle.getVal() != 0"})
         protected TruffleObject doUncachedHandle(LLVMAddress handle) {
             LLVMFunctionDescriptor descriptor = doLookup(handle);
             if (descriptor == null) {
-                return handle;
+                return new LLVMTruffleAddress(handle, new PointerType(null));
             } else if (descriptor.isNativeFunction()) {
                 return descriptor.getNativeFunction();
             } else {

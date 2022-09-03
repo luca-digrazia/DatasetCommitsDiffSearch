@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,25 +29,26 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.LLVMRuntimeType;
+import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
+import com.oracle.truffle.llvm.runtime.interop.LLVMTruffleAddressMessageResolutionForeign;
+import com.oracle.truffle.llvm.runtime.types.Type;
 
-public class LLVMTruffleAddress implements TruffleObject {
-    private final LLVMAddress address;
-    private final LLVMRuntimeType type;
+public final class LLVMTruffleAddress implements LLVMInternalTruffleObject {
+    private final long address;
+    private final Type type;
 
-    public LLVMTruffleAddress(LLVMAddress address, LLVMRuntimeType type) {
-        this.address = address;
+    public LLVMTruffleAddress(LLVMAddress address, Type type) {
+        this.address = address.getVal();
         this.type = type;
     }
 
     public LLVMAddress getAddress() {
-        return address;
+        return LLVMAddress.fromLong(address);
     }
 
-    public LLVMRuntimeType getType() {
+    public Type getType() {
         return type;
     }
 
@@ -55,18 +56,13 @@ public class LLVMTruffleAddress implements TruffleObject {
         return object instanceof LLVMTruffleAddress;
     }
 
-    @CompilationFinal private static ForeignAccess ACCESS;
-
     @Override
     public ForeignAccess getForeignAccess() {
-        if (ACCESS == null) {
-            try {
-                Class<?> accessor = Class.forName("com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMAddressMessageResolutionAccessor");
-                ACCESS = (ForeignAccess) accessor.getField("ACCESS").get(null);
-            } catch (Exception e) {
-                throw new AssertionError(e);
-            }
-        }
-        return ACCESS;
+        return LLVMTruffleAddressMessageResolutionForeign.ACCESS;
+    }
+
+    @Override
+    public String toString() {
+        return Long.toString(address);
     }
 }
