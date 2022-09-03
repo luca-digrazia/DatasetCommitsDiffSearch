@@ -65,7 +65,7 @@ abstract class Content {
 
     @Override
     public final boolean equals(Object obj) {
-        if (obj == null || getClass() != obj.getClass()) {
+        if (getClass() != obj.getClass()) {
             return false;
         }
         Content other = (Content) obj;

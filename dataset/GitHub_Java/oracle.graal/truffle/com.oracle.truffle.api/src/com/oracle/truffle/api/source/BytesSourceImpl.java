@@ -50,6 +50,10 @@ final class BytesSourceImpl extends Content {
     }
 
     @Override
+    void reset() {
+    }
+
+    @Override
     public String getName() {
         return name;
     }
