@@ -22,34 +22,33 @@
  */
 package com.oracle.graal.truffle.test;
 
-import org.junit.*;
+import org.junit.Assert;
+import org.junit.Test;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.truffle.test.nodes.*;
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.graal.truffle.OptimizedCallTarget;
+import com.oracle.graal.truffle.test.nodes.AbstractTestNode;
+import com.oracle.graal.truffle.test.nodes.AssumptionCutsBranchTestNode;
+import com.oracle.graal.truffle.test.nodes.ConstantWithAssumptionTestNode;
+import com.oracle.graal.truffle.test.nodes.RootTestNode;
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.nodes.InvalidAssumptionException;
 
 public class AssumptionPartialEvaluationTest extends PartialEvaluationTest {
-
     public static Object constant42() {
         return 42;
     }
 
     @Test
     public void constantValue() {
-        FrameDescriptor fd = new FrameDescriptor();
         Assumption assumption = Truffle.getRuntime().createAssumption();
         AbstractTestNode result = new ConstantWithAssumptionTestNode(assumption, 42);
-        RootTestNode rootNode = new RootTestNode("constantValue", result);
-        InstalledCode installedCode = assertPartialEvalEquals("constant42", rootNode, fd);
-        Assert.assertTrue(installedCode.isValid());
-        try {
-            assertEquals(42, installedCode.execute(null, null, null));
-        } catch (InvalidInstalledCodeException e) {
-            Assert.fail("Code must not have been invalidated.");
-        }
-        Assert.assertTrue(installedCode.isValid());
+        RootTestNode rootNode = new RootTestNode(new FrameDescriptor(), "constantValue", result);
+        OptimizedCallTarget callTarget = assertPartialEvalEquals("constant42", rootNode);
+        Assert.assertTrue(callTarget.isValid());
+        assertDeepEquals(42, callTarget.call());
+        Assert.assertTrue(callTarget.isValid());
         try {
             assumption.check();
         } catch (InvalidAssumptionException e) {
@@ -61,12 +60,24 @@ public class AssumptionPartialEvaluationTest extends PartialEvaluationTest {
             Assert.fail("Assumption must have been invalidated.");
         } catch (InvalidAssumptionException e) {
         }
-        Assert.assertFalse(installedCode.isValid());
+        Assert.assertFalse(callTarget.isValid());
+        assertDeepEquals(43, callTarget.call());
+    }
 
-        try {
-            installedCode.execute(null, null, null);
-            Assert.fail("Code must have been invalidated.");
-        } catch (InvalidInstalledCodeException e) {
+    /**
+     * This tests whether a valid Assumption does successfully cut of the branch that is not
+     * executed.
+     */
+    @Test
+    public void assumptionBranchCutoff() {
+        Assumption assumption = Truffle.getRuntime().createAssumption();
+        AssumptionCutsBranchTestNode result = new AssumptionCutsBranchTestNode(assumption);
+        RootTestNode rootNode = new RootTestNode(new FrameDescriptor(), "cutoffBranch", result);
+        OptimizedCallTarget compilable = compileHelper("cutoffBranch", rootNode, new Object[0]);
+
+        for (int i = 0; i < 100000; i++) {
+            Assert.assertEquals(0, compilable.call(new Object[0]));
         }
+        Assert.assertNull(result.getChildNode());
     }
 }

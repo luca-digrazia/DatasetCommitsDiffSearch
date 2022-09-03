@@ -73,7 +73,6 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
             if (result > 100) {
                 /* Dead branch, just to have exception-throwing calls during partial evaluation. */
                 boundary();
-                boundary();
             }
             return result;
         } else {

@@ -252,18 +252,6 @@ public class StructuredGraph extends Graph implements JavaMethodContext {
         setLastSchedule(null);
     }
 
-    @Override
-    public boolean maybeCompress() {
-        if (super.maybeCompress()) {
-            /*
-             * The schedule contains a NodeMap which is unusable after compression.
-             */
-            clearLastSchedule();
-            return true;
-        }
-        return false;
-    }
-
     public Stamp getReturnStamp() {
         Stamp returnStamp = null;
         for (ReturnNode returnNode : getNodes(ReturnNode.TYPE)) {
@@ -679,7 +667,6 @@ public class StructuredGraph extends Graph implements JavaMethodContext {
         return !(start.next() instanceof ReturnNode);
     }
 
-    @Override
     public JavaMethod asJavaMethod() {
         return method();
     }

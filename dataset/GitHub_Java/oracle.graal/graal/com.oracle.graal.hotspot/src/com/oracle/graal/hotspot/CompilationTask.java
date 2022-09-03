@@ -52,7 +52,7 @@ import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.DebugCloseable;
 import com.oracle.graal.debug.DebugDumpScope;
-import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.debug.DebugTimer;
 import com.oracle.graal.debug.Management;
 import com.oracle.graal.debug.TTY;
@@ -63,7 +63,7 @@ import com.oracle.graal.options.OptionValue.OverrideScope;
 
 public class CompilationTask {
 
-    private static final DebugCounter BAILOUTS = Debug.counter("Bailouts");
+    private static final DebugMetric BAILOUTS = Debug.metric("Bailouts");
 
     private static final EventProvider eventProvider;
 
@@ -146,9 +146,9 @@ public class CompilationTask {
     private static final DebugTimer CompilationTime = Debug.timer("CompilationTime");
 
     /**
-     * Counts the number of compiled {@linkplain CompilationResult#getBytecodeSize() bytecodes}.
+     * Meters the {@linkplain CompilationResult#getBytecodeSize() bytecodes} compiled.
      */
-    private static final DebugCounter CompiledBytecodes = Debug.counter("CompiledBytecodes");
+    private static final DebugMetric CompiledBytecodes = Debug.metric("CompiledBytecodes");
 
     public static final DebugTimer CodeInstallationTime = Debug.timer("CodeInstallation");
 
@@ -323,8 +323,7 @@ public class CompilationTask {
     private void installMethod(final CompilationResult compResult) {
         final CodeCacheProvider codeCache = jvmciRuntime.getHostJVMCIBackend().getCodeCache();
         installedCode = null;
-        Object[] context = {new DebugDumpScope(getIdString(), true), codeCache, getMethod(), compResult};
-        try (Scope s = Debug.scope("CodeInstall", context)) {
+        try (Scope s = Debug.scope("CodeInstall", new DebugDumpScope(getIdString(), true), codeCache, getMethod())) {
             HotSpotCompiledCode compiledCode = HotSpotCompiledCodeBuilder.createCompiledCode(request.getMethod(), request, compResult);
             installedCode = (HotSpotInstalledCode) codeCache.installCode(request.getMethod(), compiledCode, null, request.getMethod().getSpeculationLog(), installAsDefault);
         } catch (Throwable e) {

@@ -240,8 +240,7 @@ public class InliningTest extends GraalCompilerTest {
             ResolvedJavaMethod method = getResolvedJavaMethod(snippet);
             StructuredGraph graph = eagerInfopointMode ? parseDebug(method, AllowAssumptions.YES) : parseEager(method, AllowAssumptions.YES);
             try (Scope s2 = Debug.scope("Inlining", graph)) {
-                PhaseSuite<HighTierContext> graphBuilderSuite = eagerInfopointMode
-                                ? getCustomGraphBuilderSuite(GraphBuilderConfiguration.getDefault(getDefaultGraphBuilderPlugins()).withFullInfopoints(true))
+                PhaseSuite<HighTierContext> graphBuilderSuite = eagerInfopointMode ? getCustomGraphBuilderSuite(GraphBuilderConfiguration.getFullDebugDefault(getDefaultGraphBuilderPlugins()))
                                 : getDefaultGraphBuilderSuite();
                 HighTierContext context = new HighTierContext(getProviders(), graphBuilderSuite, OptimisticOptimizations.ALL);
                 Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
@@ -336,12 +335,10 @@ public class InliningTest extends GraalCompilerTest {
             this.value = value;
         }
 
-        @Override
         public int publicNotOverriddenMethod() {
             return value;
         }
 
-        @Override
         public int publicOverriddenMethod() {
             return value;
         }
