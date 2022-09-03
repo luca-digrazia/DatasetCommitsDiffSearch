@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,28 +22,55 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.ILLEGAL;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.lir.LIRInstruction.Opcode;
-import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
+
+import jdk.vm.ci.amd64.AMD64.CPUFeature;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.Value;
 
 /**
  * Returns from a function.
  */
 @Opcode("RETURN")
-final class AMD64HotSpotReturnOp extends AMD64HotSpotEpilogueOp {
+final class AMD64HotSpotReturnOp extends AMD64HotSpotEpilogueBlockEndOp {
 
+    public static final LIRInstructionClass<AMD64HotSpotReturnOp> TYPE = LIRInstructionClass.create(AMD64HotSpotReturnOp.class);
     @Use({REG, ILLEGAL}) protected Value value;
+    private final boolean isStub;
+    private final Register scratchForSafepointOnReturn;
+    private final GraalHotSpotVMConfig config;
 
-    AMD64HotSpotReturnOp(Value value) {
+    AMD64HotSpotReturnOp(Value value, boolean isStub, Register scratchForSafepointOnReturn, GraalHotSpotVMConfig config) {
+        super(TYPE);
         this.value = value;
+        this.isStub = isStub;
+        this.scratchForSafepointOnReturn = scratchForSafepointOnReturn;
+        this.config = config;
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-        leaveFrameAndRestoreRbp(tasm, masm);
+    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        leaveFrameAndRestoreRbp(crb, masm);
+        if (!isStub) {
+            // Every non-stub compile method must have a poll before the return.
+            AMD64HotSpotSafepointOp.emitCode(crb, masm, config, true, null, scratchForSafepointOnReturn);
+
+            /*
+             * We potentially return to the interpreter, and that's an AVX-SSE transition. The only
+             * live value at this point should be the return value in either rax, or in xmm0 with
+             * the upper half of the register unused, so we don't destroy any value here.
+             */
+            if (masm.supports(CPUFeature.AVX)) {
+                masm.vzeroupper();
+            }
+        }
         masm.ret(0);
     }
 }
