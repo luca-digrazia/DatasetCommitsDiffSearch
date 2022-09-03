@@ -30,12 +30,14 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.logging.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
+import com.oracle.graal.snippets.*;
 
 /**
  * Singleton class holding the instance of the {@link GraalRuntime}.
@@ -104,22 +106,12 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
         return unsafe.getInt(address);
     }
 
-    /**
-     * Reads a word value from a given object.
-     */
-    public static long unsafeReadWord(Object object, long offset) {
-        if (wordKind == Kind.Long) {
-            return unsafe.getLong(object, offset);
-        }
-        return unsafe.getInt(object, offset);
-    }
-
     protected/* final */CompilerToVM compilerToVm;
     protected/* final */VMToCompiler vmToCompiler;
 
     protected final HotSpotRuntime runtime;
+    protected final GraalCompiler compiler;
     protected final TargetDescription target;
-    protected final Replacements replacements;
 
     private HotSpotRuntimeInterpreterInterface runtimeInterpreterInterface;
     private volatile HotSpotGraphCache cache;
@@ -139,10 +131,6 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
         compilerToVm.initializeConfiguration(config);
         config.check();
 
-        // Set some global options:
-        GraalOptions.HotSpotPrintCompilation = config.printCompilation;
-        GraalOptions.HotSpotPrintInlining = config.printInlining;
-
         if (Boolean.valueOf(System.getProperty("graal.printconfig"))) {
             printConfig(config);
         }
@@ -153,13 +141,9 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
 
         runtime = createRuntime();
 
-        // Replacements cannot have speculative optimizations since they have
-        // to be valid for the entire run of the VM.
-        Assumptions assumptions = new Assumptions(false);
-        replacements = new HotSpotReplacementsImpl(runtime, assumptions, runtime.getGraalRuntime().getTarget());
-
         backend = createBackend();
         GraalOptions.StackShadowPages = config.stackShadowPages;
+        compiler = new GraalCompiler();
         if (GraalOptions.CacheGraphs) {
             cache = new HotSpotGraphCache();
         }
@@ -192,6 +176,10 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
 
     public TargetDescription getTarget() {
         return target;
+    }
+
+    public GraalCompiler getCompiler() {
+        return compiler;
     }
 
     public HotSpotGraphCache getCache() {
@@ -249,10 +237,6 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
         return runtime;
     }
 
-    public Replacements getReplacements() {
-        return replacements;
-    }
-
     public void evictDeoptedGraphs() {
         if (cache != null) {
             long[] deoptedGraphs = getCompilerToVM().getDeoptedLeafGraphIds();
@@ -274,7 +258,7 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
     @SuppressWarnings("unchecked")
     @Override
     public <T> T getCapability(Class<T> clazz) {
-        if (clazz == GraalCodeCacheProvider.class || clazz == CodeCacheProvider.class || clazz == MetaAccessProvider.class) {
+        if (clazz == GraalCodeCacheProvider.class || clazz == CodeCacheProvider.class || clazz == MetaAccessProvider.class || clazz == SnippetProvider.class) {
             return (T) getRuntime();
         }
         if (clazz == DisassemblerProvider.class || clazz == BytecodeDisassemblerProvider.class) {
@@ -283,8 +267,8 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
         if (clazz == HotSpotRuntime.class) {
             return (T) runtime;
         }
-        if (clazz == Replacements.class) {
-            return (T) replacements;
+        if (clazz == GraalCompiler.class) {
+            return (T) getCompiler();
         }
         if (clazz == Backend.class) {
             return (T) getBackend();

@@ -29,7 +29,6 @@ import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.*;
@@ -146,7 +145,8 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
                             graph = graph.copy();
                         }
                         InlinedBytecodes.add(method.getCodeSize());
-                        return GraalCompiler.compileMethod(graalRuntime.getRuntime(), graalRuntime.getBackend(), graalRuntime.getTarget(), method, graph, graalRuntime.getCache(), plan, optimisticOpts);
+                        return graalRuntime.getCompiler().compileMethod(graalRuntime.getRuntime(), graalRuntime.getBackend(), graalRuntime.getTarget(), method, graph, graalRuntime.getCache(), plan,
+                                        optimisticOpts);
                     }
                 });
             } finally {
