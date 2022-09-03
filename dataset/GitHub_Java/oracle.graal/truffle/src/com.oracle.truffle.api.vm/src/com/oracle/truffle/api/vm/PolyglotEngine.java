@@ -1498,10 +1498,5 @@ public class PolyglotEngine {
         public String getLanguageHome(Object engineObject) {
             return ((PolyglotRuntime.LanguageShared) engineObject).cache.getLanguageHome();
         }
-
-        @Override
-        public boolean isInstrumentExceptionsAreThrown(Object vmObject) {
-            return false;
-        }
     }
 }
