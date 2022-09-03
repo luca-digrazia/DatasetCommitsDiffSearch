@@ -750,6 +750,12 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
 
     @Override
     public String toString() {
-        return "HotSpotType<" + getName() + ", resolved>";
+        String simpleName;
+        if (isArray() || isInterface()) {
+            simpleName = getName();
+        } else {
+            simpleName = getName().substring(1, getName().length() - 1);
+        }
+        return "HotSpotType<" + simpleName + ", resolved>";
     }
 }
