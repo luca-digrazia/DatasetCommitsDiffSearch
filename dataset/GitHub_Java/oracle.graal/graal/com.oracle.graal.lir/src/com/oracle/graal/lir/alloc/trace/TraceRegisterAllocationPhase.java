@@ -25,6 +25,9 @@ package com.oracle.graal.lir.alloc.trace;
 import java.util.List;
 
 import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.options.Option;
+import jdk.vm.ci.options.OptionType;
+import jdk.vm.ci.options.OptionValue;
 
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.alloc.TraceBuilder;
@@ -46,9 +49,6 @@ import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
 import com.oracle.graal.lir.phases.AllocationPhase;
 import com.oracle.graal.lir.ssi.SSIUtil;
 import com.oracle.graal.lir.ssi.SSIVerifier;
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionType;
-import com.oracle.graal.options.OptionValue;
 
 /**
  * An implementation of a Trace Register Allocator as described in <a
@@ -154,10 +154,6 @@ public final class TraceRegisterAllocationPhase extends AllocationPhase {
     }
 
     private static void unnumberInstructions(List<? extends AbstractBlockBase<?>> trace, LIR lir) {
-        for (AbstractBlockBase<?> block : trace) {
-            for (LIRInstruction op : lir.getLIRforBlock(block)) {
-                op.setId(-1);
-            }
-        }
+        trace.stream().flatMap(b -> lir.getLIRforBlock(b).stream()).forEach(op -> op.setId(-1));
     }
 }
