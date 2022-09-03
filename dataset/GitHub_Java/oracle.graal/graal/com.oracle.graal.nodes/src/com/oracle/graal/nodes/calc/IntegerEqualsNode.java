@@ -24,8 +24,8 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "==")
 public final class IntegerEqualsNode extends CompareNode {
@@ -38,8 +38,8 @@ public final class IntegerEqualsNode extends CompareNode {
      */
     public IntegerEqualsNode(ValueNode x, ValueNode y) {
         super(x, y);
-        assert !x.kind().isNumericFloat() && x.kind() != Kind.Object;
-        assert !y.kind().isNumericFloat() && y.kind() != Kind.Object;
+        assert x.kind() != Kind.Double && x.kind() != Kind.Float && x.kind() != Kind.Object;
+        assert y.kind() != Kind.Double && y.kind() != Kind.Float && y.kind() != Kind.Object;
     }
 
     @Override
@@ -53,7 +53,7 @@ public final class IntegerEqualsNode extends CompareNode {
     }
 
     @Override
-    protected LogicNode optimizeNormalizeCmp(Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
+    protected ValueNode optimizeNormalizeCmp(Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
         if (constant.getKind() == Kind.Int && constant.asInt() == 0) {
             ValueNode a = mirrored ? normalizeNode.y() : normalizeNode.x();
             ValueNode b = mirrored ? normalizeNode.x() : normalizeNode.y();
@@ -68,11 +68,11 @@ public final class IntegerEqualsNode extends CompareNode {
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (x() == y()) {
-            return LogicConstantNode.tautology(graph());
-        } else if (x().stamp().alwaysDistinct(y().stamp())) {
-            return LogicConstantNode.contradiction(graph());
+            return ConstantNode.forBoolean(true, graph());
+        } else if (x().integerStamp().alwaysDistinct(y().integerStamp())) {
+            return ConstantNode.forBoolean(false, graph());
         }
 
         if (x() instanceof AndNode && y().isConstant() && y().asConstant().asLong() == 0) {

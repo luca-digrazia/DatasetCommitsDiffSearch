@@ -26,12 +26,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-/**
- * This node will perform a "test" operation on its arguments. Its result is equivalent to the
- * expression "(x &amp; y) == 0", meaning that it will return true if (and only if) no bit is set in
- * both x and y.
- */
-public class IntegerTestNode extends LogicNode implements Canonicalizable, LIRLowerable {
+public class IntegerTestNode extends BooleanNode implements Canonicalizable, LIRLowerable {
 
     @Input private ValueNode x;
     @Input private ValueNode y;
@@ -51,6 +46,7 @@ public class IntegerTestNode extends LogicNode implements Canonicalizable, LIRLo
      * @param y the instruction that produces the second input to this instruction
      */
     public IntegerTestNode(ValueNode x, ValueNode y) {
+        super(StampFactory.condition());
         assert (x == null && y == null) || x.kind() == y.kind();
         this.x = x;
         this.y = y;
@@ -60,17 +56,12 @@ public class IntegerTestNode extends LogicNode implements Canonicalizable, LIRLo
     public void generate(LIRGeneratorTool gen) {
     }
 
-    @Override
-    public LogicNode canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (x().isConstant() && y().isConstant()) {
-            return LogicConstantNode.forBoolean((x().asConstant().asLong() & y().asConstant().asLong()) == 0, graph());
+            return ConstantNode.forBoolean((x().asConstant().asLong() & y().asConstant().asLong()) == 0, graph());
         }
-        if (x().stamp() instanceof IntegerStamp && y().stamp() instanceof IntegerStamp) {
-            IntegerStamp xStamp = (IntegerStamp) x().stamp();
-            IntegerStamp yStamp = (IntegerStamp) y().stamp();
-            if ((xStamp.upMask() & yStamp.upMask()) == 0) {
-                return LogicConstantNode.tautology(graph());
-            }
+        if ((x().integerStamp().mask() & y().integerStamp().mask()) == 0) {
+            return ConstantNode.forBoolean(true, graph());
         }
         return this;
     }
