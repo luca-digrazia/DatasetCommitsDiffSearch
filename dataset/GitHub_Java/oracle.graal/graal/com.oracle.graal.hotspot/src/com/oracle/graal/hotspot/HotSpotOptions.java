@@ -26,8 +26,8 @@ package com.oracle.graal.hotspot;
 import java.lang.reflect.*;
 import java.util.*;
 
+import com.oracle.graal.compiler.*;
 import com.oracle.graal.hotspot.logging.*;
-import com.oracle.graal.phases.*;
 
 public class HotSpotOptions {
 
@@ -45,11 +45,6 @@ public class HotSpotOptions {
         Object value = null;
         String fieldName = null;
         String valueString = null;
-
-        if (option.equals("+PrintFlags")) {
-            printFlags();
-            return true;
-        }
 
         char first = option.charAt(0);
         if (first == '+' || first == '-') {
@@ -69,7 +64,7 @@ public class HotSpotOptions {
         Field f;
         try {
             f = GraalOptions.class.getDeclaredField(fieldName);
-            Class<?> fType = f.getType();
+            Class< ? > fType = f.getType();
 
             if (value == null) {
                 if (fType == Boolean.TYPE) {
@@ -101,7 +96,7 @@ public class HotSpotOptions {
             if (value != null) {
                 f.setAccessible(true);
                 f.set(null, value);
-                // Logger.info("Set option " + fieldName + " to " + value);
+                //Logger.info("Set option " + fieldName + " to " + value);
             } else {
                 Logger.info("Wrong value \"" + valueString + "\" for option " + fieldName);
                 return false;
@@ -110,7 +105,7 @@ public class HotSpotOptions {
             Logger.info("Security exception when setting option " + option);
             return false;
         } catch (NoSuchFieldException e) {
-            Logger.info("Could not find option " + fieldName + " (use -G:+PrintFlags to see Graal options)");
+            Logger.info("Could not find option " + fieldName);
             return false;
         } catch (IllegalArgumentException e) {
             Logger.info("Illegal value for option " + option);
@@ -120,6 +115,10 @@ public class HotSpotOptions {
             return false;
         }
 
+        if (option.equals("+PrintFlags")) {
+            printFlags();
+        }
+
         return true;
     }
 
@@ -127,7 +126,6 @@ public class HotSpotOptions {
         Logger.info("[Graal flags]");
         Field[] flags = GraalOptions.class.getDeclaredFields();
         Arrays.sort(flags, new Comparator<Field>() {
-
             public int compare(Field o1, Field o2) {
                 return o1.getName().compareTo(o2.getName());
             }
