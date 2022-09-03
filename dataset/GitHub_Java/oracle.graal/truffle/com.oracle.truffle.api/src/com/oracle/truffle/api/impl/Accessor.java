@@ -116,6 +116,8 @@ public abstract class Accessor {
         }
     }
 
+    private static final TruffleInfoImpl INFO = new TruffleInfoImpl();
+
     protected Accessor() {
         if (!this.getClass().getName().startsWith("com.oracle.truffle.api")) {
             throw new IllegalStateException();
@@ -305,7 +307,7 @@ public abstract class Accessor {
     }
 
     private static Reference<Object> previousVM = new WeakReference<>(null);
-    private static Assumption oneVM = Truffle.getRuntime().createAssumption();
+    private static Assumption oneVM;
 
     @TruffleBoundary
     protected Closeable executionStart(Object vm, @SuppressWarnings("unused") int currentDepth, boolean debugger, Source s) {
@@ -315,9 +317,10 @@ public abstract class Accessor {
         final Closeable debugClose = DEBUG == null ? null : DEBUG.executionStart(vm, prev == null ? 0 : -1, debugger, s);
         if (!(vm == previousVM.get())) {
             previousVM = new WeakReference<>(vm);
-            oneVM.invalidate();
-            oneVM = Truffle.getRuntime().createAssumption();
-
+            if (oneVM != null) {
+                oneVM.invalidate();
+            }
+            oneVMAssumption();
         }
         CURRENT_VM.set(vm);
         class ContextCloseable implements Closeable {
@@ -337,7 +340,10 @@ public abstract class Accessor {
         SPI.dispatchEvent(vm, event);
     }
 
-    static Assumption oneVMAssumption() {
+    synchronized static Assumption oneVMAssumption() {
+        if (oneVM == null || oneVM.isValid()) {
+            oneVM = Truffle.getRuntime().createAssumption();
+        }
         return oneVM;
     }
 
@@ -412,7 +418,7 @@ public abstract class Accessor {
 
     @SuppressWarnings({"deprecation", "rawtypes", "unchecked"})
     protected void onLoopCount(Node source, int count) {
-        LoopCountSupport loopSupport = TruffleInfoImpl.INFO.loops();
+        LoopCountSupport loopSupport = INFO.loops();
         // optimized calltarget is not existent on default runtimes
         if (loopSupport != null) {
             loopSupport.onLoopCount(source, count);
