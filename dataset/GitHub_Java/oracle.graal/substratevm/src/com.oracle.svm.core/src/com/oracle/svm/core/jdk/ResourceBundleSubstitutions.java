@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -36,7 +34,6 @@ import org.graalvm.nativeimage.ImageSingletons;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
-import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.util.VMError;
 
 import sun.util.resources.OpenListResourceBundle;
@@ -66,31 +63,10 @@ final class Target_java_util_ResourceBundle {
     }
 
     @Substitute
-    private static ResourceBundle getBundle(String baseName, Locale locale, ClassLoader loader) {
+    public static ResourceBundle getBundle(String baseName, Locale locale, ClassLoader loader) {
         return ImageSingletons.lookup(LocalizationSupport.class).getCached(baseName, locale);
     }
 
-    @Substitute
-    private static ResourceBundle getBundle(String baseName, Locale targetLocale, ClassLoader loader, Control control) {
-        return ImageSingletons.lookup(LocalizationSupport.class).getCached(baseName, targetLocale);
-    }
-
-    /*
-     * Currently there is no support for the module system at run time. Module arguments are
-     * therefore ignored.
-     */
-
-    @TargetElement(onlyWith = JDK11OrLater.class)
-    @Substitute
-    private static ResourceBundle getBundle(String baseName, Target_java_lang_Module module) {
-        return ImageSingletons.lookup(LocalizationSupport.class).getCached(baseName, Locale.getDefault());
-    }
-
-    @TargetElement(onlyWith = JDK11OrLater.class)
-    @Substitute
-    private static ResourceBundle getBundle(String baseName, Locale targetLocale, Target_java_lang_Module module) {
-        return ImageSingletons.lookup(LocalizationSupport.class).getCached(baseName, targetLocale);
-    }
 }
 
 @TargetClass(java.util.ListResourceBundle.class)
