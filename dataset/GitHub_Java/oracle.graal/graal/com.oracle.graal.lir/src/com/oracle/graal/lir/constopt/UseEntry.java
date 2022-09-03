@@ -22,11 +22,9 @@
  */
 package com.oracle.graal.lir.constopt;
 
-import jdk.vm.ci.meta.Value;
-
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.ValueProcedure;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.lir.*;
 
 /**
  * Represents a usage of a constant.
@@ -37,7 +35,7 @@ class UseEntry {
     private final LIRInstruction instruction;
     private final Value value;
 
-    UseEntry(AbstractBlockBase<?> block, LIRInstruction instruction, Value value) {
+    public UseEntry(AbstractBlockBase<?> block, LIRInstruction instruction, Value value) {
         this.block = block;
         this.instruction = instruction;
         this.value = value;
