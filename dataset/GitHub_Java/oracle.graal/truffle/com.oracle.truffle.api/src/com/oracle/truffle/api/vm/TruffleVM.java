@@ -344,9 +344,7 @@ public final class TruffleVM {
      * @return result of a processing the file, possibly <code>null</code>
      * @throws IOException exception to signal I/O problems or problems with processing the file's
      *             content
-     * @deprecated use {@link #eval(com.oracle.truffle.api.source.Source)}
      */
-    @Deprecated
     public Object eval(URI location) throws IOException {
         checkThread();
         Source s;
@@ -384,9 +382,7 @@ public final class TruffleVM {
      * @param reader the source of code snippet to execute
      * @return result of an execution, possibly <code>null</code>
      * @throws IOException thrown to signal errors while processing the code
-     * @deprecated use {@link #eval(com.oracle.truffle.api.source.Source)}
      */
-    @Deprecated
     public Object eval(String mimeType, Reader reader) throws IOException {
         checkThread();
         TruffleLanguage<?> l = getTruffleLang(mimeType);
@@ -404,9 +400,7 @@ public final class TruffleVM {
      * @param code the code snippet to execute
      * @return result of an execution, possibly <code>null</code>
      * @throws IOException thrown to signal errors while processing the code
-     * @deprecated use {@link #eval(com.oracle.truffle.api.source.Source)}
      */
-    @Deprecated
     public Object eval(String mimeType, String code) throws IOException {
         checkThread();
         TruffleLanguage<?> l = getTruffleLang(mimeType);
@@ -414,25 +408,6 @@ public final class TruffleVM {
             throw new IOException("No language for MIME type " + mimeType + " found. Supported types: " + langs.keySet());
         }
         return eval(l, Source.fromText(code, mimeType));
-    }
-
-    /**
-     * Evaluates provided source. Chooses language registered for a particular
-     * {@link Source#getMimeType() MIME type} (throws {@link IOException} if there is none). The
-     * language is then allowed to parse and execute the source.
-     *
-     * @param source code snippet to execute
-     * @return result of an execution, possibly <code>null</code>
-     * @throws IOException thrown to signal errors while processing the code
-     */
-    public Object eval(Source source) throws IOException {
-        String mimeType = source.getMimeType();
-        checkThread();
-        TruffleLanguage<?> l = getTruffleLang(mimeType);
-        if (l == null) {
-            throw new IOException("No language for MIME type " + mimeType + " found. Supported types: " + langs.keySet());
-        }
-        return eval(l, source);
     }
 
     private Object eval(TruffleLanguage<?> l, Source s) throws IOException {
@@ -654,8 +629,8 @@ public final class TruffleVM {
             if (impl == null) {
                 try {
                     TruffleLanguage<?> language = data.language;
-                    impl = language;
                     env = SPI.attachEnv(TruffleVM.this, language, out, err, in);
+                    impl = language;
                 } catch (Exception ex) {
                     throw new IllegalStateException("Cannot initialize " + getShortName() + " language with implementation " + data.language.getClass().getName(), ex);
                 }
