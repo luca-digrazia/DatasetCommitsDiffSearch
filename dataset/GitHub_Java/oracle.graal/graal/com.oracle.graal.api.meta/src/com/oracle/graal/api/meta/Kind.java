@@ -68,32 +68,26 @@ public enum Kind {
     /** The non-type. */
     Illegal('-', "illegal", false, false);
 
-    private final char typeChar;
-    private final String javaName;
-    private final boolean isStackInt;
-    private final boolean isPrimitive;
-
-    private Kind(char typeChar, String javaName, boolean isPrimitive, boolean isStackInt) {
-        this.typeChar = typeChar;
-        this.javaName = javaName;
+    private Kind(char ch, String name, boolean isPrimitive, boolean isStackInt) {
+        this.typeChar = ch;
+        this.javaName = name;
         this.isPrimitive = isPrimitive;
         this.isStackInt = isStackInt;
     }
 
-    /**
-     * Returns the name of the kind as a single character.
-     */
-    public char getTypeChar() {
-        return typeChar;
-    }
+    private final boolean isStackInt;
+    private final boolean isPrimitive;
 
     /**
-     * Returns the name of this kind which will also be it Java programming language name if it is
-     * {@linkplain #isPrimitive() primitive} or {@code void}.
+     * The name of the kind as a single character.
      */
-    public String getJavaName() {
-        return javaName;
-    }
+    public final char typeChar;
+
+    /**
+     * The name of this kind which will also be it Java programming language name if it is {@linkplain #isPrimitive()
+     * primitive} or {@code void}.
+     */
+    public final String javaName;
 
     /**
      * Checks whether this type is valid as an {@code int} on the Java operand stack.
@@ -115,11 +109,11 @@ public enum Kind {
     }
 
     /**
-     * Returns the kind that represents this kind when on the Java operand stack.
+     * Gets the kind that represents this kind when on the Java operand stack.
      *
      * @return the kind used on the operand stack
      */
-    public Kind getStackKind() {
+    public Kind stackKind() {
         if (isStackInt()) {
             return Int;
         }
@@ -142,7 +136,7 @@ public enum Kind {
     }
 
     /**
-     * Returns the kind from the character describing a primitive or void.
+     * Gets the kind from the character describing a primitive or void.
      *
      * @param ch the character
      * @return the kind
@@ -462,16 +456,6 @@ public enum Kind {
         }
     }
 
-    private static Unsafe unsafeCache;
-
-    private static Unsafe unsafe() {
-        if (unsafeCache == null) {
-            unsafeCache = Unsafe.getUnsafe();
-        }
-        return unsafeCache;
-    }
-
-
     /**
      * Utility function for reading a value of this kind using an object and a displacement.
      *
@@ -480,26 +464,27 @@ public enum Kind {
      * @return the read value encapsulated in a {@link Constant} object
      */
     public Constant readUnsafeConstant(Object object, long displacement) {
-        assert object != null : displacement;
+        assert object != null;
+        Unsafe u = Unsafe.getUnsafe();
         switch (this) {
             case Boolean:
-                return Constant.forBoolean(unsafe().getBoolean(object, displacement));
+                return Constant.forBoolean(u.getBoolean(object, displacement));
             case Byte:
-                return Constant.forByte(unsafe().getByte(object, displacement));
+                return Constant.forByte(u.getByte(object, displacement));
             case Char:
-                return Constant.forChar(unsafe().getChar(object, displacement));
+                return Constant.forChar(u.getChar(object, displacement));
             case Short:
-                return Constant.forShort(unsafe().getShort(object, displacement));
+                return Constant.forShort(u.getShort(object, displacement));
             case Int:
-                return Constant.forInt(unsafe().getInt(object, displacement));
+                return Constant.forInt(u.getInt(object, displacement));
             case Long:
-                return Constant.forLong(unsafe().getLong(object, displacement));
+                return Constant.forLong(u.getLong(object, displacement));
             case Float:
-                return Constant.forFloat(unsafe().getFloat(object, displacement));
+                return Constant.forFloat(u.getFloat(object, displacement));
             case Double:
-                return Constant.forDouble(unsafe().getDouble(object, displacement));
+                return Constant.forDouble(u.getDouble(object, displacement));
             case Object:
-                return Constant.forObject(unsafe().getObject(object, displacement));
+                return Constant.forObject(u.getObject(object, displacement));
             default:
                 assert false : "unexpected kind: " + this;
                 return null;
