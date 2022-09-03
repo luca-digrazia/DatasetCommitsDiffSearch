@@ -53,6 +53,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
 
     private final Compiler compiler;
     private IntrinsifyArrayCopyPhase intrinsifyArrayCopy;
+    private LowerCheckCastPhase lowerCheckCastPhase;
 
     public final HotSpotTypePrimitive typeBoolean;
     public final HotSpotTypePrimitive typeChar;
@@ -115,8 +116,12 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
                 @Override
                 public void run() {
                     VMToCompilerImpl.this.intrinsifyArrayCopy = new IntrinsifyArrayCopyPhase(runtime);
+                    VMToCompilerImpl.this.lowerCheckCastPhase = new LowerCheckCastPhase(runtime);
                     GraalIntrinsics.installIntrinsics(runtime, runtime.getCompiler().getTarget());
-                    runtime.installSnippets();
+                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new SystemSnippets());
+                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new UnsafeSnippets());
+                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new ArrayCopySnippets());
+                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new CheckCastSnippets());
                 }
             });
 
@@ -289,7 +294,6 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
         CiCompilationStatistics.clear("final");
         MethodEntryCounters.printCounters(compiler);
         HotSpotXirGenerator.printCounters(TTY.out().out());
-        CheckCastSnippets.printCounters(TTY.out().out());
     }
 
     private void flattenChildren(DebugValueMap map, DebugValueMap globalMap) {
@@ -495,6 +499,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
         if (GraalOptions.Intrinsify) {
             phasePlan.addPhase(PhasePosition.HIGH_LEVEL, intrinsifyArrayCopy);
         }
+        phasePlan.addPhase(PhasePosition.HIGH_LEVEL, lowerCheckCastPhase);
         return phasePlan;
     }
 
