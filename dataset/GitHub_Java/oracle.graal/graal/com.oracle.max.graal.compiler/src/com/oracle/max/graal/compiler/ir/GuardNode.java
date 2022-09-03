@@ -30,33 +30,33 @@ import com.sun.cri.ci.*;
 
 
 public final class GuardNode extends FloatingNode {
+    private static final int INPUT_COUNT = 2;
+    private static final int INPUT_ANCHOR = 0;
+    private static final int INPUT_NODE = 1;
 
-    @NodeInput
-    private FixedNode anchor;
-
-    @NodeInput
-    private BooleanNode node;
+    private static final int SUCCESSOR_COUNT = 0;
 
     public FixedNode anchor() {
-        return anchor;
+        return (FixedNode) inputs().get(super.inputCount() + INPUT_ANCHOR);
     }
 
-    public void setAnchor(FixedNode x) {
-        updateUsages(anchor, x);
-        anchor = x;
+    public void setAnchor(FixedNode anchor) {
+        inputs().set(super.inputCount() + INPUT_ANCHOR, anchor);
     }
 
+    /**
+     * The instruction that produces the object tested against null.
+     */
     public BooleanNode node() {
-        return node;
+        return (BooleanNode) inputs().get(super.inputCount() + INPUT_NODE);
     }
 
-    public void setNode(BooleanNode x) {
-        updateUsages(node, x);
-        node = x;
+    public void setNode(BooleanNode n) {
+        inputs().set(super.inputCount() + INPUT_NODE, n);
     }
 
     public GuardNode(BooleanNode node, Graph graph) {
-        super(CiKind.Illegal, graph);
+        super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setNode(node);
     }
 

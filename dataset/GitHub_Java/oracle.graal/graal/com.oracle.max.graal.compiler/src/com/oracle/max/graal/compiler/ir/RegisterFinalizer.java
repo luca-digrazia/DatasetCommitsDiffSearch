@@ -128,8 +128,6 @@ public final class RegisterFinalizer extends StateSplit {
 
     @Override
     public Node copy(Graph into) {
-        RegisterFinalizer x = new RegisterFinalizer(null, into);
-        super.copyInto(x);
-        return x;
+        return new RegisterFinalizer(null, into);
     }
 }
