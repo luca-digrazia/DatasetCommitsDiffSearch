@@ -33,24 +33,14 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
-import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.hsail.*;
-import com.oracle.graal.lir.hsail.HSAILArithmetic.ConvertOp;
 import com.oracle.graal.lir.hsail.HSAILArithmetic.Op1Reg;
 import com.oracle.graal.lir.hsail.HSAILArithmetic.Op2Reg;
-import com.oracle.graal.lir.hsail.HSAILArithmetic.ShiftOp;
-import com.oracle.graal.lir.hsail.HSAILControlFlow.CompareBranchOp;
-import com.oracle.graal.lir.hsail.HSAILControlFlow.CondMoveOp;
-import com.oracle.graal.lir.hsail.HSAILControlFlow.FloatCondMoveOp;
-import com.oracle.graal.lir.hsail.HSAILControlFlow.ReturnOp;
-import com.oracle.graal.lir.hsail.HSAILControlFlow.StrategySwitchOp;
-import com.oracle.graal.lir.hsail.HSAILMove.LeaOp;
-import com.oracle.graal.lir.hsail.HSAILMove.MembarOp;
-import com.oracle.graal.lir.hsail.HSAILMove.MoveFromRegOp;
-import com.oracle.graal.lir.hsail.HSAILMove.MoveToRegOp;
+import com.oracle.graal.lir.hsail.HSAILControlFlow.*;
+import com.oracle.graal.lir.hsail.HSAILMove.*;
 import com.oracle.graal.phases.util.*;
 
 /**
@@ -66,13 +56,13 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
         }
     }
 
-    public HSAILLIRGenerator(LIRKindTool lirKindTool, Providers providers, CallingConvention cc, LIRGenerationResult lirGenRes) {
-        super(lirKindTool, providers, cc, lirGenRes);
+    public HSAILLIRGenerator(Providers providers, CallingConvention cc, LIRGenerationResult lirGenRes) {
+        super(providers, cc, lirGenRes);
         lirGenRes.getLIR().setSpillMoveFactory(new HSAILSpillMoveFactory());
     }
 
     @Override
-    public boolean canInlineConstant(JavaConstant c) {
+    public boolean canInlineConstant(Constant c) {
         switch (c.getKind()) {
             case Long:
                 return NumUtil.isInt(c.asLong()) && !getCodeCache().needsDataPatch(c);
@@ -86,7 +76,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
     protected HSAILLIRInstruction createMove(AllocatableValue dst, Value src) {
         if (src instanceof HSAILAddressValue) {
             return new LeaOp(dst, (HSAILAddressValue) src);
-        } else if (isRegister(src) || isStackSlotValue(dst)) {
+        } else if (isRegister(src) || isStackSlot(dst)) {
             return new MoveFromRegOp(dst.getKind(), dst, src);
         } else {
             return new MoveToRegOp(dst.getKind(), dst, src);
@@ -135,7 +125,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
                 Value indexRegister;
                 Value convertedIndex = index.getKind() == Kind.Long ? index : this.emitSignExtend(index, 32, 64);
                 if (scale != 1) {
-                    indexRegister = emitUMul(convertedIndex, JavaConstant.forInt(scale));
+                    indexRegister = emitUMul(convertedIndex, Constant.forInt(scale));
                 } else {
                     indexRegister = convertedIndex;
                 }
@@ -152,7 +142,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitAddress(StackSlotValue address) {
+    public Variable emitAddress(StackSlot address) {
         throw GraalInternalError.unimplemented();
     }
 
@@ -209,13 +199,13 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
     public void emitIntegerTestBranch(Value left, Value right, LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability) {
         Variable result = emitAnd(left, right);
         Variable dummyResult = newVariable(left.getLIRKind());
-        append(new CompareBranchOp(mapKindToCompareOp(result.getKind()), Condition.EQ, result, JavaConstant.forInt(0), dummyResult, dummyResult, trueDestination, falseDestination, false));
+        append(new CompareBranchOp(mapKindToCompareOp(result.getKind()), Condition.EQ, result, Constant.forInt(0), dummyResult, dummyResult, trueDestination, falseDestination, false));
     }
 
     @Override
     public Variable emitIntegerTestMove(Value left, Value right, Value trueValue, Value falseValue) {
         Variable result = emitAnd(left, right);
-        append(new CondMoveOp(mapKindToCompareOp(result.getKind()), result, JavaConstant.forInt(0), result, Condition.EQ, load(trueValue), load(falseValue)));
+        append(new CondMoveOp(mapKindToCompareOp(result.getKind()), result, Constant.forInt(0), result, Condition.EQ, load(trueValue), load(falseValue)));
         return result;
     }
 
@@ -832,7 +822,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
      * Graal generates for any switch construct appearing in Java bytecode.
      */
     @Override
-    public void emitStrategySwitch(JavaConstant[] keyConstants, double[] keyProbabilities, LabelRef[] keyTargets, LabelRef defaultTarget, Variable value) {
+    public void emitStrategySwitch(Constant[] keyConstants, double[] keyProbabilities, LabelRef[] keyTargets, LabelRef defaultTarget, Variable value) {
         emitStrategySwitch(new SwitchStrategy.SequentialStrategy(keyProbabilities, keyConstants), value, keyTargets, defaultTarget);
     }
 

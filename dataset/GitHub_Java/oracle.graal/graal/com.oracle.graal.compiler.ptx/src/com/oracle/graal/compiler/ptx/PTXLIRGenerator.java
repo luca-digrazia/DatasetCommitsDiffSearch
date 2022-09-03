@@ -33,7 +33,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
-import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.gen.*;
@@ -81,8 +80,8 @@ public class PTXLIRGenerator extends LIRGenerator {
         }
     }
 
-    public PTXLIRGenerator(LIRKindTool lirKindTool, Providers providers, CallingConvention cc, LIRGenerationResult lirGenRes) {
-        super(lirKindTool, providers, cc, lirGenRes);
+    public PTXLIRGenerator(Providers providers, CallingConvention cc, LIRGenerationResult lirGenRes) {
+        super(providers, cc, lirGenRes);
         lirGenRes.getLIR().setSpillMoveFactory(new PTXSpillMoveFactory());
         int callVariables = cc.getArgumentCount() + (cc.getReturn().equals(Value.ILLEGAL) ? 0 : 1);
         lirGenRes.getLIR().setFirstVariableNumber(callVariables);
@@ -94,7 +93,7 @@ public class PTXLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public boolean canInlineConstant(JavaConstant c) {
+    public boolean canInlineConstant(Constant c) {
         switch (c.getKind()) {
             case Long:
                 return NumUtil.isInt(c.asLong()) && !getCodeCache().needsDataPatch(c);
@@ -127,7 +126,7 @@ public class PTXLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitMove(AllocatableValue dst, Value src) {
-        if (isRegister(src) || isStackSlotValue(dst)) {
+        if (isRegister(src) || isStackSlot(dst)) {
             append(new MoveFromRegOp(dst, src));
         } else {
             append(new MoveToRegOp(dst, src));
@@ -169,9 +168,9 @@ public class PTXLIRGenerator extends LIRGenerator {
                 convertedIndex = emitSignExtend(index, 32, 64);
                 if (scale != 1) {
                     if (CodeUtil.isPowerOf2(scale)) {
-                        indexRegister = emitShl(convertedIndex, JavaConstant.forInt(CodeUtil.log2(scale)));
+                        indexRegister = emitShl(convertedIndex, Constant.forInt(CodeUtil.log2(scale)));
                     } else {
-                        indexRegister = emitMul(convertedIndex, JavaConstant.forInt(scale));
+                        indexRegister = emitMul(convertedIndex, Constant.forInt(scale));
                     }
                 } else {
                     indexRegister = convertedIndex;
@@ -216,7 +215,7 @@ public class PTXLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitAddress(StackSlotValue address) {
+    public Variable emitAddress(StackSlot address) {
         throw GraalInternalError.unimplemented("PTXLIRGenerator.emitAddress()");
     }
 
@@ -697,13 +696,13 @@ public class PTXLIRGenerator extends LIRGenerator {
             assert inputVal.getKind() == Kind.Long;
             Variable result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Long));
             long mask = CodeUtil.mask(fromBits);
-            append(new Op2Stack(LAND, result, inputVal, JavaConstant.forLong(mask)));
+            append(new Op2Stack(LAND, result, inputVal, Constant.forLong(mask)));
             return result;
         } else {
             assert inputVal.getKind() == Kind.Int;
             Variable result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Int));
             int mask = (int) CodeUtil.mask(fromBits);
-            append(new Op2Stack(IAND, result, inputVal, JavaConstant.forInt(mask)));
+            append(new Op2Stack(IAND, result, inputVal, Constant.forInt(mask)));
             if (toBits > 32) {
                 Variable longResult = newVariable(LIRKind.derive(inputVal).changeType(Kind.Long));
                 emitMove(longResult, result);

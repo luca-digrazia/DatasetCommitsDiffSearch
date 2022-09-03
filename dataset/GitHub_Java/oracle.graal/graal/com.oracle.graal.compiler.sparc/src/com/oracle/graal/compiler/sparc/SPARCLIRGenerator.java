@@ -36,7 +36,6 @@ import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
 import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
-import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.sparc.*;
@@ -61,14 +60,14 @@ import com.oracle.graal.lir.sparc.SPARCMove.MoveToRegOp;
 import com.oracle.graal.lir.sparc.SPARCMove.StackLoadAddressOp;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.sparc.*;
-import com.oracle.graal.sparc.SPARC.CPUFeature;
+import com.oracle.graal.sparc.SPARC.*;
 
 /**
  * This class implements the SPARC specific portion of the LIR generator.
  */
 public abstract class SPARCLIRGenerator extends LIRGenerator {
 
-    private StackSlotValue tmpStackSlot;
+    private StackSlot tmpStackSlot;
 
     private class SPARCSpillMoveFactory implements LIR.SpillMoveFactory {
 
@@ -78,13 +77,13 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         }
     }
 
-    public SPARCLIRGenerator(LIRKindTool lirKindTool, Providers providers, CallingConvention cc, LIRGenerationResult lirGenRes) {
-        super(lirKindTool, providers, cc, lirGenRes);
+    public SPARCLIRGenerator(Providers providers, CallingConvention cc, LIRGenerationResult lirGenRes) {
+        super(providers, cc, lirGenRes);
         lirGenRes.getLIR().setSpillMoveFactory(new SPARCSpillMoveFactory());
     }
 
     @Override
-    public boolean canInlineConstant(JavaConstant c) {
+    public boolean canInlineConstant(Constant c) {
         switch (c.getKind()) {
             case Int:
                 return SPARCAssembler.isSimm13(c.asInt()) && !getCodeCache().needsDataPatch(c);
@@ -100,7 +99,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     protected SPARCLIRInstruction createMove(AllocatableValue dst, Value src) {
         if (src instanceof SPARCAddressValue) {
             return new LoadAddressOp(dst, (SPARCAddressValue) src);
-        } else if (isRegister(src) || isStackSlotValue(dst)) {
+        } else if (isRegister(src) || isStackSlot(dst)) {
             return new MoveFromRegOp(dst, src);
         } else {
             return new MoveToRegOp(dst, src);
@@ -143,9 +142,9 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 if (scale != 1) {
                     Value longIndex = index.getKind() == Kind.Long ? index : emitSignExtend(index, 32, 64);
                     if (CodeUtil.isPowerOf2(scale)) {
-                        indexRegister = emitShl(longIndex, JavaConstant.forLong(CodeUtil.log2(scale)));
+                        indexRegister = emitShl(longIndex, Constant.forLong(CodeUtil.log2(scale)));
                     } else {
-                        indexRegister = emitMul(longIndex, JavaConstant.forLong(scale));
+                        indexRegister = emitMul(longIndex, Constant.forLong(scale));
                     }
                 } else {
                     indexRegister = asAllocatable(index);
@@ -164,14 +163,14 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         } else {
             displacementInt = 0;
             if (baseRegister.equals(Value.ILLEGAL)) {
-                baseRegister = load(JavaConstant.forLong(finalDisp));
+                baseRegister = load(Constant.forLong(finalDisp));
             } else {
                 if (finalDisp == 0) {
                     // Nothing to do. Just use the base register.
                 } else {
                     Variable longBaseRegister = newVariable(LIRKind.derivedReference(Kind.Long));
                     emitMove(longBaseRegister, baseRegister);
-                    baseRegister = emitAdd(longBaseRegister, JavaConstant.forLong(finalDisp));
+                    baseRegister = emitAdd(longBaseRegister, Constant.forLong(finalDisp));
                 }
             }
         }
@@ -189,7 +188,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Value emitAddress(StackSlotValue address) {
+    public Value emitAddress(StackSlot address) {
         Variable result = newVariable(LIRKind.value(target().wordKind));
         append(new StackLoadAddressOp(result, address));
         return result;
@@ -274,7 +273,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     private Value loadSimm11(Value value) {
         if (isConstant(value)) {
-            JavaConstant c = asConstant(value);
+            Constant c = asConstant(value);
             if (c.isNull() || SPARCAssembler.isSimm11(c)) {
                 return value;
             } else {
@@ -553,7 +552,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         }
     }
 
-    private Variable emitBinaryConst(SPARCArithmetic op, AllocatableValue a, JavaConstant b, LIRFrameState state) {
+    private Variable emitBinaryConst(SPARCArithmetic op, AllocatableValue a, Constant b, LIRFrameState state) {
         switch (op) {
             case IADD:
             case LADD:
@@ -787,7 +786,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     private Variable emitShift(SPARCArithmetic op, Value a, Value b) {
         Variable result = newVariable(LIRKind.derive(a, b).changeType(a.getPlatformKind()));
-        if (isConstant(b) && canInlineConstant((JavaConstant) b)) {
+        if (isConstant(b) && canInlineConstant((Constant) b)) {
             append(new BinaryRegConst(op, result, load(a), asConstant(b), null));
         } else {
             append(new BinaryRegReg(op, result, load(a), load(b)));
@@ -911,16 +910,16 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     private void moveBetweenFpGp(AllocatableValue dst, AllocatableValue src) {
         if (!getArchitecture().getFeatures().contains(CPUFeature.VIS3)) {
-            StackSlotValue tempSlot = getTempSlot(LIRKind.value(Kind.Long));
+            StackSlot tempSlot = getTempSlot(LIRKind.value(Kind.Long));
             append(new MoveFpGp(dst, src, tempSlot));
         } else {
             append(new MoveFpGpVIS3(dst, src));
         }
     }
 
-    private StackSlotValue getTempSlot(LIRKind kind) {
+    private StackSlot getTempSlot(LIRKind kind) {
         if (tmpStackSlot == null) {
-            tmpStackSlot = getResult().getFrameMapBuilder().allocateSpillSlot(kind);
+            tmpStackSlot = getResult().getFrameMap().allocateSpillSlot(kind);
         }
         return tmpStackSlot;
     }
@@ -979,15 +978,15 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             assert inputVal.getKind() == Kind.Long;
             Variable result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Long));
             long mask = CodeUtil.mask(fromBits);
-            append(new BinaryRegConst(SPARCArithmetic.LAND, result, asAllocatable(inputVal), JavaConstant.forLong(mask), null));
+            append(new BinaryRegConst(SPARCArithmetic.LAND, result, asAllocatable(inputVal), Constant.forLong(mask), null));
             return result;
         } else {
             assert inputVal.getKind() == Kind.Int || inputVal.getKind() == Kind.Short || inputVal.getKind() == Kind.Byte || inputVal.getKind() == Kind.Char : inputVal.getKind();
             Variable result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Int));
             long mask = CodeUtil.mask(fromBits);
-            JavaConstant constant = JavaConstant.forInt((int) mask);
+            Constant constant = Constant.forInt((int) mask);
             if (fromBits == 32) {
-                append(new BinaryRegConst(IUSHR, result, inputVal, JavaConstant.forInt(0)));
+                append(new BinaryRegConst(IUSHR, result, inputVal, Constant.forInt(0)));
             } else if (canInlineConstant(constant)) {
                 append(new BinaryRegConst(SPARCArithmetic.IAND, result, asAllocatable(inputVal), constant, null));
             } else {

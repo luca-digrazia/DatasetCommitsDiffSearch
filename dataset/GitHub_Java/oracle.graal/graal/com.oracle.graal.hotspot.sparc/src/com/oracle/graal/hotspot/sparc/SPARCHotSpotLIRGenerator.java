@@ -42,11 +42,7 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.sparc.*;
-import com.oracle.graal.lir.sparc.SPARCMove.CompareAndSwapOp;
-import com.oracle.graal.lir.sparc.SPARCMove.LoadOp;
-import com.oracle.graal.lir.sparc.SPARCMove.NullCheckOp;
-import com.oracle.graal.lir.sparc.SPARCMove.StoreConstantOp;
-import com.oracle.graal.lir.sparc.SPARCMove.StoreOp;
+import com.oracle.graal.lir.sparc.SPARCMove.*;
 
 public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSpotLIRGenerator {
 
@@ -55,7 +51,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     private LIRFrameState currentRuntimeCallInfo;
 
     public SPARCHotSpotLIRGenerator(HotSpotProviders providers, HotSpotVMConfig config, CallingConvention cc, LIRGenerationResult lirGenRes) {
-        super(new DefaultLIRKindTool(providers.getCodeCache().getTarget().wordKind), providers, cc, lirGenRes);
+        super(providers, cc, lirGenRes);
         this.config = config;
     }
 
@@ -72,7 +68,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     private StackSlot deoptimizationRescueSlot;
 
     @Override
-    public StackSlotValue getLockSlot(int lockDepth) {
+    public StackSlot getLockSlot(int lockDepth) {
         return getLockStack().makeLockSlot(lockDepth);
     }
 
@@ -101,7 +97,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         super.beforeRegisterAllocation();
         boolean hasDebugInfo = getResult().getLIR().hasDebugInfo();
         if (hasDebugInfo) {
-            ((SPARCHotSpotLIRGenerationResult) getResult()).setDeoptimizationRescueSlot(((SPARCFrameMapBuilder) getResult().getFrameMapBuilder()).allocateDeoptimizationRescueSlot());
+            ((SPARCHotSpotLIRGenerationResult) getResult()).setDeoptimizationRescueSlot(getResult().getFrameMap().allocateSpillSlot(LIRKind.value(Kind.Long)));
         }
     }
 
@@ -144,7 +140,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
             operand = resultOperandFor(input.getLIRKind());
             emitMove(operand, input);
         }
-        append(new SPARCHotSpotReturnOp(operand, getStub() != null, runtime().getConfig()));
+        append(new SPARCHotSpotReturnOp(operand, getStub() != null));
     }
 
     @Override
@@ -164,8 +160,8 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     }
 
     private void moveDeoptValuesToThread(Value actionAndReason, Value speculation) {
-        moveValueToThread(actionAndReason, config.pendingDeoptimizationOffset);
-        moveValueToThread(speculation, config.pendingFailedSpeculationOffset);
+        moveValueToThread(actionAndReason, runtime().getConfig().pendingDeoptimizationOffset);
+        moveValueToThread(speculation, runtime().getConfig().pendingFailedSpeculationOffset);
     }
 
     private void moveValueToThread(Value v, int offset) {
@@ -183,7 +179,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
 
     @Override
     public void emitDeoptimizeCaller(DeoptimizationAction action, DeoptimizationReason reason) {
-        moveDeoptValuesToThread(getMetaAccess().encodeDeoptActionAndReason(action, reason, 0), JavaConstant.NULL_POINTER);
+        moveDeoptValuesToThread(getMetaAccess().encodeDeoptActionAndReason(action, reason, 0), Constant.NULL_OBJECT);
         append(new SPARCHotSpotDeoptimizeCallerOp());
     }
 
@@ -195,7 +191,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         return result;
     }
 
-    private static boolean canStoreConstant(JavaConstant c) {
+    private static boolean canStoreConstant(Constant c) {
         // SPARC can only store integer null constants (via g0)
         switch (c.getKind()) {
             case Float:
@@ -210,7 +206,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     public void emitStore(LIRKind kind, Value address, Value inputVal, LIRFrameState state) {
         SPARCAddressValue storeAddress = asAddressValue(address);
         if (isConstant(inputVal)) {
-            JavaConstant c = asConstant(inputVal);
+            Constant c = asConstant(inputVal);
             if (canStoreConstant(c)) {
                 append(new StoreConstantOp((Kind) kind.getPlatformKind(), storeAddress, c, state));
                 return;
@@ -253,7 +249,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
      * @param savedRegisterLocations the slots to which the registers are saved
      * @param supportsRemove determines if registers can be pruned
      */
-    protected SPARCSaveRegistersOp emitSaveRegisters(Register[] savedRegisters, StackSlotValue[] savedRegisterLocations, boolean supportsRemove) {
+    protected SPARCSaveRegistersOp emitSaveRegisters(Register[] savedRegisters, StackSlot[] savedRegisterLocations, boolean supportsRemove) {
         SPARCSaveRegistersOp save = new SPARCSaveRegistersOp(savedRegisters, savedRegisterLocations, supportsRemove);
         append(save);
         return save;
@@ -276,11 +272,11 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
                         d56,          d58,          d60,          d62
         };
         // @formatter:on
-        StackSlotValue[] savedRegisterLocations = new StackSlotValue[savedRegisters.length];
+        StackSlot[] savedRegisterLocations = new StackSlot[savedRegisters.length];
         for (int i = 0; i < savedRegisters.length; i++) {
             PlatformKind kind = target().arch.getLargestStorableKind(savedRegisters[i].getRegisterCategory());
             assert kind != Kind.Illegal;
-            VirtualStackSlot spillSlot = getResult().getFrameMapBuilder().allocateSpillSlot(LIRKind.value(kind));
+            StackSlot spillSlot = getResult().getFrameMap().allocateSpillSlot(LIRKind.value(kind));
             savedRegisterLocations[i] = spillSlot;
         }
         return emitSaveRegisters(savedRegisters, savedRegisterLocations, false);
