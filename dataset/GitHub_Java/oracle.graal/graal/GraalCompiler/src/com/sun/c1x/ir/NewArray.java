@@ -28,7 +28,7 @@ import com.sun.cri.ci.*;
 /**
  * The {@code NewArray} class is the base of all instructions that allocate arrays.
  */
-public abstract class NewArray extends StateSplit {
+public abstract class NewArray extends Instruction {
 
     private static final int INPUT_COUNT = 1;
     private static final int INPUT_LENGTH = 0;
@@ -71,7 +71,7 @@ public abstract class NewArray extends StateSplit {
     }
 
     @Override
-    public boolean needsStateAfter() {
-        return false;
+    public boolean canTrap() {
+        return true;
     }
 }

@@ -24,7 +24,6 @@ package com.sun.c1x.ir;
 
 import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 
 /**
@@ -32,9 +31,8 @@ import com.sun.cri.ci.*;
  */
 public final class Throw extends BlockEnd {
 
-    private static final int INPUT_COUNT = 2;
+    private static final int INPUT_COUNT = 1;
     private static final int INPUT_EXCEPTION = 0;
-    private static final int INPUT_STATE_BEFORE = 1;
 
     private static final int SUCCESSOR_COUNT = 0;
 
@@ -57,17 +55,6 @@ public final class Throw extends BlockEnd {
 
     public Value setException(Value n) {
         return (Value) inputs().set(super.inputCount() + INPUT_EXCEPTION, n);
-    }
-
-    /**
-     * The state for this instruction.
-     */
-    public FrameState stateBefore() {
-        return (FrameState) inputs().get(super.inputCount() + INPUT_STATE_BEFORE);
-    }
-
-    public FrameState setStateBefore(FrameState n) {
-        return (FrameState) inputs().set(super.inputCount() + INPUT_STATE_BEFORE, n);
     }
 
     /**
