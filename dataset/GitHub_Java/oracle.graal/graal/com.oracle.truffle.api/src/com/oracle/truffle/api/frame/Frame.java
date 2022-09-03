@@ -70,7 +70,6 @@ public interface Frame {
      * 
      * @param slot the slot of the local variable
      * @return the current value of the local variable
-     * @throws FrameSlotTypeException
      */
     byte getByte(FrameSlot slot) throws FrameSlotTypeException;
 
@@ -81,7 +80,7 @@ public interface Frame {
      * @param value the new value of the local variable
      */
 
-    void setByte(FrameSlot slot, byte value);
+    void setByte(FrameSlot slot, byte value) throws FrameSlotTypeException;
 
     /**
      * Read access to a local variable of type boolean.
@@ -97,7 +96,7 @@ public interface Frame {
      * @param slot the slot of the local variable
      * @param value the new value of the local variable
      */
-    void setBoolean(FrameSlot slot, boolean value);
+    void setBoolean(FrameSlot slot, boolean value) throws FrameSlotTypeException;
 
     /**
      * Read access to a local variable of type int.
@@ -113,7 +112,7 @@ public interface Frame {
      * @param slot the slot of the local variable
      * @param value the new value of the local variable
      */
-    void setInt(FrameSlot slot, int value);
+    void setInt(FrameSlot slot, int value) throws FrameSlotTypeException;
 
     /**
      * Read access to a local variable of type long.
@@ -129,7 +128,7 @@ public interface Frame {
      * @param slot the slot of the local variable
      * @param value the new value of the local variable
      */
-    void setLong(FrameSlot slot, long value);
+    void setLong(FrameSlot slot, long value) throws FrameSlotTypeException;
 
     /**
      * Read access to a local variable of type float.
@@ -145,7 +144,7 @@ public interface Frame {
      * @param slot the slot of the local variable
      * @param value the new value of the local variable
      */
-    void setFloat(FrameSlot slot, float value);
+    void setFloat(FrameSlot slot, float value) throws FrameSlotTypeException;
 
     /**
      * Read access to a local variable of type double.
@@ -161,7 +160,7 @@ public interface Frame {
      * @param slot the slot of the local variable
      * @param value the new value of the local variable
      */
-    void setDouble(FrameSlot slot, double value);
+    void setDouble(FrameSlot slot, double value) throws FrameSlotTypeException;
 
     /**
      * Read access to a local variable of any type.
