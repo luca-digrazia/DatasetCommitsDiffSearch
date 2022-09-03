@@ -190,8 +190,8 @@ abstract class ToJavaNode extends Node {
         }
     }
 
-    static final class TruffleHandler implements InvocationHandler {
-        final TruffleObject obj;
+    private static final class TruffleHandler implements InvocationHandler {
+        private final TruffleObject obj;
 
         TruffleHandler(TruffleObject obj) {
             this.obj = obj;
@@ -203,7 +203,15 @@ abstract class ToJavaNode extends Node {
             Object[] args = arguments == null ? EMPTY : arguments;
             Object val;
             for (int i = 0; i < args.length; i++) {
-                args[i] = JavaInterop.asTruffleValue(args[i]);
+                if (args[i] == null) {
+                    continue;
+                }
+                if (Proxy.isProxyClass(args[i].getClass())) {
+                    InvocationHandler h = Proxy.getInvocationHandler(args[i]);
+                    if (h instanceof TruffleHandler) {
+                        args[i] = ((TruffleHandler) h).obj;
+                    }
+                }
             }
 
             if (Object.class == method.getDeclaringClass()) {
