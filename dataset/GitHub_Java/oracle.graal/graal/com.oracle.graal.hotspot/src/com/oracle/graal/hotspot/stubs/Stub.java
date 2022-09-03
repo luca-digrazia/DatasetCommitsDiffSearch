@@ -40,8 +40,6 @@ import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.phases.*;
-import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase.PostAllocationOptimizationContext;
-import com.oracle.graal.lir.profiling.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.schedule.*;
@@ -182,7 +180,7 @@ public abstract class Stub {
                     Suites suites = new Suites(new PhaseSuite<>(), defaultSuites.getMidTier(), defaultSuites.getLowTier());
                     SchedulePhase schedule = emitFrontEnd(providers, target, graph, null, providers.getSuites().getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graph),
                                     null, suites);
-                    LIRSuites lirSuites = createLIRSuites();
+                    LIRSuites lirSuites = providers.getSuites().getDefaultLIRSuites();
                     emitBackEnd(graph, Stub.this, incomingCc, getInstalledCodeOwner(), backend, target, compResult, CompilationResultBuilderFactory.Default, schedule, getRegisterConfig(), lirSuites);
                 } catch (Throwable e) {
                     throw Debug.handle(e);
@@ -210,15 +208,6 @@ public abstract class Stub {
         }
 
         return code;
-    }
-
-    private LIRSuites createLIRSuites() {
-        LIRSuites lirSuites = new LIRSuites(providers.getSuites().getDefaultLIRSuites());
-        ListIterator<LIRPhase<PostAllocationOptimizationContext>> moveProfiling = lirSuites.getPostAllocationOptimizationStage().findPhase(MoveProfiling.class);
-        if (moveProfiling != null) {
-            moveProfiling.remove();
-        }
-        return lirSuites;
     }
 
     /**

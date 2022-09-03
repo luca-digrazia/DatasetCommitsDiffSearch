@@ -44,9 +44,9 @@ import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.phases.*;
-import com.oracle.graal.lir.phases.PreAllocationOptimizationPhase.PreAllocationOptimizationContext;
-import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase.PostAllocationOptimizationContext;
-import com.oracle.graal.lir.phases.AllocationPhase.AllocationContext;
+import com.oracle.graal.lir.phases.LIRHighTierPhase.LIRHighTierContext;
+import com.oracle.graal.lir.phases.LIRLowTierPhase.LIRLowTierContext;
+import com.oracle.graal.lir.phases.LIRMidTierPhase.LIRMidTierContext;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.spi.*;
@@ -352,14 +352,14 @@ public class GraalCompiler {
 
     public static <T extends AbstractBlock<T>> LIRGenerationResult emitLowLevel(TargetDescription target, List<T> codeEmittingOrder, List<T> linearScanOrder, LIRGenerationResult lirGenRes,
                     LIRGeneratorTool lirGen, LIRSuites lirSuites) {
-        PreAllocationOptimizationContext highTierContext = new PreAllocationOptimizationContext(lirGen);
-        lirSuites.getPreAllocationOptimizationStage().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, highTierContext);
+        LIRHighTierContext highTierContext = new LIRHighTierContext(lirGen);
+        lirSuites.getHighTier().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, highTierContext);
 
-        AllocationContext midTierContext = new AllocationContext();
-        lirSuites.getAllocationStage().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, midTierContext);
+        LIRMidTierContext midTierContext = new LIRMidTierContext();
+        lirSuites.getMidTier().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, midTierContext);
 
-        PostAllocationOptimizationContext lowTierContext = new PostAllocationOptimizationContext();
-        lirSuites.getPostAllocationOptimizationStage().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, lowTierContext);
+        LIRLowTierContext lowTierContext = new LIRLowTierContext();
+        lirSuites.getLowTier().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, lowTierContext);
 
         return lirGenRes;
     }

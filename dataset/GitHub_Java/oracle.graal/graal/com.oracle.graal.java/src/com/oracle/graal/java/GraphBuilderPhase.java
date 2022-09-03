@@ -884,9 +884,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                         TTY.print(s);
                         TTY.println(" inlining call " + targetMethod.getName());
                     }
-
-                    ResolvedJavaMethod inlinedTargetMethod = inlineInvokePlugin.inlinedMethod(this, targetMethod, args);
-                    parseAndInlineCallee(inlinedTargetMethod, args);
+                    parseAndInlineCallee(targetMethod, args);
                     return;
                 } else {
                     // System.out.println("Could not inline invoke " + targetMethod);

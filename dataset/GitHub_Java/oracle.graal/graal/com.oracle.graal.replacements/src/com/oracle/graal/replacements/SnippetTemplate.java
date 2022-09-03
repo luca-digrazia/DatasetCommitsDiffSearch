@@ -45,7 +45,6 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.Graph.Mark;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.loop.*;
 import com.oracle.graal.nodeinfo.*;
@@ -393,13 +392,12 @@ public class SnippetTemplate {
     }
 
     @NodeInfo
-    static final class VarargsPlaceholderNode extends FloatingNode implements ArrayLengthProvider {
+    static class VarargsPlaceholderNode extends FloatingNode implements ArrayLengthProvider {
 
-        public static final NodeClass TYPE = NodeClass.get(VarargsPlaceholderNode.class);
         protected final Varargs varargs;
 
         public VarargsPlaceholderNode(Varargs varargs, MetaAccessProvider metaAccess) {
-            super(TYPE, StampFactory.exactNonNull(metaAccess.lookupJavaType(varargs.componentType).getArrayClass()));
+            super(StampFactory.exactNonNull(metaAccess.lookupJavaType(varargs.componentType).getArrayClass()));
             this.varargs = varargs;
         }
 

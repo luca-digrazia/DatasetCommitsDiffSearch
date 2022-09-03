@@ -151,7 +151,7 @@ public class StructuredGraph extends Graph {
 
     public Stamp getReturnStamp() {
         Stamp returnStamp = null;
-        for (ReturnNode returnNode : getNodes(ReturnNode.TYPE)) {
+        for (ReturnNode returnNode : getNodes(ReturnNode.class)) {
             ValueNode result = returnNode.result();
             if (result != null) {
                 if (returnStamp == null) {
@@ -246,7 +246,7 @@ public class StructuredGraph extends Graph {
     }
 
     public ParameterNode getParameter(int index) {
-        for (ParameterNode param : getNodes(ParameterNode.TYPE)) {
+        for (ParameterNode param : getNodes(ParameterNode.class)) {
             if (param.index() == index) {
                 return param;
             }
@@ -255,7 +255,7 @@ public class StructuredGraph extends Graph {
     }
 
     public Iterable<Invoke> getInvokes() {
-        final Iterator<MethodCallTargetNode> callTargets = getNodes(MethodCallTargetNode.TYPE).iterator();
+        final Iterator<MethodCallTargetNode> callTargets = getNodes(MethodCallTargetNode.class).iterator();
         return new Iterable<Invoke>() {
 
             private Invoke next;
@@ -299,7 +299,7 @@ public class StructuredGraph extends Graph {
     }
 
     public boolean hasLoops() {
-        return hasNode(LoopBeginNode.TYPE);
+        return hasNode(LoopBeginNode.class);
     }
 
     public void removeFloating(FloatingNode node) {
@@ -324,7 +324,7 @@ public class StructuredGraph extends Graph {
         if (node instanceof AbstractBeginNode) {
             ((AbstractBeginNode) node).prepareDelete();
         }
-        assert node.hasNoUsages() : node + " " + node.usages().count() + ", " + node.usages().first();
+        assert node.hasNoUsages() : node + " " + node.usages();
         GraphUtil.unlinkFixedNode(node);
         node.safeDelete();
     }
@@ -533,13 +533,5 @@ public class StructuredGraph extends Graph {
      */
     public Set<ResolvedJavaMethod> getInlinedMethods() {
         return inlinedMethods;
-    }
-
-    /**
-     *
-     * @return true if the graph contains only a {@link StartNode} and {@link ReturnNode}
-     */
-    public boolean isTrivial() {
-        return !(start.next() instanceof ReturnNode);
     }
 }

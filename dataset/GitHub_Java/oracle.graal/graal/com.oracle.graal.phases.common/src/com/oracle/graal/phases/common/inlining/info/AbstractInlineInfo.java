@@ -52,18 +52,28 @@ public abstract class AbstractInlineInfo implements InlineInfo {
 
     protected static Collection<Node> inline(Invoke invoke, ResolvedJavaMethod concrete, Inlineable inlineable, boolean receiverNullCheck) {
         List<Node> canonicalizeNodes = new ArrayList<>();
-        assert inlineable instanceof InlineableGraph;
-        StructuredGraph calleeGraph = ((InlineableGraph) inlineable).getGraph();
-        Map<Node, Node> duplicateMap = InliningUtil.inline(invoke, calleeGraph, receiverNullCheck, canonicalizeNodes);
-        getInlinedParameterUsages(canonicalizeNodes, calleeGraph, duplicateMap);
+        if (inlineable instanceof InlineableGraph) {
+            StructuredGraph calleeGraph = ((InlineableGraph) inlineable).getGraph();
+            Map<Node, Node> duplicateMap = InliningUtil.inline(invoke, calleeGraph, receiverNullCheck, canonicalizeNodes);
+            getInlinedParameterUsages(canonicalizeNodes, calleeGraph, duplicateMap);
+        } else {
+            assert inlineable instanceof InlineableMacroNode;
 
+            Class<? extends FixedWithNextNode> macroNodeClass = ((InlineableMacroNode) inlineable).getMacroNodeClass();
+            FixedWithNextNode macroNode = InliningUtil.inlineMacroNode(invoke, concrete, macroNodeClass);
+            canonicalizeNodes.add(macroNode);
+        }
+
+        InliningUtil.InlinedBytecodes.add(concrete.getCodeSize());
         StructuredGraph graph = invoke.asNode().graph();
-        graph.recordInlinedMethod(concrete);
+        if (graph.isInlinedMethodRecordingEnabled()) {
+            graph.getInlinedMethods().add(concrete);
+        }
         return canonicalizeNodes;
     }
 
     public static void getInlinedParameterUsages(Collection<Node> parameterUsages, StructuredGraph calleeGraph, Map<Node, Node> duplicateMap) {
-        for (ParameterNode parameter : calleeGraph.getNodes(ParameterNode.TYPE)) {
+        for (ParameterNode parameter : calleeGraph.getNodes(ParameterNode.class)) {
             for (Node usage : parameter.usages()) {
                 Node node = duplicateMap.get(usage);
                 if (node != null && node.isAlive()) {

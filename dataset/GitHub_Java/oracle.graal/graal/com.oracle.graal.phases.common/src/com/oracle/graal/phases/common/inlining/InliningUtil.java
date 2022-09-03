@@ -331,7 +331,7 @@ public class InliningUtil {
             processFrameStates(invoke, inlineGraph, duplicates, stateAtExceptionEdge, returnNodes.size() > 1);
             int callerLockDepth = stateAfter.nestedLockDepth();
             if (callerLockDepth != 0) {
-                for (MonitorIdNode original : inlineGraph.getNodes(MonitorIdNode.TYPE)) {
+                for (MonitorIdNode original : inlineGraph.getNodes(MonitorIdNode.class)) {
                     MonitorIdNode monitor = (MonitorIdNode) duplicates.get(original);
                     monitor.setLockDepth(monitor.getLockDepth() + callerLockDepth);
                 }
@@ -389,11 +389,11 @@ public class InliningUtil {
     }
 
     private static void processSimpleInfopoints(Invoke invoke, StructuredGraph inlineGraph, Map<Node, Node> duplicates) {
-        if (inlineGraph.getNodes(SimpleInfopointNode.TYPE).isEmpty()) {
+        if (inlineGraph.getNodes(SimpleInfopointNode.class).isEmpty()) {
             return;
         }
         BytecodePosition pos = new BytecodePosition(toBytecodePosition(invoke.stateAfter()), invoke.asNode().graph().method(), invoke.bci());
-        for (SimpleInfopointNode original : inlineGraph.getNodes(SimpleInfopointNode.TYPE)) {
+        for (SimpleInfopointNode original : inlineGraph.getNodes(SimpleInfopointNode.class)) {
             SimpleInfopointNode duplicate = (SimpleInfopointNode) duplicates.get(original);
             duplicate.addCaller(pos);
         }
@@ -410,7 +410,7 @@ public class InliningUtil {
         FrameState stateAtReturn = invoke.stateAfter();
         FrameState outerFrameState = null;
         Kind invokeReturnKind = invoke.asNode().getKind();
-        for (FrameState original : inlineGraph.getNodes(FrameState.TYPE)) {
+        for (FrameState original : inlineGraph.getNodes(FrameState.class)) {
             FrameState frameState = (FrameState) duplicates.get(original);
             if (frameState != null && frameState.isAlive()) {
                 if (frameState.bci == BytecodeFrame.AFTER_BCI) {
@@ -438,11 +438,10 @@ public class InliningUtil {
                 } else {
                     // only handle the outermost frame states
                     if (frameState.outerFrameState() == null) {
-                        assert frameState.bci != BytecodeFrame.AFTER_EXCEPTION_BCI : frameState;
                         assert frameState.bci != BytecodeFrame.BEFORE_BCI : frameState;
-                        assert frameState.bci != BytecodeFrame.UNKNOWN_BCI : frameState;
-                        assert frameState.bci != BytecodeFrame.UNWIND_BCI : frameState;
-                        assert frameState.bci == BytecodeFrame.INVALID_FRAMESTATE_BCI || frameState.method().equals(inlineGraph.method()) : frameState;
+                        assert frameState.bci == BytecodeFrame.INVALID_FRAMESTATE_BCI || frameState.method().equals(inlineGraph.method());
+                        assert frameState.bci != BytecodeFrame.AFTER_EXCEPTION_BCI && frameState.bci != BytecodeFrame.BEFORE_BCI && frameState.bci != BytecodeFrame.AFTER_EXCEPTION_BCI &&
+                                        frameState.bci != BytecodeFrame.UNWIND_BCI : frameState.bci;
                         if (outerFrameState == null) {
                             outerFrameState = stateAtReturn.duplicateModifiedDuringCall(invoke.bci(), invokeReturnKind);
                         }

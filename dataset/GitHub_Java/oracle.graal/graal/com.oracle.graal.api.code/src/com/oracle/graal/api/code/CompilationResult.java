@@ -25,23 +25,27 @@ package com.oracle.graal.api.code;
 import static com.oracle.graal.api.meta.MetaUtil.*;
 import static java.util.Collections.*;
 
+import java.io.*;
 import java.util.*;
 
+import com.oracle.graal.api.code.Assumptions.Assumption;
 import com.oracle.graal.api.code.CodeUtil.RefMapFormatter;
-import com.oracle.graal.api.meta.Assumptions.Assumption;
 import com.oracle.graal.api.meta.*;
 
 /**
  * Represents the output from compiling a method, including the compiled machine code, associated
  * data and references, relocation information, deoptimization information, etc.
  */
-public class CompilationResult {
+public class CompilationResult implements Serializable {
+
+    private static final long serialVersionUID = -1319947729753702434L;
 
     /**
      * Represents a code position with associated additional information.
      */
-    public abstract static class Site {
+    public abstract static class Site implements Serializable {
 
+        private static final long serialVersionUID = -8214214947651979102L;
         /**
          * The position (or offset) of this site with respect to the start of the target method.
          */
@@ -70,6 +74,7 @@ public class CompilationResult {
      */
     public static class Infopoint extends Site implements Comparable<Infopoint> {
 
+        private static final long serialVersionUID = 2479806696381720162L;
         public final DebugInfo debugInfo;
 
         public final InfopointReason reason;
@@ -118,6 +123,8 @@ public class CompilationResult {
      * Represents a call in the code.
      */
     public static final class Call extends Infopoint {
+
+        private static final long serialVersionUID = 1440741241631046954L;
 
         /**
          * The target of the call.
@@ -176,7 +183,9 @@ public class CompilationResult {
     /**
      * Represents some external data that is referenced by the code.
      */
-    public abstract static class Reference {
+    public abstract static class Reference implements Serializable {
+
+        private static final long serialVersionUID = 4841246083028477946L;
 
         @Override
         public abstract int hashCode();
@@ -186,6 +195,8 @@ public class CompilationResult {
     }
 
     public static final class ConstantReference extends Reference {
+
+        private static final long serialVersionUID = 5841121930949053612L;
 
         private final VMConstant constant;
 
@@ -221,6 +232,8 @@ public class CompilationResult {
     }
 
     public static final class DataSectionReference extends Reference {
+
+        private static final long serialVersionUID = 9011681879878139182L;
 
         private boolean initialized;
         private int offset;
@@ -268,6 +281,7 @@ public class CompilationResult {
      */
     public static final class DataPatch extends Site {
 
+        private static final long serialVersionUID = 5771730331604867476L;
         public Reference reference;
 
         public DataPatch(int pcOffset, Reference reference) {
@@ -300,8 +314,9 @@ public class CompilationResult {
      * {@link CompilationResult#getTargetCode()}. This is optional information that can be used to
      * enhance a disassembly of the code.
      */
-    public abstract static class CodeAnnotation {
+    public abstract static class CodeAnnotation implements Serializable {
 
+        private static final long serialVersionUID = -7903959680749520748L;
         public final int position;
 
         public CodeAnnotation(int position) {
@@ -327,6 +342,10 @@ public class CompilationResult {
      */
     public static final class CodeComment extends CodeAnnotation {
 
+        /**
+         *
+         */
+        private static final long serialVersionUID = 6802287188701961401L;
         public final String value;
 
         public CodeComment(int position, String comment) {
@@ -364,6 +383,8 @@ public class CompilationResult {
      * inclusive.
      */
     public static final class JumpTable extends CodeAnnotation {
+
+        private static final long serialVersionUID = 2222194398353801831L;
 
         /**
          * The low value in the key range (inclusive).
@@ -413,6 +434,7 @@ public class CompilationResult {
      */
     public static final class ExceptionHandler extends Site {
 
+        private static final long serialVersionUID = 4897339464722665281L;
         public final int handlerPos;
 
         ExceptionHandler(int pcOffset, int handlerPos) {
@@ -446,6 +468,7 @@ public class CompilationResult {
      */
     public static final class Mark extends Site {
 
+        private static final long serialVersionUID = 3612943150662354844L;
         public final Object id;
 
         public Mark(int pcOffset, Object id) {
@@ -602,10 +625,11 @@ public class CompilationResult {
     }
 
     /**
-     * Gets the assumptions made during compilation.
+     * Gets a fixed-size {@linkplain Arrays#asList(Object...) view} of the assumptions made during
+     * compilation.
      */
-    public Assumption[] getAssumptions() {
-        return assumptions;
+    public Collection<Assumption> getAssumptions() {
+        return assumptions == null ? Collections.emptyList() : Arrays.asList(assumptions);
     }
 
     /**
@@ -640,14 +664,15 @@ public class CompilationResult {
     }
 
     /**
-     * Gets the methods whose bytecodes were used as input to the compilation.
+     * Gets a fixed-size {@linkplain Arrays#asList(Object...) view} of the methods whose bytecodes
+     * were used as input to the compilation.
      *
      * @return {@code null} if the compilation did not record method dependencies otherwise the
      *         methods whose bytecodes were used as input to the compilation with the first element
      *         being the root method of the compilation
      */
-    public ResolvedJavaMethod[] getMethods() {
-        return methods;
+    public Collection<ResolvedJavaMethod> getMethods() {
+        return methods == null ? null : Arrays.asList(methods);
     }
 
     public DataSection getDataSection() {

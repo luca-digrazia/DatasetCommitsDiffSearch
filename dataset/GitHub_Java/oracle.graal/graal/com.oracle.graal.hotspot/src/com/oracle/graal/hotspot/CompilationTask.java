@@ -32,14 +32,17 @@ import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.InitTimer.*;
 import static com.oracle.graal.hotspot.meta.HotSpotSuitesProvider.*;
 import static com.oracle.graal.nodes.StructuredGraph.*;
+import static com.oracle.graal.phases.common.inlining.InliningUtil.*;
 
 import java.lang.management.*;
+import java.util.*;
 import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.internal.*;
@@ -52,7 +55,7 @@ import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.OptimisticOptimizations.Optimization;
 import com.oracle.graal.phases.tiers.*;
@@ -125,12 +128,7 @@ public class CompilationTask {
     /**
      * Time spent in compilation.
      */
-    private static final DebugTimer CompilationTime = Debug.timer("CompilationTime");
-
-    /**
-     * Meters the {@linkplain StructuredGraph#getBytecodeSize() bytecodes} compiled.
-     */
-    private static final DebugMetric CompiledBytecodes = Debug.metric("CompiledBytecodes");
+    public static final DebugTimer CompilationTime = Debug.timer("CompilationTime");
 
     public static final DebugTimer CodeInstallationTime = Debug.timer("CodeInstallation");
 
@@ -165,7 +163,8 @@ public class CompilationTask {
     public void runCompilation() {
         HotSpotVMConfig config = backend.getRuntime().getConfig();
         final long threadId = Thread.currentThread().getId();
-        long startCompilationTime = System.nanoTime();
+        long previousInlinedBytecodes = InlinedBytecodes.getCurrentValue();
+        long previousCompilationTime = CompilationTime.getCurrentValue();
         HotSpotInstalledCode installedCode = null;
         final boolean isOSR = entryBCI != StructuredGraph.INVOCATION_ENTRY_BCI;
 
@@ -173,7 +172,7 @@ public class CompilationTask {
         EventProvider eventProvider = Graal.getRequiredCapability(EventProvider.class);
         CompilationEvent compilationEvent = eventProvider.newCompilationEvent();
 
-        try (DebugCloseable a = CompilationTime.start()) {
+        try (TimerCloseable a = CompilationTime.start()) {
             // If there is already compiled code for this method on our level we simply return.
             // Graal compiles are always at the highest compile level, even in non-tiered mode so we
             // only need to check for that value.
@@ -196,11 +195,26 @@ public class CompilationTask {
                 // Begin the compilation event.
                 compilationEvent.begin();
 
-                HotSpotProviders providers = backend.getProviders();
-                graph = new StructuredGraph(method, entryBCI, AllowAssumptions.from(OptAssumptions.getValue()));
-                if (shouldDisableMethodInliningRecording(config)) {
-                    graph.disableInlinedMethodRecording();
+                Map<ResolvedJavaMethod, StructuredGraph> graphCache = null;
+                if (GraalOptions.CacheGraphs.getValue()) {
+                    graphCache = new HashMap<>();
                 }
+
+                boolean recordEvolMethodDeps = graalEnv == 0 || unsafe.getByte(graalEnv + config.graalEnvJvmtiCanHotswapOrPostBreakpointOffset) != 0;
+
+                HotSpotProviders providers = backend.getProviders();
+                Replacements replacements = providers.getReplacements();
+                graph = replacements.getMethodSubstitution(method);
+                if (graph == null || entryBCI != INVOCATION_ENTRY_BCI) {
+                    graph = new StructuredGraph(method, entryBCI, AllowAssumptions.from(OptAssumptions.getValue()));
+                    if (!recordEvolMethodDeps) {
+                        graph.disableInlinedMethodRecording();
+                    }
+                } else {
+                    // Compiling method substitution - must clone the graph
+                    graph = graph.copy(graph.name, method, AllowAssumptions.from(OptAssumptions.getValue()), recordEvolMethodDeps);
+                }
+                InlinedBytecodes.add(method.getCodeSize());
                 CallingConvention cc = getCallingConvention(providers.getCodeCache(), Type.JavaCallee, graph.method(), false);
                 if (graph.getEntryBCI() != StructuredGraph.INVOCATION_ENTRY_BCI) {
                     // for OSR, only a pointer is passed to the method.
@@ -218,8 +232,8 @@ public class CompilationTask {
                     // all code after the OSR loop is never executed.
                     optimisticOpts.remove(Optimization.RemoveNeverExecutedCode);
                 }
-                result = compileGraph(graph, cc, method, providers, backend, backend.getTarget(), getGraphBuilderSuite(providers), optimisticOpts, profilingInfo, method.getSpeculationLog(), suites,
-                                lirSuites, new CompilationResult(), CompilationResultBuilderFactory.Default);
+                result = compileGraph(graph, cc, method, providers, backend, backend.getTarget(), graphCache, getGraphBuilderSuite(providers), optimisticOpts, profilingInfo,
+                                method.getSpeculationLog(), suites, lirSuites, new CompilationResult(), CompilationResultBuilderFactory.Default);
                 result.setId(getId());
                 result.setEntryBCI(entryBCI);
             } catch (Throwable e) {
@@ -245,7 +259,7 @@ public class CompilationTask {
                 }
             }
 
-            try (DebugCloseable b = CodeInstallationTime.start()) {
+            try (TimerCloseable b = CodeInstallationTime.start()) {
                 installedCode = (HotSpotInstalledCode) installMethod(result);
                 if (!isOSR) {
                     ProfilingInfo profile = method.getProfilingInfo();
@@ -280,49 +294,33 @@ public class CompilationTask {
                 System.exit(-1);
             }
         } finally {
-            final int compiledBytecodes = graph.getBytecodeSize();
-            CompiledBytecodes.add(compiledBytecodes);
+            final int processedBytes = (int) (InlinedBytecodes.getCurrentValue() - previousInlinedBytecodes);
 
             // Log a compilation event.
-            if (compilationEvent.shouldWrite() && installedCode != null) {
+            if (compilationEvent.shouldWrite()) {
                 compilationEvent.setMethod(method.format("%H.%n(%p)"));
                 compilationEvent.setCompileId(getId());
                 compilationEvent.setCompileLevel(config.compilationLevelFullOptimization);
                 compilationEvent.setSucceeded(true);
                 compilationEvent.setIsOsr(isOSR);
                 compilationEvent.setCodeSize(installedCode.getSize());
-                compilationEvent.setInlinedBytes(compiledBytecodes);
+                compilationEvent.setInlinedBytes(processedBytes);
                 compilationEvent.commit();
             }
 
             if (graalEnv != 0) {
                 long ctask = unsafe.getAddress(graalEnv + config.graalEnvTaskOffset);
                 assert ctask != 0L;
-                unsafe.putInt(ctask + config.compileTaskNumInlinedBytecodesOffset, compiledBytecodes);
+                unsafe.putInt(ctask + config.compileTaskNumInlinedBytecodesOffset, processedBytes);
             }
-            long compilationTime = System.nanoTime() - startCompilationTime;
             if ((config.ciTime || config.ciTimeEach) && installedCode != null) {
-                long timeUnitsPerSecond = TimeUnit.NANOSECONDS.convert(1, TimeUnit.SECONDS);
+                long time = CompilationTime.getCurrentValue() - previousCompilationTime;
+                TimeUnit timeUnit = CompilationTime.getTimeUnit();
+                long timeUnitsPerSecond = timeUnit.convert(1, TimeUnit.SECONDS);
                 CompilerToVM c2vm = backend.getRuntime().getCompilerToVM();
-                c2vm.notifyCompilationStatistics(id, method, entryBCI != INVOCATION_ENTRY_BCI, compiledBytecodes, compilationTime, timeUnitsPerSecond, installedCode);
+                c2vm.notifyCompilationStatistics(id, method, entryBCI != INVOCATION_ENTRY_BCI, processedBytes, time, timeUnitsPerSecond, installedCode);
             }
         }
-    }
-
-    /**
-     * Determines whether to {@linkplain StructuredGraph#disableInlinedMethodRecording() disable}
-     * method inlining recording for the method being compiled.
-     *
-     * @see StructuredGraph#getBytecodeSize()
-     */
-    private boolean shouldDisableMethodInliningRecording(HotSpotVMConfig config) {
-        if (config.ciTime || config.ciTimeEach || CompiledBytecodes.isEnabled()) {
-            return false;
-        }
-        if (graalEnv == 0 || unsafe.getByte(graalEnv + config.graalEnvJvmtiCanHotswapOrPostBreakpointOffset) != 0) {
-            return false;
-        }
-        return true;
     }
 
     private String getMethodDescription() {

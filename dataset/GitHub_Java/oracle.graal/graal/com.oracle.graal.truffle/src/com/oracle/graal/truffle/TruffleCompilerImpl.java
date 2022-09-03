@@ -237,8 +237,4 @@ public class TruffleCompilerImpl {
     public PartialEvaluator getPartialEvaluator() {
         return partialEvaluator;
     }
-
-    public GraphBuilderPlugins createGraphBuilderSuitePlugins() {
-        return this.createGraphBuilderSuite().plugins;
-    }
 }

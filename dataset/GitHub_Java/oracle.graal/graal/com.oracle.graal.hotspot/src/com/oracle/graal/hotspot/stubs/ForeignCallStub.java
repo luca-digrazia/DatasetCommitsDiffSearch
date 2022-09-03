@@ -26,6 +26,7 @@ import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.hotspot.*;
@@ -33,8 +34,10 @@ import com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.replacements.*;
+import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
@@ -185,17 +188,16 @@ public class ForeignCallStub extends Stub {
      */
     @Override
     protected StructuredGraph getGraph() {
-        WordTypes wordTypes = providers.getWordTypes();
         Class<?>[] args = linkage.getDescriptor().getArgumentTypes();
         boolean isObjectResult = linkage.getOutgoingCallingConvention().getReturn().getKind() == Kind.Object;
 
         StructuredGraph graph = new StructuredGraph(toString(), null, AllowAssumptions.NO);
         graph.disableInlinedMethodRecording();
 
-        GraphKit kit = new GraphKit(graph, providers, wordTypes);
+        GraphKit kit = new HotSpotGraphKit(graph, providers);
         ParameterNode[] params = createParameters(kit, args);
 
-        ReadRegisterNode thread = kit.append(new ReadRegisterNode(providers.getRegisters().getThreadRegister(), wordTypes.getWordKind(), true, false));
+        ReadRegisterNode thread = kit.append(new ReadRegisterNode(providers.getRegisters().getThreadRegister(), true, false));
         ValueNode result = createTargetCall(kit, params, thread);
         kit.createInvoke(StubUtil.class, "handlePendingException", thread, ConstantNode.forBoolean(isObjectResult, graph));
         if (isObjectResult) {
@@ -208,7 +210,8 @@ public class ForeignCallStub extends Stub {
             Debug.dump(graph, "Initial stub graph");
         }
 
-        kit.inlineInvokes();
+        kit.rewriteWordTypes(providers.getSnippetReflection());
+        kit.inlineInvokes(providers.getSnippetReflection());
 
         if (Debug.isDumpEnabled()) {
             Debug.dump(graph, "Stub graph before compilation");
@@ -217,13 +220,26 @@ public class ForeignCallStub extends Stub {
         return graph;
     }
 
+    private static class HotSpotGraphKit extends GraphKit {
+
+        public HotSpotGraphKit(StructuredGraph graph, Providers providers) {
+            super(graph, providers);
+        }
+
+        @Override
+        public void rewriteWordTypes(SnippetReflectionProvider snippetReflection) {
+            new HotSpotWordTypeRewriterPhase(providers.getMetaAccess(), snippetReflection, providers.getConstantReflection(), providers.getCodeCache().getTarget().wordKind).apply(graph);
+        }
+    }
+
     private ParameterNode[] createParameters(GraphKit kit, Class<?>[] args) {
         ParameterNode[] params = new ParameterNode[args.length];
         ResolvedJavaType accessingClass = providers.getMetaAccess().lookupJavaType(getClass());
         for (int i = 0; i < args.length; i++) {
             ResolvedJavaType type = providers.getMetaAccess().lookupJavaType(args[i]).resolve(accessingClass);
+            Kind kind = type.getKind().getStackKind();
             Stamp stamp;
-            if (type.getKind().getStackKind() == Kind.Object) {
+            if (kind == Kind.Object) {
                 stamp = StampFactory.declared(type);
             } else {
                 stamp = StampFactory.forKind(type.getKind());
