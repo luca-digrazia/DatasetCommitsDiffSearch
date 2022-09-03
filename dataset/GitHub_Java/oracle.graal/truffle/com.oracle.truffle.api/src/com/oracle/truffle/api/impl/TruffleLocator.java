@@ -24,12 +24,11 @@
  */
 package com.oracle.truffle.api.impl;
 
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleRuntime;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
-
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleRuntime;
 
 /**
  * Locator that allows the users of the Truffle API to find implementations of languages to be
@@ -63,8 +62,7 @@ public abstract class TruffleLocator {
     }
 
     /**
-     * Utility method to load a class from one of the located classloaders. Please note that this
-     * method is used in tests using reflection. Do not remove.
+     * Utility method to load a class from one of the located classloaders.
      *
      * @param name class to search for
      * @return the class or <code>null</code> if none of the loaders knows the class
