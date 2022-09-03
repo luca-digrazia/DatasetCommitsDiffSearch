@@ -98,7 +98,7 @@ public final class ForeignAccessFactoryGenerator {
         return languageCheckFactoryInvokation != null;
     }
 
-    private void appendImports(Writer w) throws IOException {
+    private static void appendImports(Writer w) throws IOException {
         w.append("import com.oracle.truffle.api.interop.UnsupportedMessageException;").append("\n");
         w.append("import com.oracle.truffle.api.interop.ForeignAccess.Factory10;").append("\n");
         w.append("import com.oracle.truffle.api.interop.ForeignAccess.Factory;").append("\n");
@@ -107,12 +107,7 @@ public final class ForeignAccessFactoryGenerator {
         w.append("import com.oracle.truffle.api.interop.TruffleObject;").append("\n");
         w.append("import com.oracle.truffle.api.CallTarget;").append("\n");
         w.append("import com.oracle.truffle.api.Truffle;").append("\n");
-        if (!(messageHandlers.containsKey(Message.IS_BOXED) &&
-                        messageHandlers.containsKey(Message.IS_NULL) &&
-                        messageHandlers.containsKey(Message.IS_EXECUTABLE) &&
-                        messageHandlers.containsKey(Message.HAS_SIZE))) {
-            w.append("import com.oracle.truffle.api.nodes.RootNode;").append("\n");
-        }
+        w.append("import com.oracle.truffle.api.nodes.RootNode;").append("\n");
     }
 
     private void appendSingletonAndGetter(Writer w) throws IOException {
@@ -123,12 +118,12 @@ public final class ForeignAccessFactoryGenerator {
             allocation = "ForeignAccess.create(null, new " + simpleClassName + "());";
         }
         w.append("  public static final ForeignAccess ACCESS = ").append(allocation).append("\n");
-        w.append("  public static ForeignAccess createAccess() { return ").append(allocation).append("}\n");
+        w.append("  public static ForeignAccess createAccess() { return ").append(allocation).append(" }\n");
         w.append("\n");
     }
 
     private void appendPrivateConstructor(Writer w) throws IOException {
-        w.append("  private ").append(simpleClassName).append("(){}").append("\n");
+        w.append("  private ").append(simpleClassName).append("() { }").append("\n");
         w.append("\n");
     }
 

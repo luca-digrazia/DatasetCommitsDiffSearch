@@ -42,9 +42,8 @@ public final class UnaryGenerator extends MessageGenerator {
     private final String targetableUnaryNode;
     private final String unaryRootNode;
 
-    public UnaryGenerator(ProcessingEnvironment processingEnv, Resolve resolveAnnotation, MessageResolution messageResolutionAnnotation, TypeElement element,
-                    ForeignAccessFactoryGenerator containingForeignAccessFactory) {
-        super(processingEnv, resolveAnnotation, messageResolutionAnnotation, element, containingForeignAccessFactory);
+    public UnaryGenerator(ProcessingEnvironment processingEnv, Resolve resolveAnnotation, MessageResolution messageResolutionAnnotation, TypeElement element) {
+        super(processingEnv, resolveAnnotation, messageResolutionAnnotation, element);
         this.targetableUnaryNode = (new StringBuilder(messageName)).replace(0, 1, messageName.substring(0, 1).toUpperCase()).append("Node").insert(0, "Targetable").toString();
         this.unaryRootNode = (new StringBuilder(messageName)).replace(0, 1, messageName.substring(0, 1).toUpperCase()).append("RootNode").toString();
     }
@@ -61,7 +60,7 @@ public final class UnaryGenerator extends MessageGenerator {
 
     @Override
     void appendRootNode(Writer w) throws IOException {
-        w.append("    private final static class ").append(unaryRootNode).append(" extends RootNode {\n");
+        w.append("    private static final class ").append(unaryRootNode).append(" extends RootNode {\n");
         w.append("        protected ").append(unaryRootNode).append("(Class<? extends TruffleLanguage<?>> language) {\n");
         w.append("            super(language, null, null);\n");
         w.append("        }\n");
