@@ -34,16 +34,19 @@ import java.util.concurrent.atomic.*;
 import java.util.logging.*;
 
 import com.amd.okra.*;
+import com.oracle.graal.test.*;
 
 /**
  * Abstract class on which the HSAIL unit tests are built. Executes a method or lambda on both the
  * Java side and the Okra side and compares the results for fields that are annotated with
- * {@link KernelTester.Result}.
+ * {@link Result}.
  */
-public abstract class KernelTester {
+public abstract class KernelTester extends GraalTest {
 
     /**
-     * Denotes a field whose value is to be compared as part of computing the result of a test.
+     * Denotes a field whose value is to be
+     * {@linkplain KernelTester#assertResultFieldsEqual(KernelTester) compared} as part of computing
+     * the result of a test.
      */
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.FIELD)
@@ -62,17 +65,21 @@ public abstract class KernelTester {
     }
 
     public enum DispatchMode {
-        SEQ, JTP, OKRA
+        SEQ,
+        JTP,
+        OKRA
     }
 
     public enum HsailMode {
-        COMPILED, INJECT_HSAIL, INJECT_OCL
+        COMPILED,
+        INJECT_HSAIL,
+        INJECT_OCL
     }
 
-    private DispatchMode dispatchMode;
+    public DispatchMode dispatchMode;
     // Where the hsail comes from.
     private HsailMode hsailMode;
-    private Method testMethod;
+    protected Method testMethod;
     // What type of okra dispatch to use when client calls.
     private boolean useLambdaMethod;
     private Class<?>[] testMethodParams = null;
@@ -84,10 +91,11 @@ public abstract class KernelTester {
     private static final String propPkgName = KernelTester.class.getPackage().getName();
     private static Level logLevel;
     private static ConsoleHandler consoleHandler;
+    private boolean runOkraFirst = Boolean.getBoolean("kerneltester.runOkraFirst");
 
     static {
         logger = Logger.getLogger(propPkgName);
-        logLevel = Level.parse(System.getProperty("kerneltester.logLevel", "SEVERE"));
+        logLevel = Level.parse(System.getProperty("kerneltester.logLevel", "OFF"));
 
         // This block configure the logger with handler and formatter.
         consoleHandler = new ConsoleHandler();
@@ -107,172 +115,54 @@ public abstract class KernelTester {
 
     private static boolean gaveNoOkraWarning = false;
     private boolean onSimulator;
-    private boolean okraLibExists;
+    private final boolean okraLibExists;
 
     public boolean runningOnSimulator() {
         return onSimulator;
     }
 
-    public KernelTester() {
-        okraLibExists = OkraUtil.okraLibExists();
+    public boolean okraEnvIsInitialized() {
+        return this.okraLibExists;
+    }
+
+    public KernelTester(boolean okraLibExists) {
         dispatchMode = DispatchMode.SEQ;
         hsailMode = HsailMode.COMPILED;
         useLambdaMethod = false;
+
+        this.okraLibExists = okraLibExists || OkraUtil.okraLibExists();
+        if (!this.okraLibExists) {
+            logger.info("Okra native library cannot be found or loaded while running" + this.getClass().getSimpleName());
+            return;
+        }
+
+        // Control which okra instances can run the tests (isSimulator is static).
+        onSimulator = OkraContext.isSimulator();
     }
 
     public abstract void runTest();
 
-    // Default comparison is to compare all things marked @Result.
-    public boolean compareResults(KernelTester base) {
+    /**
+     * Asserts that the value of all {@link Result} annotated fields in this object and
+     * {@code other} are {@linkplain #assertDeepEquals(Object, Object) equal}.
+     *
+     * @throws AssertionError if the value of a result field in this and {@code other} are not equal
+     */
+    public void assertResultFieldsEqual(KernelTester other) {
         Class<?> clazz = this.getClass();
         while (clazz != null && clazz != KernelTester.class) {
             for (Field f : clazz.getDeclaredFields()) {
                 if (!Modifier.isStatic(f.getModifiers())) {
                     Result annos = f.getAnnotation(Result.class);
                     if (annos != null) {
-                        logger.fine("@Result field = " + f);
-                        Object myResult = getFieldFromObject(f, this);
-                        Object otherResult = getFieldFromObject(f, base);
-                        boolean same = compareObjects(myResult, otherResult);
-                        logger.fine("comparing " + myResult + ", " + otherResult + ", match=" + same);
-                        if (!same) {
-                            logger.severe("mismatch comparing " + f + ", " + myResult + " vs. " + otherResult);
-                            logSevere("FAILED!!! " + this.getClass());
-                            return false;
-                        }
+                        Object actualResult = getFieldFromObject(f, this);
+                        Object expectedResult = getFieldFromObject(f, other);
+                        assertDeepEquals(f.toString(), expectedResult, actualResult);
                     }
                 }
             }
             clazz = clazz.getSuperclass();
         }
-        logInfo("PASSED: " + this.getClass());
-        return true;
-    }
-
-    private boolean compareObjects(Object first, Object second) {
-        Class<?> clazz = first.getClass();
-        if (clazz != second.getClass()) {
-            return false;
-        }
-        if (!clazz.isArray()) {
-            // Non arrays.
-            if (clazz.equals(float.class) || clazz.equals(double.class)) {
-                return isEqualsFP((double) first, (double) second);
-            } else {
-                return first.equals(second);
-            }
-        } else {
-            // Handle the case where Objects are arrays.
-            ArrayComparer comparer;
-            if (clazz.equals(float[].class) || clazz.equals(double[].class)) {
-                comparer = new FPArrayComparer();
-            } else if (clazz.equals(long[].class) || clazz.equals(int[].class) || clazz.equals(byte[].class)) {
-                comparer = new IntArrayComparer();
-            } else if (clazz.equals(boolean[].class)) {
-                comparer = new BooleanArrayComparer();
-            } else {
-                comparer = new ObjArrayComparer();
-            }
-            return comparer.compareArrays(first, second);
-        }
-    }
-
-    static final int MISMATCHLIMIT = 10;
-    static final int ELEMENTDISPLAYLIMIT = 20;
-
-    public int getMisMatchLimit() {
-        return MISMATCHLIMIT;
-    }
-
-    public int getElementDisplayLimit() {
-        return ELEMENTDISPLAYLIMIT;
-    }
-
-    abstract class ArrayComparer {
-
-        abstract Object getElement(Object ary, int index);
-
-        // Equality test, can be overridden
-        boolean isEquals(Object firstElement, Object secondElement) {
-            return firstElement.equals(secondElement);
-        }
-
-        boolean compareArrays(Object first, Object second) {
-            int len = Array.getLength(first);
-            if (len != Array.getLength(second)) {
-                return false;
-            }
-            // If info logLevel, build string of first few elements from first array.
-            if (logLevel.intValue() <= Level.INFO.intValue()) {
-                StringBuilder sb = new StringBuilder();
-                for (int i = 0; i < Math.min(len, getElementDisplayLimit()); i++) {
-                    sb.append(getElement(first, i));
-                    sb.append(", ");
-                }
-                logger.info(sb.toString());
-            }
-            boolean success = true;
-            int mismatches = 0;
-            for (int i = 0; i < len; i++) {
-                Object firstElement = getElement(first, i);
-                Object secondElement = getElement(second, i);
-                if (!isEquals(firstElement, secondElement)) {
-                    logSevere("mismatch at index " + i + ", expected " + secondElement + ", saw " + firstElement);
-                    success = false;
-                    mismatches++;
-                    if (mismatches >= getMisMatchLimit()) {
-                        logSevere("...Truncated");
-                        break;
-                    }
-                }
-            }
-            return success;
-        }
-    }
-
-    class FPArrayComparer extends ArrayComparer {
-
-        @Override
-        Object getElement(Object ary, int index) {
-            return Array.getDouble(ary, index);
-        }
-
-        @Override
-        boolean isEquals(Object firstElement, Object secondElement) {
-            return isEqualsFP((double) firstElement, (double) secondElement);
-        }
-    }
-
-    class IntArrayComparer extends ArrayComparer {
-
-        @Override
-        Object getElement(Object ary, int index) {
-            return Array.getLong(ary, index);
-        }
-    }
-
-    class BooleanArrayComparer extends ArrayComparer {
-
-        @Override
-        Object getElement(Object ary, int index) {
-            return Array.getBoolean(ary, index);
-        }
-    }
-
-    class ObjArrayComparer extends ArrayComparer {
-
-        @Override
-        Object getElement(Object ary, int index) {
-            return Array.get(ary, index);
-        }
-    }
-
-    /**
-     * This isEqualsFP method allows subclass to override what FP equality means for this particular
-     * unit test.
-     */
-    public boolean isEqualsFP(double first, double second) {
-        return first == second;
     }
 
     public void setDispatchMode(DispatchMode dispatchMode) {
@@ -355,6 +245,20 @@ public abstract class KernelTester {
     }
 
     /**
+     * The "array stream" version of {@link #dispatchMethodKernel(int, Object...)}.
+     */
+    public void dispatchMethodKernel(Object[] ary, Object... args) {
+        if (testMethod == null) {
+            setTestMethod(getTestMethodName(), this.getClass());
+        }
+        if (dispatchMode == DispatchMode.SEQ) {
+            dispatchMethodKernelSeq(ary, args);
+        } else if (dispatchMode == DispatchMode.OKRA) {
+            dispatchMethodKernelOkra(ary, args);
+        }
+    }
+
+    /**
      * This dispatchLambdaMethodKernel dispatches the lambda version of a kernel where the "kernel"
      * is for the lambda method itself (like lambda$0).
      */
@@ -381,9 +285,9 @@ public abstract class KernelTester {
     }
 
     /**
-     * The dispatchLambdaKernel dispatches the lambda version of a kernel where the "kernel" is for
-     * the xxx$$Lambda.accept method in the wrapper for the lambda. Note that the useLambdaMethod
-     * boolean provides a way of actually invoking dispatchLambdaMethodKernel from this API.
+     * Dispatches the lambda version of a kernel where the "kernel" is for the xxx$$Lambda.accept
+     * method in the wrapper for the lambda. Note that the useLambdaMethod boolean provides a way of
+     * actually invoking dispatchLambdaMethodKernel from this API.
      */
     public void dispatchLambdaKernel(int range, MyIntConsumer consumer) {
         if (useLambdaMethod) {
@@ -496,7 +400,7 @@ public abstract class KernelTester {
         String hsailSource = getHSAILSource(testMethod);
         if (!okraLibExists) {
             if (!gaveNoOkraWarning) {
-                logger.fine("No Okra library detected, skipping all KernelTester tests in " + this.getClass().getPackage().getName());
+                logger.severe("No Okra library detected, skipping all KernelTester tests in " + this.getClass().getPackage().getName());
                 gaveNoOkraWarning = true;
             }
         }
@@ -518,7 +422,11 @@ public abstract class KernelTester {
         }
     }
 
-    private void dispatchKernelOkra(int range, Object... args) {
+    /**
+     * Dispatches an okra kernel over a given range using JNI. Protected so that it can be
+     * overridden in {@link GraalKernelTester} which will dispatch without JNI.
+     */
+    protected void dispatchKernelOkra(int range, Object... args) {
         if (okraKernel == null) {
             createOkraKernel();
         }
@@ -532,6 +440,7 @@ public abstract class KernelTester {
         okraKernel.dispatchWithArgs(args);
     }
 
+    // int stream version
     private void dispatchMethodKernelSeq(int range, Object... args) {
         Object[] invokeArgs = new Object[args.length + 1];
         // Need space on the end for the gid parameter.
@@ -544,33 +453,71 @@ public abstract class KernelTester {
         }
         for (int rangeIndex = 0; rangeIndex < range; rangeIndex++) {
             invokeArgs[gidArgIndex] = rangeIndex;
-            try {
-                testMethod.invoke(this, invokeArgs);
-            } catch (IllegalAccessException e) {
-                fail("could not invoke " + testMethod + ", make sure it is public");
-            } catch (IllegalArgumentException e) {
-                fail("wrong arguments invoking " + testMethod + ", check number and type of args passed to dispatchMethodKernel");
-            } catch (InvocationTargetException e) {
-                Throwable cause = e.getCause();
-                /**
-                 * We will ignore ArrayIndexOutOfBoundsException because the graal okra target
-                 * doesn't really handle it yet (basically returns early if it sees one).
-                 */
-                if (cause instanceof ArrayIndexOutOfBoundsException) {
-                    logger.severe("ignoring ArrayIndexOutOfBoundsException for index " + rangeIndex);
-                } else {
-                    // Other exceptions.
-                    String errstr = testMethod + " threw an exception on gid=" + rangeIndex + ", exception was " + cause;
-                    fail(errstr);
-                }
-            } catch (Exception e) {
-                fail("Unknown exception " + e + " invoking " + testMethod);
-            }
+            invokeMethodKernelSeq(invokeArgs, rangeIndex);
         }
     }
 
+    // array stream version
+    private void dispatchMethodKernelSeq(Object[] ary, Object... args) {
+        Object[] invokeArgs = new Object[args.length + 1];
+        // Need space on the end for the final obj parameter.
+        System.arraycopy(args, 0, invokeArgs, 0, args.length);
+        int objArgIndex = invokeArgs.length - 1;
+        if (logLevel.intValue() <= Level.FINE.intValue()) {
+            for (Object arg : args) {
+                logger.fine(arg.toString());
+            }
+        }
+        int range = ary.length;
+        for (int rangeIndex = 0; rangeIndex < range; rangeIndex++) {
+            invokeArgs[objArgIndex] = ary[rangeIndex];
+            invokeMethodKernelSeq(invokeArgs, rangeIndex);
+        }
+    }
+
+    private void invokeMethodKernelSeq(Object[] invokeArgs, int rangeIndex) {
+        try {
+            testMethod.invoke(this, invokeArgs);
+        } catch (IllegalAccessException e) {
+            fail("could not invoke " + testMethod + ", make sure it is public");
+        } catch (IllegalArgumentException e) {
+            fail("wrong arguments invoking " + testMethod + ", check number and type of args passed to dispatchMethodKernel");
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException) {
+                throw ((RuntimeException) cause);
+            } else {
+                String errstr = testMethod + " threw a checked exception on gid=" + rangeIndex + ", exception was " + cause;
+                fail(errstr);
+            }
+        } catch (Exception e) {
+            fail("Unknown exception " + e + " invoking " + testMethod);
+        }
+    }
+
+    // int stream version
     private void dispatchMethodKernelOkra(int range, Object... args) {
         Object[] fixedArgs = fixArgTypes(args);
+        if (Modifier.isStatic(testMethod.getModifiers())) {
+            dispatchKernelOkra(range, fixedArgs);
+        } else {
+            // If it is a non-static method we have to push "this" as the first argument.
+            Object[] newFixedArgs = new Object[fixedArgs.length + 1];
+            System.arraycopy(fixedArgs, 0, newFixedArgs, 1, fixedArgs.length);
+            newFixedArgs[0] = this;
+            dispatchKernelOkra(range, newFixedArgs);
+        }
+    }
+
+    // array stream version
+    private void dispatchMethodKernelOkra(Object[] ary, Object... args) {
+        // add the ary itself as the last arg in the passed parameter list
+        Object[] argsWithAry = new Object[args.length + 1];
+        System.arraycopy(args, 0, argsWithAry, 0, args.length);
+        argsWithAry[argsWithAry.length - 1] = ary;
+
+        Object[] fixedArgs = fixArgTypes(argsWithAry);
+        int range = ary.length;
         if (Modifier.isStatic(testMethod.getModifiers())) {
             dispatchKernelOkra(range, fixedArgs);
         } else {
@@ -586,7 +533,7 @@ public abstract class KernelTester {
      * For primitive arg parameters, make sure arg types are cast to whatever the testMethod
      * signature says they should be.
      */
-    private Object[] fixArgTypes(Object[] args) {
+    protected Object[] fixArgTypes(Object[] args) {
         Object[] fixedArgs = new Object[args.length];
         for (int i = 0; i < args.length; i++) {
             Class<?> paramClass = testMethodParams[i];
@@ -632,7 +579,7 @@ public abstract class KernelTester {
      * the lambda method itself as opposed to the wrapper that calls the lambda method. From the
      * consumer object, we need to find the fields and pass them to the kernel.
      */
-    private void dispatchLambdaMethodKernelOkra(int range, MyIntConsumer consumer) {
+    protected void dispatchLambdaMethodKernelOkra(int range, MyIntConsumer consumer) {
         logger.info("To determine parameters to pass to hsail kernel, we will examine   " + consumer.getClass());
         Field[] fields = consumer.getClass().getDeclaredFields();
         Object[] args = new Object[fields.length];
@@ -647,12 +594,13 @@ public abstract class KernelTester {
     private void dispatchLambdaMethodKernelOkra(Object[] ary, MyObjConsumer consumer) {
         logger.info("To determine parameters to pass to hsail kernel, we will examine   " + consumer.getClass());
         Field[] fields = consumer.getClass().getDeclaredFields();
-        Object[] args = new Object[fields.length];
+        Object[] args = new Object[fields.length + 1];  // + 1 because we also pass the array
         int argIndex = 0;
         for (Field f : fields) {
             logger.info("... " + f);
             args[argIndex++] = getFieldFromObject(f, consumer);
         }
+        args[argIndex] = ary;
         dispatchKernelOkra(ary.length, args);
     }
 
@@ -670,8 +618,9 @@ public abstract class KernelTester {
 
     private void dispatchLambdaKernelOkra(Object[] ary, MyObjConsumer consumer) {
         // The "wrapper" method always has only one arg consisting of the consumer.
-        Object[] args = new Object[1];
+        Object[] args = new Object[2];
         args[0] = consumer;
+        args[1] = ary;
         dispatchKernelOkra(ary.length, args);
     }
 
@@ -681,44 +630,61 @@ public abstract class KernelTester {
         }
     }
 
-    private void compareOkraToSeq(HsailMode hsailMode1) {
-        compareOkraToSeq(hsailMode1, false);
+    private void assertOkraEqualsSeq(HsailMode hsailModeToUse) {
+        assertOkraEqualsSeq(hsailModeToUse, false);
     }
 
     /**
-     * Runs this instance on OKRA, and as SEQ and compares the output of the two executions.
+     * Runs this instance on OKRA, and as SEQ and compares the output of the two executions. the
+     * runOkraFirst flag controls which order they are done in. Note the compiler must use eager
+     * resolving if Okra is done first.
      */
-    private void compareOkraToSeq(HsailMode hsailMode1, boolean useLambda) {
-        // Create and run sequential instance.
-        KernelTester testerSeq = newInstance();
-        testerSeq.setDispatchMode(DispatchMode.SEQ);
-        testerSeq.runTest();
-        // Now do this object.
-        this.setHsailMode(hsailMode1);
+    private void assertOkraEqualsSeq(HsailMode hsailModeToUse, boolean useLambda) {
+        KernelTester testerSeq;
+        if (runOkraFirst) {
+            runOkraInstance(hsailModeToUse, useLambda);
+            testerSeq = runSeqInstance();
+        } else {
+            testerSeq = runSeqInstance();
+            runOkraInstance(hsailModeToUse, useLambda);
+        }
+        assertResultFieldsEqual(testerSeq);
+    }
+
+    private void runOkraInstance(HsailMode hsailModeToUse, boolean useLambda) {
+        // run Okra instance in exiting KernelTester object
+        this.setHsailMode(hsailModeToUse);
         this.setDispatchMode(DispatchMode.OKRA);
         this.useLambdaMethod = useLambda;
         this.runTest();
         this.disposeKernelOkra();
-        assertTrue("failed comparison to SEQ", compareResults(testerSeq));
+    }
+
+    private KernelTester runSeqInstance() {
+        // Create and run sequential instance.
+        KernelTester testerSeq = newInstance();
+        testerSeq.setDispatchMode(DispatchMode.SEQ);
+        testerSeq.runTest();
+        return testerSeq;
     }
 
     public void testGeneratedHsail() {
-        compareOkraToSeq(HsailMode.COMPILED);
+        assertOkraEqualsSeq(HsailMode.COMPILED);
     }
 
     public void testGeneratedHsailUsingLambdaMethod() {
-        compareOkraToSeq(HsailMode.COMPILED, true);
+        assertOkraEqualsSeq(HsailMode.COMPILED, true);
     }
 
     public void testInjectedHsail() {
-        newInstance().compareOkraToSeq(HsailMode.INJECT_HSAIL);
+        newInstance().assertOkraEqualsSeq(HsailMode.INJECT_HSAIL);
     }
 
     public void testInjectedOpencl() {
-        newInstance().compareOkraToSeq(HsailMode.INJECT_OCL);
+        newInstance().assertOkraEqualsSeq(HsailMode.INJECT_OCL);
     }
 
-    private static Object getFieldFromObject(Field f, Object fromObj) {
+    protected static Object getFieldFromObject(Field f, Object fromObj) {
         try {
             f.setAccessible(true);
             Type type = f.getType();
