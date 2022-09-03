@@ -311,9 +311,4 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         GraalInternalError.shouldNotReachHere("binary negation not implemented");
         return null;
     }
-
-    public void emitPrefetchAllocate(ValueNode address, ValueNode distance) {
-        SPARCAddressValue addr = emitAddress(operand(address), 0, loadNonConst(operand(distance)), 1);
-        append(new SPARCPrefetchOp(addr, config.allocatePrefetchInstr));
-    }
 }
