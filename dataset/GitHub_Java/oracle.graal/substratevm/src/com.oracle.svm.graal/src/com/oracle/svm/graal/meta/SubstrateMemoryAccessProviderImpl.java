@@ -25,8 +25,6 @@
 package com.oracle.svm.graal.meta;
 
 import org.graalvm.compiler.core.common.CompressEncoding;
-import org.graalvm.compiler.nodes.java.ArrayLengthNode;
-import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.compiler.word.BarrieredAccess;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.Platform;
@@ -36,6 +34,7 @@ import org.graalvm.word.SignedWord;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
+import com.oracle.svm.core.UnsafeAccess;
 import com.oracle.svm.core.graal.meta.SubstrateMemoryAccessProvider;
 import com.oracle.svm.core.heap.ReferenceAccess;
 import com.oracle.svm.core.hub.LayoutEncoding;
@@ -49,11 +48,9 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.PrimitiveConstant;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
-import sun.misc.Unsafe;
 
 public final class SubstrateMemoryAccessProviderImpl implements SubstrateMemoryAccessProvider {
 
-    private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
     public static final SubstrateMemoryAccessProviderImpl SINGLETON = new SubstrateMemoryAccessProviderImpl();
 
     @Platforms(Platform.HOSTED_ONLY.class)
@@ -94,7 +91,7 @@ public final class SubstrateMemoryAccessProviderImpl implements SubstrateMemoryA
             checkRead(JavaKind.Object, displacement, baseObjectType, baseObject);
             Object rawValue = BarrieredAccess.readObject(baseObject, offset);
             if (isVolatile) {
-                UNSAFE.loadFence();
+                UnsafeAccess.UNSAFE.loadFence();
             }
             return SubstrateObjectConstant.forObject(rawValue, (compressedEncoding != null));
         }
@@ -112,7 +109,7 @@ public final class SubstrateMemoryAccessProviderImpl implements SubstrateMemoryA
             Word address = baseAddress.add(offset);
             Object rawValue = ReferenceAccess.singleton().readObjectAt(address, false);
             if (isVolatile) {
-                UNSAFE.loadFence();
+                UnsafeAccess.UNSAFE.loadFence();
             }
             return SubstrateObjectConstant.forObject(rawValue, false);
         }
@@ -125,7 +122,7 @@ public final class SubstrateMemoryAccessProviderImpl implements SubstrateMemoryA
         }
 
         if (type.isArray()) {
-            int length = ArrayLengthNode.arrayLength(object);
+            int length = KnownIntrinsics.readArrayLength(object);
             if (length < 1) {
                 throw new IllegalArgumentException("Unsafe array access: reading element of kind " + kind +
                                 " at offset " + displacement + " from zero-sized array " +
@@ -164,7 +161,7 @@ public final class SubstrateMemoryAccessProviderImpl implements SubstrateMemoryA
         long rawValue;
 
         if (baseConstant instanceof SubstrateObjectConstant) {
-            Object baseObject = SubstrateObjectConstant.asObject(baseConstant);
+            Object baseObject = ((SubstrateObjectConstant) baseConstant).getObject();
             assert baseObject != null : "SubstrateObjectConstant does not wrap null value";
 
             switch (bits) {
@@ -215,12 +212,12 @@ public final class SubstrateMemoryAccessProviderImpl implements SubstrateMemoryA
             return null;
         }
         if (isVolatile) {
-            UNSAFE.loadFence();
+            UnsafeAccess.UNSAFE.loadFence();
         }
         return toConstant(kind, rawValue);
     }
 
-    public static JavaConstant toConstant(JavaKind kind, long rawValue) {
+    private static JavaConstant toConstant(JavaKind kind, long rawValue) {
         switch (kind) {
             case Boolean:
                 return JavaConstant.forBoolean(rawValue != 0);
