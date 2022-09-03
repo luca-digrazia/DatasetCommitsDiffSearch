@@ -71,20 +71,15 @@ public class FloatingReadPhase extends Phase {
         }
     }
 
+    private final Map<LoopBeginNode, Set<Object>> modifiedInLoops = new IdentityHashMap<>();
+
     @Override
     protected void run(StructuredGraph graph) {
-        Map<LoopBeginNode, Set<Object>> modifiedInLoops = new IdentityHashMap<>();
-        ReentrantNodeIterator.apply(new CollectMemoryCheckpointsClosure(modifiedInLoops), graph.start(), new HashSet<>(), null);
-        ReentrantNodeIterator.apply(new FloatingReadClosure(modifiedInLoops), graph.start(), new MemoryMap(graph.start()), null);
+        ReentrantNodeIterator.apply(new CollectMemoryCheckpointsClosure(), graph.start(), new HashSet<>(), null);
+        ReentrantNodeIterator.apply(new FloatingReadClosure(), graph.start(), new MemoryMap(graph.start()), null);
     }
 
-    private static class CollectMemoryCheckpointsClosure extends NodeIteratorClosure<Set<Object>> {
-
-        private final Map<LoopBeginNode, Set<Object>> modifiedInLoops;
-
-        public CollectMemoryCheckpointsClosure(Map<LoopBeginNode, Set<Object>> modifiedInLoops) {
-            this.modifiedInLoops = modifiedInLoops;
-        }
+    private class CollectMemoryCheckpointsClosure extends NodeIteratorClosure<Set<Object>> {
 
         @Override
         protected void processNode(FixedNode node, Set<Object> currentState) {
@@ -127,13 +122,7 @@ public class FloatingReadPhase extends Phase {
 
     }
 
-    private static class FloatingReadClosure extends NodeIteratorClosure<MemoryMap> {
-
-        private final Map<LoopBeginNode, Set<Object>> modifiedInLoops;
-
-        public FloatingReadClosure(Map<LoopBeginNode, Set<Object>> modifiedInLoops) {
-            this.modifiedInLoops = modifiedInLoops;
-        }
+    private class FloatingReadClosure extends NodeIteratorClosure<MemoryMap> {
 
         @Override
         protected void processNode(FixedNode node, MemoryMap state) {
@@ -144,7 +133,7 @@ public class FloatingReadPhase extends Phase {
             }
         }
 
-        private static void processCheckpoint(MemoryCheckpoint checkpoint, MemoryMap state) {
+        private void processCheckpoint(MemoryCheckpoint checkpoint, MemoryMap state) {
             for (Object identity : checkpoint.getLocationIdentities()) {
                 if (identity == LocationNode.ANY_LOCATION) {
                     state.lastMemorySnapshot.clear();
@@ -153,7 +142,7 @@ public class FloatingReadPhase extends Phase {
             }
         }
 
-        private static void processFloatable(FloatableAccessNode accessNode, MemoryMap state) {
+        private void processFloatable(FloatableAccessNode accessNode, MemoryMap state) {
             StructuredGraph graph = (StructuredGraph) accessNode.graph();
             assert accessNode.getNullCheck() == false;
             Object locationIdentity = accessNode.location().locationIdentity();

@@ -44,11 +44,11 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
     private static final Object ID = new Object();
     private static final Kind[] KINDS = new Kind[]{Kind.Byte, Kind.Char, Kind.Short, Kind.Int, Kind.Long, Kind.Float, Kind.Double, Kind.Object};
     private final TargetDescription target;
-    private final ReplacementsImpl installer;
+    private final ReplacementsInstaller installer;
 
     public PointerTest() {
         target = Graal.getRequiredCapability(CodeCacheProvider.class).getTarget();
-        installer = new ReplacementsImpl(runtime, new Assumptions(false), target);
+        installer = new ReplacementsInstaller(runtime, new Assumptions(false), target);
     }
 
     private static final ThreadLocal<SnippetInliningPolicy> inliningPolicy = new ThreadLocal<>();
@@ -76,7 +76,7 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
     @Test
     public void test_read3() {
         for (Kind kind : KINDS) {
-            assertRead(parse("read" + kind.name() + "3"), kind, false, LocationNode.UNKNOWN_LOCATION);
+            assertRead(parse("read" + kind.name() + "3"), kind, false, LocationNode.ANY_LOCATION);
         }
     }
 
