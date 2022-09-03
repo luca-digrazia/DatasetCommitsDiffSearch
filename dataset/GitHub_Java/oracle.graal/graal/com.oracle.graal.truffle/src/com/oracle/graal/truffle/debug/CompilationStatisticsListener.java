@@ -83,7 +83,8 @@ public final class CompilationStatisticsListener extends AbstractDebugCompilatio
     private final IdentityStatistics<String> compilationResultInfopointStatistics = new IdentityStatistics<>();
     private final IntSummaryStatistics compilationResultMarks = new IntSummaryStatistics();
     private final IntSummaryStatistics compilationResultTotalFrameSize = new IntSummaryStatistics();
-    private final IntSummaryStatistics compilationResultDataPatches = new IntSummaryStatistics();
+    private final IntSummaryStatistics compilationResultDataReferences = new IntSummaryStatistics();
+    private final IdentityStatistics<String> compilationResultDataReferencesStatistics = new IdentityStatistics<>();
 
     private CompilationStatisticsListener() {
     }
@@ -193,7 +194,8 @@ public final class CompilationStatisticsListener extends AbstractDebugCompilatio
         compilationResultInfopoints.accept(result.getInfopoints().size());
         compilationResultInfopointStatistics.accept(result.getInfopoints().stream().map(e -> e.reason.toString()));
         compilationResultMarks.accept(result.getMarks().size());
-        compilationResultDataPatches.accept(result.getDataPatches().size());
+        compilationResultDataReferences.accept(result.getDataReferences().size());
+        compilationResultDataReferencesStatistics.accept(result.getDataReferences().stream().map(d -> d.data.getKind().toString()));
     }
 
     @Override
@@ -248,7 +250,8 @@ public final class CompilationStatisticsListener extends AbstractDebugCompilatio
         printStatistic("  Infopoints", compilationResultInfopoints);
         compilationResultInfopointStatistics.printStatistics(identity());
         printStatistic("  Marks", compilationResultMarks);
-        printStatistic("  Data references", compilationResultDataPatches);
+        printStatistic("  Data references", compilationResultDataReferences);
+        compilationResultDataReferencesStatistics.printStatistics(identity());
 
         if (TruffleCompilerOptions.TruffleCompilationStatisticDetails.getValue()) {
             printStatistic("Truffle nodes");

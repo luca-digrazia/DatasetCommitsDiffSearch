@@ -30,8 +30,9 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.truffle.*;
-import com.oracle.graal.truffle.TruffleInlining.CallTreeNodeVisitor;
+import com.oracle.graal.truffle.TruffleInlining.*;
 import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.nodes.NodeUtil.*;
 
 public final class TraceCompilationASTListener extends AbstractDebugCompilationListener {
 
@@ -64,8 +65,8 @@ public final class TraceCompilationASTListener extends AbstractDebugCompilationL
                     p.println(node.getClass().getSimpleName());
                 } else {
                     String fieldName = "unknownField";
-                    NodeFieldAccessor[] fields = NodeClass.get(parent.getClass()).getFields();
-                    for (NodeFieldAccessor field : fields) {
+                    NodeField[] fields = NodeClass.get(parent.getClass()).getFields();
+                    for (NodeField field : fields) {
                         Object value = field.loadValue(parent);
                         if (value == node) {
                             fieldName = field.getName();
