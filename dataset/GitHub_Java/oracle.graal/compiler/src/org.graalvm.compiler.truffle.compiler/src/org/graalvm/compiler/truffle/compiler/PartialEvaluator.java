@@ -202,15 +202,14 @@ public abstract class PartialEvaluator {
         OptionValues options = TruffleCompilerOptions.getOptions();
         ResolvedJavaMethod rootMethod = rootForCallTarget(compilable);
         // @formatter:off
-        StructuredGraph.Builder builder = new StructuredGraph.Builder(options, debug, allowAssumptions).
+        final StructuredGraph graph = new StructuredGraph.Builder(options, debug, allowAssumptions).
                         name(name).
                         method(rootMethod).
                         speculationLog(log).
                         compilationId(compilationId).
-                        cancellable(cancellable);
+                        cancellable(cancellable).
+                        build();
         // @formatter:on
-        builder = customizeStructuredGraphBuilder(builder);
-        final StructuredGraph graph = builder.build();
 
         try (DebugContext.Scope s = debug.scope("CreateGraph", graph);
                         Indent indent = debug.logAndIndent("createGraph %s", graph);) {
@@ -230,15 +229,9 @@ public abstract class PartialEvaluator {
         } catch (Throwable e) {
             throw debug.handle(e);
         }
+//        debug.forceDump(graph, "PE");
 
         return graph;
-    }
-
-    /**
-     * Hook for subclasses: customize the StructuredGraph.
-     */
-    protected StructuredGraph.Builder customizeStructuredGraphBuilder(StructuredGraph.Builder builder) {
-        return builder;
     }
 
     /**
@@ -295,7 +288,7 @@ public abstract class PartialEvaluator {
                     }
 
                     lastDirectCallNode = (JavaConstant) arg0.asConstant();
-                } else if (original.equals(callDirectMethod)) {
+                } else if (original.equals(callDirectMethod) && lastDirectCallNode != null) {
                     TruffleInliningPlan.Decision decision = getDecision(inlining.peek(), lastDirectCallNode);
                     lastDirectCallNode = null;
                     if (decision != null && decision.shouldInline()) {
