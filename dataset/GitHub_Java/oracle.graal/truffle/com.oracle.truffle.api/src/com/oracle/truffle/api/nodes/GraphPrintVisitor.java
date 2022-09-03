@@ -59,12 +59,13 @@ public class GraphPrintVisitor implements Closeable {
 
     public static final String GraphVisualizerAddress = "127.0.0.1";
     public static final int GraphVisualizerPort = 4444;
+    private static final XMLOutputFactory XML_OUTPUT_FACTORY = XMLOutputFactory.newInstance();
 
     private Map<Object, NodeElement> nodeMap;
     private List<EdgeElement> edgeList;
     private Map<Object, NodeElement> prevNodeMap;
     private int id;
-    private Impl xmlstream;
+    private XMLStreamWriter xmlstream;
     private OutputStream outputStream;
     private int openGroupCount;
     private int openGraphCount;
@@ -119,140 +120,66 @@ public class GraphPrintVisitor implements Closeable {
         }
     }
 
-    private static class Impl {
-        private static final XMLOutputFactory XML_OUTPUT_FACTORY = XMLOutputFactory.newInstance();
-        private final XMLStreamWriter xmlstream;
-
-        protected Impl(OutputStream outputStream) {
-            try {
-                this.xmlstream = XML_OUTPUT_FACTORY.createXMLStreamWriter(outputStream);
-            } catch (XMLStreamException | FactoryConfigurationError e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        public void writeStartDocument() {
-            try {
-                xmlstream.writeStartDocument();
-            } catch (XMLStreamException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        public void writeEndDocument() {
-            try {
-                xmlstream.writeEndDocument();
-            } catch (XMLStreamException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        public void writeStartElement(String name) {
-            try {
-                xmlstream.writeStartElement(name);
-            } catch (XMLStreamException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        public void writeEndElement() {
-            try {
-                xmlstream.writeEndElement();
-            } catch (XMLStreamException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        public void writeAttribute(String name, String value) {
-            try {
-                xmlstream.writeAttribute(name, value);
-            } catch (XMLStreamException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        public void writeCharacters(String text) {
-            try {
-                xmlstream.writeCharacters(text);
-            } catch (XMLStreamException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        public void flush() {
-            try {
-                xmlstream.flush();
-            } catch (XMLStreamException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        public void close() {
-            try {
-                xmlstream.close();
-            } catch (XMLStreamException e) {
-                throw new RuntimeException(e);
-            }
-        }
-    }
-
     public GraphPrintVisitor() {
         this(new ByteArrayOutputStream());
     }
 
     public GraphPrintVisitor(OutputStream outputStream) {
         this.outputStream = outputStream;
-        this.xmlstream = new Impl(outputStream);
-        this.xmlstream.writeStartDocument();
-        this.xmlstream.writeStartElement("graphDocument");
-    }
-
-    private void ensureOpen() {
-        if (xmlstream == null) {
-            throw new IllegalStateException("printer is closed");
+        try {
+            this.xmlstream = XML_OUTPUT_FACTORY.createXMLStreamWriter(outputStream);
+            this.xmlstream.writeStartDocument();
+            this.xmlstream.writeStartElement("graphDocument");
+        } catch (XMLStreamException | FactoryConfigurationError e) {
+            throw new RuntimeException(e);
         }
     }
 
     public GraphPrintVisitor beginGroup(String groupName) {
-        ensureOpen();
         maybeEndGraph();
         openGroupCount++;
-        xmlstream.writeStartElement("group");
-        xmlstream.writeStartElement("properties");
+        try {
+            xmlstream.writeStartElement("group");
+            xmlstream.writeStartElement("properties");
 
-        if (!groupName.isEmpty()) {
-            // set group name
-            xmlstream.writeStartElement("p");
-            xmlstream.writeAttribute("name", "name");
-            xmlstream.writeCharacters(groupName);
-            xmlstream.writeEndElement();
+            if (!groupName.isEmpty()) {
+                // set group name
+                xmlstream.writeStartElement("p");
+                xmlstream.writeAttribute("name", "name");
+                xmlstream.writeCharacters(groupName);
+                xmlstream.writeEndElement();
+            }
+
+            xmlstream.writeEndElement(); // properties
+
+            // forget old nodes
+            prevNodeMap = null;
+            nodeMap = new IdentityHashMap<>();
+            edgeList = new ArrayList<>();
+
+            return this;
+        } catch (XMLStreamException e) {
+            throw new RuntimeException(e);
         }
-
-        xmlstream.writeEndElement(); // properties
-
-        // forget old nodes
-        prevNodeMap = null;
-        nodeMap = new IdentityHashMap<>();
-        edgeList = new ArrayList<>();
-
-        return this;
     }
 
     public GraphPrintVisitor endGroup() {
-        ensureOpen();
         if (openGroupCount <= 0) {
             throw new IllegalArgumentException("no open group");
         }
         maybeEndGraph();
         openGroupCount--;
 
-        xmlstream.writeEndElement(); // group
+        try {
+            xmlstream.writeEndElement(); // group
+        } catch (XMLStreamException e) {
+            throw new RuntimeException(e);
+        }
 
         return this;
     }
 
     public GraphPrintVisitor beginGraph(String graphName) {
-        ensureOpen();
         if (openGroupCount == 0) {
             beginGroup(graphName);
         }
@@ -277,40 +204,43 @@ public class GraphPrintVisitor implements Closeable {
     }
 
     public GraphPrintVisitor endGraph() {
-        ensureOpen();
         if (openGraphCount <= 0) {
             throw new IllegalArgumentException("no open graph");
         }
         openGraphCount--;
 
-        xmlstream.writeStartElement("graph");
+        try {
+            xmlstream.writeStartElement("graph");
 
-        xmlstream.writeStartElement("properties");
+            xmlstream.writeStartElement("properties");
 
-        // set graph name
-        xmlstream.writeStartElement("p");
-        xmlstream.writeAttribute("name", "name");
-        xmlstream.writeCharacters(currentGraphName);
-        xmlstream.writeEndElement();
+            // set graph name
+            xmlstream.writeStartElement("p");
+            xmlstream.writeAttribute("name", "name");
+            xmlstream.writeCharacters(currentGraphName);
+            xmlstream.writeEndElement();
 
-        xmlstream.writeEndElement(); // properties
+            xmlstream.writeEndElement(); // properties
 
-        xmlstream.writeStartElement("nodes");
-        writeNodes();
-        xmlstream.writeEndElement(); // nodes
+            xmlstream.writeStartElement("nodes");
+            writeNodes();
+            xmlstream.writeEndElement(); // nodes
 
-        xmlstream.writeStartElement("edges");
-        writeEdges();
-        xmlstream.writeEndElement(); // edges
+            xmlstream.writeStartElement("edges");
+            writeEdges();
+            xmlstream.writeEndElement(); // edges
 
-        xmlstream.writeEndElement(); // graph
+            xmlstream.writeEndElement(); // graph
 
-        xmlstream.flush();
+            xmlstream.flush();
+        } catch (XMLStreamException e) {
+            throw new RuntimeException(e);
+        }
 
         return this;
     }
 
-    private void writeNodes() {
+    private void writeNodes() throws XMLStreamException {
         for (NodeElement node : nodeMap.values()) {
             xmlstream.writeStartElement("node");
             xmlstream.writeAttribute("id", String.valueOf(node.getId()));
@@ -328,7 +258,7 @@ public class GraphPrintVisitor implements Closeable {
         }
     }
 
-    private void writeEdges() {
+    private void writeEdges() throws XMLStreamException {
         for (EdgeElement edge : edgeList) {
             xmlstream.writeStartElement("edge");
 
@@ -385,16 +315,18 @@ public class GraphPrintVisitor implements Closeable {
         if (xmlstream == null) {
             return;
         }
-        while (openGroupCount > 0) {
-            endGroup();
-        }
-        assert openGraphCount == 0 && openGroupCount == 0;
+        try {
+            while (openGroupCount > 0) {
+                endGroup();
+            }
 
-        xmlstream.writeEndElement(); // graphDocument
-        xmlstream.writeEndDocument();
-        xmlstream.flush();
-        xmlstream.close();
-        xmlstream = null;
+            xmlstream.writeEndElement(); // graphDocument
+            xmlstream.writeEndDocument();
+            xmlstream.flush();
+            xmlstream = null;
+        } catch (XMLStreamException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private int nextId() {
