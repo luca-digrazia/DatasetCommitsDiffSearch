@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -29,8 +27,6 @@ import static com.oracle.svm.core.option.RuntimeOptionParser.GRAAL_OPTION_PREFIX
 import static com.oracle.svm.core.option.SubstrateOptionsParser.BooleanOptionFormat.NAME_VALUE;
 import static com.oracle.svm.core.option.SubstrateOptionsParser.BooleanOptionFormat.PLUS_MINUS;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
 //Checkstyle: allow reflection
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -87,18 +83,21 @@ public class JavaMainWrapper {
 
     public static class JavaMainSupport {
 
-        final MethodHandle javaMainHandle;
-        final String javaMainClassName;
+        private final Method javaMainMethod;
 
         @Platforms(Platform.HOSTED_ONLY.class)
-        public JavaMainSupport(Method javaMainMethod) throws IllegalAccessException {
-            this.javaMainHandle = MethodHandles.lookup().unreflect(javaMainMethod);
-            this.javaMainClassName = javaMainMethod.getDeclaringClass().getName();
+        public JavaMainSupport(Method javaMainMethod) {
+            this.javaMainMethod = javaMainMethod;
+        }
+
+        private Method getJavaMainMethod() {
+            assert javaMainMethod != null;
+            return javaMainMethod;
         }
 
         public String getJavaCommand() {
-            if (mainArgs != null) {
-                StringBuilder commandLine = new StringBuilder(javaMainClassName);
+            if (javaMainMethod != null && mainArgs != null) {
+                StringBuilder commandLine = new StringBuilder(javaMainMethod.getDeclaringClass().getName());
 
                 for (String arg : mainArgs) {
                     commandLine.append(' ');
@@ -159,40 +158,28 @@ public class JavaMainWrapper {
             args = RuntimePropertyParser.parse(args);
         }
         mainArgs = args;
-
+        final RuntimeSupport rs = RuntimeSupport.getRuntimeSupport();
         try {
-            if (AllocationSite.Options.AllocationProfiling.getValue()) {
-                Runtime.getRuntime().addShutdownHook(new AllocationSite.AllocationProfilingShutdownHook());
+            try {
+                if (AllocationSite.Options.AllocationProfiling.getValue()) {
+                    Runtime.getRuntime().addShutdownHook(new AllocationSite.AllocationProfilingShutdownHook());
+                }
+                if (SubstrateOptions.PrintGCSummary.getValue()) {
+                    Runtime.getRuntime().addShutdownHook(new PrintGCSummaryShutdownHook());
+                }
+                rs.executeStartupHooks();
+                ImageSingletons.lookup(JavaMainSupport.class).getJavaMainMethod().invoke(null, (Object) mainArgs);
+            } catch (Throwable ex) {
+                JavaThreads.dispatchUncaughtException(Thread.currentThread(), ex);
             }
-            if (SubstrateOptions.PrintGCSummary.getValue()) {
-                Runtime.getRuntime().addShutdownHook(new PrintGCSummaryShutdownHook());
-            }
-            RuntimeSupport.getRuntimeSupport().executeStartupHooks();
-
-            /*
-             * Invoke the application's main method. Invoking the main method via a method handle
-             * preserves exceptions, while invoking the main method via reflection would wrap
-             * exceptions in a InvocationTargetException.
-             */
-            ImageSingletons.lookup(JavaMainSupport.class).javaMainHandle.invokeExact(args);
-
-        } catch (Throwable ex) {
-            JavaThreads.dispatchUncaughtException(Thread.currentThread(), ex);
-
         } finally {
-            /*
-             * Shutdown sequence: First wait for all non-daemon threads to exit.
-             */
-            JavaThreads.singleton().joinAllNonDaemons();
-            /*
-             * Run shutdown hooks (both our own hooks and application-registered hooks. Note that
-             * this can start new non-daemon threads. We are not responsible to wait until they have
-             * exited.
-             */
-            RuntimeSupport.getRuntimeSupport().shutdown();
-
-            Counter.logValues();
+            /* Shutdown before joining non-daemon threads. */
+            rs.shutdown();
         }
+
+        JavaThreads.singleton().joinAllNonDaemons();
+        Counter.logValues();
+
         return 0;
     }
 

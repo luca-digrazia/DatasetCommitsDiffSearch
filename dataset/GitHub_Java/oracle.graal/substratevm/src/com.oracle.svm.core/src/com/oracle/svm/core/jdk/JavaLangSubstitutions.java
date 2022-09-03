@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -49,7 +47,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.compiler.word.ObjectAccess;
 import org.graalvm.compiler.word.Word;
@@ -738,15 +735,9 @@ final class Target_java_lang_Package {
 /** Dummy class to have a class with the file's name. */
 public final class JavaLangSubstitutions {
 
+    @Platforms(Platform.HOSTED_ONLY.class)
     public static class ClassLoaderSupport {
-        public Target_java_lang_ClassLoader systemClassLoader;
-
-        @Platforms(Platform.HOSTED_ONLY.class) public Map<ClassLoader, Target_java_lang_ClassLoader> classLoaders = Collections.synchronizedMap(new IdentityHashMap<>());
-
-        @Fold
-        public static ClassLoaderSupport getInstance() {
-            return ImageSingletons.lookup(ClassLoaderSupport.class);
-        }
+        public Map<ClassLoader, Target_java_lang_ClassLoader> classloaders = Collections.synchronizedMap(new IdentityHashMap<>());
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)//
