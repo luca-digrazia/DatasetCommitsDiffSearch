@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.max.asm.*;
 import com.oracle.max.graal.compiler.alloc.*;
 import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
@@ -45,7 +44,6 @@ public final class LIRBlock {
     private List<LIRBlock> predecessors = new ArrayList<LIRBlock>(4);
     private List<LIRBlock> successors = new ArrayList<LIRBlock>(4);
     private LIRDebugInfo debugInfo;
-    private boolean align;
 
     /**
      * Bit map specifying which {@linkplain OperandPool operands} are live upon entry to this block.
@@ -106,14 +104,6 @@ public final class LIRBlock {
 
     public int firstLirInstructionId() {
         return firstLirInstructionID;
-    }
-
-    public boolean align() {
-        return align;
-    }
-
-    public void setAlign(boolean b) {
-        align = b;
     }
 
     public void setFirstLirInstructionId(int firstLirInstructionId) {
@@ -184,7 +174,8 @@ public final class LIRBlock {
     }
 
     public int loopDepth() {
-        return loopDepth;
+        // TODO(tw): Set correct loop depth.
+        return 0;
     }
 
     public int loopIndex() {
@@ -292,9 +283,5 @@ public final class LIRBlock {
         }
         LIROpcode code = lirInstruction.code;
         return code == LIROpcode.Branch || code == LIROpcode.TableSwitch;
-    }
-
-    public boolean isExceptionEntry() {
-        return firstInstruction() instanceof ExceptionObject;
     }
 }
