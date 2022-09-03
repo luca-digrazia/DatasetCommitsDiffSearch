@@ -28,7 +28,6 @@ import java.util.regex.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.vis.*;
 import com.sun.c1x.*;
-import com.sun.c1x.ir.*;
 import com.sun.c1x.observer.*;
 import com.sun.c1x.value.*;
 
@@ -71,14 +70,26 @@ public class GraphvizPrinterObserver implements CompilationObserver {
             try {
                 if (pdf) {
                     ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-                    printGraph(graph, name, buffer);
+                    GraphvizPrinter printer = new GraphvizPrinter(buffer);
+                    if (C1XOptions.OmitDOTFrameStates) {
+                        printer.addOmittedClass(FrameState.class);
+                    }
+                    printer.begin(name);
+                    printer.print(graph, true);
+                    printer.end();
 
                     out = new FileOutputStream(filename + ".pdf");
                     GraphvizRunner.process(GraphvizRunner.DOT_LAYOUT, new ByteArrayInputStream(buffer.toByteArray()), out, "pdf");
                 } else {
                     out = new FileOutputStream(filename + ".gv");
 
-                    printGraph(graph, name, out);
+                    GraphvizPrinter printer = new GraphvizPrinter(out);
+                    if (C1XOptions.OmitDOTFrameStates) {
+                        printer.addOmittedClass(FrameState.class);
+                    }
+                    printer.begin(name);
+                    printer.print(graph, true);
+                    printer.end();
                 }
             } catch (IOException e) {
                 e.printStackTrace();
@@ -91,21 +102,5 @@ public class GraphvizPrinterObserver implements CompilationObserver {
                 }
             }
         }
-    }
-
-    private static void printGraph(Graph graph, String name, OutputStream buffer) {
-        GraphvizPrinter printer = new GraphvizPrinter(buffer);
-        if (C1XOptions.OmitDOTFrameStates) {
-            printer.addOmittedClass(FrameState.class);
-        }
-        printer.addClassColor(StartNode.class, "snow3");
-        printer.addClassColor(EndNode.class, "snow3");
-        printer.addClassColor(LoopBegin.class, "skyblue");
-        printer.addClassColor(LoopEnd.class, "skyblue3");
-        printer.addClassColor(Unwind.class, "red");
-        printer.addClassColor(Return.class, "indianred1");
-        printer.begin(name);
-        printer.print(graph, true);
-        printer.end();
     }
 }
