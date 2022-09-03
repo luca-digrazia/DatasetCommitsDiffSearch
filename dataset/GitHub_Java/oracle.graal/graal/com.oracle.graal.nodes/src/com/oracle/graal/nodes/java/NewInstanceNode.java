@@ -23,13 +23,12 @@
 package com.oracle.graal.nodes.java;
 
 import java.lang.ref.*;
-import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
 
 /**
@@ -42,20 +41,20 @@ public class NewInstanceNode extends AbstractNewObjectNode implements Virtualiza
 
     /**
      * Constructs a NewInstanceNode.
-     *
+     * 
      * @param type the class being allocated
      * @param fillContents determines whether the new object's fields should be initialized to
      *            zero/null.
      */
     public NewInstanceNode(ResolvedJavaType type, boolean fillContents) {
         super(StampFactory.exactNonNull(type), fillContents);
-        assert !type.isArray() && !type.isInterface() && !type.isPrimitive();
+        assert !type.isArray();
         this.instanceClass = type;
     }
 
     /**
      * Gets the instance class being allocated by this node.
-     *
+     * 
      * @return the instance class allocated
      */
     public ResolvedJavaType instanceClass() {
@@ -75,7 +74,7 @@ public class NewInstanceNode extends AbstractNewObjectNode implements Virtualiza
             for (int i = 0; i < state.length; i++) {
                 state[i] = defaultFieldValue(fields[i]);
             }
-            tool.createVirtualObject(virtualObject, state, Collections.<MonitorIdNode> emptyList());
+            tool.createVirtualObject(virtualObject, state, null);
             tool.replaceWithVirtual(virtualObject);
         }
     }

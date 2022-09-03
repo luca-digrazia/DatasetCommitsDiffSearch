@@ -20,17 +20,16 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-//JaCoCo Exclude
 package com.oracle.graal.nodes.java;
 
 import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * The {@code DynamicNewArrayNode} is used for allocation of arrays when the type is not a
@@ -56,8 +55,9 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode {
     @Override
     public void simplify(SimplifierTool tool) {
         if (isAlive() && elementType.isConstant()) {
-            ResolvedJavaType javaType = tool.getConstantReflection().asJavaType(elementType.asConstant());
-            if (javaType != null && !javaType.equals(tool.getMetaAccess().lookupJavaType(void.class))) {
+            Class<?> elementClass = (Class<?>) elementType.asConstant().asObject();
+            if (elementClass != null && !(elementClass.equals(void.class))) {
+                ResolvedJavaType javaType = tool.getMetaAccess().lookupJavaType(elementClass);
                 NewArrayNode newArray = graph().add(new NewArrayNode(javaType, length(), fillContents()));
                 List<Node> snapshot = inputs().snapshot();
                 graph().replaceFixedWithFixed(this, newArray);
@@ -73,12 +73,4 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode {
     public static Object newArray(Class<?> componentType, int length) {
         return Array.newInstance(componentType, length);
     }
-
-    @NodeIntrinsic
-    private static native Object newArray(Class<?> componentType, int length, @ConstantNodeParameter boolean fillContents);
-
-    public static Object newUninitializedArray(Class<?> componentType, int length) {
-        return newArray(componentType, length, false);
-    }
-
 }
