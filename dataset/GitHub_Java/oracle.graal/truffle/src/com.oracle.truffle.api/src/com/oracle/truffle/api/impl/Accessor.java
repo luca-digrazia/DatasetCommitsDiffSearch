@@ -82,7 +82,6 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.Source.SourceBuilder;
 import com.oracle.truffle.api.source.SourceSection;
 import java.nio.file.Path;
-import java.util.List;
 
 /**
  * Communication between TruffleLanguage API/SPI, and other services.
@@ -245,8 +244,6 @@ public abstract class Accessor {
 
         public abstract boolean isNativeAccessAllowed(Object vmObject, Env env);
 
-        public abstract boolean inContextPreInitialization(Object vmObject);
-
         public abstract Object createInternalContext(Object vmObject, Map<String, Object> config, TruffleContext spiContext);
 
         public abstract void initializeInternalContext(Object vmObject, Object contextImpl);
@@ -333,7 +330,6 @@ public abstract class Accessor {
 
         public abstract boolean isHostSymbol(Object guestObject);
 
-        public abstract <S> S lookupService(Object languageContextVMObject, LanguageInfo language, Class<S> type);
     }
 
     public abstract static class LanguageSupport {
@@ -345,7 +341,7 @@ public abstract class Accessor {
 
         public abstract boolean areOptionsCompatible(TruffleLanguage<?> language, OptionValues firstContextOptions, OptionValues newContextOptions);
 
-        public abstract Object createEnvContext(Env localEnv, List<Object> servicesCollector);
+        public abstract Object createEnvContext(Env localEnv);
 
         public abstract TruffleContext createTruffleContext(Object impl);
 

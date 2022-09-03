@@ -1888,8 +1888,8 @@ public abstract class TruffleLanguage<C> {
                 throw new IllegalArgumentException("Cannot request services from the current language.");
             }
 
-            Env otherEnv = AccessAPI.engineAccess().getLanguageEnv(vmObject, language);
-            return otherEnv == null ? null : otherEnv.getSpi().lookup(type);
+            Env otherEnv = AccessAPI.engineAccess().getLanguageEnv(this, language);
+            return otherEnv.getSpi().lookup(type);
         }
 
         /**
@@ -1939,20 +1939,6 @@ public abstract class TruffleLanguage<C> {
          */
         public TruffleContext getContext() {
             return AccessAPI.engineAccess().getPolyglotContext(vmObject);
-        }
-
-        /**
-         * Returns <code>true</code> if this {@link org.graalvm.polyglot.Context} is being
-         * pre-initialized. For a given {@link Env environment}, the return value of this method
-         * never changes.
-         *
-         * @see #initializeContext(Object)
-         * @see #patchContext(Object, Env)
-         * @since 1.0
-         */
-        @TruffleBoundary
-        public boolean isPreInitialization() {
-            return AccessAPI.engineAccess().inContextPreInitialization(vmObject);
         }
 
         /**

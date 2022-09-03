@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -282,10 +282,6 @@ public final class OptimizedCompilationProfile {
         callAndLoopCount += count;
     }
 
-    void reportCompilationIgnored() {
-        compilationFailed = true;
-    }
-
     void reportInvalidated() {
         invalidationCount++;
         int reprofile = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleInvalidationReprofileCount);
@@ -316,12 +312,13 @@ public final class OptimizedCompilationProfile {
     boolean interpreterCall(OptimizedCallTarget callTarget) {
         int intCallCount = ++callCount;
         int intAndLoopCallCount = ++callAndLoopCount;
-        // Check if call target is hot enough to compile, but took not too long to get hot.
-        int callThreshold = compilationCallThreshold; // 0 if TruffleCompileImmediately
-        if (callThreshold == 0 || (intCallCount >= callThreshold //
-                        && intAndLoopCallCount >= compilationCallAndLoopThreshold //
-                        && !compilationFailed && !callTarget.isCompiling())) {
-            return callTarget.compile(!multiTierEnabled);
+        if (!callTarget.isCompiling() && !compilationFailed) {
+            // Check if call target is hot enough to compile, but took not too long to get hot.
+            int callThreshold = compilationCallThreshold; // 0 if TruffleCompileImmediately
+            int callAndLoopThreshold = compilationCallAndLoopThreshold;
+            if ((intAndLoopCallCount >= callAndLoopThreshold && intCallCount >= callThreshold) || callThreshold == 0) {
+                return callTarget.compile(!multiTierEnabled);
+            }
         }
         return false;
     }

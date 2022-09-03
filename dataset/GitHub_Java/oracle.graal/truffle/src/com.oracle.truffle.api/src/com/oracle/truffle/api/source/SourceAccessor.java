@@ -48,7 +48,7 @@ import java.util.Collection;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.source.Source.SourceBuilder;
-import java.util.Set;
+import java.nio.file.Path;
 
 final class SourceAccessor extends Accessor {
 
@@ -76,12 +76,8 @@ final class SourceAccessor extends Accessor {
         return ACCESSOR.loaders();
     }
 
-    static String getMimeType(TruffleFile file, Set<String> validMimeTypes) throws IOException {
-        return ACCESSOR.languageSupport().getMimeType(file, validMimeTypes);
-    }
-
-    static TruffleFile getTruffleFile(Object origin, boolean embedder, boolean languageCacheUsesContextClassLoader) {
-        return ACCESSOR.languageSupport().getTruffleFile(origin, embedder, languageCacheUsesContextClassLoader);
+    static Path getPath(TruffleFile file) {
+        return ACCESSOR.languageSupport().getPath(file);
     }
 
     static final class SourceSupportImpl extends Accessor.SourceSupport {
@@ -107,13 +103,13 @@ final class SourceAccessor extends Accessor {
         }
 
         @Override
-        public String findMimeType(File file, boolean useContextClassLoader) throws IOException {
-            return Source.findMimeType(SourceAccessor.getTruffleFile(file.toPath(), true, useContextClassLoader));
+        public String findMimeType(File file) throws IOException {
+            return Source.findMimeType(file.toPath(), null);
         }
 
         @Override
-        public String findMimeType(URL url, boolean useContextClassLoader) throws IOException {
-            return Source.findMimeType(url, url.openConnection(), null, true, useContextClassLoader);
+        public String findMimeType(URL url) throws IOException {
+            return Source.findMimeType(url);
         }
 
         @Override
@@ -122,23 +118,9 @@ final class SourceAccessor extends Accessor {
         }
 
         @Override
-        public SourceBuilder newBuilder(String language, URL origin) {
-            return Source.newBuilder(language, origin);
-        }
-
-        @Override
         public boolean isLegacySource(Source source) {
             return source.isLegacy();
         }
 
-        @Override
-        public void setEmbedderBuilder(SourceBuilder builder, boolean embedder) {
-            builder.embedder(embedder);
-        }
-
-        @Override
-        public void setLanguageCacheUsesContextClassLoader(SourceBuilder builder, boolean useContextClassLoader) {
-            builder.languageCacheUsesContextClassLoader(useContextClassLoader);
-        }
     }
 }
