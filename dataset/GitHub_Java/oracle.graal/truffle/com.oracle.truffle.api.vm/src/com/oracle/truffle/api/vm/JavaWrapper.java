@@ -29,24 +29,20 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 
 final class JavaWrapper implements InvocationHandler {
-    private final PolyglotEngine.Value value;
+    private final TruffleVM.Symbol value;
     private final Object wrapper;
     private final InvocationHandler chain;
 
-    public JavaWrapper(PolyglotEngine.Value value, Object wrapper, InvocationHandler chain) {
+    public JavaWrapper(TruffleVM.Symbol value, Object wrapper, InvocationHandler chain) {
         this.value = value;
         this.chain = chain;
         this.wrapper = wrapper;
     }
 
-    static <T> T create(Class<T> representation, Object wrapper, PolyglotEngine.Value value) {
-        try {
-            InvocationHandler chain = Proxy.getInvocationHandler(wrapper);
-            Object instance = Proxy.newProxyInstance(representation.getClassLoader(), new Class<?>[]{representation}, new JavaWrapper(value, wrapper, chain));
-            return representation.cast(instance);
-        } catch (IllegalArgumentException ex) {
-            return representation.cast(wrapper);
-        }
+    static <T> T create(Class<T> representation, Object wrapper, TruffleVM.Symbol value) {
+        InvocationHandler chain = Proxy.getInvocationHandler(wrapper);
+        Object instance = Proxy.newProxyInstance(representation.getClassLoader(), new Class<?>[]{representation}, new JavaWrapper(value, wrapper, chain));
+        return representation.cast(instance);
     }
 
     @Override
@@ -54,7 +50,7 @@ final class JavaWrapper implements InvocationHandler {
         if (method.getDeclaringClass() == Object.class) {
             return method.invoke(this, args);
         }
-        PolyglotEngine.Value retValue = value.invokeProxy(chain, wrapper, method, args);
+        TruffleVM.Symbol retValue = value.invokeProxy(chain, wrapper, method, args);
         if (method.getReturnType() == void.class) {
             return null;
         } else {
