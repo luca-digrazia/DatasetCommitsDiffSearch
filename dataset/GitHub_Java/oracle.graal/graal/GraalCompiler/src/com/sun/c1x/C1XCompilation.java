@@ -25,7 +25,6 @@ package com.sun.c1x;
 
 import java.util.*;
 
-import com.oracle.max.asm.*;
 import com.oracle.graal.graph.*;
 import com.sun.c1x.alloc.*;
 import com.sun.c1x.asm.*;
@@ -42,6 +41,8 @@ import com.sun.cri.ri.*;
 /**
  * This class encapsulates global information about the compilation of a particular method,
  * including a reference to the runtime, statistics about the compiled code, etc.
+ *
+ * @author Ben L. Titzer
  */
 public final class C1XCompilation {
 
@@ -70,7 +71,7 @@ public final class C1XCompilation {
     private int nextID = 1;
 
     private FrameMap frameMap;
-    private TargetMethodAssembler assembler;
+    private AbstractAssembler assembler;
 
     private IR hir;
 
@@ -186,10 +187,9 @@ public final class C1XCompilation {
         return frameMap;
     }
 
-    public TargetMethodAssembler assembler() {
+    public AbstractAssembler masm() {
         if (assembler == null) {
-            AbstractAssembler asm = compiler.backend.newAssembler(registerConfig);
-            assembler = new TargetMethodAssembler(asm);
+            assembler = compiler.backend.newAssembler(registerConfig);
             assembler.setFrameSize(frameMap.frameSize());
             assembler.targetMethod.setCustomStackAreaOffset(frameMap.offsetToCustomArea());
         }
@@ -246,7 +246,6 @@ public final class C1XCompilation {
             initFrameMap(hir.maxLocks());
 
             lirGenerator = compiler.backend.newLIRGenerator(this);
-
             for (BlockBegin begin : hir.linearScanOrder()) {
                 lirGenerator.doBlock(begin);
             }
@@ -281,7 +280,7 @@ public final class C1XCompilation {
             // generate traps at the end of the method
             lirAssembler.emitTraps();
 
-            CiTargetMethod targetMethod = assembler().finishTargetMethod(method, runtime, lirAssembler.registerRestoreEpilogueOffset, false);
+            CiTargetMethod targetMethod = masm().finishTargetMethod(method, runtime, lirAssembler.registerRestoreEpilogueOffset, false);
             if (assumptions.count() > 0) {
                 targetMethod.setAssumptions(assumptions);
             }

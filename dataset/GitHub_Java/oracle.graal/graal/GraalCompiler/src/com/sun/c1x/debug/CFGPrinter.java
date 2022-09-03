@@ -132,8 +132,8 @@ public class CFGPrinter {
         out.print("to_bci ").println(block.end() == null ? -1 : block.end().bci());
 
         out.print("predecessors ");
-        for (BlockEnd pred : block.blockPredecessors()) {
-            out.print("\"B").print(pred.begin().blockID).print("\" ");
+        for (BlockBegin pred : block.blockPredecessors()) {
+            out.print("\"B").print(pred.blockID).print("\" ");
         }
         out.println();
 
@@ -153,6 +153,15 @@ public class CFGPrinter {
         if (block.isExceptionEntry()) {
             out.print("\"ex\" ");
         }
+        if (block.isSubroutineEntry()) {
+            out.print("\"sr\" ");
+        }
+        if (block.isBackwardBranchTarget()) {
+            out.print("\"bb\" ");
+        }
+        if (block.isParserLoopHeader()) {
+            out.print("\"plh\" ");
+        }
         if (block.isCriticalEdgeSplit()) {
             out.print("\"ces\" ");
         }
@@ -164,6 +173,9 @@ public class CFGPrinter {
         }
         out.println();
 
+        if (block.dominator() != null) {
+            out.print("dominator \"B").print(block.dominator().blockID).println('"');
+        }
         if (block.loopIndex() != -1) {
             out.print("loop_index ").println(block.loopIndex());
             out.print("loop_depth ").println(block.loopDepth());
