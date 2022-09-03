@@ -30,9 +30,6 @@
 package uk.ac.man.cs.llvm.ir.module;
 
 import java.util.List;
-
-import com.oracle.truffle.llvm.runtime.LLVMLogger;
-
 import uk.ac.man.cs.llvm.ir.ConstantGenerator;
 import uk.ac.man.cs.llvm.ir.FunctionGenerator;
 import uk.ac.man.cs.llvm.ir.ModuleGenerator;
@@ -40,15 +37,9 @@ import uk.ac.man.cs.llvm.ir.types.Type;
 
 public enum ModuleVersion {
 
-    LLVM_3_2(ModuleV32::new, FunctionV32::new, ConstantsV32::new, MetadataV32::new),
-    LLVM_3_8(ModuleV38::new, FunctionV38::new, ConstantsV38::new, MetadataV38::new),
-    DEFAULT(Module::new, Function::new, Constants::new, Metadata::new);
-
-    @FunctionalInterface
-    private interface MetadataParser {
-
-        Metadata instantiate(Types types, List<Type> symbols);
-    }
+    LLVM_3_2(ModuleV32::new, FunctionV32::new, ConstantsV32::new),
+    LLVM_3_8(ModuleV38::new, FunctionV38::new, ConstantsV38::new),
+    DEFAULT(Module::new, Function::new, Constants::new);
 
     @FunctionalInterface
     private interface ConstantsParser {
@@ -74,28 +65,10 @@ public enum ModuleVersion {
 
     private final ConstantsParser constants;
 
-    private final MetadataParser metadata;
-
-    ModuleVersion(ModuleParser module, FunctionParser function, ConstantsParser constants, MetadataParser metadata) {
+    ModuleVersion(ModuleParser module, FunctionParser function, ConstantsParser constants) {
         this.module = module;
         this.function = function;
         this.constants = constants;
-        this.metadata = metadata;
-    }
-
-    public static ModuleVersion getModuleVersion(String versionStr) {
-        if (versionStr.contains("3.2")) {
-            return LLVM_3_2;
-        } else if (versionStr.contains("3.8")) {
-            return LLVM_3_8;
-        } else {
-            LLVMLogger.unconditionalInfo("Couldn't parse LLVM Version, use default one");
-            return DEFAULT;
-        }
-    }
-
-    public Metadata createMetadata(Types types, List<Type> symbols) {
-        return metadata.instantiate(types, symbols);
     }
 
     public Constants createConstants(Types types, List<Type> symbols, ConstantGenerator generator) {

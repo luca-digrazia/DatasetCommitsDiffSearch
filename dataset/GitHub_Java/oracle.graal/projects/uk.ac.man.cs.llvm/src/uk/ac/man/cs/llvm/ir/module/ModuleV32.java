@@ -60,10 +60,10 @@ public class ModuleV32 extends Module {
         Type type = types.get(args[i++]);
         boolean isConstant = (args[i++] & 1) == 1;
         int initialiser = (int) args[i++];
-        long linkage = args[i++];
+        i++; // Unused parameter
         int align = (int) args[i++];
 
-        generator.createGlobal(type, isConstant, initialiser, align, linkage);
+        generator.createVariable(type, isConstant, initialiser, align);
         symbols.add(type);
     }
 }

@@ -36,6 +36,7 @@ import uk.ac.man.cs.llvm.ir.InstructionGenerator;
 import uk.ac.man.cs.llvm.ir.model.elements.AllocateInstruction;
 import uk.ac.man.cs.llvm.ir.model.elements.BinaryOperationInstruction;
 import uk.ac.man.cs.llvm.ir.model.elements.BranchInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.Call;
 import uk.ac.man.cs.llvm.ir.model.elements.CallInstruction;
 import uk.ac.man.cs.llvm.ir.model.elements.CastInstruction;
 import uk.ac.man.cs.llvm.ir.model.elements.CompareInstruction;
@@ -58,8 +59,14 @@ import uk.ac.man.cs.llvm.ir.model.elements.SwitchOldInstruction;
 import uk.ac.man.cs.llvm.ir.model.elements.UnreachableInstruction;
 import uk.ac.man.cs.llvm.ir.model.elements.ValueInstruction;
 import uk.ac.man.cs.llvm.ir.model.elements.VoidCallInstruction;
+import uk.ac.man.cs.llvm.ir.model.enums.BinaryOperator;
+import uk.ac.man.cs.llvm.ir.model.enums.CastOperator;
+import uk.ac.man.cs.llvm.ir.model.enums.CompareOperator;
+import uk.ac.man.cs.llvm.ir.model.enums.Flag;
+import uk.ac.man.cs.llvm.ir.types.FloatingPointType;
 import uk.ac.man.cs.llvm.ir.types.MetaType;
 import uk.ac.man.cs.llvm.ir.types.Type;
+import uk.ac.man.cs.llvm.ir.types.VectorType;
 
 public final class InstructionBlock implements InstructionGenerator, ValueSymbol {
 
@@ -91,121 +98,232 @@ public final class InstructionBlock implements InstructionGenerator, ValueSymbol
 
     @Override
     public void createAllocation(Type type, int count, int align) {
-        addInstruction(AllocateInstruction.fromSymbols(function.getSymbols(), type, count, align));
+        addInstruction(new AllocateInstruction(
+                        type,
+                        function.getSymbols().getSymbol(count),
+                        align));
     }
 
     @Override
     public void createBinaryOperation(Type type, int opcode, int flags, int lhs, int rhs) {
-        addInstruction(BinaryOperationInstruction.fromSymbols(function.getSymbols(), type, opcode, flags, lhs, rhs));
+        boolean isFloatingPoint = type instanceof FloatingPointType || (type instanceof VectorType && ((VectorType) type).getElementType() instanceof FloatingPointType);
+
+        BinaryOperator operator = BinaryOperator.decode(opcode, isFloatingPoint);
+
+        BinaryOperationInstruction operation = new BinaryOperationInstruction(type, operator, Flag.decode(operator, flags));
+
+        operation.setLHS(function.getSymbols().getSymbol(lhs, operation));
+        operation.setRHS(function.getSymbols().getSymbol(rhs, operation));
+
+        addInstruction(operation);
     }
 
     @Override
     public void createBranch(int block) {
-        addInstruction(BranchInstruction.fromTarget(function.getBlock(block)));
+        addInstruction(new BranchInstruction(
+                        function.getBlock(block)));
     }
 
     @Override
     public void createBranch(int condition, int blockTrue, int blockFalse) {
-        addInstruction(ConditionalBranchInstruction.fromSymbols(function.getSymbols(), condition, function.getBlock(blockTrue), function.getBlock(blockFalse)));
+        addInstruction(new ConditionalBranchInstruction(
+                        function.getSymbols().getSymbol(condition),
+                        function.getBlock(blockTrue),
+                        function.getBlock(blockFalse)));
     }
 
     @Override
     public void createCall(Type type, int target, int[] arguments) {
+        Call call;
         if (type == MetaType.VOID) {
-            addInstruction(VoidCallInstruction.fromSymbols(function.getSymbols(), target, arguments));
+            call = new VoidCallInstruction(function.getSymbols().getSymbol(target));
         } else {
-            addInstruction(CallInstruction.fromSymbols(function.getSymbols(), type, target, arguments));
+            call = new CallInstruction(type, function.getSymbols().getSymbol(target));
         }
+
+        for (int i = 0; i < arguments.length; i++) {
+            call.addArgument(function.getSymbols().getSymbol(arguments[i], call));
+        }
+
+        addInstruction(call);
     }
 
     @Override
     public void createCast(Type type, int opcode, int value) {
-        addInstruction(CastInstruction.fromSymbols(function.getSymbols(), type, opcode, value));
+        CastInstruction cast = new CastInstruction(type, CastOperator.decode(opcode));
+
+        cast.setValue(function.getSymbols().getSymbol(value, cast));
+
+        addInstruction(cast);
     }
 
     @Override
     public void createCompare(Type type, int opcode, int lhs, int rhs) {
-        addInstruction(CompareInstruction.fromSymbols(function.getSymbols(), type, opcode, lhs, rhs));
+        CompareInstruction compare = new CompareInstruction(type, CompareOperator.decode(opcode));
+
+        compare.setLHS(function.getSymbols().getSymbol(lhs, compare));
+        compare.setRHS(function.getSymbols().getSymbol(rhs, compare));
+
+        addInstruction(compare);
     }
 
     @Override
     public void createExtractElement(Type type, int vector, int index) {
-        addInstruction(ExtractElementInstruction.fromSymbols(function.getSymbols(), type, vector, index));
+        addInstruction(new ExtractElementInstruction(
+                        type,
+                        function.getSymbols().getSymbol(vector),
+                        function.getSymbols().getSymbol(index)));
     }
 
     @Override
     public void createExtractValue(Type type, int aggregate, int index) {
-        addInstruction(ExtractValueInstruction.fromSymbols(function.getSymbols(), type, aggregate, index));
+        addInstruction(new ExtractValueInstruction(
+                        type,
+                        function.getSymbols().getSymbol(aggregate),
+                        index));
     }
 
     @Override
     public void createGetElementPointer(Type type, int pointer, int[] indices, boolean isInbounds) {
-        addInstruction(GetElementPointerInstruction.fromSymbols(function.getSymbols(), type, pointer, indices, isInbounds));
+        GetElementPointerInstruction gep = new GetElementPointerInstruction(type, isInbounds);
+
+        gep.setBasePointer(function.getSymbols().getSymbol(pointer, gep));
+        for (int i = 0; i < indices.length; i++) {
+            gep.addIndex(function.getSymbols().getSymbol(indices[i], gep));
+        }
+
+        addInstruction(gep);
     }
 
     @Override
     public void createIndirectBranch(int address, int[] successors) {
-        addInstruction(IndirectBranchInstruction.generate(function, address, successors));
+        InstructionBlock[] blocks = new InstructionBlock[successors.length];
+        for (int i = 0; i < successors.length; i++) {
+            blocks[i] = function.getBlock(successors[i]);
+        }
+        addInstruction(new IndirectBranchInstruction(
+                        function.getSymbols().getSymbol(address),
+                        blocks));
     }
 
     @Override
     public void createInsertElement(Type type, int vector, int index, int value) {
-        addInstruction(InsertElementInstruction.fromSymbols(function.getSymbols(), type, vector, index, value));
+        addInstruction(new InsertElementInstruction(
+                        type,
+                        function.getSymbols().getSymbol(vector),
+                        function.getSymbols().getSymbol(index),
+                        function.getSymbols().getSymbol(value)));
     }
 
     @Override
     public void createInsertValue(Type type, int aggregate, int index, int value) {
-        addInstruction(InsertValueInstruction.fromSymbols(function.getSymbols(), type, aggregate, index, value));
+        addInstruction(new InsertValueInstruction(
+                        type,
+                        function.getSymbols().getSymbol(aggregate),
+                        index,
+                        function.getSymbols().getSymbol(value)));
     }
 
     @Override
     public void createLoad(Type type, int source, int align, boolean isVolatile) {
-        addInstruction(LoadInstruction.fromSymbols(function.getSymbols(), type, source, align, isVolatile));
+        LoadInstruction load = new LoadInstruction(type, align, isVolatile);
+
+        load.setSource(function.getSymbols().getSymbol(source, load));
+
+        addInstruction(load);
     }
 
     @Override
     public void createPhi(Type type, int[] values, int[] blocks) {
-        addInstruction(PhiInstruction.generate(function, type, values, blocks));
+        PhiInstruction phi = new PhiInstruction(type);
+
+        for (int i = 0; i < values.length; i++) {
+            phi.addCase(
+                            function.getSymbols().getSymbol(values[i], phi),
+                            function.getBlock(blocks[i]));
+        }
+
+        addInstruction(phi);
     }
 
     @Override
     public void createReturn() {
-        addInstruction(ReturnInstruction.generate());
+        addInstruction(new ReturnInstruction());
     }
 
     @Override
     public void createReturn(int value) {
-        addInstruction(ReturnInstruction.generate(function.getSymbols(), value));
+        ReturnInstruction ret = new ReturnInstruction();
+
+        ret.setValue(function.getSymbols().getSymbol(value, ret));
+
+        addInstruction(ret);
     }
 
     @Override
     public void createSelect(Type type, int condition, int trueValue, int falseValue) {
-        addInstruction(SelectInstruction.fromSymbols(function.getSymbols(), type, condition, trueValue, falseValue));
+        SelectInstruction select = new SelectInstruction(type);
+
+        select.setCondition(function.getSymbols().getSymbol(condition, select));
+        select.setTrueValue(function.getSymbols().getSymbol(trueValue, select));
+        select.setFalseValue(function.getSymbols().getSymbol(falseValue, select));
+
+        addInstruction(select);
     }
 
     @Override
     public void createShuffleVector(Type type, int vector1, int vector2, int mask) {
-        addInstruction(ShuffleVectorInstruction.fromSymbols(function.getSymbols(), type, vector1, vector2, mask));
+        addInstruction(new ShuffleVectorInstruction(type,
+                        function.getSymbols().getSymbol(vector1),
+                        function.getSymbols().getSymbol(vector2),
+                        function.getSymbols().getSymbol(mask)));
     }
 
     @Override
     public void createStore(int destination, int source, int align, boolean isVolatile) {
-        addInstruction(StoreInstruction.fromSymbols(function.getSymbols(), destination, source, align, isVolatile));
+        StoreInstruction store = new StoreInstruction(align, isVolatile);
+
+        store.setDestination(function.getSymbols().getSymbol(destination, store));
+        store.setSource(function.getSymbols().getSymbol(source, store));
+
+        addInstruction(store);
     }
 
     @Override
     public void createSwitch(int condition, int defaultBlock, int[] caseValues, int[] caseBlocks) {
-        addInstruction(SwitchInstruction.generate(function, condition, defaultBlock, caseValues, caseBlocks));
+        Symbol[] values = new Symbol[caseValues.length];
+        InstructionBlock[] blocks = new InstructionBlock[caseBlocks.length];
+
+        for (int i = 0; i < values.length; i++) {
+            values[i] = function.getSymbols().getSymbol(caseValues[i]);
+            blocks[i] = function.getBlock(caseBlocks[i]);
+        }
+
+        addInstruction(new SwitchInstruction(
+                        function.getSymbols().getSymbol(condition),
+                        function.getBlock(defaultBlock),
+                        values,
+                        blocks));
     }
 
     @Override
     public void createSwitchOld(int condition, int defaultBlock, long[] caseConstants, int[] caseBlocks) {
-        addInstruction(SwitchOldInstruction.generate(function, condition, defaultBlock, caseConstants, caseBlocks));
+        InstructionBlock[] blocks = new InstructionBlock[caseBlocks.length];
+
+        for (int i = 0; i < blocks.length; i++) {
+            blocks[i] = function.getBlock(caseBlocks[i]);
+        }
+
+        addInstruction(new SwitchOldInstruction(
+                        function.getSymbols().getSymbol(condition),
+                        function.getBlock(defaultBlock),
+                        caseConstants,
+                        blocks));
     }
 
     @Override
     public void createUnreachable() {
-        addInstruction(UnreachableInstruction.generate());
+        addInstruction(new UnreachableInstruction());
     }
 
     @Override
@@ -241,10 +359,5 @@ public final class InstructionBlock implements InstructionGenerator, ValueSymbol
     @Override
     public void setName(String name) {
         this.name = name;
-    }
-
-    @Override
-    public String toString() {
-        return "InstructionBlock [function=" + function.getName() + ", blockIndex=" + blockIndex + ", instructionCount=" + instructions.size() + ", name=" + name + "]";
     }
 }
