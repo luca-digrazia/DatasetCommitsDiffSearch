@@ -275,7 +275,8 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                                 if (usageNodeClass.valueNumberable() && !usageNodeClass.isLeafNode()) {
                                     Node newNode = graph().findDuplicate(usage);
                                     if (newNode != null) {
-                                        usage.replaceAtUsagesAndDelete(newNode);
+                                        usage.replaceAtUsages(newNode);
+                                        usage.safeDelete();
                                     }
                                 }
                                 if (usage.isAlive()) {
