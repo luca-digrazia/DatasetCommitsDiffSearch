@@ -37,7 +37,9 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
@@ -47,8 +49,6 @@ import com.oracle.truffle.llvm.nodes.op.LLVMAddressCompareNodeGen.LLVMAddressNEQ
 import com.oracle.truffle.llvm.nodes.op.LLVMAddressCompareNodeGen.LLVMForeignEqualsNodeGen;
 import com.oracle.truffle.llvm.nodes.op.LLVMAddressCompareNodeGen.LLVMManagedEqualsNodeGen;
 import com.oracle.truffle.llvm.nodes.op.LLVMAddressCompareNodeGen.LLVMNativeEqualsNodeGen;
-import com.oracle.truffle.llvm.nodes.op.LLVMAddressCompareNodeGen.ManagedToComparableValueNodeGen;
-import com.oracle.truffle.llvm.nodes.op.LLVMAddressCompareNodeGen.NativeToComparableValueNodeGen;
 import com.oracle.truffle.llvm.nodes.op.LLVMAddressCompareNodeGen.ToComparableValueNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
@@ -56,6 +56,7 @@ import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -175,14 +176,24 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
         this.op = op;
     }
 
-    @ImportStatic(ForeignToLLVMType.class)
-    protected abstract static class ManagedToComparableValue extends Node {
+    @NodeChild(type = LLVMExpressionNode.class)
+    protected abstract static class ToComparableValue extends LLVMExpressionNode {
 
-        abstract LLVMAddress execute(Object obj);
+        protected abstract LLVMAddress executeWithTarget(Object v1);
 
         @Specialization
         protected LLVMAddress doAddress(long address) {
             return LLVMAddress.fromLong(address);
+        }
+
+        @Specialization
+        protected LLVMAddress doAddress(LLVMAddress address) {
+            return address;
+        }
+
+        @Specialization
+        protected LLVMAddress doLLVMGlobalVariableDescriptor(LLVMGlobalVariable address, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            return globalAccess.getNativeLocation(address);
         }
 
         @Specialization
@@ -194,9 +205,15 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
             }
         }
 
+        @Child private Node isNull = Message.IS_NULL.createNode();
+
         @Specialization
         protected LLVMAddress doLLVMTruffleObject(LLVMTruffleObject address) {
-            return LLVMAddress.fromLong(getHashCode(address.getObject()) + address.getOffset());
+            if (ForeignAccess.sendIsNull(isNull, address.getObject())) {
+                return LLVMAddress.fromLong(address.getOffset());
+            } else {
+                return LLVMAddress.fromLong(getHashCode(address.getObject()) + address.getOffset());
+            }
         }
 
         @TruffleBoundary
@@ -209,66 +226,20 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
             return LLVMAddress.fromLong(address.getFunctionPointer());
         }
 
+        @Child private ForeignToLLVM toLLVM = ForeignToLLVM.create(ForeignToLLVMType.I64);
+
         @Specialization
-        protected LLVMAddress doLLVMBoxedPrimitive(LLVMBoxedPrimitive address, @Cached("create(I64)") ForeignToLLVM toLLVM) {
+        protected LLVMAddress doLLVMBoxedPrimitive(LLVMBoxedPrimitive address) {
             return LLVMAddress.fromLong((long) toLLVM.executeWithTarget(address.getValue()));
         }
     }
 
-    protected abstract static class NativeToComparableValue extends Node {
-
-        protected abstract LLVMAddress execute(VirtualFrame frame, Object obj, LLVMObjectNativeLibrary lib);
-
-        @Specialization(guards = "lib.isPointer(frame, obj)")
-        protected LLVMAddress doPointer(VirtualFrame frame, Object obj, LLVMObjectNativeLibrary lib) {
-            try {
-                return LLVMAddress.fromLong(lib.asPointer(frame, obj));
-            } catch (InteropException ex) {
-                throw ex.raise();
-            }
-        }
-
-        @Specialization(guards = "!lib.isPointer(frame, obj)")
-        @SuppressWarnings("unused")
-        protected LLVMAddress doManaged(VirtualFrame frame, Object obj, LLVMObjectNativeLibrary lib,
-                        @Cached("createToComparable()") ManagedToComparableValue toComparable) {
-            return toComparable.execute(obj);
-        }
-
-        static ManagedToComparableValue createToComparable() {
-            return ManagedToComparableValueNodeGen.create();
-        }
-    }
-
-    protected abstract static class ToComparableValue extends Node {
-
-        protected abstract LLVMAddress execute(VirtualFrame frame, Object obj);
-
-        @Specialization(guards = "lib.guard(obj)")
-        protected LLVMAddress doNativeCached(VirtualFrame frame, Object obj,
-                        @Cached("createCached(obj)") LLVMObjectNativeLibrary lib,
-                        @Cached("createToComparable()") NativeToComparableValue toComparable) {
-            return doNative(frame, obj, lib, toComparable);
-        }
-
-        @Specialization(replaces = "doNativeCached", guards = "lib.guard(obj)")
-        protected LLVMAddress doNative(VirtualFrame frame, Object obj,
-                        @Cached("createGeneric()") LLVMObjectNativeLibrary lib,
-                        @Cached("createToComparable()") NativeToComparableValue toComparable) {
-            return toComparable.execute(frame, obj, lib);
-        }
-
-        static NativeToComparableValue createToComparable() {
-            return NativeToComparableValueNodeGen.create();
-        }
-    }
-
-    @Child private ToComparableValue convertVal1 = ToComparableValueNodeGen.create();
-    @Child private ToComparableValue convertVal2 = ToComparableValueNodeGen.create();
+    @Child private ToComparableValue convertVal1 = ToComparableValueNodeGen.create(null);
+    @Child private ToComparableValue convertVal2 = ToComparableValueNodeGen.create(null);
 
     @Specialization
-    public boolean doGenericCompare(VirtualFrame frame, Object val1, Object val2) {
-        return op.compare(convertVal1.execute(frame, val1), convertVal2.execute(frame, val2));
+    public boolean doGenericCompare(Object val1, Object val2) {
+        return op.compare(convertVal1.executeWithTarget(val1), convertVal2.executeWithTarget(val2));
     }
 
     @ImportStatic(JavaInterop.class)
