@@ -37,7 +37,6 @@ import com.oracle.graal.truffle.debug.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.impl.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.utilities.*;
@@ -55,7 +54,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     protected final CompilationPolicy compilationPolicy;
     private final OptimizedCallTarget sourceCallTarget;
     private final AtomicInteger callSitesKnown = new AtomicInteger(0);
-
     @CompilationFinal private Class<?>[] profiledArgumentTypes;
     @CompilationFinal private Assumption profiledArgumentTypesAssumption;
     @CompilationFinal private Class<?> profiledReturnType;
@@ -240,7 +238,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             // We are called and we are still in Truffle interpreter mode.
             interpreterCall();
         } else {
-            // We come here from compiled code
+            // We come here from compiled code (i.e., we have been inlined).
         }
 
         return callRoot(args);
@@ -301,12 +299,12 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     private void interpreterCall() {
         CompilerAsserts.neverPartOfCompilation();
-        if (isValid()) {
+        if (this.isValid()) {
             // Stubs were deoptimized => reinstall.
             this.runtime.reinstallStubs();
         } else {
             compilationProfile.reportInterpreterCall();
-            if (compilationPolicy.shouldCompile(compilationProfile, getCompilerOptions())) {
+            if (compilationPolicy.shouldCompile(compilationProfile)) {
                 compile();
             }
         }
@@ -478,16 +476,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         } catch (NoSuchMethodException | SecurityException e) {
             throw new GraalInternalError(e);
         }
-    }
-
-    private CompilerOptions getCompilerOptions() {
-        final ExecutionContext context = rootNode.getExecutionContext();
-
-        if (context == null) {
-            return DefaultCompilerOptions.INSTANCE;
-        }
-
-        return context.getCompilerOptions();
     }
 
 }
