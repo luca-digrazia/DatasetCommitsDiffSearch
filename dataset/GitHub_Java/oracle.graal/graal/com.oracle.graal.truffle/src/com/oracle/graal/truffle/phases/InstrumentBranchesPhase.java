@@ -57,33 +57,6 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaUtil;
 import jdk.vm.ci.meta.ResolvedJavaField;
 
-/**
- * Instruments {@link IfNode}s in the graph, by adding execution counters to the true and the false
- * branch of each {@link IfNode}. If this phase is enabled, the runtime outputs a summary of all the
- * compiled {@link IfNode}s and the execution count of their branches, when the program exits.
- *
- * The phase is enabled with the following flag:
- *
- * <pre>
- * -Dgraal.TruffleInstrumentBranches
- * </pre>
- *
- * The phase can be configured to only instrument the {@link IfNode}s in specific methods, by
- * providing the following method filter flag:
- *
- * <pre>
- * -Dgraal.TruffleInstrumentBranchesFilter
- * </pre>
- *
- * The flag:
- *
- * <pre>
- * -Dgraal.TruffleInstrumentBranchesPerInlineSite
- * </pre>
- *
- * decides whether to treat different inlining sites separately when tracking the execution counts
- * of an {@link IfNode}.
- */
 public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
 
     private static final String[] OMITTED_STACK_PATTERNS = new String[]{
@@ -107,11 +80,6 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
         } else {
             methodFilter = new MethodFilter[0];
         }
-    }
-
-    @Override
-    public float codeSizeIncrease() {
-        return 2.5f;
     }
 
     @Override
