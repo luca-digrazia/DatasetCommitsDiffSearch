@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,22 +24,10 @@ package com.oracle.graal.asm.test;
 
 import java.lang.reflect.Method;
 
-import org.junit.Assert;
-
-import com.oracle.graal.api.test.Graal;
-import com.oracle.graal.code.CompilationResult;
-import com.oracle.graal.code.DisassemblerProvider;
-import com.oracle.graal.compiler.target.Backend;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.runtime.RuntimeProvider;
-import com.oracle.graal.serviceprovider.GraalServices;
-import com.oracle.graal.test.GraalTest;
-
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.code.CompilationResult;
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.code.InvalidInstalledCodeException;
 import jdk.vm.ci.code.RegisterConfig;
@@ -48,12 +36,19 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.runtime.JVMCI;
 import jdk.vm.ci.runtime.JVMCIBackend;
+import jdk.vm.ci.service.Services;
+
+import org.junit.Assert;
+
+import com.oracle.graal.code.DisassemblerProvider;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.test.GraalTest;
 
 public abstract class AssemblerTest extends GraalTest {
 
     private final MetaAccessProvider metaAccess;
     protected final CodeCacheProvider codeCache;
-    private final Backend backend;
 
     public interface CodeGenTest {
         byte[] generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig, CallingConvention cc);
@@ -63,7 +58,6 @@ public abstract class AssemblerTest extends GraalTest {
         JVMCIBackend providers = JVMCI.getRuntime().getHostJVMCIBackend();
         this.metaAccess = providers.getMetaAccess();
         this.codeCache = providers.getCodeCache();
-        this.backend = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend();
     }
 
     public MetaAccessProvider getMetaAccess() {
@@ -75,7 +69,7 @@ public abstract class AssemblerTest extends GraalTest {
         ResolvedJavaMethod method = getMetaAccess().lookupJavaMethod(m);
         try (Scope s = Debug.scope("assembleMethod", method, codeCache)) {
             RegisterConfig registerConfig = codeCache.getRegisterConfig();
-            CallingConvention cc = backend.newLIRGenerationResult("", null, null, new StructuredGraph(method, AllowAssumptions.NO), null).getCallingConvention();
+            CallingConvention cc = CodeUtil.getCallingConvention(codeCache, CallingConvention.Type.JavaCallee, method, false);
 
             CompilationResult compResult = new CompilationResult();
             byte[] targetCode = test.generateCode(compResult, codeCache.getTarget(), registerConfig, cc);
@@ -83,9 +77,9 @@ public abstract class AssemblerTest extends GraalTest {
             compResult.setTotalFrameSize(0);
             compResult.close();
 
-            InstalledCode code = backend.addInstalledCode(method, compResult);
+            InstalledCode code = codeCache.addCode(method, compResult, null, null);
 
-            for (DisassemblerProvider dis : GraalServices.load(DisassemblerProvider.class)) {
+            for (DisassemblerProvider dis : Services.load(DisassemblerProvider.class)) {
                 String disasm1 = dis.disassembleCompiledCode(codeCache, compResult);
                 Assert.assertTrue(compResult.toString(), disasm1 == null || disasm1.length() > 0);
                 String disasm2 = dis.disassembleInstalledCode(codeCache, compResult, code);
