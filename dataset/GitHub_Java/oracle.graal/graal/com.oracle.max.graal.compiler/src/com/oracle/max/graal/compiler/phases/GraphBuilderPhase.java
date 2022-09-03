@@ -39,6 +39,7 @@ import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.ir.Deoptimize.DeoptAction;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
+import com.oracle.max.graal.compiler.util.LoopUtil.Loop;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
@@ -197,9 +198,15 @@ public final class GraphBuilderPhase extends Phase {
         addToWorkList(blockFromBci[0]);
         iterateAllBlocks();
 
+        List<Loop> loops = LoopUtil.computeLoops(graph);
+        NodeBitMap loopExits = graph.createNodeBitMap();
+        for (Loop loop : loops) {
+            loopExits.markAll(loop.exist());
+        }
+
         // remove Placeholders
         for (Node n : graph.getNodes()) {
-            if (n instanceof Placeholder) {
+            if (n instanceof Placeholder && !loopExits.isMarked(n)) {
                 Placeholder p = (Placeholder) n;
                 p.replace(p.next());
             }
@@ -380,12 +387,6 @@ public final class GraphBuilderPhase extends Phase {
     private FixedNode handleException(Value exceptionObject, int bci) {
         assert bci == Instruction.SYNCHRONIZATION_ENTRY_BCI || bci == bci() : "invalid bci";
 
-        if (GraalOptions.UseExceptionProbability && method.invocationCount() > GraalOptions.MatureInvocationCount) {
-            if (exceptionObject == null && method.exceptionProbability(bci) == 0) {
-                return null;
-            }
-        }
-
         RiExceptionHandler firstHandler = null;
         // join with all potential exception handlers
         if (exceptionHandlers != null) {
@@ -425,6 +426,8 @@ public final class GraphBuilderPhase extends Phase {
                     dispatchBlock = blockFromBci[handlerBCI];
                 }
             }
+            Placeholder p = new Placeholder(graph);
+            p.setStateAfter(frameState.duplicateWithoutStack(bci));
 
             Value currentExceptionObject;
             if (exceptionObject == null) {
@@ -437,10 +440,11 @@ public final class GraphBuilderPhase extends Phase {
             if (exceptionObject == null) {
                 ExceptionObject eObj = (ExceptionObject) currentExceptionObject;
                 eObj.setNext(target);
-                return eObj;
+                p.setNext(eObj);
             } else {
-                return target;
+                p.setNext(target);
             }
+            return p;
         }
         return null;
     }
@@ -953,7 +957,7 @@ public final class GraphBuilderPhase extends Phase {
             append(deoptimize);
             frameState.pushReturn(resultType, Constant.defaultForKind(resultType, graph));
         } else {
-            Invoke invoke = new Invoke(bci(), opcode, resultType.stackKind(), args, target, target.signature().returnType(method.holder()), graph);
+            Invoke invoke = new Invoke(bci(), opcode, resultType.stackKind(), args, target, target.signature().returnType(method.holder()), method.typeProfile(bci()), graph);
             Value result = appendWithBCI(invoke);
             invoke.setExceptionEdge(handleException(null, bci()));
             frameState.pushReturn(resultType, result);

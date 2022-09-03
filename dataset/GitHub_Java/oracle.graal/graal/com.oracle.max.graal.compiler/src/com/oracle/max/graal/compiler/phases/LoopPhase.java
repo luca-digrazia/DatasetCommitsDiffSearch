@@ -26,7 +26,6 @@ import java.util.*;
 
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.oracle.max.graal.compiler.util.LoopUtil.Loop;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
@@ -36,21 +35,17 @@ public class LoopPhase extends Phase {
 
     @Override
     protected void run(Graph graph) {
-        List<Loop> loops = LoopUtil.computeLoops(graph);
-        /*
-        for (Loop loop : loops) {
-            LoopUtil.peelLoop(loop);
-        }
-//        loops = LoopUtil.computeLoops(graph); // TODO (gd) avoid recomputing loops
-        */
-        for (Loop loop : loops) {
-            doLoopCounters(loop);
+        List<Node> nodes = new ArrayList<Node>(graph.getNodes());
+        for (Node n : nodes) {
+            if (n instanceof LoopBegin) {
+                doLoop((LoopBegin) n);
+            }
         }
     }
 
-    private void doLoopCounters(Loop loop) {
-        LoopBegin loopBegin = loop.loopBegin();
-        List<LoopCounter> counters = findLoopCounters(loopBegin, loop.nodes());
+    private void doLoop(LoopBegin loopBegin) {
+        NodeBitMap loopNodes = LoopUtil.computeLoopNodes(loopBegin);
+        List<LoopCounter> counters = findLoopCounters(loopBegin, loopNodes);
         mergeLoopCounters(counters, loopBegin);
     }
 
@@ -81,14 +76,14 @@ public class LoopPhase extends Phase {
                         IntegerSub sub = new IntegerSub(kind, c2.init(), c1.init(), graph);
                         IntegerAdd addStride = new IntegerAdd(kind, sub, c1.stride(), graph);
                         IntegerAdd add = new IntegerAdd(kind, c1, addStride, graph);
-                        Phi phi = new Phi(kind, loopBegin, graph); // (gd) assumes order on loopBegin preds - works in collab with graph builder
+                        Phi phi = new Phi(kind, loopBegin, graph); // TODO (gd) assumes order on loopBegin preds
                         phi.addInput(c2.init());
                         phi.addInput(add);
-                        c2.replaceAndDelete(phi);
+                        c2.replace(phi);
                     } else {
                         IntegerSub sub = new IntegerSub(kind, c2.init(), c1.init(), graph);
                         IntegerAdd add = new IntegerAdd(kind, c1, sub, graph);
-                        c2.replaceAndDelete(add);
+                        c2.replace(add);
                     }
                 }
             }
@@ -110,9 +105,6 @@ public class LoopPhase extends Phase {
                 if (phi.valueCount() == 2) {
                     Value backEdge = phi.valueAt(1);
                     Value init = phi.valueAt(0);
-                    if (loopNodes.isNew(init) || loopNodes.isNew(backEdge)) {
-                        continue;
-                    }
                     if (loopNodes.isMarked(init)) {
                         // try to reverse init/backEdge order
                         Value tmp = backEdge;
@@ -138,11 +130,11 @@ public class LoopPhase extends Phase {
                             useCounterAfterAdd = true;
                         }
                     }
-                    if (stride != null && !loopNodes.isNew(stride) &&  !loopNodes.isMarked(stride)) {
+                    if (stride != null && !loopNodes.isMarked(stride)) {
                         Graph graph = loopBegin.graph();
                         LoopCounter counter = new LoopCounter(init.kind, init, stride, loopBegin, graph);
                         counters.add(counter);
-                        phi.replaceAndDelete(counter);
+                        phi.replace(counter);
                         if (loopEndState != null) {
                             loopEndState.inputs().replace(backEdge, counter);
                         }

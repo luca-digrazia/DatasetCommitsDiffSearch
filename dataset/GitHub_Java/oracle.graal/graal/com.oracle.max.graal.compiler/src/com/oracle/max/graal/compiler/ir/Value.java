@@ -25,7 +25,6 @@ package com.oracle.max.graal.compiler.ir;
 import java.util.*;
 
 import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.gen.*;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
@@ -56,6 +55,14 @@ public abstract class Value extends Node {
         super(inputCount, successorCount, graph);
         assert kind == kind.stackKind() : kind + " != " + kind.stackKind();
         this.kind = kind;
+    }
+
+    ///////////////
+    // TODO: remove when Value class changes are completed
+
+    @Override
+    protected Object clone() throws CloneNotSupportedException {
+        throw new CloneNotSupportedException();
     }
 
     /**
@@ -153,21 +160,9 @@ public abstract class Value extends Node {
      *
      * @param v the visitor to accept
      */
-    public void accept(ValueVisitor v) {
-        throw new IllegalStateException("No visit method for this node");
-    }
+    public abstract void accept(ValueVisitor v);
 
     public abstract void print(LogStream out);
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public <T extends Op> T lookup(Class<T> clazz) {
-        if (clazz == LIRGenerator.LIRGeneratorOp.class) {
-            return (T) LIRGenerator.DELEGATE_TO_VALUE_VISITOR;
-        }
-        return super.lookup(clazz);
-    }
-
 
     @Override
     public Map<Object, Object> getDebugProperties() {
