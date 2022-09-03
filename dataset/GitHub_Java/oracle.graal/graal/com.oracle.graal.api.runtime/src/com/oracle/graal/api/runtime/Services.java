@@ -56,7 +56,7 @@ public class Services {
                 // Fall back to standard SerivceLoader
             }
         }
-        return ServiceLoader.load(service, Services.class.getClassLoader());
+        return ServiceLoader.loadInstalled(service);
     }
 
     private static native <S> S[] getServiceImpls(Class<?> service);

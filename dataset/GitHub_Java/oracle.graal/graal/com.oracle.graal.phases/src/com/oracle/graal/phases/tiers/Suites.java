@@ -83,27 +83,28 @@ public final class Suites {
             }
         }
 
-        if (nonBasicCount == 1) {
-            /*
-             * There is exactly one non-basic configuration. We use this one as default.
-             */
-            defaultConfiguration = nonBasic;
+        if (CompilerConfiguration.getValue().equals("")) {
+            if (nonBasicCount == 1) {
+                /*
+                 * There is exactly one non-basic configuration. We use this one as default.
+                 */
+                defaultConfiguration = nonBasic;
+            } else {
+                /*
+                 * There is either no extended configuration available, or more than one. In that
+                 * case, default to "basic".
+                 */
+                defaultConfiguration = basic;
+                if (defaultConfiguration == null) {
+                    throw new GraalInternalError("unable to find basic compiler configuration");
+                }
+            }
         } else {
-            /*
-             * There is either no extended configuration available, or more than one. In that case,
-             * default to "basic".
-             */
-            defaultConfiguration = basic;
+            defaultConfiguration = configurations.get(CompilerConfiguration.getValue());
             if (defaultConfiguration == null) {
-                throw new GraalInternalError("unable to find basic compiler configuration");
+                throw new GraalInternalError("unknown compiler configuration: " + CompilerConfiguration.getValue());
             }
         }
-    }
-
-    public Suites(PhaseSuite<HighTierContext> highTier, PhaseSuite<MidTierContext> midTier, PhaseSuite<LowTierContext> lowTier) {
-        this.highTier = highTier;
-        this.midTier = midTier;
-        this.lowTier = lowTier;
     }
 
     private Suites(CompilerConfiguration config) {
@@ -113,12 +114,7 @@ public final class Suites {
     }
 
     public static Suites createDefaultSuites() {
-        String selected = CompilerConfiguration.getValue();
-        if (selected.equals("")) {
-            return new Suites(defaultConfiguration);
-        } else {
-            return createSuites(selected);
-        }
+        return new Suites(defaultConfiguration);
     }
 
     public static Suites createSuites(String name) {
