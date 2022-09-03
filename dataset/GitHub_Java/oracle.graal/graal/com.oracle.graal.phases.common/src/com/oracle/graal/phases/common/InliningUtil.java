@@ -350,11 +350,10 @@ public class InliningUtil {
      * Represents an inlining opportunity where the compiler can statically determine a monomorphic
      * target method and therefore is able to determine the called method exactly.
      */
-    public static class ExactInlineInfo extends AbstractInlineInfo {
+    private static class ExactInlineInfo extends AbstractInlineInfo {
 
         protected final ResolvedJavaMethod concrete;
         private Inlineable inlineableElement;
-        private boolean suppressNullCheck;
 
         public ExactInlineInfo(Invoke invoke, ResolvedJavaMethod concrete) {
             super(invoke);
@@ -362,13 +361,9 @@ public class InliningUtil {
             assert concrete != null;
         }
 
-        public void suppressNullCheck() {
-            suppressNullCheck = true;
-        }
-
         @Override
         public void inline(MetaAccessProvider runtime, Assumptions assumptions, Replacements replacements) {
-            inline(invoke, concrete, inlineableElement, assumptions, !suppressNullCheck);
+            inline(invoke, concrete, inlineableElement, assumptions, true);
         }
 
         @Override
@@ -1025,7 +1020,7 @@ public class InliningUtil {
 
     /**
      * Determines if inlining is possible at the given invoke node.
-     *
+     * 
      * @param invoke the invoke that should be inlined
      * @return an instance of InlineInfo, or null if no inlining is possible at the given invoke
      */
@@ -1287,7 +1282,7 @@ public class InliningUtil {
 
     /**
      * Performs an actual inlining, thereby replacing the given invoke with the given inlineGraph.
-     *
+     * 
      * @param invoke the invoke that will be replaced
      * @param inlineGraph the graph that the invoke will be replaced with
      * @param receiverNullCheck true if a null check needs to be generated for non-static inlinings,
@@ -1339,7 +1334,7 @@ public class InliningUtil {
         assert invoke.asNode().successors().first() != null : invoke;
         assert invoke.asNode().predecessor() != null;
 
-        Map<Node, Node> duplicates = graph.addDuplicates(nodes, inlineGraph, inlineGraph.getNodeCount(), localReplacement);
+        Map<Node, Node> duplicates = graph.addDuplicates(nodes, localReplacement);
         FixedNode firstCFGNodeDuplicate = (FixedNode) duplicates.get(firstCFGNode);
         invoke.asNode().replaceAtPredecessor(firstCFGNodeDuplicate);
 
@@ -1382,8 +1377,7 @@ public class InliningUtil {
         if (stateAfter != null) {
             FrameState outerFrameState = null;
             int callerLockDepth = stateAfter.nestedLockDepth();
-            for (Node inlinedNode : inlineGraph.getNodes()) {
-                Node node = duplicates.get(inlinedNode);
+            for (Node node : duplicates.values()) {
                 if (node instanceof FrameState) {
                     FrameState frameState = (FrameState) node;
                     assert frameState.bci != FrameState.BEFORE_BCI : frameState;
@@ -1426,7 +1420,7 @@ public class InliningUtil {
         if (returnNode != null) {
             if (returnNode.result() instanceof LocalNode) {
                 returnValue = localReplacement.replacement(returnNode.result());
-            } else if (returnNode.result() != null) {
+            } else {
                 returnValue = duplicates.get(returnNode.result());
             }
             invoke.asNode().replaceAtUsages(returnValue);
