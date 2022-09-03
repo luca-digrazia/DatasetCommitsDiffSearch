@@ -22,49 +22,21 @@
  */
 package com.oracle.graal.printer;
 
-import static com.oracle.graal.compiler.common.GraalOptions.PrintGraphProbabilities;
-import static com.oracle.graal.compiler.common.GraalOptions.PrintIdealGraphSchedule;
-import static com.oracle.graal.graph.Edges.Type.Inputs;
-import static com.oracle.graal.graph.Edges.Type.Successors;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.graph.Edges.Type.*;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.WritableByteChannel;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.io.*;
+import java.nio.*;
+import java.nio.channels.*;
+import java.util.*;
 import java.util.Map.Entry;
-
-import com.oracle.graal.compiler.common.cfg.BlockMap;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.graph.CachedGraph;
-import com.oracle.graal.graph.Edges;
-import com.oracle.graal.graph.Graph;
-import com.oracle.graal.graph.InputEdges;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodeList;
-import com.oracle.graal.graph.NodeMap;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractEndNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.ControlSinkNode;
-import com.oracle.graal.nodes.ControlSplitNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.ProxyNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.VirtualState;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.cfg.ControlFlowGraph;
-import com.oracle.graal.phases.schedule.SchedulePhase;
-
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.Signature;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.phases.schedule.*;
 
 public class BinaryGraphPrinter implements GraphPrinter {
 
@@ -428,20 +400,6 @@ public class BinaryGraphPrinter implements GraphPrinter {
         return node.getId();
     }
 
-    private Object getBlockForNode(Node node, NodeMap<Block> nodeToBlocks) {
-        if (nodeToBlocks.isNew(node)) {
-            return "NEW (not in schedule)";
-        } else {
-            Block block = nodeToBlocks.get(node);
-            if (block != null) {
-                return block.getId();
-            } else if (node instanceof PhiNode) {
-                return getBlockForNode(((PhiNode) node).merge(), nodeToBlocks);
-            }
-        }
-        return null;
-    }
-
     private void writeNodes(Graph graph, NodeMap<Block> nodeToBlocks, ControlFlowGraph cfg) throws IOException {
         Map<Object, Object> props = new HashMap<>();
 
@@ -458,9 +416,13 @@ public class BinaryGraphPrinter implements GraphPrinter {
                 }
             }
             if (nodeToBlocks != null) {
-                Object block = getBlockForNode(node, nodeToBlocks);
-                if (block != null) {
-                    props.put("node-to-block", block);
+                if (nodeToBlocks.isNew(node)) {
+                    props.put("node-to-block", "NEW (not in schedule)");
+                } else {
+                    Block block = nodeToBlocks.get(node);
+                    if (block != null) {
+                        props.put("node-to-block", block.getId());
+                    }
                 }
             }
 
@@ -545,23 +507,9 @@ public class BinaryGraphPrinter implements GraphPrinter {
             writeInt(blocks.size());
             for (Block block : blocks) {
                 List<Node> nodes = blockToNodes.get(block);
-                List<Node> extraNodes = new LinkedList<>();
                 writeInt(block.getId());
+                writeInt(nodes.size());
                 for (Node node : nodes) {
-                    if (node instanceof AbstractMergeNode) {
-                        AbstractMergeNode merge = (AbstractMergeNode) node;
-                        for (PhiNode phi : merge.phis()) {
-                            if (!nodes.contains(phi)) {
-                                extraNodes.add(phi);
-                            }
-                        }
-                    }
-                }
-                writeInt(nodes.size() + extraNodes.size());
-                for (Node node : nodes) {
-                    writeInt(getNodeId(node));
-                }
-                for (Node node : extraNodes) {
                     writeInt(getNodeId(node));
                 }
                 writeInt(block.getSuccessors().size());
