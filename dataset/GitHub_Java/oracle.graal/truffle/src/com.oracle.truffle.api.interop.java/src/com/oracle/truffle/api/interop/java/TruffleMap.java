@@ -95,12 +95,9 @@ class TruffleMap<K, V> extends AbstractMap<K, V> {
         this.callWrite = map.callWrite;
     }
 
-    static <K, V> Map<K, V> create(Class<K> keyClass, Class<V> valueClass, Type valueType, TruffleObject foreignObject, Object languageContext, boolean hasKeys, boolean hasSize, boolean executable,
-                    boolean instantiable) {
+    static <K, V> Map<K, V> create(Class<K> keyClass, Class<V> valueClass, Type valueType, TruffleObject foreignObject, Object languageContext, boolean hasKeys, boolean hasSize, boolean executable) {
         if (executable) {
             return new ExecutableTruffleMap<>(keyClass, valueClass, valueType, foreignObject, languageContext, hasKeys, hasSize);
-        } else if (instantiable) {
-            return new InstantiableTruffleMap<>(keyClass, valueClass, valueType, foreignObject, languageContext, hasKeys, hasSize);
         } else {
             return new TruffleMap<>(keyClass, valueClass, valueType, foreignObject, languageContext, hasKeys, hasSize);
         }
@@ -286,30 +283,7 @@ class TruffleMap<K, V> extends AbstractMap<K, V> {
         }
     }
 
-    static final class InstantiableTruffleMap<K, V> extends TruffleMap<K, V> implements Function<Object[], Object> {
-
-        private CallTarget callExecute;
-
-        InstantiableTruffleMap(Class<K> keyClass, Class<V> valueClass, Type valueType, TruffleObject obj, Object languageContext, boolean hasKeys, boolean hasSize) {
-            super(keyClass, valueClass, valueType, obj, languageContext, hasKeys, hasSize);
-        }
-
-        @Override
-        public final Object apply(Object[] arguments) {
-            Object[] args = arguments == null ? JavaInteropReflect.EMPTY : arguments;
-            if (callExecute == null) {
-                callExecute = JavaInterop.lookupOrRegisterComputation(obj, null, InstantiateFromJava.class);
-                if (callExecute == null) {
-                    RootNode symbolNode = new InstantiateFromJava();
-                    callExecute = JavaInterop.lookupOrRegisterComputation(obj, symbolNode, InstantiateFromJava.class);
-                }
-            }
-            return callExecute.call(obj, args, Object.class, null, languageContext);
-        }
-
-    }
-
-    static class ExecutableTruffleMap<K, V> extends TruffleMap<K, V> implements Function<Object[], Object> {
+    static final class ExecutableTruffleMap<K, V> extends TruffleMap<K, V> implements Function<Object[], Object> {
         private CallTarget callExecute;
 
         ExecutableTruffleMap(Class<K> keyClass, Class<V> valueClass, Type valueType, TruffleObject obj, Object languageContext, boolean hasKeys, boolean hasSize) {
@@ -317,7 +291,7 @@ class TruffleMap<K, V> extends AbstractMap<K, V> {
         }
 
         @Override
-        public final Object apply(Object[] arguments) {
+        public Object apply(Object[] arguments) {
             Object[] args = arguments == null ? JavaInteropReflect.EMPTY : arguments;
             if (callExecute == null) {
                 callExecute = JavaInterop.lookupOrRegisterComputation(obj, null, ExecuteFunctionFromJava.class);
@@ -328,7 +302,6 @@ class TruffleMap<K, V> extends AbstractMap<K, V> {
             }
             return callExecute.call(obj, args, Object.class, null, languageContext);
         }
-
     }
 
     private static final class MapNode extends RootNode {
