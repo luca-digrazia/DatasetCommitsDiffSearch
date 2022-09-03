@@ -27,7 +27,6 @@ import static com.oracle.graal.compiler.GraalCompiler.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.nodes.ConstantNode.*;
 
-import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.atomic.*;
@@ -45,7 +44,6 @@ import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.GraalCompiler.Request;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.remote.*;
-import com.oracle.graal.compiler.common.remote.Context.Mode;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
@@ -684,96 +682,26 @@ public abstract class GraalCompilerTest extends GraalTest {
      */
     private static final boolean TEST_REPLAY = Boolean.getBoolean("graal.testReplay");
 
-    /**
-     * Directory into which tests can dump content useful in debugging test failures.
-     */
-    private static final File OUTPUT_DIR = new File(System.getProperty("graal.test.output"), "testOutput");
+    protected CompilationResult replayCompile(ResolvedJavaMethod installedCodeOwner, StructuredGraph graph) {
 
-    protected static File getOutputDir() {
-        if (!OUTPUT_DIR.exists()) {
-            OUTPUT_DIR.mkdirs();
-        }
-        if (!OUTPUT_DIR.exists()) {
-            throw new GraalInternalError("Could not create test output directory: %s", OUTPUT_DIR.getAbsolutePath());
-        }
-        return OUTPUT_DIR;
-    }
+        StructuredGraph graphToCompile = graph == null ? parseForCompile(installedCodeOwner) : graph;
+        lastCompiledGraph = graphToCompile;
 
-    protected String dissasembleToFile(CompilationResult original, ResolvedJavaMethod installedCodeOwner, String fileSuffix) {
-        String dis = getCodeCache().disassemble(original, null);
-        File disFile = new File(getOutputDir(), installedCodeOwner.format("%H.%n_%p").replace(", ", "__") + "." + fileSuffix);
-        try (PrintStream ps = new PrintStream(new FileOutputStream(disFile))) {
-            ps.println(dis);
-            return disFile.getAbsolutePath();
-        } catch (IOException e) {
-            return null;
-        }
-    }
-
-    protected void assertCompilationResultsEqual(Context c, String prefix, CompilationResult original, CompilationResult derived, ResolvedJavaMethod installedCodeOwner) {
-        if (!derived.equals(original)) {
-            Mode mode = c.getMode();
-            // Temporarily force capturing mode as dumping/printing/disassembling
-            // may need to execute proxy methods that have not yet been executed
-            c.setMode(Mode.Capturing);
+        CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graphToCompile.method(), false);
+        try (Context c = new Context(); Debug.Scope s = Debug.scope("ReplayCompiling", new DebugDumpScope("REPLAY", true))) {
             try {
-                String originalDisFile = dissasembleToFile(original, installedCodeOwner, "original");
-                String derivedDisFile = dissasembleToFile(derived, installedCodeOwner, "derived");
-                String message = String.format("%s compilation result differs from original compilation result", prefix);
-                if (originalDisFile != null && derivedDisFile != null) {
-                    message += String.format(" [diff %s %s]", originalDisFile, derivedDisFile);
-                }
-                Assert.fail(message);
-            } finally {
-                c.setMode(mode);
+                Request<CompilationResult> request = new GraalCompiler.Request<>(graphToCompile, null, cc, installedCodeOwner, getProviders(), getBackend(), getCodeCache().getTarget(), null,
+                                getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graphToCompile), getSpeculationLog(), getSuites(), new CompilationResult(),
+                                CompilationResultBuilderFactory.Default);
+
+                request = c.get(request);
+                return GraalCompiler.compile(request);
+            } catch (Throwable e) {
+                e.printStackTrace();
+                throw e;
             }
-        }
-    }
-
-    protected void testRecompile(Context c, Mode mode, CompilationResult originalResultInContext, ResolvedJavaMethod installedCodeOwner) {
-        try (Debug.Scope s = Debug.scope(mode.name(), new DebugDumpScope(mode.name(), true))) {
-
-            StructuredGraph graphToCompile = parseForCompile(installedCodeOwner);
-            lastCompiledGraph = graphToCompile;
-
-            CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graphToCompile.method(), false);
-            Request<CompilationResult> request = c.get(new GraalCompiler.Request<>(graphToCompile, null, cc, installedCodeOwner, getProviders(), getBackend(), getCodeCache().getTarget(), null,
-                            getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graphToCompile), getSpeculationLog(), getSuites(), new CompilationResult(),
-                            CompilationResultBuilderFactory.Default));
-            assertCompilationResultsEqual(c, mode.name(), originalResultInContext, GraalCompiler.compile(request), installedCodeOwner);
         } catch (Throwable e) {
             throw Debug.handle(e);
-        }
-    }
-
-    protected void testReplayCompile(ResolvedJavaMethod installedCodeOwner) {
-        CompilationResult originalResult;
-
-        // Repeat the compilation without a context to account for any side-effects the
-        // initial compilation may have had. For example, if dumping was enabled then
-        // the dumping code may have changed profiles in methods that are inlined
-        // by the test method being compiled.
-        try (Debug.Scope s = Debug.scope("Repeating", new DebugDumpScope("Repeating", true))) {
-            StructuredGraph graphToCompile = parseForCompile(installedCodeOwner);
-            lastCompiledGraph = graphToCompile;
-            CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graphToCompile.method(), false);
-            originalResult = GraalCompiler.compileGraph(graphToCompile, null, cc, installedCodeOwner, getProviders(), getBackend(), getCodeCache().getTarget(), null, getDefaultGraphBuilderSuite(),
-                            OptimisticOptimizations.ALL, getProfilingInfo(graphToCompile), getSpeculationLog(), getSuites(), new CompilationResult(), CompilationResultBuilderFactory.Default);
-        } catch (Throwable e) {
-            throw Debug.handle(e);
-        }
-
-        try (Context c = new Context()) {
-            // Need to use an 'in context' copy of the original result when comparing for
-            // equality against other 'in context' results so that proxies are compared
-            // against proxies
-            CompilationResult originalResultInContext = c.get(originalResult);
-
-            // Capturing compilation
-            testRecompile(c, Mode.Capturing, originalResultInContext, installedCodeOwner);
-
-            // Replay compilation
-            testRecompile(c, Mode.Replaying, originalResultInContext, installedCodeOwner);
         }
     }
 
@@ -793,7 +721,7 @@ public abstract class GraalCompilerTest extends GraalTest {
                         OptimisticOptimizations.ALL, getProfilingInfo(graphToCompile), getSpeculationLog(), getSuites(), new CompilationResult(), CompilationResultBuilderFactory.Default);
 
         if (TEST_REPLAY && graph == null) {
-            testReplayCompile(installedCodeOwner);
+            replayCompile(installedCodeOwner, null);
         }
         return res;
     }
