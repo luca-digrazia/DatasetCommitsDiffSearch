@@ -26,8 +26,6 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.compiler.util.*;
@@ -38,6 +36,8 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 
 public class InliningPhase extends Phase implements InliningCallback {
@@ -47,13 +47,13 @@ public class InliningPhase extends Phase implements InliningCallback {
      * - honor the result of overrideInliningDecision(0, caller, invoke.bci, method, true);
      */
 
-    private final TargetDescription target;
-    private final ExtendedRiRuntime runtime;
+    private final CiTarget target;
+    private final GraalRuntime runtime;
 
     private final Collection<? extends Invoke> hints;
 
     private final PriorityQueue<InlineInfo> inlineCandidates = new PriorityQueue<>();
-    private Assumptions assumptions;
+    private CiAssumptions assumptions;
 
     private final PhasePlan plan;
     private final RiGraphCache cache;
@@ -66,7 +66,7 @@ public class InliningPhase extends Phase implements InliningCallback {
     private static final DebugMetric metricInliningConsidered = Debug.metric("InliningConsidered");
     private static final DebugMetric metricInliningStoppedByMaxDesiredSize = Debug.metric("InliningStoppedByMaxDesiredSize");
 
-    public InliningPhase(TargetDescription target, ExtendedRiRuntime runtime, Collection<? extends Invoke> hints, Assumptions assumptions, RiGraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
+    public InliningPhase(CiTarget target, GraalRuntime runtime, Collection<? extends Invoke> hints, CiAssumptions assumptions, RiGraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
         this.target = target;
         this.runtime = runtime;
         this.hints = hints;
@@ -91,17 +91,12 @@ public class InliningPhase extends Phase implements InliningCallback {
         }
 
         while (!inlineCandidates.isEmpty() && graph.getNodeCount() < GraalOptions.MaximumDesiredSize) {
-            InlineInfo candidate = inlineCandidates.remove();
-            if (!candidate.invoke.node().isAlive()) {
-                continue;
-            }
-            // refresh infos
-            final InlineInfo info = InliningUtil.getInlineInfo(candidate.invoke, candidate.level, runtime, assumptions, this, optimisticOpts);
+            final InlineInfo info = inlineCandidates.remove();
 
             boolean inline = Debug.scope("InliningDecisions", new Callable<Boolean>() {
                 @Override
                 public Boolean call() throws Exception {
-                    return info != null && inliningPolicy.isWorthInlining(graph, info);
+                    return info.invoke.node().isAlive() && inliningPolicy.isWorthInlining(graph, info);
                 }
             });
 
@@ -119,7 +114,7 @@ public class InliningPhase extends Phase implements InliningCallback {
 //                        new IntrinsificationPhase(runtime).apply(graph);
 //                    }
                     metricInliningPerformed.increment();
-                } catch (BailoutException bailout) {
+                } catch (CiBailout bailout) {
                     // TODO determine if we should really bail out of the whole compilation.
                     throw bailout;
                 } catch (AssertionError e) {
@@ -176,14 +171,14 @@ public class InliningPhase extends Phase implements InliningCallback {
         }
     }
 
-    public static final Map<JavaMethod, Integer> parsedMethods = new HashMap<>();
+    public static final Map<RiMethod, Integer> parsedMethods = new HashMap<>();
 
 
 
     private static final DebugMetric metricInliningRuns = Debug.metric("Runs");
 
     @Override
-    public StructuredGraph buildGraph(final ResolvedJavaMethod method) {
+    public StructuredGraph buildGraph(final RiResolvedMethod method) {
         final StructuredGraph newGraph = new StructuredGraph(method);
 
         return Debug.scope("buildInlineGraph", this, new Callable<StructuredGraph>() {
@@ -213,9 +208,6 @@ public class InliningPhase extends Phase implements InliningCallback {
                 if (GraalOptions.Intrinsify) {
                     new IntrinsificationPhase(runtime).apply(newGraph);
                 }
-                if (GraalOptions.CullFrameStates) {
-                    new CullFrameStatesPhase().apply(newGraph);
-                }
                 if (GraalOptions.CacheGraphs && cache != null) {
                     cache.put(newGraph);
                 }
@@ -225,7 +217,7 @@ public class InliningPhase extends Phase implements InliningCallback {
     }
 
     @Override
-    public double inliningWeight(ResolvedJavaMethod caller, ResolvedJavaMethod method, Invoke invoke) {
+    public double inliningWeight(RiResolvedMethod caller, RiResolvedMethod method, Invoke invoke) {
         boolean preferred = hints != null && hints.contains(invoke);
         return weightComputationPolicy.computeWeight(caller, method, invoke, preferred);
     }
@@ -250,12 +242,12 @@ public class InliningPhase extends Phase implements InliningCallback {
 
 
     @Override
-    public void recordConcreteMethodAssumption(ResolvedJavaMethod method, ResolvedJavaType context, ResolvedJavaMethod impl) {
+    public void recordConcreteMethodAssumption(RiResolvedMethod method, RiResolvedType context, RiResolvedMethod impl) {
         assumptions.recordConcreteMethod(method, context, impl);
     }
 
     @Override
-    public void recordMethodContentsAssumption(ResolvedJavaMethod method) {
+    public void recordMethodContentsAssumption(RiResolvedMethod method) {
         if (assumptions != null) {
             assumptions.recordMethodContents(method);
         }
@@ -368,9 +360,9 @@ public class InliningPhase extends Phase implements InliningCallback {
 
             double maxSize = GraalOptions.MaximumGreedyInlineSize;
             if (GraalOptions.InliningBonusPerTransferredValue != 0) {
-                Signature signature = info.invoke.callTarget().targetMethod().signature();
+                RiSignature signature = info.invoke.callTarget().targetMethod().signature();
                 int transferredValues = signature.argumentCount(!Modifier.isStatic(info.invoke.callTarget().targetMethod().accessFlags()));
-                if (signature.returnKind() != Kind.Void) {
+                if (signature.returnKind(false) != CiKind.Void) {
                     transferredValues++;
                 }
                 maxSize += transferredValues * GraalOptions.InliningBonusPerTransferredValue;
@@ -403,12 +395,12 @@ public class InliningPhase extends Phase implements InliningCallback {
 
 
     private interface WeightComputationPolicy {
-        double computeWeight(ResolvedJavaMethod caller, ResolvedJavaMethod method, Invoke invoke, boolean preferredInvoke);
+        double computeWeight(RiResolvedMethod caller, RiResolvedMethod method, Invoke invoke, boolean preferredInvoke);
     }
 
     private static class BytecodeSizeBasedWeightComputationPolicy implements WeightComputationPolicy {
         @Override
-        public double computeWeight(ResolvedJavaMethod caller, ResolvedJavaMethod method, Invoke invoke, boolean preferredInvoke) {
+        public double computeWeight(RiResolvedMethod caller, RiResolvedMethod method, Invoke invoke, boolean preferredInvoke) {
             double codeSize = method.codeSize();
             if (preferredInvoke) {
                 codeSize = codeSize / GraalOptions.BoostInliningForEscapeAnalysis;
@@ -419,7 +411,7 @@ public class InliningPhase extends Phase implements InliningCallback {
 
     private static class ComplexityBasedWeightComputationPolicy implements WeightComputationPolicy {
         @Override
-        public double computeWeight(ResolvedJavaMethod caller, ResolvedJavaMethod method, Invoke invoke, boolean preferredInvoke) {
+        public double computeWeight(RiResolvedMethod caller, RiResolvedMethod method, Invoke invoke, boolean preferredInvoke) {
             double complexity = method.compilationComplexity();
             if (preferredInvoke) {
                 complexity = complexity / GraalOptions.BoostInliningForEscapeAnalysis;
