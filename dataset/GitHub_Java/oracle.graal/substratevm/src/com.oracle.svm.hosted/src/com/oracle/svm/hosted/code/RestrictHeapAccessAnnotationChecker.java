@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -46,10 +44,9 @@ import org.graalvm.nativeimage.ImageSingletons;
 
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.svm.core.annotate.RestrictHeapAccess.Access;
-import com.oracle.svm.core.heap.RestrictHeapAccessCallees;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.util.UserError;
-import com.oracle.svm.hosted.code.RestrictHeapAccessCalleesImpl.RestrictionInfo;
+import com.oracle.svm.hosted.code.RestrictHeapAccessCallees.RestrictionInfo;
 import com.oracle.svm.hosted.meta.HostedMethod;
 import com.oracle.svm.hosted.meta.HostedUniverse;
 
@@ -123,11 +120,11 @@ public final class RestrictHeapAccessAnnotationChecker {
     static class RestrictHeapAccessWarningVisitor {
 
         private final HostedUniverse universe;
-        private final RestrictHeapAccessCalleesImpl restrictHeapAccessCallees;
+        private final RestrictHeapAccessCallees restrictHeapAccessCallees;
 
         RestrictHeapAccessWarningVisitor(HostedUniverse universe) {
             this.universe = universe;
-            this.restrictHeapAccessCallees = (RestrictHeapAccessCalleesImpl) ImageSingletons.lookup(RestrictHeapAccessCallees.class);
+            this.restrictHeapAccessCallees = ImageSingletons.lookup(RestrictHeapAccessCallees.class);
         }
 
         @SuppressWarnings("try")
