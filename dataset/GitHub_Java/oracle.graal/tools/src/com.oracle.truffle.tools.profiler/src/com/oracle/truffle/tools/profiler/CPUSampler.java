@@ -263,6 +263,20 @@ public final class CPUSampler implements Closeable {
     /**
      * Finds {@link CPUSampler} associated with given engine.
      *
+     * @param engine the engine to find debugger for
+     * @return an instance of associated {@link CPUSampler}
+     * @since 0.30
+     * @deprecated use {@link #find(Engine)} instead
+     */
+    @Deprecated
+    @SuppressWarnings("deprecation")
+    public static CPUSampler find(com.oracle.truffle.api.vm.PolyglotEngine engine) {
+        return CPUSamplerInstrument.getSampler(engine);
+    }
+
+    /**
+     * Finds {@link CPUSampler} associated with given engine.
+     *
      * @since 1.0
      */
     public static CPUSampler find(Engine engine) {
@@ -377,7 +391,7 @@ public final class CPUSampler implements Closeable {
      * @param delaySamplingUntilNonInternalLangInit Enable or disable this option.
      * @since 0.31
      */
-    public synchronized void setDelaySamplingUntilNonInternalLangInit(boolean delaySamplingUntilNonInternalLangInit) {
+    public void setDelaySamplingUntilNonInternalLangInit(boolean delaySamplingUntilNonInternalLangInit) {
         verifyConfigAllowed();
         this.delaySamplingUntilNonInternalLangInit = delaySamplingUntilNonInternalLangInit;
     }
@@ -527,7 +541,7 @@ public final class CPUSampler implements Closeable {
      *
      * @since 0.30
      */
-    public synchronized void setGatherSelfHitTimes(boolean gatherSelfHitTimes) {
+    public void setGatherSelfHitTimes(boolean gatherSelfHitTimes) {
         verifyConfigAllowed();
         this.gatherSelfHitTimes = gatherSelfHitTimes;
     }
