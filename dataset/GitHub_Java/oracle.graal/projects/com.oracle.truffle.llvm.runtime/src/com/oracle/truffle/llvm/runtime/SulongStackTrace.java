@@ -89,14 +89,6 @@ public final class SulongStackTrace {
             appendToStackTrace(sb);
             return sb.toString();
         }
-
-        public String getLineNumber() {
-            if (lineNumber == -1) {
-                return "N/A";
-            } else {
-                return String.valueOf(lineNumber);
-            }
-        }
     }
 
     public void addStackTraceElement(String sourceFunctionName, String sourceFileName, String irFunctionName, String irSourceName, String irBlock, int line, int column) {

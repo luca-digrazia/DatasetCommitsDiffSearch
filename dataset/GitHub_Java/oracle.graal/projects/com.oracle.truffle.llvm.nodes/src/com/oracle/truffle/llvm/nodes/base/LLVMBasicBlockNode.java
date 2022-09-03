@@ -29,8 +29,6 @@
  */
 package com.oracle.truffle.llvm.nodes.base;
 
-import java.io.PrintStream;
-
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -42,11 +40,12 @@ import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.nodes.func.LLVMFunctionStartNode;
+import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.SulongRuntimeException;
 import com.oracle.truffle.llvm.runtime.SulongStackTrace;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
+import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 
 /**
  * This node represents a basic block in LLVM. The node contains both sequential statements which do
@@ -58,6 +57,7 @@ import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 public class LLVMBasicBlockNode extends LLVMExpressionNode {
 
     public static final int RETURN_FROM_FUNCTION = -1;
+    private static final boolean TRACE = !LLVMLogger.TARGET_NONE.equals(LLVMOptions.DEBUG.traceExecution());
 
     @Children private final LLVMExpressionNode[] statements;
     @Child public LLVMControlFlowNode termInstruction;
@@ -89,7 +89,7 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
         for (int i = 0; i < statements.length; i++) {
             LLVMExpressionNode statement = statements[i];
             try {
-                if (traceEnabled()) {
+                if (TRACE) {
                     trace(statement);
                 }
                 statement.executeGeneric(frame);
@@ -102,7 +102,7 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
                 throw e;
             } catch (Throwable t) {
                 CompilerDirectives.transferToInterpreter();
-                final SulongStackTrace stackTrace = new SulongStackTrace(t.getMessage());
+                final SulongStackTrace stackTrace = new SulongStackTrace();
                 fillStackTrace(stackTrace, i);
                 throw new SulongRuntimeException(t, stackTrace);
             }
@@ -139,30 +139,9 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
         return blockName;
     }
 
-    @CompilationFinal private boolean traceEnabledFlag;
-    @CompilationFinal private PrintStream traceStream;
-
-    private boolean traceEnabled() {
-        if (traceStream == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            traceStream = SulongEngineOption.getStream(getContext().getEnv().getOptions().get(SulongEngineOption.DEBUG));
-            traceEnabledFlag = SulongEngineOption.isTrue(getContext().getEnv().getOptions().get(SulongEngineOption.DEBUG));
-        }
-        return traceEnabledFlag;
-    }
-
-    private PrintStream traceStream() {
-        if (traceStream == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            traceStream = SulongEngineOption.getStream(getContext().getEnv().getOptions().get(SulongEngineOption.DEBUG));
-            traceEnabledFlag = SulongEngineOption.isTrue(getContext().getEnv().getOptions().get(SulongEngineOption.DEBUG));
-        }
-        return traceStream;
-    }
-
     @TruffleBoundary
-    private void trace(LLVMExpressionNode statement) {
-        traceStream().println(("[sulong] " + statement.getSourceDescription()));
+    private static void trace(LLVMExpressionNode statement) {
+        LLVMLogger.print(LLVMOptions.DEBUG.traceExecution()).accept(("[sulong] " + statement.getSourceDescription()));
     }
 
     @Override

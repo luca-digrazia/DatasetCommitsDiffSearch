@@ -47,7 +47,6 @@ import com.oracle.truffle.llvm.parser.model.globals.GlobalAlias;
 import com.oracle.truffle.llvm.parser.model.globals.GlobalConstant;
 import com.oracle.truffle.llvm.parser.model.globals.GlobalVariable;
 import com.oracle.truffle.llvm.parser.model.visitors.ModelVisitor;
-import com.oracle.truffle.llvm.runtime.LLVMException;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.LazyToTruffleConverter;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -113,14 +112,17 @@ final class LLVMModelVisitor implements ModelVisitor {
 
             FrameDescriptor frame = visitor.getStack().getFrame(method.getName());
 
-            final LLVMLifetimeAnalysis lifetimes = LLVMLifetimeAnalysis.getResult(method, frame, visitor.getPhis().getPhiMap(method.getName()));
-            LLVMExpressionNode body = visitor.createFunction(method, frame.findFrameSlot(LLVMException.FRAME_SLOT_ID), lifetimes);
+            List<LLVMExpressionNode> parameters = visitor.createParameters(frame, method);
 
-            List<LLVMExpressionNode> copyArgumentsToFrame = visitor.copyArgumentsToFrame(frame, method);
-            LLVMExpressionNode[] copyArgumentsToFrameArray = copyArgumentsToFrame.toArray(new LLVMExpressionNode[copyArgumentsToFrame.size()]);
+            final LLVMLifetimeAnalysis lifetimes = LLVMLifetimeAnalysis.getResult(method, frame, visitor.getPhis().getPhiMap(method.getName()));
+
+            LLVMExpressionNode body = visitor.createFunction(method, lifetimes);
+
+            LLVMExpressionNode[] beforeFunction = parameters.toArray(new LLVMExpressionNode[parameters.size()]);
+            LLVMExpressionNode[] afterFunction = new LLVMExpressionNode[0];
 
             final SourceSection sourceSection = visitor.getSourceSection(method);
-            RootNode rootNode = visitor.getNodeFactory().createFunctionStartNode(visitor, body, copyArgumentsToFrameArray, sourceSection, frame, method, visitor.getSource());
+            RootNode rootNode = visitor.getNodeFactory().createFunctionStartNode(visitor, body, beforeFunction, afterFunction, sourceSection, frame, method, visitor.getSource());
 
             final String astPrintTarget = LLVMOptions.DEBUG.printFunctionASTs();
             if (LLVMLogger.TARGET_STDOUT.equals(astPrintTarget) || LLVMLogger.TARGET_ANY.equals(astPrintTarget)) {
