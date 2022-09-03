@@ -49,8 +49,8 @@ import com.oracle.truffle.llvm.nodes.control.LLVMConditionalBranchNode;
 import com.oracle.truffle.llvm.nodes.control.LLVMDispatchBasicBlockNode;
 import com.oracle.truffle.llvm.nodes.control.LLVMIndirectBranchNode;
 import com.oracle.truffle.llvm.nodes.control.LLVMRetNodeFactory.LLVMVoidReturnNodeGen;
-import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI16SwitchNode;
 import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI1SwitchNode;
+import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI16SwitchNode;
 import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI32SwitchNode;
 import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI64SwitchNode;
 import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI8SwitchNode;
@@ -62,9 +62,9 @@ import com.oracle.truffle.llvm.nodes.func.LLVMInlineAssemblyRootNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMLandingpadNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMResumeNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMTypeIdForExceptionNode;
-import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMCMathsIntrinsicsFactory;
 import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMFAbsNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMPowNodeGen;
+import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMSqrtNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleGetArgNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMAssumeNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMByteSwapFactory.LLVMByteSwapI16NodeGen;
@@ -88,6 +88,8 @@ import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMStackRestoreNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMStackSaveNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMTrapNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMComplexDivSC;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMCopySignFactory.LLVMCopySignDoubleFactory;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMCopySignFactory.LLVMCopySignFloatFactory;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMSAddWithOverflowFactory.GCCAddWithOverflowNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMSAddWithOverflowFactory.LLVMSAddWithOverflowI16NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMSAddWithOverflowFactory.LLVMSAddWithOverflowI32NodeGen;
@@ -103,19 +105,15 @@ import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMSSubWithOverflowF
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMSSubWithOverflowFactory.LLVMSSubWithOverflowI32NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMSSubWithOverflowFactory.LLVMSSubWithOverflowI64NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMSSubWithOverflowFactory.LLVMSSubWithOverflowI8NodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUAddWithOverflowFactory.LLVMUAddWithOverflowAndCarryI16NodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUAddWithOverflowFactory.LLVMUAddWithOverflowAndCarryI32NodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUAddWithOverflowFactory.LLVMUAddWithOverflowAndCarryI64NodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUAddWithOverflowFactory.LLVMUAddWithOverflowAndCarryI8NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUAddWithOverflowFactory.LLVMUAddWithOverflowI16NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUAddWithOverflowFactory.LLVMUAddWithOverflowI32NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUAddWithOverflowFactory.LLVMUAddWithOverflowI64NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUAddWithOverflowFactory.LLVMUAddWithOverflowI8NodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUMulWithOverflowFactory.GCCUMulWithOverflowNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUMulWithOverflowFactory.LLVMUMulWithOverflowI16NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUMulWithOverflowFactory.LLVMUMulWithOverflowI32NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUMulWithOverflowFactory.LLVMUMulWithOverflowI64NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUMulWithOverflowFactory.LLVMUMulWithOverflowI8NodeGen;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUMulWithOverflowFactory.GCCUMulWithOverflowNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUSubWithOverflowFactory.LLVMUSubWithOverflowAndCarryI16NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUSubWithOverflowFactory.LLVMUSubWithOverflowAndCarryI32NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUSubWithOverflowFactory.LLVMUSubWithOverflowAndCarryI64NodeGen;
@@ -124,6 +122,10 @@ import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUSubWithOverflowF
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUSubWithOverflowFactory.LLVMUSubWithOverflowI32NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUSubWithOverflowFactory.LLVMUSubWithOverflowI64NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUSubWithOverflowFactory.LLVMUSubWithOverflowI8NodeGen;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUAddWithOverflowFactory.LLVMUAddWithOverflowAndCarryI8NodeGen;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUAddWithOverflowFactory.LLVMUAddWithOverflowAndCarryI16NodeGen;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUAddWithOverflowFactory.LLVMUAddWithOverflowAndCarryI32NodeGen;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMUAddWithOverflowFactory.LLVMUAddWithOverflowAndCarryI64NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.bit.CountLeadingZeroesNodeFactory.CountLeadingZeroesI16NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.bit.CountLeadingZeroesNodeFactory.CountLeadingZeroesI32NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.bit.CountLeadingZeroesNodeFactory.CountLeadingZeroesI64NodeGen;
@@ -166,9 +168,9 @@ import com.oracle.truffle.llvm.parser.model.enums.Linkage;
 import com.oracle.truffle.llvm.parser.model.enums.ReadModifyWriteOperator;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
-import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalConstant;
-import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalValueSymbol;
-import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
+import com.oracle.truffle.llvm.parser.model.globals.GlobalConstant;
+import com.oracle.truffle.llvm.parser.model.globals.GlobalValueSymbol;
+import com.oracle.truffle.llvm.parser.model.globals.GlobalVariable;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
@@ -450,16 +452,7 @@ public class BasicNodeFactory implements NodeFactory {
     @Override
     public LLVMExpressionNode createInlineAssemblerExpression(LLVMParserRuntime runtime, String asmExpression, String asmFlags, LLVMExpressionNode[] args, Type[] argTypes, Type retType,
                     SourceSection sourceSection) {
-        Type[] retTypes = null;
-        int[] retOffsets = null;
-        if (retType instanceof StructureType) { // multiple out values
-            assert args[1] instanceof LLVMAllocaConstInstruction;
-            LLVMAllocaConstInstruction alloca = (LLVMAllocaConstInstruction) args[1];
-            retTypes = alloca.getTypes();
-            retOffsets = alloca.getOffsets();
-        }
-
-        Parser asmParser = new Parser(asmExpression, asmFlags, argTypes, retType, retTypes, retOffsets);
+        Parser asmParser = new Parser(asmExpression, asmFlags, args, argTypes, retType);
         LLVMInlineAssemblyRootNode assemblyRoot = asmParser.Parse();
         LLVMFunctionDescriptor asm = LLVMFunctionDescriptor.createDescriptor(runtime.getContext(), "<asm>", new FunctionType(MetaType.UNKNOWN, new Type[0], false), -1);
         asm.declareInSulong(Truffle.getRuntime().createCallTarget(assemblyRoot), false);
@@ -657,9 +650,10 @@ public class BasicNodeFactory implements NodeFactory {
                 return LLVMPowNodeGen.create(args[1], args[2], sourceSection);
             case "@llvm.powi.f80":
                 return LLVMPowNodeGen.create(args[1], args[2], sourceSection);
-            case "@llvm.fabs.f32":
             case "@llvm.fabs.f64":
                 return LLVMFAbsNodeGen.create(args[1], sourceSection);
+            case "@llvm.sqrt.f64":
+                return LLVMSqrtNodeGen.create(args[1]);
             case "@llvm.returnaddress":
                 return LLVMReturnAddressNodeGen.create(args[1], sourceSection);
             case "@llvm.lifetime.start":
@@ -706,8 +700,9 @@ public class BasicNodeFactory implements NodeFactory {
             case "@llvm.objectsize.i64":
                 return LLVMI64ObjectSizeNodeGen.create(args[1], args[2], sourceSection);
             case "@llvm.copysign.f32":
+                return LLVMCopySignFloatFactory.create(args[1], args[2], sourceSection);
             case "@llvm.copysign.f64":
-                return LLVMCMathsIntrinsicsFactory.LLVMCopySignNodeGen.create(args[1], args[2], sourceSection);
+                return LLVMCopySignDoubleFactory.create(args[1], args[2], sourceSection);
 
             case "@llvm.uadd.with.overflow.i8":
                 return LLVMUAddWithOverflowI8NodeGen.create(getOverflowFieldOffset(runtime, declaration), args[2], args[3], args[1], sourceSection);
@@ -757,39 +752,6 @@ public class BasicNodeFactory implements NodeFactory {
                 return LLVMSMulWithOverflowI32NodeGen.create(getOverflowFieldOffset(runtime, declaration), args[2], args[3], args[1], sourceSection);
             case "@llvm.smul.with.overflow.i64":
                 return LLVMSMulWithOverflowI64NodeGen.create(getOverflowFieldOffset(runtime, declaration), args[2], args[3], args[1], sourceSection);
-            case "@llvm.exp2.f32":
-            case "@llvm.exp2.f64":
-                return LLVMCMathsIntrinsicsFactory.LLVMExp2NodeGen.create(args[1], sourceSection);
-            case "@llvm.sqrt.f32":
-            case "@llvm.sqrt.f64":
-                return LLVMCMathsIntrinsicsFactory.LLVMSqrtNodeGen.create(args[1], sourceSection);
-            case "@llvm.sin.f32":
-            case "@llvm.sin.f64":
-                return LLVMCMathsIntrinsicsFactory.LLVMSinNodeGen.create(args[1], sourceSection);
-            case "@llvm.cos.f32":
-            case "@llvm.cos.f64":
-                return LLVMCMathsIntrinsicsFactory.LLVMCosNodeGen.create(args[1], sourceSection);
-            case "@llvm.exp.f32":
-            case "@llvm.exp.f64":
-                return LLVMCMathsIntrinsicsFactory.LLVMExpNodeGen.create(args[1], sourceSection);
-            case "@llvm.log.f32":
-            case "@llvm.log.f64":
-                return LLVMCMathsIntrinsicsFactory.LLVMLogNodeGen.create(args[1], sourceSection);
-            case "@llvm.log2.f32":
-            case "@llvm.log2.f64":
-                return LLVMCMathsIntrinsicsFactory.LLVMLog2NodeGen.create(args[1], sourceSection);
-            case "@llvm.log10.f32":
-            case "@llvm.log10.f64":
-                return LLVMCMathsIntrinsicsFactory.LLVMLog10NodeGen.create(args[1], sourceSection);
-            case "@llvm.floor.f32":
-            case "@llvm.floor.f64":
-                return LLVMCMathsIntrinsicsFactory.LLVMFloorNodeGen.create(args[1], sourceSection);
-            case "@llvm.ceil.f32":
-            case "@llvm.ceil.f64":
-                return LLVMCMathsIntrinsicsFactory.LLVMCeilNodeGen.create(args[1], sourceSection);
-            case "@llvm.rint.f32":
-            case "@llvm.rint.f64":
-                return LLVMCMathsIntrinsicsFactory.LLVMRintNodeGen.create(args[1], sourceSection);
 
             default:
                 throw new IllegalStateException("Missing LLVM builtin: " + declaration.getName());
