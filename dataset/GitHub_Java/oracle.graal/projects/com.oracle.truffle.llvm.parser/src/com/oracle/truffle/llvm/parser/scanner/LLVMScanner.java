@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -40,14 +40,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.oracle.truffle.llvm.parser.elf.ElfDynamicSection;
-import com.oracle.truffle.llvm.parser.elf.ElfFile;
-import com.oracle.truffle.llvm.parser.elf.ElfSectionHeaderTable.Entry;
-import com.oracle.truffle.llvm.parser.listeners.BCFileRoot;
+import com.oracle.truffle.llvm.parser.listeners.Module;
 import com.oracle.truffle.llvm.parser.listeners.ParserListener;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
 
 public final class LLVMScanner {
 
@@ -57,7 +52,6 @@ public final class LLVMScanner {
 
     private static final long BC_MAGIC_WORD = 0xdec04342L; // 'BC' c0de
     private static final long WRAPPER_MAGIC_WORD = 0x0B17C0DEL;
-    private static final long ELF_MAGIC_WORD = 0x464C457FL;
 
     private static final int MAX_BLOCK_DEPTH = 3;
 
@@ -87,12 +81,7 @@ public final class LLVMScanner {
         this.offset = 0;
     }
 
-    public static ModelModule parse(ByteBuffer bytes, LLVMContext context) {
-        assert bytes != null;
-        if (!isSupportedFile(bytes)) {
-            return null;
-        }
-
+    public static ModelModule parse(ByteBuffer bytes) {
         final ModelModule model = new ModelModule();
 
         ByteBuffer b = bytes.duplicate();
@@ -111,55 +100,32 @@ public final class LLVMScanner {
             b.position((int) offset);
             b.limit((int) (offset + size));
             bitcode = b.slice();
-        } else if (magicWord == ELF_MAGIC_WORD) {
-            ElfFile elfFile = ElfFile.create(b);
-            Entry llvmbc = elfFile.getSectionHeaderTable().getEntry(".llvmbc");
-            if (llvmbc == null) {
-                // ELF File does not contain an .llvmbc section
-                return null;
-            }
-            ElfDynamicSection dynamicSection = elfFile.getDynamicSection();
-            if (dynamicSection != null) {
-                List<String> libraries = dynamicSection.getDTNeeded();
-                List<String> paths = dynamicSection.getDTRPath();
-                model.addLibraries(libraries);
-                model.addLibraryPaths(paths);
-            }
-            long offset = llvmbc.getOffset();
-            long size = llvmbc.getSize();
-            b.position((int) offset);
-            b.limit((int) (offset + size));
-            bitcode = b.slice();
         } else {
-            throw new LLVMParserException("Not a valid input file!");
+            throw new RuntimeException("Not a valid input file!");
         }
 
-        parseBitcodeBlock(bitcode, model, context);
-
+        final BitStream bitstream = BitStream.create(bitcode);
+        final LLVMScanner scanner = new LLVMScanner(bitstream, new Module(model));
+        parseBitcodeBlock(scanner);
         return model;
     }
 
-    private static boolean isSupportedFile(ByteBuffer bytes) {
+    public static boolean isSupportedFile(ByteBuffer bytes) {
         ByteBuffer duplicate = bytes.duplicate();
         BitStream bs = BitStream.create(duplicate);
         long magicWord = bs.read(0, Integer.SIZE);
-        return magicWord == BC_MAGIC_WORD || magicWord == WRAPPER_MAGIC_WORD || magicWord == ELF_MAGIC_WORD;
+        return magicWord == BC_MAGIC_WORD || magicWord == WRAPPER_MAGIC_WORD;
     }
 
-    private static void parseBitcodeBlock(ByteBuffer bitcode, ModelModule model, LLVMContext context) {
-        final BitStream bitstream = BitStream.create(bitcode);
-        final BCFileRoot fileParser = new BCFileRoot(model);
-        final LLVMScanner scanner = new LLVMScanner(bitstream, fileParser);
+    private static void parseBitcodeBlock(LLVMScanner scanner) {
         final long actualMagicWord = scanner.read(Integer.SIZE);
         if (actualMagicWord != BC_MAGIC_WORD) {
-            throw new LLVMParserException("Not a valid Bitcode File!");
+            throw new RuntimeException("Not a valid Bitcode File!");
         }
 
-        scanner.scanToEnd();
-
-        // the root block does not exist in the LLVM file and is therefore never exited by the
-        // scanner
-        fileParser.exit(context);
+        while (scanner.offset < scanner.bitstream.size()) {
+            scanner.scanNext();
+        }
     }
 
     private static <V> List<V> subList(List<V> original, int from) {
@@ -170,7 +136,7 @@ public final class LLVMScanner {
         return newList;
     }
 
-    private long read(int bits) {
+    long read(int bits) {
         final long value = bitstream.read(offset, bits);
         offset += bits;
         return value;
@@ -195,36 +161,30 @@ public final class LLVMScanner {
         return value;
     }
 
-    private void scanToEnd() {
-        scanToOffset(bitstream.size());
-    }
+    private void scanNext() {
+        final int id = (int) read(idSize);
 
-    private void scanToOffset(long to) {
-        while (offset < to) {
-            final int id = (int) read(idSize);
+        switch (id) {
+            case BuiltinIDs.END_BLOCK:
+                exitBlock();
+                break;
 
-            switch (id) {
-                case BuiltinIDs.END_BLOCK:
-                    exitBlock();
-                    break;
+            case BuiltinIDs.ENTER_SUBBLOCK:
+                enterSubBlock();
+                break;
 
-                case BuiltinIDs.ENTER_SUBBLOCK:
-                    enterSubBlock();
-                    break;
+            case BuiltinIDs.DEFINE_ABBREV:
+                defineAbbreviation();
+                break;
 
-                case BuiltinIDs.DEFINE_ABBREV:
-                    defineAbbreviation();
-                    break;
+            case BuiltinIDs.UNABBREV_RECORD:
+                unabbreviatedRecord();
+                break;
 
-                case BuiltinIDs.UNABBREV_RECORD:
-                    unabbreviatedRecord();
-                    break;
-
-                default:
-                    // custom defined abbreviation
-                    abbreviatedRecord(id);
-                    break;
-            }
+            default:
+                // custom defined abbreviation
+                abbreviatedRecord(id);
+                break;
         }
     }
 
@@ -311,6 +271,7 @@ public final class LLVMScanner {
                     default:
                         throw new IllegalStateException("Unexpected Record Type Id: " + recordType);
                 }
+
             }
 
             i++;
@@ -338,77 +299,63 @@ public final class LLVMScanner {
         final long numWords = read(Integer.SIZE);
 
         final Block subBlock = Block.lookup(blockId);
-        if (subBlock == null || subBlock.skip()) {
+        if (subBlock == null) {
             offset += numWords * Integer.SIZE;
-
-        } else if (subBlock.parseLazily()) {
-            final long endingOffset = offset + (numWords * Integer.SIZE);
-            final LazyScanner lazyScanner = new LazyScanner(new HashMap<>(defaultAbbreviations), offset, endingOffset, (int) newIdSize, subBlock);
-            offset = endingOffset;
-            parser.skip(subBlock, lazyScanner);
 
         } else {
             final int localAbbreviationDefinitionsOffset = defaultAbbreviations.getOrDefault(block, Collections.emptyList()).size();
             parents.push(new ScannerState(subList(abbreviationDefinitions, localAbbreviationDefinitionsOffset), block, idSize, parser));
+            abbreviationDefinitions.clear();
+            abbreviationDefinitions.addAll(defaultAbbreviations.getOrDefault(subBlock, Collections.emptyList()));
+            block = subBlock;
+            idSize = (int) newIdSize;
             parser = parser.enter(subBlock);
-            startSubBlock(subBlock, (int) newIdSize);
-        }
-    }
 
-    private void startSubBlock(Block subBlock, int newIdSize) {
-        abbreviationDefinitions.clear();
-        abbreviationDefinitions.addAll(defaultAbbreviations.getOrDefault(subBlock, Collections.emptyList()));
-        block = subBlock;
-        idSize = newIdSize;
+            if (block == Block.BLOCKINFO) {
+                final ParserListener parentListener = parser;
+                parser = new ParserListener() {
 
-        if (block == Block.BLOCKINFO) {
-            final ParserListener parentListener = parser;
-            parser = new ParserListener() {
+                    int currentBlockId = -1;
 
-                int currentBlockId = -1;
+                    @Override
+                    public ParserListener enter(Block newBlock) {
+                        return parentListener.enter(newBlock);
+                    }
 
-                @Override
-                public ParserListener enter(Block newBlock) {
-                    return parentListener.enter(newBlock);
-                }
-
-                @Override
-                public void exit() {
-                    setDefaultAbbreviations();
-                    parentListener.exit();
-                }
-
-                @Override
-                public void record(long id, long[] args) {
-                    if (id == 1) {
-                        // SETBID tells us which blocks is currently being described
-                        // we simply ignore SETRECORDNAME since we do not need it
+                    @Override
+                    public void exit() {
                         setDefaultAbbreviations();
-                        currentBlockId = (int) args[0];
+                        parentListener.exit();
                     }
-                    parentListener.record(id, args);
-                }
 
-                private void setDefaultAbbreviations() {
-                    if (currentBlockId >= 0) {
-                        final Block currentBlock = Block.lookup(currentBlockId);
-                        defaultAbbreviations.putIfAbsent(currentBlock, new ArrayList<>());
-                        defaultAbbreviations.get(currentBlock).addAll(abbreviationDefinitions);
-                        abbreviationDefinitions.clear();
+                    @Override
+                    public void record(long id, long[] args) {
+                        if (id == 1) {
+                            // SETBID tells us which blocks is currently being described
+                            // we simply ignore SETRECORDNAME since we do not need it
+                            setDefaultAbbreviations();
+                            currentBlockId = (int) args[0];
+                        }
+                        parentListener.record(id, args);
                     }
-                }
-            };
+
+                    private void setDefaultAbbreviations() {
+                        if (currentBlockId >= 0) {
+                            final Block currentBlock = Block.lookup(currentBlockId);
+                            defaultAbbreviations.putIfAbsent(currentBlock, new ArrayList<>());
+                            defaultAbbreviations.get(currentBlock).addAll(abbreviationDefinitions);
+                            abbreviationDefinitions.clear();
+                        }
+                    }
+                };
+            }
+
         }
     }
 
     private void exitBlock() {
         alignInt();
         parser.exit();
-
-        if (parents.isEmpty()) {
-            // after lazily parsed block
-            return;
-        }
 
         final ScannerState parentState = parents.pop();
         block = parentState.getBlock();
@@ -439,32 +386,5 @@ public final class LLVMScanner {
             recordBuffer.addOpNoCheck(op);
         }
         passRecordToParser();
-    }
-
-    public final class LazyScanner {
-
-        private final Map<Block, List<List<AbbreviatedRecord>>> oldDefaultAbbreviations;
-        private final long startingOffset;
-        private final long endingOffset;
-        private final int startingIdSize;
-        private final Block startingBlock;
-
-        private LazyScanner(Map<Block, List<List<AbbreviatedRecord>>> oldDefaultAbbreviations, long startingOffset, long endingOffset, int startingIdSize, Block startingBlock) {
-            this.oldDefaultAbbreviations = oldDefaultAbbreviations;
-            this.startingOffset = startingOffset;
-            this.endingOffset = endingOffset;
-            this.startingIdSize = startingIdSize;
-            this.startingBlock = startingBlock;
-        }
-
-        public void scanBlock(ParserListener lazyParser) {
-            assert parents.isEmpty();
-            defaultAbbreviations.clear();
-            defaultAbbreviations.putAll(oldDefaultAbbreviations);
-            offset = startingOffset;
-            parser = lazyParser;
-            startSubBlock(startingBlock, startingIdSize);
-            scanToOffset(endingOffset);
-        }
     }
 }

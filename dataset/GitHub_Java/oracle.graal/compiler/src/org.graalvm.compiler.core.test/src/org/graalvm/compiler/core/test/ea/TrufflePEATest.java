@@ -22,8 +22,6 @@
  */
 package org.graalvm.compiler.core.test.ea;
 
-import java.lang.reflect.Field;
-
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.test.GraalCompilerTest;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -35,8 +33,9 @@ import org.graalvm.compiler.phases.common.inlining.InliningPhase;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.virtual.phases.ea.PartialEscapePhase;
 import org.junit.Test;
-
 import sun.misc.Unsafe;
+
+import java.lang.reflect.Field;
 
 public class TrufflePEATest extends GraalCompilerTest {
 
@@ -57,7 +56,6 @@ public class TrufflePEATest extends GraalCompilerTest {
     static class DynamicObject {
         int primitiveField0;
         int primitiveField1;
-        int primitiveField2;
     }
 
     private static final long offsetLong1 = Unsafe.ARRAY_LONG_BASE_OFFSET + Unsafe.ARRAY_LONG_INDEX_SCALE * 1;
@@ -68,15 +66,7 @@ public class TrufflePEATest extends GraalCompilerTest {
     static {
         try {
             Field primitiveField0 = DynamicObject.class.getDeclaredField("primitiveField0");
-            long offset = UNSAFE.objectFieldOffset(primitiveField0);
-            if (offset % 8 == 0) {
-                primitiveField0Offset = offset;
-            } else {
-                Field primitiveField1 = DynamicObject.class.getDeclaredField("primitiveField1");
-                offset = UNSAFE.objectFieldOffset(primitiveField1);
-                assert offset % 8 == 0;
-                primitiveField0Offset = offset;
-            }
+            primitiveField0Offset = UNSAFE.objectFieldOffset(primitiveField0);
         } catch (NoSuchFieldException | SecurityException e) {
             throw new AssertionError(e);
         }

@@ -44,8 +44,10 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.parser.datalayout.DataLayoutConverter;
 import com.oracle.truffle.llvm.parser.datalayout.DataLayoutConverter.DataSpecConverterImpl;
+import com.oracle.truffle.llvm.parser.metadata.debuginfo.DebugInformation;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
 import com.oracle.truffle.llvm.parser.model.enums.Linkage;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
@@ -55,8 +57,6 @@ import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalAlias;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalValueSymbol;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
-import com.oracle.truffle.llvm.parser.model.symbols.constants.aggregate.ArrayConstant;
-import com.oracle.truffle.llvm.parser.model.symbols.constants.aggregate.StructureConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
 import com.oracle.truffle.llvm.parser.model.target.TargetDataLayout;
 import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
@@ -88,9 +88,6 @@ public final class LLVMParserRuntime {
 
     public static LLVMParserResult parse(Source source, ByteBuffer bytes, LLVMLanguage language, LLVMContext context, NodeFactory nodeFactory) {
         BitcodeParserResult parserResult = BitcodeParserResult.getFromSource(bytes);
-        context.addLibraryPaths(parserResult.getLibraryPaths());
-        context.addNativeLibraries(parserResult.getLibraries());
-
         ModelModule model = parserResult.getModel();
         StackAllocation stack = parserResult.getStackAllocation();
         LLVMPhiManager phiManager = parserResult.getPhis();
@@ -141,6 +138,7 @@ public final class LLVMParserRuntime {
     private final Map<GlobalAlias, Symbol> aliases;
     private final List<LLVMExpressionNode> deallocations;
     private final LLVMScope scope;
+    private final DebugInformation debugInformation;
 
     private LLVMParserRuntime(Source source, LLVMLanguage language, LLVMContext context, StackAllocation stack, DataSpecConverterImpl targetDataLayout, NodeFactory nodeFactory,
                     Map<GlobalAlias, Symbol> aliases) {
@@ -153,6 +151,7 @@ public final class LLVMParserRuntime {
         this.aliases = aliases;
         this.deallocations = new ArrayList<>();
         this.scope = LLVMScope.createFileScope(context);
+        this.debugInformation = DebugInformation.generate();
     }
 
     private void initializeFunctions(LLVMPhiManager phiManager, LLVMLabelList labels, List<FunctionDefinition> functions) {
@@ -347,5 +346,30 @@ public final class LLVMParserRuntime {
 
     public LLVMScope getScope() {
         return scope;
+    }
+
+    /**
+     * Get the {@link SourceSection} for the given function. This will refer to the original
+     * sourcefile if the bitcode file was compiled with debug information, otherwise the referenced
+     * {@link Source} will contain a simple String identifying the LLVM IR function. This also
+     * parses the SourceSections for the instructions contained in the function.
+     *
+     * @param function The function to get the source for
+     * @return the corresponding {@link SourceSection} or {@code null}
+     */
+    SourceSection getSourceSection(FunctionDefinition function) {
+        return debugInformation.parseAndGetDebugInfo(function, source);
+    }
+
+    /**
+     * Get the {@link SourceSection} for the given instruction if debug information is available.
+     * {@link LLVMParserRuntime#getSourceSection(FunctionDefinition)} needs to be called on the
+     * containing {@link FunctionDefinition} prior to this call for this to work.
+     *
+     * @param instruction The instruction to get the source for
+     * @return the corresponding {@link SourceSection} or {@code null}
+     */
+    SourceSection getSourceSection(Instruction instruction) {
+        return debugInformation.getDebugInfo(instruction);
     }
 }
