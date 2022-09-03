@@ -22,28 +22,25 @@
  */
 package com.oracle.graal.truffle.hotspot;
 
+import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.compiler.GraalCompiler.*;
 import static com.oracle.graal.graph.util.CollectionsAccess.*;
 import static com.oracle.graal.hotspot.meta.HotSpotSuitesProvider.*;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
-import static jdk.internal.jvmci.code.CodeUtil.*;
 
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.code.CallingConvention.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.compiler.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.debug.Debug.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.service.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CallingConvention.Type;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.compiler.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.hotspot.*;
@@ -57,6 +54,7 @@ import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
+import com.oracle.graal.printer.*;
 import com.oracle.graal.runtime.*;
 import com.oracle.graal.truffle.*;
 import com.oracle.graal.truffle.hotspot.nfi.*;
@@ -76,6 +74,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         return new HotSpotTruffleRuntime();
     }
 
+    private TruffleCompilerImpl truffleCompiler;
     private Map<OptimizedCallTarget, Future<?>> compilations = newIdentityMap();
     private final ThreadPoolExecutor compileQueue;
 
@@ -90,9 +89,9 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
 
         // Create compilation queue.
         CompilerThreadFactory factory = new CompilerThreadFactory("TruffleCompilerThread", new CompilerThreadFactory.DebugConfigAccess() {
-            public JVMCIDebugConfig getDebugConfig() {
+            public GraalDebugConfig getDebugConfig() {
                 if (Debug.isEnabled()) {
-                    JVMCIDebugConfig debugConfig = DebugEnvironment.initialize(TTY.out().out());
+                    GraalDebugConfig debugConfig = DebugEnvironment.initialize(TTY.out().out());
                     debugConfig.dumpHandlers().add(new TruffleTreeDumpHandler());
                     return debugConfig;
                 } else {
@@ -190,7 +189,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         CallingConvention cc = getCallingConvention(providers.getCodeCache(), Type.JavaCallee, graph.method(), false);
         Backend backend = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend();
         CompilationResultBuilderFactory factory = getOptimizedCallTargetInstrumentationFactory(backend.getTarget().arch.getName(), javaMethod);
-        return compileGraph(graph, cc, javaMethod, providers, backend, providers.getCodeCache().getTarget(), graphBuilderSuite, OptimisticOptimizations.ALL, getProfilingInfo(graph), suites,
+        return compileGraph(graph, cc, javaMethod, providers, backend, providers.getCodeCache().getTarget(), graphBuilderSuite, OptimisticOptimizations.ALL, getProfilingInfo(graph), null, suites,
                         lirSuites, new CompilationResult(), factory);
     }
 
@@ -214,12 +213,21 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     @Override
     public void compile(OptimizedCallTarget optimizedCallTarget, boolean mayBeAsynchronous) {
         if (truffleCompiler == null) {
-            truffleCompiler = DefaultTruffleCompiler.create();
+            truffleCompiler = new TruffleCompilerImpl();
         }
         Runnable r = new Runnable() {
             @Override
             public void run() {
-                doCompile(optimizedCallTarget);
+                boolean success = true;
+                try (Scope s = Debug.scope("Truffle", new TruffleDebugJavaMethod(optimizedCallTarget))) {
+                    truffleCompiler.compileMethod(optimizedCallTarget);
+                } catch (Throwable e) {
+                    optimizedCallTarget.notifyCompilationFailed(e);
+                    success = false;
+                } finally {
+                    optimizedCallTarget.notifyCompilationFinished(success);
+
+                }
             }
         };
         Future<?> future = compileQueue.submit(r);
@@ -334,7 +342,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         try {
             return UnsafeAccess.unsafe.objectFieldOffset(Thread.class.getDeclaredField("eetop"));
         } catch (Exception e) {
-            throw new JVMCIError(e);
+            throw new GraalInternalError(e);
         }
     }
 
@@ -348,6 +356,9 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         return null;
     }
 
+    /**
+     * Called from the VM.
+     */
     public static NativeFunctionInterface createNativeFunctionInterface() {
         HotSpotVMConfig config = HotSpotGraalRuntime.runtime().getConfig();
         Backend backend = HotSpotGraalRuntime.runtime().getHostBackend();

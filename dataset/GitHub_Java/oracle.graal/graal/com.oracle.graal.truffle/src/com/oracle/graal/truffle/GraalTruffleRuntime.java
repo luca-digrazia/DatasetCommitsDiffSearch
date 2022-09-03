@@ -22,24 +22,18 @@
  */
 package com.oracle.graal.truffle;
 
-import com.oracle.jvmci.code.stack.InspectedFrameVisitor;
-import com.oracle.jvmci.code.stack.InspectedFrame;
-import com.oracle.jvmci.code.stack.StackIntrospection;
-import com.oracle.jvmci.code.CompilationResult;
-import com.oracle.jvmci.meta.MetaAccessProvider;
-import com.oracle.jvmci.meta.ResolvedJavaMethod;
-
 import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
 import java.util.*;
 import java.util.concurrent.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.stack.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.truffle.debug.*;
 import com.oracle.graal.truffle.unsafe.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.debug.Debug.Scope;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.*;
@@ -61,8 +55,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     private final List<GraalTruffleCompilationListener> compilationListeners = new ArrayList<>();
     private final GraalTruffleCompilationListener compilationNotify = new DispatchTruffleCompilationListener();
 
-    protected TruffleCompiler truffleCompiler;
-    protected LoopNodeFactory loopNodeFactory;
+    private LoopNodeFactory loopNodeFactory;
 
     public GraalTruffleRuntime() {
         Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
@@ -82,10 +75,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
             throw new IllegalStateException("Unable to load a factory for " + clazz.getName());
         }
         return bestFactory;
-    }
-
-    public void log(String message) {
-        TTY.out().println(message);
     }
 
     protected void installDefaultListeners() {
@@ -112,14 +101,11 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
         if (!(repeatingNode instanceof Node)) {
             throw new IllegalArgumentException("Repeating node must be of type Node.");
         }
-        return getLoopNodeFactory().create(repeatingNode);
-    }
-
-    protected LoopNodeFactory getLoopNodeFactory() {
         if (loopNodeFactory == null) {
             loopNodeFactory = loadPrioritizedServiceProvider(LoopNodeFactory.class);
         }
-        return loopNodeFactory;
+
+        return loopNodeFactory.create(repeatingNode);
     }
 
     @Override
@@ -284,18 +270,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     public abstract Collection<OptimizedCallTarget> getQueuedCallTargets();
 
     public abstract void compile(OptimizedCallTarget optimizedCallTarget, boolean mayBeAsynchronous);
-
-    protected void doCompile(OptimizedCallTarget optimizedCallTarget) {
-        boolean success = true;
-        try (Scope s = Debug.scope("Truffle", new TruffleDebugJavaMethod(optimizedCallTarget))) {
-            truffleCompiler.compileMethod(optimizedCallTarget);
-        } catch (Throwable e) {
-            optimizedCallTarget.notifyCompilationFailed(e);
-            success = false;
-        } finally {
-            optimizedCallTarget.notifyCompilationFinished(success);
-        }
-    }
 
     public abstract boolean cancelInstalledTask(OptimizedCallTarget optimizedCallTarget, Object source, CharSequence reason);
 
