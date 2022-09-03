@@ -350,7 +350,7 @@ public abstract class GraalCompilerTest extends GraalTest {
 
         final int id = compilationId++;
 
-        InstalledCode installedCode = Debug.scope("Compiling", new Object[]{runtime, new DebugDumpScope(String.valueOf(id), true)}, new Callable<InstalledCode>() {
+        InstalledCode installedCode = Debug.scope("Compiling", new DebugDumpScope(String.valueOf(id), true), new Callable<InstalledCode>() {
 
             public InstalledCode call() throws Exception {
                 final boolean printCompilation = GraalOptions.PrintCompilation && !TTY.isSuppressed();
@@ -407,7 +407,7 @@ public abstract class GraalCompilerTest extends GraalTest {
     protected StructuredGraph parse(Method m) {
         ResolvedJavaMethod javaMethod = runtime.lookupJavaMethod(m);
         StructuredGraph graph = new StructuredGraph(javaMethod);
-        new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.ALL).apply(graph);
+        new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.ALL).apply(graph);
         return graph;
     }
 
@@ -423,7 +423,7 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     protected PhasePlan getDefaultPhasePlan() {
         PhasePlan plan = new PhasePlan();
-        plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.ALL));
+        plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.ALL));
         return plan;
     }
 }
