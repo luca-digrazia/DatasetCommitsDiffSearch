@@ -48,7 +48,6 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
 import com.oracle.truffle.llvm.nodes.base.LLVMThread;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
@@ -203,7 +202,7 @@ public abstract class LLVMSignal extends LLVMFunctionNode {
                                                 new LLVMNode[]{},
                                                 new LLVMNode[]{},
                                                 null,
-                                                new FrameDescriptor(), "", new LLVMStackFrameNuller[0]));
+                                                new FrameDescriptor(), ""));
 
                 isRunning.set(true);
                 context.registerThread(this);

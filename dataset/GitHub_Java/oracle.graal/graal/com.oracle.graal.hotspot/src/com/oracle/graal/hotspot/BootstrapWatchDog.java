@@ -35,9 +35,7 @@ import com.oracle.graal.options.OptionValue;
  * A watch dog that monitors the compilation rate during a
  * {@linkplain HotSpotGraalRuntimeProvider#isBootstrapping() bootstrap}. If it falls below a given
  * ratio of the maximum observed compilation rate, the compiler will ignore all subsequent
- * compilation requests until bootstrapping is completed. Note that the compilation rate is computed
- * over the whole execution, not just the last measurement period. This allows for a sudden but
- * temporary drop in any given measurement period.
+ * compilation requests until bootstrapping is completed.
  *
  * This mechanism is based on past observations that a significantly falling bootstrap compilation
  * rate implies a configuration where bootstrapping will take an unreasonably long time and it's
@@ -54,28 +52,11 @@ final class BootstrapWatchDog extends Thread {
         // @formatter:on
     }
 
-    /**
-     * Count of completed compilations. This is updated by the compiler threads and read by the
-     * watch dog thread.
-     */
     private final AtomicInteger compilations = new AtomicInteger();
-
-    /**
-     * Set to true once the compilation rate drops too low.
-     */
     private boolean hitCriticalRate;
-
-    /**
-     * The maximum compilation rate seen during execution.
-     */
     private double maxRate;
 
-    /**
-     * Creates and returns a {@link BootstrapWatchDog} if
-     * {@link Options#BootstrapWatchDogCriticalRateRatio} is not set to 0 otherwise returns
-     * {@code null}.
-     */
-    static BootstrapWatchDog maybeCreate() {
+    public static BootstrapWatchDog maybeCreate() {
         return MAX_RATE_DECREASE <= 0.0D ? null : new BootstrapWatchDog();
     }
 
@@ -87,23 +68,23 @@ final class BootstrapWatchDog extends Thread {
     /**
      * Set to true to debug the watch dog.
      */
-    private static final boolean DEBUG = Boolean.getBoolean("debug.graal.BootstrapWatchDog");
+    static final boolean DEBUG = false;
 
     /**
      * Seconds to delay before starting to measure the compilation rate.
      */
-    private static final int INITIAL_DELAY = 10;
+    static final int INITIAL_DELAY = 10;
 
     /**
      * Seconds between each compilation rate measurement.
      */
-    private static final long EPOCH = 5;
+    static final long EPOCH = 5;
 
     /**
      * The watch dog {@link #hitCriticalCompilationRate() hits} a critical compilation rate if the
      * current compilation rate falls below this ratio of the maximum compilation rate.
      */
-    private static final double MAX_RATE_DECREASE = Options.BootstrapWatchDogCriticalRateRatio.getValue();
+    static final double MAX_RATE_DECREASE = Options.BootstrapWatchDogCriticalRateRatio.getValue();
 
     @Override
     public void run() {
@@ -138,7 +119,7 @@ final class BootstrapWatchDog extends Thread {
         }
     }
 
-    private static double seconds(long ms) {
+    static double seconds(long ms) {
         return (double) ms / 1000;
     }
 
@@ -152,7 +133,7 @@ final class BootstrapWatchDog extends Thread {
     /**
      * Notifies this object that a compilation finished.
      */
-    void notifyCompilationFinished() {
+    public void notifyCompilationFinished() {
         compilations.incrementAndGet();
     }
 }
