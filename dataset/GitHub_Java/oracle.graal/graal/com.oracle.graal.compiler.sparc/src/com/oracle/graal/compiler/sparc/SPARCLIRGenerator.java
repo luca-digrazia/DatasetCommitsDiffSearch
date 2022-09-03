@@ -221,7 +221,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     @Override
     public void emitCompareBranch(PlatformKind cmpKind, Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef trueDestination, LabelRef falseDestination,
                     double trueDestinationProbability) {
-        boolean mirrored = emitCompare(cmpKind, left, right);
+        boolean mirrored = emitCompare(left, right);
         Condition finalCondition = mirrored ? cond.mirror() : cond;
         Kind kind = left.getKind().getStackKind();
         switch (kind) {
@@ -262,7 +262,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitConditionalMove(PlatformKind cmpKind, Value left, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue) {
-        boolean mirrored = emitCompare(cmpKind, left, right);
+        boolean mirrored = emitCompare(left, right);
         Condition finalCondition = mirrored ? cond.mirror() : cond;
 
         Variable result = newVariable(trueValue.getLIRKind());
@@ -287,12 +287,11 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
      * This method emits the compare instruction, and may reorder the operands. It returns true if
      * it did so.
      *
-     * @param cmpKind Kind how a and b have to be compared
      * @param a the left operand of the comparison
      * @param b the right operand of the comparison
      * @return true if the left and right operands were switched, false otherwise
      */
-    protected boolean emitCompare(PlatformKind cmpKind, Value a, Value b) {
+    protected boolean emitCompare(Value a, Value b) {
         Variable left;
         Value right;
         boolean mirrored;
@@ -305,14 +304,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             right = loadNonConst(b);
             mirrored = false;
         }
-        switch ((Kind) cmpKind) {
-            case Short:
-            case Char:
-                append(new CompareOp(ICMP, emitZeroExtend(left, 16, 32), emitZeroExtend(right, 16, 32)));
-                break;
-            case Byte:
-                append(new CompareOp(ICMP, emitZeroExtend(left, 8, 32), emitZeroExtend(right, 8, 32)));
-                break;
+        switch (left.getKind().getStackKind()) {
             case Int:
                 append(new CompareOp(ICMP, left, right));
                 break;
@@ -914,16 +906,14 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         } else {
             assert inputVal.getKind() == Kind.Int || inputVal.getKind() == Kind.Short || inputVal.getKind() == Kind.Byte : inputVal.getKind();
             Variable result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Int));
-            long mask = IntegerStamp.defaultMask(fromBits);
-            Constant constant = Constant.forLong(mask);
+            int mask = (int) IntegerStamp.defaultMask(fromBits);
+            Constant constant = Constant.forInt(mask);
             if (canInlineConstant(constant)) {
                 append(new BinaryRegConst(SPARCArithmetic.IAND, result, asAllocatable(inputVal), constant, null));
-            } else if (fromBits == 32) {
-                append(new ShiftOp(IUSHR, result, inputVal, Constant.forInt(0)));
             } else {
                 Variable maskVar = newVariable(LIRKind.derive(inputVal).changeType(Kind.Int));
                 emitMove(maskVar, constant);
-                append(new BinaryRegReg(IAND, result, maskVar, asAllocatable(inputVal)));
+                append(new BinaryRegReg(IAND, result, maskVar, (inputVal)));
             }
             if (toBits > 32) {
                 Variable longResult = newVariable(LIRKind.derive(inputVal).changeType(Kind.Long));
