@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -33,7 +32,7 @@ import com.oracle.graal.nodes.util.*;
  * the if node's taken probability. Then the branch probability node will be removed. This node is
  * intended primarily for snippets, so that they can define their fast and slow paths.
  */
-public class BranchProbabilityNode extends FixedWithNextNode implements Simplifiable, Lowerable {
+public class BranchProbabilityNode extends FixedWithNextNode implements Simplifiable {
 
     public static final double LIKELY_PROBABILITY = 0.6;
     public static final double NOT_LIKELY_PROBABILITY = 1 - LIKELY_PROBABILITY;
@@ -47,52 +46,38 @@ public class BranchProbabilityNode extends FixedWithNextNode implements Simplifi
     public static final double NOT_DEOPT_PATH_PROBABILITY = 0.999;
     public static final double DEOPT_PATH_PROBABILITY = 1 - NOT_DEOPT_PATH_PROBABILITY;
 
-    @Input private ValueNode probability;
+    private final double probability;
 
-    public BranchProbabilityNode(ValueNode probability) {
+    public BranchProbabilityNode(double probability) {
         super(StampFactory.forVoid());
+        assert probability >= 0 && probability <= 1;
         this.probability = probability;
     }
 
     @Override
     public void simplify(SimplifierTool tool) {
-        if (probability.isConstant()) {
-            double probabilityValue = probability.asConstant().asDouble();
-            if (probabilityValue < 0.0) {
-                throw new GraalInternalError("A negative probability of " + probabilityValue + " is not allowed!");
-            } else if (probabilityValue > 1.0) {
-                throw new GraalInternalError("A probability of more than 1.0 (" + probabilityValue + ") is not allowed!");
-            }
-            FixedNode current = this;
-            while (!(current instanceof BeginNode)) {
-                current = (FixedNode) current.predecessor();
-            }
-            BeginNode begin = (BeginNode) current;
-            if (!(begin.predecessor() instanceof IfNode)) {
-                throw new GraalInternalError("Injected branch probability cannot follow a merge, only if nodes");
-            }
-            IfNode ifNode = (IfNode) begin.predecessor();
-            if (ifNode.trueSuccessor() == begin) {
-                ifNode.setTrueSuccessorProbability(probabilityValue);
-            } else {
-                ifNode.setTrueSuccessorProbability(1 - probabilityValue);
-            }
-
-            FixedNode next = next();
-            setNext(null);
-            ((FixedWithNextNode) predecessor()).setNext(next);
-            GraphUtil.killCFG(this);
+        FixedNode current = this;
+        while (!(current instanceof BeginNode)) {
+            current = (FixedNode) current.predecessor();
         }
+        BeginNode begin = (BeginNode) current;
+        assert begin.predecessor() instanceof IfNode : "explicit branch probability cannot follow a merge, only if nodes";
+        IfNode ifNode = (IfNode) begin.predecessor();
+        if (ifNode.trueSuccessor() == begin) {
+            ifNode.setTrueSuccessorProbability(probability);
+        } else {
+            ifNode.setTrueSuccessorProbability(1 - probability);
+        }
+
+        FixedNode next = next();
+        setNext(null);
+        ((FixedWithNextNode) predecessor()).setNext(next);
+        GraphUtil.killCFG(this);
     }
 
     @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static void probability(double probability) {
-    }
-
-    @Override
-    public void lower(LoweringTool tool, LoweringType loweringType) {
-        throw new GraalInternalError("Branch probability could not be injected, because the probability value did not reduce to a constant value.");
+    public static void probability(@ConstantNodeParameter double probability) {
     }
 
 }

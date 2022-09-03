@@ -37,11 +37,6 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
     public void testObjectSubstitutions() {
         test("getClass_");
         test("objectHashCode");
-
-        Object obj = new Object();
-
-        assertEquals("a string".getClass(), ObjectSubstitutions.getClass("a string"));
-        assertEquals(obj.hashCode(), ObjectSubstitutions.hashCode(obj));
     }
 
     @SuppressWarnings("all")
