@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,12 +26,7 @@ import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.c.CGlobalData;
-import com.oracle.svm.core.c.CGlobalDataFactory;
-import com.oracle.svm.core.graal.code.CGlobalDataInfo;
 import com.oracle.svm.core.jdk.NativeLibrarySupport;
-import com.oracle.svm.core.jdk.PlatformNativeLibrarySupport;
-import com.oracle.svm.hosted.c.CGlobalDataFeature;
 
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.MetaUtil;
@@ -50,8 +43,6 @@ public final class JNINativeLinkage {
     private final String declaringClass;
     private final String name;
     private final String descriptor;
-
-    private CGlobalDataInfo builtInAddress = null;
 
     /**
      * Creates an object for linking the address of a native method.
@@ -71,19 +62,6 @@ public final class JNINativeLinkage {
 
     public String getDeclaringClassName() {
         return declaringClass;
-    }
-
-    public boolean isBuiltInFunction() {
-        return (PlatformNativeLibrarySupport.singleton().isBuiltinPkgNative(this.getShortName()));
-    }
-
-    public CGlobalDataInfo getBuiltInAddress() {
-        assert this.isBuiltInFunction();
-        if (builtInAddress == null) {
-            CGlobalData<CFunctionPointer> linkage = CGlobalDataFactory.forSymbol(this.getShortName());
-            builtInAddress = CGlobalDataFeature.singleton().registerAsAccessedOrGet(linkage);
-        }
-        return builtInAddress;
     }
 
     /**

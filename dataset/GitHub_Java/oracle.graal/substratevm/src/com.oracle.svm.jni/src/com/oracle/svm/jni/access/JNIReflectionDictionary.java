@@ -135,17 +135,24 @@ public final class JNIReflectionDictionary {
         return (clazz != null) ? clazz.getField(name) : null;
     }
 
-    public JNIFieldId getFieldID(Class<?> clazz, String name) {
+    public JNIFieldId getFieldID(Class<?> clazz, String name, boolean isStatic) {
         JNIAccessibleField field = getField(clazz, name);
-        return field != null ? field.getId() : Word.zero();
+        if (field != null && field.isStatic() == isStatic) {
+            return getFieldID(field);
+        }
+        return Word.nullPointer();
     }
 
-    public String getFieldNameByID(Class<?> classObject, JNIFieldId id) {
+    private static JNIFieldId getFieldID(JNIAccessibleField field) {
+        return WordFactory.pointer((long) field.getOffset());
+    }
+
+    public String getFieldNameByID(Class<?> classObject, JNIFieldId id, boolean isStatic) {
         JNIAccessibleClass clazz = classesByClassObject.get(classObject);
         if (clazz != null) {
             for (Entry<String, JNIAccessibleField> entry : clazz.getFieldsByName().entrySet()) {
                 JNIAccessibleField field = entry.getValue();
-                if (id.equal(field.getId())) {
+                if (isStatic == field.isStatic() && id.equal(getFieldID(field))) {
                     return entry.getKey();
                 }
             }
