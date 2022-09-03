@@ -22,15 +22,12 @@
  */
 package com.oracle.graal.phases.common.inlining.info;
 
-import java.util.*;
-
 import com.oracle.graal.api.code.Assumptions;
 import com.oracle.graal.api.meta.MetaAccessProvider;
 import com.oracle.graal.api.meta.ResolvedJavaMethod;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.Invoke;
 import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.phases.common.inlining.info.elem.Inlineable;
+import com.oracle.graal.phases.common.inlining.InliningUtil;
 import com.oracle.graal.phases.util.Providers;
 
 /**
@@ -59,22 +56,20 @@ public interface InlineInfo {
 
     ResolvedJavaMethod methodAt(int index);
 
-    Inlineable inlineableElementAt(int index);
+    InliningUtil.Inlineable inlineableElementAt(int index);
 
     double probabilityAt(int index);
 
     double relevanceAt(int index);
 
-    void setInlinableElement(int index, Inlineable inlineableElement);
+    void setInlinableElement(int index, InliningUtil.Inlineable inlineableElement);
 
     /**
      * Performs the inlining described by this object and returns the node that represents the
      * return value of the inlined method (or null for void methods and methods that have no
      * non-exceptional exit).
-     * 
-     * @return a collection of nodes that need to be canonicalized after the inlining
      */
-    Collection<Node> inline(Providers providers, Assumptions assumptions);
+    void inline(Providers providers, Assumptions assumptions);
 
     /**
      * Try to make the call static bindable to avoid interface and virtual method calls.
