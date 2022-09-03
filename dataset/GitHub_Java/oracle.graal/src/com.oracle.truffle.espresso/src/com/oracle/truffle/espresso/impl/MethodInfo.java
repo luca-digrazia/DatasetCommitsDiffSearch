@@ -30,7 +30,13 @@ import java.lang.reflect.Modifier;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.interop.ArityException;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.jni.Mangle;
 import com.oracle.truffle.espresso.jni.NativeLibrary;
@@ -67,6 +73,7 @@ public final class MethodInfo implements ModifiersProvider {
     @CompilerDirectives.CompilationFinal private CallTarget callTarget;
     @CompilerDirectives.CompilationFinal private Klass returnType;
     @CompilerDirectives.CompilationFinal(dimensions = 1) private Klass[] parameterTypes;
+
 
     MethodInfo(Klass declaringClass, String name, SignatureDescriptor signature,
                     byte[] code, int maxStackSize, int maxLocals, int modifiers,
@@ -211,12 +218,13 @@ public final class MethodInfo implements ModifiersProvider {
                     System.err.println("Linking native method: " + meta(this).getDeclaringClass().getName() + "#" + getName() + " " + getSignature());
                     Meta meta = getContext().getMeta();
 
-                    Meta.Method.WithInstance findNative = meta.knownKlass(ClassLoader.class).staticMethod("findNative", long.class, ClassLoader.class, String.class);
+                    Meta.Method.WithInstance findNative = meta.knownKlass(ClassLoader.class)
+                            .staticMethod("findNative", long.class, ClassLoader.class, String.class);
 
                     // Lookup the short name first, otherwise lookup the long name (with signature).
                     callTarget = lookupJniCallTarget(findNative, false);
                     if (callTarget == null) {
-                        callTarget = lookupJniCallTarget(findNative, true);
+                        callTarget = lookupJniCallTarget(findNative,true);
                     }
 
                     if (callTarget == null) {
