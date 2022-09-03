@@ -61,9 +61,8 @@ public abstract class GeneratedPlugin {
     }
 
     public void generate(ProcessingEnvironment env, PrintWriter out) {
-        out.printf("    //        class: %s\n", intrinsicMethod.getEnclosingElement());
-        out.printf("    //       method: %s\n", intrinsicMethod);
-        out.printf("    // generated-by: %s\n", getClass().getName());
+        out.printf("    // class:  %s\n", intrinsicMethod.getEnclosingElement());
+        out.printf("    // method: %s\n", intrinsicMethod);
         out.printf("    private static final class %s extends GeneratedInvocationPlugin {\n", pluginName);
         out.printf("\n");
         out.printf("        @Override\n");

@@ -30,10 +30,9 @@ import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.tools.Diagnostic.Kind;
-
-import jdk.vm.ci.meta.JavaKind;
 
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.InjectedNodeParameter;
@@ -104,7 +103,7 @@ public abstract class GeneratedNodeIntrinsicPlugin extends GeneratedPlugin {
 
         @Override
         public void extraImports(Set<String> imports) {
-            if (getReturnKind(intrinsicMethod) != JavaKind.Void) {
+            if (intrinsicMethod.getReturnType().getKind() != TypeKind.VOID) {
                 imports.add("jdk.vm.ci.meta.JavaKind");
             }
         }
@@ -129,11 +128,10 @@ public abstract class GeneratedNodeIntrinsicPlugin extends GeneratedPlugin {
                 out.printf("            node.setStamp(%s);\n", deps.use(WellKnownDependency.RETURN_STAMP));
             }
 
-            JavaKind returnKind = getReturnKind(intrinsicMethod);
-            if (returnKind == JavaKind.Void) {
+            if (intrinsicMethod.getReturnType().getKind() == TypeKind.VOID) {
                 out.printf("            b.add(node);\n");
             } else {
-                out.printf("            b.addPush(JavaKind.%s, node);\n", returnKind.name());
+                out.printf("            b.addPush(JavaKind.%s, node);\n", getReturnKind(intrinsicMethod));
             }
             out.printf("            return true;\n");
         }
@@ -155,13 +153,13 @@ public abstract class GeneratedNodeIntrinsicPlugin extends GeneratedPlugin {
         @Override
         protected List<? extends VariableElement> getParameters() {
             List<? extends VariableElement> ret = customFactory.getParameters();
-            // remove initial GraphBuilderContext parameter
-            return ret.subList(1, ret.size());
+            // remove initial GraphBuilderContext and ResolvedJavaMethod parameters
+            return ret.subList(2, ret.size());
         }
 
         @Override
         protected void factoryCall(ProcessingEnvironment env, PrintWriter out, InjectedDependencies deps, int argCount) {
-            out.printf("            return %s.%s(b", customFactory.getEnclosingElement(), customFactory.getSimpleName());
+            out.printf("            return %s.%s(b, targetMethod", customFactory.getEnclosingElement(), customFactory.getSimpleName());
             for (int i = 0; i < argCount; i++) {
                 out.printf(", arg%d", i);
             }
