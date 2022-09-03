@@ -32,25 +32,24 @@ import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.ptx.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.ptx.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.Block;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
 import com.oracle.graal.lir.StandardOp.LabelOp;
-import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.ptx.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.phases.util.*;
+import com.oracle.graal.graph.GraalInternalError;
 
 /**
  * PTX specific backend.
  */
 public class PTXBackend extends Backend {
 
-    public PTXBackend(Providers providers) {
-        super(providers);
+    public PTXBackend(MetaAccessProvider metaAccess, CodeCacheProvider codeCache, TargetDescription target) {
+        super(metaAccess, codeCache, target);
     }
 
     @Override
@@ -60,15 +59,15 @@ public class PTXBackend extends Backend {
 
     @Override
     public FrameMap newFrameMap() {
-        return new PTXFrameMap(getCodeCache());
+        return new PTXFrameMap(getCodeCache(), target, getCodeCache().getRegisterConfig());
     }
 
     @Override
     public LIRGenerator newLIRGenerator(StructuredGraph graph, FrameMap frameMap, CallingConvention cc, LIR lir) {
-        return new PTXLIRGenerator(graph, getProviders(), frameMap, cc, lir);
+        return new PTXLIRGenerator(graph, getMetaAccess(), getCodeCache(), target, frameMap, cc, lir);
     }
 
-    class PTXFrameContext implements FrameContext {
+    class HotSpotFrameContext implements FrameContext {
 
         @Override
         public void enter(TargetMethodAssembler tasm) {
@@ -82,7 +81,7 @@ public class PTXBackend extends Backend {
 
     @Override
     protected AbstractAssembler createAssembler(FrameMap frameMap) {
-        return new PTXAssembler(getTarget(), frameMap.registerConfig);
+        return new PTXAssembler(target, frameMap.registerConfig);
     }
 
     @Override
@@ -94,8 +93,8 @@ public class PTXBackend extends Backend {
         // - has no instructions with debug info
         FrameMap frameMap = lirGen.frameMap;
         AbstractAssembler masm = createAssembler(frameMap);
-        PTXFrameContext frameContext = new PTXFrameContext();
-        TargetMethodAssembler tasm = new PTXTargetMethodAssembler(getCodeCache(), getForeignCalls(), frameMap, masm, frameContext, compilationResult);
+        HotSpotFrameContext frameContext = new HotSpotFrameContext();
+        TargetMethodAssembler tasm = new PTXTargetMethodAssembler(target, getCodeCache(), frameMap, masm, frameContext, compilationResult);
         tasm.setFrameSize(0);
         return tasm;
     }
