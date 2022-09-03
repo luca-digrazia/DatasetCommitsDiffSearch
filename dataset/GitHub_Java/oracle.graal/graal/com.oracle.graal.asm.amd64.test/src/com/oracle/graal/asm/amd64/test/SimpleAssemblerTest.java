@@ -37,7 +37,7 @@ public class SimpleAssemblerTest extends AssemblerTest {
         CodeGenTest test = new CodeGenTest() {
 
             @Override
-            public Buffer generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig, CallingConvention cc) {
+            public Buffer generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig) {
                 AMD64Assembler asm = new AMD64Assembler(target, registerConfig);
                 Register ret = registerConfig.getReturnRegister(Kind.Int);
                 asm.movl(ret, 8472);
@@ -53,11 +53,11 @@ public class SimpleAssemblerTest extends AssemblerTest {
         CodeGenTest test = new CodeGenTest() {
 
             @Override
-            public Buffer generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig, CallingConvention cc) {
+            public Buffer generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig) {
                 AMD64MacroAssembler asm = new AMD64MacroAssembler(target, registerConfig);
                 Register ret = registerConfig.getReturnRegister(Kind.Double);
                 compResult.recordDataReference(asm.codeBuffer.position(), Constant.forDouble(84.72), 8, false);
-                asm.movdbl(ret, asm.getPlaceholder());
+                asm.movdbl(ret, Address.Placeholder);
                 asm.ret(0);
                 return asm.codeBuffer;
             }

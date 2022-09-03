@@ -38,7 +38,7 @@ public abstract class AssemblerTest extends GraalTest {
 
     public interface CodeGenTest {
 
-        Buffer generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig, CallingConvention cc);
+        Buffer generateCode(CompilationResult compResult, TargetDescription target, RegisterConfig registerConfig);
     }
 
     public AssemblerTest() {
@@ -47,24 +47,21 @@ public abstract class AssemblerTest extends GraalTest {
 
     protected InstalledCode assembleMethod(Method m, CodeGenTest test) {
         ResolvedJavaMethod method = codeCache.lookupJavaMethod(m);
-        RegisterConfig registerConfig = codeCache.lookupRegisterConfig();
-        CallingConvention cc = CodeUtil.getCallingConvention(codeCache, CallingConvention.Type.JavaCallee, method, false);
+        RegisterConfig registerConfig = codeCache.lookupRegisterConfig(method);
 
         CompilationResult compResult = new CompilationResult();
-        Buffer codeBuffer = test.generateCode(compResult, codeCache.getTarget(), registerConfig, cc);
+
+        Buffer codeBuffer = test.generateCode(compResult, codeCache.getTarget(), registerConfig);
         compResult.setTargetCode(codeBuffer.close(true), codeBuffer.position());
 
         return codeCache.addMethod(method, compResult, null);
     }
 
-    protected Object runTest(String methodName, CodeGenTest test, Object... args) {
+    protected void assertReturn(String methodName, CodeGenTest test, Object expected, Object... args) {
         Method method = getMethod(methodName);
         InstalledCode code = assembleMethod(method, test);
-        return code.executeVarargs(args);
-    }
 
-    protected void assertReturn(String methodName, CodeGenTest test, Object expected, Object... args) {
-        Object actual = runTest(methodName, test, args);
-        Assert.assertEquals("unexpected return value", expected, actual);
+        Object actual = code.executeVarargs(args);
+        Assert.assertEquals("unexpected return value: " + actual, actual, expected);
     }
 }
