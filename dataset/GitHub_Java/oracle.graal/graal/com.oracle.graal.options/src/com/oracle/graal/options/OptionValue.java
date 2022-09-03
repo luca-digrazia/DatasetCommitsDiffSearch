@@ -22,8 +22,14 @@
  */
 package com.oracle.graal.options;
 
+import java.util.*;
+
 /**
- * An option value.
+ * A settable option value.
+ * <p>
+ * To access {@link OptionProvider} instances via a {@link ServiceLoader} for working with options,
+ * instances of this class should be assigned to static final fields that are annotated with
+ * {@link Option}.
  */
 public class OptionValue<T> {
 
@@ -32,8 +38,11 @@ public class OptionValue<T> {
      */
     protected T value;
 
-    private OptionDescriptor descriptor;
-
+    /**
+     * Creates an option value.
+     * 
+     * @param value the initial/default value of the option
+     */
     public OptionValue(T value) {
         this.value = value;
     }
@@ -57,29 +66,9 @@ public class OptionValue<T> {
     }
 
     /**
-     * Sets the descriptor for this option.
-     */
-    public void setDescriptor(OptionDescriptor descriptor) {
-        this.descriptor = descriptor;
-    }
-
-    /**
-     * Gets the name of this option. The name for an option value with a null
-     * {@linkplain #setDescriptor(OptionDescriptor) descriptor} is {@code "<anonymous>"}.
-     */
-    public String getName() {
-        return descriptor == null ? "<anonymous>" : (descriptor.getDeclaringClass().getName() + "." + descriptor.getName());
-    }
-
-    @Override
-    public String toString() {
-        return getName() + "=" + value;
-    }
-
-    /**
      * Gets the value of this option.
      */
-    public T getValue() {
+    public final T getValue() {
         if (value == UNINITIALIZED) {
             value = initialValue();
         }
@@ -90,7 +79,7 @@ public class OptionValue<T> {
      * Sets the value of this option.
      */
     @SuppressWarnings("unchecked")
-    public void setValue(Object v) {
+    public final void setValue(Object v) {
         this.value = (T) v;
     }
 }

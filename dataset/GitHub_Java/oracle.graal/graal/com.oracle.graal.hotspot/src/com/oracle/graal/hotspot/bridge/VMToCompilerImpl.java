@@ -28,7 +28,6 @@ import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.CompilationTask.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.java.GraphBuilderPhase.*;
-import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.io.*;
 import java.lang.reflect.*;
@@ -182,7 +181,7 @@ public class VMToCompilerImpl implements VMToCompiler {
         // Install intrinsics.
         final HotSpotRuntime runtime = graalRuntime.getCapability(HotSpotRuntime.class);
         final Replacements replacements = graalRuntime.getCapability(Replacements.class);
-        if (Intrinsify.getValue()) {
+        if (GraalOptions.Intrinsify) {
             Debug.scope("RegisterReplacements", new Object[]{new DebugDumpScope("RegisterReplacements")}, new Runnable() {
 
                 @Override
@@ -192,7 +191,7 @@ public class VMToCompilerImpl implements VMToCompiler {
                         provider.registerReplacements(runtime, replacements, runtime.getTarget());
                     }
                     runtime.registerReplacements(replacements);
-                    if (BootstrapReplacements.getValue()) {
+                    if (GraalOptions.BootstrapReplacements) {
                         for (ResolvedJavaMethod method : replacements.getAllReplacements()) {
                             replacements.getMacroSubstitution(method);
                             replacements.getMethodSubstitution(method);
@@ -422,7 +421,7 @@ public class VMToCompilerImpl implements VMToCompiler {
         System.gc();
         phaseTransition("bootstrap2");
 
-        if (CompileTheWorld.getValue() != null) {
+        if (GraalOptions.CompileTheWorld != null) {
             new CompileTheWorld().compile();
             System.exit(0);
         }
@@ -769,7 +768,7 @@ public class VMToCompilerImpl implements VMToCompiler {
             phasePlan.addPhase(PhasePosition.AFTER_PARSING, new OnStackReplacementPhase());
         }
         phasePlan.addPhase(PhasePosition.LOW_LEVEL, new WriteBarrierAdditionPhase());
-        if (VerifyPhases.getValue()) {
+        if (GraalOptions.VerifyPhases) {
             phasePlan.addPhase(PhasePosition.LOW_LEVEL, new WriteBarrierVerificationPhase());
 
         }
