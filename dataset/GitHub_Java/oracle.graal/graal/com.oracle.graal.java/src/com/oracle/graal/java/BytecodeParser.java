@@ -258,7 +258,6 @@ import java.util.Formatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import com.oracle.graal.bytecode.Bytecode;
 import com.oracle.graal.bytecode.BytecodeDisassembler;
@@ -1377,7 +1376,7 @@ public class BytecodeParser implements GraphBuilderContext {
         }
 
         JavaKind resultType = targetMethod.getSignature().getReturnKind();
-        if (!parsingIntrinsic() && DeoptALot.getValue(graph.getOptions())) {
+        if (DeoptALot.getValue()) {
             append(new DeoptimizeNode(DeoptimizationAction.None, RuntimeConstraint));
             frameState.pushReturn(resultType, ConstantNode.defaultForKind(resultType, graph));
             return;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,44 +22,90 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.compiler.common.calc.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.compiler.common.calc.Condition;
+import com.oracle.graal.compiler.common.type.AbstractPointerStamp;
+import com.oracle.graal.compiler.common.type.ObjectStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable.BinaryCommutative;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.LogicConstantNode;
+import com.oracle.graal.nodes.LogicNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.extended.LoadHubNode;
+import com.oracle.graal.nodes.extended.LoadMethodNode;
+import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.nodes.util.GraphUtil;
+
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.TriState;
 
 @NodeInfo(shortName = "==")
-public class PointerEqualsNode extends CompareNode {
+public class PointerEqualsNode extends CompareNode implements BinaryCommutative<ValueNode> {
 
-    /**
-     * Constructs a new pointer equality comparison node.
-     *
-     * @param x the instruction producing the first input to the instruction
-     * @param y the instruction that produces the second input to this instruction
-     */
-    public static PointerEqualsNode create(ValueNode x, ValueNode y) {
+    public static final NodeClass<PointerEqualsNode> TYPE = NodeClass.create(PointerEqualsNode.class);
+
+    public PointerEqualsNode(ValueNode x, ValueNode y) {
+        this(TYPE, x, y);
+    }
+
+    public static LogicNode create(ValueNode x, ValueNode y) {
+        LogicNode result = findSynonym(x, y);
+        if (result != null) {
+            return result;
+        }
         return new PointerEqualsNode(x, y);
     }
 
-    protected PointerEqualsNode(ValueNode x, ValueNode y) {
-        super(x, y);
+    protected PointerEqualsNode(NodeClass<? extends PointerEqualsNode> c, ValueNode x, ValueNode y) {
+        super(c, Condition.EQ, false, x, y);
         assert x.stamp() instanceof AbstractPointerStamp;
         assert y.stamp() instanceof AbstractPointerStamp;
     }
 
-    @Override
-    public Condition condition() {
-        return Condition.EQ;
-    }
-
-    @Override
-    public boolean unorderedIsTrue() {
+    /**
+     * Determines if this is a comparison used to determine whether dispatching on a receiver could
+     * select a certain method and if so, returns {@code true} if the answer is guaranteed to be
+     * false. Otherwise, returns {@code false}.
+     */
+    private boolean isAlwaysFailingVirtualDispatchTest(ValueNode forX, ValueNode forY) {
+        if (forY.isConstant()) {
+            if (forX instanceof LoadMethodNode && condition == Condition.EQ) {
+                LoadMethodNode lm = ((LoadMethodNode) forX);
+                if (lm.getMethod().getEncoding().equals(forY.asConstant())) {
+                    if (lm.getHub() instanceof LoadHubNode) {
+                        ValueNode object = ((LoadHubNode) lm.getHub()).getValue();
+                        ResolvedJavaType type = StampTool.typeOrNull(object);
+                        ResolvedJavaType declaringClass = lm.getMethod().getDeclaringClass();
+                        if (type != null && !type.equals(declaringClass) && declaringClass.isAssignableFrom(type)) {
+                            ResolvedJavaMethod override = type.resolveMethod(lm.getMethod(), lm.getCallerType());
+                            if (override != null && override != lm.getMethod()) {
+                                assert declaringClass.isAssignableFrom(override.getDeclaringClass());
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         return false;
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        LogicNode result = findSynonym(forX, forY);
+        if (result != null) {
+            return result;
+        }
+        if (isAlwaysFailingVirtualDispatchTest(forX, forY)) {
+            return LogicConstantNode.contradiction();
+        }
+        return super.canonical(tool, forX, forY);
+    }
+
+    public static LogicNode findSynonym(ValueNode forX, ValueNode forY) {
         if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY)) {
             return LogicConstantNode.tautology();
         } else if (forX.stamp().alwaysDistinct(forY.stamp())) {
@@ -68,12 +114,51 @@ public class PointerEqualsNode extends CompareNode {
             return IsNullNode.create(forY);
         } else if (((AbstractPointerStamp) forY.stamp()).alwaysNull()) {
             return IsNullNode.create(forX);
+        } else {
+            return null;
         }
-        return super.canonical(tool, forX, forY);
     }
 
     @Override
     protected CompareNode duplicateModified(ValueNode newX, ValueNode newY) {
-        return PointerEqualsNode.create(newX, newY);
+        return new PointerEqualsNode(newX, newY);
+    }
+
+    @Override
+    public Stamp getSucceedingStampForX(boolean negated) {
+        if (!negated) {
+            Stamp xStamp = getX().stamp();
+            Stamp newStamp = xStamp.join(getY().stamp());
+            if (!newStamp.equals(xStamp)) {
+                return newStamp;
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public Stamp getSucceedingStampForY(boolean negated) {
+        if (!negated) {
+            Stamp yStamp = getY().stamp();
+            Stamp newStamp = yStamp.join(getX().stamp());
+            if (!newStamp.equals(yStamp)) {
+                return newStamp;
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public TriState tryFold(Stamp xStampGeneric, Stamp yStampGeneric) {
+        if (xStampGeneric instanceof ObjectStamp && yStampGeneric instanceof ObjectStamp) {
+            ObjectStamp xStamp = (ObjectStamp) xStampGeneric;
+            ObjectStamp yStamp = (ObjectStamp) yStampGeneric;
+            if (xStamp.alwaysDistinct(yStamp)) {
+                return TriState.FALSE;
+            } else if (xStamp.neverDistinct(yStamp)) {
+                return TriState.TRUE;
+            }
+        }
+        return TriState.UNKNOWN;
     }
 }
