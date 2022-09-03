@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,34 +22,52 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.util.*;
+import static com.oracle.graal.nodeinfo.InputType.Memory;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_20;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_2;
+
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
  * Creates a memory barrier.
  */
-public class MembarNode extends AbstractStateSplit implements StateSplit, LIRLowerable, MemoryCheckpoint {
+@NodeInfo(nameTemplate = "Membar#{p#location/s}", allowedUsageTypes = Memory, cycles = CYCLES_20, size = SIZE_2)
+public final class MembarNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Single {
 
-    private final int barriers;
+    public static final NodeClass<MembarNode> TYPE = NodeClass.create(MembarNode.class);
+    protected final int barriers;
+    protected final LocationIdentity location;
 
-    /**
-     * @param barriers a mask of the barrier constants defined in {@link MemoryBarriers}
-     */
     public MembarNode(int barriers) {
-        super(StampFactory.illegal());
+        this(barriers, LocationIdentity.any());
+    }
+
+    public MembarNode(int barriers, LocationIdentity location) {
+        super(TYPE, StampFactory.forVoid());
         this.barriers = barriers;
+        this.location = location;
     }
 
     @Override
-    public void generate(LIRGeneratorTool generator) {
-        generator.emitMembar(barriers);
+    public LocationIdentity getLocationIdentity() {
+        return location;
     }
 
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static void get(@ConstantNodeParameter int barriers) {
-        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
+    @Override
+    public void generate(NodeLIRBuilderTool generator) {
+        generator.getLIRGeneratorTool().emitMembar(barriers);
     }
+
+    @NodeIntrinsic
+    public static native void memoryBarrier(@ConstantNodeParameter int barriers);
+
+    @NodeIntrinsic
+    public static native void memoryBarrier(@ConstantNodeParameter int barriers, @ConstantNodeParameter LocationIdentity location);
 }
