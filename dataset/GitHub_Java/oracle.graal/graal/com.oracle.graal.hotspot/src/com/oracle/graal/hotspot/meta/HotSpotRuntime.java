@@ -593,7 +593,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             LocationNode location = IndexedLocationNode.create(ANY_LOCATION, cas.expected().kind(), cas.displacement(), cas.offset(), graph, 1);
             LoweredCompareAndSwapNode atomicNode = graph.add(new LoweredCompareAndSwapNode(cas.object(), location, cas.expected(), cas.newValue(), getCompareAndSwapBarrier(cas),
                             cas.expected().kind() == Kind.Object));
-            atomicNode.setStateAfter(cas.stateAfter());
             graph.replaceFixedWithFixed(cas, atomicNode);
         } else if (n instanceof LoadIndexedNode) {
             LoadIndexedNode loadIndexed = (LoadIndexedNode) n;
@@ -623,12 +622,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                 } else {
                     LoadHubNode arrayClass = graph.add(new LoadHubNode(array, wordKind));
                     LocationNode location = ConstantLocationNode.create(FINAL_LOCATION, wordKind, config.arrayClassElementOffset, graph);
-                    /*
-                     * Anchor the read of the element klass to the cfg, because it is only valid
-                     * when arrayClass is an object class, which might not be the case in other
-                     * parts of the compiled method.
-                     */
-                    FloatingReadNode arrayElementKlass = graph.unique(new FloatingReadNode(arrayClass, location, BeginNode.prevBegin(storeIndexed), StampFactory.forKind(wordKind())));
+                    FloatingReadNode arrayElementKlass = graph.unique(new FloatingReadNode(arrayClass, location, null, StampFactory.forKind(wordKind())));
                     CheckCastDynamicNode checkcast = graph.add(new CheckCastDynamicNode(arrayElementKlass, value, true));
                     graph.addBeforeFixed(storeIndexed, checkcast);
                     graph.addBeforeFixed(checkcast, arrayClass);

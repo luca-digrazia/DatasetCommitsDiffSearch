@@ -53,8 +53,7 @@ public class CheckCastDynamicSnippets implements Snippets {
         if (checkNull && probability(NOT_FREQUENT_PROBABILITY, object == null)) {
             isNull.inc();
         } else {
-            BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
-            Word objectHub = loadHubIntrinsic(object, getWordKind(), anchorNode);
+            Word objectHub = loadHub(object);
             if (!checkUnknownSubType(hub, objectHub)) {
                 DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
             }
