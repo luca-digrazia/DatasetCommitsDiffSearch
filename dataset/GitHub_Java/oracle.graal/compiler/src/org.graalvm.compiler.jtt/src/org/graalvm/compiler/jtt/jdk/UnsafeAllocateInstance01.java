@@ -67,7 +67,6 @@ public class UnsafeAllocateInstance01 extends JTTTest {
         runTest("testInstance");
     }
 
-    @Ignore("https://bugs.openjdk.java.net/browse/JDK-8153540")
     @Test
     public void run1() throws Throwable {
         runTest("testClassForException", UnsafeAllocateInstance01[].class);
