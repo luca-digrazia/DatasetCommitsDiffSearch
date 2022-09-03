@@ -24,6 +24,7 @@ package com.oracle.graal.loop;
 
 import java.util.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.cfg.*;
@@ -144,7 +145,7 @@ public class LoopEx {
             BinaryNode result = BinaryNode.reassociate(binary, invariant, binary.getX(), binary.getY());
             if (result != binary) {
                 if (Debug.isLogEnabled()) {
-                    Debug.log("%s : Reassociated %s into %s", graph.method().format("%H::%n"), binary, result);
+                    Debug.log("%s : Reassociated %s into %s", MetaUtil.format("%H::%n", graph.method()), binary, result);
                 }
                 if (!result.isAlive()) {
                     assert !result.isDeleted();
@@ -173,7 +174,7 @@ public class LoopEx {
             }
             LogicNode ifTest = ifNode.condition();
             if (!(ifTest instanceof IntegerLessThanNode)) {
-                if (ifTest instanceof IntegerBelowNode) {
+                if (ifTest instanceof IntegerBelowThanNode) {
                     Debug.log("Ignored potential Counted loop at %s with |<|", loopBegin);
                 }
                 return false;
