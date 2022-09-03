@@ -41,9 +41,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.graalvm.polyglot.Context;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -59,20 +56,6 @@ import com.oracle.truffle.api.nodes.Node;
 
 @SuppressWarnings({"rawtypes", "unchecked"})
 public class AsCollectionsTest {
-
-    private Context context;
-
-    @Before
-    public void enterContext() {
-        context = Context.create();
-        context.enter();
-    }
-
-    @After
-    public void leaveContext() {
-        context.leave();
-        context.close();
-    }
 
     @Test
     public void testAsList() {
