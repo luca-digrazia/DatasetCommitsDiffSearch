@@ -25,7 +25,6 @@
 package com.oracle.truffle.tools.profiler;
 
 import com.oracle.truffle.api.Assumption;
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -85,20 +84,20 @@ final class ShadowStack {
 
         @CompilationFinal private boolean seenOtherThreads;
         @CompilationFinal final boolean isAttachedToRootNode;
-        @CompilationFinal final boolean ignoreInlinedRoots;
+        @CompilationFinal final boolean compiled;
 
-        StackPushPopNode(ShadowStack profilerStack, SourceLocation location, boolean ignoreInlinedRoots, boolean isAttachedToRootNode) {
+        StackPushPopNode(ShadowStack profilerStack, SourceLocation location, boolean compiled, boolean isAttachedToRootNode) {
             this.profilerStack = profilerStack;
             this.cachedThread = Thread.currentThread();
             this.location = location;
             this.cachedStack = getStack();
             this.isAttachedToRootNode = isAttachedToRootNode;
-            this.ignoreInlinedRoots = ignoreInlinedRoots;
+            this.compiled = compiled;
         }
 
         @Override
         protected void onEnter(VirtualFrame frame) {
-            if (CompilerDirectives.inCompiledCode() && ignoreInlinedRoots && isAttachedToRootNode && !CompilerDirectives.inCompilationRoot()) {
+            if (CompilerDirectives.inCompiledCode() && compiled && isAttachedToRootNode && !CompilerDirectives.inCompilationRoot()) {
                 return;
             }
             doOnEnter();
@@ -128,17 +127,13 @@ final class ShadowStack {
 
         @Override
         protected void onReturnValue(VirtualFrame frame, Object result) {
-            if (ignoreInlinedRoots) {
+            if (compiled) {
                 if (CompilerDirectives.inCompiledCode()) {
                     if (isAttachedToRootNode && !CompilerDirectives.inCompilationRoot()) {
                         return;
                     }
                 } else {
-                    // This is needed to control for the case that an invalidation happened in an
-                    // inlined root.
-                    // Than there should be no stack pop until we exit the original compilation
-                    // root.
-                    if (getStack().top() != location) {
+                    if (getStack().getStack()[cachedStack.stackIndex] != location) {
                         return;
                     }
                 }
@@ -238,12 +233,6 @@ final class ShadowStack {
                 }
                 stackIndex = index - 1;
             }
-        }
-
-        SourceLocation top() {
-            CompilerAsserts.neverPartOfCompilation();
-            int index = stackIndex;
-            return stack[index];
         }
 
         SourceLocation[] getStack() {
