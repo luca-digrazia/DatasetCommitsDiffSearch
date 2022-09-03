@@ -24,8 +24,7 @@ package com.oracle.graal.nodes;
 
 //JaCoCo Exclude
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -105,23 +104,6 @@ public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtual
         inferStamp();
         if (stamp().equals(object().stamp())) {
             return object();
-        }
-        if (getGuard() != null) {
-            for (Node use : getGuard().asNode().usages()) {
-                if (use instanceof PiNode) {
-                    PiNode otherPi = (PiNode) use;
-                    if (object() == otherPi.object() && stamp().equals(otherPi.stamp())) {
-                        /*
-                         * Two PiNodes with the same guard and same result, so return the one with
-                         * the more precise piStamp.
-                         */
-                        Stamp newStamp = piStamp.join(otherPi.piStamp);
-                        if (newStamp.equals(otherPi.piStamp)) {
-                            return otherPi;
-                        }
-                    }
-                }
-            }
         }
         return this;
     }
