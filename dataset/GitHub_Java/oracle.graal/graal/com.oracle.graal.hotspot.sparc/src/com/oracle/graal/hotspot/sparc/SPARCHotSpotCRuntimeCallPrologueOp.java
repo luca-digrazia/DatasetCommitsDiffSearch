@@ -28,6 +28,7 @@ import static com.oracle.graal.sparc.SPARC.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Stx;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.sparc.*;
@@ -51,7 +52,7 @@ final class SPARCHotSpotCRuntimeCallPrologueOp extends SPARCLIRInstruction imple
     public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
         // Save last Java frame.
         masm.add(stackPointer, STACK_BIAS, g4);
-        masm.stx(g4, new SPARCAddress(thread, threadLastJavaSpOffset));
+        new Stx(g4, new SPARCAddress(thread, threadLastJavaSpOffset)).emit(masm);
 
         // Save the thread register when calling out to the runtime.
         SPARCMove.move(crb, masm, threadTemp, thread.asValue(LIRKind.value(Kind.Long)), delayedControlTransfer);

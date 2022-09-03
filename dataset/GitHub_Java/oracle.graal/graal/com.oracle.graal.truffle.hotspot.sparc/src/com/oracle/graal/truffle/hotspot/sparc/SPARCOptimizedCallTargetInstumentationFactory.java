@@ -35,6 +35,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Ldx;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.lir.asm.*;
@@ -60,7 +61,7 @@ public class SPARCOptimizedCallTargetInstumentationFactory implements OptimizedC
                     SPARCAddress codeBlobAddress = new SPARCAddress(thisRegister, getFieldOffset("address", InstalledCode.class));
                     SPARCAddress verifiedEntryPointAddress = new SPARCAddress(spillRegister, config.nmethodEntryOffset);
 
-                    asm.ldx(codeBlobAddress, spillRegister);
+                    new Ldx(codeBlobAddress, spillRegister).emit(asm);
                     if (asm.hasFeature(CBCOND)) {
                         asm.cbcondx(Equal, spillRegister, 0, doProlog);
                     } else {
@@ -68,7 +69,7 @@ public class SPARCOptimizedCallTargetInstumentationFactory implements OptimizedC
                         asm.bpcc(Equal, NOT_ANNUL, doProlog, Xcc, PREDICT_NOT_TAKEN);
                         asm.nop();
                     }
-                    asm.ldx(verifiedEntryPointAddress, spillRegister); // in delay slot
+                    new Ldx(verifiedEntryPointAddress, spillRegister).emit(asm); // in delay slot
                     asm.jmp(spillRegister);
                     asm.nop();
                     asm.bind(doProlog);

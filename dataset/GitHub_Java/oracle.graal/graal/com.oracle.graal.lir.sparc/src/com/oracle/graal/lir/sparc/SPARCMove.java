@@ -31,6 +31,21 @@ import static com.oracle.graal.sparc.SPARC.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Lddf;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Ldf;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Ldsb;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Ldsh;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Ldsw;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Lduh;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Ldx;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Stb;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Stdf;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Stf;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Sth;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Stw;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Stx;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Cas;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Casx;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
@@ -134,11 +149,11 @@ public class SPARCMove {
                 switch (inputKind) {
                     case Float:
                         assert resultKindSize == 4;
-                        masm.stf(asFloatReg(input), tempAddress);
+                        new Stf(asFloatReg(input), tempAddress).emit(masm);
                         break;
                     case Double:
                         assert resultKindSize == 8;
-                        masm.stdf(asDoubleReg(input), tempAddress);
+                        new Stdf(asDoubleReg(input), tempAddress).emit(masm);
                         break;
                     case Long:
                     case Int:
@@ -146,13 +161,13 @@ public class SPARCMove {
                     case Char:
                     case Byte:
                         if (resultKindSize == 8) {
-                            masm.stx(asLongReg(input), tempAddress);
+                            new Stx(asLongReg(input), tempAddress).emit(masm);
                         } else if (resultKindSize == 4) {
-                            masm.stw(asIntReg(input), tempAddress);
+                            new Stw(asIntReg(input), tempAddress).emit(masm);
                         } else if (resultKindSize == 2) {
-                            masm.sth(asIntReg(input), tempAddress);
+                            new Sth(asIntReg(input), tempAddress).emit(masm);
                         } else if (resultKindSize == 1) {
-                            masm.stb(asIntReg(input), tempAddress);
+                            new Stb(asIntReg(input), tempAddress).emit(masm);
                         } else {
                             throw GraalInternalError.shouldNotReachHere();
                         }
@@ -163,25 +178,25 @@ public class SPARCMove {
                 delayedControlTransfer.emitControlTransfer(crb, masm);
                 switch (resultKind) {
                     case Long:
-                        masm.ldx(tempAddress, asLongReg(result));
+                        new Ldx(tempAddress, asLongReg(result)).emit(masm);
                         break;
                     case Int:
-                        masm.ldsw(tempAddress, asIntReg(result));
+                        new Ldsw(tempAddress, asIntReg(result)).emit(masm);
                         break;
                     case Short:
-                        masm.ldsh(tempAddress, asIntReg(input));
+                        new Ldsh(tempAddress, asIntReg(input)).emit(masm);
                         break;
                     case Char:
-                        masm.lduh(tempAddress, asIntReg(input));
+                        new Lduh(tempAddress, asIntReg(input)).emit(masm);
                         break;
                     case Byte:
-                        masm.ldsb(tempAddress, asIntReg(input));
+                        new Ldsb(tempAddress, asIntReg(input)).emit(masm);
                         break;
                     case Float:
-                        masm.ldf(tempAddress, asFloatReg(result));
+                        new Ldf(tempAddress, asFloatReg(result)).emit(masm);
                         break;
                     case Double:
-                        masm.lddf(tempAddress, asDoubleReg(result));
+                        new Lddf(tempAddress, asDoubleReg(result)).emit(masm);
                         break;
                     default:
                         GraalInternalError.shouldNotReachHere();
@@ -297,28 +312,28 @@ public class SPARCMove {
                 switch (kind) {
                     case Boolean:
                     case Byte:
-                        masm.ldsb(addr, dst);
+                        new Ldsb(addr, dst).emit(masm);
                         break;
                     case Short:
-                        masm.ldsh(addr, dst);
+                        new Ldsh(addr, dst).emit(masm);
                         break;
                     case Char:
-                        masm.lduh(addr, dst);
+                        new Lduh(addr, dst).emit(masm);
                         break;
                     case Int:
-                        masm.ldsw(addr, dst);
+                        new Ldsw(addr, dst).emit(masm);
                         break;
                     case Long:
-                        masm.ldx(addr, dst);
+                        new Ldx(addr, dst).emit(masm);
                         break;
                     case Float:
-                        masm.ldf(addr, dst);
+                        new Ldf(addr, dst).emit(masm);
                         break;
                     case Double:
-                        masm.lddf(addr, dst);
+                        new Lddf(addr, dst).emit(masm);
                         break;
                     case Object:
-                        masm.ldx(addr, dst);
+                        new Ldx(addr, dst).emit(masm);
                         break;
                     default:
                         throw GraalInternalError.shouldNotReachHere();
@@ -392,7 +407,7 @@ public class SPARCMove {
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             delayedControlTransfer.emitControlTransfer(crb, masm);
             crb.recordImplicitException(masm.position(), state);
-            masm.ldx(new SPARCAddress(asRegister(input), 0), g0);
+            new Ldx(new SPARCAddress(asRegister(input), 0), r0).emit(masm);
         }
 
         public Value getCheckedValue() {
@@ -483,26 +498,26 @@ public class SPARCMove {
                 switch (kind) {
                     case Boolean:
                     case Byte:
-                        masm.stb(asRegister(input), addr);
+                        new Stb(asRegister(input), addr).emit(masm);
                         break;
                     case Short:
                     case Char:
-                        masm.sth(asRegister(input), addr);
+                        new Sth(asRegister(input), addr).emit(masm);
                         break;
                     case Int:
-                        masm.stw(asRegister(input), addr);
+                        new Stw(asRegister(input), addr).emit(masm);
                         break;
                     case Long:
-                        masm.stx(asRegister(input), addr);
+                        new Stx(asRegister(input), addr).emit(masm);
                         break;
                     case Object:
-                        masm.stx(asRegister(input), addr);
+                        new Stx(asRegister(input), addr).emit(masm);
                         break;
                     case Float:
-                        masm.stf(asRegister(input), addr);
+                        new Stf(asRegister(input), addr).emit(masm);
                         break;
                     case Double:
-                        masm.stdf(asRegister(input), addr);
+                        new Stdf(asRegister(input), addr).emit(masm);
                         break;
                     default:
                         throw GraalInternalError.shouldNotReachHere("missing: " + kind);
@@ -535,18 +550,18 @@ public class SPARCMove {
                 switch (kind) {
                     case Boolean:
                     case Byte:
-                        masm.stb(g0, addr);
+                        new Stb(g0, addr).emit(masm);
                         break;
                     case Short:
                     case Char:
-                        masm.sth(g0, addr);
+                        new Sth(g0, addr).emit(masm);
                         break;
                     case Int:
-                        masm.stw(g0, addr);
+                        new Stw(g0, addr).emit(masm);
                         break;
                     case Long:
                     case Object:
-                        masm.stx(g0, addr);
+                        new Stx(g0, addr).emit(masm);
                         break;
                     case Float:
                     case Double:
@@ -666,24 +681,24 @@ public class SPARCMove {
             switch (input.getKind()) {
                 case Byte:
                 case Boolean:
-                    masm.stb(src, dst);
+                    new Stb(src, dst).emit(masm);
                     break;
                 case Char:
                 case Short:
-                    masm.sth(src, dst);
+                    new Sth(src, dst).emit(masm);
                     break;
                 case Int:
-                    masm.stw(src, dst);
+                    new Stw(src, dst).emit(masm);
                     break;
                 case Long:
                 case Object:
-                    masm.stx(src, dst);
+                    new Stx(src, dst).emit(masm);
                     break;
                 case Float:
-                    masm.stf(src, dst);
+                    new Stf(src, dst).emit(masm);
                     break;
                 case Double:
-                    masm.stdf(src, dst);
+                    new Stdf(src, dst).emit(masm);
                     break;
                 default:
                     throw GraalInternalError.shouldNotReachHere("Input is a: " + input.getKind() + "(" + input + ")");
@@ -701,26 +716,26 @@ public class SPARCMove {
             switch (input.getKind()) {
                 case Boolean:
                 case Byte:
-                    masm.ldsb(src, dst);
+                    new Ldsb(src, dst).emit(masm);
                     break;
                 case Short:
-                    masm.ldsh(src, dst);
+                    new Ldsh(src, dst).emit(masm);
                     break;
                 case Char:
-                    masm.lduh(src, dst);
+                    new Lduh(src, dst).emit(masm);
                     break;
                 case Int:
-                    masm.ldsw(src, dst);
+                    new Ldsw(src, dst).emit(masm);
                     break;
                 case Long:
                 case Object:
-                    masm.ldx(src, dst);
+                    new Ldx(src, dst).emit(masm);
                     break;
                 case Float:
-                    masm.ldf(src, dst);
+                    new Ldf(src, dst).emit(masm);
                     break;
                 case Double:
-                    masm.lddf(src, dst);
+                    new Lddf(src, dst).emit(masm);
                     break;
                 default:
                     throw GraalInternalError.shouldNotReachHere("Input is a: " + input.getKind());
@@ -783,7 +798,7 @@ public class SPARCMove {
                             new Setx(0, scratch, true).emit(masm);
                             // Now load the float value
                             delaySlotLir.emitControlTransfer(crb, masm);
-                            masm.ldf(new SPARCAddress(scratch, 0), asFloatReg(result));
+                            new Ldf(scratch, asFloatReg(result)).emit(masm);
                         }
                     }
                     break;
@@ -810,7 +825,7 @@ public class SPARCMove {
                             new Setx(0, scratch, true).emit(masm);
                             delaySlotLir.emitControlTransfer(crb, masm);
                             // Now load the float value
-                            masm.lddf(new SPARCAddress(scratch, 0), asDoubleReg(result));
+                            new Lddf(scratch, asDoubleReg(result)).emit(masm);
                         }
                     }
                     break;
@@ -835,11 +850,11 @@ public class SPARCMove {
     protected static void compareAndSwap(SPARCMacroAssembler masm, AllocatableValue address, AllocatableValue cmpValue, AllocatableValue newValue) {
         switch (cmpValue.getKind()) {
             case Int:
-                masm.cas(asRegister(address), asRegister(cmpValue), asRegister(newValue));
+                new Cas(asRegister(address), asRegister(cmpValue), asRegister(newValue)).emit(masm);
                 break;
             case Long:
             case Object:
-                masm.casx(asRegister(address), asRegister(cmpValue), asRegister(newValue));
+                new Casx(asRegister(address), asRegister(cmpValue), asRegister(newValue)).emit(masm);
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();

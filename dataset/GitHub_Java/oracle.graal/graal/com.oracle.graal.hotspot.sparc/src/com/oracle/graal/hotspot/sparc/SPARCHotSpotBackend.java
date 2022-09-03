@@ -38,6 +38,8 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Ldx;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Stx;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.hotspot.*;
@@ -111,12 +113,12 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
                     // Use SPARCAddress to get the final displacement including the stack bias.
                     SPARCAddress address = new SPARCAddress(sp, -disp);
                     if (SPARCAssembler.isSimm13(address.getDisplacement())) {
-                        masm.stx(g0, address);
+                        new Stx(g0, address).emit(masm);
                     } else {
                         try (SPARCScratchRegister sc = SPARCScratchRegister.get()) {
                             Register scratch = sc.getRegister();
                             new Setx(address.getDisplacement(), scratch).emit(masm);
-                            masm.stx(g0, new SPARCAddress(sp, scratch));
+                            new Stx(g0, new SPARCAddress(sp, scratch)).emit(masm);
                         }
                     }
                 }
@@ -159,7 +161,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
                 final int slotSize = 8;
                 for (int i = 0; i < frameSize / slotSize; ++i) {
                     // 0xC1C1C1C1
-                    masm.stx(g0, new SPARCAddress(sp, i * slotSize));
+                    new Stx(g0, new SPARCAddress(sp, i * slotSize)).emit(masm);
                 }
             }
         }
@@ -232,7 +234,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
                     Register receiver = asRegister(cc.getArgument(0));
                     SPARCAddress src = new SPARCAddress(receiver, config.hubOffset);
 
-                    masm.ldx(src, scratch);
+                    new Ldx(src, scratch).emit(masm);
                     masm.cmp(scratch, inlineCacheKlass);
                 }
                 masm.bpcc(NotEqual, NOT_ANNUL, unverifiedStub, Xcc, PREDICT_NOT_TAKEN);

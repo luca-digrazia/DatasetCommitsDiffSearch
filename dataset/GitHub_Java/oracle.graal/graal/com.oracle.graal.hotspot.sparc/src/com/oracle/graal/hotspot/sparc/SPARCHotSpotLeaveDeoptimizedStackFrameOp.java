@@ -22,28 +22,33 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
 import static com.oracle.graal.sparc.SPARC.*;
 
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.sparc.*;
 
 /**
  * Pops the current frame off the stack including the return address.
  */
 @Opcode("LEAVE_DEOPTIMIZED_STACK_FRAME")
-final class SPARCHotSpotLeaveDeoptimizedStackFrameOp extends SPARCHotSpotEpilogueOp {
+final class SPARCHotSpotLeaveDeoptimizedStackFrameOp extends SPARCLIRInstruction {
 
     @Override
     public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
         // Save O registers over restore.
-        new Mov(o0, i0).emit(masm);
-        new Mov(o1, i1).emit(masm);
-        new Mov(o2, i2).emit(masm);
-        new Mov(o3, i3).emit(masm);
-        new Mov(o4, i4).emit(masm);
+        masm.mov(o0, i0);
+        masm.mov(o1, i1);
+        masm.mov(o2, i2);
+        masm.mov(o3, i3);
+        masm.mov(o4, i4);
 
-        new RestoreWindow().emit(masm);
+        masm.restoreWindow();
+    }
+
+    @Override
+    public boolean leavesRegisterWindow() {
+        return true;
     }
 }

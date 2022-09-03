@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,21 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
-import static jdk.internal.jvmci.sparc.SPARC.*;
+import static com.oracle.graal.sparc.SPARC.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.asm.*;
 
 public class SPARCTestOp extends SPARCLIRInstruction {
-    public static final LIRInstructionClass<SPARCTestOp> TYPE = LIRInstructionClass.create(SPARCTestOp.class);
-    public static final SizeEstimate SIZE = SizeEstimate.create(1);
 
     @Use({REG}) protected Value x;
     @Use({REG, CONST}) protected Value y;
 
     public SPARCTestOp(Value x, Value y) {
-        super(TYPE, SIZE);
         this.x = x;
         this.y = y;
     }
@@ -60,7 +56,7 @@ public class SPARCTestOp extends SPARCLIRInstruction {
                     masm.andcc(asLongReg(x), asLongReg(y), g0);
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
             }
         } else if (isConstant(y)) {
             switch (x.getKind()) {
@@ -75,10 +71,10 @@ public class SPARCTestOp extends SPARCLIRInstruction {
                     masm.andcc(asLongReg(x), crb.asIntConst(y), g0);
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
             }
         } else {
-            throw JVMCIError.shouldNotReachHere();
+            throw GraalInternalError.shouldNotReachHere();
         }
     }
 

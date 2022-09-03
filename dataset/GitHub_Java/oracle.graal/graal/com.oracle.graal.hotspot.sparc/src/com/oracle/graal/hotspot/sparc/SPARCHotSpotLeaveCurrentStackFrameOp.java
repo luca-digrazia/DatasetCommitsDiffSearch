@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,32 +22,20 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static jdk.vm.ci.sparc.SPARC.i0;
-import static jdk.vm.ci.sparc.SPARC.i1;
-import static jdk.vm.ci.sparc.SPARC.i2;
-import static jdk.vm.ci.sparc.SPARC.i3;
-import static jdk.vm.ci.sparc.SPARC.i4;
-import static jdk.vm.ci.sparc.SPARC.o0;
-import static jdk.vm.ci.sparc.SPARC.o1;
-import static jdk.vm.ci.sparc.SPARC.o2;
-import static jdk.vm.ci.sparc.SPARC.o3;
-import static jdk.vm.ci.sparc.SPARC.o4;
+import static com.oracle.graal.sparc.SPARC.*;
 
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-import com.oracle.graal.lir.sparc.SPARCLIRInstruction;
+import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.sparc.*;
 
 /**
  * Pops the current frame off the stack.
  */
 @Opcode("LEAVE_CURRENT_STACK_FRAME")
 final class SPARCHotSpotLeaveCurrentStackFrameOp extends SPARCLIRInstruction {
-    public static final LIRInstructionClass<SPARCHotSpotLeaveCurrentStackFrameOp> TYPE = LIRInstructionClass.create(SPARCHotSpotLeaveCurrentStackFrameOp.class);
 
-    SPARCHotSpotLeaveCurrentStackFrameOp() {
-        super(TYPE);
+    public SPARCHotSpotLeaveCurrentStackFrameOp() {
     }
 
     @Override

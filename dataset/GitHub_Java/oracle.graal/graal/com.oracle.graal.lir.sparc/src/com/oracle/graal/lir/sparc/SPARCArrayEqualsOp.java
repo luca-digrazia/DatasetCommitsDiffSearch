@@ -41,6 +41,10 @@ import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
 import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Ldub;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Lduh;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Lduw;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Ldx;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.gen.*;
@@ -150,8 +154,8 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         masm.sub(g0, length, length);
 
         // Compare the last element first
-        masm.ldx(new SPARCAddress(array1, 0), tempReg1);
-        masm.ldx(new SPARCAddress(array2, 0), tempReg2);
+        new Ldx(new SPARCAddress(array1, 0), tempReg1).emit(masm);
+        new Ldx(new SPARCAddress(array2, 0), tempReg2).emit(masm);
         if (hasCBcond) {
             masm.cbcondx(NotEqual, tempReg1, tempReg2, falseLabel);
             masm.nop(); // for optimal performance (see manual)
@@ -166,16 +170,16 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         }
 
         // Load the first value from array 1 (Later done in back branch delay-slot)
-        masm.ldx(new SPARCAddress(array1, length), tempReg1);
+        new Ldx(new SPARCAddress(array1, length), tempReg1).emit(masm);
         masm.bind(loop);
-        masm.ldx(new SPARCAddress(array2, length), tempReg2);
+        new Ldx(new SPARCAddress(array2, length), tempReg2).emit(masm);
         masm.cmp(tempReg1, tempReg2);
         masm.bpcc(NotEqual, NOT_ANNUL, falseLabel, Xcc, PREDICT_NOT_TAKEN);
         // Delay slot, not annul, add for next iteration
         masm.addcc(length, VECTOR_SIZE, length);
         // Annul, to prevent access past the array
         masm.bpcc(NotEqual, ANNUL, loop, Xcc, PREDICT_TAKEN);
-        masm.ldx(new SPARCAddress(array1, length), tempReg1); // Load in delay slot
+        new Ldx(new SPARCAddress(array1, length), tempReg1).emit(masm); // Load in delay slot
 
         // Tail count zero, therefore we can go to the end
         if (hasCBcond) {
@@ -214,8 +218,8 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
                 masm.nop();
             }
 
-            masm.lduw(new SPARCAddress(array1, 0), tempReg1);
-            masm.lduw(new SPARCAddress(array2, 0), tempReg2);
+            new Lduw(new SPARCAddress(array1, 0), tempReg1).emit(masm);
+            new Lduw(new SPARCAddress(array2, 0), tempReg2).emit(masm);
 
             if (hasCBcond) {
                 masm.cbcondx(NotEqual, tempReg1, tempReg2, falseLabel);
@@ -242,8 +246,8 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
                     masm.nop();
                 }
 
-                masm.lduh(new SPARCAddress(array1, 0), tempReg1);
-                masm.lduh(new SPARCAddress(array2, 0), tempReg2);
+                new Lduh(new SPARCAddress(array1, 0), tempReg1).emit(masm);
+                new Lduh(new SPARCAddress(array2, 0), tempReg2).emit(masm);
 
                 if (hasCBcond) {
                     masm.cbcondx(NotEqual, tempReg1, tempReg2, falseLabel);
@@ -269,8 +273,8 @@ public class SPARCArrayEqualsOp extends SPARCLIRInstruction {
                         masm.bpcc(NotEqual, NOT_ANNUL, trueLabel, Xcc, PREDICT_TAKEN);
                         masm.nop();
                     }
-                    masm.ldub(new SPARCAddress(array1, 0), tempReg1);
-                    masm.ldub(new SPARCAddress(array2, 0), tempReg2);
+                    new Ldub(new SPARCAddress(array1, 0), tempReg1).emit(masm);
+                    new Ldub(new SPARCAddress(array2, 0), tempReg2).emit(masm);
                     if (hasCBcond) {
                         masm.cbcondx(NotEqual, tempReg1, tempReg2, falseLabel);
                     } else {

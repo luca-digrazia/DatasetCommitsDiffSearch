@@ -22,34 +22,27 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
-import static jdk.internal.jvmci.sparc.SPARC.*;
+import static com.oracle.graal.sparc.SPARC.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.gen.*;
 
-public final class SPARCBitManipulationOp extends SPARCLIRInstruction {
-    public static final LIRInstructionClass<SPARCBitManipulationOp> TYPE = LIRInstructionClass.create(SPARCBitManipulationOp.class);
+public class SPARCBitManipulationOp extends SPARCLIRInstruction {
 
     public enum IntrinsicOpcode {
-        IPOPCNT(SizeEstimate.create(2)),
-        LPOPCNT(SizeEstimate.create(1)),
-        IBSR(SizeEstimate.create(13)),
-        LBSR(SizeEstimate.create(14)),
-        BSF(SizeEstimate.create(4));
-
-        final SizeEstimate size;
-
-        private IntrinsicOpcode(SizeEstimate size) {
-            this.size = size;
-        }
+        IPOPCNT,
+        LPOPCNT,
+        IBSR,
+        LBSR,
+        BSF;
     }
 
     @Opcode private final IntrinsicOpcode opcode;
@@ -58,7 +51,6 @@ public final class SPARCBitManipulationOp extends SPARCLIRInstruction {
     @Temp({REG}) protected Value scratch;
 
     public SPARCBitManipulationOp(IntrinsicOpcode opcode, AllocatableValue result, AllocatableValue input, LIRGeneratorTool gen) {
-        super(TYPE, opcode.size);
         this.opcode = opcode;
         this.result = result;
         this.input = input;
@@ -91,7 +83,7 @@ public final class SPARCBitManipulationOp extends SPARCLIRInstruction {
                         masm.andn(dst, src, dst);
                         masm.popc(dst, dst);
                     } else {
-                        throw JVMCIError.shouldNotReachHere("missing: " + tkind);
+                        throw GraalInternalError.shouldNotReachHere("missing: " + tkind);
                     }
                     break;
                 case IBSR: {
@@ -136,7 +128,7 @@ public final class SPARCBitManipulationOp extends SPARCLIRInstruction {
                     break;
                 }
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
 
             }
         } else if (isConstant(input) && isSimm13(crb.asIntConst(input))) {
@@ -148,10 +140,11 @@ public final class SPARCBitManipulationOp extends SPARCLIRInstruction {
                     masm.popc(crb.asIntConst(input), dst);
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
             }
         } else {
-            throw JVMCIError.shouldNotReachHere();
+            throw GraalInternalError.shouldNotReachHere();
         }
     }
+
 }
