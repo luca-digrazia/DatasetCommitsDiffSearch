@@ -120,7 +120,7 @@ public abstract class Node implements Cloneable, Formattable {
         nodeClass = NodeClass.get(getClass());
     }
 
-    int id() {
+    protected int id() {
         return id;
     }
 
@@ -180,10 +180,6 @@ public abstract class Node implements Cloneable, Formattable {
                 assert assertTrue(result, "not found in usages, old input: %s", oldInput);
             }
             if (newInput != null) {
-                NodeWorkList inputChanged = graph.inputChanged;
-                if (inputChanged != null) {
-                    inputChanged.addAgain(this);
-                }
                 newInput.usages.add(this);
             }
         }
