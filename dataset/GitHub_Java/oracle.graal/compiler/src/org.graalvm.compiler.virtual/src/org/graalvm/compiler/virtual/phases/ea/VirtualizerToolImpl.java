@@ -33,7 +33,6 @@ import org.graalvm.compiler.graph.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
 import org.graalvm.compiler.nodes.calc.UnpackEndianHalfNode;
@@ -180,7 +179,7 @@ class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
                 } else if (oldValue.getStackKind() == JavaKind.Double || oldValue.getStackKind() == JavaKind.Long) {
                     // Splitting double word constant by storing over it with an int
                     getDebug().log(DebugContext.DETAILED_LEVEL, "virtualizing %s producing second half of double word value %s", current, oldValue);
-                    ValueNode secondHalf = UnpackEndianHalfNode.create(oldValue, false, NodeView.DEFAULT);
+                    ValueNode secondHalf = UnpackEndianHalfNode.create(oldValue, false);
                     addNode(secondHalf);
                     state.setEntry(virtual.getObjectId(), index + 1, secondHalf);
                 }
@@ -189,7 +188,7 @@ class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
                 // Storing into second half of double, so replace previous value
                 ValueNode previous = getEntry(virtual, index - 1);
                 getDebug().log(DebugContext.DETAILED_LEVEL, "virtualizing %s producing first half of double word value %s", current, previous);
-                ValueNode firstHalf = UnpackEndianHalfNode.create(previous, true, NodeView.DEFAULT);
+                ValueNode firstHalf = UnpackEndianHalfNode.create(previous, true);
                 addNode(firstHalf);
                 state.setEntry(virtual.getObjectId(), index - 1, firstHalf);
             }
