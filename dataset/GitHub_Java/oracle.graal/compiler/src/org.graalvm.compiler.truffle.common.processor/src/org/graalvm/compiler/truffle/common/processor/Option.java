@@ -59,13 +59,6 @@ public class Option {
             .help("Compile call target when call count exceeds this threshold.")
             .javadocExtra("Deprecated: Use {@code PolyglotCompilerOptions.CompilationThreshold} instead."),
 
-        option("TruffleFirstTierCompilationThreshold")
-            .type("Integer")
-            .category("EXPERT")
-            .def("100")
-            .help("Compile call target in the first tier when call count exceeds this threshold.")
-            .javadocExtra("Deprecated: Use {@code PolyglotCompilerOptions.CompilationThreshold} instead."),
-
         option("TruffleFirstTierMinInvokeThreshold")
             .type("Integer")
             .category("EXPERT")
@@ -168,12 +161,6 @@ public class Option {
             .category("EXPERT")
             .def("false")
             .help("Used for debugging the splitting implementation. Prints splitting summary directly to stdout on shutdown"),
-
-        option("TruffleExperimentalSplittingTraceEvents")
-                .type("Boolean")
-                .category("EXPERT")
-                .def("false")
-                .help("Trace details of experimental splitting events and decisions."),
 
         option("TruffleExperimentalSplittingDumpDecisions")
             .type("Boolean")
