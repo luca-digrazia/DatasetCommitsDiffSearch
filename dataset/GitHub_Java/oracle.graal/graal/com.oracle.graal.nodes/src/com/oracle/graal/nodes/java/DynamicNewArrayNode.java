@@ -36,7 +36,6 @@ import com.oracle.graal.nodes.*;
  * The {@code DynamicNewArrayNode} is used for allocation of arrays when the type is not a
  * compile-time constant.
  */
-@NodeInfo
 public class DynamicNewArrayNode extends AbstractNewArrayNode {
 
     @Input private ValueNode elementType;
@@ -59,8 +58,7 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode {
         if (isAlive() && elementType.isConstant()) {
             ResolvedJavaType javaType = tool.getConstantReflection().asJavaType(elementType.asConstant());
             if (javaType != null && !javaType.equals(tool.getMetaAccess().lookupJavaType(void.class))) {
-                ValueNode length = length();
-                NewArrayNode newArray = graph().add(new NewArrayNode(javaType, length.isAlive() ? length : graph().addOrUniqueWithInputs(length), fillContents()));
+                NewArrayNode newArray = graph().add(new NewArrayNode(javaType, length(), fillContents()));
                 List<Node> snapshot = inputs().snapshot();
                 graph().replaceFixedWithFixed(this, newArray);
                 for (Node input : snapshot) {
