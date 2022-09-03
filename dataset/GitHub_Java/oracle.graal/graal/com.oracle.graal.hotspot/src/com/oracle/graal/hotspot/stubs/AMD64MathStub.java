@@ -22,70 +22,45 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_COS;
 import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_LOG;
 import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_LOG10;
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_SIN;
-import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_TAN;
 
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.replacements.Snippet;
-import com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode;
+import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation;
+import com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode;
 
 /**
  * Stub called to support {@link Math}.
  */
 public class AMD64MathStub extends SnippetStub {
 
+    private final ForeignCallDescriptor descriptor;
+
     public AMD64MathStub(ForeignCallDescriptor descriptor, HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
-        super(snippetName(descriptor), providers, linkage);
+        super("unary", providers, linkage);
+        this.descriptor = descriptor;
     }
 
-    private static String snippetName(ForeignCallDescriptor descriptor) {
-        if (descriptor == ARITHMETIC_LOG) {
-            return "log";
+    @Override
+    protected Object getConstantParameterValue(int index, String name) {
+        if (index == 1) {
+            if (descriptor == ARITHMETIC_LOG) {
+                return UnaryOperation.LOG;
+            }
+            if (descriptor == ARITHMETIC_LOG10) {
+                return UnaryOperation.LOG10;
+            }
+            throw new InternalError("Unknown operation " + descriptor);
         }
-        if (descriptor == ARITHMETIC_LOG10) {
-            return "log10";
-        }
-        if (descriptor == ARITHMETIC_SIN) {
-            return "sin";
-        }
-        if (descriptor == ARITHMETIC_COS) {
-            return "cos";
-        }
-        if (descriptor == ARITHMETIC_TAN) {
-            return "tan";
-        }
-        throw new InternalError("Unknown operation " + descriptor);
+        return super.getConstantParameterValue(index, name);
     }
 
     @Snippet
-    private static double log(double value) {
-        return UnaryMathIntrinsicNode.compute(value, UnaryOperation.LOG);
+    private static double unary(double value, @ConstantParameter UnaryOperation operation) {
+        return UnaryMathIntrinsicNode.compute(value, operation);
     }
-
-    @Snippet
-    private static double log10(double value) {
-        return UnaryMathIntrinsicNode.compute(value, UnaryOperation.LOG10);
-    }
-
-    @Snippet
-    private static double sin(double value) {
-        return UnaryMathIntrinsicNode.compute(value, UnaryOperation.SIN);
-    }
-
-    @Snippet
-    private static double cos(double value) {
-        return UnaryMathIntrinsicNode.compute(value, UnaryOperation.COS);
-    }
-
-    @Snippet
-    private static double tan(double value) {
-        return UnaryMathIntrinsicNode.compute(value, UnaryOperation.TAN);
-    }
-
 }
