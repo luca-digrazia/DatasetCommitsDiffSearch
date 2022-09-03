@@ -33,6 +33,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -48,7 +49,7 @@ public abstract class LLVMReadStringNode extends Node {
 
     @Child PointerReadStringNode readOther;
 
-    public abstract String executeWithTarget(Object address);
+    public abstract String executeWithTarget(VirtualFrame frame, Object address);
 
     @Specialization
     String readString(String address) {
@@ -56,24 +57,24 @@ public abstract class LLVMReadStringNode extends Node {
     }
 
     @Specialization
-    String readForeign(LLVMTruffleObject foreign,
+    String readForeign(VirtualFrame frame, LLVMTruffleObject foreign,
                     @Cached("create()") ForeignReadStringNode read) {
-        return read.execute(foreign);
+        return read.execute(frame, foreign);
     }
 
     @Fallback
-    String readOther(Object address) {
+    String readOther(VirtualFrame frame, Object address) {
         if (readOther == null) {
             readOther = insert(PointerReadStringNode.create());
         }
-        return readOther.readPointer(address);
+        return readOther.readPointer(frame, address);
     }
 
     abstract static class ForeignReadStringNode extends Node {
 
         @Child private Node isBoxed = Message.IS_BOXED.createNode();
 
-        protected abstract String execute(LLVMTruffleObject foreign);
+        protected abstract String execute(VirtualFrame frame, LLVMTruffleObject foreign);
 
         @Specialization(guards = "isBoxed(object)")
         String readUnbox(LLVMTruffleObject object,
@@ -87,9 +88,9 @@ public abstract class LLVMReadStringNode extends Node {
         }
 
         @Specialization(guards = "!isBoxed(object)")
-        String readOther(LLVMTruffleObject object,
+        String readOther(VirtualFrame frame, LLVMTruffleObject object,
                         @Cached("create()") PointerReadStringNode read) {
-            return read.readPointer(object);
+            return read.readPointer(frame, object);
         }
 
         protected boolean isBoxed(LLVMTruffleObject object) {
@@ -110,20 +111,20 @@ public abstract class LLVMReadStringNode extends Node {
         @Child private LLVMIncrementPointerNode inc = LLVMIncrementPointerNodeGen.create();
         @Child private LLVMLoadNode read = LLVMI8LoadNodeGen.create();
 
-        public String readPointer(Object address) {
+        public String readPointer(VirtualFrame frame, Object address) {
             Object ptr = address;
             int length = 0;
-            while ((byte) read.executeWithTarget(ptr) != 0) {
+            while ((byte) read.executeWithTarget(frame, ptr) != 0) {
                 length++;
-                ptr = inc.executeWithTarget(ptr, Byte.BYTES);
+                ptr = inc.executeWithTarget(frame, ptr, Byte.BYTES);
             }
 
             char[] string = new char[length];
 
             ptr = address;
             for (int i = 0; i < length; i++) {
-                string[i] = (char) Byte.toUnsignedInt((byte) read.executeWithTarget(ptr));
-                ptr = inc.executeWithTarget(ptr, Byte.BYTES);
+                string[i] = (char) Byte.toUnsignedInt((byte) read.executeWithTarget(frame, ptr));
+                ptr = inc.executeWithTarget(frame, ptr, Byte.BYTES);
             }
 
             return toString(string);
