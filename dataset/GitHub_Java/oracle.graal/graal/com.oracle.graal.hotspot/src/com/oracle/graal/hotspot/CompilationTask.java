@@ -31,7 +31,6 @@ import static com.oracle.graal.phases.GraalOptions.*;
 import static com.oracle.graal.phases.common.InliningUtil.*;
 
 import java.io.*;
-import java.lang.management.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -40,7 +39,7 @@ import java.util.concurrent.atomic.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.*;
+import com.oracle.graal.compiler.CompilerThreadFactory.CompilerThread;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.internal.*;
@@ -54,8 +53,6 @@ import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
 
 public class CompilationTask implements Runnable, Comparable {
-
-    private static final long TIMESTAMP_START = System.currentTimeMillis();
 
     // Keep static finals in a group with withinEnqueue as the last one. CompilationTask can be
     // called from within it's own clinit so it needs to be careful about accessing state. Once
@@ -106,12 +103,6 @@ public class CompilationTask implements Runnable, Comparable {
     private long taskId;
 
     private boolean blocking;
-
-    /**
-     * A {@link com.sun.management.ThreadMXBean} to be able to query some information about the
-     * current compiler thread, e.g. total allocated bytes.
-     */
-    private final com.sun.management.ThreadMXBean threadMXBean = (com.sun.management.ThreadMXBean) ManagementFactory.getThreadMXBean();
 
     public CompilationTask(HotSpotBackend backend, HotSpotResolvedJavaMethod method, int entryBCI, boolean blocking) {
         this.backend = backend;
@@ -215,11 +206,9 @@ public class CompilationTask implements Runnable, Comparable {
          */
 
         HotSpotVMConfig config = backend.getRuntime().getConfig();
-        final long threadId = Thread.currentThread().getId();
         long previousInlinedBytecodes = InlinedBytecodes.getCurrentValue();
         long previousCompilationTime = CompilationTime.getCurrentValue();
         HotSpotInstalledCode installedCode = null;
-
         try (TimerCloseable a = CompilationTime.start()) {
             if (!tryToChangeStatus(CompilationStatus.Queued, CompilationStatus.Running)) {
                 return;
@@ -244,9 +233,7 @@ public class CompilationTask implements Runnable, Comparable {
 
             CompilationResult result = null;
             TTY.Filter filter = new TTY.Filter(PrintFilter.getValue(), method);
-            final long start = System.currentTimeMillis();
-            final long allocatedBytesBefore = threadMXBean.getThreadAllocatedBytes(threadId);
-
+            long start = System.currentTimeMillis();
             try (Scope s = Debug.scope("Compiling", new DebugDumpScope(String.valueOf(id), true))) {
                 Map<ResolvedJavaMethod, StructuredGraph> graphCache = null;
                 if (GraalOptions.CacheGraphs.getValue()) {
@@ -283,18 +270,10 @@ public class CompilationTask implements Runnable, Comparable {
             } finally {
                 filter.remove();
                 final boolean printAfterCompilation = PrintAfterCompilation.getValue() && !TTY.isSuppressed();
-
-                if (printAfterCompilation || printCompilation) {
-                    final long stop = System.currentTimeMillis();
-                    final int targetCodeSize = result != null ? result.getTargetCodeSize() : -1;
-                    final long allocatedBytesAfter = threadMXBean.getThreadAllocatedBytes(threadId);
-                    final long allocatedBytes = (allocatedBytesAfter - allocatedBytesBefore) / 1024;
-
-                    if (printAfterCompilation) {
-                        TTY.println(getMethodDescription() + String.format(" | %4dms %5dB %5dkB", stop - start, targetCodeSize, allocatedBytes));
-                    } else if (printCompilation) {
-                        TTY.println(String.format("%-6d Graal %-70s %-45s %-50s | %4dms %5dB %5dkB", id, "", "", "", stop - start, targetCodeSize, allocatedBytes));
-                    }
+                if (printAfterCompilation) {
+                    TTY.println(getMethodDescription() + String.format(" | %4dms %5dB", System.currentTimeMillis() - start, (result != null ? result.getTargetCodeSize() : -1)));
+                } else if (printCompilation) {
+                    TTY.println(String.format("%-6d Graal %-70s %-45s %-50s | %4dms %5dB", id, "", "", "", System.currentTimeMillis() - start, (result != null ? result.getTargetCodeSize() : -1)));
                 }
             }
 
@@ -351,24 +330,7 @@ public class CompilationTask implements Runnable, Comparable {
     private void printCompilation() {
         final boolean isOSR = entryBCI != StructuredGraph.INVOCATION_ENTRY_BCI;
         final int mod = method.getModifiers();
-        String compilerName = "";
-        if (HotSpotCIPrintCompilerName.getValue()) {
-            compilerName = "Graal:";
-        }
-        HotSpotVMConfig config = backend.getRuntime().getConfig();
-        int compLevel = config.compilationLevelFullOptimization;
-        char compLevelChar;
-        if (config.tieredCompilation) {
-            compLevelChar = '-';
-            if (compLevel != -1) {
-                compLevelChar = (char) ('0' + compLevel);
-            }
-        } else {
-            compLevelChar = ' ';
-        }
-        boolean hasExceptionHandlers = method.getExceptionHandlers().length > 0;
-        TTY.println(String.format("%s%7d %4d %c%c%c%c%c%c      %s %s(%d bytes)", compilerName, (System.currentTimeMillis() - TIMESTAMP_START), id, isOSR ? '%' : ' ',
-                        Modifier.isSynchronized(mod) ? 's' : ' ', hasExceptionHandlers ? '!' : ' ', blocking ? 'b' : ' ', Modifier.isNative(mod) ? 'n' : ' ', compLevelChar,
+        TTY.println(String.format("%7d %4d %c%c%c%c%c       %s %s(%d bytes)", 0, id, isOSR ? '%' : ' ', Modifier.isSynchronized(mod) ? 's' : ' ', ' ', ' ', Modifier.isNative(mod) ? 'n' : ' ',
                         MetaUtil.format("%H::%n(%p)", method), isOSR ? "@ " + entryBCI + " " : "", method.getCodeSize()));
     }
 

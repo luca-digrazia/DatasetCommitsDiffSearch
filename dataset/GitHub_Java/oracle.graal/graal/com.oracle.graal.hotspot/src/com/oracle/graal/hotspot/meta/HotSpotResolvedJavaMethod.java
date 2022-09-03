@@ -373,8 +373,9 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     }
 
     /**
-     * @param level
-     * @return true if the currently installed code was generated at {@code level}.
+     * Gets the compilation level of the currently installed code for this method.
+     * 
+     * @return compilation level
      */
     public boolean hasCompiledCodeAtLevel(int level) {
         long compiledCode = getCompiledCode();

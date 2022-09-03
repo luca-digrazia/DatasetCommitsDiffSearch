@@ -128,33 +128,19 @@ public class TestResolvedJavaMethod extends MethodUniverse {
     }
 
     @Test
-    public void isSynchronizedTest() {
-        for (Map.Entry<Method, ResolvedJavaMethod> e : methods.entrySet()) {
-            ResolvedJavaMethod m = e.getValue();
-            assertEquals(Modifier.isSynchronized(e.getKey().getModifiers()), m.isSynchronized());
-        }
-        for (Map.Entry<Constructor<?>, ResolvedJavaMethod> e : constructors.entrySet()) {
-            ResolvedJavaMethod m = e.getValue();
-            assertEquals(Modifier.isSynchronized(e.getKey().getModifiers()), m.isSynchronized());
-        }
-    }
-
-    @Test
     public void canBeStaticallyBoundTest() {
         for (Map.Entry<Method, ResolvedJavaMethod> e : methods.entrySet()) {
             ResolvedJavaMethod m = e.getValue();
-            assertEquals(m.canBeStaticallyBound(), canBeStaticallyBound(e.getKey()));
+            assertEquals(m.canBeStaticallyBound(), canBeStaticallyBound(e.getKey().getModifiers()));
         }
         for (Map.Entry<Constructor<?>, ResolvedJavaMethod> e : constructors.entrySet()) {
             ResolvedJavaMethod m = e.getValue();
-            assertEquals(m.canBeStaticallyBound(), canBeStaticallyBound(e.getKey()));
+            assertEquals(m.canBeStaticallyBound(), canBeStaticallyBound(e.getKey().getModifiers()));
         }
     }
 
-    private static boolean canBeStaticallyBound(Member method) {
-        int modifiers = method.getModifiers();
-        return (Modifier.isFinal(modifiers) || Modifier.isPrivate(modifiers) || Modifier.isStatic(modifiers) || Modifier.isFinal(method.getDeclaringClass().getModifiers())) &&
-                        !Modifier.isAbstract(modifiers);
+    private static boolean canBeStaticallyBound(int modifiers) {
+        return (Modifier.isFinal(modifiers) || Modifier.isPrivate(modifiers) || Modifier.isStatic(modifiers)) && !Modifier.isAbstract(modifiers);
     }
 
     private static String methodWithExceptionHandlers(String p1, Object o2) {

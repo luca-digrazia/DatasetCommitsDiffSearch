@@ -28,11 +28,12 @@ import org.junit.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.compiler.*;
 import com.oracle.graal.java.decompiler.test.example.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.printer.*;
 import com.oracle.graal.runtime.*;
 
-@Ignore
 public class DecompilerTest {
 
     public static void doTest(String name) {
@@ -47,6 +48,12 @@ public class DecompilerTest {
         } catch (SecurityException e) {
             Assert.fail();
         }
+    }
+
+    @Before
+    public void init() {
+        GraalOptions.DecompileAfterPhase.setValue("");
+        GraalDebugConfig.Dump.setValue("");
     }
 
     @Test
