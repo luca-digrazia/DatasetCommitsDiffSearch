@@ -44,8 +44,8 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.debug.Breakpoint.BreakpointConditionFailure;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameInstance;
@@ -163,7 +163,6 @@ public final class DebuggerSession implements Closeable {
 
     enum SteppingLocation {
         AFTER_CALL,
-        AFTER_STATEMENT,
         BEFORE_STATEMENT
     }
 
@@ -185,7 +184,7 @@ public final class DebuggerSession implements Closeable {
     private Predicate<Source> sourceFilter;
     private final StableBoolean breakpointsActive = new StableBoolean(true);
     private final DebuggerExecutionLifecycle executionLifecycle;
-    final ThreadLocal<ThreadSuspension> threadSuspensions = new ThreadLocal<>();
+    private final ThreadLocal<Boolean> disabledSuspensions = new ThreadLocal<>();
 
     private final int sessionId;
 
@@ -442,9 +441,9 @@ public final class DebuggerSession implements Closeable {
     void setThreadSuspendEnabled(boolean enabled) {
         if (!enabled) {
             // temporarily disable suspensions in the given thread
-            threadSuspensions.set(ThreadSuspension.DISABLED);
+            disabledSuspensions.set(Boolean.TRUE);
         } else {
-            threadSuspensions.remove();
+            disabledSuspensions.remove();
         }
     }
 
@@ -483,7 +482,7 @@ public final class DebuggerSession implements Closeable {
                 }
             });
         }
-        return debugger.getInstrumenter().attachExecutionEventFactory(builder.build(), factory);
+        return debugger.getInstrumenter().attachFactory(builder.build(), factory);
     }
 
     private void removeBindings() {
@@ -645,8 +644,7 @@ public final class DebuggerSession implements Closeable {
 
     @TruffleBoundary
     void notifyCallback(DebuggerNode source, MaterializedFrame frame, Object returnValue, BreakpointConditionFailure conditionFailure) {
-        ThreadSuspension suspensionDisabled = threadSuspensions.get();
-        if (suspensionDisabled != null && !suspensionDisabled.enabled) {
+        if (disabledSuspensions.get() == Boolean.TRUE) {
             return;
         }
         // SuspensionFilter:
@@ -851,33 +849,29 @@ public final class DebuggerSession implements Closeable {
 
     private List<DebuggerNode> collectDebuggerNodes(DebuggerNode source) {
         List<DebuggerNode> nodes = new ArrayList<>();
-        SuspendAnchor suspendAnchor = (source.getSteppingLocation() == SteppingLocation.BEFORE_STATEMENT) ? SuspendAnchor.BEFORE : SuspendAnchor.AFTER;
-        EventContext context = source.getContext();
-        synchronized (breakpoints) {
-            for (Breakpoint b : breakpoints) {
-                if (suspendAnchor == b.getSuspendAnchor()) {
-                    DebuggerNode node = b.lookupNode(context);
-                    if (node != null) {
-                        nodes.add(node);
-                    }
-                }
-            }
-        }
-        synchronized (debugger) {
-            for (Breakpoint b : debugger.getRawBreakpoints()) {
-                if (suspendAnchor == b.getSuspendAnchor()) {
-                    DebuggerNode node = b.lookupNode(context);
-                    if (node != null) {
-                        nodes.add(node);
-                    }
-                }
-            }
-        }
-        if (suspendAnchor == SuspendAnchor.BEFORE) {
+        if (source.getSteppingLocation() == SteppingLocation.BEFORE_STATEMENT) {
+            EventContext context = source.getContext();
+
             if (stepping.get()) {
                 EventBinding<? extends ExecutionEventNodeFactory> localStatementBinding = statementBinding;
                 if (localStatementBinding != null) {
                     DebuggerNode node = (DebuggerNode) context.lookupExecutionEventNode(localStatementBinding);
+                    if (node != null) {
+                        nodes.add(node);
+                    }
+                }
+            }
+            synchronized (breakpoints) {
+                for (Breakpoint b : breakpoints) {
+                    DebuggerNode node = b.lookupNode(context);
+                    if (node != null) {
+                        nodes.add(node);
+                    }
+                }
+            }
+            synchronized (debugger) {
+                for (Breakpoint b : debugger.getRawBreakpoints()) {
+                    DebuggerNode node = b.lookupNode(context);
                     if (node != null) {
                         nodes.add(node);
                     }
@@ -888,17 +882,11 @@ public final class DebuggerSession implements Closeable {
                 nodes.add(node);
             }
         } else {
-            assert source.getSteppingLocation() == SteppingLocation.AFTER_CALL ||
-                            source.getSteppingLocation() == SteppingLocation.AFTER_STATEMENT;
-            // there is only one binding that can lead to an after event
+            assert source.getSteppingLocation() == SteppingLocation.AFTER_CALL;
+            // there is only one binding that can lead to a after event
             if (stepping.get()) {
-                EventBinding<? extends ExecutionEventNodeFactory> localCallBinding = callBinding;
-                if (localCallBinding != null) {
-                    DebuggerNode node = (DebuggerNode) context.lookupExecutionEventNode(localCallBinding);
-                    if (node != null) {
-                        nodes.add(node);
-                    }
-                }
+                assert source.getContext().lookupExecutionEventNode(callBinding) == source;
+                nodes.add(source);
             }
         }
         return nodes;
@@ -946,18 +934,6 @@ public final class DebuggerSession implements Closeable {
             return Debugger.ACCESSOR.evalInContext(node, frame, code);
         } catch (KillException kex) {
             throw new IOException("Evaluation was killed.", kex);
-        }
-    }
-
-    static final class ThreadSuspension {
-
-        static final ThreadSuspension ENABLED = new ThreadSuspension(true);
-        static final ThreadSuspension DISABLED = new ThreadSuspension(false);
-
-        boolean enabled;
-
-        ThreadSuspension(boolean enabled) {
-            this.enabled = enabled;
         }
     }
 

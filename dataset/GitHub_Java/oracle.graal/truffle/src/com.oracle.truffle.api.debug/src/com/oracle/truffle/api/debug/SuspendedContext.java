@@ -24,15 +24,9 @@
  */
 package com.oracle.truffle.api.debug;
 
-import java.io.PrintStream;
-
 import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.EventContext;
-import com.oracle.truffle.api.instrumentation.InstrumentableNode;
-import com.oracle.truffle.api.instrumentation.Tag;
-import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
 
 /**
@@ -40,8 +34,8 @@ import com.oracle.truffle.api.source.SourceSection;
  */
 interface SuspendedContext {
 
-    static SuspendedContext create(EventContext eventContext, TruffleInstrument.Env env) {
-        return new SuspendedEventContext(eventContext, env);
+    static SuspendedContext create(EventContext eventContext) {
+        return new SuspendedEventContext(eventContext);
     }
 
     static SuspendedContext create(Node node, ThreadDeath unwind) {
@@ -57,8 +51,6 @@ interface SuspendedContext {
 
     Node getInstrumentedNode();
 
-    boolean hasTag(Class<? extends Tag> tag);
-
     boolean isLanguageContextInitialized();
 
     ThreadDeath createUnwind(Object info, EventBinding<?> unwindBinding);
@@ -66,11 +58,9 @@ interface SuspendedContext {
     final class SuspendedEventContext implements SuspendedContext {
 
         private final EventContext eventContext;
-        private final TruffleInstrument.Env env;
 
-        private SuspendedEventContext(EventContext eventContext, TruffleInstrument.Env env) {
+        private SuspendedEventContext(EventContext eventContext) {
             this.eventContext = eventContext;
-            this.env = env;
         }
 
         @Override
@@ -79,29 +69,11 @@ interface SuspendedContext {
         }
 
         public SourceSection getInstrumentedSourceSection() {
-            SourceSection ss = eventContext.getInstrumentedSourceSection();
-            if (ss == null) {
-                Node node = eventContext.getInstrumentedNode();
-                // Nodes tagged with standard tags should have a source section attached.
-                PrintStream err = new PrintStream(env.err());
-                err.print("WARNING: Instrumented node " + node + " of class " + node.getClass() + " has null SourceSection.");
-                ss = node.getEncapsulatingSourceSection();
-                if (ss == null) {
-                    RootNode root = node.getRootNode();
-                    err.print("WARNING: and null encapsulating SourceSection under " + root + " of class = " + root.getClass());
-                }
-                err.flush();
-            }
-            return ss;
+            return eventContext.getInstrumentedSourceSection();
         }
 
         public Node getInstrumentedNode() {
             return eventContext.getInstrumentedNode();
-        }
-
-        @Override
-        public boolean hasTag(Class<? extends Tag> tag) {
-            return eventContext.hasTag(tag);
         }
 
         public boolean isLanguageContextInitialized() {
@@ -146,11 +118,6 @@ interface SuspendedContext {
         @Override
         public Node getInstrumentedNode() {
             return node;
-        }
-
-        @Override
-        public boolean hasTag(Class<? extends Tag> tag) {
-            return ((node instanceof InstrumentableNode) && ((InstrumentableNode) node).hasTag(tag));
         }
 
         @Override
