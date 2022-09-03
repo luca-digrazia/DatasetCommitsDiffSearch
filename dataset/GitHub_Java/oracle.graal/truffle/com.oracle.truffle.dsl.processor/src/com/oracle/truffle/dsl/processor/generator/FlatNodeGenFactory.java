@@ -1870,23 +1870,31 @@ public class FlatNodeGenFactory {
                     }
 
                     String specializationLocalName = createSpecializationLocalName(specialization);
-                    builder.declaration("int", countName, CodeTreeBuilder.singleString("0"));
                     if (useSpecializationClass) {
+                        if (specialization.getMaximumNumberOfInstances() > 1) {
+                            builder.declaration("int", countName, CodeTreeBuilder.singleString("0"));
+                        }
                         builder.declaration(createSpecializationTypeName(specialization), specializationLocalName, CodeTreeBuilder.singleString(createSpecializationFieldName(specialization)));
                         builder.startIf().tree(stateCheck).end().startBlock();
-                        builder.startWhile();
+                        if (specialization.getMaximumNumberOfInstances() > 1) {
+                            builder.startWhile();
+                        } else {
+                            builder.startIf();
+                        }
                         builder.string(specializationLocalName, " != null");
                         builder.end();
                         builder.startBlock();
                     } else {
                         builder.declaration("boolean", duplicateFoundName, CodeTreeBuilder.singleString("false"));
-                        builder.startIf().tree(stateCheck).end().startBlock();
+                        duplicationGuard = combineTrees(" && ", stateCheck, duplicationGuard);
                     }
 
                     builder.startIf().tree(duplicationGuard).end();
                     builder.startBlock();
                     if (useSpecializationClass) {
-                        builder.statement("break");
+                        if (specialization.getMaximumNumberOfInstances() > 1) {
+                            builder.statement("break");
+                        }
                     } else {
                         builder.startStatement().string(duplicateFoundName, " = true").end();
                     }
@@ -1895,16 +1903,14 @@ public class FlatNodeGenFactory {
                     if (useSpecializationClass) {
                         if (specialization.getMaximumNumberOfInstances() > 1) {
                             builder.startStatement().string(specializationLocalName, " = ", specializationLocalName, ".next_").end();
+                            builder.statement(countName + "++");
                         } else {
                             builder.statement(specializationLocalName + " = null");
                         }
 
-                        builder.statement(countName + "++");
                         builder.end();
-                    } else {
-                        builder.statement(countName + "++");
+                        builder.end();
                     }
-                    builder.end();
                 }
 
                 if (needsDuplicationCheck) {
@@ -1956,7 +1962,7 @@ public class FlatNodeGenFactory {
                     guards = combineTrees(" && ", assumptionGuardExpressions);
                 }
 
-                if (specialization.hasMultipleInstances()) {
+                if (useSpecializationClass && specialization.getMaximumNumberOfInstances() > 1) {
                     DSLExpression limit = specialization.getLimitExpression();
                     CodeTree limitExpression = DSLExpressionGenerator.write(limit, null, castBoundTypes(bindExpressionValues(limit, specialization, frameState)));
                     CodeTree limitCondition = CodeTreeBuilder.createBuilder().string(countName).string(" < ").tree(limitExpression).build();
@@ -1988,7 +1994,7 @@ public class FlatNodeGenFactory {
                     }
 
                     builder.startStatement();
-                    if (!needsDuplicationCheck) {
+                    if (specialization.getMaximumNumberOfInstances() <= 1) {
                         builder.string(createSpecializationTypeName(specialization)).string(" ");
                     }
                     builder.string(createSpecializationLocalName(specialization), " = ");
@@ -2077,8 +2083,7 @@ public class FlatNodeGenFactory {
                 int signatureIndex = 0;
                 for (Parameter p : specialization.getSignatureParameters()) {
                     TypeMirror targetType = p.getType();
-                    TypeMirror polymorphicType = node.getPolymorphicSpecialization().findParameterOrDie(p.getSpecification().getExecution()).getType();
-                    if (typeSystem.hasImplicitSourceTypes(targetType) && needsCastTo(polymorphicType, targetType)) {
+                    if (typeSystem.hasImplicitSourceTypes(targetType)) {
                         String implicitFieldName = createImplicitTypeStateLocalName(p);
                         builder.tree(state.createSetInteger(frameState, new TypeGuard(p.getType(), signatureIndex), CodeTreeBuilder.singleString(implicitFieldName)));
                     }
