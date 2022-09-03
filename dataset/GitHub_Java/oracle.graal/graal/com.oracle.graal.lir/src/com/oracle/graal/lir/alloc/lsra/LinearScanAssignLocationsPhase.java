@@ -38,7 +38,6 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp.MoveOp;
-import com.oracle.graal.lir.StandardOp.ValueMoveOp;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 import com.oracle.graal.lir.phases.*;
@@ -187,8 +186,10 @@ public class LinearScanAssignLocationsPhase extends AllocationPhase {
 
         InstructionValueProcedure assignProc = (inst, operand, mode, flags) -> isVariable(operand) ? colorLirOperand(inst, (Variable) operand, mode) : operand;
         // remove useless moves
+        MoveOp move = null;
         if (op instanceof MoveOp) {
-            AllocatableValue result = ((MoveOp) op).getResult();
+            move = (MoveOp) op;
+            AllocatableValue result = move.getResult();
             if (isVariable(result) && allocator.isMaterialized(result, op.id(), OperandMode.DEF)) {
                 /*
                  * This happens if a materializable interval is originally not spilled but then
@@ -208,8 +209,7 @@ public class LinearScanAssignLocationsPhase extends AllocationPhase {
         op.forEachState((inst, state) -> computeDebugInfo(inst, state));
 
         // remove useless moves
-        if (op instanceof ValueMoveOp) {
-            ValueMoveOp move = (ValueMoveOp) op;
+        if (move != null) {
             if (move.getInput().equals(move.getResult())) {
                 return true;
             }
