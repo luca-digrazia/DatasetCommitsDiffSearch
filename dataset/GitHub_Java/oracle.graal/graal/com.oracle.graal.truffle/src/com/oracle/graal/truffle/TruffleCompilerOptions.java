@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.truffle;
 
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionType;
-import com.oracle.graal.options.OptionValue;
-import com.oracle.graal.options.StableOptionValue;
+import jdk.vm.ci.options.Option;
+import jdk.vm.ci.options.OptionType;
+import jdk.vm.ci.options.OptionValue;
+import jdk.vm.ci.options.StableOptionValue;
 
 /**
  * Options for the Truffle compiler.
@@ -183,11 +183,8 @@ public class TruffleCompilerOptions {
     @Option(help = "Enable support for simple infopoints in truffle partial evaluations.", type = OptionType.Expert)
     public static final OptionValue<Boolean> TruffleEnableInfopoints = new OptionValue<>(false);
 
-    @Option(help = "Run the partial escape analysis iteratively in Truffle compilation.", type = OptionType.Debug)
+    @Option(help = "Enable support for simple infopoints in truffle partial evaluations.", type = OptionType.Debug)
     public static final OptionValue<Boolean> TruffleIterativePartialEscape = new OptionValue<>(false);
-
-    @Option(help = "Enable/disable builtin profiles in com.oracle.truffle.api.profiles.", type = OptionType.Debug)
-    public static final OptionValue<Boolean> TruffleProfilingEnabled = new OptionValue<>(true);
 
     // @formatter:on
 }
