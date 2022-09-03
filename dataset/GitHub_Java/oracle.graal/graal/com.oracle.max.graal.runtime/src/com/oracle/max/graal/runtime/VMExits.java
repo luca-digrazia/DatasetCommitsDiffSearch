@@ -31,7 +31,9 @@ import com.sun.cri.ri.*;
  */
 public interface VMExits {
 
-    void compileMethod(HotSpotMethodResolved method, int entryBCI) throws Throwable;
+    void compileMethod(long methodVmId, String name, int entryBCI) throws Throwable;
+
+    RiMethod createRiMethodResolved(long vmId, String name);
 
     RiMethod createRiMethodUnresolved(String name, String signature, RiType holder);
 
