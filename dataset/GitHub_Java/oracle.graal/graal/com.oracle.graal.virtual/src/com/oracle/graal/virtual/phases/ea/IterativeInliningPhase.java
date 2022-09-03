@@ -71,7 +71,7 @@ public class IterativeInliningPhase extends AbstractInliningPhase {
                 inlining.apply(graph, context);
                 progress |= inlining.getInliningCount() > 0;
 
-                new DeadCodeEliminationPhase(Optional).apply(graph);
+                new DeadCodeEliminationPhase(OPTIONAL).apply(graph);
 
                 boolean reduceOrEliminate = FlowSensitiveReduction.getValue() || ConditionalElimination.getValue();
                 if (reduceOrEliminate && OptCanonicalizer.getValue()) {

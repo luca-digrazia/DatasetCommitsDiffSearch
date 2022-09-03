@@ -43,8 +43,8 @@ public class DeadCodeEliminationPhase extends Phase {
     private static final DebugMetric metricNodesRemoved = Debug.metric("NodesRemoved");
 
     public enum Optionality {
-        Optional,
-        Required;
+        OPTIONAL,
+        REQUIRED;
     }
 
     /**
@@ -52,15 +52,15 @@ public class DeadCodeEliminationPhase extends Phase {
      * {@link Options#ReduceDCE}.
      */
     public DeadCodeEliminationPhase() {
-        this(Optionality.Required);
+        this(Optionality.REQUIRED);
     }
 
     /**
      * Creates a dead code elimination phase that will be run only if it is
-     * {@linkplain Optionality#Required non-optional} or {@link Options#ReduceDCE} is false.
+     * {@linkplain Optionality#REQUIRED non-optional} or {@link Options#ReduceDCE} is false.
      */
     public DeadCodeEliminationPhase(Optionality optionality) {
-        this.optional = optionality == Optionality.Optional;
+        this.optional = optionality == Optionality.OPTIONAL;
     }
 
     private final boolean optional;

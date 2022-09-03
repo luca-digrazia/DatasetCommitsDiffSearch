@@ -671,7 +671,7 @@ public class SnippetTemplate {
             }
         }
 
-        new DeadCodeEliminationPhase(Required).apply(snippetCopy);
+        new DeadCodeEliminationPhase(REQUIRED).apply(snippetCopy);
 
         assert checkAllVarargPlaceholdersAreDeleted(parameterCount, placeholders);
 
