@@ -23,24 +23,33 @@
 
 package com.oracle.graal.compiler.hsail;
 
-import java.lang.reflect.*;
+import static com.oracle.graal.api.code.CodeUtil.*;
+
 import java.util.logging.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CallingConvention.Type;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hsail.*;
-import com.oracle.graal.java.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.phases.*;
+import com.oracle.graal.api.code.CallingConvention.*;
+import com.oracle.graal.api.runtime.Graal;
+import com.oracle.graal.compiler.GraalCompiler;
+import com.oracle.graal.java.GraphBuilderConfiguration;
+import com.oracle.graal.java.GraphBuilderPhase;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.spi.GraalCodeCacheProvider;
+import com.oracle.graal.phases.OptimisticOptimizations;
+import com.oracle.graal.phases.PhasePlan;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.graph.GraalInternalError;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.nodes.spi.Replacements;
+import com.oracle.graal.compiler.target.Backend;
+import com.oracle.graal.hsail.*;
+
+import java.lang.reflect.Method;
 
 /**
  * Class that represents a HSAIL compilation result. Includes the compiled HSAIL code.
@@ -48,6 +57,10 @@ import com.oracle.graal.phases.tiers.*;
 public class HSAILCompilationResult {
 
     private CompilationResult compResult;
+    protected static GraalCodeCacheProvider runtime = Graal.getRequiredCapability(GraalCodeCacheProvider.class);
+    protected static Replacements replacements = Graal.getRequiredCapability(Replacements.class);
+    protected static Backend backend = Graal.getRequiredCapability(Backend.class);
+    protected static SuitesProvider suitesProvider = Graal.getRequiredCapability(SuitesProvider.class);
     private static final String propPkgName = HSAILCompilationResult.class.getPackage().getName();
     private static Level logLevel;
     private static ConsoleHandler consoleHandler;
@@ -73,64 +86,29 @@ public class HSAILCompilationResult {
     }
 
     public static HSAILCompilationResult getHSAILCompilationResult(Method meth) {
-        MetaAccessProvider metaAccess = Graal.getRequiredCapability(MetaAccessProvider.class);
-        ResolvedJavaMethod javaMethod = metaAccess.lookupJavaMethod(meth);
+        ResolvedJavaMethod javaMethod = runtime.lookupJavaMethod(meth);
         return getHSAILCompilationResult(javaMethod);
     }
 
     public static HSAILCompilationResult getHSAILCompilationResult(ResolvedJavaMethod javaMethod) {
-        MetaAccessProvider metaAccess = Graal.getRequiredCapability(MetaAccessProvider.class);
         StructuredGraph graph = new StructuredGraph(javaMethod);
-        new GraphBuilderPhase(metaAccess, GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.ALL).apply(graph);
+        new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.ALL).apply(graph);
         return getHSAILCompilationResult(graph);
-    }
-
-    /**
-     * HSAIL doesn't have a calling convention as such. Function arguments are actually passed in
-     * memory but then loaded into registers in the function body. This routine makes sure that
-     * arguments to a kernel or function are loaded (by the kernel or function body) into registers
-     * of the appropriate sizes. For example, int and float parameters should appear in S registers,
-     * whereas double and long parameters should appear in d registers.
-     */
-    public static CallingConvention getHSAILCallingConvention(CallingConvention.Type type, TargetDescription target, ResolvedJavaMethod method, boolean stackOnly) {
-        Signature sig = method.getSignature();
-        JavaType retType = sig.getReturnType(null);
-        int sigCount = sig.getParameterCount(false);
-        JavaType[] argTypes;
-        int argIndex = 0;
-        if (!Modifier.isStatic(method.getModifiers())) {
-            argTypes = new JavaType[sigCount + 1];
-            argTypes[argIndex++] = method.getDeclaringClass();
-        } else {
-            argTypes = new JavaType[sigCount];
-        }
-        for (int i = 0; i < sigCount; i++) {
-            argTypes[argIndex++] = sig.getParameterType(i, null);
-        }
-
-        RegisterConfig registerConfig = new HSAILRegisterConfig();
-        return registerConfig.getCallingConvention(type, retType, argTypes, target, stackOnly);
     }
 
     public static HSAILCompilationResult getHSAILCompilationResult(StructuredGraph graph) {
         Debug.dump(graph, "Graph");
         TargetDescription target = new TargetDescription(new HSAIL(), true, 8, 0, true);
-        MetaAccessProvider metaAccess = Graal.getRequiredCapability(MetaAccessProvider.class);
-        CodeCacheProvider codeCache = Graal.getRequiredCapability(CodeCacheProvider.class);
-        ConstantReflectionProvider constantReflection = Graal.getRequiredCapability(ConstantReflectionProvider.class);
-        LoweringProvider lowerer = Graal.getRequiredCapability(LoweringProvider.class);
-        HSAILBackend hsailBackend = new HSAILBackend(metaAccess, codeCache, target);
+        HSAILBackend hsailBackend = new HSAILBackend(Graal.getRequiredCapability(GraalCodeCacheProvider.class), target);
         PhasePlan phasePlan = new PhasePlan();
-        GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(metaAccess, GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.NONE);
+        GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.NONE);
         phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
         phasePlan.addPhase(PhasePosition.AFTER_PARSING, new HSAILPhase());
         new HSAILPhase().apply(graph);
-        CallingConvention cc = getHSAILCallingConvention(Type.JavaCallee, target, graph.method(), false);
-        Replacements replacements = Graal.getRequiredCapability(Replacements.class);
-        SuitesProvider suitesProvider = Graal.getRequiredCapability(SuitesProvider.class);
+        CallingConvention cc = getCallingConvention(runtime, Type.JavaCallee, graph.method(), false);
         try {
-            CompilationResult compResult = GraalCompiler.compileGraph(graph, cc, graph.method(), metaAccess, constantReflection, codeCache, lowerer, replacements, hsailBackend, target, null,
-                            phasePlan, OptimisticOptimizations.NONE, new SpeculationLog(), suitesProvider.getDefaultSuites(), new CompilationResult());
+            CompilationResult compResult = GraalCompiler.compileGraph(graph, cc, graph.method(), runtime, replacements, hsailBackend, target, null, phasePlan, OptimisticOptimizations.NONE,
+                            new SpeculationLog(), suitesProvider.getDefaultSuites(), new CompilationResult());
             return new HSAILCompilationResult(compResult);
         } catch (GraalInternalError e) {
             String partialCode = hsailBackend.getPartialCodeString();
@@ -148,8 +126,8 @@ public class HSAILCompilationResult {
         @Override
         protected void run(StructuredGraph graph) {
             for (LocalNode local : graph.getNodes(LocalNode.class)) {
-                if (local.stamp() instanceof ObjectStamp) {
-                    local.setStamp(StampFactory.declaredNonNull(((ObjectStamp) local.stamp()).type()));
+                if (local.kind() == Kind.Object) {
+                    local.setStamp(StampFactory.declaredNonNull(local.objectStamp().type()));
                 }
             }
         }

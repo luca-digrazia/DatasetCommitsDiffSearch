@@ -166,7 +166,7 @@ public class HSAILMove {
         @Override
         public void emitMemAccess(HSAILAssembler masm) {
             HSAILAddress addr = address.toAddress();
-            masm.emitLoad(kind, result, addr);
+            masm.emitLoad(result, addr);
         }
     }
 
@@ -183,7 +183,7 @@ public class HSAILMove {
         public void emitMemAccess(HSAILAssembler masm) {
             assert isRegister(input);
             HSAILAddress addr = address.toAddress();
-            masm.emitStore(kind, input, addr);
+            masm.emitStore(input, addr);
         }
     }
 

@@ -23,24 +23,22 @@
 
 package com.oracle.graal.compiler.hsail.test;
 
-import static org.junit.Assume.*;
-
 import org.junit.*;
 
 /**
- * Unit test of NBody demo app. This version uses a call to the main routine which would normally be
- * too large to inline.
+ * Tests the storing of null in an Object array.
  */
-public class StaticNBodyCallTest extends StaticNBodyTest {
+public class ObjectStoreNullTest extends ObjectStoreTest {
 
-    public static void run(float[] inxyz, float[] outxyz, float[] invxyz, float[] outvxyz, int gid) {
-        StaticNBodyTest.run(inxyz, outxyz, invxyz, outvxyz, gid);
+    @Override
+    public void run(int gid) {
+        outIntegerArray[gid] = (gid % 3 == 1 ? null : inIntegerArray[gid]);
     }
 
     @Test
     @Override
     public void test() {
-        assumeTrue(aggressiveInliningEnabled() || canHandleHSAILMethodCalls());
         testGeneratedHsail();
     }
+
 }

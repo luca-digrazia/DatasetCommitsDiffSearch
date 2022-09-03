@@ -69,7 +69,7 @@ public abstract class KernelTester {
         COMPILED, INJECT_HSAIL, INJECT_OCL
     }
 
-    public DispatchMode dispatchMode;
+    private DispatchMode dispatchMode;
     // Where the hsail comes from.
     private HsailMode hsailMode;
     private Method testMethod;
@@ -84,7 +84,6 @@ public abstract class KernelTester {
     private static final String propPkgName = KernelTester.class.getPackage().getName();
     private static Level logLevel;
     private static ConsoleHandler consoleHandler;
-    private boolean runOkraFirst = Boolean.getBoolean("kerneltester.runOkraFirst");
 
     static {
         logger = Logger.getLogger(propPkgName);
@@ -693,42 +692,25 @@ public abstract class KernelTester {
         }
     }
 
-    private void compareOkraToSeq(HsailMode hsailModeToUse) {
-        compareOkraToSeq(hsailModeToUse, false);
+    private void compareOkraToSeq(HsailMode hsailMode1) {
+        compareOkraToSeq(hsailMode1, false);
     }
 
     /**
-     * Runs this instance on OKRA, and as SEQ and compares the output of the two executions. the
-     * runOkraFirst flag controls which order they are done in. Note the compiler must use eager
-     * resolving if Okra is done first.
+     * Runs this instance on OKRA, and as SEQ and compares the output of the two executions.
      */
-    private void compareOkraToSeq(HsailMode hsailModeToUse, boolean useLambda) {
-        KernelTester testerSeq;
-        if (runOkraFirst) {
-            runOkraInstance(hsailModeToUse, useLambda);
-            testerSeq = runSeqInstance();
-        } else {
-            testerSeq = runSeqInstance();
-            runOkraInstance(hsailModeToUse, useLambda);
-        }
-        assertTrue("failed comparison to SEQ", compareResults(testerSeq));
-    }
-
-    private void runOkraInstance(HsailMode hsailModeToUse, boolean useLambda) {
-        // run Okra instance in exiting KernelTester object
-        this.setHsailMode(hsailModeToUse);
-        this.setDispatchMode(DispatchMode.OKRA);
-        this.useLambdaMethod = useLambda;
-        this.runTest();
-        this.disposeKernelOkra();
-    }
-
-    private KernelTester runSeqInstance() {
+    private void compareOkraToSeq(HsailMode hsailMode1, boolean useLambda) {
         // Create and run sequential instance.
         KernelTester testerSeq = newInstance();
         testerSeq.setDispatchMode(DispatchMode.SEQ);
         testerSeq.runTest();
-        return testerSeq;
+        // Now do this object.
+        this.setHsailMode(hsailMode1);
+        this.setDispatchMode(DispatchMode.OKRA);
+        this.useLambdaMethod = useLambda;
+        this.runTest();
+        this.disposeKernelOkra();
+        assertTrue("failed comparison to SEQ", compareResults(testerSeq));
     }
 
     public void testGeneratedHsail() {

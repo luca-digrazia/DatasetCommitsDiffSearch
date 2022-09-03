@@ -53,6 +53,7 @@ public class HSAILControlFlow {
         }
     }
 
+
     public static class ForeignCallNoArgOp extends HSAILLIRInstruction {
 
         @Def({REG}) protected Value out;
@@ -78,6 +79,7 @@ public class HSAILControlFlow {
             this.arg1 = arg1;
         }
     }
+
 
     public static class CompareBranchOp extends HSAILLIRInstruction implements StandardOp.BranchOp {
 

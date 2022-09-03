@@ -23,24 +23,33 @@
 
 package com.oracle.graal.compiler.hsail.test;
 
-import static org.junit.Assume.*;
-
 import org.junit.*;
 
 /**
- * Unit test of NBody demo app. This version uses a call to the main routine which would normally be
- * too large to inline.
+ * Tests the mixing of 32-bit and 64-bit spills caused by loop unrolling.
  */
-public class StaticNBodyCallTest extends StaticNBodyTest {
+public class Float2DMatrixMultiplyRangeFinalTest extends Float2DMatrixBase {
 
-    public static void run(float[] inxyz, float[] outxyz, float[] invxyz, float[] outvxyz, int gid) {
-        StaticNBodyTest.run(inxyz, outxyz, invxyz, outvxyz, gid);
+    static final int range = 6;
+
+    public void run(int gid) {
+        for (int j = 0; j < range; j++) {
+            float sum = 0;
+            for (int k = 0; k < range; k++) {
+                sum += (matrixA[gid][k] * matrixB[k][j]);
+            }
+            outMatrix[gid][j] = sum;
+        }
+    }
+
+    @Override
+    public void runTest() {
+        setupArrays(range);
+        dispatchMethodKernel(range);
     }
 
     @Test
-    @Override
     public void test() {
-        assumeTrue(aggressiveInliningEnabled() || canHandleHSAILMethodCalls());
         testGeneratedHsail();
     }
 }
