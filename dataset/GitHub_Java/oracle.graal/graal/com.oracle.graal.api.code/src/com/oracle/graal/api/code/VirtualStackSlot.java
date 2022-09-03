@@ -24,18 +24,15 @@ package com.oracle.graal.api.code;
 
 import com.oracle.graal.api.meta.*;
 
-/**
- * {@link VirtualStackSlot}s are stack slots that are not yet fixed to specific frame offset. They
- * are replaced by real {@link StackSlot}s with a fixed position in the frame before code emission.
- */
 public abstract class VirtualStackSlot extends StackSlotValue {
 
     private static final long serialVersionUID = 2823688688873398219L;
+    private static int idCounter = 0;
     private final int id;
 
-    public VirtualStackSlot(int id, LIRKind lirKind) {
+    public VirtualStackSlot(LIRKind lirKind) {
         super(lirKind);
-        this.id = id;
+        id = idCounter++;
     }
 
     public int getId() {
