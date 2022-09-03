@@ -23,7 +23,6 @@
 package com.oracle.graal.nodeinfo.processor;
 
 import static com.oracle.truffle.dsl.processor.java.ElementUtils.*;
-import static java.util.Arrays.*;
 import static javax.lang.model.element.Modifier.*;
 
 import java.util.*;
@@ -61,11 +60,6 @@ public class GraphNodeGenerator {
         this.NodeSuccessorList = getType("com.oracle.graal.graph.NodeSuccessorList");
     }
 
-    /**
-     * Returns a type element given a canonical name.
-     *
-     * @throw {@link NoClassDefFoundError} if a type element does not exist for {@code name}
-     */
     public TypeElement getType(String name) {
         TypeElement typeElement = env.getProcessingEnv().getElementUtils().getTypeElement(name);
         if (typeElement == null) {
@@ -127,11 +121,14 @@ public class GraphNodeGenerator {
         }
     }
 
-    public boolean isAssignableWithErasure(Element from, Element to) {
+    public boolean isAssignable(Element from, Element to) {
         Types types = env.getProcessingEnv().getTypeUtils();
         TypeMirror fromType = types.erasure(from.asType());
         TypeMirror toType = types.erasure(to.asType());
-        return types.isAssignable(fromType, toType);
+        boolean res = types.isAssignable(fromType, toType);
+        // System.out.printf("%s:%s is %sassignable to %s:%s%n", from, fromType, res ? "" : "NOT ",
+// to, toType);
+        return res;
     }
 
     public void scanFields(TypeElement node, FieldScanner scanner) {
@@ -154,7 +151,7 @@ public class GraphNodeGenerator {
                         throw new ElementException(field, "Field cannot be both input and successor");
                     } else if (isNonOptionalInput && isOptionalInput) {
                         throw new ElementException(field, "Inputs must be either optional or non-optional");
-                    } else if (isAssignableWithErasure(field, NodeInputList)) {
+                    } else if (isAssignable(field, NodeInputList)) {
                         if (!modifiers.contains(FINAL)) {
                             throw new ElementException(field, "Input list field must be final");
                         }
@@ -165,7 +162,7 @@ public class GraphNodeGenerator {
                             return;
                         }
                     } else {
-                        if (!isAssignableWithErasure(field, Node) && field.getKind() == ElementKind.INTERFACE) {
+                        if (!isAssignable(field, Node) && field.getKind() == ElementKind.INTERFACE) {
                             throw new ElementException(field, "Input field type must be an interface or assignable to Node");
                         }
                         if (modifiers.contains(FINAL)) {
@@ -182,7 +179,7 @@ public class GraphNodeGenerator {
                         }
                     }
                 } else if (isSuccessor) {
-                    if (isAssignableWithErasure(field, NodeSuccessorList)) {
+                    if (isAssignable(field, NodeSuccessorList)) {
                         if (!modifiers.contains(FINAL)) {
                             throw new ElementException(field, "Successor list field must be final");
                         }
@@ -193,7 +190,7 @@ public class GraphNodeGenerator {
                             return;
                         }
                     } else {
-                        if (!isAssignableWithErasure(field, Node)) {
+                        if (!isAssignable(field, Node)) {
                             throw new ElementException(field, "Successor field must be a Node type");
                         }
                         if (modifiers.contains(FINAL)) {
@@ -211,13 +208,13 @@ public class GraphNodeGenerator {
                     }
 
                 } else {
-                    if (isAssignableWithErasure(field, Node) && !field.getSimpleName().contentEquals("Null")) {
+                    if (isAssignable(field, Node) && !field.getSimpleName().contentEquals("Null")) {
                         throw new ElementException(field, "Suspicious Node field: " + field);
                     }
-                    if (isAssignableWithErasure(field, NodeInputList)) {
+                    if (isAssignable(field, NodeInputList)) {
                         throw new ElementException(field, "Suspicious NodeInputList field");
                     }
-                    if (isAssignableWithErasure(field, NodeSuccessorList)) {
+                    if (isAssignable(field, NodeSuccessorList)) {
                         throw new ElementException(field, "Suspicious NodeSuccessorList field");
                     }
                     if (!scanner.scanDataField(field)) {
@@ -227,37 +224,6 @@ public class GraphNodeGenerator {
             }
             currentClazz = getSuperType(currentClazz);
         } while (!isObject(getSuperType(currentClazz).asType()));
-    }
-
-    /**
-     * Determines if two parameter lists contain the
-     * {@linkplain Types#isSameType(TypeMirror, TypeMirror) same} types.
-     */
-    private boolean parametersMatch(List<? extends VariableElement> p1, List<? extends VariableElement> p2) {
-        if (p1.size() == p2.size()) {
-            for (int i = 0; i < p1.size(); i++) {
-                if (!env.getProcessingEnv().getTypeUtils().isSameType(p1.get(i).asType(), p2.get(i).asType())) {
-                    return false;
-                }
-            }
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * Searches a type for a method based on a given name and parameter types.
-     */
-    public ExecutableElement findMethod(TypeElement type, String name, List<? extends VariableElement> parameters) {
-        List<? extends ExecutableElement> methods = ElementFilter.methodsIn(type.getEnclosedElements());
-        for (ExecutableElement method : methods) {
-            if (method.getSimpleName().toString().equals(name)) {
-                if (parametersMatch(method.getParameters(), parameters)) {
-                    return method;
-                }
-            }
-        }
-        return null;
     }
 
     public CodeCompilationUnit process(TypeElement node) {
@@ -273,15 +239,11 @@ public class GraphNodeGenerator {
         nodeGenElement.setSuperClass(node.asType());
 
         for (ExecutableElement constructor : ElementFilter.constructorsIn(node.getEnclosedElements())) {
-            if (constructor.getModifiers().contains(PUBLIC)) {
-                throw new ElementException(constructor, "Node class constructor must not be public");
+            if (constructor.getModifiers().contains(Modifier.PRIVATE)) {
+                // ignore private constructors
+                continue;
             }
-
-            checkFactoryMethodExists(node, newClassName, constructor);
-
-            CodeExecutableElement subConstructor = createConstructor(nodeGenElement, constructor);
-            subConstructor.getModifiers().removeAll(Arrays.asList(PUBLIC, PRIVATE, PROTECTED));
-            nodeGenElement.add(subConstructor);
+            nodeGenElement.add(createSuperConstructor(nodeGenElement, constructor));
         }
 
         DeclaredType generatedNode = (DeclaredType) ElementUtils.getType(getProcessingEnv(), GeneratedNode.class);
@@ -295,33 +257,7 @@ public class GraphNodeGenerator {
         return compilationUnit;
     }
 
-    /**
-     * Checks that a public static factory method named {@code "create"} exists in {@code node}
-     * whose signature matches that of a given constructor.
-     *
-     * @throws ElementException if the check fails
-     */
-    private void checkFactoryMethodExists(TypeElement node, String newClassName, ExecutableElement constructor) {
-        ExecutableElement create = findMethod(node, "create", constructor.getParameters());
-        if (create == null) {
-            Formatter f = new Formatter();
-            f.format("public static %s create(", node.getSimpleName());
-            String sep = "";
-            Formatter callArgs = new Formatter();
-            for (VariableElement v : constructor.getParameters()) {
-                f.format("%s%s %s", sep, ElementUtils.getSimpleName(v.asType()), v.getSimpleName());
-                callArgs.format("%s%s", sep, v.getSimpleName());
-                sep = ", ";
-            }
-            f.format(") { return new %s(%s); }", newClassName, callArgs);
-            throw new ElementException(constructor, "Missing Node class factory method '%s'", f);
-        }
-        if (!create.getModifiers().containsAll(asList(PUBLIC, STATIC))) {
-            throw new ElementException(constructor, "Node class factory method must be public and static");
-        }
-    }
-
-    private CodeExecutableElement createConstructor(TypeElement type, ExecutableElement element) {
+    private CodeExecutableElement createSuperConstructor(TypeElement type, ExecutableElement element) {
         CodeExecutableElement executable = CodeExecutableElement.clone(getProcessingEnv(), element);
 
         // to create a constructor we have to set the return type to null.(TODO needs fix)

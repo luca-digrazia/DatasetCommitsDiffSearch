@@ -47,11 +47,7 @@ public class GraphNodeProcessor extends AbstractProcessor {
     }
 
     void errorMessage(Element element, String format, Object... args) {
-        message(Kind.ERROR, element, format, args);
-    }
-
-    void message(Kind kind, Element element, String format, Object... args) {
-        processingEnv.getMessager().printMessage(kind, String.format(format, args), element);
+        processingEnv.getMessager().printMessage(Kind.ERROR, String.format(format, args), element);
     }
 
     /**
@@ -128,8 +124,6 @@ public class GraphNodeProcessor extends AbstractProcessor {
             } catch (Throwable t) {
                 if (!isBug367599(t)) {
                     reportException(element, t);
-                } else {
-                    message(Kind.NOTE, element, t.toString());
                 }
             }
         }
