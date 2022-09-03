@@ -400,7 +400,7 @@ public class ArrayCopySnippets implements SnippetsInterface{
         @Input private ValueNode object;
         @Input private ValueNode value;
         @Input private ValueNode offset;
-        private final int displacement;
+        @Data private final int displacement;
 
         public DirectObjectStoreNode(ValueNode object, int displacement, ValueNode offset, ValueNode value) {
             super(StampFactory.illegal());
