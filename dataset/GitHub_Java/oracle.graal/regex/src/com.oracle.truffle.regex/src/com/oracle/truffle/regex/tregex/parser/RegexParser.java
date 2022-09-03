@@ -102,7 +102,6 @@ public final class RegexParser {
 
     private final RegexAST ast;
     private final RegexSource source;
-    private final RegexFlags flags;
     private final RegexLexer lexer;
     private final RegexProperties properties;
     private final Counter.ThresholdCounter groupCount;
@@ -115,11 +114,10 @@ public final class RegexParser {
     private Term curTerm;
 
     @TruffleBoundary
-    public RegexParser(RegexSource source, RegexOptions options) throws RegexSyntaxException {
+    public RegexParser(RegexSource source, RegexOptions options) {
         this.source = source;
-        this.flags = RegexFlags.parseFlags(source.getGeneralFlags());
-        this.lexer = new RegexLexer(source, flags, options);
-        this.ast = new RegexAST(source, flags, options);
+        this.lexer = new RegexLexer(source, options);
+        this.ast = new RegexAST(source, options);
         this.properties = ast.getProperties();
         this.groupCount = ast.getGroupCount();
         this.copyVisitor = new CopyVisitor(ast);
@@ -129,7 +127,7 @@ public final class RegexParser {
 
     private static Group parseRootLess(String pattern) throws RegexSyntaxException {
         try {
-            return new RegexParser(new RegexSource(pattern), RegexOptions.DEFAULT).parse(false);
+            return new RegexParser(new RegexSource(pattern, RegexFlags.DEFAULT), RegexOptions.DEFAULT).parse(false);
         } catch (Throwable e) {
             e.printStackTrace();
             System.out.flush();
@@ -178,10 +176,6 @@ public final class RegexParser {
     @TruffleBoundary
     public Map<String, Integer> getNamedCaptureGroups() {
         return lexer.getNamedCaptureGroups();
-    }
-
-    public RegexFlags getFlags() {
-        return flags;
     }
 
     /* AST manipulation */
@@ -393,7 +387,7 @@ public final class RegexParser {
 
     private void addCharClass(Token.CharacterClass token) {
         CodePointSet codePointSet = token.getCodePointSet();
-        if (flags.isUnicode()) {
+        if (source.getFlags().isUnicode()) {
             if (codePointSet.matchesNothing()) {
                 // We need this branch because a Group with no alternatives is invalid
                 addTerm(createCharClass(MatcherBuilder.createEmpty(), token.getSourceSection()));
@@ -479,7 +473,7 @@ public final class RegexParser {
             Token token = lexer.next();
             switch (token.kind) {
                 case caret:
-                    if (flags.isMultiline()) {
+                    if (source.getFlags().isMultiline()) {
                         substitute(token, MULTI_LINE_CARET_SUBSTITUTION);
                         properties.setAlternations();
                     } else if (!curTermIsAnchor(PositionAssertion.Type.CARET)) {
@@ -489,7 +483,7 @@ public final class RegexParser {
                     }
                     break;
                 case dollar:
-                    if (flags.isMultiline()) {
+                    if (source.getFlags().isMultiline()) {
                         substitute(token, MULTI_LINE_DOLLAR_SUBSTITUTION);
                         properties.setAlternations();
                     } else if (!curTermIsAnchor(PositionAssertion.Type.DOLLAR)) {
@@ -499,7 +493,7 @@ public final class RegexParser {
                     }
                     break;
                 case wordBoundary:
-                    if (flags.isUnicode() && flags.isIgnoreCase()) {
+                    if (source.getFlags().isUnicode() && source.getFlags().isIgnoreCase()) {
                         substitute(token, UNICODE_IGNORE_CASE_WORD_BOUNDARY_SUBSTITUTION);
                     } else {
                         substitute(token, WORD_BOUNDARY_SUBSTITUTION);
@@ -507,7 +501,7 @@ public final class RegexParser {
                     properties.setAlternations();
                     break;
                 case nonWordBoundary:
-                    if (flags.isUnicode() && flags.isIgnoreCase()) {
+                    if (source.getFlags().isUnicode() && source.getFlags().isIgnoreCase()) {
                         substitute(token, UNICODE_IGNORE_CASE_NON_WORD_BOUNDARY_SUBSTITUTION);
                     } else {
                         substitute(token, NON_WORD_BOUNDARY_SUBSTITUTION);
@@ -563,7 +557,7 @@ public final class RegexParser {
         if (curTerm == null) {
             throw syntaxError(ErrorMessages.QUANTIFIER_WITHOUT_TARGET);
         }
-        if (flags.isUnicode() && curTerm instanceof LookAheadAssertion) {
+        if (source.getFlags().isUnicode() && curTerm instanceof LookAheadAssertion) {
             throw syntaxError(ErrorMessages.QUANTIFIER_ON_LOOKAHEAD_ASSERTION);
         }
         if (curTerm instanceof LookBehindAssertion) {
@@ -635,7 +629,7 @@ public final class RegexParser {
     }
 
     private RegexSyntaxException syntaxError(String msg) {
-        return new RegexSyntaxException(source.getPattern(), source.getGeneralFlags(), msg);
+        return new RegexSyntaxException(source.getPattern(), source.getFlags(), msg);
     }
 
     /**
@@ -692,7 +686,7 @@ public final class RegexParser {
                         case Null:
                             throw syntaxError(ErrorMessages.QUANTIFIER_WITHOUT_TARGET);
                         case LookAheadAssertion:
-                            if (flags.isUnicode()) {
+                            if (source.getFlags().isUnicode()) {
                                 throw syntaxError(ErrorMessages.QUANTIFIER_ON_LOOKAHEAD_ASSERTION);
                             }
                             break;
