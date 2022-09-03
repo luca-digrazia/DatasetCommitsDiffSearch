@@ -130,9 +130,9 @@ public class IdealGraphPrinter {
         }
         List<Loop> loops = null;
         try {
-            loops = LoopUtil.computeLoops(graph);
+            LoopUtil.computeLoops(graph);
         } catch (Throwable t) {
-            t.printStackTrace();
+
         }
 
         stream.println("  <nodes>");
@@ -264,20 +264,14 @@ public class IdealGraphPrinter {
             Set<String> nodeBits = bits.get(node);
             if (nodeBits != null) {
                 for (String bit : nodeBits) {
-                    stream.printf("    <p name='");
-                    stream.print(bit);
-                    stream.println("'>true</p>");
+                    stream.printf("    <p name='%s'>true</p>%n", bit);
                 }
             }
 
             for (Entry<Object, Object> entry : props.entrySet()) {
                 String key = entry.getKey().toString();
                 String value = entry.getValue() == null ? "null" : entry.getValue().toString();
-                stream.print("    <p name='");
-                stream.print(escape(key));
-                stream.print("'>");
-                stream.print(escape(value));
-                stream.println("</p>");
+                stream.printf("    <p name='%s'>%s</p>%n", escape(key), escape(value));
             }
 
             stream.println("   </properties></node>");
@@ -377,50 +371,11 @@ public class IdealGraphPrinter {
     }
 
     private String escape(String s) {
-        StringBuilder str = null;
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            switch (c) {
-                case '&':
-                case '<':
-                case '>':
-                case '"':
-                case '\'':
-                    if (str == null) {
-                        str = new StringBuilder();
-                        str.append(s, 0, i);
-                    }
-                    switch(c) {
-                        case '&':
-                            str.append("&amp;");
-                            break;
-                        case '<':
-                            str.append("&lt;");
-                            break;
-                        case '>':
-                            str.append("&gt;");
-                            break;
-                        case '"':
-                            str.append("&quot;");
-                            break;
-                        case '\'':
-                            str.append("&apos;");
-                            break;
-                        default:
-                            assert false;
-                    }
-                    break;
-                default:
-                    if (str != null) {
-                        str.append(c);
-                    }
-                    break;
-            }
-        }
-        if (str == null) {
-            return s;
-        } else {
-            return str.toString();
-        }
+        s = s.replace("&", "&amp;");
+        s = s.replace("<", "&lt;");
+        s = s.replace(">", "&gt;");
+        s = s.replace("\"", "&quot;");
+        s = s.replace("'", "&apos;");
+        return s;
     }
 }

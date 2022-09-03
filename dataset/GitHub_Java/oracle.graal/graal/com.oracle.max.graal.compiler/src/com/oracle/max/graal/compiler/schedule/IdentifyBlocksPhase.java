@@ -408,11 +408,7 @@ public class IdentifyBlocksPhase extends Phase {
             }
         }
 
-        int cnt = 0;
         while (!workList.isEmpty()) {
-            if (cnt++ > blocks.size() * 10) {
-                throw new RuntimeException("(ls) endless loop in computeDominators?");
-            }
             Block b = workList.remove();
 
             List<Block> predecessors = b.getPredecessors();

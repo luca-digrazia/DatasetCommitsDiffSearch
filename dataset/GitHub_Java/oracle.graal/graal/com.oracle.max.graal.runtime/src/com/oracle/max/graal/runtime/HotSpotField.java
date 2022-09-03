@@ -60,10 +60,10 @@ public class HotSpotField extends CompilerObject implements RiField {
     @Override
     public CiConstant constantValue(CiConstant receiver) {
         if (receiver == null) {
-            if (constant == null && holder.isResolved() && holder.isSubtypeOf(compiler.getVMEntries().getType(C1XOptions.class))) {
+            if (constant == null && holder.isResolved() && holder.isSubtypeOf(compiler.getVMEntries().getType(GraalOptions.class))) {
                 Field f;
                 try {
-                    f = C1XOptions.class.getField(name);
+                    f = GraalOptions.class.getField(name);
                 } catch (SecurityException e1) {
                     return null;
                 } catch (NoSuchFieldException e1) {
@@ -95,18 +95,18 @@ public class HotSpotField extends CompilerObject implements RiField {
         return holder;
     }
 
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof HotSpotField) {
-            HotSpotField other = (HotSpotField) obj;
-            return other.offset == offset && other.holder.equals(holder());
-        }
-        return false;
-    }
+//    @Override
+//    public boolean equals(Object obj) {
+//        if (obj instanceof HotSpotField) {
+//            HotSpotField other = (HotSpotField) obj;
+//            return other.offset == offset && other.holder.equals(holder());
+//        }
+//        return false;
+//    }
 
     @Override
     public boolean isResolved() {
-        return offset != -1;
+        return holder.isResolved();
     }
 
     @Override
@@ -130,7 +130,7 @@ public class HotSpotField extends CompilerObject implements RiField {
 
     @Override
     public String toString() {
-        return "HotSpotField<" + holder.name() + "." + name + ">";
+        return "HotSpotField<" + holder.name() + "." + name + ":" + offset + ">";
     }
 
 }

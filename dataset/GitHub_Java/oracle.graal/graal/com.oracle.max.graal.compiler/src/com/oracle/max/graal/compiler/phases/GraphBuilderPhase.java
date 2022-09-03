@@ -325,12 +325,12 @@ public final class GraphBuilderPhase extends Phase {
                     Merge merge = new Merge(graph);
                     assert p.predecessors().size() == 1 : "predecessors size: " + p.predecessors().size();
                     FixedNode next = p.next();
+                    p.setNext(null);
                     EndNode end = new EndNode(graph);
-                    p.setNext(end);
+                    p.replaceAndDelete(end);
                     merge.setNext(next);
                     merge.addEnd(end);
                     merge.setStateAfter(existingState);
-                    p.setStateAfter(existingState.duplicate(bci));
                     if (!(next instanceof LoopEnd)) {
                         target.firstInstruction = merge;
                     }
@@ -436,12 +436,17 @@ public final class GraphBuilderPhase extends Phase {
             p.setStateAfter(frameState.duplicateWithoutStack(bci));
 
             Value currentExceptionObject;
+            ExceptionObject newObj = null;
             if (exceptionObject == null) {
-                currentExceptionObject = new ExceptionObject(graph);
+                newObj = new ExceptionObject(graph);
+                currentExceptionObject = newObj;
             } else {
                 currentExceptionObject = exceptionObject;
             }
             FrameState stateWithException = frameState.duplicateWithException(bci, currentExceptionObject);
+            if (newObj != null) {
+                newObj.setStateAfter(stateWithException);
+            }
             FixedNode target = createTarget(dispatchBlock, stateWithException);
             if (exceptionObject == null) {
                 ExceptionObject eObj = (ExceptionObject) currentExceptionObject;
@@ -1198,14 +1203,7 @@ public final class GraphBuilderPhase extends Phase {
             } else {
                 EndNode end = new EndNode(graph);
                 ((Merge) result).addEnd(end);
-                Placeholder p = new Placeholder(graph);
-                int bci = block.startBci;
-                if (block instanceof ExceptionBlock) {
-                    bci = ((ExceptionBlock) block).deoptBci;
-                }
-                p.setStateAfter(stateAfter.duplicate(bci));
-                p.setNext(end);
-                result = p;
+                result = end;
             }
         }
         assert !(result instanceof LoopBegin || result instanceof Merge);

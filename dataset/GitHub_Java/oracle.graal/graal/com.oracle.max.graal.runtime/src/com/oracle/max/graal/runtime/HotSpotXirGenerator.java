@@ -643,26 +643,25 @@ public class HotSpotXirGenerator implements RiXirGenerator {
 
             XirOperand objHub = asm.createTemp("objHub", CiKind.Object);
 
+            XirLabel end = asm.createInlineLabel("end");
             XirLabel slowPath = asm.createOutOfLineLabel("slow path");
-            XirLabel trueSucc = asm.createInlineLabel(XirLabel.TrueSuccessor);
-            XirLabel falseSucc = asm.createInlineLabel(XirLabel.FalseSuccessor);
 
             if (is(NULL_CHECK, flags)) {
                 // null isn't "instanceof" anything
-                asm.jeq(falseSucc, object, asm.o(null));
+                asm.mov(result, asm.b(false));
+                asm.jeq(end, object, asm.o(null));
             }
 
             asm.pload(CiKind.Object, objHub, object, asm.i(config.hubOffset), false);
             // if we get an exact match: succeed immediately
             asm.mov(result, asm.b(true));
-            asm.jeq(trueSucc, objHub, hub);
-            asm.jmp(slowPath);
+            asm.jneq(slowPath, objHub, hub);
+            asm.bindInline(end);
 
             // -- out of line -------------------------------------------------------
             asm.bindOutOfLine(slowPath);
             checkSubtype(asm, result, objHub, hub);
-            asm.jeq(falseSucc, result, asm.b(false));
-            asm.jmp(trueSucc);
+            asm.jmp(end);
 
             return asm.finishTemplate("instanceof");
         }
@@ -1044,7 +1043,6 @@ public class HotSpotXirGenerator implements RiXirGenerator {
            asm.pload(CiKind.Object, objHub, object, asm.i(config.hubOffset), false);
            // if we get an exact match: continue
            asm.jneq(slowPath, objHub, hub);
-           asm.shouldNotReachHere();
 
            // -- out of line -------------------------------------------------------
            asm.bindOutOfLine(slowPath);
