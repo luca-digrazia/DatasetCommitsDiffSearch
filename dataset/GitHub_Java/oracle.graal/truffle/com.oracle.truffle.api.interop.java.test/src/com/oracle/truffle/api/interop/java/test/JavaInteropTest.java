@@ -219,22 +219,13 @@ public class JavaInteropTest {
 
     @Test
     public void accessAllPublicPropertiesDirectly() {
-        final PublicPOJO orig = new PublicPOJO();
-        final TruffleObject pojo = JavaInterop.asTruffleObject(orig);
+        TruffleObject pojo = JavaInterop.asTruffleObject(new PublicPOJO());
         CallTarget callKeys = sendKeys();
         TruffleObject result = (TruffleObject) callKeys.call(pojo);
         List<?> propertyNames = JavaInterop.asJavaObject(List.class, result);
         assertEquals("One instance field and one method", 2, propertyNames.size());
         assertEquals("One field x", "x", propertyNames.get(0));
         assertEquals("One method to access x", "readX", propertyNames.get(1));
-
-        TruffleObject readX = (TruffleObject) message(Message.READ, pojo, "readX");
-        Boolean isExecutable = (Boolean) message(Message.IS_EXECUTABLE, readX);
-        assertTrue("Method can be executed " + readX, isExecutable);
-
-        orig.writeX(10);
-        final Object value = message(Message.createExecute(0), readX);
-        assertEquals(10, value);
     }
 
     @Test
