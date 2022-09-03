@@ -33,6 +33,7 @@ import java.util.List;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.LIRKind;
 import jdk.vm.ci.meta.Value;
 
@@ -450,7 +451,7 @@ public class MoveResolver {
         }
         if (isIllegal(fromInterval.location()) && fromInterval.canMaterialize()) {
             // Instead of a reload, re-materialize the value
-            Constant rematValue = fromInterval.getMaterializedValue();
+            JavaConstant rematValue = fromInterval.getMaterializedValue();
             addMapping(rematValue, toInterval);
             return;
         }
