@@ -37,8 +37,6 @@ import com.oracle.graal.phases.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.word.*;
 
-//JaCoCo Exclude
-
 /**
  * Utilities and common code paths used by the type check snippets.
  */

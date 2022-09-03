@@ -108,6 +108,7 @@ public class AMD64ConvertSnippets implements Snippets {
     @Snippet
     public static int d2i(double input, int result) {
         if (probability(SLOW_PATH_PROBABILITY, result == Integer.MIN_VALUE)) {
+
             if (Double.isNaN(input)) {
                 // input is NaN -> return 0
                 return 0;
