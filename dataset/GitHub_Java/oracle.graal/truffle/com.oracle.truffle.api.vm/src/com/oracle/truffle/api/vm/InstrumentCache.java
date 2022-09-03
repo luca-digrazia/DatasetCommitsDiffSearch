@@ -100,9 +100,6 @@ final class InstrumentCache {
     }
 
     private static void loadForOne(ClassLoader loader, List<InstrumentCache> list, Set<String> classNamesUsed) {
-        if (loader == null) {
-            return;
-        }
         Enumeration<URL> en;
         try {
             en = loader.getResources("META-INF/truffle/instrument");

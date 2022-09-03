@@ -136,9 +136,6 @@ final class LanguageCache {
     }
 
     private static void createLanguages(ClassLoader loader, Map<String, LanguageCache> map) {
-        if (loader == null) {
-            return;
-        }
         Enumeration<URL> en;
         try {
             en = loader.getResources("META-INF/truffle/language");
