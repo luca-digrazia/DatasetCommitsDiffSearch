@@ -32,109 +32,141 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.util.*;
+import com.oracle.graal.replacements.Snippet.SnippetInliningPolicy;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
+import com.oracle.graal.word.*;
 
 public class BoxingSnippets implements Snippets {
 
-    @Snippet
+    /**
+     * This snippet inlining policy differs from the default one in that it does normal inlining of
+     * boxing methods like {@link Integer#valueOf(int)} (as opposed to method substitution).
+     */
+    public static class BoxingSnippetInliningPolicy implements SnippetInliningPolicy {
+
+        @Override
+        public boolean shouldInline(ResolvedJavaMethod method, ResolvedJavaMethod caller) {
+            if (method.isNative()) {
+                return false;
+            }
+            if (method.getAnnotation(Fold.class) != null) {
+                return false;
+            }
+            if (method.getAnnotation(NodeIntrinsic.class) != null) {
+                return false;
+            }
+            if (method.getAnnotation(Word.Operation.class) != null) {
+                return false;
+            }
+            return true;
+        }
+
+        @Override
+        public boolean shouldUseReplacement(ResolvedJavaMethod callee, ResolvedJavaMethod methodToParse) {
+            return false;
+        }
+    }
+
+    @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static Object booleanValueOf(boolean value) {
         valueOfCounter.inc();
         return PiNode.piCast(Boolean.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
-    @Snippet
+    @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static Object byteValueOf(byte value) {
         valueOfCounter.inc();
         return PiNode.piCast(Byte.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
-    @Snippet
+    @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static Object charValueOf(char value) {
         valueOfCounter.inc();
         return PiNode.piCast(Character.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
-    @Snippet
+    @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static Object doubleValueOf(double value) {
         valueOfCounter.inc();
         return PiNode.piCast(Double.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
-    @Snippet
+    @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static Object floatValueOf(float value) {
         valueOfCounter.inc();
         return PiNode.piCast(Float.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
-    @Snippet
+    @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static Object intValueOf(int value) {
         valueOfCounter.inc();
         return PiNode.piCast(Integer.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
-    @Snippet
+    @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static Object longValueOf(long value) {
         valueOfCounter.inc();
         return PiNode.piCast(Long.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
-    @Snippet
+    @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static Object shortValueOf(short value) {
         valueOfCounter.inc();
         return PiNode.piCast(Short.valueOf(value), StampFactory.forNodeIntrinsic());
     }
 
-    @Snippet
+    @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static boolean booleanValue(Boolean value) {
         valueOfCounter.inc();
         return value.booleanValue();
     }
 
-    @Snippet
+    @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static byte byteValue(Byte value) {
         valueOfCounter.inc();
         return value.byteValue();
     }
 
-    @Snippet
+    @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static char charValue(Character value) {
         valueOfCounter.inc();
         return value.charValue();
     }
 
-    @Snippet
+    @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static double doubleValue(Double value) {
         valueOfCounter.inc();
         return value.doubleValue();
     }
 
-    @Snippet
+    @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static float floatValue(Float value) {
         valueOfCounter.inc();
         return value.floatValue();
     }
 
-    @Snippet
+    @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static int intValue(Integer value) {
         valueOfCounter.inc();
         return value.intValue();
     }
 
-    @Snippet
+    @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static long longValue(Long value) {
         valueOfCounter.inc();
         return value.longValue();
     }
 
-    @Snippet
+    @Snippet(inlining = BoxingSnippetInliningPolicy.class)
     public static short shortValue(Short value) {
         valueOfCounter.inc();
         return value.shortValue();

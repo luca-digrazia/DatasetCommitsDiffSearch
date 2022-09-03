@@ -22,21 +22,18 @@
  */
 package com.oracle.graal.replacements;
 
-import static jdk.internal.jvmci.meta.MetaUtil.*;
+import static com.oracle.graal.api.meta.MetaUtil.*;
 
 import java.lang.reflect.*;
 import java.util.*;
 
-import jdk.internal.jvmci.common.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
-
-import jdk.internal.jvmci.meta.*;
-
-import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.spi.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.InjectedNodeParameter;
@@ -48,6 +45,7 @@ import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.util.*;
 
 /**
  * Replaces calls to {@link NodeIntrinsic}s with nodes and calls to methods annotated with
@@ -55,19 +53,12 @@ import com.oracle.graal.phases.*;
  */
 public class NodeIntrinsificationPhase extends Phase {
 
-    private final MetaAccessProvider metaAccess;
-    private final ConstantReflectionProvider constantReflection;
+    private final Providers providers;
     private final SnippetReflectionProvider snippetReflection;
-    private final ForeignCallsProvider foreignCalls;
-    private final StampProvider stampProvider;
 
-    public NodeIntrinsificationPhase(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, SnippetReflectionProvider snippetReflection, ForeignCallsProvider foreignCalls,
-                    StampProvider stampProvider) {
-        this.metaAccess = metaAccess;
-        this.constantReflection = constantReflection;
+    public NodeIntrinsificationPhase(Providers providers, SnippetReflectionProvider snippetReflection) {
+        this.providers = providers;
         this.snippetReflection = snippetReflection;
-        this.foreignCalls = foreignCalls;
-        this.stampProvider = stampProvider;
     }
 
     @Override
@@ -110,7 +101,7 @@ public class NodeIntrinsificationPhase extends Phase {
 
             if (constant != null) {
                 // Replace the invoke with the result of the call
-                ConstantNode node = ConstantNode.forConstant(constant, metaAccess, methodCallTargetNode.graph());
+                ConstantNode node = ConstantNode.forConstant(constant, providers.getMetaAccess(), methodCallTargetNode.graph());
                 methodCallTargetNode.invoke().intrinsify(node);
 
                 // Clean up checkcast instructions inserted by javac if the return type is generic.
@@ -123,7 +114,7 @@ public class NodeIntrinsificationPhase extends Phase {
         return true;
     }
 
-    public static final JavaConstant COULD_NOT_FOLD = new PrimitiveConstant(Kind.Illegal, 100) {
+    @SuppressWarnings("serial") public static final JavaConstant COULD_NOT_FOLD = new PrimitiveConstant(Kind.Illegal, 100) {
         @Override
         public boolean equals(Object o) {
             return this == o;
@@ -174,7 +165,7 @@ public class NodeIntrinsificationPhase extends Phase {
         if (intrinsic.foldable() && areAllConstant(arguments)) {
             JavaConstant res = tryFold(arguments, parameterTypes, method);
             if (!res.equals(COULD_NOT_FOLD)) {
-                return ConstantNode.forConstant(res, metaAccess);
+                return ConstantNode.forConstant(res, providers.getMetaAccess());
             }
         }
 
@@ -229,12 +220,12 @@ public class NodeIntrinsificationPhase extends Phase {
                  * For intrinsification (but not for folding) if we have a Class<?> object we want
                  * the corresponding ResolvedJavaType.
                  */
-                ResolvedJavaType type = folding ? null : constantReflection.asJavaType(constant);
+                ResolvedJavaType type = folding ? null : providers.getConstantReflection().asJavaType(constant);
                 Object arg;
                 if (type != null) {
                     /* If we found such a type then it's our arg */
                     arg = type;
-                    parameterTypes[i] = metaAccess.lookupJavaType(ResolvedJavaType.class);
+                    parameterTypes[i] = providers.getMetaAccess().lookupJavaType(ResolvedJavaType.class);
                 } else {
                     JavaConstant javaConstant = (JavaConstant) constant;
                     if (folding) {
@@ -262,7 +253,7 @@ public class NodeIntrinsificationPhase extends Phase {
                 reflectionCallArguments[i] = arg;
             } else {
                 reflectionCallArguments[i] = argument;
-                parameterTypes[i] = metaAccess.lookupJavaType(ValueNode.class);
+                parameterTypes[i] = providers.getMetaAccess().lookupJavaType(ValueNode.class);
             }
         }
         return reflectionCallArguments;
@@ -273,10 +264,10 @@ public class NodeIntrinsificationPhase extends Phase {
         if (intrinsic.value() == NodeIntrinsic.class) {
             result = target.getDeclaringClass();
         } else {
-            result = metaAccess.lookupJavaType(intrinsic.value());
+            result = providers.getMetaAccess().lookupJavaType(intrinsic.value());
         }
-        assert metaAccess.lookupJavaType(ValueNode.class).isAssignableFrom(result) : "Node intrinsic class " + result.toJavaName(false) + " derived from @" + NodeIntrinsic.class.getSimpleName() +
-                        " annotation on " + target.format("%H.%n(%p)") + " is not a subclass of " + ValueNode.class;
+        assert providers.getMetaAccess().lookupJavaType(ValueNode.class).isAssignableFrom(result) : "Node intrinsic class " + result.toJavaName(false) + " derived from @" +
+                        NodeIntrinsic.class.getSimpleName() + " annotation on " + target.format("%H.%n(%p)") + " is not a subclass of " + ValueNode.class;
         return result;
     }
 
@@ -297,12 +288,12 @@ public class NodeIntrinsificationPhase extends Phase {
                         break;
                     }
                 } else {
-                    throw new JVMCIError("Found multiple constructors in %s compatible with signature %s: %s, %s", nodeClass.toJavaName(), sigString(parameterTypes), constructor, c);
+                    throw new GraalInternalError("Found multiple constructors in %s compatible with signature %s: %s, %s", nodeClass.toJavaName(), sigString(parameterTypes), constructor, c);
                 }
             }
         }
         if (constructor == null) {
-            throw new JVMCIError("Could not find constructor in %s compatible with signature %s", nodeClass.toJavaName(), sigString(parameterTypes));
+            throw new GraalInternalError("Could not find constructor in %s compatible with signature %s", nodeClass.toJavaName(), sigString(parameterTypes));
         }
 
         try {
@@ -336,7 +327,7 @@ public class NodeIntrinsificationPhase extends Phase {
         int count = c.getSignature().getParameterCount(false);
         for (int i = start; i < count; i++) {
             if (c.getParameterAnnotation(InjectedNodeParameter.class, i) != null) {
-                throw new JVMCIError("Injected parameter %d of type %s must precede all non-injected parameters of %s", i,
+                throw new GraalInternalError("Injected parameter %d of type %s must precede all non-injected parameters of %s", i,
                                 c.getSignature().getParameterType(i, c.getDeclaringClass()).toJavaName(false), c.format("%H.%n(%p)"));
             }
         }
@@ -348,6 +339,7 @@ public class NodeIntrinsificationPhase extends Phase {
         Object[] injected = null;
 
         ResolvedJavaType[] signature = resolveJavaTypes(c.getSignature().toParameterTypes(null), c.getDeclaringClass());
+        MetaAccessProvider metaAccess = providers.getMetaAccess();
         for (int i = 0; i < signature.length; i++) {
             if (c.getParameterAnnotation(InjectedNodeParameter.class, i) != null) {
                 injected = injected == null ? new Object[1] : Arrays.copyOf(injected, injected.length + 1);
@@ -359,15 +351,15 @@ public class NodeIntrinsificationPhase extends Phase {
                 } else if (signature[i].equals(metaAccess.lookupJavaType(StructuredGraph.class))) {
                     injected[injected.length - 1] = graph;
                 } else if (signature[i].equals(metaAccess.lookupJavaType(ForeignCallsProvider.class))) {
-                    injected[injected.length - 1] = foreignCalls;
+                    injected[injected.length - 1] = providers.getForeignCalls();
                 } else if (signature[i].equals(metaAccess.lookupJavaType(SnippetReflectionProvider.class))) {
                     injected[injected.length - 1] = snippetReflection;
                 } else if (signature[i].isAssignableFrom(metaAccess.lookupJavaType(Stamp.class))) {
                     injected[injected.length - 1] = invokeStamp;
                 } else if (signature[i].isAssignableFrom(metaAccess.lookupJavaType(StampProvider.class))) {
-                    injected[injected.length - 1] = stampProvider;
+                    injected[injected.length - 1] = providers.getStampProvider();
                 } else {
-                    throw new JVMCIError("Cannot handle injected argument of type %s in %s", signature[i].toJavaName(), c.format("%H.%n(%p)"));
+                    throw new GraalInternalError("Cannot handle injected argument of type %s in %s", signature[i].toJavaName(), c.format("%H.%n(%p)"));
                 }
             } else {
                 assert checkNoMoreInjected(c, i);
@@ -492,6 +484,12 @@ public class NodeIntrinsificationPhase extends Phase {
             for (Node piUsage : usage.usages().snapshot()) {
                 checkCheckCastUsage(graph, intrinsifiedNode, usage, piUsage);
             }
+        } else if (usage instanceof GuardingPiNode) {
+            GuardingPiNode pi = (GuardingPiNode) usage;
+            for (Node piUsage : pi.usages().snapshot()) {
+                checkCheckCastUsage(graph, intrinsifiedNode, usage, piUsage);
+            }
+            graph.removeFixed(pi);
         } else {
             DebugScope.forceDump(graph, "exception");
             assert false : sourceLocation(usage) + " has unexpected usage " + usage + " of checkcast " + input + " at " + sourceLocation(input);

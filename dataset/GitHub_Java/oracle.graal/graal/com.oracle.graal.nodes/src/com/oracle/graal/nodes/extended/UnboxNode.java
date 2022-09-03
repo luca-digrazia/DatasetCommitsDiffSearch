@@ -22,16 +22,13 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.virtual.*;
 
 @NodeInfo
 public final class UnboxNode extends FixedWithNextNode implements Virtualizable, Lowerable, Canonicalizable.Unary<ValueNode> {
@@ -69,22 +66,18 @@ public final class UnboxNode extends FixedWithNextNode implements Virtualizable,
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode alias = tool.getAlias(getValue());
-        if (alias instanceof VirtualObjectNode) {
-            VirtualObjectNode virtual = (VirtualObjectNode) alias;
-            ResolvedJavaType objectType = virtual.type();
+        State state = tool.getObjectState(getValue());
+        if (state != null && state.getState() == EscapeState.Virtual) {
+            ResolvedJavaType objectType = state.getVirtualObject().type();
             ResolvedJavaType expectedType = tool.getMetaAccessProvider().lookupJavaType(boxingKind.toBoxedJavaClass());
             if (objectType.equals(expectedType)) {
-                tool.replaceWithValue(tool.getEntry(virtual, 0));
+                tool.replaceWithValue(state.getEntry(0));
             }
         }
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        if (tool.allUsagesAvailable() && hasNoUsages() && StampTool.isPointerNonNull(forValue)) {
-            return null;
-        }
         ValueNode synonym = findSynonym(tool.getMetaAccess(), tool.getConstantReflection(), forValue, boxingKind);
         if (synonym != null) {
             return synonym;
