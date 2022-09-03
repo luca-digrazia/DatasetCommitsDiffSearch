@@ -58,6 +58,11 @@ public abstract class ValueProcedure extends InstructionValueProcedure {
     }
 
     @Override
+    public final Value doValue(LIRInstruction instruction, Value value) {
+        throw GraalInternalError.shouldNotReachHere("This doValue() method should never be called");
+    }
+
+    @Override
     public final Value doValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
         return doValue(value, mode, flags);
     }

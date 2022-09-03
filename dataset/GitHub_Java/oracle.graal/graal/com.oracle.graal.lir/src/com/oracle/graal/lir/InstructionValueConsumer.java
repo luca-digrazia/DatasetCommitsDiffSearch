@@ -25,8 +25,8 @@ package com.oracle.graal.lir;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.lir.LIRInstruction.OperandFlag;
-import com.oracle.graal.lir.LIRInstruction.OperandMode;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.lir.LIRInstruction.*;
 
 /**
  * Non-modifying version of {@link InstructionValueProcedure}.
@@ -34,14 +34,28 @@ import com.oracle.graal.lir.LIRInstruction.OperandMode;
 public abstract class InstructionValueConsumer extends InstructionValueProcedureBase {
 
     /**
-     * Iterator method to be overwritten.
+     * Iterator method to be overwritten. This version of the iterator does not take additional
+     * parameters to keep the signature short.
+     *
+     * @param instruction The current instruction.
+     * @param value The value that is iterated.
+     */
+    public void visitValue(LIRInstruction instruction, Value value) {
+        throw GraalInternalError.shouldNotReachHere("One of the visitValue() methods must be overwritten");
+    }
+
+    /**
+     * Iterator method to be overwritten. This version of the iterator gets additional parameters
+     * about the processed value.
      *
      * @param instruction The current instruction.
      * @param value The value that is iterated.
      * @param mode The operand mode for the value.
      * @param flags A set of flags for the value.
      */
-    public abstract void visitValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags);
+    public void visitValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
+        visitValue(instruction, value);
+    }
 
     @Override
     public final Value processValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {

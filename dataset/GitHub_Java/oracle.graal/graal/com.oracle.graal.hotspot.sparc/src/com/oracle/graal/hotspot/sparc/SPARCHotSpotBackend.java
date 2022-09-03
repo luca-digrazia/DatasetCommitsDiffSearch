@@ -25,8 +25,8 @@ package com.oracle.graal.hotspot.sparc;
 import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 import static com.oracle.graal.sparc.SPARC.*;
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 
 import java.util.*;
 
@@ -49,8 +49,6 @@ import com.oracle.graal.hotspot.meta.HotSpotCodeCacheProvider.MarkId;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.LIRInstruction.OperandFlag;
-import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.gen.*;
@@ -349,7 +347,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
 
         private final InstructionValueConsumer valueConsumer = new InstructionValueConsumer() {
             @Override
-            public void visitValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
+            public void visitValue(LIRInstruction instruction, Value value) {
                 Object valueObject = value;
                 if (isRegister(value)) { // Canonicalize registers
                     valueObject = asRegister(value);
