@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,22 +22,52 @@
  */
 package com.oracle.graal.compiler.test.tutorial;
 
-import java.util.*;
+import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.debug.*;
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.java.*;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeMap;
+import com.oracle.graal.java.GraphBuilderPhase;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.graph.*;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.Invoke;
+import com.oracle.graal.nodes.ParameterNode;
+import com.oracle.graal.nodes.ReturnNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.ValuePhiNode;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.BytecodeExceptionMode;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
+import com.oracle.graal.nodes.java.LoadFieldNode;
+import com.oracle.graal.nodes.java.MethodCallTargetNode;
+import com.oracle.graal.nodes.java.NewArrayNode;
+import com.oracle.graal.nodes.java.NewInstanceNode;
+import com.oracle.graal.nodes.java.StoreFieldNode;
+import com.oracle.graal.nodes.spi.StampProvider;
+import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.phases.OptimisticOptimizations;
+import com.oracle.graal.phases.graph.StatelessPostOrderNodeIterator;
+
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * A simple context-insensitive static analysis based on the Graal API. It is intended for
@@ -50,7 +80,7 @@ import com.oracle.graal.phases.graph.*;
  * types need to be added to any type state.
  * <p>
  * The type flows are constructed from a high-level Graal graph by the {@link TypeFlowBuilder}. All
- * nodes that operate on {@link Kind#Object object} values are converted to the appropriate type
+ * nodes that operate on {@link JavaKind#Object object} values are converted to the appropriate type
  * flows. The analysis is context insensitive: every Java field has {@link Results#lookupField one
  * list} of types assigned to the field; every Java method has {@link Results#lookupMethod one
  * state} for each {@link MethodState#formalParameters parameter} as well as the
@@ -75,7 +105,7 @@ public class StaticAnalysis {
 
     /**
      * Adds a root method to the static analysis. The method must be static and must not have any
-     * parameters, because the possible types of the parametes would not be known.
+     * parameters, because the possible types of the parameters would not be known.
      */
     public void addMethod(ResolvedJavaMethod method) {
         if (!method.isStatic() || method.getSignature().getParameterCount(false) > 0) {
@@ -106,7 +136,7 @@ public class StaticAnalysis {
     }
 
     protected static RuntimeException error(String msg) {
-        throw GraalInternalError.shouldNotReachHere(msg);
+        throw GraalError.shouldNotReachHere(msg);
     }
 
     /**
@@ -201,6 +231,7 @@ public class StaticAnalysis {
         }
 
         @Override
+        @SuppressWarnings("try")
         protected void process() {
             if (!processed) {
                 /* We want to process a method only once. */
@@ -210,7 +241,7 @@ public class StaticAnalysis {
                  * Build the Graal graph for the method using the bytecode parser provided by Graal.
                  */
 
-                StructuredGraph graph = new StructuredGraph(method);
+                StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO, INVALID_COMPILATION_ID);
                 /*
                  * Support for graph dumping, IGV uses this information to show the method name of a
                  * graph.
@@ -222,13 +253,14 @@ public class StaticAnalysis {
                      * the code before static analysis, the classes would otherwise be not loaded
                      * yet and the bytecode parser would only create a graph.
                      */
-                    GraphBuilderConfiguration graphBuilderConfig = GraphBuilderConfiguration.getEagerDefault().withOmitAllExceptionEdges(true);
+                    Plugins plugins = new Plugins(new InvocationPlugins(metaAccess));
+                    GraphBuilderConfiguration graphBuilderConfig = GraphBuilderConfiguration.getDefault(plugins).withEagerResolving(true);
                     /*
                      * For simplicity, we ignore all exception handling during the static analysis.
                      * This is a constraint of this example code, a real static analysis needs to
                      * handle the Graal nodes for throwing and handling exceptions.
                      */
-                    graphBuilderConfig = graphBuilderConfig.withOmitAllExceptionEdges(true);
+                    graphBuilderConfig = graphBuilderConfig.withBytecodeExceptionMode(BytecodeExceptionMode.OmitAll);
                     /*
                      * We do not want Graal to perform any speculative optimistic optimizations,
                      * i.e., we do not want to use profiling information. Since we do not run the
@@ -236,9 +268,8 @@ public class StaticAnalysis {
                      * wrong.
                      */
                     OptimisticOptimizations optimisticOpts = OptimisticOptimizations.NONE;
-                    Assumptions assumptions = new Assumptions(false);
 
-                    GraphBuilderPhase.Instance graphBuilder = new GraphBuilderPhase.Instance(metaAccess, stampProvider, assumptions, graphBuilderConfig, optimisticOpts);
+                    GraphBuilderPhase.Instance graphBuilder = new GraphBuilderPhase.Instance(metaAccess, stampProvider, null, null, graphBuilderConfig, optimisticOpts, null);
                     graphBuilder.apply(graph);
                 } catch (Throwable ex) {
                     Debug.handle(ex);
@@ -311,7 +342,7 @@ public class StaticAnalysis {
      * The active element for method invocations. For {@link InvokeKind#Virtual virtual} and
      * {@link InvokeKind#Interface interface} calls, the {@link TypeFlow#getTypes() types} of this
      * node are the receiver types. When a new receiver type is added, a new callee might be added.
-     * Adding a new callee means liking the type flow of the actual parameters with the formal
+     * Adding a new callee means linking the type flow of the actual parameters with the formal
      * parameters of the callee, and linking the return value of the callee with the return value
      * state of the invocation.
      *
@@ -319,7 +350,6 @@ public class StaticAnalysis {
      * {@link InvokeKind#Special special} calls) have only one callee, but use the same code for
      * simplicity.
      */
-
     class InvokeTypeFlow extends TypeFlow {
         private final MethodCallTargetNode callTarget;
         private final TypeFlow[] actualParameters;
@@ -441,7 +471,7 @@ public class StaticAnalysis {
         }
 
         private boolean isObject(ValueNode node) {
-            return node.getKind() == Kind.Object;
+            return node.getStackKind() == JavaKind.Object;
         }
 
         @Override

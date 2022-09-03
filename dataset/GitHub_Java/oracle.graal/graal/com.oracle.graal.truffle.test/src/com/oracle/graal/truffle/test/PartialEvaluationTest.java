@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,183 +22,123 @@
  */
 package com.oracle.graal.truffle.test;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
+import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
+import static com.oracle.graal.compiler.common.CompilationRequestIdentifier.asCompilationRequest;
 
-import java.util.*;
-import java.util.concurrent.*;
+import org.junit.Assert;
 
-import org.junit.*;
-
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.java.*;
-import com.oracle.graal.loop.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.Lowerable.LoweringType;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.PhasePlan.PhasePosition;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
-import com.oracle.graal.printer.*;
-import com.oracle.graal.truffle.*;
-import com.oracle.graal.truffle.printer.*;
-import com.oracle.graal.virtual.phases.ea.*;
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.graal.api.replacements.SnippetReflectionProvider;
+import com.oracle.graal.compiler.common.CompilationIdentifier;
+import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.DebugDumpScope;
+import com.oracle.graal.debug.DebugEnvironment;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.java.MethodCallTargetNode;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
+import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.truffle.DefaultInliningPolicy;
+import com.oracle.graal.truffle.DefaultTruffleCompiler;
+import com.oracle.graal.truffle.GraalTruffleRuntime;
+import com.oracle.graal.truffle.OptimizedCallTarget;
+import com.oracle.graal.truffle.TruffleCompiler;
+import com.oracle.graal.truffle.TruffleDebugJavaMethod;
+import com.oracle.graal.truffle.TruffleInlining;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.nodes.RootNode;
 
 public class PartialEvaluationTest extends GraalCompilerTest {
-
-    private static final long UNROLL_LIMIT = 100;
-    private final PartialEvaluator nodeCompiler;
+    private final TruffleCompiler truffleCompiler;
 
     public PartialEvaluationTest() {
-        // Make sure Truffle runtime is initialized.
-        Assert.assertTrue(Truffle.getRuntime() instanceof GraalTruffleRuntime);
-        this.nodeCompiler = new PartialEvaluator(runtime, runtime);
+        beforeInitialization();
+        GraalTruffleRuntime runtime = (GraalTruffleRuntime) Truffle.getRuntime();
+        this.truffleCompiler = DefaultTruffleCompiler.create(runtime);
 
-        DebugEnvironment.initialize(System.out);
+        DebugEnvironment.initialize(System.out, runtime.getRequiredGraalCapability(SnippetReflectionProvider.class));
     }
 
-    protected InstalledCode assertPartialEvalEquals(String methodName, RootNode root, FrameDescriptor descriptor) {
-        return assertPartialEvalEquals(methodName, root, descriptor, Arguments.EMPTY_ARGUMENTS);
+    /**
+     * Executed before initialization. This hook can be used to override specific flags.
+     */
+    protected void beforeInitialization() {
     }
 
-    protected InstalledCode assertPartialEvalEquals(String methodName, RootNode root, FrameDescriptor descriptor, Arguments arguments) {
-        Assumptions assumptions = new Assumptions(true);
-        StructuredGraph actual = partialEval(root, descriptor, arguments, assumptions, true);
-        InstalledCode result = new TruffleCompilerImpl().compileMethodHelper(actual, GraphBuilderConfiguration.getDefault(), assumptions);
+    protected OptimizedCallTarget assertPartialEvalEquals(String methodName, RootNode root) {
+        return assertPartialEvalEquals(methodName, root, new Object[0]);
+    }
+
+    private CompilationIdentifier getCompilationId(final OptimizedCallTarget compilable) {
+        return ((GraalTruffleRuntime) Truffle.getRuntime()).getCompilationIdentifier(compilable, truffleCompiler.getPartialEvaluator().getCompilationRootMethods()[0], getBackend());
+    }
+
+    protected OptimizedCallTarget compileHelper(String methodName, RootNode root, Object[] arguments) {
+        final OptimizedCallTarget compilable = (OptimizedCallTarget) (Truffle.getRuntime()).createCallTarget(root);
+        CompilationIdentifier compilationId = getCompilationId(compilable);
+        StructuredGraph actual = partialEval(compilable, arguments, AllowAssumptions.YES, compilationId);
+        truffleCompiler.compileMethodHelper(actual, methodName, null, compilable, asCompilationRequest(compilationId));
+        return compilable;
+    }
+
+    protected OptimizedCallTarget assertPartialEvalEquals(String methodName, RootNode root, Object[] arguments) {
+        final OptimizedCallTarget compilable = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(root);
+        CompilationIdentifier compilationId = getCompilationId(compilable);
+        StructuredGraph actual = partialEval(compilable, arguments, AllowAssumptions.YES, compilationId);
+        truffleCompiler.compileMethodHelper(actual, methodName, null, compilable, asCompilationRequest(compilationId));
+        removeFrameStates(actual);
         StructuredGraph expected = parseForComparison(methodName);
-        removeFrameStates(actual);
-        Assert.assertEquals(getCanonicalGraphString(expected, true), getCanonicalGraphString(actual, true));
-        return result;
+        Assert.assertEquals(getCanonicalGraphString(expected, true, true), getCanonicalGraphString(actual, true, true));
+        return compilable;
     }
 
-    protected void assertPartialEvalNoInvokes(RootNode root, FrameDescriptor descriptor) {
-        assertPartialEvalNoInvokes(root, descriptor, Arguments.EMPTY_ARGUMENTS);
+    protected void assertPartialEvalNoInvokes(RootNode root) {
+        assertPartialEvalNoInvokes(root, new Object[0]);
     }
 
-    protected void assertPartialEvalNoInvokes(RootNode root, FrameDescriptor descriptor, Arguments arguments) {
-        Assumptions assumptions = new Assumptions(true);
-        StructuredGraph actual = partialEval(root, descriptor, arguments, assumptions, true);
+    protected void assertPartialEvalNoInvokes(RootNode root, Object[] arguments) {
+        final OptimizedCallTarget compilable = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(root);
+        StructuredGraph actual = partialEval(compilable, arguments, AllowAssumptions.YES, INVALID_COMPILATION_ID);
         removeFrameStates(actual);
-        for (MethodCallTargetNode node : actual.getNodes(MethodCallTargetNode.class)) {
+        for (MethodCallTargetNode node : actual.getNodes(MethodCallTargetNode.TYPE)) {
             Assert.fail("Found invalid method call target node: " + node);
         }
     }
 
-    protected StructuredGraph partialEval(RootNode root, FrameDescriptor descriptor, Arguments arguments, final Assumptions assumptions, final boolean canonicalizeReads) {
-        final OptimizedCallTarget compilable = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(root, descriptor);
-
+    @SuppressWarnings("try")
+    protected StructuredGraph partialEval(OptimizedCallTarget compilable, Object[] arguments, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId) {
         // Executed AST so that all classes are loaded and initialized.
-        do {
-            compilable.call(null, arguments);
-            compilable.call(null, arguments);
-            compilable.call(null, arguments);
-        } while (compilable.inline());
+        compilable.call(arguments);
+        compilable.call(arguments);
+        compilable.call(arguments);
 
-        StructuredGraph graph = Debug.scope("Truffle", new DebugDumpScope("Truffle: " + compilable), new Callable<StructuredGraph>() {
-
-            @Override
-            public StructuredGraph call() {
-                StructuredGraph resultGraph = nodeCompiler.createGraph(compilable, assumptions);
-                CanonicalizerPhase canonicalizer = new CanonicalizerPhase(canonicalizeReads);
-                HighTierContext context = new HighTierContext(runtime, assumptions, replacements);
-
-                if (resultGraph.hasLoops()) {
-                    boolean unrolled;
-                    do {
-                        unrolled = false;
-                        LoopsData loopsData = new LoopsData(resultGraph);
-                        loopsData.detectedCountedLoops();
-                        for (LoopEx ex : innerLoopsFirst(loopsData.countedLoops())) {
-                            if (ex.counted().isConstantMaxTripCount()) {
-                                long constant = ex.counted().constantMaxTripCount();
-                                if (constant <= UNROLL_LIMIT) {
-                                    LoopTransformations.fullUnroll(ex, runtime, assumptions, canonicalizeReads);
-                                    Debug.dump(resultGraph, "After loop unrolling %d times", constant);
-
-                                    canonicalizer.apply(resultGraph, context);
-                                    unrolled = true;
-                                    break;
-                                }
-                            }
-                        }
-                    } while (unrolled);
-                }
-
-                new DeadCodeEliminationPhase().apply(resultGraph);
-                new PartialEscapePhase(true, canonicalizer).apply(resultGraph, context);
-
-                if (TruffleInlinePrinter.getValue()) {
-                    InlinePrinterProcessor.printTree();
-                }
-
-                return resultGraph;
-            }
-
-            private List<LoopEx> innerLoopsFirst(Collection<LoopEx> loops) {
-                ArrayList<LoopEx> sortedLoops = new ArrayList<>(loops);
-                Collections.sort(sortedLoops, new Comparator<LoopEx>() {
-
-                    @Override
-                    public int compare(LoopEx o1, LoopEx o2) {
-                        return o2.lirLoop().depth - o1.lirLoop().depth;
-                    }
-                });
-                return sortedLoops;
-            }
-        });
-
-        return graph;
+        try (Scope s = Debug.scope("TruffleCompilation", new TruffleDebugJavaMethod(compilable))) {
+            return truffleCompiler.getPartialEvaluator().createGraph(compilable, new TruffleInlining(compilable, new DefaultInliningPolicy()), allowAssumptions, compilationId);
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
     }
 
     protected void removeFrameStates(StructuredGraph graph) {
-        for (FrameState frameState : graph.getNodes(FrameState.class)) {
+        for (FrameState frameState : graph.getNodes(FrameState.TYPE)) {
             frameState.replaceAtUsages(null);
             frameState.safeDelete();
         }
-        new CanonicalizerPhase.Instance(runtime, new Assumptions(false), true).apply(graph);
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
         new DeadCodeEliminationPhase().apply(graph);
     }
 
+    @SuppressWarnings("try")
     protected StructuredGraph parseForComparison(final String methodName) {
-
-        StructuredGraph graphResult = Debug.scope("Truffle", new DebugDumpScope("Comparison: " + methodName), new Callable<StructuredGraph>() {
-
-            public StructuredGraph call() {
-                Assumptions assumptions = new Assumptions(false);
-                StructuredGraph graph = parse(methodName);
-                CanonicalizerPhase.Instance canonicalizerPhase = new CanonicalizerPhase.Instance(runtime, assumptions, true);
-                canonicalizerPhase.apply(graph);
-
-                // Additional inlining.
-                final PhasePlan plan = new PhasePlan();
-                GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getEagerDefault(), TruffleCompilerImpl.Optimizations);
-                plan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
-                plan.addPhase(PhasePosition.AFTER_PARSING, canonicalizerPhase);
-                plan.addPhase(PhasePosition.AFTER_PARSING, new DeadCodeEliminationPhase());
-
-                new ConvertDeoptimizeToGuardPhase().apply(graph);
-                canonicalizerPhase.apply(graph);
-                new DeadCodeEliminationPhase().apply(graph);
-
-                InliningPhase inliningPhase = new InliningPhase(runtime, null, replacements, assumptions, null, plan, OptimisticOptimizations.NONE);
-                inliningPhase.apply(graph);
-                removeFrameStates(graph);
-
-                new ConvertDeoptimizeToGuardPhase().apply(graph);
-                canonicalizerPhase.apply(graph);
-                new DeadCodeEliminationPhase().apply(graph);
-
-                new LoweringPhase(LoweringType.BEFORE_GUARDS).apply(graph, new PhaseContext(runtime, assumptions, replacements));
-                canonicalizerPhase.apply(graph);
-                new DeadCodeEliminationPhase().apply(graph);
-                return graph;
-            }
-        });
-        return graphResult;
+        try (Scope s = Debug.scope("Truffle", new DebugDumpScope("Comparison: " + methodName))) {
+            StructuredGraph graph = parseEager(methodName, AllowAssumptions.YES);
+            compile(graph.method(), graph);
+            return graph;
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
     }
 }

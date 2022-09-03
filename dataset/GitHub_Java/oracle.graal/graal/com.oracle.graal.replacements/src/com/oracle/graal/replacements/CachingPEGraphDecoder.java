@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,20 +22,29 @@
  */
 package com.oracle.graal.replacements;
 
-import java.util.*;
+import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
+import static com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_AFTER_PARSING;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.meta.*;
+import java.util.HashMap;
+import java.util.Map;
 
-import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.java.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.bytecode.BytecodeProvider;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.java.GraphBuilderPhase;
+import com.oracle.graal.nodes.EncodedGraph;
+import com.oracle.graal.nodes.GraphEncoder;
+import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
-import com.oracle.graal.phases.util.*;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
+import com.oracle.graal.phases.OptimisticOptimizations;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.ConvertDeoptimizeToGuardPhase;
+import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.phases.util.Providers;
+
+import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * A graph decoder that provides all necessary encoded graphs on-the-fly (by parsing the methods and
@@ -43,14 +52,15 @@ import com.oracle.graal.phases.util.*;
  */
 public class CachingPEGraphDecoder extends PEGraphDecoder {
 
-    private final Providers providers;
-    private final GraphBuilderConfiguration graphBuilderConfig;
-    private final OptimisticOptimizations optimisticOpts;
+    protected final Providers providers;
+    protected final GraphBuilderConfiguration graphBuilderConfig;
+    protected final OptimisticOptimizations optimisticOpts;
     private final AllowAssumptions allowAssumptions;
     private final Map<ResolvedJavaMethod, EncodedGraph> graphCache;
 
-    public CachingPEGraphDecoder(Providers providers, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, AllowAssumptions allowAssumptions, Architecture architecture) {
-        super(providers.getMetaAccess(), providers.getConstantReflection(), providers.getStampProvider(), architecture);
+    public CachingPEGraphDecoder(Providers providers, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, AllowAssumptions allowAssumptions,
+                    Architecture architecture) {
+        super(providers.getMetaAccess(), providers.getConstantReflection(), providers.getConstantFieldProvider(), providers.getStampProvider(), architecture);
 
         this.providers = providers;
         this.graphBuilderConfig = graphBuilderConfig;
@@ -59,14 +69,27 @@ public class CachingPEGraphDecoder extends PEGraphDecoder {
         this.graphCache = new HashMap<>();
     }
 
-    private EncodedGraph createGraph(ResolvedJavaMethod method) {
-        StructuredGraph graph = new StructuredGraph(method, allowAssumptions);
-        try (Debug.Scope scope = Debug.scope("createGraph", graph)) {
+    protected GraphBuilderPhase.Instance createGraphBuilderPhaseInstance(IntrinsicContext initialIntrinsicContext) {
+        return new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), providers.getConstantReflection(), providers.getConstantFieldProvider(), graphBuilderConfig,
+                        optimisticOpts, initialIntrinsicContext);
+    }
 
-            new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), providers.getConstantReflection(), graphBuilderConfig, optimisticOpts, null).apply(graph);
+    @SuppressWarnings("try")
+    private EncodedGraph createGraph(ResolvedJavaMethod method, BytecodeProvider intrinsicBytecodeProvider) {
+        StructuredGraph graph = new StructuredGraph(method, allowAssumptions, INVALID_COMPILATION_ID);
+        try (Debug.Scope scope = Debug.scope("createGraph", graph)) {
+            IntrinsicContext initialIntrinsicContext = intrinsicBytecodeProvider != null ? new IntrinsicContext(method, method, intrinsicBytecodeProvider, INLINE_AFTER_PARSING) : null;
+            GraphBuilderPhase.Instance graphBuilderPhaseInstance = createGraphBuilderPhaseInstance(initialIntrinsicContext);
+            graphBuilderPhaseInstance.apply(graph);
 
             PhaseContext context = new PhaseContext(providers);
             new CanonicalizerPhase().apply(graph, context);
+            /*
+             * ConvertDeoptimizeToGuardPhase reduces the number of merges in the graph, so that
+             * fewer frame states will be created. This significantly reduces the number of nodes in
+             * the initial graph.
+             */
+            new ConvertDeoptimizeToGuardPhase().apply(graph, context);
 
             EncodedGraph encodedGraph = GraphEncoder.encodeSingleGraph(graph, architecture);
             graphCache.put(method, encodedGraph);
@@ -78,10 +101,10 @@ public class CachingPEGraphDecoder extends PEGraphDecoder {
     }
 
     @Override
-    protected EncodedGraph lookupEncodedGraph(ResolvedJavaMethod method) {
+    protected EncodedGraph lookupEncodedGraph(ResolvedJavaMethod method, BytecodeProvider intrinsicBytecodeProvider) {
         EncodedGraph result = graphCache.get(method);
         if (result == null && method.hasBytecodes()) {
-            result = createGraph(method);
+            result = createGraph(method, intrinsicBytecodeProvider);
         }
         return result;
     }

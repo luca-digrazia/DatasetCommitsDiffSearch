@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,131 +22,86 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import java.lang.reflect.*;
+import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.virtual.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.replacements.nodes.*;
+import java.lang.reflect.Method;
 
-public class ObjectCloneNode extends MacroNode implements VirtualizableAllocation, ArrayLengthProvider {
+import com.oracle.graal.compiler.common.type.StampPair;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
+import com.oracle.graal.nodes.ParameterNode;
+import com.oracle.graal.nodes.ReturnNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.java.LoadFieldNode;
+import com.oracle.graal.nodes.java.NewInstanceNode;
+import com.oracle.graal.nodes.java.StoreFieldNode;
+import com.oracle.graal.nodes.spi.ArrayLengthProvider;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.Replacements;
+import com.oracle.graal.nodes.spi.VirtualizableAllocation;
+import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.replacements.nodes.BasicObjectCloneNode;
 
-    public ObjectCloneNode(Invoke invoke) {
-        super(invoke);
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
+@NodeInfo
+public final class ObjectCloneNode extends BasicObjectCloneNode implements VirtualizableAllocation, ArrayLengthProvider {
+
+    public static final NodeClass<ObjectCloneNode> TYPE = NodeClass.create(ObjectCloneNode.class);
+
+    public ObjectCloneNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, StampPair returnStamp, ValueNode receiver) {
+        super(TYPE, invokeKind, targetMethod, bci, returnStamp, receiver);
     }
 
     @Override
-    public boolean inferStamp() {
-        return updateStamp(getObject().stamp());
-    }
-
-    private ValueNode getObject() {
-        return arguments.get(0);
-    }
-
-    @Override
-    protected StructuredGraph getSnippetGraph(LoweringTool tool) {
-        if (!GraalOptions.IntrinsifyObjectClone) {
-            return null;
-        }
-
-        ResolvedJavaType type = getObject().objectStamp().type();
-        Method method;
-        /*
-         * The first condition tests if the parameter is an array, the second condition tests if the
-         * parameter can be an array. Otherwise, the parameter is known to be a non-array object.
-         */
-        if (type.isArray()) {
-            method = ObjectCloneSnippets.arrayCloneMethod;
-        } else if (type == null || type.isAssignableFrom(tool.getRuntime().lookupJavaType(Object[].class))) {
-            method = ObjectCloneSnippets.genericCloneMethod;
-        } else {
-            method = ObjectCloneSnippets.instanceCloneMethod;
-        }
-        ResolvedJavaMethod snippetMethod = tool.getRuntime().lookupJavaMethod(method);
-        StructuredGraph snippetGraph = (StructuredGraph) snippetMethod.getCompilerStorage().get(Graph.class);
-
-        assert snippetGraph != null : "ObjectCloneSnippets should be installed";
-        return snippetGraph;
-    }
-
-    private static boolean isCloneableType(ResolvedJavaType type, MetaAccessProvider metaAccess) {
-        return metaAccess.lookupJavaType(Cloneable.class).isAssignableFrom(type);
-    }
-
-    private static ResolvedJavaType getConcreteType(ObjectStamp stamp, Assumptions assumptions) {
-        if (stamp.isExactType() || stamp.type() == null) {
-            return stamp.type();
-        } else {
-            ResolvedJavaType type = stamp.type().findUniqueConcreteSubtype();
-            if (type != null) {
-                assumptions.recordConcreteSubtype(stamp.type(), type);
-            }
-            return type;
-        }
-    }
-
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        State originalState = tool.getObjectState(getObject());
-        if (originalState != null && originalState.getState() == EscapeState.Virtual) {
-            VirtualObjectNode originalVirtual = originalState.getVirtualObject();
-            if (isCloneableType(originalVirtual.type(), tool.getMetaAccessProvider())) {
-                ValueNode[] newEntryState = new ValueNode[originalVirtual.entryCount()];
-                for (int i = 0; i < newEntryState.length; i++) {
-                    newEntryState[i] = originalState.getEntry(i);
-                }
-                VirtualObjectNode newVirtual = originalVirtual.duplicate();
-                tool.createVirtualObject(newVirtual, newEntryState, 0);
-                tool.replaceWithVirtual(newVirtual);
-            }
-        } else {
-            ValueNode obj;
-            if (originalState != null) {
-                obj = originalState.getMaterializedValue();
-            } else {
-                obj = tool.getReplacedValue(getObject());
-            }
-            ResolvedJavaType type = getConcreteType(obj.objectStamp(), tool.getAssumptions());
-            if (isCloneableType(type, tool.getMetaAccessProvider())) {
-                if (!type.isArray()) {
-                    VirtualInstanceNode newVirtual = new VirtualInstanceNode(type);
-                    ResolvedJavaField[] fields = newVirtual.getFields();
-
-                    ValueNode[] state = new ValueNode[fields.length];
-                    final LoadFieldNode[] loads = new LoadFieldNode[fields.length];
-                    for (int i = 0; i < fields.length; i++) {
-                        state[i] = loads[i] = graph().add(new LoadFieldNode(obj, fields[i]));
+    @SuppressWarnings("try")
+    protected StructuredGraph getLoweredSnippetGraph(LoweringTool tool) {
+        ResolvedJavaType type = StampTool.typeOrNull(getObject());
+        if (type != null) {
+            if (type.isArray()) {
+                Method method = ObjectCloneSnippets.arrayCloneMethods.get(type.getComponentType().getJavaKind());
+                if (method != null) {
+                    final ResolvedJavaMethod snippetMethod = tool.getMetaAccess().lookupJavaMethod(method);
+                    final Replacements replacements = tool.getReplacements();
+                    StructuredGraph snippetGraph = null;
+                    try (Scope s = Debug.scope("ArrayCloneSnippet", snippetMethod)) {
+                        snippetGraph = replacements.getSnippet(snippetMethod, null);
+                    } catch (Throwable e) {
+                        throw Debug.handle(e);
                     }
 
-                    final StructuredGraph structuredGraph = (StructuredGraph) graph();
-                    tool.customAction(new Runnable() {
+                    assert snippetGraph != null : "ObjectCloneSnippets should be installed";
+                    return lowerReplacement((StructuredGraph) snippetGraph.copy(), tool);
+                }
+                assert false : "unhandled array type " + type.getComponentType().getJavaKind();
+            } else {
+                Assumptions assumptions = graph().getAssumptions();
+                type = getConcreteType(getObject().stamp());
+                if (type != null) {
+                    StructuredGraph newGraph = new StructuredGraph(AllowAssumptions.from(assumptions != null), INVALID_COMPILATION_ID);
+                    ParameterNode param = newGraph.addWithoutUnique(new ParameterNode(0, StampPair.createSingle(getObject().stamp())));
+                    NewInstanceNode newInstance = newGraph.add(new NewInstanceNode(type, true));
+                    newGraph.addAfterFixed(newGraph.start(), newInstance);
+                    ReturnNode returnNode = newGraph.add(new ReturnNode(newInstance));
+                    newGraph.addAfterFixed(newInstance, returnNode);
 
-                        public void run() {
-                            for (LoadFieldNode load : loads) {
-                                structuredGraph.addBeforeFixed(ObjectCloneNode.this, load);
-                            }
-                        }
-                    });
-                    tool.createVirtualObject(newVirtual, state, 0);
-                    tool.replaceWithVirtual(newVirtual);
+                    for (ResolvedJavaField field : type.getInstanceFields(true)) {
+                        LoadFieldNode load = newGraph.add(LoadFieldNode.create(newGraph.getAssumptions(), param, field));
+                        newGraph.addBeforeFixed(returnNode, load);
+                        newGraph.addBeforeFixed(returnNode, newGraph.add(new StoreFieldNode(newInstance, field, load)));
+                    }
+                    return lowerReplacement(newGraph, tool);
                 }
             }
         }
-    }
-
-    @Override
-    public ValueNode length() {
-        if (getObject() instanceof ArrayLengthProvider) {
-            return ((ArrayLengthProvider) getObject()).length();
-        } else {
-            return null;
-        }
+        return null;
     }
 }

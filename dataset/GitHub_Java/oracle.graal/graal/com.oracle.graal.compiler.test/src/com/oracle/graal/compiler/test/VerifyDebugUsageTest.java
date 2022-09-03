@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.compiler.test;
 
+import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
+
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
@@ -29,6 +31,8 @@ import org.junit.Test;
 
 import com.oracle.graal.api.test.Graal;
 import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.DebugConfigScope;
+import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.Indent;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.java.GraphBuilderPhase;
@@ -80,7 +84,7 @@ public class VerifyDebugUsageTest {
 
         @Override
         protected void run(StructuredGraph graph) {
-            Debug.dump(graph, "%s", graph.toString());
+            Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "%s", graph.toString());
         }
 
     }
@@ -123,7 +127,7 @@ public class VerifyDebugUsageTest {
 
         @Override
         protected void run(StructuredGraph graph) {
-            Debug.dump(graph, "error " + graph);
+            Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "error " + graph);
         }
 
     }
@@ -166,7 +170,7 @@ public class VerifyDebugUsageTest {
 
         @Override
         protected void run(StructuredGraph graph) {
-            Debug.dump(graph, "%s", graph);
+            Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "%s", graph);
         }
 
     }
@@ -178,6 +182,36 @@ public class VerifyDebugUsageTest {
             Debug.verify(graph, "%s", graph);
         }
 
+    }
+
+    private static class InvalidGraalErrorGuaranteePhase extends Phase {
+        @Override
+        protected void run(StructuredGraph graph) {
+            GraalError.guarantee(graph.getNodes().count() > 0, "Graph must contain nodes %s %s %s", graph, graph, graph, graph.toString());
+        }
+    }
+
+    private static class ValidGraalErrorGuaranteePhase extends Phase {
+        @Override
+        protected void run(StructuredGraph graph) {
+            GraalError.guarantee(graph.getNodes().count() > 0, "Graph must contain nodes %s", graph);
+        }
+    }
+
+    public static Object sideEffect;
+
+    private static class InvalidGraalErrorCtorPhase extends Phase {
+        @Override
+        protected void run(StructuredGraph graph) {
+            sideEffect = new GraalError("No Error %s", graph.toString());
+        }
+    }
+
+    private static class ValidGraalErrorCtorPhase extends Phase {
+        @Override
+        protected void run(StructuredGraph graph) {
+            sideEffect = new GraalError("Error %s", graph);
+        }
     }
 
     @Test(expected = VerificationError.class)
@@ -240,20 +274,44 @@ public class VerifyDebugUsageTest {
         testDebugUsageClass(ValidDumpUsagePhase.class);
     }
 
+    @Test(expected = VerificationError.class)
+    public void testGraalGuaranteeInvalid() {
+        testDebugUsageClass(InvalidGraalErrorGuaranteePhase.class);
+    }
+
+    @Test
+    public void testGraalGuaranteeValid() {
+        testDebugUsageClass(ValidGraalErrorGuaranteePhase.class);
+    }
+
+    @Test(expected = VerificationError.class)
+    public void testGraalCtorInvalid() {
+        testDebugUsageClass(InvalidGraalErrorCtorPhase.class);
+    }
+
+    @Test
+    public void testGraalCtorValid() {
+        testDebugUsageClass(ValidGraalErrorCtorPhase.class);
+    }
+
+    @SuppressWarnings("try")
     private static void testDebugUsageClass(Class<?> c) {
         RuntimeProvider rt = Graal.getRequiredCapability(RuntimeProvider.class);
         Providers providers = rt.getHostBackend().getProviders();
         MetaAccessProvider metaAccess = providers.getMetaAccess();
         PhaseSuite<HighTierContext> graphBuilderSuite = new PhaseSuite<>();
-        GraphBuilderConfiguration config = GraphBuilderConfiguration.getEagerDefault(new Plugins(new InvocationPlugins(metaAccess)));
+        Plugins plugins = new Plugins(new InvocationPlugins(metaAccess));
+        GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault(plugins).withEagerResolving(true);
         graphBuilderSuite.appendPhase(new GraphBuilderPhase(config));
         HighTierContext context = new HighTierContext(providers, graphBuilderSuite, OptimisticOptimizations.NONE);
         for (Method m : c.getDeclaredMethods()) {
             if (!Modifier.isNative(m.getModifiers()) && !Modifier.isAbstract(m.getModifiers())) {
                 ResolvedJavaMethod method = metaAccess.lookupJavaMethod(m);
-                StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO);
+                StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO, INVALID_COMPILATION_ID);
                 graphBuilderSuite.apply(graph, context);
-                new VerifyDebugUsage().apply(graph, context);
+                try (DebugConfigScope s = Debug.disableIntercept()) {
+                    new VerifyDebugUsage().apply(graph, context);
+                }
             }
         }
     }

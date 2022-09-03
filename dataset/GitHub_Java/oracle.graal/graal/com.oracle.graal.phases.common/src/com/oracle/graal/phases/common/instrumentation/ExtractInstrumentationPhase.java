@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.phases.common.instrumentation;
 
+import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
+
 import java.util.Collections;
 import java.util.Map;
 
@@ -157,8 +159,7 @@ public class ExtractInstrumentationPhase extends BasePhase<HighTierContext> {
          * InstrumentationNode is alive.
          */
         StructuredGraph genInstrumentationGraph(StructuredGraph oldGraph, InstrumentationNode instrumentationNode) {
-            StructuredGraph instrumentationGraph = new StructuredGraph.Builder(AllowAssumptions.YES).name("Instrumentation:" + oldGraph.method().format("%H.%n(%p)")).options(
-                            oldGraph.getOptions()).build();
+            StructuredGraph instrumentationGraph = new StructuredGraph(AllowAssumptions.YES, INVALID_COMPILATION_ID);
             Map<Node, Node> replacements = Node.newMap();
             int index = 0; // for ParameterNode index
             for (Node current : nodes) {

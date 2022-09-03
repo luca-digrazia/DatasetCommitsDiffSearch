@@ -44,7 +44,8 @@ import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.Management;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.debug.TimeSource;
-import com.oracle.graal.options.OptionValues;
+import com.oracle.graal.options.OptionValue;
+import com.oracle.graal.options.OptionValue.OverrideScope;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.CodeCacheProvider;
@@ -92,7 +93,6 @@ public class CompilationTask {
     private final boolean installAsDefault;
 
     private final boolean useProfilingInfo;
-    private final OptionValues options;
 
     static class Lazy {
         /**
@@ -102,24 +102,12 @@ public class CompilationTask {
         static final com.sun.management.ThreadMXBean threadMXBean = (com.sun.management.ThreadMXBean) Management.getThreadMXBean();
     }
 
-    public CompilationTask(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalCompiler compiler, HotSpotCompilationRequest request, boolean useProfilingInfo, boolean installAsDefault,
-                    OptionValues options) {
+    public CompilationTask(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalCompiler compiler, HotSpotCompilationRequest request, boolean useProfilingInfo, boolean installAsDefault) {
         this.jvmciRuntime = jvmciRuntime;
         this.compiler = compiler;
         this.compilationId = new HotSpotCompilationIdentifier(request);
         this.useProfilingInfo = useProfilingInfo;
         this.installAsDefault = installAsDefault;
-
-        /*
-         * Disable inlining if HotSpot has it disabled unless it's been explicitly set in Graal.
-         */
-        HotSpotGraalRuntimeProvider graalRuntime = compiler.getGraalRuntime();
-        GraalHotSpotVMConfig config = graalRuntime.getVMConfig();
-        if (Inline.getValue(options) && !config.inline && !Inline.hasBeenSet(options)) {
-            this.options = new OptionValues(options, Inline, false);
-        } else {
-            this.options = options;
-        }
     }
 
     public HotSpotResolvedJavaMethod getMethod() {
@@ -212,13 +200,13 @@ public class CompilationTask {
         CompilationResult result = null;
         try (DebugCloseable a = CompilationTime.start()) {
             CompilationStatistics stats = CompilationStatistics.create(method, isOSR);
-            final boolean printCompilation = PrintCompilation.getValue(options) && !TTY.isSuppressed();
-            final boolean printAfterCompilation = PrintAfterCompilation.getValue(options) && !TTY.isSuppressed();
+            final boolean printCompilation = PrintCompilation.getValue() && !TTY.isSuppressed();
+            final boolean printAfterCompilation = PrintAfterCompilation.getValue() && !TTY.isSuppressed();
             if (printCompilation) {
                 TTY.println(getMethodDescription() + "...");
             }
 
-            TTY.Filter filter = new TTY.Filter(PrintFilter.getValue(options), method);
+            TTY.Filter filter = new TTY.Filter(PrintFilter.getValue(), method);
             final long start;
             final long allocatedBytesBefore;
             if (printAfterCompilation || printCompilation) {
@@ -232,7 +220,14 @@ public class CompilationTask {
             try (Scope s = Debug.scope("Compiling", new DebugDumpScope(getIdString(), true))) {
                 // Begin the compilation event.
                 compilationEvent.begin();
-                result = compiler.compile(method, entryBCI, useProfilingInfo, compilationId, options);
+                /*
+                 * Disable inlining if HotSpot has it disabled unless it's been explicitly set in
+                 * Graal.
+                 */
+                boolean disableInlining = !config.inline && !Inline.hasBeenSet();
+                try (OverrideScope s1 = disableInlining ? OptionValue.override(Inline, false) : null) {
+                    result = compiler.compile(method, entryBCI, useProfilingInfo, compilationId);
+                }
             } catch (Throwable e) {
                 throw Debug.handle(e);
             } finally {
@@ -269,11 +264,11 @@ public class CompilationTask {
             return null;
         } catch (BailoutException bailout) {
             BAILOUTS.increment();
-            if (ExitVMOnBailout.getValue(options)) {
+            if (ExitVMOnBailout.getValue()) {
                 TTY.out.println(method.format("Bailout in %H.%n(%p)"));
                 bailout.printStackTrace(TTY.out);
                 System.exit(-1);
-            } else if (PrintBailout.getValue(options)) {
+            } else if (PrintBailout.getValue()) {
                 TTY.out.println(method.format("Bailout in %H.%n(%p)"));
                 bailout.printStackTrace(TTY.out);
             }
@@ -333,8 +328,8 @@ public class CompilationTask {
          * Automatically enable ExitVMOnException during bootstrap or when asserts are enabled but
          * respect ExitVMOnException if it's been explicitly set.
          */
-        boolean exitVMOnException = ExitVMOnException.getValue(options);
-        if (!ExitVMOnException.hasBeenSet(options)) {
+        boolean exitVMOnException = ExitVMOnException.getValue();
+        if (!ExitVMOnException.hasBeenSet()) {
             assert (exitVMOnException = true) == true;
             if (!exitVMOnException) {
                 HotSpotGraalRuntimeProvider runtime = compiler.getGraalRuntime();
@@ -344,7 +339,7 @@ public class CompilationTask {
             }
         }
 
-        if (PrintStackTraceOnException.getValue(options) || exitVMOnException) {
+        if (PrintStackTraceOnException.getValue() || exitVMOnException) {
             try {
                 t.printStackTrace(TTY.out);
             } catch (Throwable throwable) {

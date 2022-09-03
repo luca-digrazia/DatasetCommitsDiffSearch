@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,172 +22,212 @@
  */
 package com.oracle.graal.truffle.hotspot;
 
-import static com.oracle.graal.api.code.CodeUtil.*;
-import static com.oracle.graal.compiler.GraalCompiler.*;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
+import static com.oracle.graal.compiler.GraalCompiler.compileGraph;
+import static com.oracle.graal.hotspot.meta.HotSpotSuitesProvider.withNodeSourcePosition;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleStackTraceLimit;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleTransferToInterpreter;
+import static com.oracle.graal.truffle.hotspot.UnsafeAccess.UNSAFE;
 
-import java.lang.reflect.*;
-import java.util.*;
+import java.nio.file.FileSystems;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.ListIterator;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CallingConvention.Type;
-import com.oracle.graal.api.code.stack.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.debug.*;
+import com.oracle.graal.api.replacements.SnippetReflectionProvider;
+import com.oracle.graal.api.runtime.GraalRuntime;
+import com.oracle.graal.code.CompilationResult;
+import com.oracle.graal.compiler.common.CompilationIdentifier;
+import com.oracle.graal.compiler.common.CompilationRequestIdentifier;
+import com.oracle.graal.compiler.target.Backend;
+import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.java.*;
-import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
-import com.oracle.graal.phases.util.*;
-import com.oracle.graal.runtime.*;
-import com.oracle.graal.truffle.*;
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.CompilerDirectives.*;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.impl.*;
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.graal.debug.DebugEnvironment;
+import com.oracle.graal.debug.GraalDebugConfig;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.debug.TTY;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.hotspot.HotSpotBackend;
+import com.oracle.graal.hotspot.HotSpotCompilationIdentifier;
+import com.oracle.graal.hotspot.HotSpotCompiledCodeBuilder;
+import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
+import com.oracle.graal.hotspot.meta.HotSpotProviders;
+import com.oracle.graal.java.GraphBuilderPhase;
+import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
+import com.oracle.graal.lir.phases.LIRSuites;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
+import com.oracle.graal.phases.BasePhase;
+import com.oracle.graal.phases.OptimisticOptimizations;
+import com.oracle.graal.phases.PhaseSuite;
+import com.oracle.graal.phases.common.AbstractInliningPhase;
+import com.oracle.graal.phases.tiers.HighTierContext;
+import com.oracle.graal.phases.tiers.Suites;
+import com.oracle.graal.phases.tiers.SuitesProvider;
+import com.oracle.graal.phases.util.Providers;
+import com.oracle.graal.runtime.RuntimeProvider;
+import com.oracle.graal.serviceprovider.GraalServices;
+import com.oracle.graal.truffle.DefaultTruffleCompiler;
+import com.oracle.graal.truffle.GraalTruffleRuntime;
+import com.oracle.graal.truffle.OptimizedCallTarget;
+import com.oracle.graal.truffle.TruffleCallBoundary;
+import com.oracle.graal.truffle.TruffleCompiler;
+import com.oracle.graal.truffle.hotspot.nfi.HotSpotNativeFunctionInterface;
+import com.oracle.graal.truffle.hotspot.nfi.RawNativeCallNodeFactory;
+import com.oracle.nfi.api.NativeFunctionInterface;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.frame.FrameInstance;
+import com.oracle.truffle.api.frame.FrameInstanceVisitor;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.SourceSection;
+
+import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.CompiledCode;
+import jdk.vm.ci.code.stack.StackIntrospection;
+import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
+import jdk.vm.ci.hotspot.HotSpotCompilationRequest;
+import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
+import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
+import jdk.vm.ci.hotspot.HotSpotSpeculationLog;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.SpeculationLog;
+import jdk.vm.ci.runtime.JVMCI;
+import jdk.vm.ci.runtime.JVMCICompiler;
 
 /**
  * Implementation of the Truffle runtime when running on top of Graal.
  */
-public final class HotSpotTruffleRuntime implements GraalTruffleRuntime {
+public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
 
-    public static HotSpotTruffleRuntime makeInstance() {
-        return new HotSpotTruffleRuntime();
+    static class Lazy extends BackgroundCompileQueue {
+        private StackIntrospection stackIntrospection;
+        private final HotSpotTruffleRuntime runtime;
+
+        Lazy(HotSpotTruffleRuntime runtime) {
+            runtime.installDefaultListeners();
+            this.runtime = runtime;
+        }
+
+        @Override
+        public GraalDebugConfig getDebugConfig() {
+            if (Debug.isEnabled()) {
+                SnippetReflectionProvider snippetReflection = runtime.getRequiredGraalCapability(SnippetReflectionProvider.class);
+                return DebugEnvironment.initialize(TTY.out().out(), snippetReflection);
+            } else {
+                return null;
+            }
+        }
     }
 
-    private TruffleCompiler truffleCompiler;
-    private Replacements truffleReplacements;
-    private StackIntrospection stackIntrospection;
-    private ArrayList<String> includes;
-    private ArrayList<String> excludes;
-
-    private HotSpotTruffleRuntime() {
-        installOptimizedCallTargetCallMethod();
+    public HotSpotTruffleRuntime(Supplier<GraalRuntime> graalRuntime) {
+        super(graalRuntime);
+        setDontInlineCallBoundaryMethod();
     }
 
+    @Override
     public String getName() {
         return "Graal Truffle Runtime";
     }
 
-    public RootCallTarget createCallTarget(RootNode rootNode) {
+    private volatile Lazy lazy;
+
+    private Lazy lazy() {
+        if (lazy == null) {
+            synchronized (this) {
+                if (lazy == null) {
+                    lazy = new Lazy(this);
+                }
+            }
+        }
+        return lazy;
+    }
+
+    @Override
+    protected StackIntrospection getStackIntrospection() {
+        Lazy l = lazy();
+        if (l.stackIntrospection == null) {
+            l.stackIntrospection = HotSpotJVMCIRuntime.runtime().getHostJVMCIBackend().getStackIntrospection();
+        }
+        return l.stackIntrospection;
+    }
+
+    @Override
+    public TruffleCompiler getTruffleCompiler() {
         if (truffleCompiler == null) {
-            truffleCompiler = new TruffleCompilerImpl();
+            initializeTruffleCompiler();
         }
-        return new HotSpotOptimizedCallTarget(rootNode, truffleCompiler, TruffleMinInvokeThreshold.getValue(), TruffleCompilationThreshold.getValue(), acceptForCompilation(rootNode));
+        return truffleCompiler;
     }
 
-    public CallNode createCallNode(CallTarget target) {
-        if (target instanceof OptimizedCallTarget) {
-            return OptimizedCallNode.create((OptimizedCallTarget) target);
-        } else {
-            return new DefaultCallNode(target);
-        }
-    }
-
-    @Override
-    public VirtualFrame createVirtualFrame(Object[] arguments, FrameDescriptor frameDescriptor) {
-        return OptimizedCallTarget.createFrame(frameDescriptor, arguments);
-    }
-
-    @Override
-    public MaterializedFrame createMaterializedFrame(Object[] arguments) {
-        return createMaterializedFrame(arguments, new FrameDescriptor());
-    }
-
-    @Override
-    public MaterializedFrame createMaterializedFrame(Object[] arguments, FrameDescriptor frameDescriptor) {
-        return new FrameWithoutBoxing(frameDescriptor, arguments);
-    }
-
-    @Override
-    public Assumption createAssumption() {
-        return createAssumption(null);
-    }
-
-    @Override
-    public Assumption createAssumption(String name) {
-        return new OptimizedAssumption(name);
-    }
-
-    public Replacements getReplacements() {
-        if (truffleReplacements == null) {
-            truffleReplacements = HotSpotTruffleReplacements.makeInstance();
-        }
-        return truffleReplacements;
-    }
-
-    private boolean acceptForCompilation(RootNode rootNode) {
-        if (TruffleCompileOnly.getValue() != null) {
-            if (includes == null) {
-                parseCompileOnly();
-            }
-
-            String name = rootNode.toString();
-            boolean included = includes.isEmpty();
-            for (int i = 0; !included && i < includes.size(); i++) {
-                if (name.contains(includes.get(i))) {
-                    included = true;
-                }
-            }
-            if (!included) {
-                return false;
-            }
-            for (String exclude : excludes) {
-                if (name.contains(exclude)) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
-    private void parseCompileOnly() {
-        includes = new ArrayList<>();
-        excludes = new ArrayList<>();
-
-        String[] items = TruffleCompileOnly.getValue().split(",");
-        for (String item : items) {
-            if (item.startsWith("~")) {
-                excludes.add(item.substring(1));
-            } else {
-                includes.add(item);
+    private void initializeTruffleCompiler() {
+        synchronized (this) {
+            // might occur for multiple compiler threads at the same time.
+            if (truffleCompiler == null) {
+                truffleCompiler = DefaultTruffleCompiler.create(this);
             }
         }
     }
 
-    public static void installOptimizedCallTargetCallMethod() {
-        Providers providers = getGraalProviders();
+    @Override
+    protected OptimizedCallTarget createOptimizedCallTarget(OptimizedCallTarget source, RootNode rootNode) {
+        /* No HotSpot-specific subclass is currently necessary for call targets. */
+        return new OptimizedCallTarget(source, rootNode);
+    }
+
+    @Override
+    public SpeculationLog createSpeculationLog() {
+        return new HotSpotSpeculationLog();
+    }
+
+    public static void setDontInlineCallBoundaryMethod() {
+        MetaAccessProvider metaAccess = JVMCI.getRuntime().getHostJVMCIBackend().getMetaAccess();
+        ResolvedJavaType type = metaAccess.lookupJavaType(OptimizedCallTarget.class);
+        for (ResolvedJavaMethod method : type.getDeclaredMethods()) {
+            if (method.getAnnotation(TruffleCallBoundary.class) != null) {
+                ((HotSpotResolvedJavaMethod) method).setNotInlineable();
+            }
+        }
+    }
+
+    @SuppressWarnings("try")
+    public void installOptimizedCallTargetCallMethod() {
+        Providers providers = getHotSpotProviders();
         MetaAccessProvider metaAccess = providers.getMetaAccess();
-        CodeCacheProvider codeCache = providers.getCodeCache();
-        ResolvedJavaMethod resolvedCallMethod = metaAccess.lookupJavaMethod(getCallMethod());
-        CompilationResult compResult = compileMethod(resolvedCallMethod);
-        try (Scope s = Debug.scope("CodeInstall", codeCache, resolvedCallMethod)) {
-            codeCache.setDefaultMethod(resolvedCallMethod, compResult);
+        ResolvedJavaType type = metaAccess.lookupJavaType(OptimizedCallTarget.class);
+        for (ResolvedJavaMethod method : type.getDeclaredMethods()) {
+            if (method.getAnnotation(TruffleCallBoundary.class) != null) {
+                HotSpotCompilationIdentifier compilationId = (HotSpotCompilationIdentifier) getHotSpotBackend().getCompilationIdentifier(method);
+                CompilationResult compResult = compileMethod(method, compilationId);
+                CodeCacheProvider codeCache = providers.getCodeCache();
+                try (Scope s = Debug.scope("CodeInstall", codeCache, method, compResult)) {
+                    CompiledCode compiledCode = HotSpotCompiledCodeBuilder.createCompiledCode(method, compilationId.getRequest(), compResult);
+                    codeCache.setDefaultCode(method, compiledCode);
+                } catch (Throwable e) {
+                    throw Debug.handle(e);
+                }
+            }
         }
     }
 
-    private static Method getCallMethod() {
-        Method method;
-        try {
-            method = HotSpotOptimizedCallTarget.class.getDeclaredMethod("call", new Class[]{Object[].class});
-        } catch (NoSuchMethodException | SecurityException e) {
-            throw GraalInternalError.shouldNotReachHere();
-        }
-        return method;
+    @Override
+    public CompilationRequestIdentifier getCompilationIdentifier(OptimizedCallTarget optimizedCallTarget, ResolvedJavaMethod callRootMethod, Backend backend) {
+        HotSpotCompilationRequest request = new HotSpotCompilationRequest((HotSpotResolvedJavaMethod) callRootMethod, JVMCICompiler.INVOCATION_ENTRY_BCI, 0L);
+        return new HotSpotTruffleCompilationIdentifier(request, optimizedCallTarget);
     }
 
-    private static CompilationResultBuilderFactory getOptimizedCallTargetInstrumentationFactory(String arch, ResolvedJavaMethod method) {
-        for (OptimizedCallTargetInstrumentationFactory factory : ServiceLoader.loadInstalled(OptimizedCallTargetInstrumentationFactory.class)) {
+    private CompilationResultBuilderFactory getOptimizedCallTargetInstrumentationFactory(String arch) {
+        for (OptimizedCallTargetInstrumentationFactory factory : GraalServices.load(OptimizedCallTargetInstrumentationFactory.class)) {
             if (factory.getArchitecture().equals(arch)) {
-                factory.setInstrumentedMethod(method);
+                factory.init(getVMConfig(), getHotSpotProviders().getRegisters());
                 return factory;
             }
         }
@@ -195,62 +235,236 @@ public final class HotSpotTruffleRuntime implements GraalTruffleRuntime {
         return CompilationResultBuilderFactory.Default;
     }
 
-    private static CompilationResult compileMethod(ResolvedJavaMethod javaMethod) {
-        Providers providers = getGraalProviders();
+    private CompilationResult compileMethod(ResolvedJavaMethod javaMethod, CompilationIdentifier compilationId) {
+        HotSpotProviders providers = getHotSpotProviders();
+        SuitesProvider suitesProvider = providers.getSuites();
+        Suites suites = suitesProvider.getDefaultSuites().copy();
+        LIRSuites lirSuites = suitesProvider.getDefaultLIRSuites();
+        removeInliningPhase(suites);
+        StructuredGraph graph = new StructuredGraph(javaMethod, AllowAssumptions.NO, compilationId);
+
         MetaAccessProvider metaAccess = providers.getMetaAccess();
-        SuitesProvider suitesProvider = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getSuites();
-        Suites suites = suitesProvider.createSuites();
-        suites.getHighTier().findPhase(InliningPhase.class).remove();
-        StructuredGraph graph = new StructuredGraph(javaMethod);
-        new GraphBuilderPhase.Instance(metaAccess, GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.ALL).apply(graph);
+        Plugins plugins = new Plugins(new InvocationPlugins(metaAccess));
+        HotSpotCodeCacheProvider codeCache = providers.getCodeCache();
+        boolean infoPoints = codeCache.shouldDebugNonSafepoints();
+        GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault(plugins).withEagerResolving(true).withNodeSourcePosition(infoPoints);
+        new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(), providers.getConstantReflection(), providers.getConstantFieldProvider(), config, OptimisticOptimizations.ALL,
+                        null).apply(graph);
+
+        PhaseSuite<HighTierContext> graphBuilderSuite = getGraphBuilderSuite(codeCache, suitesProvider);
+        Backend backend = getHotSpotBackend();
+        CompilationResultBuilderFactory factory = getOptimizedCallTargetInstrumentationFactory(backend.getTarget().arch.getName());
+        return compileGraph(graph, javaMethod, providers, backend, graphBuilderSuite, OptimisticOptimizations.ALL, graph.getProfilingInfo(), suites, lirSuites, new CompilationResult(), factory);
+    }
+
+    private HotSpotBackend getHotSpotBackend() {
+        RuntimeProvider runtimeProvider = getRequiredGraalCapability(RuntimeProvider.class);
+        return (HotSpotBackend) runtimeProvider.getHostBackend();
+    }
+
+    private GraalHotSpotVMConfig getVMConfig() {
+        RuntimeProvider runtimeProvider = getRequiredGraalCapability(RuntimeProvider.class);
+        return ((HotSpotGraalRuntimeProvider) runtimeProvider).getVMConfig();
+    }
+
+    private HotSpotProviders getHotSpotProviders() {
+        return getHotSpotBackend().getProviders();
+    }
+
+    private static PhaseSuite<HighTierContext> getGraphBuilderSuite(CodeCacheProvider codeCache, SuitesProvider suitesProvider) {
         PhaseSuite<HighTierContext> graphBuilderSuite = suitesProvider.getDefaultGraphBuilderSuite();
-        CallingConvention cc = getCallingConvention(providers.getCodeCache(), Type.JavaCallee, graph.method(), false);
-        Backend backend = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend();
-        CompilationResultBuilderFactory factory = getOptimizedCallTargetInstrumentationFactory(backend.getTarget().arch.getName(), javaMethod);
-        return compileGraph(graph, null, cc, javaMethod, providers, backend, providers.getCodeCache().getTarget(), null, graphBuilderSuite, OptimisticOptimizations.ALL, getProfilingInfo(graph), null,
-                        suites, new CompilationResult(), factory);
+        if (codeCache.shouldDebugNonSafepoints()) {
+            graphBuilderSuite = withNodeSourcePosition(graphBuilderSuite);
+        }
+        return graphBuilderSuite;
     }
 
-    private static Providers getGraalProviders() {
-        RuntimeProvider runtimeProvider = Graal.getRequiredCapability(RuntimeProvider.class);
-        return runtimeProvider.getHostBackend().getProviders();
+    private static void removeInliningPhase(Suites suites) {
+        ListIterator<BasePhase<? super HighTierContext>> inliningPhase = suites.getHighTier().findPhase(AbstractInliningPhase.class);
+        if (inliningPhase != null) {
+            inliningPhase.remove();
+        }
     }
 
-    @SlowPath
-    public Iterable<FrameInstance> getStackTrace() {
-        if (stackIntrospection == null) {
-            stackIntrospection = Graal.getRequiredCapability(StackIntrospection.class);
-        }
-        ResolvedJavaMethod method = getGraalProviders().getMetaAccess().lookupJavaMethod(HotSpotFrameInstance.NextFrame.METHOD);
-        final Iterator<InspectedFrame> frames = stackIntrospection.getStackTrace(method, method).iterator();
-        class FrameIterator implements Iterator<FrameInstance> {
-            public boolean hasNext() {
-                return frames.hasNext();
-            }
-
-            public FrameInstance next() {
-                InspectedFrame frame = frames.next();
-                return new HotSpotFrameInstance.NextFrame(frame);
-            }
-        }
-        return new Iterable<FrameInstance>() {
-            public Iterator<FrameInstance> iterator() {
-                return new FrameIterator();
-            }
-        };
+    @Override
+    protected BackgroundCompileQueue getCompileQueue() {
+        return lazy();
     }
 
-    public FrameInstance getCurrentFrame() {
-        if (stackIntrospection == null) {
-            stackIntrospection = Graal.getRequiredCapability(StackIntrospection.class);
+    @Override
+    public boolean cancelInstalledTask(OptimizedCallTarget optimizedCallTarget, Object source, CharSequence reason) {
+        if (lazy == null) {
+            // if truffle wasn't initialized yet, this is a noop
+            return false;
         }
-        ResolvedJavaMethod method = getGraalProviders().getMetaAccess().lookupJavaMethod(HotSpotFrameInstance.CurrentFrame.METHOD);
-        Iterator<InspectedFrame> frames = stackIntrospection.getStackTrace(method, method).iterator();
-        if (frames.hasNext()) {
-            return new HotSpotFrameInstance.CurrentFrame(frames.next());
-        } else {
-            System.out.println("no current frame found");
+
+        return super.cancelInstalledTask(optimizedCallTarget, source, reason);
+    }
+
+    private static CodeCacheProvider getCodeCache() {
+        return JVMCI.getRuntime().getHostJVMCIBackend().getCodeCache();
+    }
+
+    @Override
+    public void invalidateInstalledCode(OptimizedCallTarget optimizedCallTarget, Object source, CharSequence reason) {
+        getCodeCache().invalidateInstalledCode(optimizedCallTarget);
+        getCompilationNotify().notifyCompilationInvalidated(optimizedCallTarget, source, reason);
+    }
+
+    @Override
+    public void reinstallStubs() {
+        installOptimizedCallTargetCallMethod();
+    }
+
+    @Override
+    protected boolean platformEnableInfopoints() {
+        return getCodeCache().shouldDebugNonSafepoints();
+    }
+
+    @Override
+    protected CallMethods getCallMethods() {
+        if (callMethods == null) {
+            lookupCallMethods(JVMCI.getRuntime().getHostJVMCIBackend().getMetaAccess());
+        }
+        return callMethods;
+    }
+
+    @Override
+    public void notifyTransferToInterpreter() {
+        CompilerAsserts.neverPartOfCompilation();
+        if (TraceTruffleTransferToInterpreter.getValue()) {
+            TraceTransferToInterpreterHelper.traceTransferToInterpreter(this, getVMConfig());
+        }
+    }
+
+    private static RawNativeCallNodeFactory getRawNativeCallNodeFactory(String arch) {
+        for (RawNativeCallNodeFactory factory : GraalServices.load(RawNativeCallNodeFactory.class)) {
+            if (factory.getArchitecture().equals(arch)) {
+                return factory;
+            }
+        }
+        // No RawNativeCallNodeFactory on this platform.
+        return null;
+    }
+
+    NativeFunctionInterface createNativeFunctionInterface() {
+        GraalHotSpotVMConfig config = getVMConfig();
+        Backend backend = getHotSpotBackend();
+        RawNativeCallNodeFactory factory = getRawNativeCallNodeFactory(backend.getTarget().arch.getName());
+        if (factory == null) {
             return null;
+        }
+        return new HotSpotNativeFunctionInterface(getHotSpotProviders(), factory, backend, config.dllLoad, config.dllLookup, config.rtldDefault);
+    }
+
+    private static class TraceTransferToInterpreterHelper {
+        private static final long THREAD_EETOP_OFFSET;
+
+        static {
+            try {
+                THREAD_EETOP_OFFSET = UNSAFE.objectFieldOffset(Thread.class.getDeclaredField("eetop"));
+            } catch (Exception e) {
+                throw new GraalError(e);
+            }
+        }
+
+        static void traceTransferToInterpreter(HotSpotTruffleRuntime runtime, GraalHotSpotVMConfig config) {
+            long thread = UNSAFE.getLong(Thread.currentThread(), THREAD_EETOP_OFFSET);
+            long pendingTransferToInterpreterAddress = thread + config.pendingTransferToInterpreterOffset;
+            boolean deoptimized = UNSAFE.getByte(pendingTransferToInterpreterAddress) != 0;
+            if (deoptimized) {
+                logTransferToInterpreter(runtime);
+                UNSAFE.putByte(pendingTransferToInterpreterAddress, (byte) 0);
+            }
+        }
+
+        private static String formatStackFrame(FrameInstance frameInstance, CallTarget target) {
+            StringBuilder builder = new StringBuilder();
+            if (target instanceof RootCallTarget) {
+                RootNode root = ((RootCallTarget) target).getRootNode();
+                String name = root.getName();
+                if (name == null) {
+                    builder.append("unnamed-root");
+                } else {
+                    builder.append(name);
+                }
+                Node callNode = frameInstance.getCallNode();
+                SourceSection sourceSection = null;
+                if (callNode != null) {
+                    sourceSection = callNode.getEncapsulatingSourceSection();
+                }
+                if (sourceSection == null) {
+                    sourceSection = root.getSourceSection();
+                }
+
+                if (sourceSection == null || sourceSection.getSource() == null) {
+                    builder.append("(Unknown)");
+                } else {
+                    builder.append("(").append(formatPath(sourceSection)).append(":").append(sourceSection.getStartLine()).append(")");
+                }
+
+                if (target instanceof OptimizedCallTarget) {
+                    OptimizedCallTarget callTarget = ((OptimizedCallTarget) target);
+                    if (callTarget.isValid()) {
+                        builder.append(" <opt>");
+                    }
+                    if (callTarget.getSourceCallTarget() != null) {
+                        builder.append(" <split-" + Integer.toHexString(callTarget.hashCode()) + ">");
+                    }
+                }
+
+            } else {
+                builder.append(target.toString());
+            }
+            return builder.toString();
+        }
+
+        private static String formatPath(SourceSection sourceSection) {
+            if (sourceSection.getSource().getPath() != null) {
+                Path path = FileSystems.getDefault().getPath(".").toAbsolutePath();
+                Path filePath = FileSystems.getDefault().getPath(sourceSection.getSource().getPath()).toAbsolutePath();
+
+                try {
+                    return path.relativize(filePath).toString();
+                } catch (IllegalArgumentException e) {
+                    // relativization failed
+                }
+            }
+            return sourceSection.getSource().getName();
+        }
+
+        private static void logTransferToInterpreter(final HotSpotTruffleRuntime runtime) {
+            final int limit = TraceTruffleStackTraceLimit.getValue();
+
+            runtime.log("[truffle] transferToInterpreter at");
+            runtime.iterateFrames(new FrameInstanceVisitor<Object>() {
+                int frameIndex = 0;
+
+                @Override
+                public Object visitFrame(FrameInstance frameInstance) {
+                    CallTarget target = frameInstance.getCallTarget();
+                    StringBuilder line = new StringBuilder("  ");
+                    if (frameIndex > 0) {
+                        line.append("  ");
+                    }
+                    line.append(formatStackFrame(frameInstance, target));
+                    frameIndex++;
+
+                    runtime.log(line.toString());
+                    if (frameIndex < limit) {
+                        return null;
+                    } else {
+                        runtime.log("    ...");
+                        return frameInstance;
+                    }
+                }
+
+            });
+            final int skip = 3;
+
+            StackTraceElement[] stackTrace = new Throwable().getStackTrace();
+            String suffix = stackTrace.length > skip + limit ? "\n    ..." : "";
+            runtime.log(Arrays.stream(stackTrace).skip(skip).limit(limit).map(StackTraceElement::toString).collect(Collectors.joining("\n    ", "  ", suffix)));
         }
     }
 }

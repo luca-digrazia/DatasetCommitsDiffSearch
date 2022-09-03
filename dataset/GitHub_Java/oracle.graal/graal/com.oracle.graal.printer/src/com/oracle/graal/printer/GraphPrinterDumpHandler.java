@@ -22,35 +22,65 @@
  */
 package com.oracle.graal.printer;
 
-import java.io.*;
-import java.net.*;
-import java.nio.channels.*;
-import java.nio.file.*;
-import java.text.*;
-import java.util.*;
+import static com.oracle.graal.debug.GraalDebugConfig.asJavaMethod;
 
-import com.oracle.max.criutils.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
+import java.io.IOException;
+import java.lang.management.ManagementFactory;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
+
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.DebugDumpHandler;
+import com.oracle.graal.debug.DebugDumpScope;
+import com.oracle.graal.debug.GraalDebugConfig.Options;
+import com.oracle.graal.debug.TTY;
+import com.oracle.graal.graph.Graph;
+import com.oracle.graal.nodes.StructuredGraph;
+
+import jdk.vm.ci.meta.JavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+
+//JaCoCo Exclude
 
 /**
- * Observes compilation events and uses {@link IdealGraphPrinter} to generate a graph representation that can be
- * inspected with the <a href="http://kenai.com/projects/igv">Ideal Graph Visualizer</a>.
+ * Observes compilation events and uses {@link IdealGraphPrinter} to generate a graph representation
+ * that can be inspected with the <a href="http://kenai.com/projects/igv">Ideal Graph Visualizer</a>
+ * .
  */
 public class GraphPrinterDumpHandler implements DebugDumpHandler {
-    private static final SimpleDateFormat sdf = new SimpleDateFormat("YYYY-MM-dd-HHmm");
 
-    private GraphPrinter printer;
+    private final GraphPrinterSupplier printerSupplier;
+    protected GraphPrinter printer;
     private List<String> previousInlineContext;
+    private int[] dumpIds = {};
     private int failuresCount;
+    private Map<Graph, List<String>> inlineContextMap;
+    private final String jvmArguments;
+    private final String sunJavaCommand;
+
+    @FunctionalInterface
+    public interface GraphPrinterSupplier {
+        GraphPrinter get() throws IOException;
+    }
 
     /**
      * Creates a new {@link GraphPrinterDumpHandler}.
+     *
+     * @param printerSupplier Supplier used to create the GraphPrinter. Should supply an optional or
+     *            null in case of failure.
      */
-    public GraphPrinterDumpHandler() {
-        previousInlineContext = new ArrayList<>();
+    public GraphPrinterDumpHandler(GraphPrinterSupplier printerSupplier) {
+        this.printerSupplier = printerSupplier;
+        /* Add the JVM and Java arguments to the graph properties to help identify it. */
+        this.jvmArguments = String.join(" ", ManagementFactory.getRuntimeMXBean().getInputArguments());
+        this.sunJavaCommand = System.getProperty("sun.java.command");
     }
 
     private void ensureInitialized() {
@@ -58,140 +88,199 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
             if (failuresCount > 8) {
                 return;
             }
-            previousInlineContext.clear();
-            if (GraalOptions.PrintIdealGraphFile) {
-                initializeFilePrinter();
-            } else {
-                initializeNetworkPrinter();
+            previousInlineContext = new ArrayList<>();
+            inlineContextMap = new WeakHashMap<>();
+            try {
+                printer = printerSupplier.get();
+            } catch (IOException e) {
+                TTY.println(e.getMessage());
+                failuresCount++;
             }
         }
     }
 
-    private void initializeFilePrinter() {
-        String ext;
-        if (GraalOptions.PrintBinaryGraphs) {
-            ext = ".bgv";
-        } else {
-            ext = ".gv.xml";
+    private int nextDumpId() {
+        int depth = previousInlineContext.size();
+        if (dumpIds.length < depth) {
+            dumpIds = Arrays.copyOf(dumpIds, depth);
         }
-        String fileName = "Graphs-" + Thread.currentThread().getName() + "-" + sdf.format(new Date()) + ext;
-        try {
-            if (GraalOptions.PrintBinaryGraphs) {
-                printer = new BinaryGraphPrinter(FileChannel.open(new File(fileName).toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW));
-            } else {
-                printer = new IdealGraphPrinter(new FileOutputStream(fileName));
-            }
-            TTY.println("Dumping IGV graphs to %s", fileName);
-        } catch (IOException e) {
-            TTY.println("Failed to open %s to dump IGV graphs : %s", fileName, e);
-            failuresCount++;
-            printer = null;
-        }
-    }
-
-    private void initializeNetworkPrinter() {
-        String host = GraalOptions.PrintIdealGraphAddress;
-        int port = GraalOptions.PrintBinaryGraphs ? GraalOptions.PrintBinaryGraphPort : GraalOptions.PrintIdealGraphPort;
-        try {
-            if (GraalOptions.PrintBinaryGraphs) {
-                printer = new BinaryGraphPrinter(SocketChannel.open(new InetSocketAddress(host, port)));
-            } else {
-                IdealGraphPrinter xmlPrinter = new IdealGraphPrinter(new Socket(host, port).getOutputStream());
-                printer = xmlPrinter;
-            }
-            TTY.println("Connected to the IGV on %s:%d", host, port);
-        } catch (IOException e) {
-            TTY.println("Could not connect to the IGV on %s:%d : %s", host, port, e);
-            failuresCount++;
-            printer = null;
-        }
+        return dumpIds[depth - 1]++;
     }
 
     @Override
+    @SuppressWarnings("try")
     public void dump(Object object, final String message) {
-        if (object instanceof Graph) {
+        if (object instanceof Graph && Options.PrintIdealGraph.getValue()) {
             ensureInitialized();
             if (printer == null) {
                 return;
             }
             final Graph graph = (Graph) object;
 
-            if (printer != null) {
-                // Get all current RiResolvedMethod instances in the context.
-                List<String> inlineContext = getInlineContext();
+            // Get all current JavaMethod instances in the context.
+            List<String> inlineContext = getInlineContext(graph);
 
-                // Reverse list such that inner method comes after outer method.
-                Collections.reverse(inlineContext);
-
-                // Check for method scopes that must be closed since the previous dump.
-                for (int i = 0; i < previousInlineContext.size(); ++i) {
-                    if (i >= inlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
-                        for (int j = previousInlineContext.size() - 1; j >= i; --j) {
-                            closeScope();
+            if (inlineContext != previousInlineContext) {
+                Map<Object, Object> properties = new HashMap<>();
+                properties.put("graph", graph.toString());
+                addCompilationId(properties, graph);
+                addCFGFileName(properties);
+                if (inlineContext.equals(previousInlineContext)) {
+                    /*
+                     * two different graphs have the same inline context, so make sure they appear
+                     * in different folders by closing and reopening the top scope.
+                     */
+                    int inlineDepth = previousInlineContext.size() - 1;
+                    closeScope(inlineDepth);
+                    openScope(inlineContext.get(inlineDepth), inlineDepth, properties);
+                } else {
+                    // Check for method scopes that must be closed since the previous dump.
+                    for (int i = 0; i < previousInlineContext.size(); ++i) {
+                        if (i >= inlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
+                            for (int inlineDepth = previousInlineContext.size() - 1; inlineDepth >= i; --inlineDepth) {
+                                closeScope(inlineDepth);
+                            }
+                            break;
                         }
-                        break;
+                    }
+                    // Check for method scopes that must be opened since the previous dump.
+                    for (int i = 0; i < inlineContext.size(); ++i) {
+                        if (i >= previousInlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
+                            for (int inlineDepth = i; inlineDepth < inlineContext.size(); ++inlineDepth) {
+                                openScope(inlineContext.get(inlineDepth), inlineDepth, inlineDepth == inlineContext.size() - 1 ? properties : null);
+                            }
+                            break;
+                        }
                     }
                 }
+            }
 
-                // Check for method scopes that must be opened since the previous dump.
-                for (int i = 0; i < inlineContext.size(); ++i) {
-                    if (i >= previousInlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
-                        for (int j = i; j < inlineContext.size(); ++j) {
-                            openScope(inlineContext.get(j), j == 0);
-                        }
-                        break;
-                    }
-                }
+            // Save inline context for next dump.
+            previousInlineContext = inlineContext;
 
-                // Save inline context for next dump.
-                previousInlineContext = inlineContext;
-
-                Debug.sandbox("PrintingGraph", new Runnable() {
-
-                    @Override
-                    public void run() {
-                        // Finally, output the graph.
-                        try {
-                            printer.print(graph, message, null);
-                        } catch (IOException e) {
-                            failuresCount++;
-                            printer = null;
-                        }
-                    }
-                });
+            try (Scope s = Debug.sandbox("PrintingGraph", null)) {
+                // Finally, output the graph.
+                Map<Object, Object> properties = new HashMap<>();
+                properties.put("graph", graph.toString());
+                properties.put("scope", Debug.currentScope());
+                addCFGFileName(properties);
+                printer.print(graph, nextDumpId() + ":" + message, properties);
+            } catch (IOException e) {
+                failuresCount++;
+                printer = null;
+            } catch (Throwable e) {
+                throw Debug.handle(e);
             }
         }
     }
 
-    private static List<String> getInlineContext() {
-        List<String> result = new ArrayList<>();
-        for (Object o : Debug.context()) {
-            if (o instanceof ResolvedJavaMethod) {
-                ResolvedJavaMethod method = (ResolvedJavaMethod) o;
-                result.add(MetaUtil.format("%H::%n(%p)", method));
-            } else if (o instanceof DebugDumpScope) {
-                DebugDumpScope debugDumpScope = (DebugDumpScope) o;
-                if (debugDumpScope.decorator && !result.isEmpty()) {
-                    result.set(result.size() - 1, debugDumpScope.name + ":" + result.get(result.size() - 1));
+    private static void addCompilationId(Map<Object, Object> properties, final Graph graph) {
+        if (graph instanceof StructuredGraph) {
+            properties.put("compilationId", ((StructuredGraph) graph).compilationId());
+        }
+    }
+
+    private static void addCFGFileName(Map<Object, Object> properties) {
+        if (Options.PrintCFG.getValue() || Options.PrintBackendCFG.getValue()) {
+            properties.put("PrintCFGFileName", CFGPrinterObserver.getCFGPath().toAbsolutePath().toString());
+        }
+    }
+
+    private List<String> getInlineContext(Graph graph) {
+        List<String> result = inlineContextMap.get(graph);
+        if (result == null) {
+            result = new ArrayList<>();
+            Object lastMethodOrGraph = null;
+            boolean graphSeen = false;
+            for (Object o : Debug.context()) {
+                if (o == graph) {
+                    graphSeen = true;
+                }
+
+                if (o instanceof DebugDumpScope) {
+                    DebugDumpScope debugDumpScope = (DebugDumpScope) o;
+                    if (debugDumpScope.decorator && !result.isEmpty()) {
+                        result.set(result.size() - 1, debugDumpScope.name + ":" + result.get(result.size() - 1));
+                    } else {
+                        result.add(debugDumpScope.name);
+                    }
                 } else {
-                    result.add(debugDumpScope.name);
+                    addMethodContext(result, o, lastMethodOrGraph);
+                }
+                if (o instanceof JavaMethod || o instanceof Graph) {
+                    lastMethodOrGraph = o;
                 }
             }
+
+            if (result.isEmpty()) {
+                result.add(graph.toString());
+                graphSeen = true;
+            }
+            // Reverse list such that inner method comes after outer method.
+            Collections.reverse(result);
+            if (!graphSeen) {
+                /*
+                 * The graph isn't in any context but is being processed within another graph so add
+                 * it to the end of the scopes.
+                 */
+                if (asJavaMethod(graph) != null) {
+                    addMethodContext(result, graph, lastMethodOrGraph);
+                } else {
+                    result.add(graph.toString());
+                }
+            }
+            inlineContextMap.put(graph, result);
         }
         return result;
     }
 
-    private void openScope(String name, boolean showThread) {
-        String prefix = showThread ? Thread.currentThread().getName() + ":" : "";
+    private static void addMethodContext(List<String> result, Object o, Object lastMethodOrGraph) {
+        JavaMethod method = asJavaMethod(o);
+        if (method != null) {
+            /*
+             * Include the current method in the context if there was no previous JavaMethod or
+             * JavaMethodContext or if the method is different or if the method is the same but it
+             * comes from two different graphs. This ensures that recursive call patterns are
+             * handled properly.
+             */
+            if (lastMethodOrGraph == null || asJavaMethod(lastMethodOrGraph) == null || !asJavaMethod(lastMethodOrGraph).equals(method) ||
+                            (lastMethodOrGraph != o && lastMethodOrGraph instanceof Graph && o instanceof Graph)) {
+                result.add(method.format("%H::%n(%p)"));
+            } else {
+                /*
+                 * This prevents multiple adjacent method context objects for the same method from
+                 * resulting in multiple IGV tree levels. This works on the assumption that real
+                 * inlining debug scopes will have a graph context object between the inliner and
+                 * inlinee context objects.
+                 */
+            }
+        }
+    }
+
+    private void openScope(String name, int inlineDepth, Map<Object, Object> properties) {
+        String prefix = inlineDepth == 0 ? Thread.currentThread().getName() + ":" : "";
         try {
-            printer.beginGroup(prefix + name, name, Debug.contextLookup(ResolvedJavaMethod.class), -1);
+            Map<Object, Object> props = properties;
+            if (inlineDepth == 0) {
+                /* Include some VM specific properties at the root. */
+                if (props == null) {
+                    props = new HashMap<>();
+                }
+                props.put("jvmArguments", jvmArguments);
+                if (sunJavaCommand != null) {
+                    props.put("sun.java.command", sunJavaCommand);
+                }
+                props.put("date", new Date().toString());
+            }
+            printer.beginGroup(prefix + name, name, Debug.contextLookup(ResolvedJavaMethod.class), -1, props);
         } catch (IOException e) {
             failuresCount++;
             printer = null;
         }
     }
 
-    private void closeScope() {
+    private void closeScope(int inlineDepth) {
+        dumpIds[inlineDepth] = 0;
         try {
             printer.endGroup();
         } catch (IOException e) {
@@ -201,10 +290,15 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
     }
 
     @Override
-    public void close() throws IOException {
-        for (int i = 0; i < previousInlineContext.size(); i++) {
-            closeScope();
+    public void close() {
+        if (previousInlineContext != null) {
+            for (int inlineDepth = 0; inlineDepth < previousInlineContext.size(); inlineDepth++) {
+                closeScope(inlineDepth);
+            }
         }
-        printer.close();
+        if (printer != null) {
+            printer.close();
+            printer = null;
+        }
     }
 }

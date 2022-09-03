@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,31 +22,71 @@
  */
 package com.oracle.graal.replacements;
 
-import java.lang.reflect.*;
-import java.util.*;
+import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
+import static com.oracle.graal.nodes.StructuredGraph.NO_PROFILING_INFO;
+import static com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_AFTER_PARSING;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.java.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.util.*;
-import com.oracle.graal.replacements.ReplacementsImpl.FrameStateProcessing;
-import com.oracle.graal.word.phases.*;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.List;
+
+import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.StampPair;
+import com.oracle.graal.graph.Graph;
+import com.oracle.graal.graph.Node.ValueNumberable;
+import com.oracle.graal.java.FrameStateBuilder;
+import com.oracle.graal.java.GraphBuilderPhase;
+import com.oracle.graal.nodes.AbstractBeginNode;
+import com.oracle.graal.nodes.AbstractMergeNode;
+import com.oracle.graal.nodes.BeginNode;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
+import com.oracle.graal.nodes.EndNode;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.IfNode;
+import com.oracle.graal.nodes.InvokeNode;
+import com.oracle.graal.nodes.LogicNode;
+import com.oracle.graal.nodes.MergeNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderTool;
+import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
+import com.oracle.graal.nodes.java.MethodCallTargetNode;
+import com.oracle.graal.nodes.spi.StampProvider;
+import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.phases.OptimisticOptimizations;
+import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
+import com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality;
+import com.oracle.graal.phases.common.inlining.InliningUtil;
+import com.oracle.graal.phases.util.Providers;
+import com.oracle.graal.word.WordTypes;
+
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.Signature;
 
 /**
  * A utility for manually creating a graph. This will be expanded as necessary to support all
  * subsystems that employ manual graph creation (as opposed to {@linkplain GraphBuilderPhase
  * bytecode parsing} based graph creation).
  */
-public class GraphKit {
+public class GraphKit implements GraphBuilderTool {
 
     protected final Providers providers;
     protected final StructuredGraph graph;
+    protected final WordTypes wordTypes;
+    protected final GraphBuilderConfiguration.Plugins graphBuilderPlugins;
     protected FixedWithNextNode lastFixedNode;
 
     private final List<Structure> structures;
@@ -54,35 +94,90 @@ public class GraphKit {
     abstract static class Structure {
     }
 
-    public GraphKit(StructuredGraph graph, Providers providers) {
+    public GraphKit(StructuredGraph graph, Providers providers, WordTypes wordTypes, GraphBuilderConfiguration.Plugins graphBuilderPlugins) {
         this.providers = providers;
         this.graph = graph;
+        this.wordTypes = wordTypes;
+        this.graphBuilderPlugins = graphBuilderPlugins;
         this.lastFixedNode = graph.start();
 
         structures = new ArrayList<>();
-        /* Add a dummy element, so that the access of the last element never leads to an exception. */
+        /*
+         * Add a dummy element, so that the access of the last element never leads to an exception.
+         */
         structures.add(new Structure() {
         });
     }
 
+    @Override
     public StructuredGraph getGraph() {
         return graph;
     }
 
-    /**
-     * Ensures a floating node is added to or already present in the graph via {@link Graph#unique}.
-     * 
-     * @return a node similar to {@code node} if one exists, otherwise {@code node}
-     */
-    public <T extends FloatingNode> T unique(T node) {
-        return graph.unique(node);
+    @Override
+    public ConstantReflectionProvider getConstantReflection() {
+        return providers.getConstantReflection();
+    }
+
+    @Override
+    public ConstantFieldProvider getConstantFieldProvider() {
+        return providers.getConstantFieldProvider();
+    }
+
+    @Override
+    public MetaAccessProvider getMetaAccess() {
+        return providers.getMetaAccess();
+    }
+
+    @Override
+    public StampProvider getStampProvider() {
+        return providers.getStampProvider();
+    }
+
+    @Override
+    public boolean parsingIntrinsic() {
+        return true;
     }
 
     /**
-     * Appends a fixed node to the graph.
+     * Ensures a floating node is added to or already present in the graph via {@link Graph#unique}.
+     *
+     * @return a node similar to {@code node} if one exists, otherwise {@code node}
      */
-    public <T extends FixedNode> T append(T node) {
-        T result = graph.add(node);
+    public <T extends FloatingNode & ValueNumberable> T unique(T node) {
+        return graph.unique(changeToWord(node));
+    }
+
+    public <T extends ValueNode> T add(T node) {
+        return graph.add(changeToWord(node));
+    }
+
+    public <T extends ValueNode> T changeToWord(T node) {
+        if (wordTypes != null && wordTypes.isWord(node)) {
+            node.setStamp(wordTypes.getWordStamp(StampTool.typeOrNull(node)));
+        }
+        return node;
+    }
+
+    @Override
+    public <T extends ValueNode> T append(T node) {
+        T result = graph.addOrUnique(changeToWord(node));
+        if (result instanceof FixedNode) {
+            updateLastFixed((FixedNode) result);
+        }
+        return result;
+    }
+
+    @Override
+    public <T extends ValueNode> T recursiveAppend(T node) {
+        T result = graph.addOrUniqueWithInputs(node);
+        if (result instanceof FixedNode) {
+            updateLastFixed((FixedNode) result);
+        }
+        return result;
+    }
+
+    private void updateLastFixed(FixedNode result) {
         assert lastFixedNode != null;
         assert result.predecessor() == null;
         graph.addAfterFixed(lastFixedNode, result);
@@ -91,23 +186,27 @@ public class GraphKit {
         } else {
             lastFixedNode = null;
         }
-        return result;
     }
 
     public InvokeNode createInvoke(Class<?> declaringClass, String name, ValueNode... args) {
-        return createInvoke(declaringClass, name, InvokeKind.Static, null, FrameState.UNKNOWN_BCI, args);
+        return createInvoke(declaringClass, name, InvokeKind.Static, null, BytecodeFrame.UNKNOWN_BCI, args);
     }
 
     /**
      * Creates and appends an {@link InvokeNode} for a call to a given method with a given set of
      * arguments. The method is looked up via reflection based on the declaring class and name.
-     * 
+     *
      * @param declaringClass the class declaring the invoked method
      * @param name the name of the invoked method
      * @param args the arguments to the invocation
      */
-    public InvokeNode createInvoke(Class<?> declaringClass, String name, InvokeKind invokeKind, HIRFrameStateBuilder frameStateBuilder, int bci, ValueNode... args) {
+    public InvokeNode createInvoke(Class<?> declaringClass, String name, InvokeKind invokeKind, FrameStateBuilder frameStateBuilder, int bci, ValueNode... args) {
         boolean isStatic = invokeKind == InvokeKind.Static;
+        ResolvedJavaMethod method = findMethod(declaringClass, name, isStatic);
+        return createInvoke(method, invokeKind, frameStateBuilder, bci, args);
+    }
+
+    public ResolvedJavaMethod findMethod(Class<?> declaringClass, String name, boolean isStatic) {
         ResolvedJavaMethod method = null;
         for (Method m : declaringClass.getDeclaredMethods()) {
             if (Modifier.isStatic(m.getModifiers()) == isStatic && m.getName().equals(name)) {
@@ -116,59 +215,74 @@ public class GraphKit {
             }
         }
         assert method != null : "did not find method in " + declaringClass + " named " + name;
-        return createInvoke(method, invokeKind, frameStateBuilder, bci, args);
+        return method;
+    }
+
+    public ResolvedJavaMethod findMethod(Class<?> declaringClass, String name, Class<?>... parameterTypes) {
+        try {
+            Method m = declaringClass.getDeclaredMethod(name, parameterTypes);
+            return providers.getMetaAccess().lookupJavaMethod(m);
+        } catch (NoSuchMethodException | SecurityException e) {
+            throw new AssertionError(e);
+        }
     }
 
     /**
      * Creates and appends an {@link InvokeNode} for a call to a given method with a given set of
      * arguments.
      */
-    public InvokeNode createInvoke(ResolvedJavaMethod method, InvokeKind invokeKind, HIRFrameStateBuilder frameStateBuilder, int bci, ValueNode... args) {
-        assert Modifier.isStatic(method.getModifiers()) == (invokeKind == InvokeKind.Static);
+    public InvokeNode createInvoke(ResolvedJavaMethod method, InvokeKind invokeKind, FrameStateBuilder frameStateBuilder, int bci, ValueNode... args) {
+        assert method.isStatic() == (invokeKind == InvokeKind.Static);
         Signature signature = method.getSignature();
         JavaType returnType = signature.getReturnType(null);
         assert checkArgs(method, args);
-        MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, method, args, returnType, bci));
+        StampPair returnStamp = graphBuilderPlugins.getOverridingStamp(this, returnType, false);
+        if (returnStamp == null) {
+            returnStamp = StampFactory.forDeclaredType(graph.getAssumptions(), returnType, false);
+        }
+        MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, method, args, returnStamp, bci));
         InvokeNode invoke = append(new InvokeNode(callTarget, bci));
 
         if (frameStateBuilder != null) {
-            if (invoke.getKind() != Kind.Void) {
-                frameStateBuilder.push(invoke.getKind(), invoke);
+            if (invoke.getStackKind() != JavaKind.Void) {
+                frameStateBuilder.push(returnType.getJavaKind(), invoke);
             }
-            invoke.setStateAfter(frameStateBuilder.create(0));
-            if (invoke.getKind() != Kind.Void) {
-                frameStateBuilder.pop(invoke.getKind());
+            invoke.setStateAfter(frameStateBuilder.create(bci, invoke));
+            if (invoke.getStackKind() != JavaKind.Void) {
+                frameStateBuilder.pop(returnType.getJavaKind());
             }
         }
         return invoke;
     }
 
-    protected MethodCallTargetNode createMethodCallTarget(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, JavaType returnType, @SuppressWarnings("unused") int bci) {
-        return new MethodCallTargetNode(invokeKind, targetMethod, args, returnType);
+    protected MethodCallTargetNode createMethodCallTarget(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, StampPair returnStamp, @SuppressWarnings("unused") int bci) {
+        return new MethodCallTargetNode(invokeKind, targetMethod, args, returnStamp, null);
     }
 
     /**
      * Determines if a given set of arguments is compatible with the signature of a given method.
-     * 
+     *
      * @return true if {@code args} are compatible with the signature if {@code method}
      * @throws AssertionError if {@code args} are not compatible with the signature if
      *             {@code method}
      */
     public boolean checkArgs(ResolvedJavaMethod method, ValueNode... args) {
         Signature signature = method.getSignature();
-        boolean isStatic = Modifier.isStatic(method.getModifiers());
+        boolean isStatic = method.isStatic();
         if (signature.getParameterCount(!isStatic) != args.length) {
             throw new AssertionError(graph + ": wrong number of arguments to " + method);
         }
-        int paramNum = 0;
-        for (int i = 0; i != args.length; i++) {
-            Kind expected;
-            if (i == 0 && !isStatic) {
-                expected = Kind.Object;
-            } else {
-                expected = signature.getParameterKind(paramNum++).getStackKind();
-            }
-            Kind actual = args[i].stamp().getStackKind();
+        int argIndex = 0;
+        if (!isStatic) {
+            ResolvedJavaType expectedType = method.getDeclaringClass();
+            JavaKind expected = wordTypes == null ? expectedType.getJavaKind() : wordTypes.asKind(expectedType);
+            JavaKind actual = args[argIndex++].stamp().getStackKind();
+            assert expected == actual : graph + ": wrong kind of value for receiver argument of call to " + method + " [" + actual + " != " + expected + "]";
+        }
+        for (int i = 0; i != signature.getParameterCount(false); i++) {
+            JavaType expectedType = signature.getParameterType(i, method.getDeclaringClass());
+            JavaKind expected = wordTypes == null ? expectedType.getJavaKind().getStackKind() : wordTypes.asKind(expectedType).getStackKind();
+            JavaKind actual = args[argIndex++].stamp().getStackKind();
             if (expected != actual) {
                 throw new AssertionError(graph + ": wrong kind of value for argument " + i + " of call to " + method + " [" + actual + " != " + expected + "]");
             }
@@ -177,35 +291,42 @@ public class GraphKit {
     }
 
     /**
-     * Rewrite all word types in the graph.
-     */
-    public void rewriteWordTypes() {
-        new WordTypeRewriterPhase(providers.getMetaAccess(), providers.getCodeCache().getTarget().wordKind).apply(graph);
-    }
-
-    /**
-     * {@linkplain #inline(InvokeNode) Inlines} all invocations currently in the graph.
+     * Recursively {@linkplain #inline inlines} all invocations currently in the graph.
      */
     public void inlineInvokes() {
-        for (InvokeNode invoke : graph.getNodes().filter(InvokeNode.class).snapshot()) {
-            inline(invoke);
+        while (!graph.getNodes().filter(InvokeNode.class).isEmpty()) {
+            for (InvokeNode invoke : graph.getNodes().filter(InvokeNode.class).snapshot()) {
+                inline(invoke);
+            }
         }
 
         // Clean up all code that is now dead after inlining.
         new DeadCodeEliminationPhase().apply(graph);
-        assert graph.getNodes().filter(InvokeNode.class).isEmpty();
     }
 
     /**
-     * Inlines a given invocation to a method. The graph of the inlined method is
-     * {@linkplain ReplacementsImpl#makeGraph processed} in the same manner as for snippets and
-     * method substitutions.
+     * Inlines a given invocation to a method. The graph of the inlined method is processed in the
+     * same manner as for snippets and method substitutions.
      */
     public void inline(InvokeNode invoke) {
         ResolvedJavaMethod method = ((MethodCallTargetNode) invoke.callTarget()).targetMethod();
-        ReplacementsImpl repl = new ReplacementsImpl(providers, new Assumptions(false), providers.getCodeCache().getTarget());
-        StructuredGraph calleeGraph = repl.makeGraph(method, null, method, null, FrameStateProcessing.CollapseFrameForSingleSideEffect);
-        InliningUtil.inline(invoke, calleeGraph, false);
+
+        MetaAccessProvider metaAccess = providers.getMetaAccess();
+        Plugins plugins = new Plugins(graphBuilderPlugins);
+        GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault(plugins);
+
+        StructuredGraph calleeGraph = new StructuredGraph(method, AllowAssumptions.NO, NO_PROFILING_INFO, INVALID_COMPILATION_ID);
+        IntrinsicContext initialReplacementContext = new IntrinsicContext(method, method, providers.getReplacements().getReplacementBytecodeProvider(), INLINE_AFTER_PARSING);
+        GraphBuilderPhase.Instance instance = new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(), providers.getConstantReflection(), providers.getConstantFieldProvider(), config,
+                        OptimisticOptimizations.NONE,
+                        initialReplacementContext);
+        instance.apply(calleeGraph);
+
+        // Remove all frame states from inlinee
+        calleeGraph.clearAllStateAfter();
+        new DeadCodeEliminationPhase(Optionality.Required).apply(calleeGraph);
+
+        InliningUtil.inline(invoke, calleeGraph, false, null, method);
     }
 
     protected void pushStructure(Structure structure) {
@@ -221,7 +342,10 @@ public class GraphKit {
     }
 
     protected enum IfState {
-        CONDITION, THEN_PART, ELSE_PART, FINISHED
+        CONDITION,
+        THEN_PART,
+        ELSE_PART,
+        FINISHED
     }
 
     static class IfStructure extends Structure {
@@ -235,13 +359,13 @@ public class GraphKit {
      * emitting the code executed when the condition hold; and a call to {@link #elsePart} to start
      * emititng the code when the condition does not hold. It must be followed by a call to
      * {@link #endIf} to close the if-block.
-     * 
+     *
      * @param condition The condition for the if-block
      * @param trueProbability The estimated probability the the condition is true
      */
     public void startIf(LogicNode condition, double trueProbability) {
-        BeginNode thenSuccessor = graph.add(new BeginNode());
-        BeginNode elseSuccessor = graph.add(new BeginNode());
+        AbstractBeginNode thenSuccessor = graph.add(new BeginNode());
+        AbstractBeginNode elseSuccessor = graph.add(new BeginNode());
         append(new IfNode(condition, thenSuccessor, elseSuccessor, trueProbability));
         lastFixedNode = null;
 
@@ -297,7 +421,7 @@ public class GraphKit {
             EndNode elseEnd = graph.add(new EndNode());
             graph.addAfterFixed(elsePart, elseEnd);
 
-            MergeNode merge = graph.add(new MergeNode());
+            AbstractMergeNode merge = graph.add(new MergeNode());
             merge.addForwardEnd(thenEnd);
             merge.addForwardEnd(elseEnd);
 

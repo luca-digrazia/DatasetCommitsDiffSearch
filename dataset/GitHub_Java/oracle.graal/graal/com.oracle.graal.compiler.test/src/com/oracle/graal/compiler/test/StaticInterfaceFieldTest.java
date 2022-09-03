@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,34 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static com.oracle.jvmci.debug.DelegatingDebugConfig.Feature.*;
+import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
+import static com.oracle.graal.debug.DelegatingDebugConfig.Feature.INTERCEPT;
 
-import java.lang.reflect.*;
+import java.lang.reflect.Method;
 
-import org.junit.*;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.java.*;
-import com.oracle.graal.nodes.*;
+import org.junit.Assume;
+import org.junit.Test;
+
+import com.oracle.graal.api.test.Graal;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.DebugConfigScope;
+import com.oracle.graal.debug.DelegatingDebugConfig;
+import com.oracle.graal.java.GraphBuilderPhase;
+import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.tiers.*;
-import com.oracle.graal.phases.util.*;
-import com.oracle.graal.runtime.*;
-import com.oracle.graal.test.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.meta.*;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.phases.OptimisticOptimizations;
+import com.oracle.graal.phases.PhaseSuite;
+import com.oracle.graal.phases.VerifyPhase;
+import com.oracle.graal.phases.tiers.HighTierContext;
+import com.oracle.graal.phases.util.Providers;
+import com.oracle.graal.runtime.RuntimeProvider;
+import com.oracle.graal.test.GraalTest;
 
 /**
  * Test that interfaces are correctly initialized by a static field resolution during eager graph
@@ -67,13 +76,15 @@ public class StaticInterfaceFieldTest extends GraalTest {
 
     }
 
+    @SuppressWarnings("try")
     private void eagerlyParseMethod(Class<C> clazz, String methodName) {
         RuntimeProvider rt = Graal.getRequiredCapability(RuntimeProvider.class);
         Providers providers = rt.getHostBackend().getProviders();
         MetaAccessProvider metaAccess = providers.getMetaAccess();
 
         PhaseSuite<HighTierContext> graphBuilderSuite = new PhaseSuite<>();
-        GraphBuilderConfiguration config = GraphBuilderConfiguration.getEagerDefault(new Plugins(new InvocationPlugins(metaAccess)));
+        Plugins plugins = new Plugins(new InvocationPlugins(metaAccess));
+        GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault(plugins).withEagerResolving(true);
         graphBuilderSuite.appendPhase(new GraphBuilderPhase(config));
         HighTierContext context = new HighTierContext(providers, graphBuilderSuite, OptimisticOptimizations.NONE);
 
@@ -81,7 +92,7 @@ public class StaticInterfaceFieldTest extends GraalTest {
 
         final Method m = getMethod(clazz, methodName);
         ResolvedJavaMethod method = metaAccess.lookupJavaMethod(m);
-        StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO);
+        StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO, INVALID_COMPILATION_ID);
         try (DebugConfigScope s = Debug.setConfig(new DelegatingDebugConfig().disable(INTERCEPT)); Debug.Scope ds = Debug.scope("GraphBuilding", graph, method)) {
             graphBuilderSuite.apply(graph, context);
         } catch (Throwable e) {

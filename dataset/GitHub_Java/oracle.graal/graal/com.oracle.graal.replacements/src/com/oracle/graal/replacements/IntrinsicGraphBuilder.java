@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,41 @@
  */
 package com.oracle.graal.replacements;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.graphbuilderconf.InvocationPlugins.Receiver;
+import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
+
+import com.oracle.graal.bytecode.Bytecode;
+import com.oracle.graal.bytecode.BytecodeProvider;
+import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.StampPair;
+import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.ParameterNode;
+import com.oracle.graal.nodes.ReturnNode;
+import com.oracle.graal.nodes.StateSplit;
+import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.util.*;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
+import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin.Receiver;
+import com.oracle.graal.nodes.spi.StampProvider;
+
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.Signature;
 
 /**
  * Implementation of {@link GraphBuilderContext} used to produce a graph for a method based on an
@@ -42,19 +64,33 @@ import com.oracle.graal.phases.util.*;
  */
 public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
 
-    private final Providers providers;
-    private final SnippetReflectionProvider snippetReflection;
-    private final StructuredGraph graph;
-    private final ResolvedJavaMethod method;
-    private FixedWithNextNode lastInstr;
-    private ValueNode[] arguments;
-    private ValueNode returnValue;
+    protected final MetaAccessProvider metaAccess;
+    protected final ConstantReflectionProvider constantReflection;
+    protected final ConstantFieldProvider constantFieldProvider;
+    protected final StampProvider stampProvider;
+    protected final StructuredGraph graph;
+    protected final Bytecode code;
+    protected final ResolvedJavaMethod method;
+    protected final int invokeBci;
+    protected FixedWithNextNode lastInstr;
+    protected ValueNode[] arguments;
+    protected ValueNode returnValue;
 
-    public IntrinsicGraphBuilder(Providers providers, SnippetReflectionProvider snippetReflection, ResolvedJavaMethod method) {
-        this.providers = providers;
-        this.snippetReflection = snippetReflection;
-        this.graph = new StructuredGraph(method, AllowAssumptions.YES);
-        this.method = method;
+    public IntrinsicGraphBuilder(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider, StampProvider stampProvider,
+                    Bytecode code, int invokeBci) {
+        this(metaAccess, constantReflection, constantFieldProvider, stampProvider, code, invokeBci, AllowAssumptions.YES);
+    }
+
+    protected IntrinsicGraphBuilder(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider, StampProvider stampProvider,
+                    Bytecode code, int invokeBci, AllowAssumptions allowAssumptions) {
+        this.metaAccess = metaAccess;
+        this.constantReflection = constantReflection;
+        this.constantFieldProvider = constantFieldProvider;
+        this.stampProvider = stampProvider;
+        this.code = code;
+        this.method = code.getMethod();
+        this.graph = new StructuredGraph(method, allowAssumptions, INVALID_COMPILATION_ID);
+        this.invokeBci = invokeBci;
         this.lastInstr = graph.start();
 
         Signature sig = method.getSignature();
@@ -65,8 +101,8 @@ public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
         int index = 0;
         if (!method.isStatic()) {
             // add the receiver
-            Stamp receiverStamp = StampFactory.declaredNonNull(method.getDeclaringClass());
-            FloatingNode receiver = graph.addWithoutUnique(new ParameterNode(javaIndex, receiverStamp));
+            Stamp receiverStamp = StampFactory.objectNonNull(TypeReference.createWithoutAssumptions(method.getDeclaringClass()));
+            ValueNode receiver = graph.addWithoutUnique(new ParameterNode(javaIndex, StampPair.createSingle(receiverStamp)));
             arguments[index] = receiver;
             javaIndex = 1;
             index = 1;
@@ -74,14 +110,14 @@ public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
         ResolvedJavaType accessingClass = method.getDeclaringClass();
         for (int i = 0; i < max; i++) {
             JavaType type = sig.getParameterType(i, accessingClass).resolve(accessingClass);
-            Kind kind = type.getKind();
+            JavaKind kind = type.getJavaKind();
             Stamp stamp;
-            if (kind == Kind.Object && type instanceof ResolvedJavaType) {
-                stamp = StampFactory.declared((ResolvedJavaType) type);
+            if (kind == JavaKind.Object && type instanceof ResolvedJavaType) {
+                stamp = StampFactory.object(TypeReference.createWithoutAssumptions((ResolvedJavaType) type));
             } else {
                 stamp = StampFactory.forKind(kind);
             }
-            FloatingNode param = graph.addWithoutUnique(new ParameterNode(index, stamp));
+            ValueNode param = graph.addWithoutUnique(new ParameterNode(index, StampPair.createSingle(stamp)));
             arguments[index] = param;
             javaIndex += kind.getSlotCount();
             index++;
@@ -102,6 +138,7 @@ public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
         }
     }
 
+    @Override
     public <T extends ValueNode> T append(T v) {
         if (v.graph() != null) {
             return v;
@@ -113,6 +150,7 @@ public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
         return added;
     }
 
+    @Override
     public <T extends ValueNode> T recursiveAppend(T v) {
         if (v.graph() != null) {
             return v;
@@ -124,97 +162,122 @@ public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
         return added;
     }
 
-    public void push(Kind kind, ValueNode value) {
-        assert kind != Kind.Void;
+    @Override
+    public void push(JavaKind kind, ValueNode value) {
+        assert kind != JavaKind.Void;
         assert returnValue == null;
         returnValue = value;
     }
 
-    public void handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args) {
-        throw GraalInternalError.shouldNotReachHere();
+    @Override
+    public void handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, boolean forceInlineEverything) {
+        throw GraalError.shouldNotReachHere();
     }
 
+    @Override
     public StampProvider getStampProvider() {
-        return providers.getStampProvider();
+        return stampProvider;
     }
 
+    @Override
     public MetaAccessProvider getMetaAccess() {
-        return providers.getMetaAccess();
+        return metaAccess;
     }
 
-    public Assumptions getAssumptions() {
-        return graph.getAssumptions();
-    }
-
+    @Override
     public ConstantReflectionProvider getConstantReflection() {
-        return providers.getConstantReflection();
+        return constantReflection;
     }
 
-    public SnippetReflectionProvider getSnippetReflection() {
-        return snippetReflection;
+    @Override
+    public ConstantFieldProvider getConstantFieldProvider() {
+        return constantFieldProvider;
     }
 
+    @Override
     public StructuredGraph getGraph() {
         return graph;
     }
 
-    public FrameState createStateAfter() {
-        return getGraph().add(new FrameState(BytecodeFrame.BEFORE_BCI));
+    @Override
+    public void setStateAfter(StateSplit sideEffect) {
+        assert sideEffect.hasSideEffect();
+        FrameState stateAfter = getGraph().add(new FrameState(BytecodeFrame.BEFORE_BCI));
+        sideEffect.setStateAfter(stateAfter);
     }
 
+    @Override
     public GraphBuilderContext getParent() {
         return null;
     }
 
-    public ResolvedJavaMethod getRootMethod() {
-        return method;
+    @Override
+    public Bytecode getCode() {
+        return code;
     }
 
+    @Override
     public ResolvedJavaMethod getMethod() {
         return method;
     }
 
+    @Override
     public int bci() {
-        return -1;
+        return invokeBci;
     }
 
+    @Override
     public InvokeKind getInvokeKind() {
         return method.isStatic() ? InvokeKind.Static : InvokeKind.Virtual;
     }
 
+    @Override
     public JavaType getInvokeReturnType() {
         return method.getSignature().getReturnType(method.getDeclaringClass());
     }
 
+    @Override
     public int getDepth() {
         return 0;
     }
 
-    public boolean parsingReplacement() {
+    @Override
+    public boolean parsingIntrinsic() {
         return true;
     }
 
-    public Replacement getReplacement() {
-        throw GraalInternalError.shouldNotReachHere();
+    @Override
+    public IntrinsicContext getIntrinsic() {
+        throw GraalError.shouldNotReachHere();
     }
 
-    public boolean eagerResolving() {
-        return true;
-    }
-
+    @Override
     public BailoutException bailout(String string) {
-        throw GraalInternalError.shouldNotReachHere();
+        throw GraalError.shouldNotReachHere();
     }
 
-    public ValueNode get() {
+    @Override
+    public ValueNode get(boolean performNullCheck) {
         return arguments[0];
     }
 
     public StructuredGraph buildGraph(InvocationPlugin plugin) {
         Receiver receiver = method.isStatic() ? null : this;
-        InvocationPlugin.execute(this, method, plugin, receiver, arguments);
-        assert (returnValue != null) == (method.getSignature().getReturnKind() != Kind.Void);
-        append(new ReturnNode(returnValue));
-        return graph;
+        if (plugin.execute(this, method, receiver, arguments)) {
+            assert (returnValue != null) == (method.getSignature().getReturnKind() != JavaKind.Void) : method;
+            append(new ReturnNode(returnValue));
+            return graph;
+        }
+        return null;
+    }
+
+    @Override
+    public boolean intrinsify(BytecodeProvider bytecodeProvider, ResolvedJavaMethod targetMethod, ResolvedJavaMethod substitute, InvocationPlugin.Receiver receiver, ValueNode[] args) {
+        throw GraalError.shouldNotReachHere();
+    }
+
+    @Override
+    public String toString() {
+        return String.format("%s:intrinsic", method.format("%H.%n(%p)"));
     }
 }

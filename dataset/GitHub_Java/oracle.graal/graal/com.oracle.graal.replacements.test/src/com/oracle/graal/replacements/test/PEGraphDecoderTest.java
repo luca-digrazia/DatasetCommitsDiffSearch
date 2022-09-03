@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,24 +22,36 @@
  */
 package com.oracle.graal.replacements.test;
 
-import com.oracle.graal.debug.*;
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
+import static com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo.createStandardInlineInfo;
 
-import org.junit.*;
+import org.junit.Test;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.graphbuilderconf.InvocationPlugins.Registration;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.nodes.AbstractBeginNode;
+import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
+import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.Registration;
 import com.oracle.graal.nodes.memory.HeapAccess.BarrierType;
-import com.oracle.graal.nodes.memory.*;
-import com.oracle.graal.nodes.memory.address.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
-import com.oracle.graal.replacements.*;
+import com.oracle.graal.nodes.memory.ReadNode;
+import com.oracle.graal.nodes.memory.address.AddressNode;
+import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
+import com.oracle.graal.phases.OptimisticOptimizations;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.replacements.CachingPEGraphDecoder;
+
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public class PEGraphDecoderTest extends GraalCompilerTest {
 
@@ -101,7 +113,7 @@ public class PEGraphDecoderTest extends GraalCompilerTest {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver unused, ValueNode obj, ValueNode offset) {
                 AddressNode address = b.add(new OffsetAddressNode(obj, offset));
-                ReadNode read = b.addPush(Kind.Int, new ReadNode(address, LocationIdentity.any(), StampFactory.forKind(Kind.Int), BarrierType.NONE));
+                ReadNode read = b.addPush(JavaKind.Int, new ReadNode(address, LocationIdentity.any(), StampFactory.forKind(JavaKind.Int), BarrierType.NONE));
                 read.setGuard(AbstractBeginNode.prevBegin(read));
                 return true;
             }
@@ -110,23 +122,24 @@ public class PEGraphDecoderTest extends GraalCompilerTest {
 
     class InlineAll implements InlineInvokePlugin {
         @Override
-        public InlineInfo shouldInlineInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args, JavaType returnType) {
-            return new InlineInfo(method, false);
+        public InlineInfo shouldInlineInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
+            return createStandardInlineInfo(method);
         }
     }
 
     @Test
+    @SuppressWarnings("try")
     public void test() {
         ResolvedJavaMethod testMethod = getResolvedJavaMethod(PEGraphDecoderTest.class, "doTest", Object.class);
         StructuredGraph targetGraph = null;
         try (Debug.Scope scope = Debug.scope("GraphPETest", testMethod)) {
-            GraphBuilderConfiguration graphBuilderConfig = GraphBuilderConfiguration.getEagerDefault(getDefaultGraphBuilderPlugins());
+            GraphBuilderConfiguration graphBuilderConfig = GraphBuilderConfiguration.getDefault(getDefaultGraphBuilderPlugins()).withEagerResolving(true);
             registerPlugins(graphBuilderConfig.getPlugins().getInvocationPlugins());
             CachingPEGraphDecoder decoder = new CachingPEGraphDecoder(getProviders(), graphBuilderConfig, OptimisticOptimizations.NONE, AllowAssumptions.YES, getTarget().arch);
 
-            targetGraph = new StructuredGraph(testMethod, AllowAssumptions.YES);
+            targetGraph = new StructuredGraph(testMethod, AllowAssumptions.YES, INVALID_COMPILATION_ID);
             decoder.decode(targetGraph, testMethod, null, null, new InlineInvokePlugin[]{new InlineAll()}, null);
-            Debug.dump(targetGraph, "Target Graph");
+            Debug.dump(Debug.BASIC_LOG_LEVEL, targetGraph, "Target Graph");
             targetGraph.verify();
 
             PhaseContext context = new PhaseContext(getProviders());
@@ -135,7 +148,7 @@ public class PEGraphDecoderTest extends GraalCompilerTest {
 
         } catch (Throwable ex) {
             if (targetGraph != null) {
-                Debug.dump(targetGraph, ex.toString());
+                Debug.dump(Debug.BASIC_LOG_LEVEL, targetGraph, ex.toString());
             }
             Debug.handle(ex);
         }

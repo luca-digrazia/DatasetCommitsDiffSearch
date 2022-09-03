@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,72 +22,167 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.api.meta.MetaUtil.*;
+import static com.oracle.graal.nodes.StructuredGraph.NO_PROFILING_INFO;
+import static com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_AFTER_PARSING;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.replacements.Snippet.ConstantParameter;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
-import com.oracle.graal.replacements.SnippetTemplate.Arguments;
-import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
+import java.lang.reflect.Method;
+
+import com.oracle.graal.api.replacements.Snippet;
+import com.oracle.graal.api.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.compiler.common.CompilationIdentifier;
+import com.oracle.graal.api.replacements.SnippetReflectionProvider;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
+import com.oracle.graal.hotspot.meta.HotSpotProviders;
+import com.oracle.graal.java.GraphBuilderPhase;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.phases.OptimisticOptimizations;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.LoweringPhase;
+import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.replacements.ConstantBindingParameterPlugin;
+import com.oracle.graal.replacements.SnippetTemplate;
+import com.oracle.graal.replacements.Snippets;
+
+import jdk.vm.ci.meta.Local;
+import jdk.vm.ci.meta.LocalVariableTable;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Base class for a stub defined by a snippet.
  */
 public abstract class SnippetStub extends Stub implements Snippets {
 
-    static class Template extends AbstractTemplates {
-
-        Template(HotSpotRuntime runtime, Replacements replacements, TargetDescription target, Class<? extends Snippets> declaringClass) {
-            super(runtime, replacements, target);
-            this.info = snippet(declaringClass, null);
-        }
-
-        /**
-         * Info for the method implementing the stub.
-         */
-        protected final SnippetInfo info;
-
-        protected StructuredGraph getGraph(Arguments args) {
-            SnippetTemplate template = template(args);
-            return template.copySpecializedGraph();
-        }
-    }
-
-    protected final Template snippet;
+    protected final ResolvedJavaMethod method;
 
     /**
      * Creates a new snippet stub.
-     * 
+     *
+     * @param snippetMethodName name of the single {@link Snippet} annotated method in the class of
+     *            this object
      * @param linkage linkage details for a call to the stub
      */
-    public SnippetStub(HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotRuntimeCallTarget linkage) {
-        super(runtime, replacements, linkage);
-        this.snippet = new Template(runtime, replacements, target, getClass());
-    }
-
-    @Override
-    protected StructuredGraph getGraph() {
-        return snippet.getGraph(makeArguments(snippet.info));
+    public SnippetStub(String snippetMethodName, HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
+        this(null, snippetMethodName, providers, linkage);
     }
 
     /**
-     * Adds the {@linkplain ConstantParameter constant} arguments of this stub.
+     * Creates a new snippet stub.
+     *
+     * @param snippetDeclaringClass this class in which the {@link Snippet} annotated method is
+     *            declared. If {@code null}, this the class of this object is used.
+     * @param snippetMethodName name of the single {@link Snippet} annotated method in
+     *            {@code snippetDeclaringClass}
+     * @param linkage linkage details for a call to the stub
      */
-    protected abstract Arguments makeArguments(SnippetInfo stub);
+    public SnippetStub(Class<? extends Snippets> snippetDeclaringClass, String snippetMethodName, HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
+        super(providers, linkage);
+        Method javaMethod = SnippetTemplate.AbstractTemplates.findMethod(snippetDeclaringClass == null ? getClass() : snippetDeclaringClass, snippetMethodName, null);
+        this.method = providers.getMetaAccess().lookupJavaMethod(javaMethod);
+    }
+
+    @SuppressWarnings("all")
+    private static boolean assertionsEnabled() {
+        boolean enabled = false;
+        assert enabled = true;
+        return enabled;
+    }
+
+    public static final ThreadLocal<StructuredGraph> SnippetGraphUnderConstruction = assertionsEnabled() ? new ThreadLocal<>() : null;
 
     @Override
-    public ResolvedJavaMethod getInstallationMethod() {
-        return snippet.info.getMethod();
+    @SuppressWarnings("try")
+    protected StructuredGraph getGraph(CompilationIdentifier compilationId) {
+        Plugins defaultPlugins = providers.getGraphBuilderPlugins();
+        MetaAccessProvider metaAccess = providers.getMetaAccess();
+        SnippetReflectionProvider snippetReflection = providers.getSnippetReflection();
+
+        Plugins plugins = new Plugins(defaultPlugins);
+        plugins.prependParameterPlugin(new ConstantBindingParameterPlugin(makeConstArgs(), metaAccess, snippetReflection));
+        GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault(plugins);
+
+        // Stubs cannot have optimistic assumptions since they have
+        // to be valid for the entire run of the VM.
+        final StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO, NO_PROFILING_INFO, compilationId);
+        try (Scope outer = Debug.scope("SnippetStub", graph)) {
+            graph.disableUnsafeAccessTracking();
+
+            if (SnippetGraphUnderConstruction != null) {
+                assert SnippetGraphUnderConstruction.get() == null : SnippetGraphUnderConstruction.get().toString() + " " + graph;
+                SnippetGraphUnderConstruction.set(graph);
+            }
+
+            try {
+                IntrinsicContext initialIntrinsicContext = new IntrinsicContext(method, method, providers.getReplacements().getReplacementBytecodeProvider(), INLINE_AFTER_PARSING);
+                GraphBuilderPhase.Instance instance = new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(),
+                                providers.getConstantReflection(), providers.getConstantFieldProvider(),
+                                config, OptimisticOptimizations.NONE,
+                                initialIntrinsicContext);
+                instance.apply(graph);
+
+            } finally {
+                if (SnippetGraphUnderConstruction != null) {
+                    SnippetGraphUnderConstruction.set(null);
+                }
+            }
+
+            graph.setGuardsStage(GuardsStage.FLOATING_GUARDS);
+            new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, new PhaseContext(providers));
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
+
+        return graph;
+    }
+
+    protected boolean checkConstArg(int index, String expectedName) {
+        assert method.getParameterAnnotation(ConstantParameter.class, index) != null : String.format("parameter %d of %s is expected to be constant", index, method.format("%H.%n(%p)"));
+        LocalVariableTable lvt = method.getLocalVariableTable();
+        if (lvt != null) {
+            Local local = lvt.getLocal(index, 0);
+            assert local != null;
+            String actualName = local.getName();
+            assert actualName.equals(expectedName) : String.format("parameter %d of %s is expected to be named %s, not %s", index, method.format("%H.%n(%p)"), expectedName, actualName);
+        }
+        return true;
+    }
+
+    protected Object[] makeConstArgs() {
+        int count = method.getSignature().getParameterCount(false);
+        Object[] args = new Object[count];
+        for (int i = 0; i < args.length; i++) {
+            if (method.getParameterAnnotation(ConstantParameter.class, i) != null) {
+                args[i] = getConstantParameterValue(i, null);
+            }
+        }
+        return args;
+    }
+
+    protected Object getConstantParameterValue(int index, String name) {
+        throw new GraalError("%s must override getConstantParameterValue() to provide a value for parameter %d%s", getClass().getName(), index, name == null ? "" : " (" + name + ")");
+    }
+
+    @Override
+    protected Object debugScopeContext() {
+        return getInstalledCodeOwner();
+    }
+
+    @Override
+    public ResolvedJavaMethod getInstalledCodeOwner() {
+        return method;
     }
 
     @Override
     public String toString() {
-        return format("%h.%n", getInstallationMethod());
+        return "Stub<" + getInstalledCodeOwner().format("%h.%n") + ">";
     }
 }

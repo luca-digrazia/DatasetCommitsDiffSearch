@@ -22,51 +22,68 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static org.junit.Assert.*;
+import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
 
-import org.junit.*;
+import org.junit.Assert;
+import org.junit.Test;
 
-import com.oracle.graal.lir.cfg.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.nodes.AbstractBeginNode;
+import com.oracle.graal.nodes.AbstractMergeNode;
+import com.oracle.graal.nodes.BeginNode;
+import com.oracle.graal.nodes.EndNode;
+import com.oracle.graal.nodes.IfNode;
+import com.oracle.graal.nodes.MergeNode;
+import com.oracle.graal.nodes.ReturnNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.cfg.Block;
+import com.oracle.graal.nodes.cfg.ControlFlowGraph;
 
-public class SimpleCFGTest {
+public class SimpleCFGTest extends GraalCompilerTest {
+
+    private static void dumpGraph(final StructuredGraph graph) {
+        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+    }
 
     @Test
     public void testImplies() {
-        StructuredGraph graph = new StructuredGraph();
+        StructuredGraph graph = new StructuredGraph(AllowAssumptions.YES, INVALID_COMPILATION_ID);
 
         EndNode trueEnd = graph.add(new EndNode());
         EndNode falseEnd = graph.add(new EndNode());
 
-        BeginNode trueBegin = graph.add(new BeginNode());
+        AbstractBeginNode trueBegin = graph.add(new BeginNode());
         trueBegin.setNext(trueEnd);
-        BeginNode falseBegin = graph.add(new BeginNode());
+        AbstractBeginNode falseBegin = graph.add(new BeginNode());
         falseBegin.setNext(falseEnd);
 
-        IfNode ifNode = graph.add(new IfNode(null, trueBegin, falseBegin, 0.5, graph.graphId()));
+        IfNode ifNode = graph.add(new IfNode(null, trueBegin, falseBegin, 0.5));
         graph.start().setNext(ifNode);
 
-        MergeNode merge = graph.add(new MergeNode());
+        AbstractMergeNode merge = graph.add(new MergeNode());
         merge.addForwardEnd(trueEnd);
         merge.addForwardEnd(falseEnd);
         ReturnNode returnNode = graph.add(new ReturnNode(null));
         merge.setNext(returnNode);
 
+        dumpGraph(graph);
+
         ControlFlowGraph cfg = ControlFlowGraph.compute(graph, true, true, true, true);
 
         Block[] blocks = cfg.getBlocks();
         // check number of blocks
-        assertEquals(4, blocks.length);
+        assertDeepEquals(4, blocks.length);
 
         // check block - node assignment
-        assertEquals(blocks[0], cfg.blockFor(graph.start()));
-        assertEquals(blocks[0], cfg.blockFor(ifNode));
-        assertEquals(blocks[1], cfg.blockFor(trueBegin));
-        assertEquals(blocks[1], cfg.blockFor(trueEnd));
-        assertEquals(blocks[2], cfg.blockFor(falseBegin));
-        assertEquals(blocks[2], cfg.blockFor(falseEnd));
-        assertEquals(blocks[3], cfg.blockFor(merge));
-        assertEquals(blocks[3], cfg.blockFor(returnNode));
+        assertDeepEquals(blocks[0], cfg.blockFor(graph.start()));
+        assertDeepEquals(blocks[0], cfg.blockFor(ifNode));
+        assertDeepEquals(blocks[1], cfg.blockFor(trueBegin));
+        assertDeepEquals(blocks[1], cfg.blockFor(trueEnd));
+        assertDeepEquals(blocks[2], cfg.blockFor(falseBegin));
+        assertDeepEquals(blocks[2], cfg.blockFor(falseEnd));
+        assertDeepEquals(blocks[3], cfg.blockFor(merge));
+        assertDeepEquals(blocks[3], cfg.blockFor(returnNode));
 
         // check dominators
         assertDominator(blocks[0], null);
@@ -88,15 +105,15 @@ public class SimpleCFGTest {
     }
 
     public static void assertDominator(Block block, Block expectedDominator) {
-        assertEquals("dominator of " + block, expectedDominator, block.getDominator());
+        Assert.assertEquals("dominator of " + block, expectedDominator, block.getDominator());
     }
 
     public static void assertDominatedSize(Block block, int size) {
-        assertEquals("number of dominated blocks of " + block, size, block.getDominated().size());
+        Assert.assertEquals("number of dominated blocks of " + block, size, block.getDominated().size());
     }
 
     public static void assertPostdominator(Block block, Block expectedPostdominator) {
-        assertEquals("postdominator of " + block, expectedPostdominator, block.getPostdominator());
+        Assert.assertEquals("postdominator of " + block, expectedPostdominator, block.getPostdominator());
     }
 
 }

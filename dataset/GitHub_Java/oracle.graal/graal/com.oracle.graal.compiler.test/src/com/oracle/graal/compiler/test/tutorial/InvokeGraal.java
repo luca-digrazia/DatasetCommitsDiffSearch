@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,24 +22,34 @@
  */
 package com.oracle.graal.compiler.test.tutorial;
 
-import java.lang.reflect.*;
-import java.util.*;
-import java.util.concurrent.atomic.*;
+import static com.oracle.graal.compiler.common.CompilationRequestIdentifier.asCompilationRequest;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CallingConvention.Type;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.debug.*;
+import java.lang.reflect.Method;
+
+import com.oracle.graal.api.test.Graal;
+import com.oracle.graal.code.CompilationResult;
+import com.oracle.graal.compiler.GraalCompiler;
+import com.oracle.graal.compiler.common.CompilationIdentifier;
+import com.oracle.graal.compiler.target.Backend;
+import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.tiers.*;
-import com.oracle.graal.phases.util.*;
-import com.oracle.graal.runtime.*;
+import com.oracle.graal.debug.DebugDumpScope;
+import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
+import com.oracle.graal.lir.phases.LIRSuites;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.phases.OptimisticOptimizations;
+import com.oracle.graal.phases.PhaseSuite;
+import com.oracle.graal.phases.tiers.HighTierContext;
+import com.oracle.graal.phases.tiers.Suites;
+import com.oracle.graal.phases.util.Providers;
+import com.oracle.graal.runtime.RuntimeProvider;
+
+import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ProfilingInfo;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Sample code that shows how to invoke Graal from an application.
@@ -50,36 +60,38 @@ public class InvokeGraal {
     protected final Providers providers;
     protected final MetaAccessProvider metaAccess;
     protected final CodeCacheProvider codeCache;
-    protected final TargetDescription target;
 
     public InvokeGraal() {
         /* Ask the hosting Java VM for the entry point object to the Graal API. */
         RuntimeProvider runtimeProvider = Graal.getRequiredCapability(RuntimeProvider.class);
 
-        /* The default backend (architecture, VM configuration) that the hosting VM is running on. */
+        /*
+         * The default backend (architecture, VM configuration) that the hosting VM is running on.
+         */
         backend = runtimeProvider.getHostBackend();
         /* Access to all of the Graal API providers, as implemented by the hosting VM. */
         providers = backend.getProviders();
         /* Some frequently used providers and configuration objects. */
         metaAccess = providers.getMetaAccess();
         codeCache = providers.getCodeCache();
-        target = codeCache.getTarget();
     }
-
-    private static AtomicInteger compilationId = new AtomicInteger();
 
     /**
      * The simplest way to compile a method, using the default behavior for everything.
      */
+    @SuppressWarnings("try")
     protected InstalledCode compileAndInstallMethod(ResolvedJavaMethod method) {
-        /* Ensure every compilation gets a unique number, visible in IGV. */
-        try (Scope s = Debug.scope("compileAndInstallMethod", new DebugDumpScope(String.valueOf(compilationId.incrementAndGet()), true))) {
+        /* Create a unique compilation identifier, visible in IGV. */
+        CompilationIdentifier compilationId = backend.getCompilationIdentifier(method);
+        try (Scope s = Debug.scope("compileAndInstallMethod", new DebugDumpScope(String.valueOf(compilationId), true))) {
 
             /*
              * The graph that is compiled. We leave it empty (no nodes added yet). This means that
-             * it will be filled according to the graphBuilderSuite defined below.
+             * it will be filled according to the graphBuilderSuite defined below. We also specify
+             * that we want the compilation to make optimistic assumptions about runtime state such
+             * as the loaded class hierarchy.
              */
-            StructuredGraph graph = new StructuredGraph(method);
+            StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.YES, compilationId);
 
             /*
              * The phases used to build the graph. Usually this is just the GraphBuilderPhase. If
@@ -91,42 +103,33 @@ public class InvokeGraal {
              * The optimization phases that are applied to the graph. This is the main configuration
              * point for Graal. Add or remove phases to customize your compilation.
              */
-            Suites suites = backend.getSuites().createSuites();
+            Suites suites = backend.getSuites().getDefaultSuites();
 
             /*
-             * The calling convention for the machine code. You should have a very good reason
-             * before you switch to a different calling convention than the one that the VM provides
-             * by default.
+             * The low-level phases that are applied to the low-level representation.
              */
-            CallingConvention callingConvention = CodeUtil.getCallingConvention(codeCache, Type.JavaCallee, method, false);
+            LIRSuites lirSuites = backend.getSuites().getDefaultLIRSuites();
 
             /*
-             * We want Graal to perform all speculative optimisitic optimizations, using the
+             * We want Graal to perform all speculative optimistic optimizations, using the
              * profiling information that comes with the method (collected by the interpreter) for
              * speculation.
              */
             OptimisticOptimizations optimisticOpts = OptimisticOptimizations.ALL;
-            ProfilingInfo profilingInfo = method.getProfilingInfo();
+            ProfilingInfo profilingInfo = graph.getProfilingInfo(method);
 
             /* The default class and configuration for compilation results. */
             CompilationResult compilationResult = new CompilationResult();
             CompilationResultBuilderFactory factory = CompilationResultBuilderFactory.Default;
 
-            /* Advanced configuration objects that are not mandatory. */
-            Map<ResolvedJavaMethod, StructuredGraph> cache = null;
-            SpeculationLog speculationLog = null;
-
             /* Invoke the whole Graal compilation pipeline. */
-            GraalCompiler.compileGraph(graph, callingConvention, method, providers, backend, target, cache, graphBuilderSuite, optimisticOpts, profilingInfo, speculationLog, suites,
-                            compilationResult, factory);
+            GraalCompiler.compileGraph(graph, method, providers, backend, graphBuilderSuite, optimisticOpts, profilingInfo, suites, lirSuites, compilationResult, factory);
 
             /*
              * Install the compilation result into the VM, i.e., copy the byte[] array that contains
              * the machine code into an actual executable memory location.
              */
-            InstalledCode installedCode = codeCache.addMethod(method, compilationResult, null, null);
-
-            return installedCode;
+            return backend.addInstalledCode(method, asCompilationRequest(compilationId), compilationResult);
         } catch (Throwable ex) {
             throw Debug.handle(ex);
         }
