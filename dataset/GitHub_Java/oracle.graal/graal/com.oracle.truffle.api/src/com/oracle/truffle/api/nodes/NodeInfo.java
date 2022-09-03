@@ -41,7 +41,7 @@ public @interface NodeInfo {
     Kind kind() default Kind.SPECIALIZED;
 
     public enum Kind {
-        UNINITIALIZED, SPECIALIZED, POLYMORPHIC, GENERIC
+        UNINITIALIZED, SPECIALIZED, GENERIC
     }
 
 }
