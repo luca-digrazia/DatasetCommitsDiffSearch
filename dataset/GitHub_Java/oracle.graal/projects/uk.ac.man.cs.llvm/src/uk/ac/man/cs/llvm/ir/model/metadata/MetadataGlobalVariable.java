@@ -32,16 +32,25 @@ package uk.ac.man.cs.llvm.ir.model.metadata;
 import uk.ac.man.cs.llvm.ir.model.MetadataBlock;
 import uk.ac.man.cs.llvm.ir.model.MetadataBlock.MetadataReference;
 
-public class MetadataDerivedType implements MetadataBaseNode {
+public class MetadataGlobalVariable implements MetadataBaseNode {
 
+    private MetadataReference context = MetadataBlock.voidRef;
     private MetadataReference name = MetadataBlock.voidRef;
+    private MetadataReference displayName = MetadataBlock.voidRef;
+    private MetadataReference linkageName = MetadataBlock.voidRef;
     private MetadataReference file = MetadataBlock.voidRef;
     private long line;
-    private long size;
-    private long align;
-    private long offset;
-    private long flags;
-    private MetadataReference baseType = MetadataBlock.voidRef;
+    private MetadataReference type = MetadataBlock.voidRef;
+    private boolean isLocalToCompileUnit;
+    private boolean isDefinedInCompileUnit;
+
+    public MetadataReference getContext() {
+        return context;
+    }
+
+    public void setContext(MetadataReference context) {
+        this.context = context;
+    }
 
     public MetadataReference getName() {
         return name;
@@ -49,6 +58,22 @@ public class MetadataDerivedType implements MetadataBaseNode {
 
     public void setName(MetadataReference name) {
         this.name = name;
+    }
+
+    public MetadataReference getDisplayName() {
+        return displayName;
+    }
+
+    public void setDisplayName(MetadataReference displayName) {
+        this.displayName = displayName;
+    }
+
+    public MetadataReference getLinkageName() {
+        return linkageName;
+    }
+
+    public void setLinkageName(MetadataReference linkageName) {
+        this.linkageName = linkageName;
     }
 
     public MetadataReference getFile() {
@@ -67,67 +92,52 @@ public class MetadataDerivedType implements MetadataBaseNode {
         this.line = line;
     }
 
-    public long getSize() {
-        return size;
+    public MetadataReference getType() {
+        return type;
     }
 
-    public void setSize(long size) {
-        this.size = size;
+    public void setType(MetadataReference type) {
+        this.type = type;
     }
 
-    public long getAlign() {
-        return align;
+    public boolean isLocalToCompileUnit() {
+        return isLocalToCompileUnit;
     }
 
-    public void setAlign(long align) {
-        this.align = align;
+    public void setLocalToCompileUnit(boolean isLocalToCompileUnit) {
+        this.isLocalToCompileUnit = isLocalToCompileUnit;
     }
 
-    public long getOffset() {
-        return offset;
+    public boolean isDefinedInCompileUnit() {
+        return isDefinedInCompileUnit;
     }
 
-    public void setOffset(long offset) {
-        this.offset = offset;
-    }
-
-    public long getFlags() {
-        return flags;
-    }
-
-    public void setFlags(long flags) {
-        this.flags = flags;
-    }
-
-    public MetadataReference getBaseType() {
-        return baseType;
-    }
-
-    public void setBaseType(MetadataReference baseType) {
-        this.baseType = baseType;
+    public void setDefinedInCompileUnit(boolean isDefinedInCompileUnit) {
+        this.isDefinedInCompileUnit = isDefinedInCompileUnit;
     }
 
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder();
-        builder.append("MetadataDerivedType [name=");
+        builder.append("MetadataGlobalVariable [context=");
+        builder.append(context);
+        builder.append(", name=");
         builder.append(name);
+        builder.append(", displayName=");
+        builder.append(displayName);
+        builder.append(", linkageName=");
+        builder.append(linkageName);
         builder.append(", file=");
         builder.append(file);
         builder.append(", line=");
         builder.append(line);
-        builder.append(", size=");
-        builder.append(size);
-        builder.append(", align=");
-        builder.append(align);
-        builder.append(", offset=");
-        builder.append(offset);
-        builder.append(", flags=");
-        builder.append(flags);
-        builder.append(", baseType=");
-        builder.append(baseType);
+        builder.append(", type=");
+        builder.append(type);
+        builder.append(", isLocalToCompileUnit=");
+        builder.append(isLocalToCompileUnit);
+        builder.append(", isDefinedInCompileUnit=");
+        builder.append(isDefinedInCompileUnit);
         builder.append("]");
         return builder.toString();
     }
-
 }

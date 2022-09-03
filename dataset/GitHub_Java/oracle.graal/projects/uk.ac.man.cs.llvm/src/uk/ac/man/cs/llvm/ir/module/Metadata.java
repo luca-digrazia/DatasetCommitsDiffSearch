@@ -32,9 +32,6 @@ package uk.ac.man.cs.llvm.ir.module;
 import java.util.Arrays;
 import java.util.List;
 
-import com.oracle.truffle.llvm.runtime.LLVMLogger;
-import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
-
 import uk.ac.man.cs.llvm.bc.ParserListener;
 import uk.ac.man.cs.llvm.ir.model.MetadataBlock;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataBasicType;
@@ -78,7 +75,7 @@ public class Metadata implements ParserListener {
 
     protected void printMetadataDebugMsg() {
         if (metadata.size() != oldMetadataSize) {
-            LLVMLogger.info("!" + idx + " - " + metadata.getAbsolute(metadata.size() - 1));
+            System.out.println("!" + idx + " - " + metadata.getAbsolute(metadata.size() - 1));
             oldMetadataSize = metadata.size();
         }
     }
@@ -192,9 +189,7 @@ public class Metadata implements ParserListener {
                 break;
         }
 
-        if (LLVMBaseOptionFacade.verboseEnabled()) {
-            printMetadataDebugMsg();
-        }
+        // printMetadataDebugMsg(); // Enable to allow debugging of the metadata parser
 
         idx++;
     }

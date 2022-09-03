@@ -32,7 +32,8 @@ package uk.ac.man.cs.llvm.ir.model.metadata;
 import uk.ac.man.cs.llvm.ir.model.MetadataBlock;
 import uk.ac.man.cs.llvm.ir.model.MetadataBlock.MetadataReference;
 
-public class MetadataDerivedType implements MetadataBaseNode {
+public class MetadataBasicType implements MetadataBaseNode {
+    // http://llvm.org/releases/3.2/docs/SourceLevelDebugging.html#format_basic_type
 
     private MetadataReference name = MetadataBlock.voidRef;
     private MetadataReference file = MetadataBlock.voidRef;
@@ -41,7 +42,7 @@ public class MetadataDerivedType implements MetadataBaseNode {
     private long align;
     private long offset;
     private long flags;
-    private MetadataReference baseType = MetadataBlock.voidRef;
+    private long encoding; // DWARF type encoding
 
     public MetadataReference getName() {
         return name;
@@ -99,18 +100,18 @@ public class MetadataDerivedType implements MetadataBaseNode {
         this.flags = flags;
     }
 
-    public MetadataReference getBaseType() {
-        return baseType;
+    public long getEncoding() {
+        return encoding;
     }
 
-    public void setBaseType(MetadataReference baseType) {
-        this.baseType = baseType;
+    public void setEncoding(long encoding) {
+        this.encoding = encoding;
     }
 
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder();
-        builder.append("MetadataDerivedType [name=");
+        builder.append("MetadataBasicType [name=");
         builder.append(name);
         builder.append(", file=");
         builder.append(file);
@@ -124,8 +125,8 @@ public class MetadataDerivedType implements MetadataBaseNode {
         builder.append(offset);
         builder.append(", flags=");
         builder.append(flags);
-        builder.append(", baseType=");
-        builder.append(baseType);
+        builder.append(", encoding=");
+        builder.append(encoding);
         builder.append("]");
         return builder.toString();
     }

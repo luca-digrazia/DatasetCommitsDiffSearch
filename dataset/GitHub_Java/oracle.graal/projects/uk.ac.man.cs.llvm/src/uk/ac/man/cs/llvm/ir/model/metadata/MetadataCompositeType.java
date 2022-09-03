@@ -32,8 +32,9 @@ package uk.ac.man.cs.llvm.ir.model.metadata;
 import uk.ac.man.cs.llvm.ir.model.MetadataBlock;
 import uk.ac.man.cs.llvm.ir.model.MetadataBlock.MetadataReference;
 
-public class MetadataDerivedType implements MetadataBaseNode {
+public class MetadataCompositeType implements MetadataBaseNode {
 
+    private MetadataReference context = MetadataBlock.voidRef;
     private MetadataReference name = MetadataBlock.voidRef;
     private MetadataReference file = MetadataBlock.voidRef;
     private long line;
@@ -41,7 +42,17 @@ public class MetadataDerivedType implements MetadataBaseNode {
     private long align;
     private long offset;
     private long flags;
-    private MetadataReference baseType = MetadataBlock.voidRef;
+    private MetadataReference derivedFrom = MetadataBlock.voidRef;
+    private MetadataReference memberDescriptors = MetadataBlock.voidRef;
+    private long runtimeLanguage;
+
+    public MetadataReference getContext() {
+        return context;
+    }
+
+    public void setContext(MetadataReference context) {
+        this.context = context;
+    }
 
     public MetadataReference getName() {
         return name;
@@ -99,18 +110,36 @@ public class MetadataDerivedType implements MetadataBaseNode {
         this.flags = flags;
     }
 
-    public MetadataReference getBaseType() {
-        return baseType;
+    public MetadataReference getDerivedFrom() {
+        return derivedFrom;
     }
 
-    public void setBaseType(MetadataReference baseType) {
-        this.baseType = baseType;
+    public void setDerivedFrom(MetadataReference derivedFrom) {
+        this.derivedFrom = derivedFrom;
+    }
+
+    public MetadataReference getMemberDescriptors() {
+        return memberDescriptors;
+    }
+
+    public void setMemberDescriptors(MetadataReference memberDescriptors) {
+        this.memberDescriptors = memberDescriptors;
+    }
+
+    public long getRuntimeLanguage() {
+        return runtimeLanguage;
+    }
+
+    public void setRuntimeLanguage(long runtimeLanguage) {
+        this.runtimeLanguage = runtimeLanguage;
     }
 
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder();
-        builder.append("MetadataDerivedType [name=");
+        builder.append("MetadataCompositeType [context=");
+        builder.append(context);
+        builder.append(", name=");
         builder.append(name);
         builder.append(", file=");
         builder.append(file);
@@ -124,8 +153,12 @@ public class MetadataDerivedType implements MetadataBaseNode {
         builder.append(offset);
         builder.append(", flags=");
         builder.append(flags);
-        builder.append(", baseType=");
-        builder.append(baseType);
+        builder.append(", derivedFrom=");
+        builder.append(derivedFrom);
+        builder.append(", memberDescriptors=");
+        builder.append(memberDescriptors);
+        builder.append(", runtimeLanguage=");
+        builder.append(runtimeLanguage);
         builder.append("]");
         return builder.toString();
     }

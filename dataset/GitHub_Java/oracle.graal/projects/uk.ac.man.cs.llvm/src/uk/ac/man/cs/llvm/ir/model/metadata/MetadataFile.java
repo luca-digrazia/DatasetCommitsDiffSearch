@@ -32,24 +32,10 @@ package uk.ac.man.cs.llvm.ir.model.metadata;
 import uk.ac.man.cs.llvm.ir.model.MetadataBlock;
 import uk.ac.man.cs.llvm.ir.model.MetadataBlock.MetadataReference;
 
-public class MetadataDerivedType implements MetadataBaseNode {
+public class MetadataFile implements MetadataBaseNode {
 
-    private MetadataReference name = MetadataBlock.voidRef;
     private MetadataReference file = MetadataBlock.voidRef;
-    private long line;
-    private long size;
-    private long align;
-    private long offset;
-    private long flags;
-    private MetadataReference baseType = MetadataBlock.voidRef;
-
-    public MetadataReference getName() {
-        return name;
-    }
-
-    public void setName(MetadataReference name) {
-        this.name = name;
-    }
+    private MetadataReference directory = MetadataBlock.voidRef;
 
     public MetadataReference getFile() {
         return file;
@@ -59,73 +45,21 @@ public class MetadataDerivedType implements MetadataBaseNode {
         this.file = file;
     }
 
-    public long getLine() {
-        return line;
+    public MetadataReference getDirectory() {
+        return directory;
     }
 
-    public void setLine(long line) {
-        this.line = line;
-    }
-
-    public long getSize() {
-        return size;
-    }
-
-    public void setSize(long size) {
-        this.size = size;
-    }
-
-    public long getAlign() {
-        return align;
-    }
-
-    public void setAlign(long align) {
-        this.align = align;
-    }
-
-    public long getOffset() {
-        return offset;
-    }
-
-    public void setOffset(long offset) {
-        this.offset = offset;
-    }
-
-    public long getFlags() {
-        return flags;
-    }
-
-    public void setFlags(long flags) {
-        this.flags = flags;
-    }
-
-    public MetadataReference getBaseType() {
-        return baseType;
-    }
-
-    public void setBaseType(MetadataReference baseType) {
-        this.baseType = baseType;
+    public void setDirectory(MetadataReference directory) {
+        this.directory = directory;
     }
 
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder();
-        builder.append("MetadataDerivedType [name=");
-        builder.append(name);
-        builder.append(", file=");
+        builder.append("MetadataFile [file=");
         builder.append(file);
-        builder.append(", line=");
-        builder.append(line);
-        builder.append(", size=");
-        builder.append(size);
-        builder.append(", align=");
-        builder.append(align);
-        builder.append(", offset=");
-        builder.append(offset);
-        builder.append(", flags=");
-        builder.append(flags);
-        builder.append(", baseType=");
-        builder.append(baseType);
+        builder.append(", directory=");
+        builder.append(directory);
         builder.append("]");
         return builder.toString();
     }
