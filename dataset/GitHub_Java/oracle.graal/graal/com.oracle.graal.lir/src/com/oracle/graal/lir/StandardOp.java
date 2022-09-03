@@ -174,10 +174,9 @@ public class StandardOp {
     }
 
     /**
-     * A LIR operation that does nothing. If the operation records its position, it can be
-     * subsequently {@linkplain #replace(LIR, LIRInstruction) replaced}.
+     * Placeholder for a LIR instruction that will be subsequently replaced.
      */
-    public static class NoOp extends LIRInstruction {
+    public static class PlaceholderOp extends LIRInstruction {
 
         /**
          * The block in which this instruction is located.
@@ -189,7 +188,7 @@ public class StandardOp {
          */
         final int index;
 
-        public NoOp(Block block, int index) {
+        public PlaceholderOp(Block block, int index) {
             this.block = block;
             this.index = index;
         }
@@ -200,9 +199,7 @@ public class StandardOp {
 
         @Override
         public void emitCode(CompilationResultBuilder crb) {
-            if (block != null) {
-                throw new GraalInternalError(this + " should have been replaced");
-            }
+            throw new GraalInternalError(this + " should have been replaced");
         }
     }
 }
