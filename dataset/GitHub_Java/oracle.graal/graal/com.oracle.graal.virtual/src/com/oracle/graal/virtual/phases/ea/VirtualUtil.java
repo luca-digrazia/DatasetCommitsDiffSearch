@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -42,7 +41,7 @@ public final class VirtualUtil {
         // helper code that determines the paths that keep obsolete nodes alive:
 
         NodeFlood flood = graph.createNodeFlood();
-        Map<Node, Node> path = Node.newIdentityMap();
+        IdentityHashMap<Node, Node> path = new IdentityHashMap<>();
         flood.add(graph.start());
         for (Node current : flood) {
             if (current instanceof AbstractEndNode) {
@@ -119,10 +118,10 @@ public final class VirtualUtil {
         if (filter != null) {
             if (filter.startsWith("~")) {
                 ResolvedJavaMethod method = graph.method();
-                return method == null || !method.format("%H.%n").contains(filter.substring(1));
+                return method == null || !MetaUtil.format("%H.%n", method).contains(filter.substring(1));
             } else {
                 ResolvedJavaMethod method = graph.method();
-                return method != null && method.format("%H.%n").contains(filter);
+                return method != null && MetaUtil.format("%H.%n", method).contains(filter);
             }
         }
         return true;
