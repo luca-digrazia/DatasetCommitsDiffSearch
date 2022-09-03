@@ -39,7 +39,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.baseline.*;
+import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
@@ -427,7 +427,7 @@ public abstract class GraalCompilerTest extends GraalTest {
         checkArgs(javaMethod, executeArgs);
 
         InstalledCode compiledMethod = null;
-        if (UseBaselineCompiler.getValue()) {
+        if (UseLIRBuilder.getValue()) {
             compiledMethod = getCodeBaseline(javaMethod, method);
         } else {
             compiledMethod = getCode(javaMethod, parse(method));
@@ -500,9 +500,41 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     private CompilationResult compileBaseline(ResolvedJavaMethod javaMethod) {
         try (Scope bds = Debug.scope("compileBaseline")) {
-            BaselineCompiler baselineCompiler = new BaselineCompiler(GraphBuilderConfiguration.getDefault(), providers.getMetaAccess());
-            LIR lir = baselineCompiler.generate(javaMethod, -1);
-            return null;
+            Assumptions assumptions = new Assumptions(OptAssumptions.getValue());
+            LIRGenerator lirGen = compileBytecodeToLIR(javaMethod, assumptions, getCustomLIRBuilderSuite(GraphBuilderConfiguration.getDefault()), getProviders(), getCodeCache().getTarget(),
+                            getBackend(), getCallingConvention(getCodeCache(), Type.JavaCallee, javaMethod, false), getSpeculationLog(), getSuites());
+
+            CompilationResult compilationResult = new CompilationResult();
+            try (Scope s = Debug.scope("CodeGen", lirGen)) {
+                // there will be no more GraphIds so we can pass an empty array...
+                // ...they are not use (yet?) anyway
+                emitCode(getBackend(), new long[0], assumptions, lirGen, compilationResult, javaMethod, CompilationResultBuilderFactory.Default);
+            } catch (Throwable e) {
+                throw Debug.handle(e);
+            }
+            return compilationResult;
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
+    }
+
+    private static LIRGenerator compileBytecodeToLIR(ResolvedJavaMethod javaMethod, Assumptions assumptions, PhaseSuite<HighTierContext> graphBuilderSuite, Providers providers,
+                    TargetDescription target, Backend backend, CallingConvention cc, SpeculationLog speculationLog, Suites suites) {
+        StructuredGraph graph = new StructuredGraph(javaMethod);
+        graphBuilderSuite.apply(graph, new HighTierContext(providers, null, null, graphBuilderSuite, OptimisticOptimizations.ALL));
+
+        Debug.dump(graph, "after bytecode parsing");
+
+        assert !graph.isFrozen();
+        LIR lir = null;
+        try (Scope s = Debug.scope("FrontEnd")) {
+            // graphBuilderSuite was getDefaultGraphBuilderSuite()
+            lir = emitHIR(providers, target, graph, assumptions, null, graphBuilderSuite, OptimisticOptimizations.ALL, getProfilingInfo(graph), speculationLog, suites);
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
+        try (Scope s = Debug.scope("BackEnd", lir)) {
+            return emitLIR(backend, target, lir, graph, cc);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
@@ -662,8 +694,8 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     protected CompilationResult compile(ResolvedJavaMethod method, final StructuredGraph graph) {
         CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graph.method(), false);
-        return compileGraph(graph, null, cc, method, getProviders(), getBackend(), getCodeCache().getTarget(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL,
-                        getProfilingInfo(graph), getSpeculationLog(), getSuites(), true, new CompilationResult(), CompilationResultBuilderFactory.Default);
+        return compileGraph(graph, cc, method, getProviders(), getBackend(), getCodeCache().getTarget(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graph),
+                        getSpeculationLog(), getSuites(), true, new CompilationResult(), CompilationResultBuilderFactory.Default);
     }
 
     protected SpeculationLog getSpeculationLog() {
@@ -722,6 +754,14 @@ public abstract class GraalCompilerTest extends GraalTest {
         ListIterator<BasePhase<? super HighTierContext>> iterator = suite.findPhase(GraphBuilderPhase.class);
         iterator.remove();
         iterator.add(new GraphBuilderPhase(gbConf));
+        return suite;
+    }
+
+    protected PhaseSuite<HighTierContext> getCustomLIRBuilderSuite(GraphBuilderConfiguration gbConf) {
+        PhaseSuite<HighTierContext> suite = getDefaultGraphBuilderSuite().copy();
+        ListIterator<BasePhase<? super HighTierContext>> iterator = suite.findPhase(GraphBuilderPhase.class);
+        iterator.remove();
+        iterator.add(new LIRBuilderPhase(gbConf));
         return suite;
     }
 
