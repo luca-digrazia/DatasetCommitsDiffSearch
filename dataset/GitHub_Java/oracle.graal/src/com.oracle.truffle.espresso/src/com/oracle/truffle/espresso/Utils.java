@@ -22,8 +22,11 @@
  */
 package com.oracle.truffle.espresso;
 
+import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.bytecode.InterpreterToVM;
 import com.oracle.truffle.espresso.runtime.StaticObject;
+
+import java.util.Arrays;
 
 public class Utils {
 
