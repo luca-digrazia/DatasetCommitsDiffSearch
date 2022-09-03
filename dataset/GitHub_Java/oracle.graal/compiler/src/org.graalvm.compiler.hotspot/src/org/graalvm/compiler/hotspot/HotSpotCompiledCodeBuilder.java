@@ -223,22 +223,13 @@ public class HotSpotCompiledCodeBuilder {
              */
 
             List<SourceMapping> sourceMappings = new ArrayList<>();
-            ListIterator<SourceMapping> sourceMappingListIterator = target.getSourceMappings().listIterator();
-            if (sourceMappingListIterator.hasNext()) {
-                SourceMapping currentSource = sourceMappingListIterator.next();
-                NodeSourcePosition sourcePosition = currentSource.getSourcePosition();
-                if (!sourcePosition.isPlaceholder() && !sourcePosition.isSubstitution()) {
-                    sourceMappings.add(currentSource);
+            for (SourceMapping source : target.getSourceMappings()) {
+                NodeSourcePosition sourcePosition = source.getSourcePosition();
+                if (sourcePosition.isPlaceholder() || sourcePosition.isSubstitution()) {
+                    // HotSpot doesn't understand any of the special positions so just drop them.
+                    continue;
                 }
-                while (sourceMappingListIterator.hasNext()) {
-                    SourceMapping nextSource = sourceMappingListIterator.next();
-                    assert currentSource.getStartOffset() <= nextSource.getStartOffset() : "Must be presorted";
-                    currentSource = nextSource;
-                    sourcePosition = currentSource.getSourcePosition();
-                    if (!sourcePosition.isPlaceholder() && !sourcePosition.isSubstitution()) {
-                        sourceMappings.add(currentSource);
-                    }
-                }
+                sourceMappings.add(source);
             }
 
             /*
@@ -248,10 +239,11 @@ public class HotSpotCompiledCodeBuilder {
              * can potentially map to the same pc. To do that the following code makes sure that the
              * source mapping doesn't contain a pc of any important Site.
              */
+            sourceMappings.sort(Comparator.comparingInt(SourceMapping::getStartOffset));
             sites.sort(new SiteComparator());
 
             ListIterator<Site> siteListIterator = sites.listIterator();
-            sourceMappingListIterator = sourceMappings.listIterator();
+            ListIterator<SourceMapping> sourceMappingListIterator = sourceMappings.listIterator();
 
             List<Site> sourcePositionSites = new ArrayList<>();
             Site site = null;
