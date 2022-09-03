@@ -58,9 +58,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public long narrowOopBase;
     public int narrowOopShift;
     public int logMinObjAlignment;
-    public long narrowKlassBase;
-    public int narrowKlassShift;
-    public int logKlassAlignment;
 
     // CPU capabilities
     public int useSSE;
