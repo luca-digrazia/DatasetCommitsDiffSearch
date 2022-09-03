@@ -306,4 +306,8 @@ public class LLVMTypeHelper {
         }
     }
 
+    public static boolean isCompoundType(LLVMBaseType type) {
+        return type == LLVMBaseType.ARRAY || type == LLVMBaseType.STRUCT || isVectorType(type);
+    }
+
 }
