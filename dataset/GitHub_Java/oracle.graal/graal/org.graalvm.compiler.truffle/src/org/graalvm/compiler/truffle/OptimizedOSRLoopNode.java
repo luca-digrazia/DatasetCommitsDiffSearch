@@ -22,10 +22,6 @@
  */
 package org.graalvm.compiler.truffle;
 
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInvalidationReprofileCount;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleOSR;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleOSRCompilationThreshold;
-
 import java.util.Objects;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -174,33 +170,26 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
                 OptimizedCallTarget target = compiledOSRLoop;
                 if (target == null) {
                     return false;
-                }
-                if (target.isValid()) {
-                    return directCallTarget(target, frame);
-                }
-                if (!target.isCompiling()) {
+                } else if (target.isValid()) {
+                    Object result = target.callDirect(frame);
+                    if (result == Boolean.TRUE) {
+                        // loop is done. No further repetitions necessary.
+                        return true;
+                    } else {
+                        invalidateOSRTarget(this, "OSR compilation got invalidated");
+                        return false;
+                    }
+                } else if (!target.isCompiling()) {
                     invalidateOSRTarget(this, "OSR compilation failed or cancelled");
                     return false;
+                } else {
+                    iterations++;
                 }
-
-                iterations++;
-
             } while (repeatableNode.executeRepeating(frame));
             return true;
         } finally {
             baseLoopCount += iterations;
             reportParentLoopCount(iterations);
-        }
-    }
-
-    private boolean directCallTarget(OptimizedCallTarget target, VirtualFrame frame) {
-        if (target.callDirect(frame) == Boolean.TRUE) {
-            return true;
-        } else {
-            if (!target.isValid()) {
-                invalidateOSRTarget(this, "OSR compilation got invalidated");
-            }
-            return false;
         }
     }
 
@@ -277,7 +266,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
     public static LoopNode create(RepeatingNode repeat) {
         // using static methods with LoopNode return type ensures
         // that only one loop node implementation gets loaded.
-        if (TruffleCompilerOptions.getValue(TruffleOSR)) {
+        if (TruffleCompilerOptions.TruffleOSR.getValue()) {
             return createDefault(repeat);
         } else {
             return OptimizedLoopNode.create(repeat);
@@ -337,12 +326,12 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
 
         @Override
         protected int getInvalidationBackoff() {
-            return TruffleCompilerOptions.getValue(TruffleInvalidationReprofileCount);
+            return TruffleCompilerOptions.TruffleInvalidationReprofileCount.getValue();
         }
 
         @Override
         protected int getThreshold() {
-            return TruffleCompilerOptions.getValue(TruffleOSRCompilationThreshold);
+            return TruffleCompilerOptions.TruffleOSRCompilationThreshold.getValue();
         }
 
     }
