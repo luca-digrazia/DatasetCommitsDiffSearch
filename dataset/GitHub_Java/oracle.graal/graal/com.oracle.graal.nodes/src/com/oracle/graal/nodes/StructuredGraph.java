@@ -40,7 +40,7 @@ public class StructuredGraph extends Graph {
 
     public static final long INVALID_GRAPH_ID = -1;
     private static final AtomicLong uniqueGraphIds = new AtomicLong();
-    private final StartNode start;
+    private final BeginNode start;
     private final RiResolvedMethod method;
     private final long graphId;
 
@@ -94,7 +94,7 @@ public class StructuredGraph extends Graph {
         return buf.toString();
     }
 
-    public StartNode start() {
+    public BeginNode start() {
         return start;
     }
 
@@ -201,7 +201,7 @@ public class StructuredGraph extends Graph {
         assert node.usages().isEmpty() : node + " " + node.usages();
         FixedNode next = node.next();
         node.setNext(null);
-        node.replaceAtPredecessor(next);
+        node.replaceAtPredecessors(next);
         node.safeDelete();
     }
 
@@ -228,7 +228,7 @@ public class StructuredGraph extends Graph {
         assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
         FixedNode next = node.next();
         node.setNext(null);
-        node.replaceAtPredecessor(next);
+        node.replaceAtPredecessors(next);
         node.replaceAtUsages(replacement);
         node.safeDelete();
     }
@@ -241,7 +241,7 @@ public class StructuredGraph extends Graph {
         for (int i = 0; i < node.blockSuccessorCount(); i++) {
             node.setBlockSuccessor(i, null);
         }
-        node.replaceAtPredecessor(begin);
+        node.replaceAtPredecessors(begin);
         node.safeDelete();
     }
 
@@ -258,7 +258,7 @@ public class StructuredGraph extends Graph {
             }
         }
         if (begin.isAlive()) {
-            node.replaceAtPredecessor(begin);
+            node.replaceAtPredecessors(begin);
             node.safeDelete();
         } else {
             assert node.isDeleted();
@@ -293,7 +293,7 @@ public class StructuredGraph extends Graph {
         for (int i = 0; i < node.blockSuccessorCount(); i++) {
             node.setBlockSuccessor(i, null);
         }
-        node.replaceAtPredecessor(begin);
+        node.replaceAtPredecessors(begin);
         node.replaceAtUsages(replacement);
         node.safeDelete();
     }
@@ -353,7 +353,7 @@ public class StructuredGraph extends Graph {
             stateAfter.safeDelete();
         }
         if (sux == null) {
-            singleEnd.replaceAtPredecessor(null);
+            singleEnd.replaceAtPredecessors(null);
             singleEnd.safeDelete();
         } else {
             singleEnd.replaceAndDelete(sux);
