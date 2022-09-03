@@ -600,7 +600,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 append(new BinaryRegReg(IDIV, result, a, loadNonConst(b)));
                 break;
             case Long:
-                append(new BinaryRegReg(LDIV, result, a, loadNonConst(b), state));
+                append(new BinaryRegReg(LDIV, result, a, loadNonConst(b)));
                 break;
             case Float:
                 append(new Op2Stack(FDIV, result, a, loadNonConst(b)));
