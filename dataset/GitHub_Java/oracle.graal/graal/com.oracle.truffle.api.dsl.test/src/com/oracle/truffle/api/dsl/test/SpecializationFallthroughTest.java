@@ -1,3 +1,25 @@
+/*
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
 package com.oracle.truffle.api.dsl.test;
 
 import static com.oracle.truffle.api.dsl.test.TestHelper.*;
@@ -21,7 +43,7 @@ public class SpecializationFallthroughTest {
     public void testFallthrough0() {
         assertRuns(FallthroughTest0Factory.getInstance(), //
                         array(0, 0, 1, 2), //
-                        array(0, 0, 1, 2),//
+                        array(0, 0, 1, 2), //
                         new ExecutionListener() {
                             public void afterExecution(TestRootNode<? extends ValueNode> node, int index, Object value, Object expectedResult, Object actualResult, boolean last) {
                                 if (!last) {
@@ -52,7 +74,7 @@ public class SpecializationFallthroughTest {
             return a;
         }
 
-        @Generic
+        @Fallback
         Object doFallback(Object a) {
             return a;
         }
@@ -65,7 +87,7 @@ public class SpecializationFallthroughTest {
     public void testFallthrough1() {
         assertRuns(FallthroughTest1Factory.getInstance(), //
                         array(0, 0, 0, 1, 2), //
-                        array(0, 0, 0, 1, 2),//
+                        array(0, 0, 0, 1, 2), //
                         new ExecutionListener() {
                             public void afterExecution(TestRootNode<? extends ValueNode> node, int index, Object value, Object expectedResult, Object actualResult, boolean last) {
                                 if (!last) {
@@ -111,7 +133,7 @@ public class SpecializationFallthroughTest {
     public void testFallthrough2() {
         assertRuns(FallthroughTest2Factory.getInstance(), //
                         array(0, 0, 1, 1, 2, 2), //
-                        array(0, 0, 1, 1, 2, 2),//
+                        array(0, 0, 1, 1, 2, 2), //
                         new ExecutionListener() {
                             public void afterExecution(TestRootNode<? extends ValueNode> node, int index, Object value, Object expectedResult, Object actualResult, boolean last) {
                                 if (!last) {
@@ -167,7 +189,7 @@ public class SpecializationFallthroughTest {
     public void testFallthrough3() {
         assertRuns(FallthroughTest3Factory.getInstance(), //
                         array(0, 0, 1, 1, 2, 2), //
-                        array(0, 0, 1, 1, 2, 2),//
+                        array(0, 0, 1, 1, 2, 2), //
                         new ExecutionListener() {
                             public void afterExecution(TestRootNode<? extends ValueNode> node, int index, Object value, Object expectedResult, Object actualResult, boolean last) {
                                 if (!last) {
@@ -215,7 +237,7 @@ public class SpecializationFallthroughTest {
     public void testFallthrough4() {
         assertRuns(FallthroughTest4Factory.getInstance(), //
                         array(0, 0, 1, 1, 2, 2), //
-                        array(0, 0, 1, 1, 2, 2),//
+                        array(0, 0, 1, 1, 2, 2), //
                         new ExecutionListener() {
                             public void afterExecution(TestRootNode<? extends ValueNode> node, int index, Object value, Object expectedResult, Object actualResult, boolean last) {
                                 if (!last) {
@@ -268,7 +290,7 @@ public class SpecializationFallthroughTest {
     public void testFallthrough5() {
         assertRuns(FallthroughTest5Factory.getInstance(), //
                         array(0, 0, 1, 1, 2, 2), //
-                        array(0, 0, 1, 1, 2, 2),//
+                        array(0, 0, 1, 1, 2, 2), //
                         new ExecutionListener() {
                             public void afterExecution(TestRootNode<? extends ValueNode> node, int index, Object value, Object expectedResult, Object actualResult, boolean last) {
                                 if (!last) {
@@ -312,36 +334,37 @@ public class SpecializationFallthroughTest {
 
     }
 
+    /* Throwing RuntimeExceptions without rewriteOn is allowed. */
     @NodeChildren({@NodeChild("a")})
-    static class FallthroughTest6 extends ValueNode {
-
-        static int fallthrough1;
-        static int fallthrough2;
-        static int fallthrough3;
-        static int fallthrough4;
-
-        @Specialization(order = 1, rewriteOn = ArithmeticException.class)
-        int do4(int a) throws ArithmeticException {
-            return a;
-        }
-
-        @Specialization(order = 2, rewriteOn = ArithmeticException.class)
-        int do2(int a) throws ArithmeticException {
-            return a;
-        }
-
-        @Specialization(order = 3, rewriteOn = ArithmeticException.class)
-        int do3(int a) throws ArithmeticException {
-            return a;
-        }
-
-        @Specialization(order = 4, rewriteOn = ArithmeticException.class)
-        int do1(int a) throws ArithmeticException {
-            return a;
-        }
+    static class FallthroughExceptionType0 extends ValueNode {
 
         @Specialization
-        double do5(double a) {
+        int do4(int a) throws RuntimeException {
+            return a;
+        }
+
+    }
+
+    /* Non runtime exceptions must be verified. */
+    @NodeChildren({@NodeChild("a")})
+    static class FallthroughExceptionType1 extends ValueNode {
+
+        @ExpectError("A rewriteOn checked exception was specified but not thrown in the method's throws clause. The @Specialization method must specify a throws clause with the exception type 'java.lang.Throwable'.")
+        @Specialization(rewriteOn = Throwable.class)
+        int do4(int a) {
+            return a;
+        }
+
+    }
+
+    /* Checked exception must be verified. */
+    @NodeChildren({@NodeChild("a")})
+    static class FallthroughExceptionType2 extends ValueNode {
+
+        @ExpectError("A checked exception 'java.lang.Throwable' is thrown but is not specified using the rewriteOn property. "
+                        + "Checked exceptions that are not used for rewriting are not handled by the DSL. Use RuntimeExceptions for this purpose instead.")
+        @Specialization
+        int do4(int a) throws Throwable {
             return a;
         }
 
