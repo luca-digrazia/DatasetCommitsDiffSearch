@@ -33,45 +33,39 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.RootNode;
 
-public final class ComplexNumber implements TruffleObject {
+public class ComplexNumber implements TruffleObject {
 
     public static final String REAL_IDENTIFIER = "real";
     public static final String IMAGINARY_IDENTIFIER = "imaginary";
 
-    private double real;
-    private double imag;
+    private final double[] data = new double[2];
 
     public ComplexNumber(double real, double imaginary) {
-        this.real = real;
-        this.imag = imaginary;
+        data[0] = real;
+        data[1] = imaginary;
     }
 
     public ForeignAccess getForeignAccess() {
         return ForeignAccess.create(new ComplexForeignAccessFactory());
     }
 
-    public void set(String identifier, double value) {
+    private static int identifierToIndex(String identifier) {
         switch (identifier) {
             case REAL_IDENTIFIER:
-                this.real = value;
-                break;
+                return 0;
             case IMAGINARY_IDENTIFIER:
-                this.imag = value;
-                break;
+                return 1;
             default:
                 throw new IllegalArgumentException();
         }
     }
 
+    public void set(String identifier, double value) {
+        data[identifierToIndex(identifier)] = value;
+    }
+
     public double get(String identifier) {
-        switch (identifier) {
-            case REAL_IDENTIFIER:
-                return this.real;
-            case IMAGINARY_IDENTIFIER:
-                return this.imag;
-            default:
-                throw new IllegalArgumentException();
-        }
+        return data[identifierToIndex(identifier)];
     }
 
     private static class ComplexForeignAccessFactory implements Factory {
