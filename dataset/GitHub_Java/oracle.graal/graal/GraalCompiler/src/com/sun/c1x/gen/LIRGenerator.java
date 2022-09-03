@@ -1239,20 +1239,12 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
     }
 
-    void moveToPhi(PhiResolver resolver, Value curVal, Value suxVal, List<Phi> phis, int predIndex) {
+    void moveToPhi(PhiResolver resolver, Value curVal, Value suxVal) {
         // move current value to referenced phi function
         if (suxVal instanceof Phi) {
             Phi phi = (Phi) suxVal;
-
             // curVal can be null without phi being null in conjunction with inlining
             if (!phi.isDeadPhi() && curVal != null && curVal != phi) {
-
-                assert phis.contains(phi);
-                if (phi.valueAt(predIndex) != curVal) {
-                    phi.print(TTY.out());
-                }
-                assert phi.valueAt(predIndex) == curVal : "curVal=" + curVal + "valueAt(" + predIndex + ")=" + phi.valueAt(predIndex);
-
                 assert !phi.isIllegal() : "illegal phi cannot be marked as live";
                 if (curVal instanceof Phi) {
                     operandForPhi((Phi) curVal);
@@ -1301,26 +1293,31 @@ public abstract class LIRGenerator extends ValueVisitor {
 
 
                 List<Phi> phis = getPhis(sux);
-
-                int predIndex = 0;
-                for (; predIndex < sux.numberOfPreds(); ++predIndex) {
-                    if (sux.predAt(predIndex) == bb) {
-                        break;
-                    }
-                }
-                assert predIndex < sux.numberOfPreds();
-
                 if (phis != null) {
+                    int predIndex = 0;
+                    for (; predIndex < sux.numberOfPreds(); ++predIndex) {
+                        if (sux.predAt(predIndex) == bb) {
+                            break;
+                        }
+                    }
+                    assert predIndex < sux.numberOfPreds();
+
+//                    TTY.println("predIndex=" + predIndex + ", bb" + bb.blockID() + ", sux=" + sux.blockID());
+//                    for (int i = 0; i < sux.numberOfPreds(); ++i) {
+//                        TTY.println("pred[" + i + "]=" + sux.predAt(i).blockID());
+//                    }
+
                     PhiResolver resolver = new PhiResolver(this);
                     for (Phi phi : phis) {
                         if (!phi.isDeadPhi() && phi.valueCount() > predIndex) {
                             Value curVal = phi.valueAt(predIndex);
-                            if (curVal != null && curVal != phi) {
+                            if (curVal != null) {
                                 if (curVal instanceof Phi) {
                                     operandForPhi((Phi) curVal);
                                 }
                                 CiValue operand = curVal.operand();
                                 if (operand.isIllegal()) {
+                             //       phi.print(TTY.out());
                                     assert curVal instanceof Constant || curVal instanceof Local : "these can be produced lazily" + curVal + "/" + phi;
                                     operand = operandForInstruction(curVal);
                                 }
@@ -1331,17 +1328,14 @@ public abstract class LIRGenerator extends ValueVisitor {
                     resolver.dispose();
                 }
 
-                /*TTY.println("number of preds: " + sux.numberOfPreds());
-
-                PhiResolver resolver = new PhiResolver(this);
-
+/*                PhiResolver resolver = new PhiResolver(this);
 
                 for (int index = 0; index < suxState.stackSize(); index++) {
-                    moveToPhi(resolver, curState.stackAt(index), suxState.stackAt(index), phis, predIndex);
+                    moveToPhi(resolver, curState.stackAt(index), suxState.stackAt(index));
                 }
 
                 for (int index = 0; index < suxState.localsSize(); index++) {
-                    moveToPhi(resolver, curState.localAt(index), suxState.localAt(index), phis, predIndex);
+                    moveToPhi(resolver, curState.localAt(index), suxState.localAt(index));
                 }
                 resolver.dispose();*/
             }

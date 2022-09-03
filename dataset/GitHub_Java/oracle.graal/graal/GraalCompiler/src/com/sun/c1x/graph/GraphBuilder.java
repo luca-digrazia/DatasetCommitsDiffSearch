@@ -685,8 +685,8 @@ public final class GraphBuilder {
         If ifNode = new If(x, cond, y, null, graph);
         append(ifNode);
         Instruction tsucc = createTargetAt(stream().readBranchDest(), frameState);
-        ifNode.setBlockSuccessor(0, tsucc);
         Instruction fsucc = createTargetAt(stream().nextBCI(), frameState);
+        ifNode.setBlockSuccessor(0, tsucc);
         ifNode.setBlockSuccessor(1, fsucc);
     }
 
@@ -1056,21 +1056,19 @@ public final class GraphBuilder {
         BytecodeTableSwitch ts = new BytecodeTableSwitch(stream(), bci);
         int max = ts.numberOfCases();
         List<Instruction> list = new ArrayList<Instruction>(max + 1);
-        List<Integer> offsetList = new ArrayList<Integer>(max + 1);
+        boolean isBackwards = false;
         for (int i = 0; i < max; i++) {
             // add all successors to the successor list
             int offset = ts.offsetAt(i);
-            list.add(null);
-            offsetList.add(offset);
+            list.add(createTargetAt(bci + offset, frameState));
+            isBackwards |= offset < 0; // track if any of the successors are backwards
         }
         int offset = ts.defaultOffset();
-        list.add(null);
-        offsetList.add(offset);
-        TableSwitch tableSwitch = new TableSwitch(value, list, ts.lowKey(), null, graph);
-        for (int i = 0; i < offsetList.size(); ++i) {
-            tableSwitch.setBlockSuccessor(i, createTargetAt(bci + offsetList.get(i), frameState));
-        }
-        append(tableSwitch);
+        isBackwards |= offset < 0; // if the default successor is backwards
+        list.add(createTargetAt(bci + offset, frameState));
+        boolean isSafepoint = isBackwards && !noSafepoints();
+        FrameState stateAfter = isSafepoint ? frameState.create(bci()) : null;
+        append(new TableSwitch(value, list, ts.lowKey(), stateAfter, graph));
     }
 
     private void genLookupswitch() {
@@ -1079,23 +1077,21 @@ public final class GraphBuilder {
         BytecodeLookupSwitch ls = new BytecodeLookupSwitch(stream(), bci);
         int max = ls.numberOfCases();
         List<Instruction> list = new ArrayList<Instruction>(max + 1);
-        List<Integer> offsetList = new ArrayList<Integer>(max + 1);
         int[] keys = new int[max];
+        boolean isBackwards = false;
         for (int i = 0; i < max; i++) {
             // add all successors to the successor list
             int offset = ls.offsetAt(i);
-            list.add(null);
-            offsetList.add(offset);
+            list.add(createTargetAt(bci + offset, frameState));
             keys[i] = ls.keyAt(i);
+            isBackwards |= offset < 0; // track if any of the successors are backwards
         }
         int offset = ls.defaultOffset();
-        list.add(null);
-        offsetList.add(offset);
-        LookupSwitch lookupSwitch = new LookupSwitch(value, list, keys, null, graph);
-        for (int i = 0; i < offsetList.size(); ++i) {
-            lookupSwitch.setBlockSuccessor(i, createTargetAt(bci + offsetList.get(i), frameState));
-        }
-        append(lookupSwitch);
+        isBackwards |= offset < 0; // if the default successor is backwards
+        list.add(createTargetAt(bci + offset, frameState));
+        boolean isSafepoint = isBackwards && !noSafepoints();
+        FrameState stateAfter = isSafepoint ? frameState.create(bci()) : null;
+        append(new LookupSwitch(value, list, keys, stateAfter, graph));
     }
 
     private Value appendConstant(CiConstant constant) {
