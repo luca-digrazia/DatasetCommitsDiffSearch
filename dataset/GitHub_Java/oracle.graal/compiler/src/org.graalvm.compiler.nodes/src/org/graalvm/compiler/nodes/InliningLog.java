@@ -128,13 +128,13 @@ public class InliningLog {
 
     private final Callsite root;
     private final EconomicMap<Invokable, Callsite> leaves;
-    private final boolean isTracing;
+    private final OptionValues options;
 
     public InliningLog(ResolvedJavaMethod rootMethod, OptionValues options) {
         this.root = new Callsite(null, null);
         this.root.target = rootMethod;
         this.leaves = EconomicMap.create(Equivalence.IDENTITY_WITH_SYSTEM_HASHCODE);
-        this.isTracing = GraalOptions.TraceInlining.getValue(options);
+        this.options = options;
     }
 
     /**
@@ -144,15 +144,12 @@ public class InliningLog {
      * logged after replacing an {@link Invoke} with a graph. In this case, the node replacement map
      * and the {@link InliningLog} of the inlined graph must be provided.
      */
-    public void addDecision(Invokable invoke, boolean positive, String phase, EconomicMap<Node, Node> replacements, InliningLog calleeLog, String reason, Object... args) {
+    public void addDecision(Invokable invoke, boolean positive, String reason, String phase, EconomicMap<Node, Node> replacements, InliningLog calleeLog) {
         assert leaves.containsKey(invoke);
         assert (!positive && replacements == null && calleeLog == null) || (positive && replacements != null && calleeLog != null);
-        if (!isTracing) {
-            return;
-        }
         Callsite callsite = leaves.get(invoke);
         callsite.target = callsite.invoke.getTargetMethod();
-        Decision decision = new Decision(positive, String.format(reason, args), phase, invoke.getTargetMethod());
+        Decision decision = new Decision(positive, reason, phase, invoke.getTargetMethod());
         callsite.decisions.add(decision);
         if (positive) {
             leaves.removeKey(invoke);
@@ -280,7 +277,7 @@ public class InliningLog {
 
         @Override
         public void close() {
-            if (isTracing) {
+            if (GraalOptions.TraceInlining.getValue(options)) {
                 assert activated != null;
                 activated = null;
             }
@@ -310,7 +307,7 @@ public class InliningLog {
      * @return a bound {@link UpdateScope} object, or a {@code null} if tracing is disabled
      */
     public UpdateScope openUpdateScope(BiConsumer<Invokable, Invokable> updater) {
-        if (isTracing) {
+        if (GraalOptions.TraceInlining.getValue(options)) {
             UpdateScope scope = new UpdateScope(updater);
             scope.activate();
             return scope;
@@ -329,7 +326,7 @@ public class InliningLog {
      * @see #openUpdateScope
      */
     public UpdateScope openDefaultUpdateScope() {
-        if (isTracing) {
+        if (GraalOptions.TraceInlining.getValue(options)) {
             noUpdates.activate();
             return noUpdates;
         } else {
