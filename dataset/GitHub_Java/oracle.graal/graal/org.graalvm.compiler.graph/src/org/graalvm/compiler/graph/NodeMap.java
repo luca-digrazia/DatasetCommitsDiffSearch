@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -67,7 +67,7 @@ public class NodeMap<T> extends NodeIdAccessor implements EconomicMap<Node, T> {
 
     @Override
     public boolean isEmpty() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("isEmpty() is not supported for performance reasons");
     }
 
     @Override
@@ -98,7 +98,7 @@ public class NodeMap<T> extends NodeIdAccessor implements EconomicMap<Node, T> {
 
     public void setAndGrow(Node node, T value) {
         checkAndGrow(node);
-        values[getNodeId(node)] = value;
+        set(node, value);
     }
 
     /**
@@ -111,11 +111,15 @@ public class NodeMap<T> extends NodeIdAccessor implements EconomicMap<Node, T> {
 
     @Override
     public int size() {
+        throw new UnsupportedOperationException("size() is not supported for performance reasons");
+    }
+
+    public int capacity() {
         return values.length;
     }
 
     public boolean isNew(Node node) {
-        return getNodeId(node) >= size();
+        return getNodeId(node) >= capacity();
     }
 
     private boolean check(Node node) {
@@ -197,6 +201,7 @@ public class NodeMap<T> extends NodeIdAccessor implements EconomicMap<Node, T> {
 
             @Override
             public void remove() {
+                assert NodeMap.this.values[current] != null;
                 NodeMap.this.values[current] = null;
             }
         };
