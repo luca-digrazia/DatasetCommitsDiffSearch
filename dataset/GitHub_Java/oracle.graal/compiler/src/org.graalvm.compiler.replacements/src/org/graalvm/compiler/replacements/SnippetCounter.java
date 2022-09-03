@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -33,6 +35,9 @@ import org.graalvm.compiler.core.common.GraalOptions;
  * snippet specific metrics.
  */
 public final class SnippetCounter implements Comparable<SnippetCounter> {
+
+    public static final SnippetCounter DISABLED_COUNTER = new SnippetCounter(null, "Disabled", "Disabled");
+
     /**
      * A group of related counters.
      */
@@ -93,12 +98,7 @@ public final class SnippetCounter implements Comparable<SnippetCounter> {
      */
     @Override
     public int compareTo(SnippetCounter o) {
-        if (value > o.value) {
-            return -1;
-        } else if (o.value < value) {
-            return 1;
-        }
-        return 0;
+        return Long.signum(o.value - value);
     }
 
     private final Group group;

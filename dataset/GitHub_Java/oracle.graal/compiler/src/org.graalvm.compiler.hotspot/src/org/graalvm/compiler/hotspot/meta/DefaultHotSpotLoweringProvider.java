@@ -24,7 +24,6 @@
  */
 package org.graalvm.compiler.hotspot.meta;
 
-import static jdk.vm.ci.services.Services.IS_IN_NATIVE_IMAGE;
 import static org.graalvm.compiler.core.common.GraalOptions.AlwaysInlineVTableStubs;
 import static org.graalvm.compiler.core.common.GraalOptions.InlineVTableStubs;
 import static org.graalvm.compiler.core.common.GraalOptions.OmitHotExceptionStacktrace;
@@ -163,7 +162,7 @@ import org.graalvm.compiler.replacements.arraycopy.ArrayCopyNode;
 import org.graalvm.compiler.replacements.arraycopy.ArrayCopySnippets;
 import org.graalvm.compiler.replacements.arraycopy.ArrayCopyWithSlowPathNode;
 import org.graalvm.compiler.replacements.nodes.AssertionNode;
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
+import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.code.TargetDescription;
@@ -227,7 +226,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         stringToBytesSnippets = new StringToBytesSnippets.Templates(options, factories, providers, target);
         hashCodeSnippets = new HashCodeSnippets.Templates(options, factories, providers, target);
         resolveConstantSnippets = new ResolveConstantSnippets.Templates(options, factories, providers, target);
-        if (!JavaVersionUtil.Java8OrEarlier) {
+        if (!GraalServices.Java8OrEarlier) {
             profileSnippets = new ProfileSnippets.Templates(options, factories, providers, target);
         }
         objectCloneSnippets = new ObjectCloneSnippets.Templates(options, factories, providers, target);
@@ -687,9 +686,6 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     }
 
     private void throwCachedException(BytecodeExceptionNode node) {
-        if (IS_IN_NATIVE_IMAGE) {
-            throw new InternalError("Can't throw exception from SVM object");
-        }
         Throwable exception = Exceptions.cachedExceptions.get(node.getExceptionKind());
         assert exception != null;
 
