@@ -23,30 +23,29 @@
 package com.oracle.graal.hotspot.bridge;
 
 import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.meta.*;
 
 /**
- * Direct access to the {@code InstanceKlass::_graal_node_class} field.
+ * A fast-path for {@link NodeClass} retrieval using {@link HotSpotResolvedObjectType}.
  */
 class FastNodeClassRegistry extends NodeClass.Registry {
 
-    private final CompilerToVM vm;
-
-    public FastNodeClassRegistry(CompilerToVM vm) {
-        this.vm = vm;
+    @SuppressWarnings("unused")
+    static void initialize() {
+        new FastNodeClassRegistry();
     }
 
-    @SuppressWarnings("unused")
-    static void initialize(CompilerToVM vm) {
-        new FastNodeClassRegistry(vm);
+    private static HotSpotResolvedObjectType type(Class<? extends Node> key) {
+        return (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromClass(key);
     }
 
     @Override
     public NodeClass get(Class<? extends Node> key) {
-        return vm.getNodeClass(key);
+        return type(key).getNodeClass();
     }
 
     @Override
     protected void registered(Class<? extends Node> key, NodeClass value) {
-        vm.setNodeClass(key, value);
+        type(key).setNodeClass(value);
     }
 }

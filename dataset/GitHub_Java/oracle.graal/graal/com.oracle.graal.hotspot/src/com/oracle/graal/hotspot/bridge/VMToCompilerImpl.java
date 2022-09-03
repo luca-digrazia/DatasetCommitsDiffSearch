@@ -604,39 +604,28 @@ public class VMToCompilerImpl implements VMToCompiler {
 
     @Override
     public ResolvedJavaType createPrimitiveJavaType(int basicType) {
-        Class<?> javaClass;
         switch (basicType) {
             case 4:
-                javaClass = boolean.class;
-                break;
+                return runtime.typeBoolean;
             case 5:
-                javaClass = char.class;
-                break;
+                return runtime.typeChar;
             case 6:
-                javaClass = float.class;
-                break;
+                return runtime.typeFloat;
             case 7:
-                javaClass = double.class;
-                break;
+                return runtime.typeDouble;
             case 8:
-                javaClass = byte.class;
-                break;
+                return runtime.typeByte;
             case 9:
-                javaClass = short.class;
-                break;
+                return runtime.typeShort;
             case 10:
-                javaClass = int.class;
-                break;
+                return runtime.typeInt;
             case 11:
-                javaClass = long.class;
-                break;
+                return runtime.typeLong;
             case 14:
-                javaClass = void.class;
-                break;
+                return runtime.typeVoid;
             default:
                 throw new IllegalArgumentException("Unknown basic type: " + basicType);
         }
-        return HotSpotResolvedPrimitiveType.fromClass(javaClass);
     }
 
     @Override
