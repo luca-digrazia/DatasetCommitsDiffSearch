@@ -36,6 +36,7 @@ import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.inlining.info.InlineInfo;
@@ -196,15 +197,14 @@ public class InliningPhase extends AbstractInliningPhase {
         Assumptions callerAssumptions = parentInvocation.assumptions();
 
         if (inliningPolicy.isWorthInlining(probabilities, context.getReplacements(), callee, inliningDepth, calleeInfo.probability(), calleeInfo.relevance(), true)) {
-            doInline(callerCallsiteHolder, calleeInfo, callerAssumptions, context, canonicalizer);
-            inliningCount++;
+            doInline(callerCallsiteHolder, calleeInfo, callerAssumptions, context);
         } else if (context.getOptimisticOptimizations().devirtualizeInvokes()) {
             callee.tryToDevirtualizeInvoke(context.getMetaAccess(), callerAssumptions);
         }
         metricInliningConsidered.increment();
     }
 
-    private static void doInline(CallsiteHolder callerCallsiteHolder, MethodInvocation calleeInfo, Assumptions callerAssumptions, HighTierContext context, CanonicalizerPhase canonicalizer) {
+    private void doInline(CallsiteHolder callerCallsiteHolder, MethodInvocation calleeInfo, Assumptions callerAssumptions, HighTierContext context) {
         StructuredGraph callerGraph = callerCallsiteHolder.graph();
         Mark markBeforeInlining = callerGraph.getMark();
         InlineInfo callee = calleeInfo.callee();
@@ -230,6 +230,7 @@ public class InliningPhase extends AbstractInliningPhase {
 
                 callerCallsiteHolder.computeProbabilities();
 
+                inliningCount++;
                 metricInliningPerformed.increment();
             }
         } catch (BailoutException bailout) {
