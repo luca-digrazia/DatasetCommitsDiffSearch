@@ -471,7 +471,7 @@ public final class SchedulePhase extends Phase {
             }
         }
 
-        NodeStack stack = new NodeStack();
+        Stack<Node> stack = new Stack<>();
 
         // Start analysis with control flow ends.
         for (Block b : cfg.postOrder()) {
@@ -556,7 +556,7 @@ public final class SchedulePhase extends Phase {
             }
         }
 
-        ArrayList<Node> newList = new ArrayList<>(oldList.size());
+        ArrayList<Node> newList = new ArrayList<>();
         assert oldList.get(0) == beginNode;
         unprocessed.clear(beginNode);
         newList.add(beginNode);
@@ -602,7 +602,7 @@ public final class SchedulePhase extends Phase {
         blockToNodes.get(b).add(endNode);
     }
 
-    private static void processStack(ControlFlowGraph cfg, BlockMap<List<Node>> blockToNodes, NodeMap<Block> nodeToBlock, NodeBitMap visited, BlockMap<Boolean> floatingReads, NodeStack stack) {
+    private static void processStack(ControlFlowGraph cfg, BlockMap<List<Node>> blockToNodes, NodeMap<Block> nodeToBlock, NodeBitMap visited, BlockMap<Boolean> floatingReads, Stack<Node> stack) {
         Block startBlock = cfg.getStartBlock();
         while (!stack.isEmpty()) {
             Node current = stack.peek();
