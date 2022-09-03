@@ -195,12 +195,11 @@ public class JavaInteropTest {
         assertEquals("No props, class isn't public", 0, propertyNames.size());
     }
 
-    public static class PublicPOJO {
+    public class PublicPOJO {
         PublicPOJO() {
         }
 
         public int x;
-        public static int y;
     }
 
     @Test
@@ -209,18 +208,8 @@ public class JavaInteropTest {
         CallTarget callKeys = sendKeys();
         TruffleObject result = (TruffleObject) callKeys.call(pojo);
         List<?> propertyNames = JavaInterop.asJavaObject(List.class, result);
-        assertEquals("One instance field", 1, propertyNames.size());
+        assertEquals("One field", 1, propertyNames.size());
         assertEquals("One field x", "x", propertyNames.get(0));
-    }
-
-    @Test
-    public void noNonStaticPropertiesForAClass() {
-        TruffleObject pojo = JavaInterop.asTruffleObject(PublicPOJO.class);
-        CallTarget callKeys = sendKeys();
-        TruffleObject result = (TruffleObject) callKeys.call(pojo);
-        List<?> propertyNames = JavaInterop.asJavaObject(List.class, result);
-        assertEquals("One static field", 1, propertyNames.size());
-        assertEquals("One field y", "y", propertyNames.get(0));
     }
 
     @Test
