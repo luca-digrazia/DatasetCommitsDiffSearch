@@ -165,17 +165,13 @@ public abstract class JavaThreads {
     }
 
     /**
-     * Joins all non-daemon threads. If the current thread is itself a non-daemon thread, it does
-     * not attempt to join itself.
+     * This method must be called from the main thread (which is not counted in the number of
+     * non-daemon threads).
      */
     @SuppressWarnings("try")
     public void joinAllNonDaemons() {
-        int expected = 0;
-        if (currentThread.get() != null && !currentThread.get().isDaemon()) {
-            expected = 1;
-        }
         try (VMMutex ignored = VMThreads.THREAD_MUTEX.lock()) {
-            while (nonDaemonThreads.get() > expected) {
+            while (nonDaemonThreads.get() > 0) {
                 VMThreads.THREAD_LIST_CONDITION.block();
             }
         }
