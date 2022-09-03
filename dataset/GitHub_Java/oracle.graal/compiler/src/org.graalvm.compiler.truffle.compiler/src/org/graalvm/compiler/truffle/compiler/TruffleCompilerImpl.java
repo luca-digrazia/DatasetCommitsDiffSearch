@@ -40,7 +40,6 @@ import static org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions.Truff
 import static org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions.TruffleInstrumentBranches;
 import static org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions.getValue;
 
-import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.BufferOverflowException;
@@ -216,7 +215,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
      */
     public abstract CompilationIdentifier createCompilationIdentifier(CompilableTruffleAST compilable);
 
-    protected abstract DebugContext createDebugContext(OptionValues options, CompilationIdentifier compilationId, CompilableTruffleAST compilable, PrintStream logStream);
+    protected abstract DebugContext createDebugContext(OptionValues options, CompilationIdentifier compilationId, CompilableTruffleAST compilable);
 
     @Override
     public final String getCompilationIdentifier(CompilableTruffleAST compilable) {
@@ -236,7 +235,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
             if (compilable == null) {
                 debugContext = DebugContext.create(TruffleCompilerOptions.getOptions(), DebugHandlersFactory.LOADER);
             } else {
-                debugContext = createDebugContext(TruffleCompilerOptions.getOptions(), getOrCreateCompilationId(compilationId, compilable).getValue(), compilable, DebugContext.DEFAULT_LOG_STREAM);
+                debugContext = createDebugContext(TruffleCompilerOptions.getOptions(), getOrCreateCompilationId(compilationId, compilable).getValue(), compilable);
             }
             return new TruffleDebugContextImpl(debugContext);
         }
@@ -274,7 +273,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
             final OptionValues optionValues = TruffleCompilerOptions.getOptions();
             boolean usingCallersDebug = truffleDebug instanceof TruffleDebugContextImpl;
             final DebugContext graalDebug = usingCallersDebug ? ((TruffleDebugContextImpl) truffleDebug).debugContext
-                            : createDebugContext(optionValues, compilationId.getValue(), compilable, DebugContext.DEFAULT_LOG_STREAM);
+                            : createDebugContext(optionValues, compilationId.getValue(), compilable);
             try (DebugContext debugToClose = usingCallersDebug ? null : graalDebug;
                             DebugContext.Scope s = maybeOpenTruffleScope(compilable, graalDebug)) {
                 final TruffleCompilerListener listener = inListener == null ? null : new TruffleCompilerListenerPair(new TraceCompilationFailureListener(), inListener);
@@ -614,8 +613,8 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
         }
 
         @Override
-        protected DebugContext createRetryDebugContext(OptionValues options, PrintStream logStream) {
-            return createDebugContext(options, compilationId, compilable, logStream);
+        protected DebugContext createRetryDebugContext(OptionValues options) {
+            return createDebugContext(options, compilationId, compilable);
         }
 
         @Override
