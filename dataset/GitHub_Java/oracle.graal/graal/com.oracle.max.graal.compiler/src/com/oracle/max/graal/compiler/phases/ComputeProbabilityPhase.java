@@ -24,11 +24,12 @@ package com.oracle.max.graal.compiler.phases;
 
 import java.util.*;
 
-import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.graph.*;
+import com.oracle.max.graal.compiler.ir.*;
+import com.oracle.max.graal.compiler.observer.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.nodes.*;
 
 public class ComputeProbabilityPhase extends Phase {
     private static final double EPSILON = 1d / Integer.MAX_VALUE;
@@ -37,7 +38,7 @@ public class ComputeProbabilityPhase extends Phase {
      * The computation of absolute probabilities works in three steps:
      *
      * - The first step, "PropagateProbability", traverses the graph in post order (merges after their ends, ...) and keeps track of the "probability state".
-     *   Whenever it encounters a ControlSplit it uses the split's probability information to divide the probability upon the successors.
+     *   Whenever it encounters a ControlSplit it uses the splits probability information to divide the probability upon the successors.
      *   Whenever it encounters an Invoke it assumes that the exception edge is unlikely and propagates the whole probability to the normal successor.
      *   Whenever it encounters a Merge it sums up the probability of all predecessors.
      *   It also maintains a set of active loops (whose LoopBegin has been visited) and builds def/use information for the second step.
@@ -48,16 +49,17 @@ public class ComputeProbabilityPhase extends Phase {
      */
 
     @Override
-    protected void run(StructuredGraph graph) {
-        new PropagateProbability(graph.start()).apply();
-        if (context.isObserved() && GraalOptions.TraceProbability) {
-            context.observable.fireCompilationEvent("After PropagateProbability", graph);
+    protected void run(Graph graph) {
+        new PropagateProbability((FixedNode) graph.start().next()).apply();
+        GraalCompilation compilation = GraalCompilation.compilation();
+        if (compilation.compiler.isObserved() && GraalOptions.TraceProbability) {
+            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "After PropagateProbability", graph, true, false));
         }
         computeLoopFactors();
-        if (context.isObserved() && GraalOptions.TraceProbability) {
-            context.observable.fireCompilationEvent("After computeLoopFactors", graph);
+        if (compilation.compiler.isObserved() && GraalOptions.TraceProbability) {
+            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "After computeLoopFactors", graph, true, false));
         }
-        new PropagateLoopFrequency(graph.start()).apply();
+        new PropagateLoopFrequency((FixedNode) graph.start().next()).apply();
     }
 
     private void computeLoopFactors() {
@@ -83,14 +85,14 @@ public class ComputeProbabilityPhase extends Phase {
     }
 
     public static class LoopInfo {
-        public final LoopBeginNode loopBegin;
+        public final LoopBegin loopBegin;
 
         public final Set<LoopInfo> requires = new HashSet<LoopInfo>(4);
 
         private double loopFrequency = -1;
         public boolean ended = false;
 
-        public LoopInfo(LoopBeginNode loopBegin) {
+        public LoopInfo(LoopBegin loopBegin) {
             this.loopBegin = loopBegin;
         }
 
@@ -112,13 +114,14 @@ public class ComputeProbabilityPhase extends Phase {
                 }
                 loopFrequency = loopBegin.probability() / (loopBegin.probability() - d);
                 loopBegin.setLoopFrequency(loopFrequency);
+//                TTY.println("computed loop Frequency %f for %s", loopFrequency, loopBegin);
             }
             return loopFrequency;
         }
     }
 
     public Set<LoopInfo> loopInfos = new HashSet<LoopInfo>();
-    public Map<MergeNode, Set<LoopInfo>> mergeLoops = new IdentityHashMap<MergeNode, Set<LoopInfo>>();
+    public Map<Merge, Set<LoopInfo>> mergeLoops = new HashMap<Merge, Set<LoopInfo>>();
 
     private class Probability implements MergeableState<Probability> {
         public double probability;
@@ -139,7 +142,7 @@ public class ComputeProbabilityPhase extends Phase {
         }
 
         @Override
-        public boolean merge(MergeNode merge, Collection<Probability> withStates) {
+        public boolean merge(Merge merge, Collection<Probability> withStates) {
             if (merge.endCount() > 1) {
                 HashSet<LoopInfo> intersection = new HashSet<LoopInfo>(loops);
                 for (Probability other : withStates) {
@@ -147,8 +150,10 @@ public class ComputeProbabilityPhase extends Phase {
                 }
                 for (LoopInfo info : loops) {
                     if (!intersection.contains(info)) {
+    //                    TTY.println("probability for %s at %s", info.loopBegin, merge);
                         double loopFrequency = info.loopFrequency();
                         if (loopFrequency == -1) {
+    //                        TTY.println("re-queued " + merge);
                             return false;
                         }
                         probability *= loopFrequency;
@@ -158,8 +163,10 @@ public class ComputeProbabilityPhase extends Phase {
                     double prob = other.probability;
                     for (LoopInfo info : other.loops) {
                         if (!intersection.contains(info)) {
+    //                        TTY.println("probability for %s at %s", info.loopBegin, merge);
                             double loopFrequency = info.loopFrequency();
                             if (loopFrequency == -1) {
+    //                            TTY.println("re-queued " + merge);
                                 return false;
                             }
                             prob *= loopFrequency;
@@ -168,6 +175,7 @@ public class ComputeProbabilityPhase extends Phase {
                     probability += prob;
                 }
                 loops = intersection;
+    //            TTY.println("merged " + merge);
                 mergeLoops.put(merge, new HashSet<LoopInfo>(intersection));
                 assert isRelativeProbability(probability) : probability;
             }
@@ -175,14 +183,14 @@ public class ComputeProbabilityPhase extends Phase {
         }
 
         @Override
-        public void loopBegin(LoopBeginNode loopBegin) {
+        public void loopBegin(LoopBegin loopBegin) {
             loopInfo = new LoopInfo(loopBegin);
             loopInfos.add(loopInfo);
             loops.add(loopInfo);
         }
 
         @Override
-        public void loopEnd(LoopEndNode loopEnd, Probability loopEndState) {
+        public void loopEnd(LoopEnd loopEnd, Probability loopEndState) {
             assert loopInfo != null;
             for (LoopInfo innerLoop : loopEndState.loops) {
                 if (innerLoop != loopInfo && !loops.contains(innerLoop)) {
@@ -202,8 +210,8 @@ public class ComputeProbabilityPhase extends Phase {
                     probability = 0;
                 }
             } else {
-                assert pred instanceof ControlSplitNode;
-                ControlSplitNode x = (ControlSplitNode) pred;
+                assert pred instanceof ControlSplit;
+                ControlSplit x = (ControlSplit) pred;
                 double sum = 0;
                 for (int i = 0; i < x.blockSuccessorCount(); i++) {
                     if (x.blockSuccessor(i) == node) {
@@ -223,6 +231,7 @@ public class ComputeProbabilityPhase extends Phase {
 
         @Override
         protected void node(FixedNode node) {
+//            TTY.println(" -- %7.5f %s", state.probability, node);
             node.setProbability(state.probability);
         }
     }
@@ -240,10 +249,11 @@ public class ComputeProbabilityPhase extends Phase {
         }
 
         @Override
-        public boolean merge(MergeNode merge, Collection<LoopCount> withStates) {
+        public boolean merge(Merge merge, Collection<LoopCount> withStates) {
             assert merge.endCount() == withStates.size() + 1;
             if (merge.endCount() > 1) {
                 Set<LoopInfo> loops = mergeLoops.get(merge);
+//                TTY.println("merging count for %s: %d ends, %d loops", merge, merge.endCount(), loops.size());
                 assert loops != null;
                 double countProd = 1;
                 for (LoopInfo loop : loops) {
@@ -255,12 +265,12 @@ public class ComputeProbabilityPhase extends Phase {
         }
 
         @Override
-        public void loopBegin(LoopBeginNode loopBegin) {
+        public void loopBegin(LoopBegin loopBegin) {
             count *= loopBegin.loopFrequency();
         }
 
         @Override
-        public void loopEnd(LoopEndNode loopEnd, LoopCount loopEndState) {
+        public void loopEnd(LoopEnd loopEnd, LoopCount loopEndState) {
             // nothing to do...
         }
 

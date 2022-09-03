@@ -22,20 +22,18 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
-import java.util.*;
-
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.ir.Deoptimize.DeoptAction;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.CanonicalizerOp;
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
 
 public final class FixedGuard extends FixedNodeWithNext {
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
+
+    @NodeInput
+    private final NodeInputList<BooleanNode> conditions = new NodeInputList<BooleanNode>(this);
 
     public FixedGuard(BooleanNode node, Graph graph) {
         this(graph);
@@ -43,7 +41,7 @@ public final class FixedGuard extends FixedNodeWithNext {
     }
 
     public FixedGuard(Graph graph) {
-        super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(CiKind.Illegal, graph);
     }
 
     @Override
@@ -56,8 +54,8 @@ public final class FixedGuard extends FixedNodeWithNext {
         out.print("clip node ").print(inputs().toString());
     }
 
-    public void addNode(BooleanNode node) {
-        variableInputs().add(node);
+    public void addNode(BooleanNode x) {
+        conditions.add(x);
     }
 
     @Override
@@ -78,18 +76,16 @@ public final class FixedGuard extends FixedNodeWithNext {
 
     private static CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {
         @Override
-        public Node canonical(Node node, NotifyReProcess reProcess) {
+        public Node canonical(Node node) {
             FixedGuard fixedGuard = (FixedGuard) node;
-            Iterator<Node> iter = fixedGuard.variableInputs().iterator();
-            while (iter.hasNext()) {
-                Node n = iter.next();
+            for (BooleanNode n : fixedGuard.conditions.snapshot()) {
                 if (n instanceof Constant) {
                     Constant c = (Constant) n;
                     if (c.asConstant().asBoolean()) {
                         if (GraalOptions.TraceCanonicalizer) {
                             TTY.println("Removing redundant fixed guard " + fixedGuard);
                         }
-                        iter.remove();
+                        fixedGuard.conditions.remove(n);
                     } else {
                         if (GraalOptions.TraceCanonicalizer) {
                             TTY.println("Replacing fixed guard " + fixedGuard + " with deoptimization node");
@@ -99,7 +95,7 @@ public final class FixedGuard extends FixedNodeWithNext {
                 }
             }
 
-            if (fixedGuard.variableInputs().size() == 0) {
+            if (fixedGuard.conditions.isEmpty()) {
                 return fixedGuard.next();
             }
             return fixedGuard;

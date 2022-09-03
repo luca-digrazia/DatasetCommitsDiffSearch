@@ -27,6 +27,9 @@ import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.graph.collections.*;
 
+/**
+ * Duplicates every node in the graph to test the implementation of the {@link com.oracle.max.graal.graph.Node#copy()} method in node subclasses.
+ */
 public class GlobalValueNumberingPhase extends Phase {
 
     @Override
@@ -43,7 +46,7 @@ public class GlobalValueNumberingPhase extends Phase {
             for (Node input : n.inputs()) {
                 apply(input, visited);
             }
-            Node newNode = n.graph().value(n);
+            Node newNode = n.graph().ideal(n);
             if (newNode != n) {
                 GraalMetrics.GlobalValueNumberingHits++;
                 if (GraalOptions.TraceGVN) {

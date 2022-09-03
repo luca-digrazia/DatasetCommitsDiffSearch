@@ -89,6 +89,13 @@ public final class NewInstance extends FixedNodeWithNext {
         return properties;
     }
 
+    @Override
+    public Node copy(Graph into) {
+        NewInstance x = new NewInstance(instanceClass, cpi, constantPool, into);
+        super.copyInto(x);
+        return x;
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public <T extends Op> T lookup(Class<T> clazz) {

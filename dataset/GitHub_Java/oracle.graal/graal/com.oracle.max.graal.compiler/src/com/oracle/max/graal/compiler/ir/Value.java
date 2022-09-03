@@ -40,7 +40,7 @@ public abstract class Value extends Node {
      * The kind of this value. This is {@link CiKind#Void} for instructions that produce no value.
      * This kind is guaranteed to be a {@linkplain CiKind#stackKind() stack kind}.
      */
-    @Data public final CiKind kind;
+    public final CiKind kind;
 
     protected CiValue operand = CiValue.IllegalValue;
 
@@ -154,7 +154,7 @@ public abstract class Value extends Node {
      * @param v the visitor to accept
      */
     public void accept(ValueVisitor v) {
-        throw new IllegalStateException("No visit method for this node (" + this.getClass().getSimpleName() + ")");
+        throw new IllegalStateException("No visit method for this node");
     }
 
     public void print(LogStream out) {

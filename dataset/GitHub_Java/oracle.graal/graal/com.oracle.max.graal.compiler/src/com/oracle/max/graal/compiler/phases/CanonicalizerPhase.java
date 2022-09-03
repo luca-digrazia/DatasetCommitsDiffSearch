@@ -24,6 +24,7 @@ package com.oracle.max.graal.compiler.phases;
 
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.graph.collections.*;
 
 public class CanonicalizerPhase extends Phase {
     private static final int MAX_ITERATION_PER_NODE = 10;
@@ -40,38 +41,25 @@ public class CanonicalizerPhase extends Phase {
 
     @Override
     protected void run(Graph graph) {
-        final NodeWorkList nodeWorkList = graph.createNodeWorkList(!newNodes, MAX_ITERATION_PER_NODE);
+        NodeWorkList nodeWorkList = graph.createNodeWorkList(!newNodes, MAX_ITERATION_PER_NODE);
         if (newNodes) {
             nodeWorkList.addAll(graph.getNewNodes());
         }
-        NotifyReProcess reProcess = new NotifyReProcess() {
-            @Override
-            public void reProccess(Node n) {
-                nodeWorkList.addAgain(n);
-            }
-        };
         for (Node node : nodeWorkList) {
             CanonicalizerOp op = node.lookup(CanonicalizerOp.class);
             if (op != null) {
-                graph.mark();
-                Node canonical = op.canonical(node, reProcess);
+                Node canonical = op.canonical(node);
                 if (canonical != node) {
                     node.replaceAndDelete(canonical);
-                    nodeWorkList.replaced(canonical, node, false, EdgeType.USAGES);
-                    for (Node newNode : graph.getNewNodes()) {
-                        nodeWorkList.add(newNode);
-                    }
+                    nodeWorkList.replaced(canonical, node, true, EdgeType.USAGES);
+                    //System.out.println("-->" + n + " canonicalized to " + canonical);
                     GraalMetrics.NodesCanonicalized++;
                 }
             }
         }
     }
 
-    public interface NotifyReProcess {
-        void reProccess(Node n);
-    }
-
     public interface CanonicalizerOp extends Op {
-        Node canonical(Node node, NotifyReProcess reProcess);
+        Node canonical(Node node);
     }
 }

@@ -31,7 +31,8 @@ import com.sun.cri.ci.*;
  */
 public final class Return extends FixedNode {
 
-    @Input    private Value result;
+    @NodeInput
+    private Value result;
 
     public Value result() {
         return result;

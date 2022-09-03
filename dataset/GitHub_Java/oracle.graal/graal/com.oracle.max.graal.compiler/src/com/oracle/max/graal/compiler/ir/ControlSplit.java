@@ -33,7 +33,8 @@ import com.sun.cri.ci.*;
  */
 public abstract class ControlSplit extends FixedNode {
 
-    @Successor    private final NodeSuccessorList<FixedNode> blockSuccessors;
+    @NodeSuccessor
+    private final NodeSuccessorList<FixedNode> blockSuccessors;
 
     public FixedNode blockSuccessor(int index) {
         return blockSuccessors.get(index);

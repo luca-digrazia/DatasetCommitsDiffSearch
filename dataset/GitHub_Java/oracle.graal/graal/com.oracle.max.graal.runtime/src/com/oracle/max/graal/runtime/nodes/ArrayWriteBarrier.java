@@ -31,8 +31,10 @@ import com.sun.cri.ci.*;
 
 public final class ArrayWriteBarrier extends WriteBarrier {
 
-    @Input private Value object;
-    @Input private LocationNode location;
+    @NodeInput
+    private Value object;
+    @NodeInput
+    private LocationNode location;
 
     public Value object() {
         return object;

@@ -22,19 +22,23 @@
  */
 package com.oracle.max.graal.compiler.phases;
 
-import com.oracle.max.criutils.*;
+import java.util.*;
+
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.gen.*;
+import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.nodes.*;
+import com.oracle.max.graal.graph.collections.*;
 
 
 public class DeadCodeEliminationPhase extends Phase {
 
     private NodeFlood flood;
-    private StructuredGraph graph;
+    private Graph graph;
 
     @Override
-    protected void run(StructuredGraph graph) {
+    protected void run(Graph graph) {
         this.graph = graph;
         this.flood = graph.createNodeFlood();
 
@@ -45,15 +49,17 @@ public class DeadCodeEliminationPhase extends Phase {
         deleteNodes();
 
         // remove chained Merges
-        for (MergeNode merge : graph.getNodes(MergeNode.class)) {
-            if (merge.endCount() == 1 && !(merge instanceof LoopBeginNode)) {
+        for (Merge merge : graph.getNodes(Merge.class)) {
+            if (merge.endCount() == 1 && !(merge instanceof LoopBegin)) {
                 replacePhis(merge);
                 EndNode endNode = merge.endAt(0);
                 FixedNode next = merge.next();
-                merge.safeDelete();
+                merge.delete();
                 endNode.replaceAndDelete(next);
             }
         }
+
+        new PhiSimplifier(graph);
     }
 
     private void iterateSuccessors() {
@@ -66,64 +72,67 @@ public class DeadCodeEliminationPhase extends Phase {
                     flood.add(successor);
                 }
             }
+
+            if (current instanceof AbstractVectorNode) {
+                for (Node usage : current.usages()) {
+                    flood.add(usage);
+                }
+            }
         }
     }
 
     private void disconnectCFGNodes() {
-        for (EndNode node : graph.getNodes(EndNode.class)) {
+        for (Node node : graph.getNodes()) {
             if (!flood.isMarked(node)) {
-                MergeNode merge = node.merge();
-                if (merge != null && flood.isMarked(merge)) {
-                    // We are a dead end node leading to a live merge.
-                    merge.removeEnd(node);
-                }
-            }
-        }
-        for (LoopEndNode node : graph.getNodes(LoopEndNode.class)) {
-            if (!flood.isMarked(node)) {
-                LoopBeginNode loop = node.loopBegin();
-                if (flood.isMarked(loop)) {
-                    if (GraalOptions.TraceDeadCodeElimination) {
-                        TTY.println("Removing loop with unreachable end: " + loop);
+                if (node instanceof EndNode) {
+                    EndNode end = (EndNode) node;
+                    Merge merge = end.merge();
+                    if (merge != null && flood.isMarked(merge)) {
+                        // We are a dead end node leading to a live merge.
+                        merge.removeEnd(end);
                     }
-                    node.setLoopBegin(null);
-                    EndNode endNode = loop.endAt(0);
-                    assert endNode.predecessor() != null;
-                    replacePhis(loop);
-                    loop.removeEnd(endNode);
+                } else if (node instanceof LoopEnd) {
+                    LoopBegin loop = ((LoopEnd) node).loopBegin();
+                    if (flood.isMarked(loop)) {
+                        if (GraalOptions.TraceDeadCodeElimination) {
+                            TTY.println("Building loop begin node back: " + loop);
+                        }
+                        ((LoopEnd) node).setLoopBegin(null);
+                        EndNode endNode = loop.endAt(0);
+                        assert endNode.predecessor() != null;
+                        // replacePhis(loop);
 
-                    FixedNode next = loop.next();
-                    loop.setNext(null);
-                    endNode.replaceAndDelete(next);
-                    loop.safeDelete();
+                        endNode.replaceAndDelete(loop.next());
+                        loop.delete();
+                    }
                 }
             }
         }
     }
 
-    private void replacePhis(MergeNode merge) {
-        for (PhiNode phi : merge.phis().snapshot()) {
-            phi.replaceAndDelete((phi).valueAt(0));
+    private void replacePhis(Merge merge) {
+        for (Node usage : merge.usages().snapshot()) {
+            assert usage instanceof Phi;
+            usage.replaceAndDelete(((Phi) usage).valueAt(0));
         }
     }
 
     private void deleteNodes() {
         for (Node node : graph.getNodes()) {
             if (!flood.isMarked(node)) {
-                node.clearInputs();
-                node.clearSuccessors();
+                node.clearEdges();
             }
         }
         for (Node node : graph.getNodes()) {
             if (!flood.isMarked(node)) {
-                node.safeDelete();
+                node.delete();
             }
         }
     }
 
     private void iterateInputs() {
         for (Node node : graph.getNodes()) {
-            if (node instanceof LocalNode) {
+            if (node instanceof Local) {
                 flood.add(node);
             }
             if (flood.isMarked(node)) {

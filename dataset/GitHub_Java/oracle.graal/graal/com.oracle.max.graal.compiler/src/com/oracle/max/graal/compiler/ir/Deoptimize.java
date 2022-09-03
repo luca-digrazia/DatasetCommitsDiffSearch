@@ -80,4 +80,12 @@ public class Deoptimize extends FixedNode {
         properties.put("action", action);
         return properties;
     }
+
+    @Override
+    public Node copy(Graph into) {
+        Deoptimize x = new Deoptimize(action, into);
+        x.setMessage(message);
+        super.copyInto(x);
+        return x;
+    }
 }

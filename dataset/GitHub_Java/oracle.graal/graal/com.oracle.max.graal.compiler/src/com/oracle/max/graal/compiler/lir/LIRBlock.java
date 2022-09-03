@@ -25,35 +25,28 @@ package com.oracle.max.graal.compiler.lir;
 import java.util.*;
 
 import com.oracle.max.asm.*;
-import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.alloc.*;
-import com.oracle.max.graal.compiler.schedule.*;
+import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.util.*;
+import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.nodes.*;
-import com.oracle.max.graal.nodes.java.*;
+import com.oracle.max.graal.graph.collections.*;
 
 /**
  * The {@code LIRBlock} class definition.
  */
-public final class LIRBlock extends Block {
-
-    public static final IdentifyBlocksPhase.BlockFactory FACTORY = new IdentifyBlocksPhase.BlockFactory() {
-        @Override
-        public Block createBlock(int blockID) {
-            return new LIRBlock(blockID);
-        }
-    };
+public final class LIRBlock {
 
     public final Label label;
-    private List<LIRInstruction> lir;
+    private LIRList lir;
+    private final int blockID;
     private FrameState lastState;
-
+    private List<Node> instructions = new ArrayList<Node>(4);
+    private List<LIRBlock> predecessors = new ArrayList<LIRBlock>(4);
+    private List<LIRBlock> successors = new ArrayList<LIRBlock>(4);
+    private LIRDebugInfo debugInfo;
     private boolean align;
-
-    private int linearScanNumber;
-
-    public LIRPhiMapping phis;
 
     /**
      * Bit map specifying which {@linkplain OperandPool operands} are live upon entry to this block.
@@ -86,11 +79,30 @@ public final class LIRBlock extends Block {
 
     private int firstLirInstructionID;
     private int lastLirInstructionID;
+    public int blockEntryPco;
 
+    public LIRBlock(Label label, LIRDebugInfo debugInfo) {
+        this.label = label;
+        blockID = -1;
+        this.debugInfo = debugInfo;
+    }
+
+    public LIRDebugInfo debugInfo() {
+        return this.debugInfo;
+    }
 
     public LIRBlock(int blockID) {
-        super(blockID);
+        this.blockID = blockID;
         label = new Label();
+        loopIndex = -1;
+        linearScanNumber = blockID;
+        instructions = new ArrayList<Node>(4);
+        predecessors = new ArrayList<LIRBlock>(4);
+        successors = new ArrayList<LIRBlock>(4);
+    }
+
+    public List<Node> getInstructions() {
+        return instructions;
     }
 
     public int firstLirInstructionId() {
@@ -117,16 +129,26 @@ public final class LIRBlock extends Block {
         this.lastLirInstructionID = lastLirInstructionId;
     }
 
-    public List<LIRInstruction> lir() {
+    public int loopDepth;
+
+    public LIRList lir() {
         return lir;
     }
 
-    public void setLir(List<LIRInstruction> lir) {
+    public void setLir(LIRList lir) {
         this.lir = lir;
+    }
+
+    public void setBlockEntryPco(int codePos) {
+        this.blockEntryPco = codePos;
     }
 
     public void printWithoutPhis(LogStream out) {
         out.println("LIR Block " + blockID());
+    }
+
+    public int blockID() {
+        return blockID;
     }
 
     public int numberOfPreds() {
@@ -142,11 +164,15 @@ public final class LIRBlock extends Block {
     }
 
     public LIRBlock predAt(int i) {
-        return (LIRBlock) predecessors.get(i);
+        return predecessors.get(i);
     }
 
     public LIRBlock suxAt(int i) {
-        return (LIRBlock) successors.get(i);
+        return successors.get(i);
+    }
+
+    public List<LIRBlock> blockSuccessors() {
+        return successors;
     }
 
     @Override
@@ -154,9 +180,35 @@ public final class LIRBlock extends Block {
         return "B" + blockID();
     }
 
+    public List<LIRBlock> blockPredecessors() {
+        return predecessors;
+    }
+
+    public int loopDepth() {
+        return loopDepth;
+    }
+
+    public int loopIndex() {
+        return loopIndex;
+    }
+
+    public void setLoopIndex(int v) {
+        loopIndex = v;
+    }
+
+    public void setLoopDepth(int v) {
+        this.loopDepth = v;
+    }
+
+    private int loopIndex;
+
     public Label label() {
         return label;
     }
+
+    private int linearScanNumber = -1;
+    private boolean linearScanLoopEnd;
+    private boolean linearScanLoopHeader;
 
     public void setLinearScanNumber(int v) {
         linearScanNumber = v;
@@ -166,9 +218,25 @@ public final class LIRBlock extends Block {
         return linearScanNumber;
     }
 
+    public void setLinearScanLoopEnd() {
+        linearScanLoopEnd = true;
+    }
+
+    public boolean isLinearScanLoopEnd() {
+        return linearScanLoopEnd;
+    }
+
+    public void setLinearScanLoopHeader() {
+        this.linearScanLoopHeader = true;
+    }
+
+    public boolean isLinearScanLoopHeader() {
+        return linearScanLoopHeader;
+    }
+
     public void replaceWith(LIRBlock other) {
-        for (Block pred : predecessors) {
-            Util.replaceAllInList(this, other, ((LIRBlock) pred).successors);
+        for (LIRBlock pred : predecessors) {
+            Util.replaceAllInList(this, other, pred.successors);
         }
         for (int i = 0; i < other.predecessors.size(); ++i) {
             if (other.predecessors.get(i) == this) {
@@ -180,6 +248,10 @@ public final class LIRBlock extends Block {
         predecessors.clear();
     }
 
+    public void setInstructions(List<Node> list) {
+        instructions = list;
+    }
+
     public void setLastState(FrameState fs) {
         lastState = fs;
     }
@@ -188,19 +260,42 @@ public final class LIRBlock extends Block {
         return lastState;
     }
 
+    private Node first;
+    private Node last;
+
+    public Node firstInstruction() {
+        return first;
+    }
+
+
+    public Node lastInstruction() {
+        return last;
+    }
+
+    public void setFirstInstruction(Node n) {
+        first = n;
+    }
+
+
+    public void setLastInstruction(Node n) {
+        last = n;
+    }
+
     public boolean endsWithJump() {
-        if (lir.size() == 0) {
+        List<LIRInstruction> instructionsList = lir.instructionsList();
+        if (instructionsList.size() == 0) {
             return false;
         }
-        LIRInstruction lirInstruction = lir.get(lir.size() - 1);
+        LIRInstruction lirInstruction = instructionsList.get(instructionsList.size() - 1);
         if (lirInstruction instanceof LIRXirInstruction) {
             LIRXirInstruction lirXirInstruction = (LIRXirInstruction) lirInstruction;
             return (lirXirInstruction.falseSuccessor() != null) && (lirXirInstruction.trueSuccessor() != null);
         }
-        return lirInstruction instanceof LIRBranch;
+        LIROpcode code = lirInstruction.code;
+        return code == LIROpcode.Branch || code == LIROpcode.TableSwitch;
     }
 
     public boolean isExceptionEntry() {
-        return firstNode() instanceof ExceptionObjectNode;
+        return firstInstruction() instanceof ExceptionObject;
     }
 }

@@ -27,7 +27,8 @@ import com.sun.cri.ci.*;
 
 public abstract class FixedNodeWithNext extends FixedNode {
 
-    @Successor    private FixedNode next;
+    @NodeSuccessor
+    private FixedNode next;
 
     public FixedNode next() {
         return next;

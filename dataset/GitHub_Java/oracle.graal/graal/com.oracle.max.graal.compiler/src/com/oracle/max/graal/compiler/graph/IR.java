@@ -131,7 +131,7 @@ public class IR {
             new GlobalValueNumberingPhase().apply(graph);
             if (GraalOptions.Rematerialize) {
                 //new Rematerialization2Phase().apply(graph);
-                //new RematerializationPhase().apply(graph);
+                new RematerializationPhase().apply(graph);
             }
             graph.stopRecordModifications();
         }
@@ -143,7 +143,7 @@ public class IR {
                 graph.recordModifications(EdgeType.USAGES);
                 new GlobalValueNumberingPhase().apply(graph);
                 if (GraalOptions.Rematerialize) {
-                    //new RematerializationPhase().apply(graph);
+                    new RematerializationPhase().apply(graph);
                 }
                 graph.stopRecordModifications();
             }
@@ -155,12 +155,6 @@ public class IR {
         IdentifyBlocksPhase schedule = new IdentifyBlocksPhase(true);
         schedule.apply(graph);
         compilation.stats.loopCount = schedule.loopCount();
-
-        if (compilation.compiler.isObserved()) {
-            Map<String, Object> debug = new HashMap<String, Object>();
-            debug.put("schedule", schedule);
-            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "After IdentifyBlocksPhase", graph, true, false, debug));
-        }
 
 
         List<Block> blocks = schedule.getBlocks();
@@ -290,6 +284,6 @@ public class IR {
     }
 
     public FixedNodeWithNext getHIRStartBlock() {
-        return (FixedNodeWithNext) compilation.graph.start().successors().get(0);
+        return (FixedNodeWithNext) compilation.graph.start().successors().first();
     }
 }

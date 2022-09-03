@@ -34,7 +34,6 @@ import com.oracle.max.graal.compiler.util.GraphUtil.ColorSplitingLambda;
 import com.oracle.max.graal.compiler.util.GraphUtil.ColoringLambda;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.graph.NodeClass.*;
 import com.oracle.max.graal.graph.collections.*;
 import com.sun.cri.ci.*;
 
@@ -239,7 +238,7 @@ public class LoopUtil {
         // move peeled part to the end
         LoopBegin loopBegin = loop.loopBegin();
         LoopEnd loopEnd = loopBegin.loopEnd();
-        FixedNode lastNode = (FixedNode) loopEnd.predecessor();
+        FixedNode lastNode = (FixedNode) loopEnd.singlePredecessor();
         if (loopBegin.next() != lastNode) {
             lastNode.successors().replace(loopEnd, loopBegin.next());
             loopBegin.setNext(noExit);
@@ -251,7 +250,8 @@ public class LoopUtil {
         for (Phi phi : loopBegin.phis()) {
             Value backValue = phi.valueAt(backIndex);
             if (loop.nodes().isMarked(backValue) && peeling.peeledNodes.isNotNewNotMarked(backValue)) {
-                for (Node usage : phi.usages().snapshot()) {
+                List<Node> usages = new ArrayList<Node>(phi.usages());
+                for (Node usage : usages) {
                     if (peeling.peeledNodes.isNotNewMarked(usage)) {
                         usage.inputs().replace(phi, backValue);
                     }
@@ -326,25 +326,23 @@ public class LoopUtil {
     private static void rewirePeeling(PeelingResult peeling, Loop loop, FixedNode from, boolean inversion) {
         LoopBegin loopBegin = loop.loopBegin();
         Graph graph = loopBegin.graph();
-        Node loopPred = loopBegin.predecessor();
+        Node loopPred = loopBegin.singlePredecessor();
         loopPred.successors().replace(loopBegin.forwardEdge(), peeling.begin);
         NodeBitMap loopNodes = loop.cfgNodes();
         Node originalLast = from;
         if (originalLast == loopBegin.loopEnd()) {
-            originalLast = loopBegin.loopEnd().predecessor();
+            originalLast = loopBegin.loopEnd().singlePredecessor();
         }
-        for (Node sux : originalLast.successors()) {
-        }
+        int size = originalLast.successors().size();
         boolean found = false;
-        for (NodeClassIterator iter = originalLast.successors().iterator(); iter.hasNext();) {
-            Position pos = iter.nextPosition();
-            Node sux = originalLast.getNodeClass().get(originalLast, pos);
+        for (int i = 0; i < size; i++) {
+            Node sux = originalLast.successors().get(i);
             if (sux == null) {
                 continue;
             }
             if (loopNodes.isMarked(sux)) {
                 assert !found;
-                peeling.end.getNodeClass().set(peeling.end, pos, loopBegin.forwardEdge());
+                peeling.end.successors().set(i, loopBegin.forwardEdge());
                 found = true;
             }
         }
@@ -402,7 +400,7 @@ public class LoopUtil {
             EndNode oEnd = (EndNode) original.next();
             Merge merge = oEnd.merge();
             EndNode nEnd = merge.endAt(1 - merge.phiPredecessorIndex(oEnd));
-            Node newExit = nEnd.predecessor();
+            Node newExit = nEnd.singlePredecessor();
             for (Entry<Node, Node> dataEntry : peeling.dataOut.entries()) {
                 Node originalValue = dataEntry.getKey();
                 Node newValue = dataEntry.getValue();
@@ -442,7 +440,8 @@ public class LoopUtil {
                 }
                 Value newValue = (Value) entry.getValue();
                 Phi phi = null;
-                for (Node usage : originalValue.usages().snapshot()) {
+                List<Node> usages = new ArrayList<Node>(originalValue.usages());
+                for (Node usage : usages) {
                     if (exitMergesPhis.isMarked(usage) || (
                                     loop.nodes().isNotNewMarked(usage)
                                     && peeling.peeledNodes.isNotNewNotMarked(usage)
@@ -589,7 +588,7 @@ public class LoopUtil {
                 System.out.println(" - inputs > 0 : " + (n.inputs().size() > 0));
                 System.out.println(" - !danglingMergeFrameState : " + (!danglingMergeFrameState(n)));*/
                 return exitFrameStates.isNotNewMarked(n)
-                || (inOrBefore.isNotNewNotMarked(n) && n.inputs().explicitCount() > 0 && !afterColoringFramestate(n)); //TODO (gd) hum
+                || (inOrBefore.isNotNewNotMarked(n) && n.inputs().size() > 0 && !afterColoringFramestate(n)); //TODO (gd) hum
             }
             public boolean afterColoringFramestate(Node n) {
                 if (!(n instanceof FrameState)) {
@@ -621,16 +620,15 @@ public class LoopUtil {
                     }
                     inOrBefore.mark(node);
                 } else {
-                    for (NodeClassIterator iter = node.inputs().iterator(); iter.hasNext();) {
-                        Position pos = iter.nextPosition();
-                        Node input = node.getNodeClass().get(node, pos);
+                    for (int i = 0; i < node.inputs().size(); i++) {
+                        Node input = node.inputs().get(i);
                         if (input == null || newExitValues.isNew(input)) {
                             continue;
                         }
                         NodeMap<Value> valueMap = newExitValues.get(input);
                         if (valueMap != null) {
                             Value replacement = getValueAt(color, valueMap, ((Value) input).kind);
-                            node.getNodeClass().set(node, pos, replacement);
+                            node.inputs().set(i, replacement);
                         }
                     }
                 }
@@ -690,7 +688,7 @@ public class LoopUtil {
         NodeBitMap clonedExits = graph.createNodeBitMap();
         NodeBitMap exitFrameStates = graph.createNodeBitMap();
         for (Node exit : loop.exits()) {
-            if (marked.isMarked(exit.predecessor())) {
+            if (marked.isMarked(exit.singlePredecessor())) {
                 StateSplit pExit = findNearestMergableExitPoint((FixedNode) exit, marked);
                 markWithState(pExit, marked);
                 clonedExits.mark(pExit);
@@ -777,7 +775,7 @@ public class LoopUtil {
         }
 
         FixedNode newBegin = (FixedNode) duplicates.get(loopBegin.next());
-        FixedNode newFrom = (FixedNode) duplicates.get(from == loopBegin.loopEnd() ? from.predecessor() : from);
+        FixedNode newFrom = (FixedNode) duplicates.get(from == loopBegin.loopEnd() ? from.singlePredecessor() : from);
         return new PeelingResult(newBegin, newFrom, exits, phis, phiInits, dataOutMapping, unaffectedExits, exitFrameStates, marked);
     }
 
@@ -859,8 +857,8 @@ public class LoopUtil {
         for (Node n : work) {
             inOrBefore.mark(n);
             if (full) {
-                if (n.predecessor() != null) {
-                    work.add(n.predecessor());
+                for (Node pred : n.predecessors()) {
+                    work.add(pred);
                 }
             }
             if (n instanceof Phi) { // filter out data graph cycles

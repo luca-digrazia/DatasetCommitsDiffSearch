@@ -44,6 +44,7 @@ import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.compiler.value.FrameState.ValueProcedure;
 import com.oracle.max.graal.extensions.*;
 import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.graph.collections.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
@@ -1333,7 +1334,7 @@ public final class LinearScan {
 
     }
 
-    private boolean isSorted(Interval[] intervals) {
+    boolean isSorted(Interval[] intervals) {
         int from = -1;
         for (Interval interval : intervals) {
             assert interval != null;

@@ -24,21 +24,18 @@ package com.oracle.max.graal.compiler;
 
 import java.util.*;
 
-import com.oracle.max.criutils.*;
-import com.oracle.max.graal.compiler.phases.*;
-import com.oracle.max.graal.compiler.stub.*;
+import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.globalstub.*;
+import com.oracle.max.graal.compiler.observer.*;
 import com.oracle.max.graal.compiler.target.*;
-import com.oracle.max.graal.cri.*;
-import com.oracle.max.graal.nodes.*;
+import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 import com.sun.cri.xir.*;
 
-public class GraalCompiler {
+public class GraalCompiler extends ObservableCompiler {
 
-    public final Map<Object, CompilerStub> stubs = new HashMap<Object, CompilerStub>();
-
-    public final GraalContext context;
+    public final Map<Object, GlobalStub> stubs = new HashMap<Object, GlobalStub>();
 
     /**
      * The target that this compiler has been configured for.
@@ -48,7 +45,7 @@ public class GraalCompiler {
     /**
      * The runtime that this compiler has been configured for.
      */
-    public final GraalRuntime runtime;
+    public final RiRuntime runtime;
 
     /**
      * The XIR generator that lowers Java operations to machine operations.
@@ -60,114 +57,126 @@ public class GraalCompiler {
      */
     public final Backend backend;
 
-    public final RiRegisterConfig compilerStubRegisterConfig;
+    public final RiRegisterConfig globalStubRegisterConfig;
 
-    public GraalCompiler(GraalContext context, GraalRuntime runtime, CiTarget target, RiXirGenerator xirGen, RiRegisterConfig compilerStubRegisterConfig) {
-        this.context = context;
+    private GraalCompilation currentCompilation;
+
+    public GraalCompiler(RiRuntime runtime, CiTarget target, RiXirGenerator xirGen, RiRegisterConfig globalStubRegisterConfig) {
         this.runtime = runtime;
         this.target = target;
         this.xir = xirGen;
-        this.compilerStubRegisterConfig = compilerStubRegisterConfig;
+        this.globalStubRegisterConfig = globalStubRegisterConfig;
         this.backend = Backend.create(target.arch, this);
         init();
-    }
 
-    public CiTargetMethod compileMethod(RiResolvedMethod method, int osrBCI, CiStatistics stats, CiCompiler.DebugInfoLevel debugInfoLevel) {
-        return compileMethod(method, osrBCI, stats, debugInfoLevel, PhasePlan.DEFAULT);
-    }
-
-    public CiTargetMethod compileMethod(RiResolvedMethod method, int osrBCI, CiStatistics stats, CiCompiler.DebugInfoLevel debugInfoLevel, PhasePlan plan) {
-        context.timers.startScope(getClass());
-        try {
-            long startTime = 0;
-            int index = context.metrics.CompiledMethods++;
-            final boolean printCompilation = GraalOptions.PrintCompilation && !TTY.isSuppressed();
-            if (printCompilation) {
-                TTY.println(String.format("Graal %4d %-70s %-45s %-50s ...",
-                                index,
-                                method.holder().name(),
-                                method.name(),
-                                method.signature().asString()));
-                startTime = System.nanoTime();
-            }
-
-            CiTargetMethod result = null;
-            TTY.Filter filter = new TTY.Filter(GraalOptions.PrintFilter, method);
-            GraalCompilation compilation = new GraalCompilation(context, this, method, osrBCI, stats, debugInfoLevel);
-            try {
-                result = compilation.compile(plan);
-            } finally {
-                filter.remove();
-                if (printCompilation) {
-                    long time = (System.nanoTime() - startTime) / 100000;
-                    TTY.println(String.format("Graal %4d %-70s %-45s %-50s | %3d.%dms %4dnodes %5dB",
-                                    index,
-                                    "",
-                                    "",
-                                    "",
-                                    time / 10,
-                                    time % 10,
-                                    compilation.graph.getNodeCount(),
-                                    (result != null ? result.targetCodeSize() : -1)));
+        Graph.verificationListeners.add(new VerificationListener() {
+            @Override
+            public void verificationFailed(Node n, String message) {
+                GraalCompiler.this.fireCompilationEvent(new CompilationEvent(currentCompilation, "Verification Error on Node " + n.id(), currentCompilation.graph, true, false, true));
+                TTY.println(n.toString());
+                if (n.predecessor() != null) {
+                    TTY.println("predecessor: " + n.predecessor());
                 }
+                for (Node p : n.usages()) {
+                    TTY.println("usage: " + p);
+                }
+                assert false : "Verification of node " + n + " failed: " + message;
             }
-
-            return result;
-        } finally {
-            context.timers.endScope();
-        }
+        });
     }
 
-    public CiTargetMethod compileMethod(RiResolvedMethod method, StructuredGraph graph, PhasePlan plan) {
-        assert graph.verify();
-        GraalCompilation compilation = new GraalCompilation(context, this, method, graph, -1, null, CiCompiler.DebugInfoLevel.FULL);
-        return compilation.compile(plan);
+    public CiResult compileMethod(RiMethod method, int osrBCI, RiXirGenerator xirGenerator, CiStatistics stats) {
+        GraalTimers.TOTAL.start();
+        long startTime = 0;
+        int index = GraalMetrics.CompiledMethods++;
+        if (GraalOptions.PrintCompilation) {
+            TTY.print(String.format("Graal %4d %-70s %-45s | ", index, method.holder().name(), method.name()));
+            startTime = System.nanoTime();
+        }
+
+        CiResult result = null;
+        TTY.Filter filter = new TTY.Filter(GraalOptions.PrintFilter, method);
+        GraalCompilation compilation = new GraalCompilation(this, method, osrBCI, stats);
+        currentCompilation = compilation;
+        try {
+            result = compilation.compile();
+        } finally {
+            filter.remove();
+            compilation.close();
+            if (GraalOptions.PrintCompilation && !TTY.isSuppressed()) {
+                long time = (System.nanoTime() - startTime) / 100000;
+                TTY.println(String.format("%3d.%dms", time / 10, time % 10));
+            }
+            GraalTimers.TOTAL.stop();
+        }
+
+        return result;
     }
 
     private void init() {
-        final List<XirTemplate> xirTemplateStubs = xir.makeTemplates(backend.newXirAssembler());
+        final List<XirTemplate> xirTemplateStubs = xir.buildTemplates(backend.newXirAssembler());
+        final GlobalStubEmitter emitter = backend.newGlobalStubEmitter();
 
         if (xirTemplateStubs != null) {
             for (XirTemplate template : xirTemplateStubs) {
                 TTY.Filter filter = new TTY.Filter(GraalOptions.PrintFilter, template.name);
                 try {
-                    stubs.put(template, backend.emit(context, template));
+                    stubs.put(template, emitter.emit(template, runtime));
                 } finally {
                     filter.remove();
                 }
             }
         }
 
-        for (CompilerStub.Id id : CompilerStub.Id.values()) {
+        for (GlobalStub.Id id : GlobalStub.Id.values()) {
             TTY.Filter suppressor = new TTY.Filter(GraalOptions.PrintFilter, id);
             try {
-                stubs.put(id, backend.emit(context, id));
+                stubs.put(id, emitter.emit(id, runtime));
             } finally {
                 suppressor.remove();
             }
         }
+
+        if (GraalOptions.PrintCFGToFile) {
+            addCompilationObserver(new CFGPrinterObserver());
+        }
+        if (GraalOptions.PrintDOTGraphToFile) {
+            addCompilationObserver(new GraphvizPrinterObserver(false));
+        }
+        if (GraalOptions.PrintDOTGraphToPdf) {
+            addCompilationObserver(new GraphvizPrinterObserver(true));
+        }
+        if (GraalOptions.PrintIdealGraphLevel != 0 || GraalOptions.Plot || GraalOptions.PlotOnError) {
+            CompilationObserver observer;
+            if (GraalOptions.PrintIdealGraphFile) {
+                observer = new IdealGraphPrinterObserver();
+            } else {
+                observer = new IdealGraphPrinterObserver(GraalOptions.PrintIdealGraphAddress, GraalOptions.PrintIdealGraphPort);
+            }
+            addCompilationObserver(observer);
+        }
     }
 
-    public CompilerStub lookupStub(CompilerStub.Id id) {
-        CompilerStub stub = stubs.get(id);
-        assert stub != null : "no stub for global stub id: " + id;
-        return stub;
+    public GlobalStub lookupGlobalStub(GlobalStub.Id id) {
+        GlobalStub globalStub = stubs.get(id);
+        assert globalStub != null : "no stub for global stub id: " + id;
+        return globalStub;
     }
 
-    public CompilerStub lookupStub(XirTemplate template) {
-        CompilerStub stub = stubs.get(template);
-        assert stub != null : "no stub for XirTemplate: " + template;
-        return stub;
+    public GlobalStub lookupGlobalStub(XirTemplate template) {
+        GlobalStub globalStub = stubs.get(template);
+        assert globalStub != null : "no stub for XirTemplate: " + template;
+        return globalStub;
     }
 
-    public CompilerStub lookupStub(CiRuntimeCall runtimeCall) {
-        CompilerStub stub = stubs.get(runtimeCall);
-        if (stub == null) {
-            stub = backend.emit(context, runtimeCall);
-            stubs.put(runtimeCall, stub);
+    public GlobalStub lookupGlobalStub(CiRuntimeCall runtimeCall) {
+        GlobalStub globalStub = stubs.get(runtimeCall);
+        if (globalStub == null) {
+            globalStub = backend.newGlobalStubEmitter().emit(runtimeCall, runtime);
+            stubs.put(runtimeCall, globalStub);
         }
 
-        assert stub != null : "could not find global stub for runtime call: " + runtimeCall;
-        return stub;
+        assert globalStub != null : "could not find global stub for runtime call: " + runtimeCall;
+        return globalStub;
     }
 }

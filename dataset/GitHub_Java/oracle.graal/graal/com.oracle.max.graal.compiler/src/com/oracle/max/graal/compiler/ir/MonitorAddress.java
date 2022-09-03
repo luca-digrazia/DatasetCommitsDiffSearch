@@ -66,4 +66,10 @@ public final class MonitorAddress extends Value {
         properties.put("monitorIndex", monitorIndex);
         return properties;
     }
+
+    @Override
+    public Node copy(Graph into) {
+        MonitorAddress x = new MonitorAddress(monitorIndex, into);
+        return x;
+    }
 }

@@ -31,9 +31,8 @@ import com.oracle.max.graal.compiler.ir.Phi.PhiType;
 import com.oracle.max.graal.compiler.observer.*;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.graph.NodeClass.*;
 import com.oracle.max.graal.graph.collections.*;
-import com.oracle.max.graal.graph.collections.NodeWorkList.InfiniteWorkException;
+import com.oracle.max.graal.graph.collections.NodeWorkList.*;
 
 public class GraphUtil {
 
@@ -88,12 +87,17 @@ public class GraphUtil {
     }
 
     private static <T> Collection<Merge> colorCFGDownToMerge(Node from, T color, NodeMap<T> colors) {
+        throw new UnsupportedOperationException();
+        /*
+        //System.out.println("colorCFGDownToMerge(" + from + ", " + color + ", colors)");
         NodeFlood work = from.graph().createNodeFlood();
         Collection<Merge> merges = new LinkedList<Merge>();
         work.add(from);
         for (Node node : work) {
+            //System.out.println("colorToMerge : work on " + node);
             Node current = node;
             while (current != null) {
+                //System.out.println("colorToMerge : current " + current);
                 if (current instanceof Merge) {
                     merges.add((Merge) current);
                     break;
@@ -122,7 +126,8 @@ public class GraphUtil {
                 }
             }
         }
-        return merges;
+        //System.out.println("return " + merges);
+        return merges;*/
     }
 
     public static interface ColorSplitingLambda<T> {
@@ -136,6 +141,8 @@ public class GraphUtil {
 
     // TODO (gd) rework that code around Phi handling : too complicated
     public static <T> void splitFromColoring(NodeMap<T> coloring, ColorSplitingLambda<T> lambda) {
+        throw new UnsupportedOperationException();
+        /*
         Map<Node, T> internalColoring = new HashMap<Node, T>();
         NodeWorkList work = coloring.graph().createNodeWorkList();
         for (Entry<Node, T> entry : coloring.entries()) {
@@ -147,6 +154,7 @@ public class GraphUtil {
         Set<T> colors = new HashSet<T>();
         try {
             for (Node node : work) {
+                //System.out.println("Split : work on " + node);
                 if (node instanceof Phi) {
                     Phi phi = (Phi) node;
                     Merge merge = phi.merge();
@@ -160,6 +168,7 @@ public class GraphUtil {
                                     phi.setValueAt(i, replace);
                                 } else {
                                     if (lambda.explore(v) && coloring.get(v) == null && !work.isNew(v)) {
+                                        //System.out.println("Split : Add input " + input + " to work from " + node);
                                         work.add(v);
                                     }
                                 }
@@ -171,6 +180,7 @@ public class GraphUtil {
                     colors.clear();
                     T originalColoringColor = coloring.get(node);
                     if (originalColoringColor == null && internalColoring.get(node) != null) {
+                        //System.out.println("Split : ori == null && intern != null -> continue");
                         continue;
                     }
                     if (originalColoringColor == null) {
@@ -178,6 +188,7 @@ public class GraphUtil {
                             if (usage instanceof Phi) {
                                 Phi phi = (Phi) usage;
                                 Merge merge = phi.merge();
+                                //System.out.println("Split merge : " + merge + ".endCount = " + merge.endCount() + " phi " + phi + ".valueCount : " + phi.valueCount());
                                 for (int i = 0; i < phi.valueCount(); i++) {
                                     Value v = phi.valueAt(i);
                                     if (v == node) {
@@ -190,6 +201,7 @@ public class GraphUtil {
                             } else {
                                 T color = internalColoring.get(usage);
                                 if (color == null) {
+                                    //System.out.println("Split : color from " + usage + " is null : " + (lambda.explore(usage) ? "Should be colored" : "Should be white"));
                                     if (lambda.explore(usage)) {
                                         delay = true;
                                         break;
@@ -200,6 +212,7 @@ public class GraphUtil {
                             }
                         }
                         if (delay) {
+                            //System.out.println("Split : delay");
                             work.addAgain(node);
                             continue;
                         }
@@ -207,6 +220,7 @@ public class GraphUtil {
                         colors.add(originalColoringColor);
                     }
                     if (colors.size() == 1) {
+                        //System.out.println("Split : 1 color, coloring, fixing");
                         T color = colors.iterator().next();
                         internalColoring.put(node, color);
                         lambda.fixNode(node, color);
@@ -232,18 +246,18 @@ public class GraphUtil {
                                 Phi phi = new Phi(((Value) node).kind, lambda.merge(color), PhiType.Value, node.graph());
                                 for (T parentColor : parentColors) {
                                     Node input = newNodes.get(parentColor);
-                                    phi.addInput((Value) input);
+                                    phi.addInput(input);
                                 }
                                 newNode = phi;
                             } else {
-                                newNode = node.clone(node.graph());
-                                for (NodeClassIterator iter = node.inputs().iterator(); iter.hasNext();) {
-                                    Position pos = iter.nextPosition();
-                                    newNode.set(pos, node.get(pos));
+                                newNode = node.copy();
+                                for (int i = 0; i < node.inputs().size(); i++) {
+                                    Node input = node.inputs().get(i);
+                                    newNode.inputs().setOrExpand(i, input);
                                 }
-                                for (NodeClassIterator iter = node.successors().iterator(); iter.hasNext();) {
-                                    Position pos = iter.nextPosition();
-                                    newNode.set(pos, node.get(pos));
+                                for (int i = 0; i < node.successors().size(); i++) {
+                                    Node input = node.successors().get(i);
+                                    newNode.successors().setOrExpand(i, input);
                                 }
                                 internalColoring.put(newNode, color);
                                 lambda.fixSplit(node, newNode, color);
@@ -274,11 +288,12 @@ public class GraphUtil {
                                 }
                             }
                         }
-                        lambda.fixNode(node, null /*white*/);
+                        lambda.fixNode(node, null*/ /*white*/ /*);
                     }
                     if (node instanceof StateSplit) {
                         FrameState stateAfter = ((StateSplit) node).stateAfter();
                         if (stateAfter != null && lambda.explore(stateAfter) && !work.isNew(stateAfter)) {
+                            //System.out.println("Split : Add framestate to work");
                             if (!(node instanceof Merge && coloring.get(((Merge) node).next()) == null)) { // not dangling colored merge
                                 work.add(stateAfter);
                             }
@@ -299,6 +314,7 @@ public class GraphUtil {
 
                     for (Node input : node.dataInputs()) {
                         if (lambda.explore(input) && coloring.get(input) == null && !work.isNew(input)) {
+                            //System.out.println("Split : Add input " + input + " to work from " + node);
                             work.add(input);
                         }
                     }
@@ -330,6 +346,6 @@ public class GraphUtil {
             Map<String, Object> debug = new HashMap<String, Object>();
             debug.put("split", debugColoring);
             compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "Split end!!", coloring.graph(), true, false, debug));
-        }
+        }*/
     }
 }
