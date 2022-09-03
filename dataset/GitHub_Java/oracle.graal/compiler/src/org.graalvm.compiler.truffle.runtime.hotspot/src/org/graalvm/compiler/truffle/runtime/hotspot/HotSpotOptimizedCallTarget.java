@@ -24,37 +24,29 @@
  */
 package org.graalvm.compiler.truffle.runtime.hotspot;
 
+import org.graalvm.compiler.truffle.common.hotspot.HotSpotTruffleInstalledCode;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.TruffleCallBoundary;
 
 import com.oracle.truffle.api.nodes.RootNode;
 
-import jdk.vm.ci.code.InstalledCode;
-
 /**
- * A HotSpot specific {@link OptimizedCallTarget} whose machine code (if any) is represented by an
- * associated {@link InstalledCode}.
+ * A HotSpot specific {@link OptimizedCallTarget} that whose machine code (if any) is represented by
+ * an associated {@link HotSpotTruffleInstalledCode}.
  */
 public class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
-
-    /**
-     * Initial value for {@link #installedCode}.
-     */
-    private static final InstalledCode INVALID_CODE = new InstalledCode(null);
-
     /**
      * This field is read by the code injected by {@code TruffleCallBoundaryInstrumentationFactory}
-     * into a method annotated by {@link TruffleCallBoundary}. The injected code assumes this field
-     * is never null hence the use of {@link #INVALID_CODE}.
+     * into a method annotated by {@link TruffleCallBoundary}.
      */
-    private InstalledCode installedCode;
+    private HotSpotTruffleInstalledCode installedCode;
 
-    public HotSpotOptimizedCallTarget(OptimizedCallTarget sourceCallTarget, RootNode rootNode) {
+    public HotSpotOptimizedCallTarget(OptimizedCallTarget sourceCallTarget, RootNode rootNode, HotSpotTruffleInstalledCode installedCode) {
         super(sourceCallTarget, rootNode);
-        this.installedCode = INVALID_CODE;
+        this.installedCode = installedCode;
     }
 
-    public void setInstalledCode(InstalledCode code) {
+    public void setInstalledCode(HotSpotTruffleInstalledCode code) {
         installedCode = code;
     }
 
@@ -64,7 +56,12 @@ public class HotSpotOptimizedCallTarget extends OptimizedCallTarget {
     }
 
     @Override
-    protected void invalidateCode() {
+    public boolean isValidHighTier() {
+        return installedCode.isValid() && !installedCode.isLowTier();
+    }
+
+    @Override
+    public void invalidateCode() {
         if (installedCode.isValid()) {
             installedCode.invalidate();
         }
