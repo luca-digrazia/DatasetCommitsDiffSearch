@@ -34,9 +34,7 @@ import static com.oracle.graal.hotspot.nodes.NewArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewInstanceStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewMultiArrayStubCall.*;
 import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.*;
-import static com.oracle.graal.hotspot.stubs.NewArrayStub.*;
-import static com.oracle.graal.hotspot.stubs.NewInstanceStub.*;
-import static com.oracle.graal.hotspot.stubs.NewMultiArrayStub.*;
+import static com.oracle.graal.hotspot.stubs.Stub.*;
 import static com.oracle.graal.java.GraphBuilderPhase.RuntimeCalls.*;
 import static com.oracle.graal.nodes.java.RegisterFinalizerNode.*;
 import static com.oracle.graal.replacements.Log.*;
@@ -206,7 +204,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         this.graalRuntime = graalRuntime;
         regConfig = createRegisterConfig(false);
         globalStubRegConfig = createRegisterConfig(true);
-        Kind word = graalRuntime.getTarget().wordKind;
 
         // @formatter:off
 
@@ -219,42 +216,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                         /*           temps */ null,
                         /*             ret */ ret(Kind.Void),
                         /* arg0:    object */ javaCallingConvention(Kind.Object));
-
-        addStubCall(NEW_ARRAY,
-                        /*             ret */ ret(Kind.Object),
-                        /* arg0:       hub */ javaCallingConvention(word,
-                        /* arg1:    length */ Kind.Int));
-
-        addCRuntimeCall(NEW_ARRAY_C, config.newArrayAddress,
-                        /*           temps */ null,
-                        /*             ret */ ret(Kind.Void),
-                        /* arg0:    thread */ nativeCallingConvention(word,
-                        /* arg1:       hub */                         word,
-                        /* arg2:    length */                         Kind.Int));
-
-        addStubCall(NEW_INSTANCE,
-                        /*             ret */ ret(Kind.Object),
-                        /* arg0:       hub */ javaCallingConvention(word));
-
-        addCRuntimeCall(NEW_INSTANCE_C, config.newInstanceAddress,
-                        /*           temps */ null,
-                        /*             ret */ ret(Kind.Void),
-                        /* arg0:    thread */ nativeCallingConvention(word,
-                        /* arg1:       hub */                         word));
-
-        addStubCall(NEW_MULTI_ARRAY,
-                        /*             ret */ ret(Kind.Object),
-                        /* arg0:       hub */ javaCallingConvention(word,
-                        /* arg1:      rank */                       Kind.Int,
-                        /* arg2:      dims */                       word));
-
-        addCRuntimeCall(NEW_MULTI_ARRAY_C, config.newMultiArrayAddress,
-                        /*           temps */ null,
-                        /*             ret */ ret(Kind.Void),
-                        /* arg0:    thread */ nativeCallingConvention(word,
-                        /* arg1:       hub */                         word,
-                        /* arg2:      rank */                         Kind.Int,
-                        /* arg3:      dims */                         word));
 
         addRuntimeCall(CREATE_NULL_POINTER_EXCEPTION, config.createNullPointerExceptionStub,
                         /*           temps */ null,
@@ -330,14 +291,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         return addRuntimeCall(descriptor, 0L, null, ret, args);
     }
 
-    protected RuntimeCallTarget addCRuntimeCall(Descriptor descriptor, long address, Register[] tempRegs, AllocatableValue ret, AllocatableValue... args) {
-        return addRuntimeCall(descriptor, address, true, tempRegs, ret, args);
-    }
-
-    protected RuntimeCallTarget addRuntimeCall(Descriptor descriptor, long address, Register[] tempRegs, AllocatableValue ret, AllocatableValue... args) {
-        return addRuntimeCall(descriptor, address, false, tempRegs, ret, args);
-    }
-
     /**
      * Registers the details for linking a runtime call.
      * 
@@ -347,7 +300,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
      * @param ret where the call returns its result
      * @param args where arguments are passed to the call
      */
-    protected RuntimeCallTarget addRuntimeCall(Descriptor descriptor, long address, boolean isCRuntimeCall, Register[] tempRegs, AllocatableValue ret, AllocatableValue... args) {
+    protected RuntimeCallTarget addRuntimeCall(Descriptor descriptor, long address, Register[] tempRegs, AllocatableValue ret, AllocatableValue... args) {
         AllocatableValue[] temps = tempRegs == null || tempRegs.length == 0 ? AllocatableValue.NONE : new AllocatableValue[tempRegs.length];
         for (int i = 0; i < temps.length; i++) {
             temps[i] = tempRegs[i].asValue();
@@ -358,7 +311,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         for (int i = 0; i < argTypes.length; i++) {
             assert checkAssignable(argTypes[i], args[i]) : descriptor + " incompatible with argument location " + i + ": " + args[i];
         }
-        HotSpotRuntimeCallTarget runtimeCall = new HotSpotRuntimeCallTarget(descriptor, address, isCRuntimeCall, new CallingConvention(temps, 0, ret, args), graalRuntime.getCompilerToVM());
+        HotSpotRuntimeCallTarget runtimeCall = new HotSpotRuntimeCallTarget(descriptor, address, new CallingConvention(temps, 0, ret, args), graalRuntime.getCompilerToVM());
         runtimeCalls.put(descriptor, runtimeCall);
         return runtimeCall;
     }
@@ -395,6 +348,9 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         if (GraalOptions.IntrinsifyAESMethods) {
             replacements.registerSubstitutions(AESCryptSubstitutions.class);
             replacements.registerSubstitutions(CipherBlockChainingSubstitutions.class);
+        }
+        if (GraalOptions.IntrinsifyReflectionMethods) {
+            replacements.registerSubstitutions(ReflectionSubstitutions.class);
         }
 
         checkcastSnippets = new CheckCastSnippets.Templates(this, replacements, graalRuntime.getTarget());

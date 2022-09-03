@@ -23,7 +23,7 @@
 package com.oracle.graal.hotspot.replacements;
 
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.spi.MacroSubstitution;
 
 /**
  * Substitutions for {@link sun.reflect.Reflection} methods.
