@@ -34,14 +34,15 @@ import com.oracle.graal.compiler.common.alloc.TraceBuilder.TraceBuilderResult;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.alloc.trace.TraceInterval.RegisterPriority;
-import com.oracle.graal.lir.alloc.trace.TraceInterval.SpillState;
+import com.oracle.graal.lir.alloc.lsra.*;
+import com.oracle.graal.lir.alloc.lsra.Interval.RegisterPriority;
+import com.oracle.graal.lir.alloc.lsra.Interval.SpillState;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 
-final class TraceSimpleLifetimeAnalysisPhase extends TraceLinearScanLifetimeAnalysisPhase {
+public class TraceSimpleLifetimeAnalysisPhase extends TraceLinearScanLifetimeAnalysisPhase {
 
-    public TraceSimpleLifetimeAnalysisPhase(TraceLinearScan allocator, TraceBuilderResult<?> traceBuilderResult) {
+    public TraceSimpleLifetimeAnalysisPhase(LinearScan allocator, TraceBuilderResult<?> traceBuilderResult) {
         super(allocator, traceBuilderResult);
     }
 
@@ -63,7 +64,7 @@ final class TraceSimpleLifetimeAnalysisPhase extends TraceLinearScanLifetimeAnal
             return;
         }
 
-        TraceInterval interval = allocator.getOrCreateInterval(operand);
+        Interval interval = allocator.getOrCreateInterval(operand);
         if (!kind.equals(LIRKind.Illegal)) {
             interval.setKind(kind);
         }
@@ -93,7 +94,7 @@ final class TraceSimpleLifetimeAnalysisPhase extends TraceLinearScanLifetimeAnal
             return;
         }
 
-        TraceInterval interval = allocator.getOrCreateInterval(operand);
+        Interval interval = allocator.getOrCreateInterval(operand);
         if (!kind.equals(LIRKind.Illegal)) {
             interval.setKind(kind);
         }
@@ -123,7 +124,7 @@ final class TraceSimpleLifetimeAnalysisPhase extends TraceLinearScanLifetimeAnal
         }
         int defPos = op.id();
 
-        TraceInterval interval = allocator.getOrCreateInterval(operand);
+        Interval interval = allocator.getOrCreateInterval(operand);
         if (!kind.equals(LIRKind.Illegal)) {
             interval.setKind(kind);
         }
@@ -161,26 +162,25 @@ final class TraceSimpleLifetimeAnalysisPhase extends TraceLinearScanLifetimeAnal
     }
 
     @Override
-    @SuppressWarnings("try")
     protected void buildIntervals() {
 
         try (Indent indent = Debug.logAndIndent("build intervals")) {
             InstructionValueConsumer outputConsumer = (op, operand, mode, flags) -> {
-                if (TraceLinearScan.isVariableOrRegister(operand)) {
+                if (LinearScan.isVariableOrRegister(operand)) {
                     addDef((AllocatableValue) operand, op, registerPriorityOfOutputOperand(op), operand.getLIRKind());
                     addRegisterHint(op, operand, mode, flags, true);
                 }
             };
 
             InstructionValueConsumer tempConsumer = (op, operand, mode, flags) -> {
-                if (TraceLinearScan.isVariableOrRegister(operand)) {
+                if (LinearScan.isVariableOrRegister(operand)) {
                     addTemp((AllocatableValue) operand, op.id(), RegisterPriority.MustHaveRegister, operand.getLIRKind());
                     addRegisterHint(op, operand, mode, flags, false);
                 }
             };
 
             InstructionValueConsumer aliveConsumer = (op, operand, mode, flags) -> {
-                if (TraceLinearScan.isVariableOrRegister(operand)) {
+                if (LinearScan.isVariableOrRegister(operand)) {
                     RegisterPriority p = registerPriorityOfInputOperand(flags);
                     int opId = op.id();
                     int blockFrom = allocator.getFirstLirInstructionId((allocator.blockForId(opId)));
@@ -190,7 +190,7 @@ final class TraceSimpleLifetimeAnalysisPhase extends TraceLinearScanLifetimeAnal
             };
 
             InstructionValueConsumer inputConsumer = (op, operand, mode, flags) -> {
-                if (TraceLinearScan.isVariableOrRegister(operand)) {
+                if (LinearScan.isVariableOrRegister(operand)) {
                     int opId = op.id();
                     RegisterPriority p = registerPriorityOfInputOperand(flags);
                     int blockFrom = allocator.getFirstLirInstructionId((allocator.blockForId(opId)));
@@ -200,7 +200,7 @@ final class TraceSimpleLifetimeAnalysisPhase extends TraceLinearScanLifetimeAnal
             };
 
             InstructionValueConsumer stateProc = (op, operand, mode, flags) -> {
-                if (TraceLinearScan.isVariableOrRegister(operand)) {
+                if (LinearScan.isVariableOrRegister(operand)) {
                     int opId = op.id();
                     int blockFrom = allocator.getFirstLirInstructionId((allocator.blockForId(opId)));
                     addUse((AllocatableValue) operand, blockFrom, opId + 1, RegisterPriority.None, operand.getLIRKind());
@@ -271,7 +271,7 @@ final class TraceSimpleLifetimeAnalysisPhase extends TraceLinearScanLifetimeAnal
              * Add the range [0, 1] to all fixed intervals. the register allocator need not handle
              * unhandled fixed intervals.
              */
-            for (TraceInterval interval : allocator.intervals()) {
+            for (Interval interval : allocator.intervals()) {
                 if (interval != null && isRegister(interval.operand)) {
                     interval.addRange(0, 1);
                 }

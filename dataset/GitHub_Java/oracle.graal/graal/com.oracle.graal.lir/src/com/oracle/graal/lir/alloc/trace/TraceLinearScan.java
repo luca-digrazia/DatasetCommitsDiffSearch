@@ -46,7 +46,7 @@ public final class TraceLinearScan extends LinearScan {
 
     public static class Options {
         // @formatter:off
-        @Option(help = "Use simplified lifetime analysis.", type = OptionType.Debug)
+        @Option(help = "", type = OptionType.Debug)
         public static final OptionValue<Boolean> TraceRAsimpleLifetimeAnalysis = new OptionValue<>(true);
         // @formatter:on
     }
