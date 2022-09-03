@@ -60,7 +60,6 @@ import com.oracle.truffle.llvm.parser.factories.NodeFactoryFacadeImpl;
 import com.oracle.truffle.llvm.parser.impl.LLVMVisitor;
 import com.oracle.truffle.llvm.parser.impl.LLVMVisitor.ParserResult;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
-import com.oracle.truffle.llvm.runtime.LLVMOptions;
 import com.oracle.truffle.llvm.runtime.LLVMPropertyOptimizationConfiguration;
 
 /**
@@ -81,7 +80,7 @@ public class LLVM {
             public CallTarget parse(Source code, Node contextNode, String... argumentNames) {
                 Node findContext = LLVMLanguage.INSTANCE.createFindContextNode0();
                 LLVMContext context = LLVMLanguage.INSTANCE.findContext0(findContext);
-                parseDynamicBitcodeLibraries(context);
+
                 CallTarget mainFunction;
                 if (code.getMimeType() == LLVMLanguage.LLVM_MIME_TYPE) {
                     ParserResult parserResult = parseFile(code.getPath(), context);
@@ -124,16 +123,6 @@ public class LLVM {
                     throw new IllegalArgumentException("undeclared mime type");
                 }
                 return mainFunction;
-            }
-
-            private void parseDynamicBitcodeLibraries(LLVMContext context) {
-                String[] dynamicLibraryPaths = LLVMOptions.getDynamicBitcodeLibraries();
-                if (dynamicLibraryPaths != null && dynamicLibraryPaths.length != 0) {
-                    for (String s : dynamicLibraryPaths) {
-                        ParserResult result = parseFile(s, context);
-                        context.getFunctionRegistry().register(result.getParsedFunctions());
-                    }
-                }
             }
 
             @Override
