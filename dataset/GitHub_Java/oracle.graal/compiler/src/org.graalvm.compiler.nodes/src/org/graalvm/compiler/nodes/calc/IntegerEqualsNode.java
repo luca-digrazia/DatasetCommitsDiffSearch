@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -305,29 +305,5 @@ public final class IntegerEqualsNode extends CompareNode implements BinaryCommut
             }
         }
         return TriState.UNKNOWN;
-    }
-
-    @Override
-    public TriState implies(boolean thisNegated, LogicNode other) {
-        // x == y <=> y == x
-        if (other instanceof IntegerEqualsNode) {
-            ValueNode otherX = ((IntegerEqualsNode) other).getX();
-            ValueNode otherY = ((IntegerEqualsNode) other).getY();
-            if ((getX() == otherX && getY() == otherY) || (getX() == otherY && getY() == otherX)) {
-                return TriState.get(!thisNegated);
-            }
-        }
-
-        // x == y => !(x < y)
-        // x == y => !(y < x)
-        if (!thisNegated && other instanceof IntegerLessThanNode) {
-            ValueNode otherX = ((IntegerLessThanNode) other).getX();
-            ValueNode otherY = ((IntegerLessThanNode) other).getY();
-            if ((getX() == otherX && getY() == otherY) || (getX() == otherY && getY() == otherX)) {
-                return TriState.FALSE;
-            }
-        }
-
-        return super.implies(thisNegated, other);
     }
 }

@@ -27,6 +27,7 @@ package org.graalvm.compiler.core.test;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
+import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.junit.Test;
 
 public class CompareCanonicalizerTest2 extends GraalCompilerTest {
@@ -35,7 +36,7 @@ public class CompareCanonicalizerTest2 extends GraalCompilerTest {
 
     private StructuredGraph getCanonicalizedGraph(String name) {
         StructuredGraph graph = getRegularGraph(name);
-        new CanonicalizerPhase().apply(graph, getProviders());
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
         return graph;
     }
 

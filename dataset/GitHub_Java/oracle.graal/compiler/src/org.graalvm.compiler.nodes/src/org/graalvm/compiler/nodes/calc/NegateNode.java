@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,10 +26,8 @@ package org.graalvm.compiler.nodes.calc;
 
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_2;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_1;
-import static org.graalvm.compiler.nodes.calc.BinaryArithmeticNode.getArithmeticOpTable;
 
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable;
-import org.graalvm.compiler.core.common.type.ArithmeticOpTable.UnaryOp;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable.UnaryOp.Neg;
 import org.graalvm.compiler.core.common.type.FloatStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
@@ -51,7 +49,7 @@ public final class NegateNode extends UnaryArithmeticNode<Neg> implements Narrow
     public static final NodeClass<NegateNode> TYPE = NodeClass.create(NegateNode.class);
 
     public NegateNode(ValueNode value) {
-        super(TYPE, getArithmeticOpTable(value).getNeg(), value);
+        super(TYPE, ArithmeticOpTable::getNeg, value);
     }
 
     public static ValueNode create(ValueNode value, NodeView view) {
@@ -60,11 +58,6 @@ public final class NegateNode extends UnaryArithmeticNode<Neg> implements Narrow
             return synonym;
         }
         return new NegateNode(value);
-    }
-
-    @Override
-    protected UnaryOp<Neg> getOp(ArithmeticOpTable table) {
-        return table.getNeg();
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,12 +24,11 @@
  */
 package org.graalvm.compiler.nodes;
 
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.TriState;
+import static org.graalvm.compiler.nodeinfo.InputType.Condition;
+import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_0;
+import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_0;
+
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
-import org.graalvm.compiler.core.common.spi.MetaAccessExtensionProvider;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.IterableNodeType;
@@ -42,9 +41,10 @@ import org.graalvm.compiler.nodes.calc.IntegerBelowNode;
 import org.graalvm.compiler.nodes.calc.IntegerLessThanNode;
 import org.graalvm.compiler.options.OptionValues;
 
-import static org.graalvm.compiler.nodeinfo.InputType.Condition;
-import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_0;
-import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_0;
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.TriState;
 
 @NodeInfo(cycles = CYCLES_0, size = SIZE_0)
 public final class ShortCircuitOrNode extends LogicNode implements IterableNodeType, Canonicalizable.Binary<LogicNode> {
@@ -304,11 +304,6 @@ public final class ShortCircuitOrNode extends LogicNode implements IterableNodeT
         }
 
         @Override
-        public MetaAccessExtensionProvider getMetaAccessExtensionProvider() {
-            return tool.getMetaAccessExtensionProvider();
-        }
-
-        @Override
         public boolean canonicalizeReads() {
             return tool.canonicalizeReads();
         }
@@ -321,11 +316,6 @@ public final class ShortCircuitOrNode extends LogicNode implements IterableNodeT
         @Override
         public Integer smallestCompareWidth() {
             return tool.smallestCompareWidth();
-        }
-
-        @Override
-        public boolean supportsRounding() {
-            return tool.supportsRounding();
         }
 
         @Override

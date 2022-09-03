@@ -136,8 +136,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
                     boolean supported = true;
                     if (convertX.getValue().stamp(view) instanceof IntegerStamp) {
                         IntegerStamp intStamp = (IntegerStamp) convertX.getValue().stamp(view);
-                        boolean isConversionCompatible = convertX.getClass() == convertY.getClass();
-                        supported = smallestCompareWidth != null && intStamp.getBits() >= smallestCompareWidth && isConversionCompatible;
+                        supported = smallestCompareWidth != null && intStamp.getBits() >= smallestCompareWidth;
                     }
 
                     if (supported) {
