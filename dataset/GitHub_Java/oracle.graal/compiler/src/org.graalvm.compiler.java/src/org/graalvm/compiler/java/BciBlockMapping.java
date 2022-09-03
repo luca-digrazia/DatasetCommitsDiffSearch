@@ -38,7 +38,6 @@ import static org.graalvm.compiler.bytecode.Bytecodes.FALOAD;
 import static org.graalvm.compiler.bytecode.Bytecodes.FASTORE;
 import static org.graalvm.compiler.bytecode.Bytecodes.FRETURN;
 import static org.graalvm.compiler.bytecode.Bytecodes.GETFIELD;
-import static org.graalvm.compiler.bytecode.Bytecodes.GETSTATIC;
 import static org.graalvm.compiler.bytecode.Bytecodes.GOTO;
 import static org.graalvm.compiler.bytecode.Bytecodes.GOTO_W;
 import static org.graalvm.compiler.bytecode.Bytecodes.IALOAD;
@@ -72,7 +71,6 @@ import static org.graalvm.compiler.bytecode.Bytecodes.LASTORE;
 import static org.graalvm.compiler.bytecode.Bytecodes.LOOKUPSWITCH;
 import static org.graalvm.compiler.bytecode.Bytecodes.LRETURN;
 import static org.graalvm.compiler.bytecode.Bytecodes.PUTFIELD;
-import static org.graalvm.compiler.bytecode.Bytecodes.PUTSTATIC;
 import static org.graalvm.compiler.bytecode.Bytecodes.RET;
 import static org.graalvm.compiler.bytecode.Bytecodes.RETURN;
 import static org.graalvm.compiler.bytecode.Bytecodes.SALOAD;
@@ -88,8 +86,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.TreeSet;
 
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.Equivalence;
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.bytecode.BytecodeLookupSwitch;
 import org.graalvm.compiler.bytecode.BytecodeStream;
@@ -99,6 +95,8 @@ import org.graalvm.compiler.bytecode.Bytecodes;
 import org.graalvm.compiler.core.common.PermanentBailoutException;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.util.EconomicMap;
+import org.graalvm.util.Equivalence;
 
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.ExceptionHandler;
@@ -625,8 +623,6 @@ public final class BciBlockMapping {
                 case CALOAD:
                 case SALOAD:
                 case ARRAYLENGTH:
-                case PUTSTATIC:
-                case GETSTATIC:
                 case PUTFIELD:
                 case GETFIELD: {
                     ExceptionDispatchBlock handler = handleExceptions(blockMap, bci);
