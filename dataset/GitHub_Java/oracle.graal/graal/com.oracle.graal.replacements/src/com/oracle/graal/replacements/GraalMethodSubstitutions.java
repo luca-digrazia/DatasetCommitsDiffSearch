@@ -26,7 +26,6 @@ import static com.oracle.graal.phases.GraalOptions.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -36,7 +35,7 @@ import com.oracle.graal.nodes.spi.*;
 @ServiceProvider(ReplacementsProvider.class)
 public class GraalMethodSubstitutions implements ReplacementsProvider {
 
-    public void registerReplacements(MetaAccessProvider metaAccess, LoweringProvider loweringProvider, SnippetReflectionProvider snippetReflection, Replacements replacements, TargetDescription target) {
+    public void registerReplacements(MetaAccessProvider metaAccess, LoweringProvider loweringProvider, Replacements replacements, TargetDescription target) {
         for (Class<?> clazz : BoxingSubstitutions.getClasses()) {
             replacements.registerSubstitutions(clazz);
         }
@@ -51,6 +50,8 @@ public class GraalMethodSubstitutions implements ReplacementsProvider {
             replacements.registerSubstitutions(CharacterSubstitutions.class);
             replacements.registerSubstitutions(ShortSubstitutions.class);
             replacements.registerSubstitutions(UnsignedMathSubstitutions.class);
+            replacements.registerSubstitutions(NodeClassSubstitutions.class);
+            replacements.registerSubstitutions(CompositeValueClassSubstitutions.class);
         }
     }
 }

@@ -20,37 +20,15 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.jtt.jdk;
+package com.oracle.graal.replacements;
 
-import com.oracle.graal.jtt.*;
-import org.junit.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.replacements.nodes.*;
 
-public class CharacterBits extends JTTTest {
-    @SuppressWarnings("unused") private static char init = Character.reverseBytes((char) 42);
-    private static char original = 0x1708;
-
-    public static char test(char o) {
-        return Character.reverseBytes(o);
-    }
-
-    @Test
-    public void run0() {
-        runTest("test", original);
-    }
-
-    @Test
-    public void run1() {
-        runTest("test", (char) 0x1708L);
-    }
-
-    @Test
-    public void run2() {
-        runTest("test", (char) 0);
-        runTest("test", (char) 1);
-        runTest("test", (char) -1);
-        runTest("test", (char) 0x00ff);
-        runTest("test", (char) 0xff00);
-        runTest("test", (char) 0xffff);
-        runTest("test", (char) 0x3fff);
+@ClassSubstitution(Short.class)
+public class ShortSubstitutions {
+    @MethodSubstitution
+    public static short reverseBytes(short i) {
+        return (short) (ReverseBytesNode.reverse(i) >> 16);
     }
 }
