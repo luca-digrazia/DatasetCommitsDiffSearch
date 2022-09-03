@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -75,7 +73,7 @@ public class SPARCHotSpotSafepointOp extends SPARCLIRInstruction {
 
     public static void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm, GraalHotSpotVMConfig config, boolean atReturn, LIRFrameState state, Register thread,
                     Value safepointPollAddress) {
-        if (config.useThreadLocalPolling) {
+        if (config.threadLocalHandshakes) {
             emitThreadLocalPoll(crb, masm, config, atReturn, state, thread);
         } else {
             emitGlobalPoll(crb, masm, config, atReturn, state, asRegister(safepointPollAddress));
@@ -117,7 +115,7 @@ public class SPARCHotSpotSafepointOp extends SPARCLIRInstruction {
     }
 
     static AllocatableValue getSafepointAddressValue(SPARCHotSpotLIRGenerator gen) {
-        if (gen.config.useThreadLocalPolling) {
+        if (gen.config.threadLocalHandshakes) {
             return Value.ILLEGAL;
         } else {
             return gen.newVariable(LIRKind.value(gen.target().arch.getWordKind()));
@@ -125,7 +123,7 @@ public class SPARCHotSpotSafepointOp extends SPARCLIRInstruction {
     }
 
     static void emitPrologue(SPARCHotSpotNodeLIRBuilder lir, SPARCHotSpotLIRGenerator gen) {
-        if (!gen.config.useThreadLocalPolling) {
+        if (!gen.config.threadLocalHandshakes) {
             AllocatableValue var = gen.getSafepointAddressValue();
             lir.append(new SPARCHotSpotSafepointOp.SPARCLoadSafepointPollAddress(var, gen.config));
             gen.append(((HotSpotDebugInfoBuilder) lir.getDebugInfoBuilder()).lockStack());

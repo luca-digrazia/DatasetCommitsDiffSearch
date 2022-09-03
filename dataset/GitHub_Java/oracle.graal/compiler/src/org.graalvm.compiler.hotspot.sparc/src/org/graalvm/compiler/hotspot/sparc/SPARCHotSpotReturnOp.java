@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,24 +22,14 @@
  */
 package org.graalvm.compiler.hotspot.sparc;
 
-import static jdk.vm.ci.sparc.SPARC.g2;
-import static jdk.vm.ci.sparc.SPARC.g4;
-import static jdk.vm.ci.sparc.SPARC.sp;
-import static org.graalvm.compiler.hotspot.HotSpotHostBackend.ENABLE_STACK_RESERVED_ZONE;
-import static org.graalvm.compiler.hotspot.HotSpotHostBackend.THROW_DELAYED_STACKOVERFLOW_ERROR;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.ILLEGAL;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.REG;
 
-import org.graalvm.compiler.asm.Label;
-import org.graalvm.compiler.asm.sparc.SPARCAddress;
-import org.graalvm.compiler.asm.sparc.SPARCAssembler;
 import org.graalvm.compiler.asm.sparc.SPARCMacroAssembler;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
-import org.graalvm.compiler.hotspot.meta.HotSpotForeignCallsProvider;
 import org.graalvm.compiler.lir.LIRInstructionClass;
 import org.graalvm.compiler.lir.Opcode;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
-import org.graalvm.compiler.lir.sparc.SPARCCall;
 import org.graalvm.compiler.lir.sparc.SPARCControlFlow.ReturnOp;
 
 import jdk.vm.ci.code.Register;
@@ -57,34 +45,22 @@ final class SPARCHotSpotReturnOp extends SPARCHotSpotEpilogueOp {
 
     @Use({REG, ILLEGAL}) protected Value value;
     @Use({REG, ILLEGAL}) protected Value safepointPollAddress;
-    private final boolean requiresReservedStackAccessCheck;
     private final boolean isStub;
     private final GraalHotSpotVMConfig config;
     private final Register thread;
 
-    SPARCHotSpotReturnOp(Value value, boolean isStub, GraalHotSpotVMConfig config, Register thread, Value safepointPoll, boolean requiresReservedStackAccessCheck) {
+    SPARCHotSpotReturnOp(Value value, boolean isStub, GraalHotSpotVMConfig config, Register thread, Value safepointPoll) {
         super(TYPE, SIZE);
         this.value = value;
         this.isStub = isStub;
         this.config = config;
         this.thread = thread;
         this.safepointPollAddress = safepointPoll;
-        this.requiresReservedStackAccessCheck = requiresReservedStackAccessCheck;
     }
 
     @Override
     public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
         if (!isStub) {
-            if (requiresReservedStackAccessCheck) {
-                HotSpotForeignCallsProvider foreignCalls = (HotSpotForeignCallsProvider) crb.foreignCalls;
-
-                Label noReserved = new Label();
-                masm.ldx(new SPARCAddress(g2, config.javaThreadReservedStackActivationOffset), g4);
-                masm.compareBranch(sp, g4, SPARCAssembler.ConditionFlag.LessUnsigned, SPARCAssembler.CC.Xcc, noReserved, SPARCAssembler.BranchPredict.PREDICT_TAKEN, null);
-                SPARCCall.directCall(crb, masm, foreignCalls.lookupForeignCall(ENABLE_STACK_RESERVED_ZONE), null, null);
-                SPARCCall.indirectJmp(crb, masm, g4, foreignCalls.lookupForeignCall(THROW_DELAYED_STACKOVERFLOW_ERROR));
-                masm.bind(noReserved);
-            }
             // Every non-stub compile method must have a poll before the return.
             SPARCHotSpotSafepointOp.emitCode(crb, masm, config, true, null, thread, safepointPollAddress);
         }
