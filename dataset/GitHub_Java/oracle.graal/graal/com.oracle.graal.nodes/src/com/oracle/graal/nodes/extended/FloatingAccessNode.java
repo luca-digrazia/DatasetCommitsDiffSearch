@@ -22,11 +22,15 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import java.util.*;
+
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.type.*;
 
-public abstract class FloatingAccessNode extends FloatingGuardedNode implements Access {
+public abstract class FloatingAccessNode extends FloatingNode implements Access {
 
     @Input private ValueNode object;
     @Input private LocationNode location;
@@ -59,14 +63,20 @@ public abstract class FloatingAccessNode extends FloatingGuardedNode implements 
         this.location = location;
     }
 
-    public FloatingAccessNode(ValueNode object, LocationNode location, Stamp stamp, GuardingNode guard) {
-        super(stamp, guard);
+    public FloatingAccessNode(ValueNode object, LocationNode location, Stamp stamp, ValueNode... dependencies) {
+        super(stamp, dependencies);
+        this.object = object;
+        this.location = location;
+    }
+
+    public FloatingAccessNode(ValueNode object, LocationNode location, Stamp stamp, List<ValueNode> dependencies) {
+        super(stamp, dependencies);
         this.object = object;
         this.location = location;
     }
 
     @Override
-    public FloatingAccessNode asNode() {
+    public Node node() {
         return this;
     }
 
@@ -89,6 +99,11 @@ public abstract class FloatingAccessNode extends FloatingGuardedNode implements 
     public void setDeoptimizationState(FrameState f) {
         updateUsages(deoptState, f);
         deoptState = f;
+    }
+
+    @Override
+    public boolean isCallSiteDeoptimization() {
+        return false;
     }
 
     public abstract Access asFixedNode();

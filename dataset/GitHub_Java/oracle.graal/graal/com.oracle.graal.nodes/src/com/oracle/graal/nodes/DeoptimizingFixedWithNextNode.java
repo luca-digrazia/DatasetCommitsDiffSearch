@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.nodes;
 
+import java.util.*;
+
 import com.oracle.graal.nodes.type.*;
 
 public abstract class DeoptimizingFixedWithNextNode extends FixedWithNextNode implements DeoptimizingNode {
@@ -30,6 +32,14 @@ public abstract class DeoptimizingFixedWithNextNode extends FixedWithNextNode im
 
     public DeoptimizingFixedWithNextNode(Stamp stamp) {
         super(stamp);
+    }
+
+    public DeoptimizingFixedWithNextNode(Stamp stamp, List<ValueNode> dependencies) {
+        super(stamp, dependencies);
+    }
+
+    public DeoptimizingFixedWithNextNode(Stamp stamp, ValueNode... dependencies) {
+        super(stamp, dependencies);
     }
 
     @Override
@@ -41,5 +51,10 @@ public abstract class DeoptimizingFixedWithNextNode extends FixedWithNextNode im
     public void setDeoptimizationState(FrameState f) {
         updateUsages(deoptState, f);
         deoptState = f;
+    }
+
+    @Override
+    public boolean isCallSiteDeoptimization() {
+        return false;
     }
 }

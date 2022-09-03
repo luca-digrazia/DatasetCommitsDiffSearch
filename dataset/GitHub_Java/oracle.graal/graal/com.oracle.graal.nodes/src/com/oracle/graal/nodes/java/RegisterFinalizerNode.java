@@ -23,6 +23,7 @@
 package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -34,7 +35,7 @@ import com.oracle.graal.nodes.type.*;
  */
 public final class RegisterFinalizerNode extends AbstractStateSplit implements StateSplit, Canonicalizable, LIRLowerable, Virtualizable, DeoptimizingNode {
 
-    public static final ForeignCallDescriptor REGISTER_FINALIZER = new ForeignCallDescriptor("registerFinalizer", void.class, Object.class);
+    public static final Descriptor REGISTER_FINALIZER = new Descriptor("registerFinalizer", true, void.class, Object.class);
 
     @Input private FrameState deoptState;
     @Input private ValueNode object;
@@ -50,8 +51,8 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements S
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        ForeignCallLinkage linkage = gen.getRuntime().lookupForeignCall(REGISTER_FINALIZER);
-        gen.emitForeignCall(linkage, this, gen.operand(object()));
+        RuntimeCallTarget call = gen.getRuntime().lookupRuntimeCall(REGISTER_FINALIZER);
+        gen.emitCall(call, call.getCallingConvention(), this, gen.operand(object()));
     }
 
     @Override
@@ -64,8 +65,7 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements S
         } else if (stamp.type() != null && !stamp.type().hasFinalizableSubclass()) {
             // if either the declared type of receiver or the holder
             // can be assumed to have no finalizers
-            if (tool.assumptions().useOptimisticAssumptions()) {
-                tool.assumptions().recordNoFinalizableSubclassAssumption(stamp.type());
+            if (tool.assumptions().useOptimisticAssumptions() && tool.assumptions().recordNoFinalizableSubclassAssumption(stamp.type())) {
                 needsCheck = false;
             }
         }
@@ -104,6 +104,11 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements S
     @Override
     public DeoptimizationReason getDeoptimizationReason() {
         return null;
+    }
+
+    @Override
+    public boolean isCallSiteDeoptimization() {
+        return false;
     }
 
     @SuppressWarnings("unused")
