@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
@@ -34,7 +33,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.virtual.*;
 
 @NodeInfo(shortName = "==")
 public final class ObjectEqualsNode extends PointerEqualsNode implements Virtualizable {
@@ -72,13 +70,13 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         return super.canonicalizeSymmetricConstant(tool, constant, nonConstant, mirrored);
     }
 
-    private void virtualizeNonVirtualComparison(VirtualObjectNode virtual, ValueNode other, VirtualizerTool tool) {
-        if (!virtual.hasIdentity() && virtual.entryKind(0) == Kind.Boolean) {
+    private void virtualizeNonVirtualComparison(State state, ValueNode other, VirtualizerTool tool) {
+        if (!state.getVirtualObject().hasIdentity() && state.getVirtualObject().entryKind(0) == Kind.Boolean) {
             if (other.isConstant()) {
                 JavaConstant otherUnboxed = tool.getConstantReflectionProvider().unboxPrimitive(other.asJavaConstant());
                 if (otherUnboxed != null && otherUnboxed.getKind() == Kind.Boolean) {
                     int expectedValue = otherUnboxed.asBoolean() ? 1 : 0;
-                    IntegerEqualsNode equals = new IntegerEqualsNode(tool.getEntry(virtual, 0), ConstantNode.forInt(expectedValue, graph()));
+                    IntegerEqualsNode equals = new IntegerEqualsNode(state.getEntry(0), ConstantNode.forInt(expectedValue, graph()));
                     tool.addNode(equals);
                     tool.replaceWithValue(equals);
                 } else {
@@ -93,42 +91,43 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode xAlias = tool.getAlias(getX());
-        ValueNode yAlias = tool.getAlias(getY());
+        State stateX = tool.getObjectState(getX());
+        State stateY = tool.getObjectState(getY());
+        boolean xVirtual = stateX != null && stateX.getState() == EscapeState.Virtual;
+        boolean yVirtual = stateY != null && stateY.getState() == EscapeState.Virtual;
 
-        VirtualObjectNode xVirtual = xAlias instanceof VirtualObjectNode ? (VirtualObjectNode) xAlias : null;
-        VirtualObjectNode yVirtual = yAlias instanceof VirtualObjectNode ? (VirtualObjectNode) yAlias : null;
-
-        if (xVirtual != null && yVirtual == null) {
-            virtualizeNonVirtualComparison(xVirtual, yAlias, tool);
-        } else if (xVirtual == null && yVirtual != null) {
-            virtualizeNonVirtualComparison(yVirtual, xAlias, tool);
-        } else if (xVirtual != null && yVirtual != null) {
-            if (xVirtual.hasIdentity() ^ yVirtual.hasIdentity()) {
+        if (xVirtual && !yVirtual) {
+            virtualizeNonVirtualComparison(stateX, stateY != null ? stateY.getMaterializedValue() : getY(), tool);
+        } else if (!xVirtual && yVirtual) {
+            virtualizeNonVirtualComparison(stateY, stateX != null ? stateX.getMaterializedValue() : getX(), tool);
+        } else if (xVirtual && yVirtual) {
+            boolean xIdentity = stateX.getVirtualObject().hasIdentity();
+            boolean yIdentity = stateY.getVirtualObject().hasIdentity();
+            if (xIdentity ^ yIdentity) {
                 /*
                  * One of the two objects has identity, the other doesn't. In code, this looks like
                  * "Integer.valueOf(a) == new Integer(b)", which is always false.
-                 * 
+                 *
                  * In other words: an object created via valueOf can never be equal to one created
                  * by new in the same compilation unit.
                  */
                 tool.replaceWithValue(LogicConstantNode.contradiction(graph()));
-            } else if (!xVirtual.hasIdentity() && !yVirtual.hasIdentity()) {
-                ResolvedJavaType type = xVirtual.type();
-                if (type.equals(yVirtual.type())) {
+            } else if (!xIdentity && !yIdentity) {
+                ResolvedJavaType type = stateX.getVirtualObject().type();
+                if (type.equals(stateY.getVirtualObject().type())) {
                     MetaAccessProvider metaAccess = tool.getMetaAccessProvider();
                     if (type.equals(metaAccess.lookupJavaType(Integer.class)) || type.equals(metaAccess.lookupJavaType(Long.class))) {
                         // both are virtual without identity: check contents
-                        assert xVirtual.entryCount() == 1 && yVirtual.entryCount() == 1;
-                        assert xVirtual.entryKind(0).getStackKind() == Kind.Int || xVirtual.entryKind(0) == Kind.Long;
-                        IntegerEqualsNode equals = new IntegerEqualsNode(tool.getEntry(xVirtual, 0), tool.getEntry(yVirtual, 0));
+                        assert stateX.getVirtualObject().entryCount() == 1 && stateY.getVirtualObject().entryCount() == 1;
+                        assert stateX.getVirtualObject().entryKind(0).getStackKind() == Kind.Int || stateX.getVirtualObject().entryKind(0) == Kind.Long;
+                        IntegerEqualsNode equals = new IntegerEqualsNode(stateX.getEntry(0), stateY.getEntry(0));
                         tool.addNode(equals);
                         tool.replaceWithValue(equals);
                     }
                 }
             } else {
                 // both are virtual with identity: check if they refer to the same object
-                tool.replaceWithValue(LogicConstantNode.forBoolean(xVirtual == yVirtual, graph()));
+                tool.replaceWithValue(LogicConstantNode.forBoolean(stateX == stateY, graph()));
             }
         }
     }
@@ -140,6 +139,6 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         } else if (newX.stamp() instanceof AbstractPointerStamp && newY.stamp() instanceof AbstractPointerStamp) {
             return new PointerEqualsNode(newX, newY);
         }
-        throw JVMCIError.shouldNotReachHere();
+        throw GraalInternalError.shouldNotReachHere();
     }
 }
