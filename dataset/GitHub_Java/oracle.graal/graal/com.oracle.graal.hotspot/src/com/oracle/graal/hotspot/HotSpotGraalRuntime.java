@@ -90,12 +90,8 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
     private final GraalHotSpotVMConfig config;
 
-    /**
-     * @param compilerConfigurationName value for the {@code name} parameter of
-     *            {@link CompilerConfigurationFactory#selectFactory(String)}
-     */
     @SuppressWarnings("try")
-    HotSpotGraalRuntime(HotSpotJVMCIRuntime jvmciRuntime, String compilerConfigurationName) {
+    HotSpotGraalRuntime(HotSpotJVMCIRuntime jvmciRuntime, HotSpotGraalCompilerFactory compilerFactory) {
 
         HotSpotVMConfigStore store = jvmciRuntime.getConfigStore();
         config = new GraalHotSpotVMConfig(store);
@@ -106,13 +102,12 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
             GraalOptions.HotSpotPrintInlining.setValue(config.printInlining);
         }
 
-        CompilerConfigurationFactory compilerConfigurationFactory = CompilerConfigurationFactory.selectFactory(compilerConfigurationName);
-        CompilerConfiguration compilerConfiguration = compilerConfigurationFactory.createCompilerConfiguration();
+        CompilerConfiguration compilerConfiguration = compilerFactory.createCompilerConfiguration();
 
         JVMCIBackend hostJvmciBackend = jvmciRuntime.getHostJVMCIBackend();
         Architecture hostArchitecture = hostJvmciBackend.getTarget().arch;
         try (InitTimer t = timer("create backend:", hostArchitecture)) {
-            HotSpotBackendFactory factory = compilerConfigurationFactory.getBackendFactory(hostArchitecture);
+            HotSpotBackendFactory factory = compilerFactory.getBackendFactory(hostArchitecture);
             if (factory == null) {
                 throw new GraalError("No backend available for host architecture \"%s\"", hostArchitecture);
             }
@@ -125,7 +120,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
             }
 
             Architecture gpuArchitecture = jvmciBackend.getTarget().arch;
-            HotSpotBackendFactory factory = compilerConfigurationFactory.getBackendFactory(gpuArchitecture);
+            HotSpotBackendFactory factory = compilerFactory.getBackendFactory(gpuArchitecture);
             if (factory == null) {
                 throw new GraalError("No backend available for specified GPU architecture \"%s\"", gpuArchitecture);
             }
