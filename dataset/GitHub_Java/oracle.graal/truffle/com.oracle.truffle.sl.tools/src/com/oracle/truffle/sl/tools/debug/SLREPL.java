@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,8 +40,10 @@
  */
 package com.oracle.truffle.sl.tools.debug;
 
+import com.oracle.truffle.sl.nodes.instrument.SLDefaultVisualizer;
 import com.oracle.truffle.tools.debug.shell.server.REPLServer;
 
+// TODO (mlvdv) delete when the REPL is fully multi-language
 /**
  * Start a single-language REPL for the Simple Language implementation.
  */
@@ -49,9 +51,8 @@ public final class SLREPL {
 
     public static void main(String[] args) {
 
-        System.setProperty("truffle.debug.trace", "false");
-        System.setProperty("truffle.instrumentation.trace", "false");
-        final REPLServer server = new REPLServer("application/x-sl");
+        // Cheating for the prototype: start from SL, rather than from the client.
+        final REPLServer server = new REPLServer("application/x-sl", new SLDefaultVisualizer());
         server.start();
     }
 

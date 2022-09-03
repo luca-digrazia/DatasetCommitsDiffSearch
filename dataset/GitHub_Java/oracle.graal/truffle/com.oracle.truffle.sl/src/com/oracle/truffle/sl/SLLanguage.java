@@ -57,16 +57,12 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
 import com.oracle.truffle.api.frame.MaterializedFrame;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrument.Visualizer;
 import com.oracle.truffle.api.instrument.WrapperNode;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.nodes.GraphPrintVisitor;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.NodeUtil;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.vm.PolyglotEngine;
@@ -188,17 +184,6 @@ import com.oracle.truffle.sl.runtime.SLNull;
  * with the new version.
  * </ul>
  */
-
-/*
- * 
- * <p> <b>Tools:</b><br> The use of some of Truffle's support for developer tools (based on the
- * Truffle {@linkplain Instrumenter Instrumentation Framework}) are demonstrated in this file, for
- * example: <ul> <li>a {@linkplain NodeExecCounter counter for node executions}, tabulated by node
- * type; and</li> <li>a simple {@linkplain CoverageTracker code coverage engine}.</li> </ul> In each
- * case, the tool is enabled if a corresponding local boolean variable in this file is set to {@code
- * true}. Results are printed at the end of the execution using each tool's <em>default
- * printer</em>.
- */
 @TruffleLanguage.Registration(name = "SL", version = "0.5", mimeType = "application/x-sl")
 public final class SLLanguage extends TruffleLanguage<SLContext> {
     public static final String builtinKind = "SL builtin";
@@ -214,7 +199,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
     protected SLContext createContext(Env env) {
         final BufferedReader in = new BufferedReader(new InputStreamReader(env.in()));
         final PrintWriter out = new PrintWriter(env.out(), true);
-        SLContext context = new SLContext(this, env, in, out);
+        SLContext context = new SLContext(this, in, out);
         for (NodeFactory<? extends SLBuiltinNode> builtin : builtins) {
             context.installBuiltin(builtin, true);
         }
@@ -222,19 +207,12 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
         return context;
     }
 
-    /* Small tools that can be installed for demonstration */
-    // private static NodeExecCounter nodeExecCounter = null;
-    // private static NodeExecCounter statementExecCounter = null;
-    // private static CoverageTracker coverageTracker = null;
-
     /**
      * The main entry point. Use the mx command "mx sl" to run it with the correct class path setup.
      */
     public static void main(String[] args) throws IOException {
         PolyglotEngine vm = PolyglotEngine.newBuilder().build();
         assert vm.getLanguages().containsKey("application/x-sl");
-
-        setupToolDemos();
 
         int repeats = 1;
         if (args.length >= 2) {
@@ -255,7 +233,6 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
         while (repeats-- > 0) {
             main.invoke(null);
         }
-        reportToolDemos();
     }
 
     /**
@@ -414,7 +391,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
     }
 
     @Override
-    protected CallTarget parse(Source code, final Node node, String... argumentNames) throws IOException {
+    protected CallTarget parse(Source code, Node node, String... argumentNames) throws IOException {
         final SLContext c = new SLContext(this);
         final Exception[] failed = {null};
         try {
@@ -423,10 +400,10 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
         } catch (Exception e) {
             failed[0] = e;
         }
-        RootNode rootNode = new RootNode(SLLanguage.class, null, null) {
+        return new CallTarget() {
             @TruffleBoundary
             @Override
-            public Object execute(VirtualFrame frame) {
+            public Object call(Object... arguments) {
                 if (failed[0] instanceof RuntimeException) {
                     throw (RuntimeException) failed[0];
                 }
@@ -436,26 +413,17 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
                 Node n = createFindContextNode();
                 SLContext fillIn = findContext(n);
                 final SLFunctionRegistry functionRegistry = fillIn.getFunctionRegistry();
-                int oneAndCnt = 0;
-                SLFunction oneAndOnly = null;
                 for (SLFunction f : c.getFunctionRegistry().getFunctions()) {
                     RootCallTarget callTarget = f.getCallTarget();
                     if (callTarget == null) {
                         continue;
                     }
-                    oneAndOnly = functionRegistry.lookup(f.getName());
-                    oneAndCnt++;
+                    functionRegistry.lookup(f.getName());
                     functionRegistry.register(f.getName(), (SLRootNode) f.getCallTarget().getRootNode());
-                }
-                Object[] arguments = frame.getArguments();
-                if (oneAndCnt == 1 && (arguments.length > 0 || node != null)) {
-                    Node callNode = Message.createExecute(arguments.length).createNode();
-                    return ForeignAccess.execute(callNode, frame, oneAndOnly, arguments);
                 }
                 return null;
             }
         };
-        return Truffle.getRuntime().createCallTarget(rootNode);
     }
 
     @Override
@@ -504,7 +472,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
 
     @Override
     protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) throws IOException {
-        throw new IllegalStateException("evalInContext not supported in this language");
+        throw new IllegalStateException("evalInContext not supported in SL");
     }
 
     public Node createFindContextNode0() {
@@ -514,38 +482,4 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
     public SLContext findContext0(Node contextNode) {
         return findContext(contextNode);
     }
-
-    // TODO (mlvdv) remove the static hack when we no longer have the static demo variables
-    private static void setupToolDemos() {
-        // if (nodeExecCounts) {
-        // nodeExecCounter = new NodeExecCounter();
-        // nodeExecCounter.install();
-        // }
-        //
-        // if (statementCounts) {
-        // statementExecCounter = new NodeExecCounter(StandardSyntaxTag.STATEMENT);
-        // statementExecCounter.install();
-        // }
-        //
-        // if (coverage) {
-        // coverageTracker = new CoverageTracker();
-        // coverageTracker.install();
-        // }
-    }
-
-    private static void reportToolDemos() {
-        // if (nodeExecCounter != null) {
-        // nodeExecCounter.print(System.out);
-        // nodeExecCounter.dispose();
-        // }
-        // if (statementExecCounter != null) {
-        // statementExecCounter.print(System.out);
-        // statementExecCounter.dispose();
-        // }
-        // if (coverageTracker != null) {
-        // coverageTracker.print(System.out);
-        // coverageTracker.dispose();
-        // }
-    }
-
 }
