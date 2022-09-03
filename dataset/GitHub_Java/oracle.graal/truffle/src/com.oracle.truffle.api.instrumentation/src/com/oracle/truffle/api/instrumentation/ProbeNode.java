@@ -140,8 +140,7 @@ public final class ProbeNode extends Node {
     /**
      * Should get invoked after the node is invoked successfully.
      *
-     * @param result the result value of the operation, must be an interop type (i.e. either
-     *            implementing TruffleObject or be a primitive value), or <code>null</code>.
+     * @param result the result value of the operation
      * @param frame the current frame of the execution.
      * @since 0.12
      */
