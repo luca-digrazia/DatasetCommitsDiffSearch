@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.compiler.common.type.FloatStamp;
 import com.oracle.graal.compiler.common.type.PrimitiveStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
@@ -31,9 +30,7 @@ import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
 import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
-import com.oracle.graal.nodeinfo.NodeCycles;
 import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.NodeSize;
 import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.calc.UnaryNode;
@@ -45,25 +42,19 @@ import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.Value;
 
-@NodeInfo(nameTemplate = "MathIntrinsic#{p#operation/s}", cycles = NodeCycles.CYCLES_UNKNOWN, size = NodeSize.SIZE_1)
+@NodeInfo(nameTemplate = "MathIntrinsic#{p#operation/s}")
 public final class UnaryMathIntrinsicNode extends UnaryNode implements ArithmeticLIRLowerable, Lowerable {
 
     public static final NodeClass<UnaryMathIntrinsicNode> TYPE = NodeClass.create(UnaryMathIntrinsicNode.class);
     protected final UnaryOperation operation;
 
     public enum UnaryOperation {
-        LOG(new ForeignCallDescriptor("arithmeticLog", double.class, double.class)),
-        LOG10(new ForeignCallDescriptor("arithmeticLog10", double.class, double.class)),
-        SIN(new ForeignCallDescriptor("arithmeticSin", double.class, double.class)),
-        COS(new ForeignCallDescriptor("arithmeticCos", double.class, double.class)),
-        TAN(new ForeignCallDescriptor("arithmeticTan", double.class, double.class)),
-        EXP(new ForeignCallDescriptor("arithmeticExp", double.class, double.class));
-
-        public final ForeignCallDescriptor foreignCallDescriptor;
-
-        UnaryOperation(ForeignCallDescriptor foreignCallDescriptor) {
-            this.foreignCallDescriptor = foreignCallDescriptor;
-        }
+        LOG,
+        LOG10,
+        SIN,
+        COS,
+        TAN,
+        EXP
     }
 
     public UnaryOperation getOperation() {
