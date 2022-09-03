@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-public final class SerialWriteBarrier extends FixedWithNextNode implements Lowerable, Node.IterableNodeType {
+public final class SerialWriteBarrier extends FixedWithNextNode implements Lowerable {
 
     @Input private ValueNode object;
     @Input private LocationNode location;
