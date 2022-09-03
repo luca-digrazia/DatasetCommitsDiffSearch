@@ -152,17 +152,7 @@ public class PartialEvaluator {
         public boolean apply(GraphBuilderContext builder, ValueNode receiver, ResolvedJavaField field) {
             if (receiver.isConstant()) {
                 JavaConstant asJavaConstant = receiver.asJavaConstant();
-                return tryConstantFold(builder, field, asJavaConstant);
-            }
-            return false;
-        }
-
-        private boolean tryConstantFold(GraphBuilderContext builder, ResolvedJavaField field, JavaConstant asJavaConstant) {
-            JavaConstant result = providers.getConstantReflection().readConstantFieldValue(field, asJavaConstant);
-            if (result != null) {
-                ConstantNode constantNode = builder.append(ConstantNode.forConstant(result, providers.getMetaAccess()));
-                builder.push(constantNode.getKind().getStackKind(), constantNode);
-                return true;
+                return tryConstantFold(builder, providers.getMetaAccess(), providers.getConstantReflection(), field, asJavaConstant);
             }
             return false;
         }
@@ -173,7 +163,7 @@ public class PartialEvaluator {
                 builder.push(trueNode.getKind().getStackKind(), trueNode);
                 return true;
             }
-            return tryConstantFold(builder, staticField, null);
+            return tryConstantFold(builder, providers.getMetaAccess(), providers.getConstantReflection(), staticField, null);
         }
     }
 
@@ -197,14 +187,19 @@ public class PartialEvaluator {
 
         private Stack<TruffleInlining> inlining;
         private OptimizedDirectCallNode lastDirectCallNode;
+        private final Replacements replacements;
 
-        public InlineInvokePlugin(TruffleInlining inlining) {
+        public InlineInvokePlugin(TruffleInlining inlining, Replacements replacements) {
             this.inlining = new Stack<>();
             this.inlining.push(inlining);
+            this.replacements = replacements;
         }
 
         public ResolvedJavaMethod getInlinedMethod(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments, JavaType returnType, int depth) {
             if (original.getAnnotation(TruffleBoundary.class) != null) {
+                return null;
+            }
+            if (replacements != null && (replacements.getMethodSubstitutionMethod(original) != null || replacements.getMacroSubstitution(original) != null)) {
                 return null;
             }
             if (original.equals(callSiteProxyMethod)) {
@@ -248,20 +243,19 @@ public class PartialEvaluator {
     @SuppressWarnings("unused")
     private void fastPartialEvaluation(OptimizedCallTarget callTarget, StructuredGraph graph, PhaseContext baseContext, HighTierContext tierContext) {
         GraphBuilderConfiguration newConfig = configForRoot.copy();
-        newConfig.setUseProfiling(false);
+        newConfig.getInvocationPlugins().setDefaults(configForRoot.getInvocationPlugins());
         newConfig.setLoadFieldPlugin(new InterceptLoadFieldPlugin());
         newConfig.setParameterPlugin(new InterceptReceiverPlugin(callTarget));
         callTarget.setInlining(new TruffleInlining(callTarget, new DefaultInliningPolicy()));
-        newConfig.setInlineInvokePlugin(new InlineInvokePlugin(callTarget.getInlining()));
+        newConfig.setInlineInvokePlugin(new InlineInvokePlugin(callTarget.getInlining(), providers.getReplacements()));
         newConfig.setLoopExplosionPlugin(new LoopExplosionPlugin());
-        TruffleGraphBuilderPlugins.registerPlugins(providers.getMetaAccess(), newConfig.getInvocationPlugins());
+        TruffleGraphBuilderPlugins.registerInvocationPlugins(providers.getMetaAccess(), newConfig.getInvocationPlugins());
         long ms = System.currentTimeMillis();
-        new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), this.snippetReflection, providers.getReplacements(), providers.getConstantReflection(), newConfig,
-                        TruffleCompilerImpl.Optimizations).apply(graph);
+        new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), this.snippetReflection, providers.getConstantReflection(), newConfig, TruffleCompilerImpl.Optimizations).apply(graph);
         System.out.println("# ms: " + (System.currentTimeMillis() - ms));
         Debug.dump(graph, "After FastPE");
 
-        for (MethodCallTargetNode methodCallTargetNode : graph.getNodes(MethodCallTargetNode.TYPE)) {
+        for (MethodCallTargetNode methodCallTargetNode : graph.getNodes(MethodCallTargetNode.class)) {
             Class<? extends FixedWithNextNode> macroSubstitution = providers.getReplacements().getMacroSubstitution(methodCallTargetNode.targetMethod());
             if (macroSubstitution != null) {
                 InliningUtil.inlineMacroNode(methodCallTargetNode.invoke(), methodCallTargetNode.targetMethod(), macroSubstitution);
@@ -275,7 +269,6 @@ public class PartialEvaluator {
 
         // Do single partial escape and canonicalization pass.
         try (Scope pe = Debug.scope("TrufflePartialEscape", graph)) {
-            new PartialEscapePhase(true, canonicalizer).apply(graph, tierContext);
             new PartialEscapePhase(true, canonicalizer).apply(graph, tierContext);
             new IncrementalCanonicalizerPhase<>(canonicalizer, new ConditionalEliminationPhase()).apply(graph, tierContext);
         } catch (Throwable t) {
@@ -338,11 +331,11 @@ public class PartialEvaluator {
 
     private static void postPartialEvaluation(final StructuredGraph graph) {
         NeverPartOfCompilationNode.verifyNotFoundIn(graph);
-        for (MaterializeFrameNode materializeNode : graph.getNodes(MaterializeFrameNode.TYPE).snapshot()) {
+        for (MaterializeFrameNode materializeNode : graph.getNodes(MaterializeFrameNode.class).snapshot()) {
             materializeNode.replaceAtUsages(materializeNode.getFrame());
             graph.removeFixed(materializeNode);
         }
-        for (VirtualObjectNode virtualObjectNode : graph.getNodes(VirtualObjectNode.TYPE)) {
+        for (VirtualObjectNode virtualObjectNode : graph.getNodes(VirtualObjectNode.class)) {
             if (virtualObjectNode instanceof VirtualOnlyInstanceNode) {
                 VirtualOnlyInstanceNode virtualOnlyInstanceNode = (VirtualOnlyInstanceNode) virtualObjectNode;
                 virtualOnlyInstanceNode.setAllowMaterialization(true);
@@ -486,7 +479,7 @@ public class PartialEvaluator {
             assert graph.hasLoops() : graph + " does not contain a loop";
             final StructuredGraph graphCopy = graph.copy();
             final List<Node> modifiedNodes = new ArrayList<>();
-            for (ParameterNode param : graphCopy.getNodes(ParameterNode.TYPE).snapshot()) {
+            for (ParameterNode param : graphCopy.getNodes(ParameterNode.class).snapshot()) {
                 ValueNode arg = arguments.get(param.index());
                 if (arg.isConstant()) {
                     Constant constant = arg.asConstant();
@@ -533,7 +526,7 @@ public class PartialEvaluator {
     private void expandDirectCalls(StructuredGraph graph, TruffleExpansionLogger expansionLogger, TruffleInlining inlining, TruffleInliningCache inliningCache) {
         PhaseContext phaseContext = new PhaseContext(providers);
 
-        for (MethodCallTargetNode methodCallTargetNode : graph.getNodes(MethodCallTargetNode.TYPE).snapshot()) {
+        for (MethodCallTargetNode methodCallTargetNode : graph.getNodes(MethodCallTargetNode.class).snapshot()) {
             StructuredGraph inlineGraph = parseDirectCallGraph(phaseContext, graph, inlining, inliningCache, methodCallTargetNode);
 
             if (inlineGraph != null) {
@@ -546,7 +539,7 @@ public class PartialEvaluator {
     }
 
     private boolean noDirectCallsLeft(StructuredGraph graph) {
-        for (MethodCallTargetNode methodCallTargetNode : graph.getNodes(MethodCallTargetNode.TYPE).snapshot()) {
+        for (MethodCallTargetNode methodCallTargetNode : graph.getNodes(MethodCallTargetNode.class).snapshot()) {
             if (methodCallTargetNode.targetMethod().equals(callDirectMethod)) {
                 return false;
             }
