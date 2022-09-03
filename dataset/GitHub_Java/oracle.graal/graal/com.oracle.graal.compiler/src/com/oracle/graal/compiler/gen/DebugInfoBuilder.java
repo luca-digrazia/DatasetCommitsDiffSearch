@@ -82,13 +82,13 @@ public class DebugInfoBuilder {
                             BoxedVirtualObjectNode boxedVirtualObjectNode = (BoxedVirtualObjectNode) vobj;
                             entry.getValue().setValues(new Value[]{toValue(boxedVirtualObjectNode.getUnboxedValue())});
                         } else {
-                            Value[] values = new Value[vobj.entryCount()];
+                            Value[] values = new Value[vobj.fields().length];
                             entry.getValue().setValues(values);
                             if (values.length > 0) {
                                 changed = true;
                                 VirtualObjectState currentField = (VirtualObjectState) objectStates.get(vobj);
                                 assert currentField != null;
-                                for (int i = 0; i < vobj.entryCount(); i++) {
+                                for (int i = 0; i < vobj.fields().length; i++) {
                                     values[i] = toValue(currentField.fieldValues().get(i));
                                 }
                             }
@@ -122,9 +122,9 @@ public class DebugInfoBuilder {
         for (int i = numLocks - 1; i >= 0; i--) {
             assert locks != null && nextLock.inliningIdentifier == state.inliningIdentifier() && nextLock.stateDepth == i;
 
-            Value owner = toValue(nextLock.object);
-            StackSlot lockData = nextLock.lockData;
-            boolean eliminated = nextLock.eliminated;
+            Value owner = toValue(nextLock.monitor.object());
+            Value lockData = nextLock.lockData;
+            boolean eliminated = nextLock.monitor.eliminated();
             values[numLocals + numStack + nextLock.stateDepth] = new MonitorValue(owner, lockData, eliminated);
 
             nextLock = nextLock.outer;
@@ -147,14 +147,14 @@ public class DebugInfoBuilder {
         if (value instanceof VirtualObjectNode) {
             VirtualObjectNode obj = (VirtualObjectNode) value;
             EscapeObjectState state = objectStates.get(obj);
-            if (state == null && obj.entryCount() > 0) {
+            if (state == null && obj.fields().length > 0) {
                 // null states occur for objects with 0 fields
                 throw new GraalInternalError("no mapping found for virtual object %s", obj);
             }
             if (state instanceof MaterializedObjectState) {
                 return toValue(((MaterializedObjectState) state).materializedValue());
             } else {
-                assert obj.entryCount() == 0 || state instanceof VirtualObjectState;
+                assert obj.fields().length == 0 || state instanceof VirtualObjectState;
                 VirtualObject ciObj = virtualObjects.get(value);
                 if (ciObj == null) {
                     ciObj = VirtualObject.get(obj.type(), null, virtualObjects.size());

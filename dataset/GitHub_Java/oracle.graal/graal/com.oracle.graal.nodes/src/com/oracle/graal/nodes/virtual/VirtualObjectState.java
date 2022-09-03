@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.nodes.virtual;
 
+import java.util.*;
+
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -29,27 +31,40 @@ import com.oracle.graal.nodes.spi.*;
 /**
  * This class encapsulated the virtual state of an escape analyzed object.
  */
-public final class VirtualObjectState extends VirtualState implements Node.IterableNodeType, LIRLowerable {
+public final class VirtualObjectState extends EscapeObjectState implements Node.IterableNodeType, LIRLowerable {
 
-    @Input private VirtualObjectNode object;
-    @Input private NodeInputList<ValueNode> fields;
+    @Input private NodeInputList<ValueNode> fieldValues;
 
-    public VirtualObjectNode object() {
-        return object;
+    public NodeInputList<ValueNode> fieldValues() {
+        return fieldValues;
     }
 
-    public NodeInputList<ValueNode> fields() {
-        return fields;
+    public VirtualObjectState(VirtualObjectNode object, ValueNode[] fieldValues) {
+        super(object);
+        assert object.fields().length == fieldValues.length;
+        this.fieldValues = new NodeInputList<>(this, fieldValues);
     }
 
-    public VirtualObjectState(VirtualObjectNode object, ValueNode[] fields) {
-        this.object = object;
-        assert object.fields().length == fields.length;
-        this.fields = new NodeInputList<>(this, fields);
+    private VirtualObjectState(VirtualObjectNode object, List<ValueNode> fieldValues) {
+        super(object);
+        assert object.fields().length == fieldValues.size();
+        this.fieldValues = new NodeInputList<>(this, fieldValues);
     }
 
     @Override
     public void generate(LIRGeneratorTool generator) {
         // Nothing to do, virtual object states are processed as part of the handling of StateSplit nodes.
+    }
+
+    @Override
+    public VirtualObjectState duplicateWithVirtualState() {
+        return graph().add(new VirtualObjectState(object(), fieldValues));
+    }
+
+    @Override
+    public void applyToNonVirtual(NodeClosure< ? super ValueNode> closure) {
+        for (ValueNode value : fieldValues) {
+            closure.apply(this, value);
+        }
     }
 }
