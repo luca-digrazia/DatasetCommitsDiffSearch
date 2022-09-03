@@ -48,8 +48,6 @@ import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.alloc.RegisterAllocationConfig;
 import org.graalvm.compiler.core.common.spi.ForeignCallLinkage;
-import org.graalvm.compiler.core.gen.LIRGenerationProvider;
-import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotDataBuilder;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
@@ -73,16 +71,12 @@ import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
-import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 
 import jdk.vm.ci.aarch64.AArch64Kind;
 import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CompilationRequest;
-import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.site.Mark;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
 import jdk.vm.ci.hotspot.HotSpotSentinelConstant;
 import jdk.vm.ci.hotspot.aarch64.AArch64HotSpotRegisterConfig;
@@ -90,21 +84,24 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import sun.misc.Unsafe;
-
 /**
  * HotSpot AArch64 specific backend.
  */
-public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGenerationProvider {
+public class AArch64HotSpotBackend extends HotSpotHostBackend {
 
     public AArch64HotSpotBackend(GraalHotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, HotSpotProviders providers) {
         super(config, runtime, providers);
     }
 
-    private FrameMapBuilder newFrameMapBuilder(RegisterConfig registerConfig) {
+    @Override
+    public FrameMapBuilder newFrameMapBuilder(RegisterConfig registerConfig) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
-        FrameMap frameMap = new AArch64FrameMap(getCodeCache(), registerConfigNonNull, this);
-        return new AArch64FrameMapBuilder(frameMap, getCodeCache(), registerConfigNonNull);
+        return new AArch64FrameMapBuilder(newFrameMap(registerConfigNonNull), getCodeCache(), registerConfigNonNull);
+    }
+
+    @Override
+    public FrameMap newFrameMap(RegisterConfig registerConfig) {
+        return new AArch64FrameMap(getCodeCache(), registerConfig, this);
     }
 
     @Override
@@ -113,9 +110,8 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
     }
 
     @Override
-    public LIRGenerationResult newLIRGenerationResult(CompilationIdentifier compilationId, LIR lir, RegisterConfig registerConfig, StructuredGraph graph, Object stub) {
-        return new HotSpotLIRGenerationResult(compilationId, lir, newFrameMapBuilder(registerConfig), makeCallingConvention(graph, (Stub) stub), stub,
-                        config.requiresReservedStackCheck(graph.getMethods()));
+    public LIRGenerationResult newLIRGenerationResult(CompilationIdentifier compilationId, LIR lir, FrameMapBuilder frameMapBuilder, StructuredGraph graph, Object stub) {
+        return new HotSpotLIRGenerationResult(compilationId, lir, frameMapBuilder, makeCallingConvention(graph, (Stub) stub), stub, config.requiresReservedStackCheck(graph.getMethods()));
     }
 
     @Override
@@ -131,46 +127,6 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
             AArch64Address address = masm.makeAddress(sp, -bangOffset, scratch, 8, /* allowOverwrite */false);
             masm.str(64, zr, address);
         }
-    }
-
-    @Override
-    public InstalledCode createInstalledCode(DebugContext debug,
-                    ResolvedJavaMethod method,
-                    CompilationRequest compilationRequest,
-                    CompilationResult compilationResult,
-                    InstalledCode predefinedInstalledCode,
-                    boolean isDefault,
-                    Object[] context) {
-        boolean isStub = (method == null);
-        boolean isAOT = compilationResult.isImmutablePIC();
-        if (!isStub && !isAOT) {
-            // Non-stub compilation results are installed into HotSpot as nmethods. As AArch64 has
-            // a constraint that the instruction at nmethod verified entry point should be a nop or
-            // jump, AArch64HotSpotBackend always generate a nop placeholder before the code body
-            // for non-AOT compilations. See AArch64HotSpotBackend.emitInvalidatePlaceholder(). This
-            // assert checks if the nop placeholder is generated at all required places, including
-            // in manually assembled code in CodeGenTest cases.
-            assert hasInvalidatePlaceholder(compilationResult);
-        }
-        return super.createInstalledCode(debug, method, compilationRequest, compilationResult, predefinedInstalledCode, isDefault, context);
-    }
-
-    private boolean hasInvalidatePlaceholder(CompilationResult compilationResult) {
-        byte[] targetCode = compilationResult.getTargetCode();
-        int verifiedEntryOffset = 0;
-        for (Mark mark : compilationResult.getMarks()) {
-            Object markId = mark.id;
-            if (markId instanceof Integer && (int) markId == config.MARKID_VERIFIED_ENTRY) {
-                // The nmethod verified entry is located at some pc offset.
-                verifiedEntryOffset = mark.pcOffset;
-                break;
-            }
-        }
-        Unsafe unsafe = GraalUnsafeAccess.getUnsafe();
-        int instruction = unsafe.getIntVolatile(targetCode, unsafe.arrayBaseOffset(byte[].class) + verifiedEntryOffset);
-        AArch64MacroAssembler masm = new AArch64MacroAssembler(getTarget());
-        masm.nop();
-        return instruction == masm.getInt(0);
     }
 
     private class HotSpotFrameContext implements FrameContext {
@@ -264,13 +220,18 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
     }
 
     @Override
+    protected Assembler createAssembler(FrameMap frameMap) {
+        return new AArch64MacroAssembler(getTarget());
+    }
+
+    @Override
     public CompilationResultBuilder newCompilationResultBuilder(LIRGenerationResult lirGenRen, FrameMap frameMap, CompilationResult compilationResult, CompilationResultBuilderFactory factory) {
         HotSpotLIRGenerationResult gen = (HotSpotLIRGenerationResult) lirGenRen;
         LIR lir = gen.getLIR();
         assert gen.getDeoptimizationRescueSlot() == null || frameMap.frameNeedsAllocating() : "method that can deoptimize must have a frame";
 
         Stub stub = gen.getStub();
-        Assembler masm = new AArch64MacroAssembler(getTarget());
+        Assembler masm = createAssembler(frameMap);
         HotSpotFrameContext frameContext = new HotSpotFrameContext(stub != null);
 
         DataBuilder dataBuilder = new HotSpotDataBuilder(getCodeCache().getTarget());

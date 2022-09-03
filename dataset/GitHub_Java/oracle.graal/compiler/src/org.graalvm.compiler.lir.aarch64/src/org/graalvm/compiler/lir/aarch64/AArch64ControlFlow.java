@@ -31,7 +31,6 @@ import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.REG;
 
 import java.util.function.Function;
 
-import jdk.vm.ci.meta.AllocatableValue;
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.asm.aarch64.AArch64Assembler;
@@ -60,20 +59,61 @@ import jdk.vm.ci.meta.Value;
 
 public class AArch64ControlFlow {
 
-    public abstract static class AbstractBranchOp extends AArch64BlockEndOp implements StandardOp.BranchOp {
+    /**
+     * Compares integer register to 0 and branches if condition is true. Condition may only be equal
+     * or non-equal.
+     */
+    // TODO (das) where do we need this?
+    // public static class CompareAndBranchOp extends AArch64LIRInstruction implements
+    // StandardOp.BranchOp {
+    // private final ConditionFlag condition;
+    // private final LabelRef destination;
+    // @Use({REG}) private Value x;
+    //
+    // public CompareAndBranchOp(Condition condition, LabelRef destination, Value x) {
+    // assert condition == Condition.EQ || condition == Condition.NE;
+    // assert ARMv8.isGpKind(x.getKind());
+    // this.condition = condition == Condition.EQ ? ConditionFlag.EQ : ConditionFlag.NE;
+    // this.destination = destination;
+    // this.x = x;
+    // }
+    //
+    // @Override
+    // public void emitCode(CompilationResultBuilder crb, ARMv8MacroAssembler masm) {
+    // int size = ARMv8.bitsize(x.getKind());
+    // if (condition == ConditionFlag.EQ) {
+    // masm.cbz(size, asRegister(x), destination.label());
+    // } else {
+    // masm.cbnz(size, asRegister(x), destination.label());
+    // }
+    // }
+    // }
+
+    public static class BranchOp extends AArch64BlockEndOp implements StandardOp.BranchOp {
+        public static final LIRInstructionClass<BranchOp> TYPE = LIRInstructionClass.create(BranchOp.class);
+
+        private final AArch64Assembler.ConditionFlag condition;
         private final LabelRef trueDestination;
         private final LabelRef falseDestination;
 
         private final double trueDestinationProbability;
 
-        private AbstractBranchOp(LIRInstructionClass<? extends AbstractBranchOp> c, LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability) {
-            super(c);
+        public BranchOp(AArch64Assembler.ConditionFlag condition, LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability) {
+            this(TYPE, condition, trueDestination, falseDestination, trueDestinationProbability);
+        }
+
+        protected BranchOp(LIRInstructionClass<? extends BranchOp> type, AArch64Assembler.ConditionFlag condition,
+                        LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability) {
+            super(type);
+            this.condition = condition;
             this.trueDestination = trueDestination;
             this.falseDestination = falseDestination;
             this.trueDestinationProbability = trueDestinationProbability;
         }
 
-        protected abstract void emitBranch(CompilationResultBuilder crb, AArch64MacroAssembler masm, LabelRef target, boolean negate);
+        protected void emitConditionalBranch(@SuppressWarnings("unused") CompilationResultBuilder crb, AArch64MacroAssembler masm, AArch64Assembler.ConditionFlag cond, Label label) {
+            masm.branchConditionally(cond, label);
+        }
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
@@ -84,76 +124,36 @@ public class AArch64ControlFlow {
              * executing two instructions instead of one.
              */
             if (crb.isSuccessorEdge(trueDestination)) {
-                emitBranch(crb, masm, falseDestination, true);
+                emitConditionalBranch(crb, masm, condition.negate(), falseDestination.label());
             } else if (crb.isSuccessorEdge(falseDestination)) {
-                emitBranch(crb, masm, trueDestination, false);
+                emitConditionalBranch(crb, masm, condition, trueDestination.label());
             } else if (trueDestinationProbability < 0.5) {
-                emitBranch(crb, masm, falseDestination, true);
+                emitConditionalBranch(crb, masm, condition.negate(), falseDestination.label());
                 masm.jmp(trueDestination.label());
             } else {
-                emitBranch(crb, masm, trueDestination, false);
+                emitConditionalBranch(crb, masm, condition, trueDestination.label());
                 masm.jmp(falseDestination.label());
             }
         }
     }
 
-    public static class BranchOp extends AbstractBranchOp implements StandardOp.BranchOp {
-        public static final LIRInstructionClass<BranchOp> TYPE = LIRInstructionClass.create(BranchOp.class);
-
-        private final AArch64Assembler.ConditionFlag condition;
-
-        public BranchOp(AArch64Assembler.ConditionFlag condition, LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability) {
-            super(TYPE, trueDestination, falseDestination, trueDestinationProbability);
-            this.condition = condition;
-        }
-
-        @Override
-        protected void emitBranch(CompilationResultBuilder crb, AArch64MacroAssembler masm, LabelRef target, boolean negate) {
-            AArch64Assembler.ConditionFlag finalCond = negate ? condition.negate() : condition;
-            masm.branchConditionally(finalCond, target.label());
-        }
-    }
-
-    public static class CompareBranchZeroOp extends AbstractBranchOp implements StandardOp.BranchOp {
-        public static final LIRInstructionClass<CompareBranchZeroOp> TYPE = LIRInstructionClass.create(CompareBranchZeroOp.class);
-
-        @Use(REG) private AllocatableValue value;
-
-        public CompareBranchZeroOp(AllocatableValue value, LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability) {
-            super(TYPE, trueDestination, falseDestination, trueDestinationProbability);
-            this.value = value;
-        }
-
-        @Override
-        protected void emitBranch(CompilationResultBuilder crb, AArch64MacroAssembler masm, LabelRef target, boolean negate) {
-            AArch64Kind kind = (AArch64Kind) this.value.getPlatformKind();
-            assert kind.isInteger();
-            int size = kind.getSizeInBytes() * Byte.SIZE;
-
-            if (negate) {
-                masm.cbnz(size, asRegister(this.value), target.label());
-            } else {
-                masm.cbz(size, asRegister(this.value), target.label());
-            }
-        }
-    }
-
-    public static class BitTestAndBranchOp extends AbstractBranchOp implements StandardOp.BranchOp {
+    public static class BitTestAndBranchOp extends BranchOp {
         public static final LIRInstructionClass<BitTestAndBranchOp> TYPE = LIRInstructionClass.create(BitTestAndBranchOp.class);
 
-        @Use protected AllocatableValue value;
+        @Use protected Value src;
         private final int index;
 
-        public BitTestAndBranchOp(LabelRef trueDestination, LabelRef falseDestination, AllocatableValue value, double trueDestinationProbability, int index) {
-            super(TYPE, trueDestination, falseDestination, trueDestinationProbability);
-            this.value = value;
+        public BitTestAndBranchOp(LabelRef trueDestination, LabelRef falseDestination, Value src, double trueDestinationProbability, int index) {
+            super(TYPE, ConditionFlag.EQ, trueDestination, falseDestination, trueDestinationProbability);
+            this.src = src;
             this.index = index;
         }
 
         @Override
-        protected void emitBranch(CompilationResultBuilder crb, AArch64MacroAssembler masm, LabelRef target, boolean negate) {
-            ConditionFlag cond = negate ? ConditionFlag.NE : ConditionFlag.EQ;
-            Label label = target.label();
+        protected void emitConditionalBranch(CompilationResultBuilder crb, AArch64MacroAssembler masm, AArch64Assembler.ConditionFlag cond, Label label) {
+            assert cond == ConditionFlag.EQ || cond == ConditionFlag.NE;
+            ConditionFlag finalCondition = cond;
+            Label finalLabel = label;
             boolean isFarBranch;
 
             if (label.isBound()) {
@@ -167,19 +167,19 @@ public class AArch64ControlFlow {
             }
 
             if (isFarBranch) {
-                cond = cond.negate();
-                label = new Label();
+                finalCondition = cond.negate();
+                finalLabel = new Label();
             }
 
-            if (cond == ConditionFlag.EQ) {
-                masm.tbz(asRegister(value), index, label);
+            if (finalCondition == ConditionFlag.EQ) {
+                masm.tbz(asRegister(src), index, finalLabel);
             } else {
-                masm.tbnz(asRegister(value), index, label);
+                masm.tbnz(asRegister(src), index, finalLabel);
             }
 
             if (isFarBranch) {
-                masm.jmp(target.label());
-                masm.bind(label);
+                masm.jmp(label);
+                masm.bind(finalLabel);
             }
         }
     }
