@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2009, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -188,10 +186,11 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
                         }
                     }
 
-                    ArrayList<AbstractBeginNode> oldSuccessors = new ArrayList<>();
                     for (int i = 0; i < blockSuccessorCount(); i++) {
                         AbstractBeginNode successor = blockSuccessor(i);
-                        oldSuccessors.add(successor);
+                        if (!newSuccessors.contains(successor)) {
+                            tool.deleteBranch(successor);
+                        }
                         setBlockSuccessor(i, null);
                     }
 
@@ -199,13 +198,6 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
                     TypeSwitchNode newSwitch = graph().add(new TypeSwitchNode(value(), successorsArray, newKeys, newKeyProbabilities, newKeySuccessors, tool.getConstantReflection()));
                     ((FixedWithNextNode) predecessor()).setNext(newSwitch);
                     GraphUtil.killWithUnusedFloatingInputs(this);
-
-                    for (int i = 0; i < oldSuccessors.size(); i++) {
-                        AbstractBeginNode successor = oldSuccessors.get(i);
-                        if (!newSuccessors.contains(successor)) {
-                            GraphUtil.killCFG(successor);
-                        }
-                    }
                 }
             }
         }
