@@ -28,8 +28,16 @@ import com.oracle.truffle.api.interop.TruffleObject;
 
 final class JavaInteropSnippets {
     // BEGIN: JavaInteropSnippets#isNullValue
+    interface IsNullChecker {
+        @MethodMessage(message = "IS_NULL")
+        boolean isNull();
+    }
+
     public static boolean isNullValue(TruffleObject obj) {
-        return JavaInterop.isNull(obj);
+        IsNullChecker check = JavaInterop.asJavaFunction(IsNullChecker.class, obj);
+        return check.isNull();
     }
     // END: JavaInteropSnippets#isNullValue
+
+    public static boolean loaded = true;
 }
