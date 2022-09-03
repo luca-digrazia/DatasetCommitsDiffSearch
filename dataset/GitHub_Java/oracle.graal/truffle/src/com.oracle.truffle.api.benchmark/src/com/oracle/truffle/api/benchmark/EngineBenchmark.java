@@ -83,20 +83,6 @@ public class EngineBenchmark extends TruffleBenchmark {
         }
     }
 
-    @State(Scope.Thread)
-    public static class ContextStateEnterLeave extends ContextState {
-
-        public ContextStateEnterLeave() {
-            context.enter();
-        }
-
-        @Override
-        public void tearDown() {
-            context.leave();
-            super.tearDown();
-        }
-    }
-
     @Benchmark
     public Object eval(ContextState state) {
         return state.context.eval(state.source);
@@ -110,16 +96,6 @@ public class EngineBenchmark extends TruffleBenchmark {
     @Benchmark
     public void executePolyglot1Void(ContextState state) {
         state.value.executeVoid();
-    }
-
-    @Benchmark
-    public void executePolyglot1VoidEntered(ContextStateEnterLeave state) {
-        state.value.executeVoid();
-    }
-
-    @Benchmark
-    public Object executePolyglot1CallTarget(CallTargetCallState state) {
-        return state.callTarget.call(state.internalContext.object);
     }
 
     @Benchmark
@@ -155,6 +131,11 @@ public class EngineBenchmark extends TruffleBenchmark {
         public void tearDown() {
             context.close();
         }
+    }
+
+    @Benchmark
+    public Object executeCallTarget1(CallTargetCallState state) {
+        return state.callTarget.call(state.internalContext.object);
     }
 
     @Benchmark
