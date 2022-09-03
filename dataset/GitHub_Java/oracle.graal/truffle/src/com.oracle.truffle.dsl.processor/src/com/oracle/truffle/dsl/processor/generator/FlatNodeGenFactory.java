@@ -3582,7 +3582,7 @@ class FlatNodeGenFactory {
                 offsets.put(specialization, bitIndex);
                 bitIndex += specializationSize;
             }
-            return bitIndex;
+            return bitIndex - 1;
         }
 
         public CodeVariableElement declareFields(CodeTypeElement clazz) {
