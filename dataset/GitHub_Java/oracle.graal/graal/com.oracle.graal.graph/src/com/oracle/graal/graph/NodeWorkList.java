@@ -22,10 +22,7 @@
  */
 package com.oracle.graal.graph;
 
-import java.util.ArrayDeque;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.Queue;
+import java.util.*;
 
 public abstract class NodeWorkList implements Iterable<Node> {
 
@@ -122,18 +119,18 @@ public abstract class NodeWorkList implements Iterable<Node> {
         @Override
         public void add(Node node) {
             if (node != null) {
-                if (inQueue == null && worklist.size() > EXPLICIT_BITMAP_THRESHOLD) {
-                    inflateToBitMap(node.graph());
-                }
-
                 if (inQueue != null) {
                     if (inQueue.isMarkedAndGrow(node)) {
                         return;
                     }
                 } else {
-                    for (Node queuedNode : worklist) {
-                        if (queuedNode == node) {
-                            return;
+                    if (worklist.size() > EXPLICIT_BITMAP_THRESHOLD) {
+                        inflateToBitMap(node.graph());
+                    } else {
+                        for (Node queuedNode : worklist) {
+                            if (queuedNode == node) {
+                                return;
+                            }
                         }
                     }
                 }
