@@ -95,45 +95,22 @@ public abstract class LLVMCallNode {
         return frame.getArguments().length - ARG_START_INDEX;
     }
 
-    /**
-     *
-     * @param originalArgs the original args to the native function
-     * @param context the context needed to retrieve a native function handle if one of the
-     *            arguments is a function literal node
-     * @return the converted arguments
-     * @throws LLVMUnsupportedException if one of the argument nodes is a Truffle function node that
-     *             would escape to the native side
-     */
-    public static LLVMExpressionNode[] convertToPrimitiveNodes(LLVMExpressionNode[] originalArgs, LLVMContext context) {
+    protected static LLVMExpressionNode[] prepareForNative(LLVMExpressionNode[] originalArgs, LLVMContext context) {
         CompilerAsserts.neverPartOfCompilation();
-        int realArgsLength = originalArgs.length - LLVMCallNode.ARG_START_INDEX;
-        LLVMExpressionNode[] newNodes = new LLVMExpressionNode[realArgsLength];
+        LLVMExpressionNode[] newNodes = new LLVMExpressionNode[originalArgs.length - LLVMCallNode.ARG_START_INDEX];
         for (int i = 0; i < newNodes.length; i++) {
-            LLVMExpressionNode originalArg = originalArgs[i + LLVMCallNode.ARG_START_INDEX];
-            newNodes[i] = convertToPrimitiveNode(originalArg, context);
+            newNodes[i] = getArgNode(originalArgs, i + LLVMCallNode.ARG_START_INDEX, context);
         }
         return newNodes;
     }
 
-    /**
-     * Converts a Sulong Truffle node to a node that returns a primitive that can be used as an
-     * argument to Graal's NFI.
-     *
-     * @param originalArg an argument to the native function
-     * @param context the context needed to retrieve a native function handle if one of the
-     *            arguments is a function literal node
-     * @return the conversion node that wraps the originalArg or the originalArg node itself
-     * @throws LLVMUnsupportedException if one of the argument nodes is a Truffle function node that
-     *             would escape to the native side
-     */
-    public static LLVMExpressionNode convertToPrimitiveNode(LLVMExpressionNode originalArg, LLVMContext context) {
-        CompilerAsserts.neverPartOfCompilation();
-        if (originalArg instanceof LLVMAddressNode) {
-            return LLVMAddressToI64NodeGen.create((LLVMAddressNode) originalArg);
-        } else if (originalArg instanceof LLVM80BitFloatNode) {
+    private static LLVMExpressionNode getArgNode(LLVMExpressionNode[] originalArgs, int i, LLVMContext context) {
+        if (originalArgs[i] instanceof LLVMAddressNode) {
+            return LLVMAddressToI64NodeGen.create((LLVMAddressNode) originalArgs[i]);
+        } else if (originalArgs[i] instanceof LLVM80BitFloatNode) {
             throw new AssertionError("foreign function interface does not support 80 bit floats yet");
-        } else if (originalArg instanceof LLVMFunctionNode) {
-            LLVMFunctionDescriptor function = ((LLVMFunctionLiteralNode) originalArg).executeFunction();
+        } else if (originalArgs[i] instanceof LLVMFunctionNode) {
+            LLVMFunctionDescriptor function = ((LLVMFunctionLiteralNode) originalArgs[i]).executeFunction();
             String functionName = function.getName();
             long getNativeSymbol = context.getNativeHandle(functionName);
             if (getNativeSymbol != 0) {
@@ -142,7 +119,7 @@ public abstract class LLVMCallNode {
                 throw new LLVMUnsupportedException(UnsupportedReason.FUNCTION_POINTER_ESCAPES_TO_NATIVE);
             }
         } else {
-            return originalArg;
+            return originalArgs[i];
         }
     }
 
@@ -192,7 +169,7 @@ public abstract class LLVMCallNode {
                 LLVMFunctionDescriptor llvmFunction = (LLVMFunctionDescriptor) function;
                 CallTarget callTarget = context.getFunction(llvmFunction);
                 if (callTarget == null) {
-                    NativeFunctionHandle nativeHandle = context.getNativeHandle(llvmFunction, convertToPrimitiveNodes(getArgs(), context));
+                    NativeFunctionHandle nativeHandle = context.getNativeHandle(llvmFunction, prepareForNative(getArgs(), context));
                     if (nativeHandle == null) {
                         throw new IllegalStateException("could not find function " + llvmFunction.getName());
                     }
@@ -236,7 +213,7 @@ public abstract class LLVMCallNode {
 
         public LLVMResolvedDirectNativeCallNode(@SuppressWarnings("unused") LLVMFunctionDescriptor function, NativeFunctionHandle nativeFunctionHandle, LLVMExpressionNode[] args,
                         LLVMContext context) {
-            super(convertToPrimitiveNodes(args, context));
+            super(prepareForNative(args, context));
             functionHandle = nativeFunctionHandle;
         }
 
@@ -312,18 +289,6 @@ public abstract class LLVMCallNode {
 
     }
 
-    public static Object[] convertToPrimitiveArgs(Object[] arguments) {
-        Object[] newArguments = new Object[arguments.length - LLVMCallNode.ARG_START_INDEX];
-        System.arraycopy(arguments, LLVMCallNode.ARG_START_INDEX, newArguments, 0, newArguments.length);
-        CompilerAsserts.compilationConstant(arguments.length);
-        for (int i = 0; i < newArguments.length; i++) {
-            if (newArguments[i] instanceof LLVMAddress) {
-                newArguments[i] = ((LLVMAddress) newArguments[i]).getVal();
-            }
-        }
-        return newArguments;
-    }
-
     public abstract static class LLVMFunctionCallChain extends Node {
 
         private final LLVMContext context;
@@ -359,7 +324,7 @@ public abstract class LLVMCallNode {
             if (CompilerDirectives.inInterpreter() && !printedNativePerformanceWarning) {
                 printIndirectNativeCallWarning(function);
             }
-            final NativeFunctionHandle nativeHandle = currentContext.getNativeHandle(function, convertToPrimitiveNodes(args, currentContext));
+            final NativeFunctionHandle nativeHandle = currentContext.getNativeHandle(function, prepareForNative(args, currentContext));
             if (nativeHandle == null) {
                 throw new IllegalStateException("could not find function " + function.getName());
             } else {
@@ -369,7 +334,15 @@ public abstract class LLVMCallNode {
                     @ExplodeLoop
                     public Object execute(VirtualFrame frame) {
                         Object[] arguments = frame.getArguments();
-                        return nativeHandle.call(convertToPrimitiveArgs(arguments));
+                        Object[] newArguments = new Object[arguments.length - LLVMCallNode.ARG_START_INDEX];
+                        System.arraycopy(arguments, LLVMCallNode.ARG_START_INDEX, newArguments, 0, newArguments.length);
+                        CompilerAsserts.compilationConstant(arguments.length);
+                        for (int i = 0; i < newArguments.length; i++) {
+                            if (newArguments[i] instanceof LLVMAddress) {
+                                newArguments[i] = ((LLVMAddress) newArguments[i]).getVal();
+                            }
+                        }
+                        return nativeHandle.call(newArguments);
                     }
                 });
             }
