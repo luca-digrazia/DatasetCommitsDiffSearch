@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -49,9 +49,9 @@ public class MetaUtil {
      * @param printTopN print total size and instance count of the top n classes is desired
      * @return the number of bytes occupied by this constant
      */
-    public static long getMemorySizeRecursive(MetaAccessProvider access, ConstantReflectionProvider constantReflection, JavaConstant constant, PrintStream out, int printTopN) {
-        Set<JavaConstant> marked = new HashSet<>();
-        Stack<JavaConstant> stack = new Stack<>();
+    public static long getMemorySizeRecursive(MetaAccessProvider access, ConstantReflectionProvider constantReflection, Constant constant, PrintStream out, int printTopN) {
+        Set<Constant> marked = new HashSet<>();
+        Stack<Constant> stack = new Stack<>();
         if (constant.getKind() == Kind.Object && constant.isNonNull()) {
             marked.add(constant);
         }
@@ -59,7 +59,7 @@ public class MetaUtil {
         stack.push(constant);
         long sum = 0;
         while (!stack.isEmpty()) {
-            JavaConstant c = stack.pop();
+            Constant c = stack.pop();
             long memorySize = access.getMemorySize(constant);
             sum += memorySize;
             if (c.getKind() == Kind.Object && c.isNonNull()) {
@@ -75,7 +75,7 @@ public class MetaUtil {
                     if (!type.getComponentType().isPrimitive()) {
                         int length = constantReflection.readArrayLength(c);
                         for (int i = 0; i < length; i++) {
-                            JavaConstant value = constantReflection.readArrayElement(c, i);
+                            Constant value = constantReflection.readArrayElement(c, i);
                             pushConstant(marked, stack, value);
                         }
                     }
@@ -83,7 +83,7 @@ public class MetaUtil {
                     ResolvedJavaField[] instanceFields = type.getInstanceFields(true);
                     for (ResolvedJavaField f : instanceFields) {
                         if (f.getKind() == Kind.Object) {
-                            JavaConstant value = constantReflection.readFieldValue(f, c);
+                            Constant value = f.readValue(c);
                             pushConstant(marked, stack, value);
                         }
                     }
@@ -120,7 +120,7 @@ public class MetaUtil {
         return sum;
     }
 
-    private static void pushConstant(Set<JavaConstant> marked, Stack<JavaConstant> stack, JavaConstant value) {
+    private static void pushConstant(Set<Constant> marked, Stack<Constant> stack, Constant value) {
         if (value.isNonNull()) {
             if (!marked.contains(value)) {
                 marked.add(value);
@@ -325,17 +325,5 @@ public class MetaUtil {
             return indentation + (lines.substring(0, lines.length() - 1)).replace(newLine, newLine + indentation) + newLine;
         }
         return indentation + lines.replace(newLine, newLine + indentation);
-    }
-
-    /**
-     * Gets a string representation of an object based soley on its class and its
-     * {@linkplain System#identityHashCode(Object) identity hash code}. This avoids and calls to
-     * virtual methods on the object such as {@link Object#hashCode()}.
-     */
-    public static String identityHashCodeString(Object obj) {
-        if (obj == null) {
-            return "null";
-        }
-        return obj.getClass().getName() + "@" + System.identityHashCode(obj);
     }
 }
