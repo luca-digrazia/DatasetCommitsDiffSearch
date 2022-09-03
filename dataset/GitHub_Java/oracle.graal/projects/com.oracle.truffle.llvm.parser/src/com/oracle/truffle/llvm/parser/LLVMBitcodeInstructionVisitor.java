@@ -340,32 +340,24 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
         int regularIndex = labels.get(call.normalSuccessor().getName());
         int unwindIndex = labels.get(call.unwindSuccessor().getName());
 
-        List<FrameSlot> normalTo = new ArrayList<>();
-        List<FrameSlot> unwindTo = new ArrayList<>();
-        List<Type> normalType = new ArrayList<>();
-        List<Type> unwindType = new ArrayList<>();
-        List<LLVMExpressionNode> normalValue = new ArrayList<>();
-        List<LLVMExpressionNode> unwindValue = new ArrayList<>();
+        List<LLVMExpressionNode> normalPhiWriteNodes = new ArrayList<>();
+        List<LLVMExpressionNode> unwindPhiWriteNodes = new ArrayList<>();
+
         if (blockPhis != null) {
             for (Phi phi : blockPhis) {
                 FrameSlot slot = getSlot(phi.getPhiValue().getName());
                 LLVMExpressionNode value = symbols.resolve(phi.getValue());
-                if (call.normalSuccessor() == phi.getBlock()) {
-                    normalTo.add(slot);
-                    normalType.add(phi.getValue().getType());
-                    normalValue.add(value);
-                } else {
-                    unwindTo.add(slot);
-                    unwindType.add(phi.getValue().getType());
-                    unwindValue.add(value);
+                LLVMExpressionNode phiWriteNode = nodeFactory.createFrameWrite(runtime, phi.getValue().getType(), value, slot, null);
 
+                if (call.normalSuccessor() == phi.getBlock()) {
+                    normalPhiWriteNodes.add(phiWriteNode);
+                } else {
+                    unwindPhiWriteNodes.add(phiWriteNode);
                 }
             }
         }
-        LLVMExpressionNode normalPhi = nodeFactory.createPhi(normalValue.toArray(new LLVMExpressionNode[normalValue.size()]), normalTo.toArray(new FrameSlot[normalTo.size()]),
-                        normalType.toArray(new Type[normalType.size()]));
-        LLVMExpressionNode unwindPhi = nodeFactory.createPhi(unwindValue.toArray(new LLVMExpressionNode[unwindValue.size()]), unwindTo.toArray(new FrameSlot[unwindTo.size()]),
-                        unwindType.toArray(new Type[unwindType.size()]));
+        LLVMExpressionNode[] normalPhiWriteNodesArray = normalPhiWriteNodes.toArray(new LLVMExpressionNode[normalPhiWriteNodes.size()]);
+        LLVMExpressionNode[] unwindPhiWriteNodesArray = unwindPhiWriteNodes.toArray(new LLVMExpressionNode[unwindPhiWriteNodes.size()]);
 
         final SourceSection sourceSection = runtime.getSourceSection(call);
         LLVMExpressionNode function = nodeFactory.createLLVMBuiltin(target, argNodes, argCount, null);
@@ -373,8 +365,8 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
             function = symbols.resolve(target);
         }
         LLVMControlFlowNode result = nodeFactory.createFunctionInvoke(runtime, getSlot(call.getName()), function, argNodes, new FunctionType(targetType, argTypes, false),
-                        regularIndex, unwindIndex, normalPhi,
-                        unwindPhi, sourceSection);
+                        regularIndex, unwindIndex, normalPhiWriteNodesArray,
+                        unwindPhiWriteNodesArray, sourceSection);
 
         setControlFlowNode(result);
     }
@@ -401,32 +393,24 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
         int regularIndex = labels.get(call.normalSuccessor().getName());
         int unwindIndex = labels.get(call.unwindSuccessor().getName());
 
-        List<FrameSlot> normalTo = new ArrayList<>();
-        List<FrameSlot> unwindTo = new ArrayList<>();
-        List<Type> normalType = new ArrayList<>();
-        List<Type> unwindType = new ArrayList<>();
-        List<LLVMExpressionNode> normalValue = new ArrayList<>();
-        List<LLVMExpressionNode> unwindValue = new ArrayList<>();
+        List<LLVMExpressionNode> normalPhiWriteNodes = new ArrayList<>();
+        List<LLVMExpressionNode> unwindPhiWriteNodes = new ArrayList<>();
+
         if (blockPhis != null) {
             for (Phi phi : blockPhis) {
                 FrameSlot slot = getSlot(phi.getPhiValue().getName());
                 LLVMExpressionNode value = symbols.resolve(phi.getValue());
-                if (call.normalSuccessor() == phi.getBlock()) {
-                    normalTo.add(slot);
-                    normalType.add(phi.getValue().getType());
-                    normalValue.add(value);
-                } else {
-                    unwindTo.add(slot);
-                    unwindType.add(phi.getValue().getType());
-                    unwindValue.add(value);
+                LLVMExpressionNode phiWriteNode = nodeFactory.createFrameWrite(runtime, phi.getValue().getType(), value, slot, null);
 
+                if (call.normalSuccessor() == phi.getBlock()) {
+                    normalPhiWriteNodes.add(phiWriteNode);
+                } else {
+                    unwindPhiWriteNodes.add(phiWriteNode);
                 }
             }
         }
-        LLVMExpressionNode normalPhi = nodeFactory.createPhi(normalValue.toArray(new LLVMExpressionNode[normalValue.size()]), normalTo.toArray(new FrameSlot[normalTo.size()]),
-                        normalType.toArray(new Type[normalType.size()]));
-        LLVMExpressionNode unwindPhi = nodeFactory.createPhi(unwindValue.toArray(new LLVMExpressionNode[unwindValue.size()]), unwindTo.toArray(new FrameSlot[unwindTo.size()]),
-                        unwindType.toArray(new Type[unwindType.size()]));
+        LLVMExpressionNode[] normalPhiWriteNodesArray = normalPhiWriteNodes.toArray(new LLVMExpressionNode[normalPhiWriteNodes.size()]);
+        LLVMExpressionNode[] unwindPhiWriteNodesArray = unwindPhiWriteNodes.toArray(new LLVMExpressionNode[unwindPhiWriteNodes.size()]);
 
         final SourceSection sourceSection = runtime.getSourceSection(call);
         LLVMExpressionNode function = nodeFactory.createLLVMBuiltin(target, args, argCount, null);
@@ -434,7 +418,7 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
             function = symbols.resolve(target);
         }
         LLVMControlFlowNode result = nodeFactory.createFunctionInvoke(runtime, null, function, args, new FunctionType(call.getType(), argsType, false),
-                        regularIndex, unwindIndex, normalPhi, unwindPhi, sourceSection);
+                        regularIndex, unwindIndex, normalPhiWriteNodesArray, unwindPhiWriteNodesArray, sourceSection);
 
         setControlFlowNode(result);
 
@@ -477,7 +461,7 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
         int trueIndex = labels.get(branch.getTrueSuccessor().getName());
         int falseIndex = labels.get(branch.getFalseSuccessor().getName());
 
-        LLVMExpressionNode[] phiWriteNodes = getPhiWriteNodes(branch);
+        LLVMExpressionNode[][] phiWriteNodes = getPhiWriteNodes(branch);
         LLVMControlFlowNode node = nodeFactory.createConditionalBranch(runtime, trueIndex, falseIndex, conditionNode, phiWriteNodes[0], phiWriteNodes[1], runtime.getSourceSection(branch));
 
         setControlFlowNode(node);
@@ -664,27 +648,27 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
         setControlFlowNode(node);
     }
 
-    private LLVMExpressionNode[] getPhiWriteNodes(TerminatingInstruction terminatingInstruction) {
+    private LLVMExpressionNode[][] getPhiWriteNodes(TerminatingInstruction terminatingInstruction) {
         if (blockPhis != null) {
             ArrayList<Phi>[] phisPerSuccessor = LLVMPhiManager.getPhisForSuccessors(terminatingInstruction, blockPhis);
             return convertToPhiWriteNodes(phisPerSuccessor);
         }
-        return new LLVMExpressionNode[terminatingInstruction.getSuccessorCount()];
+        return new LLVMExpressionNode[terminatingInstruction.getSuccessorCount()][0];
     }
 
-    private LLVMExpressionNode[] convertToPhiWriteNodes(ArrayList<Phi>[] phisPerSuccessor) {
-        LLVMExpressionNode[] result = new LLVMExpressionNode[phisPerSuccessor.length];
+    private LLVMExpressionNode[][] convertToPhiWriteNodes(ArrayList<Phi>[] phisPerSuccessor) {
+        LLVMExpressionNode[][] result = new LLVMExpressionNode[phisPerSuccessor.length][];
         for (int i = 0; i < result.length; i++) {
-            LLVMExpressionNode[] from = new LLVMExpressionNode[phisPerSuccessor[i].size()];
-            FrameSlot[] to = new FrameSlot[phisPerSuccessor[i].size()];
-            Type[] types = new Type[phisPerSuccessor[i].size()];
+            result[i] = new LLVMExpressionNode[phisPerSuccessor[i].size()];
             for (int j = 0; j < phisPerSuccessor[i].size(); j++) {
                 Phi phi = phisPerSuccessor[i].get(j);
-                to[j] = getSlot(phi.getPhiValue().getName());
-                from[j] = symbols.resolve(phi.getValue());
-                types[j] = phi.getValue().getType();
+                FrameSlot slot = getSlot(phi.getPhiValue().getName());
+                LLVMExpressionNode value = symbols.resolve(phi.getValue());
+                Type baseType = phi.getValue().getType();
+                LLVMExpressionNode phiWriteNode = nodeFactory.createFrameWrite(runtime, baseType, value, slot, null);
+
+                result[i][j] = phiWriteNode;
             }
-            result[i] = nodeFactory.createPhi(from, to, types);
         }
         return result;
     }
