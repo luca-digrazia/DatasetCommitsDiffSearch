@@ -28,7 +28,6 @@ import java.util.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
-import com.oracle.max.graal.alloc.util.*;
 import com.oracle.max.graal.compiler.alloc.*;
 import com.oracle.max.graal.compiler.gen.*;
 import com.oracle.max.graal.compiler.lir.*;
@@ -90,7 +89,6 @@ public class CFGPrinterObserver implements CompilationObserver {
         IdentifyBlocksPhase schedule = event.debugObject(IdentifyBlocksPhase.class);
         LinearScan allocator = event.debugObject(LinearScan.class);
         Interval[] intervals = event.debugObject(Interval[].class);
-        IntervalPrinter.Interval[] printIntervals = event.debugObject(IntervalPrinter.Interval[].class);
         CiTargetMethod targetMethod = event.debugObject(CiTargetMethod.class);
 
         if (blockMap != null) {
@@ -122,9 +120,6 @@ public class CFGPrinterObserver implements CompilationObserver {
         }
         if (allocator != null && intervals != null) {
             cfgPrinter.printIntervals(event.label, intervals);
-        }
-        if (printIntervals != null) {
-            cfgPrinter.printIntervals(event.label, printIntervals);
         }
     }
 

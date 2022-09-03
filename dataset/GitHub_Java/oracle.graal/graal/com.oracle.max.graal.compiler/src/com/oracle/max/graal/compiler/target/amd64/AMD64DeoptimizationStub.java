@@ -28,10 +28,9 @@ import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.lir.*;
-import com.oracle.max.graal.lir.amd64.*;
-import com.oracle.max.graal.lir.asm.*;
+import com.oracle.max.graal.compiler.asm.*;
+import com.oracle.max.graal.compiler.lir.*;
+import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.nodes.DeoptimizeNode.DeoptAction;
 
 public class AMD64DeoptimizationStub extends AMD64SlowPath {
@@ -51,16 +50,16 @@ public class AMD64DeoptimizationStub extends AMD64SlowPath {
 
     @Override
     public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-        // TODO (cwimmer): we want to get rid of a generally reserved scratch register.
+        // TODO(cwi): we want to get rid of a generally reserved scratch register.
         CiRegister scratch = tasm.frameMap.registerConfig.getScratchRegister();
 
         masm.bind(label);
         if (GraalOptions.CreateDeoptInfo && deoptInfo != null) {
             masm.nop();
             keepAlive.add(deoptInfo.toString());
-            AMD64Move.move(tasm, masm, scratch.asValue(), CiConstant.forObject(deoptInfo));
-            // TODO Make this an explicit calling convention instead of using a scratch register
-            AMD64Call.directCall(tasm, masm, CiRuntimeCall.SetDeoptInfo, info);
+            AMD64MoveOpcode.move(tasm, masm, scratch.asValue(), CiConstant.forObject(deoptInfo));
+            // TODO Why use scratch register here? Is it an implicit calling convention that the runtime function reads this register?
+            AMD64CallOpcode.directCall(tasm, masm, CiRuntimeCall.SetDeoptInfo, info);
         }
         int code;
         switch(action) {
@@ -80,11 +79,11 @@ public class AMD64DeoptimizationStub extends AMD64SlowPath {
                 code = 4;
                 break;
             default:
-                throw GraalInternalError.shouldNotReachHere();
+                throw Util.shouldNotReachHere();
         }
         masm.movq(scratch, code);
-     // TODO Make this an explicit calling convention instead of using a scratch register
-        AMD64Call.directCall(tasm, masm, CiRuntimeCall.Deoptimize, info);
-        AMD64Call.shouldNotReachHere(tasm, masm);
+        // TODO Why use scratch register here? Is it an implicit calling convention that the runtime function reads this register?
+        AMD64CallOpcode.directCall(tasm, masm, CiRuntimeCall.Deoptimize, info);
+        AMD64CallOpcode.shouldNotReachHere(tasm, masm);
     }
 }
