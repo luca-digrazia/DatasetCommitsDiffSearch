@@ -201,7 +201,7 @@ public @interface Layout {
 
     Class<? extends ObjectType> objectTypeSuperclass() default ObjectType.class;
 
-    class Snippets {
+    static class Snippets {
 
         // BEGIN: rectlayout
         @Layout
@@ -221,7 +221,7 @@ public @interface Layout {
             // END: rectlayoutimpl
         }
 
-        interface InterfaceSnippets {
+        static interface InterfaceSnippets {
             // BEGIN: rectlayoutcreate
             DynamicObject createRect();
             // END: rectlayoutcreate
