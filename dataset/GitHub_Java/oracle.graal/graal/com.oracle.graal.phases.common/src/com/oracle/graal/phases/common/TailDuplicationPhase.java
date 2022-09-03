@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,7 +36,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.VirtualState.NodeClosure;
-import com.oracle.graal.nodes.debug.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
@@ -173,9 +172,9 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
      * This method attempts to duplicate the tail of the given merge. The merge must not be a
      * {@link LoopBeginNode}. If the merge is eligible for duplication (at least one fixed node in
      * its tail, no {@link MonitorEnterNode}/ {@link MonitorExitNode}, non-null
-     * {@link AbstractMergeNode#stateAfter()}) then the decision callback is used to determine
-     * whether the tail duplication should actually be performed. If replacements is non-null, then
-     * this list of {@link PiNode}s is used to replace one value per merge end.
+     * {@link AbstractMergeNode#stateAfter()}) then the decision callback is used to determine whether the
+     * tail duplication should actually be performed. If replacements is non-null, then this list of
+     * {@link PiNode}s is used to replace one value per merge end.
      *
      * @param merge The merge whose tail should be duplicated.
      * @param decision A callback that can make the final decision if tail duplication should occur
@@ -193,7 +192,7 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
         int fixedCount = 0;
         while (fixed instanceof FixedWithNextNode) {
             fixed = ((FixedWithNextNode) fixed).next();
-            if (fixed instanceof CommitAllocationNode || fixed instanceof ControlFlowAnchorNode) {
+            if (fixed instanceof CommitAllocationNode) {
                 return false;
             }
             fixedCount++;
@@ -210,8 +209,7 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
     }
 
     /**
-     * This class encapsulates one tail duplication operation on a specific
-     * {@link AbstractMergeNode}.
+     * This class encapsulates one tail duplication operation on a specific {@link AbstractMergeNode}.
      */
     private static class DuplicationOperation {
 

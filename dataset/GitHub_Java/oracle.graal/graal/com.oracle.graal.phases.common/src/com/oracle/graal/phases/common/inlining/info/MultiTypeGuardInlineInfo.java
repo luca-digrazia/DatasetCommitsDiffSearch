@@ -376,7 +376,7 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
             FixedNode lastSucc = successors[concretes.size()];
             for (int i = concretes.size() - 1; i >= 0; --i) {
                 LoadMethodNode method = graph.add(new LoadMethodNode(stampProvider.createMethodStamp(), concretes.get(i), receiverType, hub));
-                LogicNode methodCheck = CompareNode.createCompareNode(graph, Condition.EQ, method, constantMethods[i], null);
+                CompareNode methodCheck = CompareNode.createCompareNode(graph, Condition.EQ, method, constantMethods[i]);
                 IfNode ifNode = graph.add(new IfNode(methodCheck, successors[i], lastSucc, probability[i]));
                 method.setNext(ifNode);
                 lastSucc = method;
@@ -459,8 +459,8 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
         return costEstimateMethodDispatch < costEstimateTypeDispatch;
     }
 
-    private static AbstractBeginNode createInvocationBlock(StructuredGraph graph, Invoke invoke, AbstractMergeNode returnMerge, PhiNode returnValuePhi, AbstractMergeNode exceptionMerge,
-                    PhiNode exceptionObjectPhi, boolean useForInlining) {
+    private static AbstractBeginNode createInvocationBlock(StructuredGraph graph, Invoke invoke, AbstractMergeNode returnMerge, PhiNode returnValuePhi, AbstractMergeNode exceptionMerge, PhiNode exceptionObjectPhi,
+                    boolean useForInlining) {
         Invoke duplicatedInvoke = duplicateInvokeForInlining(graph, invoke, exceptionMerge, exceptionObjectPhi, useForInlining);
         AbstractBeginNode calleeEntryNode = graph.add(new BeginNode());
         calleeEntryNode.setNext(duplicatedInvoke.asNode());

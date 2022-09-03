@@ -32,10 +32,10 @@ public class ExpandLogicPhase extends Phase {
 
     @Override
     protected void run(StructuredGraph graph) {
-        for (ShortCircuitOrNode logic : graph.getNodes(ShortCircuitOrNode.TYPE)) {
+        for (ShortCircuitOrNode logic : graph.getNodes(ShortCircuitOrNode.class)) {
             processBinary(logic);
         }
-        assert graph.getNodes(ShortCircuitOrNode.TYPE).isEmpty();
+        assert graph.getNodes(ShortCircuitOrNode.class).isEmpty();
     }
 
     private static void processBinary(ShortCircuitOrNode binary) {

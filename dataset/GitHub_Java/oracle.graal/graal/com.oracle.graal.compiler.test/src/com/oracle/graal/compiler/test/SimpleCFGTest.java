@@ -30,7 +30,6 @@ import org.junit.*;
 
 import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.cfg.*;
 
 public class SimpleCFGTest extends GraalCompilerTest {
@@ -41,7 +40,7 @@ public class SimpleCFGTest extends GraalCompilerTest {
 
     @Test
     public void testImplies() {
-        StructuredGraph graph = new StructuredGraph(AllowAssumptions.YES);
+        StructuredGraph graph = new StructuredGraph();
 
         AbstractEndNode trueEnd = graph.add(new EndNode());
         AbstractEndNode falseEnd = graph.add(new EndNode());
