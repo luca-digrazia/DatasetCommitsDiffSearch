@@ -45,8 +45,11 @@ final class NodeClassImpl extends NodeClass {
 
     // The comprehensive list of all fields.
     private final NodeFieldAccessor[] fields;
+    // Separate arrays for the frequently accessed fields.
     private final NodeFieldAccessor parentField;
     private final NodeFieldAccessor nodeClassField;
+    private final NodeFieldAccessor[] childFields;
+    private final NodeFieldAccessor[] childrenFields;
 
     private final Class<? extends Node> clazz;
 
@@ -59,6 +62,9 @@ final class NodeClassImpl extends NodeClass {
         List<NodeFieldAccessor> fieldsList = new ArrayList<>();
         NodeFieldAccessor parentFieldTmp = null;
         NodeFieldAccessor nodeClassFieldTmp = null;
+        List<NodeFieldAccessor> childFieldList = new ArrayList<>();
+        List<NodeFieldAccessor> childrenFieldList = new ArrayList<>();
+        List<NodeFieldAccessor> cloneableFieldList = new ArrayList<>();
 
         try {
             Field field = Node.class.getDeclaredField("parent");
@@ -71,17 +77,20 @@ final class NodeClassImpl extends NodeClass {
             throw new AssertionError("Node field not found", e);
         }
 
-        collectInstanceFields(clazz, fieldsList);
+        collectInstanceFields(clazz, fieldsList, childFieldList, childrenFieldList, cloneableFieldList);
 
         this.fields = fieldsList.toArray(EMPTY_NODE_FIELD_ARRAY);
         this.nodeClassField = nodeClassFieldTmp;
         this.parentField = parentFieldTmp;
+        this.childFields = childFieldList.toArray(EMPTY_NODE_FIELD_ARRAY);
+        this.childrenFields = childrenFieldList.toArray(EMPTY_NODE_FIELD_ARRAY);
         this.clazz = clazz;
     }
 
-    private static void collectInstanceFields(Class<? extends Object> clazz, List<NodeFieldAccessor> fieldsList) {
+    private static void collectInstanceFields(Class<? extends Object> clazz, List<NodeFieldAccessor> fieldsList, List<NodeFieldAccessor> childFieldList, List<NodeFieldAccessor> childrenFieldList,
+                    List<NodeFieldAccessor> cloneableFieldList) {
         if (clazz.getSuperclass() != null) {
-            collectInstanceFields(clazz.getSuperclass(), fieldsList);
+            collectInstanceFields(clazz.getSuperclass(), fieldsList, childFieldList, childrenFieldList, cloneableFieldList);
         }
         Field[] declaredFields = clazz.getDeclaredFields();
         for (Field field : declaredFields) {
@@ -95,11 +104,16 @@ final class NodeClassImpl extends NodeClass {
             } else if (field.getAnnotation(Child.class) != null) {
                 checkChildField(field);
                 nodeField = NodeFieldAccessor.create(NodeFieldKind.CHILD, field);
+                childFieldList.add(nodeField);
             } else if (field.getAnnotation(Children.class) != null) {
                 checkChildrenField(field);
                 nodeField = NodeFieldAccessor.create(NodeFieldKind.CHILDREN, field);
+                childrenFieldList.add(nodeField);
             } else {
                 nodeField = NodeFieldAccessor.create(NodeFieldKind.DATA, field);
+                if (NodeCloneable.class.isAssignableFrom(field.getType())) {
+                    cloneableFieldList.add(nodeField);
+                }
             }
             fieldsList.add(nodeField);
         }
@@ -258,66 +272,63 @@ final class NodeClassImpl extends NodeClass {
     }
 
     private static final class NodeIterator implements Iterator<Node> {
-        private final NodeFieldAccessor[] fields;
+        private final NodeFieldAccessor[] childFields;
+        private final NodeFieldAccessor[] childrenFields;
         private final Node node;
-
-        private int fieldIndex;
-        private Node next;
-        private int childrenIndex;
-        private Object[] children;
+        private final int childrenCount;
+        private int index;
 
         protected NodeIterator(NodeClassImpl nodeClass, Node node) {
-            this.fields = nodeClass.fields;
+            this.childFields = nodeClass.childFields;
+            this.childrenFields = nodeClass.childrenFields;
             this.node = node;
-            advance();
+            this.childrenCount = childrenCount();
+            this.index = 0;
         }
 
-        private void advance() {
-            if (advanceChildren()) {
-                return;
-            }
-            while (fieldIndex < fields.length) {
-                NodeFieldAccessor field = fields[fieldIndex];
-                fieldIndex++;
-                if (field.isChildField()) {
-                    next = (Node) field.getObject(node);
-                    return;
-                } else if (field.isChildrenField()) {
-                    children = (Object[]) field.getObject(node);
-                    childrenIndex = 0;
-                    if (advanceChildren()) {
-                        return;
-                    }
+        private int childrenCount() {
+            int nodeCount = childFields.length;
+            for (NodeFieldAccessor childrenField : childrenFields) {
+                Object[] children = ((Object[]) childrenField.getObject(node));
+                if (children != null) {
+                    nodeCount += children.length;
                 }
             }
-            next = null;
+            return nodeCount;
         }
 
-        private boolean advanceChildren() {
-            if (children == null) {
-                return false;
-            } else if (childrenIndex < children.length) {
-                next = (Node) children[childrenIndex];
-                childrenIndex++;
-                return true;
+        private Node nodeAt(int idx) {
+            int nodeCount = childFields.length;
+            if (idx < nodeCount) {
+                return (Node) childFields[idx].getObject(node);
             } else {
-                children = null;
-                childrenIndex = 0;
-                return false;
+                for (NodeFieldAccessor childrenField : childrenFields) {
+                    Object[] nodeArray = (Object[]) childrenField.getObject(node);
+                    if (idx < nodeCount + nodeArray.length) {
+                        return (Node) nodeArray[idx - nodeCount];
+                    }
+                    nodeCount += nodeArray.length;
+                }
+            }
+            return null;
+        }
+
+        private void forward() {
+            if (index < childrenCount) {
+                index++;
             }
         }
 
         public boolean hasNext() {
-            return next != null;
+            return index < childrenCount;
         }
 
         public Node next() {
-            Node result = next;
-            if (result == null) {
-                throw new NoSuchElementException();
+            try {
+                return nodeAt(index);
+            } finally {
+                forward();
             }
-            advance();
-            return result;
         }
 
         public void remove() {
