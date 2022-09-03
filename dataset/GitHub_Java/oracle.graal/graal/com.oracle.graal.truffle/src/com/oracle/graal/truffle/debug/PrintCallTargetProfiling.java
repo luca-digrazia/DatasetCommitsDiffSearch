@@ -31,7 +31,7 @@ import java.util.stream.*;
 import com.oracle.graal.truffle.*;
 import com.oracle.truffle.api.*;
 
-public class PrintCallTargetProfiling extends AbstractDebugCompilationListener {
+public final class PrintCallTargetProfiling extends AbstractDebugCompilationListener {
 
     public static void install(GraalTruffleRuntime runtime) {
         if (TruffleCallTargetProfiling.getValue()) {
@@ -40,7 +40,7 @@ public class PrintCallTargetProfiling extends AbstractDebugCompilationListener {
     }
 
     @Override
-    public void notifyShutdown(TruffleRuntime runtime) {
+    public void notifyShutdown(GraalTruffleRuntime runtime) {
         Map<OptimizedCallTarget, List<OptimizedCallTarget>> groupedTargets = Truffle.getRuntime().getCallTargets().stream().map(target -> (OptimizedCallTarget) target).collect(
                         Collectors.groupingBy(target -> {
                             if (target.getSourceCallTarget() != null) {
@@ -60,9 +60,9 @@ public class PrintCallTargetProfiling extends AbstractDebugCompilationListener {
         int totalInterpretedCallCount = 0;
         int totalInvalidationCount = 0;
 
-        OUT.println();
-        OUT.printf(" %-50s  | %-15s || %-15s | %-15s || %-15s | %-15s | %-15s || %3s \n", "Call Target", "Total Calls", "Interp. Calls", "Opt. Calls", "Direct Calls", "Inlined Calls",
-                        "Indirect Calls", "Invalidations");
+        runtime.log(""); // empty line
+        runtime.log(String.format(" %-50s  | %-15s || %-15s | %-15s || %-15s | %-15s | %-15s || %3s ", "Call Target", "Total Calls", "Interp. Calls", "Opt. Calls", "Direct Calls", "Inlined Calls",
+                        "Indirect Calls", "Invalidations"));
         for (OptimizedCallTarget uniqueCallTarget : uniqueSortedTargets) {
             List<OptimizedCallTarget> allCallTargets = groupedTargets.get(uniqueCallTarget);
             int directCallCount = sumCalls(allCallTargets, p -> p.getDirectCallCount());
@@ -80,14 +80,14 @@ public class PrintCallTargetProfiling extends AbstractDebugCompilationListener {
             totalTotalCallCount += totalCallCount;
 
             if (totalCallCount > 0) {
-                OUT.printf("  %-50s | %15d || %15d | %15d || %15d | %15d | %15d || %3d\n", uniqueCallTarget, totalCallCount, interpreterCallCount, totalCallCount - interpreterCallCount,
-                                directCallCount, inlinedCallCount, indirectCallCount, invalidationCount);
+                runtime.log(String.format("  %-50s | %15d || %15d | %15d || %15d | %15d | %15d || %3d", uniqueCallTarget, totalCallCount, interpreterCallCount, totalCallCount - interpreterCallCount,
+                                directCallCount, inlinedCallCount, indirectCallCount, invalidationCount));
             }
 
         }
 
-        OUT.printf(" %-50s  | %15d || %15d | %15d || %15d | %15d | %15d || %3d\n", "Total", totalTotalCallCount, totalInterpretedCallCount, totalTotalCallCount - totalInterpretedCallCount,
-                        totalDirectCallCount, totalInlinedCallCount, totalIndirectCallCount, totalInvalidationCount);
+        runtime.log(String.format(" %-50s  | %15d || %15d | %15d || %15d | %15d | %15d || %3d", "Total", totalTotalCallCount, totalInterpretedCallCount, totalTotalCallCount -
+                        totalInterpretedCallCount, totalDirectCallCount, totalInlinedCallCount, totalIndirectCallCount, totalInvalidationCount));
 
     }
 

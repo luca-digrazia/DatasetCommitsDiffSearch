@@ -22,11 +22,13 @@
  */
 package com.oracle.graal.truffle.debug;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleSplitting;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
-import com.oracle.graal.truffle.GraalTruffleRuntime;
-import com.oracle.graal.truffle.OptimizedCallTarget;
-import com.oracle.graal.truffle.OptimizedDirectCallNode;
+import java.util.*;
+
+import com.oracle.graal.truffle.*;
+import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.nodes.NodeUtil.NodeCountFilter;
 
 public final class TraceSplittingListener extends AbstractDebugCompilationListener {
 
@@ -45,7 +47,29 @@ public final class TraceSplittingListener extends AbstractDebugCompilationListen
     public void notifyCompilationSplit(OptimizedDirectCallNode callNode) {
         OptimizedCallTarget callTarget = callNode.getCallTarget();
         String label = String.format("split %3s-%-4s-%-4s ", splitCount++, callNode.getCurrentCallTarget().getCloneIndex(), callNode.getCallCount());
-        log(0, label, callTarget.toString(), callTarget.getDebugProperties());
+        log(callTarget, 0, label, callTarget.toString(), callTarget.getDebugProperties());
+
+        if (TruffleSplittingNew.getValue()) {
+            Map<TruffleStamp, OptimizedCallTarget> splitTargets = callTarget.getSplitVersions();
+            logProfile(callTarget.getArgumentStamp(), callTarget);
+            for (TruffleStamp profile : splitTargets.keySet()) {
+                logProfile(profile, splitTargets.get(profile));
+            }
+        }
+    }
+
+    private static void logProfile(TruffleStamp stamp, OptimizedCallTarget target) {
+        String id = String.format("@%8h %s", target.hashCode(), target.getSourceCallTarget() == null ? "orig." : "split");
+        target.log(String.format("%16s%-20sCallers: %3d, Nodes:%10s %s", "", id, target.getKnownCallSiteCount(), //
+                        String.format("%d (%d/%d)", count(target, NodeCost.MONOMORPHIC), count(target, NodeCost.POLYMORPHIC), count(target, NodeCost.MEGAMORPHIC)), stamp));
+    }
+
+    private static int count(OptimizedCallTarget target, final NodeCost otherCost) {
+        return NodeUtil.countNodes(target.getRootNode(), new NodeCountFilter() {
+            public boolean isCounted(Node node) {
+                return node.getCost() == otherCost;
+            }
+        });
     }
 
 }

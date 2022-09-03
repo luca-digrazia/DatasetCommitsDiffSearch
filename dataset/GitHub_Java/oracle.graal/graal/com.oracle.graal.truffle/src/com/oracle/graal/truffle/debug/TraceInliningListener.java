@@ -22,14 +22,10 @@
  */
 package com.oracle.graal.truffle.debug;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleInlining;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.truffle.GraalTruffleRuntime;
-import com.oracle.graal.truffle.OptimizedCallTarget;
-import com.oracle.graal.truffle.TruffleInlining;
-import com.oracle.graal.truffle.TruffleInliningDecision;
-import com.oracle.graal.truffle.TruffleInliningProfile;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.truffle.*;
 
 public final class TraceInliningListener extends AbstractDebugCompilationListener {
 
@@ -49,9 +45,9 @@ public final class TraceInliningListener extends AbstractDebugCompilationListene
             return;
         }
 
-        log(0, "inline start", target.toString(), target.getDebugProperties());
+        log(target, 0, "inline start", target.toString(), target.getDebugProperties());
         logInliningDecisionRecursive(target, inlining, 1);
-        log(0, "inline done", target.toString(), target.getDebugProperties());
+        log(target, 0, "inline done", target.toString(), target.getDebugProperties());
     }
 
     private void logInliningDecisionRecursive(OptimizedCallTarget target, TruffleInlining result, int depth) {
@@ -59,7 +55,7 @@ public final class TraceInliningListener extends AbstractDebugCompilationListene
             TruffleInliningProfile profile = decision.getProfile();
             boolean inlined = decision.isInline();
             String msg = inlined ? "inline success" : "inline failed";
-            log(depth, msg, decision.getProfile().getCallNode().getCurrentCallTarget().toString(), profile.getDebugProperties());
+            log(target, depth, msg, decision.getProfile().getCallNode().getCurrentCallTarget().toString(), profile.getDebugProperties());
             if (inlined) {
                 logInliningDecisionRecursive(target, decision, depth + 1);
             }

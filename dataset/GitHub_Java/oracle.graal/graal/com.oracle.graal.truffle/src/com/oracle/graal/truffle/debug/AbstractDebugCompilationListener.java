@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,15 +22,11 @@
  */
 package com.oracle.graal.truffle.debug;
 
-import java.util.Map;
+import java.util.*;
 
-import com.oracle.graal.code.CompilationResult;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.truffle.GraalTruffleCompilationListener;
-import com.oracle.graal.truffle.GraalTruffleRuntime;
-import com.oracle.graal.truffle.OptimizedCallTarget;
-import com.oracle.graal.truffle.OptimizedDirectCallNode;
-import com.oracle.graal.truffle.TruffleInlining;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.truffle.*;
+import com.oracle.jvmci.code.*;
 
 public abstract class AbstractDebugCompilationListener implements GraalTruffleCompilationListener {
 
@@ -67,7 +63,7 @@ public abstract class AbstractDebugCompilationListener implements GraalTruffleCo
     public void notifyStartup(GraalTruffleRuntime runtime) {
     }
 
-    public static void log(int indent, String msg, String details, Map<String, Object> properties) {
+    public static void log(OptimizedCallTarget target, int indent, String msg, String details, Map<String, Object> properties) {
         int spaceIndent = indent * 2;
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("[truffle] %-16s ", msg));
@@ -97,7 +93,7 @@ public abstract class AbstractDebugCompilationListener implements GraalTruffleCo
                 sb.append(String.format(" %" + length + "s ", propertyBuilder.toString()));
             }
         }
-        OptimizedCallTarget.log(sb.toString());
+        target.log(sb.toString());
     }
 
     public static void addASTSizeProperty(OptimizedCallTarget target, Map<String, Object> properties) {

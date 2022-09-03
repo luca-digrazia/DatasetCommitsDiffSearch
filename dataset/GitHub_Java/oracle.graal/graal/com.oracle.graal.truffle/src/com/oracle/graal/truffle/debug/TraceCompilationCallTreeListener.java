@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,22 +22,15 @@
  */
 package com.oracle.graal.truffle.debug;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleCompilationCallTree;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import com.oracle.graal.code.CompilationResult;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.truffle.GraalTruffleRuntime;
-import com.oracle.graal.truffle.OptimizedCallTarget;
-import com.oracle.graal.truffle.OptimizedDirectCallNode;
-import com.oracle.graal.truffle.OptimizedIndirectCallNode;
-import com.oracle.graal.truffle.TruffleInlining;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.truffle.*;
 import com.oracle.graal.truffle.TruffleInlining.CallTreeNodeVisitor;
-import com.oracle.graal.truffle.TruffleInliningDecision;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.jvmci.code.*;
+import com.oracle.truffle.api.nodes.*;
 
 public final class TraceCompilationCallTreeListener extends AbstractDebugCompilationListener {
 
@@ -52,7 +45,7 @@ public final class TraceCompilationCallTreeListener extends AbstractDebugCompila
 
     @Override
     public void notifyCompilationSuccess(OptimizedCallTarget target, StructuredGraph graph, CompilationResult result) {
-        log(0, "opt call tree", target.toString(), target.getDebugProperties());
+        log(target, 0, "opt call tree", target.toString(), target.getDebugProperties());
         logTruffleCallTree(target);
     }
 
@@ -71,10 +64,11 @@ public final class TraceCompilationCallTreeListener extends AbstractDebugCompila
                     Map<String, Object> properties = new LinkedHashMap<>();
                     addASTSizeProperty(callNode.getCurrentCallTarget(), properties);
                     properties.putAll(callNode.getCurrentCallTarget().getDebugProperties());
-                    log(depth, "opt call tree", callNode.getCurrentCallTarget().toString() + dispatched, properties);
+                    properties.put("Stamp", callNode.getCurrentCallTarget().getArgumentStamp());
+                    log(compilable, depth, "opt call tree", callNode.getCurrentCallTarget().toString() + dispatched, properties);
                 } else if (node instanceof OptimizedIndirectCallNode) {
                     int depth = decisionStack == null ? 0 : decisionStack.size() - 1;
-                    log(depth, "opt call tree", "<indirect>", new LinkedHashMap<String, Object>());
+                    log(compilable, depth, "opt call tree", "<indirect>", new LinkedHashMap<String, Object>());
                 }
                 return true;
             }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,34 +22,19 @@
  */
 package com.oracle.graal.truffle.debug;
 
-import static java.util.function.Function.identity;
-import static java.util.stream.Collectors.counting;
-import static java.util.stream.Collectors.groupingBy;
+import static java.util.function.Function.*;
+import static java.util.stream.Collectors.*;
 
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.IntSummaryStatistics;
-import java.util.List;
-import java.util.LongSummaryStatistics;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
+import java.util.*;
+import java.util.function.*;
+import java.util.stream.*;
 
-import com.oracle.graal.code.CompilationResult;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.truffle.GraalTruffleRuntime;
-import com.oracle.graal.truffle.OptimizedCallTarget;
-import com.oracle.graal.truffle.OptimizedDirectCallNode;
-import com.oracle.graal.truffle.TruffleCompilerOptions;
-import com.oracle.graal.truffle.TruffleInlining;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.truffle.*;
 import com.oracle.graal.truffle.TruffleInlining.CallTreeNodeVisitor;
-import com.oracle.graal.truffle.TruffleInliningDecision;
-import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.api.nodes.IndirectCallNode;
-import com.oracle.truffle.api.nodes.LoopNode;
+import com.oracle.jvmci.code.*;
+import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeCost;
 
 public final class CompilationStatisticsListener extends AbstractDebugCompilationListener {
 
@@ -343,7 +328,7 @@ public final class CompilationStatisticsListener extends AbstractDebugCompilatio
         private int callCountDirectNotCloned;
         private int loopCount;
 
-        CallTargetNodeStatistics(OptimizedCallTarget target) {
+        public CallTargetNodeStatistics(OptimizedCallTarget target) {
             target.accept((CallTreeNodeVisitor) this::visitNode, true);
 
         }

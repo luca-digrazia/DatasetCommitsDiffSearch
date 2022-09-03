@@ -22,16 +22,13 @@
  */
 package com.oracle.graal.truffle.debug;
 
-import static com.oracle.graal.compiler.GraalCompilerOptions.PrintBailout;
+import static com.oracle.jvmci.compiler.Compiler.*;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.code.BailoutException;
-
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.truffle.GraalTruffleRuntime;
-import com.oracle.graal.truffle.OptimizedCallTarget;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.truffle.*;
+import com.oracle.jvmci.code.*;
 
 public final class TraceCompilationFailureListener extends AbstractDebugCompilationListener {
 
@@ -47,7 +44,7 @@ public final class TraceCompilationFailureListener extends AbstractDebugCompilat
         if (isPermanentBailout(t) || PrintBailout.getValue()) {
             Map<String, Object> properties = new LinkedHashMap<>();
             properties.put("Reason", t.toString());
-            log(0, "opt fail", target.toString(), properties);
+            log(target, 0, "opt fail", target.toString(), properties);
         }
     }
 

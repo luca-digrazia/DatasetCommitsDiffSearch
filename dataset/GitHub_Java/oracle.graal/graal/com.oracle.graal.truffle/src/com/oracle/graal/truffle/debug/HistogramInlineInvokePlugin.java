@@ -22,23 +22,15 @@
  */
 package com.oracle.graal.truffle.debug;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.IntSummaryStatistics;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.BeginNode;
-import com.oracle.graal.nodes.DeoptimizeNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.VirtualState;
-import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
-import com.oracle.graal.truffle.OptimizedCallTarget;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.truffle.*;
+import com.oracle.jvmci.meta.*;
 
 public class HistogramInlineInvokePlugin implements InlineInvokePlugin {
 
@@ -105,7 +97,7 @@ public class HistogramInlineInvokePlugin implements InlineInvokePlugin {
         private final IntSummaryStatistics shallowCount = new IntSummaryStatistics();
         private final IntSummaryStatistics callCount = new IntSummaryStatistics();
 
-        MethodStatistics(ResolvedJavaMethod method) {
+        public MethodStatistics(ResolvedJavaMethod method) {
             this.method = method;
         }
 
@@ -143,7 +135,7 @@ public class HistogramInlineInvokePlugin implements InlineInvokePlugin {
         private int deepNodeCount;
         private int callCount;
 
-        MethodStatistic(MethodStatistic parent, ResolvedJavaMethod method, int nodeCountBefore, int callsBefore) {
+        public MethodStatistic(MethodStatistic parent, ResolvedJavaMethod method, int nodeCountBefore, int callsBefore) {
             this.parent = parent;
             this.method = method;
             this.callCount = callsBefore;

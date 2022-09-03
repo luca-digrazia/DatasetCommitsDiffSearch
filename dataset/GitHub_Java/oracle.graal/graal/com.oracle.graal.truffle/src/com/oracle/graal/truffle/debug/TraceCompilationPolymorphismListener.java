@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,17 +22,14 @@
  */
 package com.oracle.graal.truffle.debug;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleCompilationPolymorphism;
+import com.oracle.jvmci.code.CompilationResult;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 
-import com.oracle.graal.code.CompilationResult;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.truffle.GraalTruffleRuntime;
-import com.oracle.graal.truffle.OptimizedCallTarget;
-import com.oracle.truffle.api.nodes.NodeCost;
-import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.truffle.*;
+import com.oracle.truffle.api.nodes.*;
 
 public final class TraceCompilationPolymorphismListener extends AbstractDebugCompilationListener {
 
@@ -55,7 +52,7 @@ public final class TraceCompilationPolymorphismListener extends AbstractDebugCom
             props.put("simpleName", node.getClass().getSimpleName());
             props.put("subtree", "\n" + NodeUtil.printCompactTreeToString(node));
             String msg = cost == NodeCost.MEGAMORPHIC ? "megamorphic" : "polymorphic";
-            log(0, msg, node.toString(), props);
+            log(target, 0, msg, node.toString(), props);
         });
     }
 

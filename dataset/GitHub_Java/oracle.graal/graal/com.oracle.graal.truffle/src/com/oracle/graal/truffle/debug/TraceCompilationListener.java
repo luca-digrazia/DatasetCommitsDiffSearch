@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,14 @@
  */
 package com.oracle.graal.truffle.debug;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleCompilation;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleCompilationDetails;
+import com.oracle.jvmci.code.CompilationResult;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 
-import com.oracle.graal.code.CompilationResult;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.truffle.GraalTruffleRuntime;
-import com.oracle.graal.truffle.OptimizedCallTarget;
-import com.oracle.graal.truffle.OptimizedDirectCallNode;
-import com.oracle.graal.truffle.TruffleInlining;
-import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.truffle.*;
+import com.oracle.truffle.api.source.*;
 
 public final class TraceCompilationListener extends AbstractDebugCompilationListener {
 
@@ -52,7 +47,7 @@ public final class TraceCompilationListener extends AbstractDebugCompilationList
     @Override
     public void notifyCompilationQueued(OptimizedCallTarget target) {
         if (TraceTruffleCompilationDetails.getValue()) {
-            log(0, "opt queued", target.toString(), target.getDebugProperties());
+            log(target, 0, "opt queued", target.toString(), target.getDebugProperties());
         }
     }
 
@@ -62,7 +57,7 @@ public final class TraceCompilationListener extends AbstractDebugCompilationList
             Map<String, Object> properties = new LinkedHashMap<>();
             addSourceInfo(properties, source);
             properties.put("Reason", reason);
-            log(0, "opt unqueued", target.toString(), properties);
+            log(target, 0, "opt unqueued", target.toString(), properties);
         }
     }
 
@@ -78,7 +73,7 @@ public final class TraceCompilationListener extends AbstractDebugCompilationList
     @Override
     public void notifyCompilationStarted(OptimizedCallTarget target) {
         if (TraceTruffleCompilationDetails.getValue()) {
-            log(0, "opt start", target.toString(), target.getDebugProperties());
+            log(target, 0, "opt start", target.toString(), target.getDebugProperties());
         }
         LocalCompilation compilation = new LocalCompilation();
         compilation.timeCompilationStarted = System.nanoTime();
@@ -122,7 +117,7 @@ public final class TraceCompilationListener extends AbstractDebugCompilationList
         properties.put("CodeSize", result.getTargetCodeSize());
         properties.put("Source", formatSourceSection(target.getRootNode().getSourceSection()));
 
-        log(0, "opt done", target.toString(), properties);
+        log(target, 0, "opt done", target.toString(), properties);
         super.notifyCompilationSuccess(target, graph, result);
         currentCompilation.set(null);
     }
@@ -136,7 +131,7 @@ public final class TraceCompilationListener extends AbstractDebugCompilationList
         Map<String, Object> properties = new LinkedHashMap<>();
         addSourceInfo(properties, source);
         properties.put("Reason", reason);
-        log(0, "opt invalidated", target.toString(), properties);
+        log(target, 0, "opt invalidated", target.toString(), properties);
     }
 
     private static void addSourceInfo(Map<String, Object> properties, Object source) {
