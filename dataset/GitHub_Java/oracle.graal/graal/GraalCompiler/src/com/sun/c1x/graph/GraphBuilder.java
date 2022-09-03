@@ -29,7 +29,6 @@ import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.graph.*;
-import com.oracle.max.graal.schedule.Schedule;
 import com.sun.c1x.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.graph.BlockMap.*;
@@ -393,7 +392,7 @@ public final class GraphBuilder {
             FrameState stateWithException = entryState.duplicateModified(bci, CiKind.Void, exception);
 
             Instruction successor = createTarget(dispatchBlock, stateWithException);
-            Anchor end = new Anchor(successor, graph);
+            BlockEnd end = new Anchor(successor, graph);
             exception.setNext(end);
             if (x instanceof Invoke) {
                 ((Invoke) x).setExceptionEdge(entry);
@@ -829,7 +828,7 @@ public final class GraphBuilder {
 
     private void appendInvoke(int opcode, RiMethod target, Value[] args, int cpi, RiConstantPool constantPool) {
         CiKind resultType = returnKind(target);
-        Invoke invoke = new Invoke(opcode, resultType.stackKind(), args, target, target.signature().returnType(compilation.method.holder()), graph, bci());
+        Invoke invoke = new Invoke(opcode, resultType.stackKind(), args, target, target.signature().returnType(compilation.method.holder()), graph);
         Value result = appendWithBCI(invoke);
         handleException(invoke, bci());
         frameState.pushReturn(resultType, result);
@@ -1195,7 +1194,7 @@ public final class GraphBuilder {
             traceInstruction(bci, opcode, blockStart);
             processBytecode(bci, opcode);
 
-            if (Schedule.isBlockEnd(lastInstr) || lastInstr.next() != null) {
+            if (lastInstr instanceof BlockEnd || lastInstr.next() != null) {
                 break;
             }
 

@@ -41,7 +41,7 @@ import com.sun.cri.ci.*;
  * Instruction nodes are chained together in a basic block through the embedded
  * {@link Instruction#next} field. An Instruction may also have a list of {@link ExceptionHandler}s.
  */
-public abstract class Instruction extends FixedNode {
+public abstract class Instruction extends Value {
 
     private static final int INPUT_COUNT = 0;
 
@@ -111,7 +111,8 @@ public abstract class Instruction extends FixedNode {
     }
 
     /**
-     * Gets the state after the instruction, if it is recorded.
+     * Gets the state after the instruction, if it is recorded. Typically only
+     * instances of {@link BlockEnd} have a non-null state after.
      * @return the state after the instruction
      */
     public FrameState stateAfter() {
