@@ -272,9 +272,9 @@ import java.lang.annotation.Target;
  * {@link #objectTypeSuperclass} property on the {@link Layout} annotation.
  */
 @Target(ElementType.TYPE)
-@Retention(RetentionPolicy.SOURCE)
+@Retention(RetentionPolicy.CLASS)
 public @interface Layout {
 
-    Class<? extends ObjectType> objectTypeSuperclass() default ObjectType.class;
+    String objectTypeSuperclass() default "ObjectType";
 
 }

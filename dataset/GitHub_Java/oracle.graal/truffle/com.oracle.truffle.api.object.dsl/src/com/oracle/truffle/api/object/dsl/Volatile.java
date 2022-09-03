@@ -46,6 +46,6 @@ import java.lang.annotation.Target;
  * @see Layout
  */
 @Target(ElementType.PARAMETER)
-@Retention(RetentionPolicy.SOURCE)
+@Retention(RetentionPolicy.CLASS)
 public @interface Volatile {
 }
