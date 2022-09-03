@@ -256,10 +256,16 @@ final class PolyglotLanguageContext implements VMObject {
         return false;
     }
 
+    OptionValuesImpl getOwnOptionValues() {
+        if (optionValues == null) {
+            optionValues = language.getOptionValues().copy();
+        }
+        return optionValues;
+    }
+
     OptionValuesImpl getOptionValues() {
         if (optionValues == null) {
-            // we need to create a copy. languages might want to modify the options
-            optionValues = language.getOptionValues().copy();
+            return language.getOptionValues();
         }
         return optionValues;
     }
