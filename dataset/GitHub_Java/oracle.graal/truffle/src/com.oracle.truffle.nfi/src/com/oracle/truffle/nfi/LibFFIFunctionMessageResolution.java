@@ -39,8 +39,6 @@ import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.nfi.LibFFIFunctionMessageResolutionFactory.CachedExecuteNodeGen;
-import com.oracle.truffle.nfi.TypeConversion.AsStringNode;
-import com.oracle.truffle.nfi.TypeConversionFactory.AsStringNodeGen;
 
 @MessageResolution(receiverType = LibFFIFunction.class)
 class LibFFIFunctionMessageResolution {
@@ -218,11 +216,9 @@ class LibFFIFunctionMessageResolution {
         private static final int INVOCABLE = KeyInfo.newBuilder().setInvocable(true).build();
         private static final int NOT_EXISTING = 0;
 
-        @Child AsStringNode asString = AsStringNodeGen.create(true);
-
         @SuppressWarnings("unused")
-        public int access(LibFFIFunction receiver, Object identifier) {
-            if ("bind".equals(asString.execute(identifier))) {
+        public int access(LibFFIFunction receiver, String identifier) {
+            if ("bind".equals(identifier)) {
                 return INVOCABLE;
             } else {
                 return NOT_EXISTING;
