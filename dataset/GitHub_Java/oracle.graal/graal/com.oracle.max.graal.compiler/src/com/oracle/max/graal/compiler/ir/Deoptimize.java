@@ -28,7 +28,7 @@ import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
-public class Deoptimize extends FixedNode {
+public class Deoptimize extends Instruction {
 
     private static final int INPUT_COUNT = 0;
     private static final int SUCCESSOR_COUNT = 0;
@@ -39,7 +39,6 @@ public class Deoptimize extends FixedNode {
         InvalidateReprofile,            // invalidate the nmethod, reset IC, maybe recompile
         InvalidateRecompile,            // invalidate the nmethod, recompile (probably)
         InvalidateStopCompiling,        // invalidate the nmethod and do not compile
-        RethrowExceptionInInterpreter,
     }
 
     private String message;

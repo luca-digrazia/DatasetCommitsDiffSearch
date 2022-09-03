@@ -173,7 +173,7 @@ public class IdealGraphPrinter {
             }
             for (Entry<Object, Object> entry : props.entrySet()) {
                 String key = entry.getKey().toString();
-                String value = entry.getValue().toString();
+                String value = entry.getValue() == null ? "null" : entry.getValue().toString();
                 stream.printf("    <p name='%s'>%s</p>%n", escape(key), escape(value));
             }
 
@@ -240,7 +240,7 @@ public class IdealGraphPrinter {
                         nodes.add(merge.stateBefore());
                     }
                     for (Node usage : merge.usages()) {
-                        if (usage instanceof Phi || usage instanceof LoopCounter) {
+                        if (usage instanceof Phi) {
                             nodes.add(usage);
                         }
                     }
