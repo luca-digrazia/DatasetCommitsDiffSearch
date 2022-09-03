@@ -36,7 +36,6 @@ import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
@@ -108,10 +107,6 @@ public class TruffleCompilerImpl implements TruffleCompiler {
         });
     }
 
-    public static final DebugTimer PartialEvaluationTime = Debug.timer("PartialEvaluationTime");
-    public static final DebugTimer CompilationTime = Debug.timer("CompilationTime");
-    public static final DebugTimer CodeInstallationTime = Debug.timer("CodeInstallation");
-
     private InstalledCode compileMethodImpl(final OptimizedCallTarget compilable) {
         final StructuredGraph graph;
         final GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault();
@@ -120,9 +115,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
         compilable.timeCompilationStarted = System.nanoTime();
         Assumptions assumptions = new Assumptions(true);
-        try (TimerCloseable a = PartialEvaluationTime.start()) {
-            graph = partialEvaluator.createGraph(compilable, assumptions);
-        }
+        graph = partialEvaluator.createGraph(compilable, assumptions);
         compilable.timePartialEvaluationFinished = System.nanoTime();
         compilable.nodeCountPartialEval = graph.getNodeCount();
         InstalledCode compiledMethod = compileMethodHelper(graph, config, compilable, assumptions);
@@ -150,11 +143,9 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
             @Override
             public CompilationResult call() {
-                try (TimerCloseable a = CompilationTime.start()) {
-                    CallingConvention cc = getCallingConvention(runtime, Type.JavaCallee, graph.method(), false);
-                    return GraalCompiler.compileGraph(graph, cc, graph.method(), runtime, replacements, backend, runtime.getTarget(), null, plan, OptimisticOptimizations.ALL, new SpeculationLog(),
-                                    suites, new CompilationResult());
-                }
+                CallingConvention cc = getCallingConvention(runtime, Type.JavaCallee, graph.method(), false);
+                return GraalCompiler.compileGraph(graph, cc, graph.method(), runtime, replacements, backend, runtime.getTarget(), null, plan, OptimisticOptimizations.ALL, new SpeculationLog(),
+                                suites, new CompilationResult());
             }
         });
 
@@ -178,13 +169,11 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
             @Override
             public InstalledCode call() throws Exception {
-                try (TimerCloseable a = CodeInstallationTime.start()) {
-                    InstalledCode installedCode = runtime.addMethod(graph.method(), result);
-                    if (installedCode != null) {
-                        Debug.dump(new Object[]{result, installedCode}, "After code installation");
-                    }
-                    return installedCode;
+                InstalledCode installedCode = runtime.addMethod(graph.method(), result);
+                if (installedCode != null) {
+                    Debug.dump(new Object[]{result, installedCode}, "After code installation");
                 }
+                return installedCode;
             }
         });
 
