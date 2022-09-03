@@ -22,17 +22,13 @@
  */
 package com.oracle.graal.nodes;
 
-import jdk.internal.jvmci.code.TargetDescription;
-import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.IterableNodeType;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.memory.MemoryMapNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo
 public final class ReturnNode extends ControlSinkNode implements LIRLowerable, IterableNodeType {
@@ -57,7 +53,6 @@ public final class ReturnNode extends ControlSinkNode implements LIRLowerable, I
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        assert verifyReturn(gen.getLIRGeneratorTool().target());
         if (result == null) {
             gen.getLIRGeneratorTool().emitReturn(JavaKind.Void, null);
         } else {
@@ -74,16 +69,13 @@ public final class ReturnNode extends ControlSinkNode implements LIRLowerable, I
         return memoryMap;
     }
 
-    private boolean verifyReturn(TargetDescription target) {
+    @Override
+    public boolean verify() {
         if (graph().method() != null) {
             JavaKind actual = result == null ? JavaKind.Void : result.getStackKind();
             JavaKind expected = graph().method().getSignature().getReturnKind().getStackKind();
-            if (actual == target.wordKind && expected == JavaKind.Object) {
-                // OK, we're compiling a snippet that returns a Word
-                return true;
-            }
-            assert actual == expected : "return kind doesn't match: actual " + actual + ", expected: " + expected;
+            assertTrue(actual == expected, "return kind doesn't match: actual " + actual + ", expected: " + expected);
         }
-        return true;
+        return super.verify();
     }
 }

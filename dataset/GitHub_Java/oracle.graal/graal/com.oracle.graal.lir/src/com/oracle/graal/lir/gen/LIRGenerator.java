@@ -22,55 +22,25 @@
  */
 package com.oracle.graal.lir.gen;
 
-import static com.oracle.graal.lir.LIRValueUtil.asConstant;
-import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
-import static com.oracle.graal.lir.LIRValueUtil.isConstantValue;
-import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
-import static com.oracle.graal.lir.LIRValueUtil.isVariable;
-import static jdk.internal.jvmci.code.ValueUtil.asAllocatableValue;
-import static jdk.internal.jvmci.code.ValueUtil.isAllocatableValue;
-import static jdk.internal.jvmci.code.ValueUtil.isLegal;
+import static com.oracle.graal.lir.LIRValueUtil.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
-import jdk.internal.jvmci.code.CallingConvention;
-import jdk.internal.jvmci.code.CodeCacheProvider;
-import jdk.internal.jvmci.code.Register;
-import jdk.internal.jvmci.code.RegisterAttributes;
-import jdk.internal.jvmci.code.TargetDescription;
-import jdk.internal.jvmci.common.JVMCIError;
-import jdk.internal.jvmci.meta.AllocatableValue;
-import jdk.internal.jvmci.meta.Constant;
-import jdk.internal.jvmci.meta.JavaConstant;
-import jdk.internal.jvmci.meta.JavaKind;
-import jdk.internal.jvmci.meta.LIRKind;
-import jdk.internal.jvmci.meta.MetaAccessProvider;
-import jdk.internal.jvmci.meta.PlatformKind;
-import jdk.internal.jvmci.meta.Value;
-import jdk.internal.jvmci.options.Option;
-import jdk.internal.jvmci.options.OptionType;
-import jdk.internal.jvmci.options.OptionValue;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.options.*;
 
-import com.oracle.graal.asm.Label;
-import com.oracle.graal.compiler.common.calc.Condition;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.compiler.common.spi.CodeGenProviders;
-import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
-import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
-import com.oracle.graal.compiler.common.spi.LIRKindTool;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.debug.TTY;
-import com.oracle.graal.lir.ConstantValue;
-import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.LIRVerifier;
-import com.oracle.graal.lir.LabelRef;
-import com.oracle.graal.lir.StandardOp;
+import com.oracle.graal.asm.*;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
-import com.oracle.graal.lir.SwitchStrategy;
-import com.oracle.graal.lir.Variable;
 
 /**
  * This class traverses the HIR instructions and generates LIR instructions from them.
@@ -84,6 +54,15 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         @Option(help = "The trace level for the LIR generator", type = OptionType.Debug)
         public static final OptionValue<Integer> TraceLIRGeneratorLevel = new OptionValue<>(0);
         // @formatter:on
+    }
+
+    protected static LIRKind toStackKind(LIRKind kind) {
+        if (kind.getPlatformKind() instanceof JavaKind) {
+            JavaKind stackKind = ((JavaKind) kind.getPlatformKind()).getStackKind();
+            return kind.changeType(stackKind);
+        } else {
+            return kind;
+        }
     }
 
     private final LIRKindTool lirKindTool;
@@ -151,7 +130,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     @Override
     public Value emitConstant(LIRKind kind, Constant constant) {
         if (constant instanceof JavaConstant && canInlineConstant((JavaConstant) constant)) {
-            return new ConstantValue(toRegisterKind(kind), constant);
+            return new ConstantValue(kind, constant);
         } else {
             return emitLoadConstant(kind, constant);
         }
@@ -220,7 +199,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
      */
     public AllocatableValue resultOperandFor(JavaKind javaKind, LIRKind lirKind) {
         Register reg = res.getFrameMapBuilder().getRegisterConfig().getReturnRegister(javaKind);
-        assert target().arch.canStoreValue(reg.getRegisterCategory(), lirKind.getPlatformKind()) : reg.getRegisterCategory() + " " + lirKind.getPlatformKind();
+        assert target().arch.canStoreValue(reg.getRegisterCategory(), lirKind.getPlatformKind());
         return reg.asValue(lirKind);
     }
 
@@ -423,20 +402,11 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     protected LIRKind getAddressKind(Value base, long displacement, Value index) {
         if (base.getLIRKind().isValue() && (index.equals(Value.ILLEGAL) || index.getLIRKind().isValue())) {
-            return LIRKind.value(target().arch.getWordKind());
+            return LIRKind.value(target().wordKind);
         } else if (base.getLIRKind().isReference(0) && displacement == 0L && index.equals(Value.ILLEGAL)) {
-            return LIRKind.reference(target().arch.getWordKind());
+            return LIRKind.reference(target().wordKind);
         } else {
-            return LIRKind.unknownReference(target().arch.getWordKind());
-        }
-    }
-
-    public LIRKind toRegisterKind(LIRKind kind) {
-        JavaKind stackKind = ((JavaKind) kind.getPlatformKind()).getStackKind();
-        if (stackKind != kind.getPlatformKind()) {
-            return kind.changeType(stackKind);
-        } else {
-            return kind;
+            return LIRKind.unknownReference(target().wordKind);
         }
     }
 
