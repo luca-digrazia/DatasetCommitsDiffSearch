@@ -53,7 +53,7 @@ import com.oracle.graal.word.*;
 public class NewInstanceStub extends SnippetStub {
 
     public NewInstanceStub(HotSpotProviders providers, TargetDescription target, HotSpotForeignCallLinkage linkage) {
-        super("newInstance", providers, target, linkage);
+        super(providers, target, linkage);
     }
 
     @Override
@@ -99,7 +99,7 @@ public class NewInstanceStub extends SnippetStub {
         int sizeInBytes = hub.readInt(klassInstanceSizeOffset(), LocationIdentity.FINAL_LOCATION);
         Word thread = registerAsWord(threadRegister);
         if (!forceSlowPath() && inlineContiguousAllocationSupported()) {
-            if (isInstanceKlassFullyInitialized(hub)) {
+            if (isKlassFullyInitialized(hub)) {
                 Word memory = refillAllocate(thread, intArrayHub, sizeInBytes, logging());
                 if (memory.notEqual(0)) {
                     Word prototypeMarkWord = hub.readWord(prototypeMarkWordOffset(), PROTOTYPE_MARK_WORD_LOCATION);
@@ -251,7 +251,7 @@ public class NewInstanceStub extends SnippetStub {
         return Boolean.getBoolean("graal.newInstanceStub.forceSlowPath");
     }
 
-    public static final ForeignCallDescriptor NEW_INSTANCE_C = newDescriptor(NewInstanceStub.class, "newInstanceC", void.class, Word.class, Word.class);
+    public static final ForeignCallDescriptor NEW_INSTANCE_C = descriptorFor(NewInstanceStub.class, "newInstanceC");
 
     @NodeIntrinsic(StubForeignCallNode.class)
     public static native void newInstanceC(@ConstantNodeParameter ForeignCallDescriptor newInstanceC, Word thread, Word hub);
