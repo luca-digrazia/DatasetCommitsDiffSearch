@@ -58,7 +58,7 @@ import org.graalvm.compiler.nodes.calc.CompareNode;
 import org.graalvm.compiler.nodes.extended.BoxNode;
 import org.graalvm.compiler.nodes.extended.BranchProbabilityNode;
 import org.graalvm.compiler.nodes.extended.GuardedUnsafeLoadNode;
-import org.graalvm.compiler.nodes.extended.RawStoreNode;
+import org.graalvm.compiler.nodes.extended.UnsafeStoreNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin.Receiver;
@@ -399,7 +399,7 @@ public class TruffleGraphBuilderPlugins {
                 }
                 FrameDescriptor constantDescriptor = snippetReflection.asObject(FrameDescriptor.class, descriptor.asJavaConstant());
 
-                ValueNode nonNullArguments = b.add(PiNode.create(args, StampFactory.objectNonNull(StampTool.typeReferenceOrNull(args))));
+                ValueNode nonNullArguments = b.add(new PiNode(args, StampFactory.objectNonNull(StampTool.typeReferenceOrNull(args))));
                 Class<?> frameClass = TruffleCompilerOptions.getValue(TruffleUseFrameWithoutBoxing) ? FrameWithoutBoxing.class : FrameWithBoxing.class;
                 NewFrameNode newFrame = new NewFrameNode(b.getMetaAccess(), snippetReflection, b.getGraph(), b.getMetaAccess().lookupJavaType(frameClass), constantDescriptor, descriptor,
                                 nonNullArguments);
@@ -608,7 +608,7 @@ public class TruffleGraphBuilderPlugins {
                                 valueAnchorNode = b.add(new ConditionAnchorNode(compareNode));
                             }
                         }
-                        b.addPush(JavaKind.Object, PiNode.create(object, piStamp, valueAnchorNode));
+                        b.addPush(JavaKind.Object, new PiNode(object, piStamp, valueAnchorNode));
                     }
                     return true;
                 } else if (canDelayIntrinsification) {
@@ -682,7 +682,7 @@ public class TruffleGraphBuilderPlugins {
                 } else {
                     locationIdentity = ObjectLocationIdentity.create(locationArgument.asJavaConstant());
                 }
-                b.add(new RawStoreNode(object, offset, value, kind, locationIdentity, true, null, forceAnyLocation));
+                b.add(new UnsafeStoreNode(object, offset, value, kind, locationIdentity, null, forceAnyLocation));
                 return true;
             }
             // TODO: should we throw b.bailout() here?
