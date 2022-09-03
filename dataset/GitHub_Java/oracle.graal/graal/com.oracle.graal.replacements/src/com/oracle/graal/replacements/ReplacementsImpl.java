@@ -135,6 +135,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
      */
     protected class ClassReplacements {
         public final Map<ResolvedJavaMethod, ResolvedJavaMethod> methodSubstitutions = CollectionsFactory.newMap();
+        public final Set<ResolvedJavaMethod> forcedSubstitutions = new HashSet<>();
 
         public ClassReplacements(Class<?>[] substitutionClasses, AtomicReference<ClassReplacements> ref) {
             for (Class<?> substitutionClass : substitutionClasses) {
@@ -171,7 +172,10 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
                         if (originalMethods != null) {
                             for (Executable originalMethod : originalMethods) {
                                 if (originalMethod != null && (guard == null || guard.execute())) {
-                                    registerMethodSubstitution(this, originalMethod, substituteMethod);
+                                    ResolvedJavaMethod original = registerMethodSubstitution(this, originalMethod, substituteMethod);
+                                    if (original != null && methodSubstitution.forced()) {
+                                        forcedSubstitutions.add(original);
+                                    }
                                 }
                             }
                         }
@@ -657,6 +661,12 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
             result.addAll(cr.methodSubstitutions.keySet());
         }
         return result;
+    }
+
+    @Override
+    public boolean isForcedSubstitution(ResolvedJavaMethod method) {
+        ClassReplacements cr = getClassReplacements(method.getDeclaringClass().getName());
+        return cr != null && cr.forcedSubstitutions.contains(method);
     }
 
     public boolean hasSubstitution(ResolvedJavaMethod method, boolean fromBytecodeOnly, int callerBci) {
