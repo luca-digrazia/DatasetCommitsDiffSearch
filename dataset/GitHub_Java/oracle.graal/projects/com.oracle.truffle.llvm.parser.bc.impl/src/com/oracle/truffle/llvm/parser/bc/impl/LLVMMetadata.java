@@ -176,17 +176,7 @@ public final class LLVMMetadata implements ModelVisitor {
 
                             // TODO: other variables than localVar should be possible here
                             MetadataLocalVariable localVar = (MetadataLocalVariable) metadata.getReference(metadataId).get();
-                            MetadataReference typeReference = localVar.getType();
-                            while (typeReference.get() instanceof MetadataDerivedType) {
-                                MetadataDerivedType derivedType = (MetadataDerivedType) typeReference.get();
-
-                                if (!derivedType.isOnlyReference()) {
-                                    break;
-                                }
-
-                                typeReference = derivedType.getBaseType();
-                            }
-                            metadataRefType.setValidatedMetadataReference(typeReference);
+                            metadataRefType.setValidatedMetadataReference(localVar.getType());
                         }
                     }
                 }
