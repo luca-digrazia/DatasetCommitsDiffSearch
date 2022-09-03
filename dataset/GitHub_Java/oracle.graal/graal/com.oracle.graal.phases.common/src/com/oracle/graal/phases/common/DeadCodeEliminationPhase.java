@@ -22,19 +22,15 @@
  */
 package com.oracle.graal.phases.common;
 
-import java.util.function.BiConsumer;
+import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Options.*;
 
-import jdk.internal.jvmci.options.Option;
-import jdk.internal.jvmci.options.OptionType;
-import jdk.internal.jvmci.options.OptionValue;
+import java.util.function.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugMetric;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeFlood;
-import com.oracle.graal.nodes.AbstractEndNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.phases.Phase;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.options.*;
+import com.oracle.graal.phases.*;
 
 public class DeadCodeEliminationPhase extends Phase {
 
@@ -73,7 +69,7 @@ public class DeadCodeEliminationPhase extends Phase {
 
     @Override
     public void run(StructuredGraph graph) {
-        if (optional && Options.ReduceDCE.getValue()) {
+        if (optional && ReduceDCE.getValue()) {
             return;
         }
 
@@ -95,7 +91,7 @@ public class DeadCodeEliminationPhase extends Phase {
 
     private static void iterateSuccessorsAndInputs(NodeFlood flood) {
         BiConsumer<Node, Node> consumer = (n, succOrInput) -> {
-            assert succOrInput.isAlive() : "dead successor or input " + succOrInput + " in " + n;
+            assert succOrInput.isAlive() : succOrInput;
             flood.add(succOrInput);
         };
         for (Node current : flood) {
