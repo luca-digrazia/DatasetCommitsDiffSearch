@@ -423,7 +423,7 @@ public final class GraphBuilder {
             // this is a load of class constant which might be unresolved
             RiType riType = (RiType) con;
             if (!riType.isResolved() || C1XOptions.TestPatching) {
-                push(CiKind.Object, append(new ResolveClass(riType, RiType.Representation.JavaClass, null, graph)));
+                push(CiKind.Object, append(new ResolveClass(riType, RiType.Representation.JavaClass, null)));
             } else {
                 push(CiKind.Object, append(new Constant(riType.getEncoding(Representation.JavaClass), graph)));
             }
@@ -643,7 +643,7 @@ public final class GraphBuilder {
         RiType type = constantPool().lookupType(cpi, CHECKCAST);
         boolean isInitialized = !C1XOptions.TestPatching && type.isResolved() && type.isInitialized();
         Value typeInstruction = genResolveClass(RiType.Representation.ObjectHub, type, isInitialized, cpi);
-        CheckCast c = new CheckCast(type, typeInstruction, apop(), null, graph);
+        CheckCast c = new CheckCast(type, typeInstruction, apop(), null);
         apush(append(c));
         checkForDirectCompare(c);
     }
@@ -653,7 +653,7 @@ public final class GraphBuilder {
         RiType type = constantPool().lookupType(cpi, INSTANCEOF);
         boolean isInitialized = !C1XOptions.TestPatching && type.isResolved() && type.isInitialized();
         Value typeInstruction = genResolveClass(RiType.Representation.ObjectHub, type, isInitialized, cpi);
-        InstanceOf i = new InstanceOf(type, typeInstruction, apop(), null, graph);
+        InstanceOf i = new InstanceOf(type, typeInstruction, apop(), null);
         ipush(append(i));
         checkForDirectCompare(i);
     }
@@ -668,7 +668,7 @@ public final class GraphBuilder {
     void genNewInstance(int cpi) {
         FrameState stateBefore = curState.immutableCopy(bci());
         RiType type = constantPool().lookupType(cpi, NEW);
-        NewInstance n = new NewInstance(type, cpi, constantPool(), stateBefore, graph);
+        NewInstance n = new NewInstance(type, cpi, constantPool(), stateBefore);
         if (memoryMap != null) {
             memoryMap.newInstance(n);
         }
@@ -679,13 +679,13 @@ public final class GraphBuilder {
         FrameState stateBefore = curState.immutableCopy(bci());
         CiKind kind = CiKind.fromArrayTypeCode(typeCode);
         RiType elementType = compilation.runtime.asRiType(kind);
-        apush(append(new NewTypeArray(ipop(), elementType, stateBefore, graph)));
+        apush(append(new NewTypeArray(ipop(), elementType, stateBefore)));
     }
 
     void genNewObjectArray(int cpi) {
         RiType type = constantPool().lookupType(cpi, ANEWARRAY);
         FrameState stateBefore = curState.immutableCopy(bci());
-        NewArray n = new NewObjectArray(type, ipop(), stateBefore, graph);
+        NewArray n = new NewObjectArray(type, ipop(), stateBefore);
         apush(append(n));
     }
 
@@ -697,7 +697,7 @@ public final class GraphBuilder {
         for (int i = rank - 1; i >= 0; i--) {
             dims[i] = ipop();
         }
-        NewArray n = new NewMultiArray(type, dims, stateBefore, cpi, constantPool(), graph);
+        NewArray n = new NewMultiArray(type, dims, stateBefore, cpi, constantPool());
         apush(append(n));
     }
 
@@ -744,7 +744,7 @@ public final class GraphBuilder {
         if (initialized) {
             holderInstr = appendConstant(holder.getEncoding(representation));
         } else {
-            holderInstr = append(new ResolveClass(holder, representation, null, graph));
+            holderInstr = append(new ResolveClass(holder, representation, null));
         }
         return holderInstr;
     }
@@ -1001,7 +1001,7 @@ public final class GraphBuilder {
 
         if (needsCheck) {
             // append a call to the finalizer registration
-            append(new RegisterFinalizer(curState.loadLocal(0), curState.immutableCopy(bci()), graph));
+            append(new RegisterFinalizer(curState.loadLocal(0), curState.immutableCopy(bci())));
             C1XMetrics.InlinedFinalizerChecks++;
         }
     }
