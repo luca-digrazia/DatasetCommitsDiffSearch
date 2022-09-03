@@ -29,10 +29,17 @@
  */
 package com.oracle.truffle.llvm.parser.metadata.debuginfo;
 
+import java.util.LinkedList;
+
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.parser.metadata.MDBaseNode;
 import com.oracle.truffle.llvm.parser.metadata.MDExpression;
+import com.oracle.truffle.llvm.parser.metadata.MDLocalVariable;
 import com.oracle.truffle.llvm.parser.metadata.MDLocation;
 import com.oracle.truffle.llvm.parser.metadata.MetadataSymbol;
+import com.oracle.truffle.llvm.parser.metadata.MetadataVisitor;
+import com.oracle.truffle.llvm.parser.model.IRScope;
 import com.oracle.truffle.llvm.parser.model.SymbolImpl;
 import com.oracle.truffle.llvm.parser.model.blocks.InstructionBlock;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
@@ -41,17 +48,21 @@ import com.oracle.truffle.llvm.parser.model.functions.FunctionParameter;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.NullConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.DbgDeclareInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.DbgValueInstruction;
+import com.oracle.truffle.llvm.parser.model.symbols.instructions.DebugTrapInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidCallInstruction;
 import com.oracle.truffle.llvm.parser.model.visitors.FunctionVisitor;
 import com.oracle.truffle.llvm.parser.model.visitors.InstructionVisitorAdapter;
 import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceFunctionType;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceSymbol;
+import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.types.MetaType;
 
-import java.util.LinkedList;
+import static com.oracle.truffle.llvm.parser.metadata.debuginfo.DebugInfoCache.getDebugInfo;
 
 public final class DebugInfoFunctionProcessor {
 
@@ -72,15 +83,46 @@ public final class DebugInfoFunctionProcessor {
     private static final int LLVM_DBG_VALUE_EXPR_ARGINDEX_NEW = 2;
     private static final int LLVM_DBG_VALUE_LOCALREF_ARGSIZE_NEW = 3;
 
+    private static final String LLVM_DEBUGTRAP_NAME = "@llvm.debugtrap";
+
     private final DebugInfoCache cache;
 
     DebugInfoFunctionProcessor(DebugInfoCache cache) {
         this.cache = cache;
     }
 
-    public void process(FunctionDefinition function) {
-        function.accept((FunctionVisitor) new Processor(function.getSourceFunction()));
+    public void process(FunctionDefinition function, IRScope scope, Source bitcodeSource, LLVMContext context) {
+        ImportsProcessor.process(scope.getMetadata(), context, cache);
+        initSourceFunction(function, bitcodeSource);
+        function.accept((FunctionVisitor) new SymbolProcessor(function.getSourceFunction()));
+        scope.getMetadata().consumeLocals(new MetadataProcessor());
+        for (SourceVariable local : function.getSourceFunction().getVariables()) {
+            local.processFragments();
+        }
         cache.endLocalScope();
+    }
+
+    private void initSourceFunction(FunctionDefinition function, Source bitcodeSource) {
+        final MDBaseNode debugInfo = getDebugInfo(function);
+        LLVMSourceLocation scope = null;
+        LLVMSourceFunctionType type = null;
+        if (debugInfo != null) {
+            scope = cache.buildLocation(debugInfo);
+            LLVMSourceType actualType = cache.parseType(debugInfo);
+            if (actualType instanceof LLVMSourceFunctionType) {
+                type = (LLVMSourceFunctionType) actualType;
+            }
+        }
+
+        if (scope == null) {
+            final String sourceText = String.format("%s:%s", bitcodeSource.getName(), function.getName());
+            final Source irSource = Source.newBuilder("llvm", sourceText, sourceText).mimeType(DIScopeBuilder.getMimeType(null)).build();
+            final SourceSection simpleSection = irSource.createSection(1);
+            scope = LLVMSourceLocation.createBitcodeFunction(function.getName(), simpleSection);
+        }
+
+        final SourceFunction sourceFunction = new SourceFunction(scope, type);
+        function.setSourceFunction(sourceFunction);
     }
 
     private static SymbolImpl getArg(VoidCallInstruction call, int index) {
@@ -98,17 +140,17 @@ public final class DebugInfoFunctionProcessor {
         return MDExpression.EMPTY;
     }
 
-    private final class Processor implements FunctionVisitor, InstructionVisitorAdapter {
+    private final class SymbolProcessor implements FunctionVisitor, InstructionVisitorAdapter {
 
-        private final SourceFunction currentFunction;
+        private final SourceFunction function;
         private final LinkedList<Integer> removeFromBlock = new LinkedList<>();
 
         private int blockInstIndex = 0;
         private DbgValueInstruction lastDbgValue = null;
         private InstructionBlock currentBlock = null;
 
-        private Processor(SourceFunction currentFunction) {
-            this.currentFunction = currentFunction;
+        private SymbolProcessor(SourceFunction function) {
+            this.function = function;
         }
 
         @Override
@@ -132,7 +174,7 @@ public final class DebugInfoFunctionProcessor {
             if (loc != null) {
                 final LLVMSourceLocation scope = cache.buildLocation(loc);
                 if (scope != null) {
-                    currentFunction.addInstruction(instruction, scope);
+                    instruction.setSourceLocation(scope);
                 }
             }
         }
@@ -149,10 +191,20 @@ public final class DebugInfoFunctionProcessor {
                     case LLVM_DBG_VALUE_NAME:
                         handleDebugIntrinsic(call, false);
                         return;
+
+                    case LLVM_DEBUGTRAP_NAME:
+                        visitDebugTrap(call);
+                        return;
                 }
             }
 
             visitInstruction(call);
+        }
+
+        private void visitDebugTrap(VoidCallInstruction call) {
+            final DebugTrapInstruction trap = DebugTrapInstruction.create(call);
+            currentBlock.set(blockInstIndex, trap);
+            visitInstruction(trap);
         }
 
         private SourceVariable getVariable(VoidCallInstruction call, int index) {
@@ -161,7 +213,7 @@ public final class DebugInfoFunctionProcessor {
                 final MDBaseNode mdLocal = ((MetadataSymbol) varSymbol).getNode();
 
                 final LLVMSourceSymbol symbol = cache.getSourceSymbol(mdLocal, false);
-                return currentFunction.getLocal(symbol);
+                return function.getLocal(symbol);
             }
 
             return null;
@@ -245,5 +297,15 @@ public final class DebugInfoFunctionProcessor {
                 }
             }
         }
+    }
+
+    private final class MetadataProcessor implements MetadataVisitor {
+
+        @Override
+        public void visit(MDLocalVariable md) {
+            // make sure the symbol is registered even if no value is available
+            cache.getSourceSymbol(md, false);
+        }
+
     }
 }
