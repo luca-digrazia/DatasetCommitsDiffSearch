@@ -717,6 +717,38 @@ public final class GraphBuilder {
 
     }
 
+    /**
+     * Temporary work-around to support the @ACCESSOR Maxine annotation.
+     */
+    private static final Class<?> Accessor;
+    static {
+        Class<?> c = null;
+        try {
+            c = Class.forName("com.sun.max.unsafe.Accessor");
+        } catch (ClassNotFoundException e) {
+        }
+        Accessor = c;
+    }
+
+    /**
+     * Temporary work-around to support the @ACCESSOR Maxine annotation.
+     */
+    private static ThreadLocal<RiType> boundAccessor = new ThreadLocal<RiType>();
+
+    /**
+     * Temporary work-around to support the @ACCESSOR Maxine annotation.
+     */
+    private static RiMethod bindAccessorMethod(RiMethod target) {
+        if (Accessor != null && target.isResolved() && target.holder().javaClass() == Accessor) {
+            RiType accessor = boundAccessor.get();
+            assert accessor != null : "Cannot compile call to method in " + target.holder() + " without enclosing @ACCESSOR annotated method";
+            RiMethod newTarget = accessor.resolveMethodImpl(target);
+            assert target != newTarget : "Could not bind " + target + " to a method in " + accessor;
+            target = newTarget;
+        }
+        return target;
+    }
+
     private void genInvokeIndirect(int opcode, RiMethod target, Value[] args, int cpi, RiConstantPool constantPool) {
         Value receiver = args[0];
         // attempt to devirtualize the call
@@ -789,7 +821,7 @@ public final class GraphBuilder {
         return assumed;
     }
 
-    private void callRegisterFinalizer() {
+    void callRegisterFinalizer() {
         Value receiver = frameState.loadLocal(0);
         RiType declaredType = receiver.declaredType();
         RiType receiverType = declaredType;
@@ -828,7 +860,7 @@ public final class GraphBuilder {
         }
     }
 
-    private void genReturn(Value x) {
+    void genReturn(Value x) {
         if (method().isConstructor() && method().holder().superType() == null) {
             callRegisterFinalizer();
         }
@@ -848,7 +880,7 @@ public final class GraphBuilder {
         append(new Return(x, !noSafepoints(), graph));
     }
 
-    private void genMonitorEnter(Value x, int bci) {
+    void genMonitorEnter(Value x, int bci) {
         int lockNumber = frameState.locksSize();
         MonitorAddress lockAddress = null;
         if (compilation.runtime.sizeOfBasicObjectLock() != 0) {
@@ -863,7 +895,7 @@ public final class GraphBuilder {
         }
     }
 
-    private void genMonitorExit(Value x, int bci) {
+    void genMonitorExit(Value x, int bci) {
         int lockNumber = frameState.locksSize() - 1;
         if (lockNumber < 0) {
             throw new CiBailout("monitor stack underflow");
@@ -877,15 +909,15 @@ public final class GraphBuilder {
         frameState.unlock();
     }
 
-    private void genJsr(int dest) {
+    void genJsr(int dest) {
         throw new CiBailout("jsr/ret not supported");
     }
 
-    private void genRet(int localIndex) {
+    void genRet(int localIndex) {
         throw new CiBailout("jsr/ret not supported");
     }
 
-    private void genTableswitch() {
+    void genTableswitch() {
         int bci = bci();
         BytecodeTableSwitch ts = new BytecodeTableSwitch(stream(), bci);
         int max = ts.numberOfCases();
@@ -905,7 +937,7 @@ public final class GraphBuilder {
         append(new TableSwitch(frameState.ipop(), list, ts.lowKey(), stateBefore, isSafepoint, graph));
     }
 
-    private void genLookupswitch() {
+    void genLookupswitch() {
         int bci = bci();
         BytecodeLookupSwitch ls = new BytecodeLookupSwitch(stream(), bci);
         int max = ls.numberOfCases();

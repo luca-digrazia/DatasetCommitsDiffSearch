@@ -565,10 +565,11 @@ public class CFGPrinter {
     public void printCFG(RiMethod method, BlockMap blockMap, int codeSize, String label, boolean printHIR, boolean printLIR) {
         begin("cfg");
         out.print("name \"").print(label).println('"');
-        for (BlockMap.Block block : blockMap.blocks) {
-            begin("block");
-            blockMap.printBlock(block, out);
-            end("block");
+        for (int bci = 0; bci < codeSize; ++bci) {
+            BlockBegin block = blockMap.get(bci);
+            if (block != null) {
+                printBlock(block, Arrays.asList(blockMap.getSuccessors(block)), blockMap.getHandlers(block), printHIR, printLIR);
+            }
         }
         end("cfg");
     }
