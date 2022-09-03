@@ -38,9 +38,9 @@ import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-public abstract class ToI64 extends ForeignToLLVM {
+abstract class ToI64 extends ForeignToLLVM {
 
-    @Child private ForeignToLLVM toI64;
+    @Child private ToI64 toI64;
 
     @Specialization
     protected long fromInt(int value) {
@@ -83,17 +83,17 @@ public abstract class ToI64 extends ForeignToLLVM {
     }
 
     @Specialization
-    protected Object fromForeignPrimitive(LLVMBoxedPrimitive boxed) {
+    protected long fromForeignPrimitive(LLVMBoxedPrimitive boxed) {
         return recursiveConvert(boxed.getValue());
     }
 
     @Specialization
-    protected Object fromForeignPrimitive(LLVMPointer boxed) {
+    protected long fromForeignPrimitive(LLVMPointer boxed) {
         return fromTruffleObject(boxed);
     }
 
     @Specialization(guards = "notLLVM(obj)")
-    protected Object fromTruffleObject(TruffleObject obj) {
+    protected long fromTruffleObject(TruffleObject obj) {
         return recursiveConvert(fromForeign(obj));
     }
 
@@ -105,7 +105,7 @@ public abstract class ToI64 extends ForeignToLLVM {
     private long recursiveConvert(Object o) {
         if (toI64 == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            toI64 = insert(getNodeFactory().createForeignToLLVM(ForeignToLLVMType.I64));
+            toI64 = insert(ToI64NodeGen.create());
         }
         return (long) toI64.executeWithTarget(o);
     }
