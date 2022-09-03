@@ -29,7 +29,6 @@ import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
@@ -305,7 +304,7 @@ public class NodeIntrinsificationPhase extends Phase {
         } else if (usage instanceof UnboxNode) {
             UnboxNode unbox = (UnboxNode) usage;
             unbox.replaceAtUsages(intrinsifiedNode);
-            graph.removeFloating(unbox);
+            graph.removeFixed(unbox);
             Debug.log("%s: Removed an UnboxNode", Debug.contextSnapshot(JavaMethod.class));
         } else if (usage instanceof MethodCallTargetNode) {
             MethodCallTargetNode checkCastCallTarget = (MethodCallTargetNode) usage;
@@ -320,13 +319,9 @@ public class NodeIntrinsificationPhase extends Phase {
             usage.replaceFirstInput(input, intrinsifiedNode);
             Debug.log("%s: Checkcast used in a return with forNodeIntrinsic stamp", Debug.contextSnapshot(JavaMethod.class));
         } else if (usage instanceof IsNullNode) {
-            if (!usage.usages().isEmpty()) {
-                assert usage.usages().count() == 1 && usage.usages().first().predecessor() == input : usage + " " + input;
-                graph.replaceFloating((FloatingNode) usage, LogicConstantNode.contradiction(graph));
-                Debug.log("%s: Replaced IsNull with false", Debug.contextSnapshot(JavaMethod.class));
-            } else {
-                // Removed as usage of a GuardingPiNode
-            }
+            assert usage.usages().count() == 1 && usage.usages().first().predecessor() == input;
+            graph.replaceFloating((FloatingNode) usage, LogicConstantNode.contradiction(graph));
+            Debug.log("%s: Replaced IsNull with false", Debug.contextSnapshot(JavaMethod.class));
         } else if (usage instanceof ProxyNode) {
             ProxyNode proxy = (ProxyNode) usage;
             assert proxy.type() == PhiType.Value;
@@ -338,15 +333,9 @@ public class NodeIntrinsificationPhase extends Phase {
             for (Node piUsage : usage.usages().snapshot()) {
                 checkCheckCastUsage(graph, intrinsifiedNode, usage, piUsage);
             }
-        } else if (usage instanceof GuardingPiNode) {
-            GuardingPiNode pi = (GuardingPiNode) usage;
-            for (Node piUsage : pi.usages().snapshot()) {
-                checkCheckCastUsage(graph, intrinsifiedNode, usage, piUsage);
-            }
-            graph.removeFixed(pi);
         } else {
-            DebugScope.dump(graph, "exception");
-            assert false : sourceLocation(usage) + " has unexpected usage " + usage + " of checkcast " + input + " at " + sourceLocation(input);
+            Debug.dump(graph, "exception");
+            assert false : sourceLocation(usage) + " has unexpected usage " + usage + " of checkcast at " + sourceLocation(input);
         }
     }
 }
