@@ -49,6 +49,7 @@ import com.oracle.graal.phases.util.*;
 import com.oracle.graal.truffle.phases.*;
 import com.oracle.graal.virtual.phases.ea.*;
 import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 
 /**
@@ -65,7 +66,7 @@ public final class TruffleCacheImpl implements TruffleCache {
     private final HashMap<List<Object>, Long> lastUsed = new HashMap<>();
     private final StructuredGraph markerGraph = new StructuredGraph();
     private final ResolvedJavaType stringBuilderClass;
-    private final ResolvedJavaMethod callBoundaryMethod;
+    private final ResolvedJavaMethod executeHelperMethod;
     private long counter;
 
     public TruffleCacheImpl(Providers providers, GraphBuilderConfiguration config, GraphBuilderConfiguration configForRootGraph, OptimisticOptimizations optimisticOptimizations) {
@@ -75,14 +76,14 @@ public final class TruffleCacheImpl implements TruffleCache {
         this.optimisticOptimizations = optimisticOptimizations;
         this.stringBuilderClass = providers.getMetaAccess().lookupJavaType(StringBuilder.class);
         try {
-            callBoundaryMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.class.getDeclaredMethod("callRoot", Object[].class));
+            executeHelperMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.class.getDeclaredMethod("executeHelper", PackedFrame.class, Arguments.class));
         } catch (NoSuchMethodException ex) {
             throw new RuntimeException(ex);
         }
     }
 
     public StructuredGraph createRootGraph() {
-        StructuredGraph graph = new StructuredGraph(callBoundaryMethod);
+        StructuredGraph graph = new StructuredGraph(executeHelperMethod);
         new GraphBuilderPhase.Instance(providers.getMetaAccess(), configForRootGraph, TruffleCompilerImpl.Optimizations).apply(graph);
         return graph;
     }
@@ -264,10 +265,9 @@ public final class TruffleCacheImpl implements TruffleCache {
     }
 
     private boolean shouldInline(final MethodCallTargetNode methodCallTargetNode) {
-        boolean result = (methodCallTargetNode.invokeKind() == InvokeKind.Special || methodCallTargetNode.invokeKind() == InvokeKind.Static) && methodCallTargetNode.targetMethod().canBeInlined() &&
+        return (methodCallTargetNode.invokeKind() == InvokeKind.Special || methodCallTargetNode.invokeKind() == InvokeKind.Static) &&
                         !Modifier.isNative(methodCallTargetNode.targetMethod().getModifiers()) && methodCallTargetNode.targetMethod().getAnnotation(ExplodeLoop.class) == null &&
                         methodCallTargetNode.targetMethod().getAnnotation(CompilerDirectives.SlowPath.class) == null &&
                         !methodCallTargetNode.targetMethod().getDeclaringClass().equals(stringBuilderClass);
-        return result;
     }
 }

@@ -30,8 +30,6 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.internal.*;
@@ -86,7 +84,7 @@ public class PartialEvaluator {
             throw Debug.handle(e);
         }
 
-        if (TraceTruffleCompilationHistogram.getValue() || TraceTruffleCompilationDetails.getValue()) {
+        if (TraceTruffleCompilationHistogram.getValue()) {
             constantReceivers = new HashSet<>();
         }
 
@@ -97,14 +95,7 @@ public class PartialEvaluator {
 
             // Replace thisNode with constant.
             ParameterNode thisNode = graph.getParameter(0);
-
-            /*
-             * Converting the call target to a Constant using the SnippetReflectionProvider is a
-             * workaround, we should think about a better solution. Since object constants are
-             * VM-specific, only the hosting VM knows how to do the conversion.
-             */
-            SnippetReflectionProvider snippetReflection = Graal.getRequiredCapability(SnippetReflectionProvider.class);
-            thisNode.replaceAndDelete(ConstantNode.forConstant(snippetReflection.forObject(callTarget), providers.getMetaAccess(), graph));
+            thisNode.replaceAndDelete(ConstantNode.forObject(callTarget, providers.getMetaAccess(), graph));
 
             // Canonicalize / constant propagate.
             PhaseContext baseContext = new PhaseContext(providers, assumptions);
@@ -132,7 +123,7 @@ public class PartialEvaluator {
             if (TraceTruffleCompilationHistogram.getValue() && constantReceivers != null) {
                 DebugHistogram histogram = Debug.createHistogram("Expanded Truffle Nodes");
                 for (Constant c : constantReceivers) {
-                    histogram.add(providers.getMetaAccess().lookupJavaType(c).getName());
+                    histogram.add(c.asObject().getClass().getSimpleName());
                 }
                 new DebugHistogramAsciiPrinter(TTY.out().out()).print(histogram);
             }
@@ -179,7 +170,7 @@ public class PartialEvaluator {
         PhaseContext phaseContext = new PhaseContext(providers, assumptions);
         TruffleExpansionLogger expansionLogger = null;
         if (TraceTruffleExpansion.getValue()) {
-            expansionLogger = new TruffleExpansionLogger(providers, graph);
+            expansionLogger = new TruffleExpansionLogger(graph);
         }
         boolean inliningEnabled = target.getInliningResult() != null && target.getInliningResult().size() > 0;
         Map<Node, TruffleCallPath> methodTargetToStack = new HashMap<>();
@@ -190,16 +181,21 @@ public class PartialEvaluator {
                 InvokeKind kind = methodCallTargetNode.invokeKind();
                 try (Indent id1 = Debug.logAndIndent("try inlining %s, kind = %s", methodCallTargetNode.targetMethod(), kind)) {
                     if (kind == InvokeKind.Static || (kind == InvokeKind.Special && (methodCallTargetNode.receiver().isConstant() || isFrame(methodCallTargetNode.receiver())))) {
-                        if ((TraceTruffleCompilationHistogram.getValue() || TraceTruffleCompilationDetails.getValue()) && kind == InvokeKind.Special && methodCallTargetNode.receiver().isConstant()) {
-                            constantReceivers.add(methodCallTargetNode.receiver().asConstant());
+                        if (TraceTruffleCompilationHistogram.getValue() && kind == InvokeKind.Special) {
+                            ConstantNode constantNode = (ConstantNode) methodCallTargetNode.arguments().first();
+                            constantReceivers.add(constantNode.asConstant());
                         }
-
                         Replacements replacements = providers.getReplacements();
                         Class<? extends FixedWithNextNode> macroSubstitution = replacements.getMacroSubstitution(methodCallTargetNode.targetMethod());
                         if (macroSubstitution != null) {
                             InliningUtil.inlineMacroNode(methodCallTargetNode.invoke(), methodCallTargetNode.targetMethod(), macroSubstitution);
                             changed = true;
                             continue;
+                        }
+
+                        if (TraceTruffleCompilationDetails.getValue() && kind == InvokeKind.Special) {
+                            ConstantNode constantNode = (ConstantNode) methodCallTargetNode.arguments().first();
+                            constantReceivers.add(constantNode.asConstant());
                         }
 
                         StructuredGraph inlineGraph = replacements.getMethodSubstitution(methodCallTargetNode.targetMethod());
@@ -222,6 +218,7 @@ public class PartialEvaluator {
                                     expansionLogger.preExpand(methodCallTargetNode, inlineGraph);
                                 }
                                 List<Node> invokeUsages = methodCallTargetNode.invoke().asNode().usages().snapshot();
+                                // try (Indent in2 = Debug.logAndIndent(false, "do inlining")) {
                                 Map<Node, Node> inlined = InliningUtil.inline(methodCallTargetNode.invoke(), inlineGraph, false);
                                 if (TraceTruffleExpansion.getValue()) {
                                     expansionLogger.postExpand(inlined);
@@ -277,17 +274,11 @@ public class PartialEvaluator {
         }
 
         ResolvedJavaMethod method = methodCallTargetNode.targetMethod();
-        if (!method.getName().equals("call") || method.getSignature().getParameterCount(false) != 1) {
+        if (!method.getName().equals("call") || method.getSignature().getParameterCount(false) != 2) {
             return null;
         }
 
-        /*
-         * Accessing the constant using the SnippetReflectionProvider is a workaround, we should
-         * think about a better solution. Since object constants are VM-specific, only the hosting
-         * VM knows how to do the conversion.
-         */
-        SnippetReflectionProvider snippetReflection = Graal.getRequiredCapability(SnippetReflectionProvider.class);
-        Object receiverValue = snippetReflection.asObject(receiverNode.asConstant());
+        Object receiverValue = receiverNode.asConstant().asObject();
         if (receiverValue instanceof OptimizedCallNode) {
             OptimizedCallNode callNode = (OptimizedCallNode) receiverValue;
             TruffleCallPath callPath = methodCallToCallPath.get(methodCallTargetNode);

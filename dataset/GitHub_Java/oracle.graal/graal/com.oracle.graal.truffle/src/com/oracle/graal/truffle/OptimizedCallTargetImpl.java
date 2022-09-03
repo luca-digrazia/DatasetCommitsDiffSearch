@@ -28,6 +28,7 @@ import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 
 /**
@@ -49,11 +50,11 @@ public final class OptimizedCallTargetImpl extends OptimizedCallTarget {
 
     @CompilerDirectives.SlowPath
     @Override
-    public Object call(Object[] args) {
-        return CompilerDirectives.inInterpreter() ? callHelper(args) : executeHelper(args);
+    public Object call(PackedFrame caller, Arguments args) {
+        return CompilerDirectives.inInterpreter() ? callHelper(caller, args) : executeHelper(caller, args);
     }
 
-    private Object callHelper(Object[] args) {
+    private Object callHelper(PackedFrame caller, Arguments args) {
         if (installedCode != null && installedCode.isValid()) {
             reinstallCallMethodShortcut();
         }
@@ -62,12 +63,12 @@ public final class OptimizedCallTargetImpl extends OptimizedCallTarget {
         }
         if (CompilerDirectives.injectBranchProbability(CompilerDirectives.FASTPATH_PROBABILITY, installedCode != null)) {
             try {
-                return installedCode.executeVarargs(new Object[]{this, args});
+                return installedCode.execute(this, caller, args);
             } catch (InvalidInstalledCodeException ex) {
-                return compiledCodeInvalidated(args);
+                return compiledCodeInvalidated(caller, args);
             }
         } else {
-            return interpreterCall(args);
+            return interpreterCall(caller, args);
         }
     }
 
@@ -78,9 +79,9 @@ public final class OptimizedCallTargetImpl extends OptimizedCallTarget {
         GraalTruffleRuntime.installOptimizedCallTargetCallMethod();
     }
 
-    private Object compiledCodeInvalidated(Object[] args) {
+    private Object compiledCodeInvalidated(PackedFrame caller, Arguments args) {
         invalidate(null, null, "Compiled code invalidated");
-        return call(args);
+        return call(caller, args);
     }
 
     @Override
@@ -107,7 +108,7 @@ public final class OptimizedCallTargetImpl extends OptimizedCallTarget {
         }
     }
 
-    private Object interpreterCall(Object[] args) {
+    private Object interpreterCall(PackedFrame caller, Arguments args) {
         CompilerAsserts.neverPartOfCompilation();
         compilationProfile.reportInterpreterCall();
 
@@ -116,13 +117,13 @@ public final class OptimizedCallTargetImpl extends OptimizedCallTarget {
             if (code != null && code.isValid()) {
                 this.installedCode = code;
                 try {
-                    return code.executeVarargs(new Object[]{this, args});
+                    return code.execute(this, caller, args);
                 } catch (InvalidInstalledCodeException ex) {
-                    return compiledCodeInvalidated(args);
+                    return compiledCodeInvalidated(caller, args);
                 }
             }
         }
-        return executeHelper(args);
+        return executeHelper(caller, args);
     }
 
     private boolean isCompiling() {
