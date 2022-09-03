@@ -59,14 +59,12 @@ public class PTXHotSpotLIRGenerator extends PTXLIRGenerator implements HotSpotLI
         throw GraalInternalError.unimplemented();
     }
 
-    @Override
-    public Value emitCompress(Value pointer, CompressEncoding encoding, boolean nonNull) {
+    public Value emitCompress(Value pointer, CompressEncoding encoding) {
         // TODO
         throw GraalInternalError.unimplemented();
     }
 
-    @Override
-    public Value emitUncompress(Value pointer, CompressEncoding encoding, boolean nonNull) {
+    public Value emitUncompress(Value pointer, CompressEncoding encoding) {
         // TODO
         throw GraalInternalError.unimplemented();
     }

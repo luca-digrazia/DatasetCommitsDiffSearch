@@ -103,7 +103,7 @@ public final class CompressionNode extends FloatingNode implements LIRLowerable,
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
+    public void generate(NodeLIRBuiderTool gen) {
         HotSpotLIRGenerator hsGen = (HotSpotLIRGenerator) gen.getLIRGeneratorTool();
         Value result;
         switch (op) {
