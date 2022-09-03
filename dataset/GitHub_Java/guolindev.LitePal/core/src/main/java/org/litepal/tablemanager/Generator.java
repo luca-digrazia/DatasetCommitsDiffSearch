@@ -99,6 +99,8 @@ public abstract class Generator extends LitePalBase {
 	 *            SQLs that want to execute.
 	 * @param db
 	 *            instance of SQLiteDatabase
+	 * 
+	 * @throws org.litepal.exceptions.DatabaseGenerateException
 	 */
 	protected void execute(List<String> sqls, SQLiteDatabase db) {
 		String throwSQL = "";
