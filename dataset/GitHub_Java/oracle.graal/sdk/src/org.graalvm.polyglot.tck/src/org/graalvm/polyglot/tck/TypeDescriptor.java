@@ -25,7 +25,6 @@
 package org.graalvm.polyglot.tck;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -44,7 +43,12 @@ import org.graalvm.polyglot.Value;
  */
 public final class TypeDescriptor {
 
-    private static final TypeDescriptor NOTYPE = new TypeDescriptor(new IntersectionImpl(Collections.emptySet()));
+    /**
+     * Represents all types. It's an intersection of no type.
+     *
+     * @since 0.30
+     */
+    public static final TypeDescriptor ANY = new TypeDescriptor(new IntersectionImpl(Collections.emptySet()));
 
     /**
      * The NULL type represents a type of null or undefined value.
@@ -90,7 +94,7 @@ public final class TypeDescriptor {
      * @see Value#hasMembers().
      * @since 0.30
      */
-    public static final TypeDescriptor ARRAY = new TypeDescriptor(new ArrayImpl(null));
+    public static final TypeDescriptor ARRAY = new TypeDescriptor(new ArrayImpl(ANY.impl));
     /**
      * Represents a host object.
      *
@@ -121,7 +125,7 @@ public final class TypeDescriptor {
      * @see Value#canExecute().
      * @since 0.30
      */
-    public static final TypeDescriptor EXECUTABLE = new TypeDescriptor(new ExecutableImpl(ExecutableImpl.Kind.BOTTOM, null, true, Collections.emptyList()));
+    public static final TypeDescriptor EXECUTABLE = new TypeDescriptor(new ExecutableImpl(ExecutableImpl.Kind.BOTTOM, ANY.impl, true, Collections.emptyList()));
 
     /**
      * Represents a raw executable type. Any executable can be assigned into the raw executable
@@ -139,18 +143,10 @@ public final class TypeDescriptor {
      * @see TypeDescriptor#EXECUTABLE
      * @since 1.0
      */
-    public static final TypeDescriptor EXECUTABLE_ANY = new TypeDescriptor(new ExecutableImpl(ExecutableImpl.Kind.TOP, null, true, Collections.emptyList()));
-
-    /**
-     * Represents all types. It's an intersection of no type.
-     *
-     * @since 0.30
-     */
-    public static final TypeDescriptor ANY = new TypeDescriptor(new UnionImpl(new HashSet<>(Arrays.asList(
-                    NOTYPE.impl, NULL.impl, BOOLEAN.impl, NUMBER.impl, STRING.impl, HOST_OBJECT.impl, NATIVE_POINTER.impl, OBJECT.impl, ARRAY.impl, EXECUTABLE_ANY.impl))));
+    public static final TypeDescriptor EXECUTABLE_ANY = new TypeDescriptor(new ExecutableImpl(ExecutableImpl.Kind.TOP, ANY.impl, true, Collections.emptyList()));
 
     private static final TypeDescriptor[] PREDEFINED_TYPES = new TypeDescriptor[]{
-                    NOTYPE, NULL, BOOLEAN, NUMBER, STRING, HOST_OBJECT, NATIVE_POINTER, OBJECT, ARRAY, EXECUTABLE, EXECUTABLE_ANY, ANY
+                    NULL, BOOLEAN, NUMBER, STRING, HOST_OBJECT, NATIVE_POINTER, OBJECT, ARRAY, EXECUTABLE, EXECUTABLE_ANY, ANY
     };
 
     private final TypeDescriptorImpl impl;
@@ -290,14 +286,13 @@ public final class TypeDescriptor {
                 final Set<TypeDescriptorImpl> contentTypes = new HashSet<>();
                 for (ArrayImpl array : arrays) {
                     final TypeDescriptorImpl contentType = array.contentType;
-                    if (contentType == null || isAny(contentType)) {
+                    if (contentType.isAssignable(contentType, ANY.impl)) {
                         seenWildCard = true;
                         break;
                     }
                     contentTypes.add(contentType);
                 }
-                final TypeDescriptorImpl contentType = unionImpl(contentTypes);
-                impls.add(seenWildCard ? ARRAY.impl : new ArrayImpl(isAny(contentType) ? null : contentType));
+                impls.add(seenWildCard ? ARRAY.impl : new ArrayImpl(unionImpl(contentTypes)));
         }
         return impls.size() == 1 ? impls.iterator().next() : new UnionImpl(impls);
     }
@@ -305,8 +300,9 @@ public final class TypeDescriptor {
     /**
      * Creates a new intersection type. The intersection type is all of the given types. The
      * intersection can be also used to create a no type. The no type is a type which has no other
-     * specialized type. The no type can be assigned to {@link TypeDescriptor#ANY} and itself. The
-     * no type is created as an empty intersection, {@code TypeDescriptor.intersection()}.
+     * specialized type. The no type can be assigned to {@link TypeDescriptor#ANY} and itself. Any
+     * type can be assigned to no type. The no type is created as an empty intersection,
+     * {@code TypeDescriptor.intersection()}.
      *
      * @param types the types to include in the intersection
      * @return the intersection type containing the given types
@@ -318,7 +314,7 @@ public final class TypeDescriptor {
         Collections.addAll(typesSet, types);
         switch (typesSet.size()) {
             case 0:
-                return NOTYPE;
+                return ANY;
             case 1:
                 return types[0];
             default:
@@ -424,10 +420,6 @@ public final class TypeDescriptor {
         }
     }
 
-    private static boolean isAny(TypeDescriptorImpl type) {
-        return type.isAssignable(type, ANY.impl);
-    }
-
     /**
      * Creates a new array type with given component type. To create a multi-dimensional array use
      * an array type as a component type.
@@ -438,7 +430,7 @@ public final class TypeDescriptor {
      */
     public static TypeDescriptor array(TypeDescriptor componentType) {
         Objects.requireNonNull(componentType, "Component type canot be null");
-        return isAny(componentType.impl) ? ARRAY : new TypeDescriptor(new ArrayImpl(componentType.impl));
+        return componentType.isAssignable(ANY) ? ARRAY : new TypeDescriptor(new ArrayImpl(componentType.impl));
     }
 
     /**
@@ -469,7 +461,7 @@ public final class TypeDescriptor {
     public static TypeDescriptor executable(TypeDescriptor returnType, boolean vararg, TypeDescriptor... parameterTypes) {
         Objects.requireNonNull(returnType, "Return type cannot be null");
         Objects.requireNonNull(parameterTypes, "Parameter types cannot be null");
-        if (isAny(returnType.impl) && parameterTypes.length == 0) {
+        if (returnType.isAssignable(ANY) && parameterTypes.length == 0) {
             return EXECUTABLE;
         }
         final List<TypeDescriptorImpl> paramTypeImpls = new ArrayList<>(parameterTypes.length);
@@ -477,7 +469,7 @@ public final class TypeDescriptor {
             Objects.requireNonNull(td, "Parameter types cannot contain null");
             paramTypeImpls.add(td.impl);
         }
-        return new TypeDescriptor(new ExecutableImpl(ExecutableImpl.Kind.UNIT, isAny(returnType.impl) ? null : returnType.impl, vararg, paramTypeImpls));
+        return new TypeDescriptor(new ExecutableImpl(ExecutableImpl.Kind.UNIT, returnType.impl, vararg, paramTypeImpls));
     }
 
     /**
@@ -514,7 +506,7 @@ public final class TypeDescriptor {
             }
             switch (contentTypes.size()) {
                 case 0:
-                    descs.add(intersection(NOTYPE, NULL, BOOLEAN, NUMBER, STRING, HOST_OBJECT, NATIVE_POINTER, OBJECT, ARRAY, EXECUTABLE));
+                    descs.add(intersection(NULL, BOOLEAN, NUMBER, STRING, HOST_OBJECT, NATIVE_POINTER, OBJECT, ARRAY, EXECUTABLE));
                     break;
                 case 1:
                     descs.add(array(contentTypes.iterator().next()));
@@ -643,8 +635,9 @@ public final class TypeDescriptor {
                         final boolean vararg,
                         final List<? extends TypeDescriptorImpl> paramTypes) {
             assert kind != null;
+            assert retType != null;
             assert paramTypes != null;
-            assert kind == Kind.UNIT || (retType == null && paramTypes.isEmpty());
+            assert kind == Kind.UNIT || (retType.equals(ANY.impl) && paramTypes.isEmpty());
             this.kind = kind;
             this.retType = retType;
             this.vararg = vararg;
@@ -667,7 +660,7 @@ public final class TypeDescriptor {
                 if (byExec.kind == Kind.TOP) {
                     return false;
                 }
-                if (!origExec.resolveRetType().isAssignable(origExec.resolveRetType(), byExec.resolveRetType())) {
+                if (!origExec.retType.isAssignable(origExec.retType, byExec.retType)) {
                     return false;
                 }
                 if (!byExec.paramTypes.isEmpty()) {
@@ -696,7 +689,7 @@ public final class TypeDescriptor {
             int res = 17;
             res = res * 31 + (vararg ? 1 : 0);
             res = res * 31 + kind.hashCode();
-            res = res * 31 + (retType == null ? 0 : retType.hashCode());
+            res = res * 31 + retType.hashCode();
             for (TypeDescriptorImpl paramType : paramTypes) {
                 res = res * 31 + paramType.hashCode();
             }
@@ -712,7 +705,7 @@ public final class TypeDescriptor {
                 return false;
             }
             final ExecutableImpl other = (ExecutableImpl) obj;
-            return vararg == other.vararg && kind == other.kind && Objects.equals(retType, other.retType) && paramTypes.equals(other.paramTypes);
+            return vararg == other.vararg && kind == other.kind && retType.equals(other.retType) && paramTypes.equals(other.paramTypes);
         }
 
         @Override
@@ -743,12 +736,8 @@ public final class TypeDescriptor {
                 sb.append(", *");
             }
             sb.append("):");
-            sb.append(retType == null ? "<any>" : retType);
+            sb.append(retType.isAssignable(retType, ANY.impl) ? "<any>" : retType);
             return sb.toString();
-        }
-
-        private TypeDescriptorImpl resolveRetType() {
-            return retType != null ? retType : ANY.impl;
         }
     }
 
@@ -756,6 +745,7 @@ public final class TypeDescriptor {
         private final TypeDescriptorImpl contentType;
 
         ArrayImpl(final TypeDescriptorImpl contentType) {
+            assert contentType != null;
             this.contentType = contentType;
         }
 
@@ -768,7 +758,7 @@ public final class TypeDescriptor {
             } else if (otherClz == ArrayImpl.class) {
                 final ArrayImpl origArray = (ArrayImpl) origType;
                 final ArrayImpl byArray = (ArrayImpl) byType;
-                return origArray.resolveContentType().isAssignable(origArray.resolveContentType(), byArray.resolveContentType());
+                return origArray.contentType.isAssignable(origArray.contentType, byArray.contentType);
             } else {
                 return other.isAssignable(origType, byType);
             }
@@ -776,7 +766,7 @@ public final class TypeDescriptor {
 
         @Override
         public int hashCode() {
-            return contentType != null ? contentType.hashCode() : 0;
+            return contentType.hashCode();
         }
 
         @Override
@@ -787,23 +777,19 @@ public final class TypeDescriptor {
             if (obj == null || obj.getClass() != ArrayImpl.class) {
                 return false;
             }
-            return Objects.equals(contentType, ((ArrayImpl) obj).contentType);
+            return contentType.equals(((ArrayImpl) obj).contentType);
         }
 
         @Override
         public String toString() {
             final StringBuilder sb = new StringBuilder("Array<");
-            if (contentType == null) {
+            if (contentType.isAssignable(contentType, ANY.impl)) {
                 sb.append("<any>");
             } else {
                 sb.append(contentType.toString());
             }
             sb.append(">");
             return sb.toString();
-        }
-
-        private TypeDescriptorImpl resolveContentType() {
-            return contentType != null ? contentType : ANY.impl;
         }
     }
 
@@ -827,9 +813,6 @@ public final class TypeDescriptor {
                     }
                     return false;
                 } else {
-                    if (types.isEmpty()) {
-                        return false;
-                    }
                     for (TypeDescriptorImpl type : types) {
                         if (!type.isAssignable(type, other)) {
                             return false;
@@ -840,9 +823,6 @@ public final class TypeDescriptor {
             } else if (otherClz == IntersectionImpl.class) {
                 final IntersectionImpl origIntersection = (IntersectionImpl) origType;
                 final IntersectionImpl byIntersection = (IntersectionImpl) byType;
-                if (origIntersection.types.isEmpty()) {
-                    return byIntersection.types.isEmpty();
-                }
                 for (TypeDescriptorImpl subType : origIntersection.types) {
                     if (byIntersection.types.contains(subType)) {
                         continue;
@@ -900,7 +880,7 @@ public final class TypeDescriptor {
 
         @Override
         public String toString() {
-            return types.isEmpty() ? "<none>" : types.stream().map(Object::toString).collect(Collectors.joining(" & ", "[", "]"));
+            return types.isEmpty() ? "<any>" : types.stream().map(Object::toString).collect(Collectors.joining(" & ", "[", "]"));
         }
     }
 
