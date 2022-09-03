@@ -30,17 +30,18 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import com.oracle.graal.api.replacements.SnippetReflectionProvider;
-import com.oracle.graal.bytecode.BytecodeDisassembler;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+
 import com.oracle.graal.debug.GraalDebugConfig.Options;
 import com.oracle.graal.graph.Graph;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeMap;
+import com.oracle.graal.graph.NodePosIterator;
 import com.oracle.graal.graph.Position;
+import com.oracle.graal.java.BytecodeDisassembler;
 import com.oracle.graal.nodeinfo.Verbosity;
 import com.oracle.graal.nodes.AbstractMergeNode;
 import com.oracle.graal.nodes.BeginNode;
-import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.EndNode;
 import com.oracle.graal.nodes.ParameterNode;
 import com.oracle.graal.nodes.PhiNode;
@@ -50,8 +51,6 @@ import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
 import com.oracle.graal.nodes.cfg.Block;
 import com.oracle.graal.nodes.cfg.ControlFlowGraph;
 import com.oracle.graal.phases.schedule.SchedulePhase;
-
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Generates a representation of {@link Graph Graphs} that can be visualized and inspected with the
@@ -78,7 +77,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
      * as properties.
      */
     @Override
-    public void beginGroup(String name, String shortName, ResolvedJavaMethod method, int bci, Map<Object, Object> properties, SnippetReflectionProvider snippetReflection) {
+    public void beginGroup(String name, String shortName, ResolvedJavaMethod method, int bci, Map<Object, Object> properties) {
         beginGroup();
         beginProperties();
         printProperty("name", name);
@@ -100,7 +99,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
      * nodes.
      */
     @Override
-    public void print(Graph graph, String title, Map<Object, Object> properties, SnippetReflectionProvider snippetReflection) {
+    public void print(Graph graph, String title, Map<Object, Object> properties) {
         beginGraph(title);
         Set<Node> noBlockNodes = Node.newSet();
         ScheduleResult schedule = null;
@@ -129,7 +128,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
         }
 
         beginNodes();
-        List<Edge> edges = printNodes(graph, cfg == null ? null : cfg.getNodeToBlock(), noBlockNodes, snippetReflection);
+        List<Edge> edges = printNodes(graph, cfg == null ? null : cfg.getNodeToBlock(), noBlockNodes);
         endNodes();
 
         beginEdges();
@@ -151,7 +150,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
         flush();
     }
 
-    private List<Edge> printNodes(Graph graph, NodeMap<Block> nodeToBlock, Set<Node> noBlockNodes, SnippetReflectionProvider snippetReflection) {
+    private List<Edge> printNodes(Graph graph, NodeMap<Block> nodeToBlock, Set<Node> noBlockNodes) {
         ArrayList<Edge> edges = new ArrayList<>();
 
         NodeMap<Set<Entry<String, Integer>>> colors = graph.createNodeMap();
@@ -209,9 +208,6 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
                 printProperty("shortName", "B");
             } else if (node.getClass() == EndNode.class) {
                 printProperty("shortName", "E");
-            } else if (node instanceof ConstantNode) {
-                ConstantNode cn = (ConstantNode) node;
-                GraphPrinter.updateStringPropertiesForConstant(snippetReflection, props, cn);
             }
             if (node.predecessor() != null) {
                 printProperty("hasPredecessor", "true");
@@ -247,7 +243,9 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
 
             // successors
             int fromIndex = 0;
-            for (Position position : node.successorPositions()) {
+            NodePosIterator succIter = node.successors().iterator();
+            while (succIter.hasNext()) {
+                Position position = succIter.nextPosition();
                 Node successor = position.get(node);
                 if (successor != null) {
                     edges.add(new Edge(node.toString(Verbosity.Id), fromIndex, successor.toString(Verbosity.Id), 0, position.getName()));
@@ -257,7 +255,9 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
 
             // inputs
             int toIndex = 1;
-            for (Position position : node.inputPositions()) {
+            NodePosIterator inputIter = node.inputs().iterator();
+            while (inputIter.hasNext()) {
+                Position position = inputIter.nextPosition();
                 Node input = position.get(node);
                 if (input != null) {
                     edges.add(new Edge(input.toString(Verbosity.Id), input.successors().count(), node.toString(Verbosity.Id), toIndex, position.getName()));
