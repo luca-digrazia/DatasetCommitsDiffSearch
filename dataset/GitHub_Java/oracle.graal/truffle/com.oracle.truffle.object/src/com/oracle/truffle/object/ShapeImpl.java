@@ -915,17 +915,6 @@ public abstract class ShapeImpl extends Shape {
                 throw new AssertionError(e);
             }
         }
-
-        public Location existingLocationForValue(Object value, Location oldLocation, ShapeImpl oldShape) {
-            assert oldShape.getLayout() == this.layout;
-            Location newLocation;
-            if (oldLocation.canSet(value)) {
-                newLocation = oldLocation;
-            } else {
-                newLocation = oldShape.allocator().locationForValueUpcast(value, oldLocation);
-            }
-            return newLocation;
-        }
     }
 
     /**
