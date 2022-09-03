@@ -28,7 +28,6 @@ import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.JavaType.Representation;
 import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
@@ -191,16 +190,16 @@ public class InliningUtil {
             // receiver null check must be before the type check
             InliningUtil.receiverNullCheck(invoke);
             ValueNode receiver = invoke.methodCallTarget().receiver();
-            LoadHubNode receiverHub = graph.unique(new LoadHubNode(receiver));
-            ConstantNode typeHub = ConstantNode.forConstant(type.getEncoding(Representation.ObjectHub), runtime, graph);
-            ObjectEqualsNode typeCheck = graph.unique(new ObjectEqualsNode(receiverHub, typeHub));
-            FixedGuardNode guard = graph.add(new FixedGuardNode(typeCheck, DeoptimizationReason.TypeCheckedInliningViolated, DeoptimizationAction.InvalidateReprofile, invoke.leafGraphId()));
+            ReadHubNode objectClass = graph.add(new ReadHubNode(receiver));
+            IsTypeNode isTypeNode = graph.unique(new IsTypeNode(objectClass, type));
+            FixedGuardNode guard = graph.add(new FixedGuardNode(isTypeNode, DeoptimizationReason.TypeCheckedInliningViolated, DeoptimizationAction.InvalidateReprofile, invoke.leafGraphId()));
             ValueAnchorNode anchor = graph.add(new ValueAnchorNode());
             assert invoke.predecessor() != null;
 
             ValueNode anchoredReceiver = createAnchoredReceiver(graph, anchor, type, receiver, true);
             invoke.callTarget().replaceFirstInput(receiver, anchoredReceiver);
 
+            graph.addBeforeFixed(invoke.node(), objectClass);
             graph.addBeforeFixed(invoke.node(), guard);
             graph.addBeforeFixed(invoke.node(), anchor);
 
@@ -334,8 +333,9 @@ public class InliningUtil {
             }
 
             // replace the invoke with a switch on the type of the actual receiver
-            LoadHubNode receiverHub = graph.unique(new LoadHubNode(invoke.methodCallTarget().receiver()));
-            FixedNode dispatchOnType = createDispatchOnType(graph, receiverHub, calleeEntryNodes, unknownTypeNode);
+            ReadHubNode objectClassNode = graph.add(new ReadHubNode(invoke.methodCallTarget().receiver()));
+            graph.addBeforeFixed(invoke.node(), objectClassNode);
+            FixedNode dispatchOnType = createDispatchOnType(graph, objectClassNode, calleeEntryNodes, unknownTypeNode);
 
             assert invoke.next() == continuation;
             invoke.setNext(null);
@@ -419,10 +419,11 @@ public class InliningUtil {
 
             MergeNode calleeEntryNode = graph.add(new MergeNode());
             calleeEntryNode.setProbability(invoke.probability());
-            LoadHubNode receiverHub = graph.unique(new LoadHubNode(invoke.methodCallTarget().receiver()));
+            ReadHubNode objectClassNode = graph.add(new ReadHubNode(invoke.methodCallTarget().receiver()));
+            graph.addBeforeFixed(invoke.node(), objectClassNode);
 
             FixedNode unknownTypeNode = graph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.TypeCheckedInliningViolated, invoke.leafGraphId()));
-            FixedNode dispatchOnType = createDispatchOnType(graph, receiverHub, new BeginNode[] {calleeEntryNode}, unknownTypeNode);
+            FixedNode dispatchOnType = createDispatchOnType(graph, objectClassNode, new BeginNode[] {calleeEntryNode}, unknownTypeNode);
 
             FixedWithNextNode pred = (FixedWithNextNode) invoke.node().predecessor();
             pred.setNext(dispatchOnType);
@@ -435,7 +436,7 @@ public class InliningUtil {
             InliningUtil.inline(invoke, calleeGraph, false);
         }
 
-        private FixedNode createDispatchOnType(StructuredGraph graph, LoadHubNode objectClassNode, BeginNode[] calleeEntryNodes, FixedNode unknownTypeSux) {
+        private FixedNode createDispatchOnType(StructuredGraph graph, ReadHubNode objectClassNode, BeginNode[] calleeEntryNodes, FixedNode unknownTypeSux) {
             assert ptypes.length > 1;
 
             ResolvedJavaType[] types = new ResolvedJavaType[ptypes.length];
