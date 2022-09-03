@@ -51,8 +51,6 @@ public class LoopPartialUnrollPhase extends LoopPhase<LoopPolicies> {
                 try (Graph.NodeEventScope nes = graph.trackNodeEvents(listener)) {
                     LoopsData dataCounted = new LoopsData(graph);
                     dataCounted.detectedCountedLoops();
-                    Graph.Mark mark = graph.getMark();
-                    boolean prePostInserted = false;
                     for (LoopEx loop : dataCounted.countedLoops()) {
                         if (!LoopTransformations.isUnrollableLoop(loop)) {
                             continue;
@@ -61,10 +59,9 @@ public class LoopPartialUnrollPhase extends LoopPhase<LoopPolicies> {
                             if (loop.loopBegin().isSimpleLoop()) {
                                 // First perform the pre/post transformation and do the partial
                                 // unroll when we come around again.
-                                LoopTransformations.insertPrePostLoops(loop);
-                                prePostInserted = true;
+                                LoopTransformations.insertPrePostLoops(loop, graph);
                             } else {
-                                LoopTransformations.partialUnroll(loop);
+                                LoopTransformations.partialUnroll(loop, graph);
                             }
                             changed = true;
                         }
@@ -75,23 +72,9 @@ public class LoopPartialUnrollPhase extends LoopPhase<LoopPolicies> {
                         canonicalizer.applyIncremental(graph, context, listener.getNodes());
                         listener.getNodes().clear();
                     }
-
-                    assert !prePostInserted || checkCounted(graph, mark);
                 }
             }
         }
-    }
-
-    private static boolean checkCounted(StructuredGraph graph, Graph.Mark mark) {
-        LoopsData dataCounted;
-        dataCounted = new LoopsData(graph);
-        dataCounted.detectedCountedLoops();
-        for (LoopEx anyLoop : dataCounted.loops()) {
-            if (graph.isNew(mark, anyLoop.loopBegin())) {
-                assert anyLoop.isCounted() : "pre/post transformation loses counted loop " + anyLoop.loopBegin();
-            }
-        }
-        return true;
     }
 
     @Override

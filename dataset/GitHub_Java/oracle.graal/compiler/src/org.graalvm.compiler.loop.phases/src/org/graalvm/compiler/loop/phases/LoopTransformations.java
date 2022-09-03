@@ -57,7 +57,6 @@ import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.LoopExitNode;
 import org.graalvm.compiler.nodes.PhiNode;
-import org.graalvm.compiler.nodes.SafepointNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.CompareNode;
@@ -225,7 +224,7 @@ public abstract class LoopTransformations {
     public static void insertPrePostLoops(LoopEx loop, StructuredGraph graph) {
         graph.getDebug().log("LoopTransformations.insertPrePostLoops %s", loop);
         LoopFragmentWhole preLoop = loop.whole();
-        CountedLoopInfo preCounted = loop.counted();
+        CountedLoopInfo preCounted = preLoop.loop().counted();
         IfNode preLimit = preCounted.getLimitTest();
         if (preLimit != null) {
             LoopBeginNode preLoopBegin = loop.loopBegin();
@@ -278,14 +277,6 @@ public abstract class LoopTransformations {
             preLoopBegin.setLoopFrequency(1);
             mainLoopBegin.setLoopFrequency(Math.max(0.0, mainLoopBegin.loopFrequency() - 2));
             postLoopBegin.setLoopFrequency(Math.max(0.0, postLoopBegin.loopFrequency() - 1));
-
-            // The pre and post loops don't require safepoints at all
-            for (SafepointNode safepoint : preLoop.nodes().filter(SafepointNode.class)) {
-                graph.removeFixed(safepoint);
-            }
-            for (SafepointNode safepoint : postLoop.nodes().filter(SafepointNode.class)) {
-                graph.removeFixed(safepoint);
-            }
         }
         graph.getDebug().dump(DebugContext.DETAILED_LEVEL, graph, "InsertPrePostLoops %s", loop);
     }
@@ -441,7 +432,7 @@ public abstract class LoopTransformations {
     }
 
     public static boolean isUnrollableLoop(LoopEx loop) {
-        if (!loop.isCounted() || !loop.counted().getCounter().isConstantStride() || !loop.loop().getChildren().isEmpty()) {
+        if (!loop.isCounted() || !loop.counted().getCounter().isConstantStride()) {
             return false;
         }
         LoopBeginNode loopBegin = loop.loopBegin();

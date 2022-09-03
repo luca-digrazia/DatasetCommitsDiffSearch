@@ -931,7 +931,7 @@ public abstract class GraalCompilerTest extends GraalTest {
      */
     @SuppressWarnings("try")
     protected InstalledCode getCode(final ResolvedJavaMethod installedCodeOwner, StructuredGraph graph, boolean forceCompile, boolean installAsDefault, OptionValues options) {
-        if (!forceCompile && graph == null) {
+        if (!forceCompile) {
             InstalledCode cached = cache.get(installedCodeOwner);
             if (cached != null) {
                 if (cached.isValid()) {
@@ -946,7 +946,6 @@ public abstract class GraalCompilerTest extends GraalTest {
             InstalledCode installedCode = null;
             StructuredGraph graphToCompile = graph == null ? parseForCompile(installedCodeOwner, id, options) : graph;
             DebugContext debug = graphToCompile.getDebug();
-
             try (AllocSpy spy = AllocSpy.open(installedCodeOwner); DebugContext.Scope ds = debug.scope("Compiling", new DebugDumpScope(id.toString(CompilationIdentifier.Verbosity.ID), true))) {
                 CompilationPrinter printer = CompilationPrinter.begin(options, id, installedCodeOwner, INVOCATION_ENTRY_BCI);
                 CompilationResult compResult = compile(installedCodeOwner, graphToCompile, new CompilationResult(), id, options);
