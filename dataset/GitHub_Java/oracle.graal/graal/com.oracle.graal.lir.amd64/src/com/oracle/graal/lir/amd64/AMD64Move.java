@@ -644,7 +644,7 @@ public class AMD64Move {
 
     protected static void compareAndSwapCompressed(TargetMethodAssembler tasm, AMD64MacroAssembler masm, AllocatableValue result, AMD64AddressValue address, AllocatableValue cmpValue,
                     AllocatableValue newValue, AllocatableValue scratch, long narrowOopBase, int narrowOopShift, int logMinObjAlignment) {
-        assert AMD64.rax.equals(asRegister(cmpValue)) && AMD64.rax.equals(asRegister(result));
+        assert asRegister(cmpValue) == AMD64.rax && asRegister(result) == AMD64.rax;
         final Register scratchRegister = asRegister(scratch);
         final Register cmpRegister = asRegister(cmpValue);
         final Register newRegister = asRegister(newValue);
@@ -669,8 +669,6 @@ public class AMD64Move {
             // Otherwise the narrow heap base, which resides always in register 12, is subtracted
             // followed by right shift.
             masm.testq(scratchRegister, scratchRegister);
-            // If the stored reference is null, move the heap to scratch
-            // register and then calculate the compressed oop value.
             masm.cmovq(ConditionFlag.Equal, scratchRegister, AMD64.r12);
             masm.subq(scratchRegister, AMD64.r12);
             masm.shrq(scratchRegister, logMinObjAlignment);
