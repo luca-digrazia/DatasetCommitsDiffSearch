@@ -29,6 +29,8 @@ import com.oracle.truffle.api.object.LocationFactory;
 import com.oracle.truffle.api.object.Property;
 import com.oracle.truffle.api.object.Shape;
 import com.oracle.truffle.object.Locations.ValueLocation;
+import com.oracle.truffle.object.debug.ShapeProfiler;
+import java.util.List;
 
 public abstract class DynamicObjectImpl extends DynamicObject implements Cloneable {
     private ShapeImpl shape;
@@ -41,7 +43,7 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
         setShape(shape);
 
         if (ObjectStorageOptions.Profile) {
-            Debug.trackObject(this);
+            trackObject(this);
         }
     }
 
@@ -205,7 +207,39 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
     }
 
     public String debugDump(int level, int levelStop) {
-        return Debug.dumpObject(this, level, levelStop);
+        List<Property> properties = this.getShape().getPropertyListInternal(true);
+        StringBuilder sb = new StringBuilder(properties.size() * 10);
+        sb.append("{\n");
+        for (Property property : properties) {
+            indent(sb, level + 1);
+
+            sb.append(property.getKey());
+            sb.append('[').append(property.getLocation()).append(']');
+            Object value = property.get(this, false);
+            if (value instanceof DynamicObjectImpl) {
+                if (level < levelStop) {
+                    value = ((DynamicObjectImpl) value).debugDump(level + 1, levelStop);
+                } else {
+                    value = value.toString();
+                }
+            }
+            sb.append(": ");
+            sb.append(value);
+            if (property != properties.get(properties.size() - 1)) {
+                sb.append(",");
+            }
+            sb.append("\n");
+        }
+        indent(sb, level);
+        sb.append("}");
+        return sb.toString();
+    }
+
+    private static StringBuilder indent(StringBuilder sb, int level) {
+        for (int i = 0; i < level; i++) {
+            sb.append(' ');
+        }
+        return sb;
     }
 
     @Override
@@ -297,6 +331,10 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
     @Override
     public final boolean updateShape() {
         return getShape().getLayout().getStrategy().updateShape(this);
+    }
+
+    private static void trackObject(DynamicObject obj) {
+        ShapeProfiler.getInstance().track(obj);
     }
 
     @Override
