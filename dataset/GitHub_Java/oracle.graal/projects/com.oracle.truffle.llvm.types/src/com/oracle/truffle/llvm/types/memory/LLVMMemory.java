@@ -47,7 +47,7 @@ import com.oracle.truffle.llvm.types.vector.LLVMVector;
 
 import sun.misc.Unsafe;
 
-public abstract class LLVMMemory {
+public class LLVMMemory {
 
     static final Unsafe UNSAFE = getUnsafe();
 
