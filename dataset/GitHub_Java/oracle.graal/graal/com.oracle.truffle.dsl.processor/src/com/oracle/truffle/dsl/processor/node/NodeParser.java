@@ -665,7 +665,6 @@ public class NodeParser extends TemplateParser<NodeData> {
         }
 
         // calculate reachability
-        SpecializationData prev = null;
         int specializationCount = 0;
         boolean reachable = true;
         for (SpecializationData specialization : specializations) {
@@ -673,9 +672,7 @@ public class NodeParser extends TemplateParser<NodeData> {
                 specialization.setReachable(true);
                 continue;
             }
-            if (prev != null && prev.equalsGuards(specialization) && prev.getExceptions().isEmpty()) {
-                specialization.addError("%s is not reachable.", specialization.isGeneric() ? "Generic" : "Specialization");
-            } else if (!reachable && specialization.getMethod() != null) {
+            if (!reachable && specialization.getMethod() != null) {
                 specialization.addError("%s is not reachable.", specialization.isGeneric() ? "Generic" : "Specialization");
             }
             specialization.setReachable(reachable);
@@ -685,7 +682,6 @@ public class NodeParser extends TemplateParser<NodeData> {
             if (!specialization.isGeneric()) {
                 specializationCount++;
             }
-            prev = specialization;
         }
 
         // initialize polymorphic depth
