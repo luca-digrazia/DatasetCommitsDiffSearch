@@ -24,7 +24,6 @@ package com.oracle.graal.lir.alloc.trace;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.lir.alloc.trace.TraceLinearScan.Options.*;
-import static com.oracle.graal.lir.alloc.trace.TraceRegisterAllocationPhase.Options.*;
 
 import java.util.*;
 
@@ -127,14 +126,6 @@ public final class TraceLinearScan extends LinearScan {
     @Override
     protected LinearScanEliminateSpillMovePhase createSpillMoveEliminationPhase() {
         return new SSILinearScanEliminateSpillMovePhase(this);
-    }
-
-    @Override
-    protected LinearScanAssignLocationsPhase createAssignLocationsPhase() {
-        if (TraceRAshareSpillInformation.getValue()) {
-            return new TraceLinearScanAssignLocationsPhase(this, traceBuilderResult);
-        }
-        return new LinearScanAssignLocationsPhase(this);
     }
 
     @Override
