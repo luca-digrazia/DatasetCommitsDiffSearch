@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -151,57 +149,6 @@ public class AArch64AtomicMove {
                 masm.stlxr(size, scratch2, scratch1, address);
                 // if scratch2 == 0 then write successful, else retry
                 masm.cbnz(32, scratch2, retry);
-            }
-        }
-    }
-
-    /**
-     * Load (Read) and Write instruction. Does the following atomically: <code>
-     *  ATOMIC_READ_AND_WRITE(newValue, result, address):
-     *    result = *address
-     *    *address = newValue
-     *    return result
-     * </code>
-     */
-    @Opcode("ATOMIC_READ_AND_WRITE")
-    public static final class AtomicReadAndWriteOp extends AArch64LIRInstruction {
-        public static final LIRInstructionClass<AtomicReadAndWriteOp> TYPE = LIRInstructionClass.create(AtomicReadAndWriteOp.class);
-
-        private final AArch64Kind accessKind;
-
-        @Def protected AllocatableValue resultValue;
-        @Alive protected AllocatableValue addressValue;
-        @Alive protected AllocatableValue newValue;
-        @Temp protected AllocatableValue scratchValue;
-
-        public AtomicReadAndWriteOp(AArch64Kind kind, AllocatableValue result, AllocatableValue address, AllocatableValue newValue, AllocatableValue scratch) {
-            super(TYPE);
-            this.accessKind = kind;
-            this.resultValue = result;
-            this.addressValue = address;
-            this.newValue = newValue;
-            this.scratchValue = scratch;
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
-            assert accessKind.isInteger();
-            final int size = accessKind.getSizeInBytes() * Byte.SIZE;
-
-            Register address = asRegister(addressValue);
-            Register value = asRegister(newValue);
-            Register result = asRegister(resultValue);
-
-            if (AArch64LIRFlagsVersioned.useLSE(masm)) {
-                masm.swp(size, value, result, address, true, true);
-            } else {
-                Register scratch = asRegister(scratchValue);
-                Label retry = new Label();
-                masm.bind(retry);
-                masm.ldaxr(size, result, address);
-                masm.stlxr(size, scratch, value, address);
-                // if scratch == 0 then write successful, else retry
-                masm.cbnz(32, scratch, retry);
             }
         }
     }
