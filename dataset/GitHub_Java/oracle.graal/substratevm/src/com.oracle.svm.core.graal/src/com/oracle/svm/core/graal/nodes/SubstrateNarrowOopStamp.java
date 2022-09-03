@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,7 +22,6 @@
  */
 package com.oracle.svm.core.graal.nodes;
 
-import com.oracle.svm.core.heap.ReferenceAccess;
 import com.oracle.svm.core.meta.CompressibleConstant;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
@@ -41,11 +38,11 @@ import org.graalvm.compiler.nodes.type.NarrowOopStamp;
 
 import com.oracle.svm.core.graal.meta.SubstrateMemoryAccessProvider;
 import com.oracle.svm.core.meta.CompressedNullConstant;
+import com.oracle.svm.core.meta.SubstrateObjectConstant;
 
 public final class SubstrateNarrowOopStamp extends NarrowOopStamp {
     private SubstrateNarrowOopStamp(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull, CompressEncoding encoding) {
         super(type, exactType, nonNull, alwaysNull, encoding);
-        assert getEncoding().equals(ReferenceAccess.singleton().getCompressEncoding()) : "Using a non-default encoding is not supported: reference map support is needed.";
     }
 
     @Override
@@ -59,7 +56,7 @@ public final class SubstrateNarrowOopStamp extends NarrowOopStamp {
 
     @Override
     public Constant readConstant(MemoryAccessProvider memoryAccessProvider, Constant base, long displacement) {
-        JavaConstant constant = ((SubstrateMemoryAccessProvider) memoryAccessProvider).readNarrowObjectConstant(base, displacement, getEncoding());
+        JavaConstant constant = ((SubstrateMemoryAccessProvider) memoryAccessProvider).readNarrowObjectConstant(base, displacement);
         assert constant != null && ((CompressibleConstant) constant).isCompressed();
         return constant;
     }
@@ -70,8 +67,8 @@ public final class SubstrateNarrowOopStamp extends NarrowOopStamp {
     }
 
     @Override
-    public boolean isCompatible(Constant c) {
-        return c instanceof CompressibleConstant && ((CompressibleConstant) c).isCompressed();
+    public boolean isCompatible(Constant other) {
+        return other instanceof SubstrateObjectConstant ? ((SubstrateObjectConstant) other).isCompressed() : true;
     }
 
     public static Stamp mkStamp(CompressionOp op, Stamp input, CompressEncoding encoding) {
