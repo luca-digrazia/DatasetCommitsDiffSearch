@@ -26,11 +26,8 @@ package com.oracle.truffle.api.interop.java;
 
 import java.lang.reflect.Array;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.nodes.Node;
 
 abstract class ArrayWriteNode extends Node {
@@ -39,36 +36,22 @@ abstract class ArrayWriteNode extends Node {
     protected abstract Object executeWithTarget(JavaObject receiver, Object index, Object value);
 
     @SuppressWarnings("unchecked")
-    @Specialization(guards = {"receiver.isArray()", "index.getClass() == clazz"})
+    @Specialization(guards = "index.getClass() == clazz")
     protected final Object doNumber(JavaObject receiver, Number index, Object value,
                     @Cached("index.getClass()") Class<?> clazz) {
         Class<Number> numberClazz = (Class<Number>) clazz;
         return doArrayAccess(receiver, numberClazz.cast(index).intValue(), value);
     }
 
-    @Specialization(guards = {"receiver.isArray()"}, replaces = "doNumber")
+    @Specialization(replaces = "doNumber")
     protected final Object doNumberGeneric(JavaObject receiver, Number index, Object value) {
         return doArrayAccess(receiver, index.intValue(), value);
     }
 
-    @SuppressWarnings("unused")
-    @TruffleBoundary
-    @Specialization(guards = {"!receiver.isArray()"})
-    protected static Object notArray(JavaObject receiver, Number index, Object value) {
-        throw UnknownIdentifierException.raise(String.valueOf(index));
-    }
-
     private Object doArrayAccess(JavaObject receiver, int index, Object value) {
         Object obj = receiver.obj;
-        assert receiver.isArray();
-        TypeAndClass<?> type = obj.getClass() == Object.class ? TypeAndClass.ANY : new TypeAndClass<>(null, obj.getClass().getComponentType());
-        final Object javaValue = toJavaNode.execute(value, type, receiver.languageContext);
-        try {
-            Array.set(obj, index, javaValue);
-        } catch (ArrayIndexOutOfBoundsException outOfBounds) {
-            CompilerDirectives.transferToInterpreter();
-            throw UnknownIdentifierException.raise(String.valueOf(index));
-        }
+        final Object javaValue = toJavaNode.execute(value, TypeAndClass.ANY, receiver.languageContext);
+        Array.set(obj, index, javaValue);
         return JavaObject.NULL;
     }
 }
