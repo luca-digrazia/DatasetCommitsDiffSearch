@@ -48,35 +48,6 @@ public class HotSpotResolvedJavaFieldImpl extends CompilerObject implements HotS
      * This value contains all flags as stored in the VM including internal ones.
      */
     private final int modifiers;
-    private final LocationIdentity locationIdentity = new LocationIdentity() {
-
-    };
-
-    public static class FieldLocationIdentity {
-        HotSpotResolvedJavaFieldImpl inner;
-
-        public FieldLocationIdentity(HotSpotResolvedJavaFieldImpl inner) {
-            this.inner = inner;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (obj instanceof FieldLocationIdentity) {
-                FieldLocationIdentity fieldLocationIdentity = (FieldLocationIdentity) obj;
-                return inner.equals(fieldLocationIdentity.inner);
-
-            }
-            return false;
-        }
-
-        @Override
-        public int hashCode() {
-            return inner.hashCode();
-        }
-    }
 
     public HotSpotResolvedJavaFieldImpl(HotSpotResolvedObjectTypeImpl holder, String name, JavaType type, long offset, int modifiers) {
         this.holder = holder;
@@ -95,7 +66,7 @@ public class HotSpotResolvedJavaFieldImpl extends CompilerObject implements HotS
         }
         if (obj instanceof HotSpotResolvedJavaField) {
             HotSpotResolvedJavaFieldImpl that = (HotSpotResolvedJavaFieldImpl) obj;
-            if (that.offset != this.offset || that.isStatic() != this.isStatic()) {
+            if (that.offset != this.offset) {
                 return false;
             } else if (this.holder.equals(that.holder)) {
                 assert this.name.equals(that.name) && this.type.equals(that.type);
@@ -257,9 +228,5 @@ public class HotSpotResolvedJavaFieldImpl extends CompilerObject implements HotS
                 throw new GraalInternalError(e);
             }
         }
-    }
-
-    public LocationIdentity getLocationIdentity() {
-        return locationIdentity;
     }
 }
