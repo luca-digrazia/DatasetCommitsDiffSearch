@@ -216,17 +216,13 @@ public final class LLVMContext {
     }
 
     private LLVMManagedPointer getApplicationArguments() {
-        String[] result;
-        if (mainArguments == null) {
-            result = new String[]{""};
-        } else {
-            result = new String[mainArguments.length + 1];
-            // we don't have an application path at this point in time. it will be overwritten when
-            // _start is called
-            result[0] = "";
-            for (int i = 1; i < result.length; i++) {
-                result[i] = mainArguments[i - 1].toString();
-            }
+        int mainArgsCount = mainArguments == null ? 0 : mainArguments.length;
+        String[] result = new String[mainArgsCount + 1];
+        // we don't have an application path at this point in time. it will be overwritten when
+        // _start is called
+        result[0] = "";
+        for (int i = 1; i < result.length; i++) {
+            result[i] = mainArguments[i - 1].toString();
         }
         return toTruffleObjects(result);
     }
@@ -284,7 +280,7 @@ public final class LLVMContext {
 
         // free the space allocated for non-pointer globals
         LLVMIntrinsicProvider provider = getContextExtension(LLVMIntrinsicProvider.class);
-        RootCallTarget free = provider.generateIntrinsicTarget("@free", 2);
+        RootCallTarget free = provider.generateIntrinsic("@free", null);
 
         for (LLVMPointer store : globalsNonPointerStore) {
             if (store != null) {
