@@ -60,11 +60,4 @@ public class Deoptimize extends Instruction {
         return "Deopt " + message;
     }
 
-    @Override
-    public Node copy(Graph into) {
-        Deoptimize x = new Deoptimize(into);
-        x.setMessage(message);
-        x.setNonNull(isNonNull());
-        return x;
-    }
 }

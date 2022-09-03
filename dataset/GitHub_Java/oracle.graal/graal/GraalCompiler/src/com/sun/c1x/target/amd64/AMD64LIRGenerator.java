@@ -466,7 +466,7 @@ public class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void visitMerge(Merge x) {
+    public void visitBlockBegin(BlockBegin x) {
         // nothing to do for now
     }
 
@@ -529,22 +529,6 @@ public class AMD64LIRGenerator extends LIRGenerator {
         lir.branch(Condition.EQ, CiKind.Boolean, getLIRBlock(x.catchSuccessor()));
 
         lir.jump(getLIRBlock(x.otherSuccessor()));
-    }
-
-    @Override
-    public void visitLoopBegin(LoopBegin x) {
-        visitMerge(x);
-    }
-
-    @Override
-    public void visitLoopEnd(LoopEnd x) {
-        setNoResult(x);
-
-        // emit phi-instruction moves after safepoint since this simplifies
-        // describing the state at the safepoint.
-
-        moveToPhi();
-        lir.jump(getLIRBlock(x.loopBegin()));
     }
 
 }

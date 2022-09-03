@@ -131,6 +131,7 @@ public final class BlockMap {
     public static class ExceptionBlock  extends Block {
         public RiExceptionHandler handler;
         public Block next;
+        public Block handlerBlock;
     }
 
     private static final Block[] NO_SUCCESSORS = new Block[0];
@@ -401,6 +402,15 @@ public final class BlockMap {
 
     private ExceptionBlock unwindBlock;
 
+    private ExceptionBlock makeUnwind() {
+        if (unwindBlock == null) {
+            unwindBlock = new ExceptionBlock();
+            unwindBlock.startBci = -1;
+            unwindBlock.endBci = -1;
+        }
+        return unwindBlock;
+    }
+
     private Block makeExceptionDispatch(List<RiExceptionHandler> handlers, int index) {
         RiExceptionHandler handler = handlers.get(index);
         if (handler.isCatchAll()) {
@@ -413,10 +423,15 @@ public final class BlockMap {
             block.endBci = -1;
             block.handler = handler;
             block.successors.add(blockMap[handler.handlerBCI()]);
+            block.handlerBlock = blockMap[handler.handlerBCI()];
+            Block next;
             if (index < handlers.size() - 1) {
-                block.next = makeExceptionDispatch(handlers, index + 1);
-                block.successors.add(block.next);
+                next = makeExceptionDispatch(handlers, index + 1);
+            } else {
+                next = makeUnwind();
             }
+            block.successors.add(next);
+            block.next = next;
             exceptionDispatch.put(handler, block);
         }
         return block;
