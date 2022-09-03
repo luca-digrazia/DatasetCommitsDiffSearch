@@ -42,7 +42,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.impl.FieldInfo;
 import com.oracle.truffle.espresso.impl.MethodInfo;
-import com.oracle.truffle.espresso.substitutions.Type;
+import com.oracle.truffle.espresso.intrinsics.Type;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -514,7 +514,7 @@ public final class Meta {
                 public Method.WithInstance apply(MethodInfo mi) {
                     Meta.Method m = meta(mi);
                     assert m.isClassInitializer();
-                    return m.forInstance(klass.tryInitializeAndGetStatics());
+                    return m.forInstance(klass.getStatics());
                 }
             });
         }
@@ -543,7 +543,7 @@ public final class Meta {
         public Method.WithInstance staticMethod(String name, Class<?> returnType, Class<?>... parameterTypes) {
             Meta.Method m = method(name, returnType, parameterTypes);
             assert m.isStatic();
-            return m.forInstance(m.getDeclaringClass().rawKlass().tryInitializeAndGetStatics());
+            return m.forInstance(m.getDeclaringClass().rawKlass().getStatics());
         }
 
         public Meta.Field declaredField(String name) {
@@ -569,7 +569,7 @@ public final class Meta {
 
         public Field.WithInstance staticField(String name) {
             assert klass.isInitialized();
-            return Klass.this.declaredField(name).forInstance(klass.tryInitializeAndGetStatics());
+            return Klass.this.declaredField(name).forInstance(klass.getStatics());
         }
 
         public WithInstance forInstance(StaticObject instance) {
@@ -665,7 +665,7 @@ public final class Meta {
 
         public Meta.Method.WithInstance asStatic() {
             assert isStatic();
-            return forInstance(method.getDeclaringClass().tryInitializeAndGetStatics());
+            return forInstance(method.getDeclaringClass().getStatics());
         }
 
         /**
