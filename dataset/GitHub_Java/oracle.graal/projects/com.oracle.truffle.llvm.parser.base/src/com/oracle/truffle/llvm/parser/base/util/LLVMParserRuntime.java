@@ -90,7 +90,7 @@ public interface LLVMParserRuntime {
 
     LLVMTypeHelper getTypeHelper();
 
-    Map<String, Type> getVariableNameTypesMapping();
+    Map<String, ResolvedType> getVariableNameTypesMapping();
 
     NodeFactoryFacade getNodeFactoryFacade();
 

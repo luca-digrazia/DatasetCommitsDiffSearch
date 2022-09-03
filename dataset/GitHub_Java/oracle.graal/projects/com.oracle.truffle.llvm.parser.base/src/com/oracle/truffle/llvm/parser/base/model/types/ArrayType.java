@@ -52,6 +52,11 @@ public class ArrayType implements AggregateType {
     }
 
     @Override
+    public int getAlignment() {
+        return elementType.getAlignment();
+    }
+
+    @Override
     public int getBits() {
         return elementType.getBits() * length;
     }

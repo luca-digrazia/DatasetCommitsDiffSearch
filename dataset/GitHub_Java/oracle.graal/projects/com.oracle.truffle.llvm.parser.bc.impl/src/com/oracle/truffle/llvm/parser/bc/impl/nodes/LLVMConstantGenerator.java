@@ -341,7 +341,7 @@ public final class LLVMConstantGenerator {
         }
 
         if (currentType != null && !((parentType instanceof StructureType) && (((StructureType) parentType).isPacked()))) {
-            currentOffset += Type.getPadding(currentOffset, currentType, typeHelper.getTargetDataLayout());
+            currentOffset += typeHelper.getPadding(currentOffset, currentType);
         }
 
         if (currentOffset != 0) {
@@ -403,7 +403,7 @@ public final class LLVMConstantGenerator {
         for (int i = 0; i < elementCount; i++) {
             final Type elementType = constant.getElementType(i);
             if (!packed) {
-                currentOffset += Type.getPadding(currentOffset, elementType, typeHelper.getTargetDataLayout());
+                currentOffset += typeHelper.getPadding(currentOffset, elementType);
             }
             offsets[i] = currentOffset;
             final int byteSize = elementType.getSize(typeHelper.getTargetDataLayout());

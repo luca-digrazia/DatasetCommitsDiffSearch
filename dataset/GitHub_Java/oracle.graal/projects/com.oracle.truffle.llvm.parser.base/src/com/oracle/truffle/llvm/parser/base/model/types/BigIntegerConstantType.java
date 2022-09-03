@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.parser.base.model.types;
 import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
 
 import java.math.BigInteger;
-import java.util.Objects;
 
 public final class BigIntegerConstantType implements Type {
 
@@ -60,6 +59,14 @@ public final class BigIntegerConstantType implements Type {
     }
 
     @Override
+    public String toString() {
+        if (getType().getBits() == 1) {
+            return value.equals(BigInteger.ZERO) ? "i1 false" : "i1 true";
+        }
+        return String.format("%s %s", type, value);
+    }
+
+    @Override
     public int getAlignment(DataLayoutConverter.DataSpecConverter targetDataLayout) {
         if (targetDataLayout != null) {
             return targetDataLayout.getBitAlignment(type.getLLVMBaseType()) / Byte.SIZE;
@@ -72,30 +79,5 @@ public final class BigIntegerConstantType implements Type {
     @Override
     public int getSize(DataLayoutConverter.DataSpecConverter targetDataLayout) {
         return type.getSize(targetDataLayout);
-    }
-
-    @Override
-    public int hashCode() {
-        int hash = 7;
-        hash = 41 * hash + ((type == null) ? 0 : type.hashCode());
-        hash = 41 * hash + ((value == null) ? 0 : value.hashCode());
-        return hash;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof BigIntegerConstantType) {
-            BigIntegerConstantType other = (BigIntegerConstantType) obj;
-            return Objects.equals(type, other.type) && Objects.equals(value, other.value);
-        }
-        return false;
-    }
-
-    @Override
-    public String toString() {
-        if (getType().getBits() == 1) {
-            return value.equals(BigInteger.ZERO) ? "i1 false" : "i1 true";
-        }
-        return String.format("%s %s", type, value);
     }
 }

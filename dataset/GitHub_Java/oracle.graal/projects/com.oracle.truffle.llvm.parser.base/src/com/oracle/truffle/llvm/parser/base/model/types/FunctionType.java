@@ -31,18 +31,15 @@ package com.oracle.truffle.llvm.parser.base.model.types;
 
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
-import com.oracle.truffle.llvm.parser.base.model.symbols.ValueSymbol;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 
-public class FunctionType implements Type, ValueSymbol {
+public class FunctionType implements Type {
 
     private final Type type;
 
     private final Type[] args;
 
     private final boolean isVarArg;
-
-    private String name;
 
     public FunctionType(Type type, Type[] args, boolean isVarArg) {
         this.type = type;
@@ -57,11 +54,6 @@ public class FunctionType implements Type, ValueSymbol {
     @Override
     public LLVMBaseType getLLVMBaseType() {
         return LLVMBaseType.FUNCTION_ADDRESS;
-    }
-
-    @Override
-    public Type getType() {
-        return new PointerType(Type.super.getType());
     }
 
     public Type getReturnType() {
@@ -89,16 +81,6 @@ public class FunctionType implements Type, ValueSymbol {
     @Override
     public int getBits() {
         return 0;
-    }
-
-    @Override
-    public void setName(String name) {
-        this.name = "@" + name;
-    }
-
-    @Override
-    public String getName() {
-        return name;
     }
 
     @Override

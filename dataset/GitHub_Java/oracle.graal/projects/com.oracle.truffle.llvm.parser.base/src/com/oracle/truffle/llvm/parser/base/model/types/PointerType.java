@@ -45,6 +45,14 @@ public final class PointerType implements Type {
     }
 
     @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof PointerType) {
+            return type.equals(((PointerType) obj).type);
+        }
+        return false;
+    }
+
+    @Override
     public LLVMBaseType getLLVMBaseType() {
         // if the pointeetype is also a pointer it will not resolve to LLVMBaseType.ADDRESS but to
         // its own pointeetype's LLVMBaseType, so we cannot just use type.getLLVMBaseType() but
@@ -54,6 +62,11 @@ public final class PointerType implements Type {
         } else {
             return LLVMBaseType.ADDRESS;
         }
+    }
+
+    @Override
+    public int hashCode() {
+        return type.hashCode();
     }
 
     public Type getPointeeType() {
@@ -67,6 +80,11 @@ public final class PointerType implements Type {
     @Override
     public int getBits() {
         return Long.BYTES * Byte.SIZE;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("%s*", type);
     }
 
     @Override
@@ -121,23 +139,5 @@ public final class PointerType implements Type {
             default:
                 return LLVMFunctionDescriptor.LLVMRuntimeType.ADDRESS;
         }
-    }
-
-    @Override
-    public int hashCode() {
-        return type.hashCode();
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof PointerType) {
-            return type.equals(((PointerType) obj).type);
-        }
-        return false;
-    }
-
-    @Override
-    public String toString() {
-        return String.format("%s*", type);
     }
 }

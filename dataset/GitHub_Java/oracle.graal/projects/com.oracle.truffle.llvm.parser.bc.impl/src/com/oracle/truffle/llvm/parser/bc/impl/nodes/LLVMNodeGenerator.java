@@ -453,7 +453,7 @@ public final class LLVMNodeGenerator {
             final Type elemType = constant.getElementType(i);
 
             if (!constant.isPacked()) {
-                currentOffset += Type.getPadding(currentOffset, elemType, typeHelper.getTargetDataLayout());
+                currentOffset += typeHelper.getPadding(currentOffset, elemType);
             }
 
             offsets[i] = currentOffset;
@@ -553,7 +553,7 @@ public final class LLVMNodeGenerator {
         }
 
         if (currentType != null && !((parentType instanceof StructureType) && (((StructureType) parentType).isPacked()))) {
-            currentOffset += Type.getPadding(currentOffset, currentType, typeHelper.getTargetDataLayout());
+            currentOffset += typeHelper.getPadding(currentOffset, currentType);
         }
 
         if (currentOffset != 0) {
