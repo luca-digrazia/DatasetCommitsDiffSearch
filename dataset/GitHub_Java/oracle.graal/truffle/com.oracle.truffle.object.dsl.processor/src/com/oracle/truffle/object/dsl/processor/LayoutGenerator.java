@@ -53,11 +53,7 @@ public class LayoutGenerator {
         }
 
         stream.println("import com.oracle.truffle.api.CompilerAsserts;");
-
-        if (layout.hasVolatileProperties()) {
-            stream.println("import java.util.concurrent.atomic.*;");
-        }
-
+        stream.println("import java.util.concurrent.atomic.*;");
         stream.printf("import %s;%n", layout.getInterfaceFullName());
 
         if (layout.getSuperLayout() != null) {
