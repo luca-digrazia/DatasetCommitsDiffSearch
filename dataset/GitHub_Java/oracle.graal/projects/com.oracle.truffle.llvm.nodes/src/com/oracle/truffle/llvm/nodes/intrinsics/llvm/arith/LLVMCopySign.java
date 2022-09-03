@@ -32,8 +32,8 @@ package com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith;
 import com.oracle.truffle.api.dsl.GenerateNodeFactory;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
-import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.NodeField;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
@@ -48,7 +48,7 @@ public abstract class LLVMCopySign {
         public abstract SourceSection getSourceSection();
 
         @Specialization
-        protected float doFloat(float magnitude, float sign) {
+        public float executeFloat(float magnitude, float sign) {
             return Math.copySign(magnitude, sign);
         }
     }
@@ -62,7 +62,7 @@ public abstract class LLVMCopySign {
         public abstract SourceSection getSourceSection();
 
         @Specialization
-        protected double doDouble(double magnitude, double sign) {
+        public double executeDouble(double magnitude, double sign) {
             return Math.copySign(magnitude, sign);
         }
     }

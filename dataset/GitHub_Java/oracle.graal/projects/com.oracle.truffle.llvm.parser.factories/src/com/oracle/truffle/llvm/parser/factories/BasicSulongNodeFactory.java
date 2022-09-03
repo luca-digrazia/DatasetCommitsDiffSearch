@@ -69,7 +69,8 @@ import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMLifetimeStartNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMMemCopyFactory.LLVMMemI32CopyNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMMemCopyFactory.LLVMMemI64CopyNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMMemMoveFactory.LLVMMemMoveI64NodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMMemSetNodeGen;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMMemSetFactory.LLVMMemSetI32NodeGen;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMMemSetFactory.LLVMMemSetI64NodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMNoOpNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMPrefetchNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMReturnAddressNodeGen;
@@ -90,9 +91,7 @@ import com.oracle.truffle.llvm.nodes.intrinsics.llvm.x86.LLVMX86_64BitVAEnd;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.x86.LLVMX86_64BitVAStart;
 import com.oracle.truffle.llvm.nodes.literals.LLVMFunctionLiteralNode;
 import com.oracle.truffle.llvm.nodes.literals.LLVMFunctionLiteralNodeGen;
-import com.oracle.truffle.llvm.nodes.literals.LLVMSimpleLiteralNode.LLVMI1LiteralNode;
-import com.oracle.truffle.llvm.nodes.literals.LLVMSimpleLiteralNode.LLVMI32LiteralNode;
-import com.oracle.truffle.llvm.nodes.literals.LLVMSimpleLiteralNode.LLVMI8LiteralNode;
+import com.oracle.truffle.llvm.nodes.memory.LLVMAddressZeroNode;
 import com.oracle.truffle.llvm.nodes.memory.LLVMAllocInstruction.LLVMAllocaInstruction;
 import com.oracle.truffle.llvm.nodes.memory.LLVMCompareExchangeNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.LLVMStoreNode.LLVMAddressArrayLiteralNode;
@@ -109,7 +108,6 @@ import com.oracle.truffle.llvm.parser.SulongNodeFactory;
 import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionKind;
-import com.oracle.truffle.llvm.parser.metadata.DebugInfoGenerator;
 import com.oracle.truffle.llvm.parser.model.enums.CompareOperator;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
@@ -345,7 +343,7 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
 
     @Override
     public LLVMExpressionNode createZeroNode(LLVMParserRuntime runtime, LLVMExpressionNode addressNode, int size) {
-        return LLVMMemSetNodeGen.create(addressNode, new LLVMI8LiteralNode((byte) 0), new LLVMI32LiteralNode(size), new LLVMI32LiteralNode(0), new LLVMI1LiteralNode(false), null);
+        return new LLVMAddressZeroNode(addressNode, size);
     }
 
     @Override
@@ -379,7 +377,7 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
     public RootNode createFunctionStartNode(LLVMParserRuntime runtime, LLVMExpressionNode functionBodyNode, LLVMExpressionNode[] beforeFunction, LLVMExpressionNode[] afterFunction,
                     SourceSection sourceSection,
                     FrameDescriptor frameDescriptor,
-                    FunctionDefinition functionHeader, Source bcSource) {
+                    FunctionDefinition functionHeader) {
         LLVMStackFrameNuller[] nullers = new LLVMStackFrameNuller[frameDescriptor.getSlots().size()];
         int i = 0;
         for (FrameSlot slot : frameDescriptor.getSlots()) {
@@ -395,9 +393,8 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
             }
             i++;
         }
-        final String originalName = DebugInfoGenerator.getSourceFunctionName(functionHeader);
         return new LLVMFunctionStartNode(sourceSection, runtime.getLanguage(), functionBodyNode, beforeFunction, afterFunction, frameDescriptor, functionHeader.getName(), nullers,
-                        functionHeader.getParameters().size(), originalName, bcSource);
+                        functionHeader.getParameters().size());
     }
 
     @Override
@@ -622,8 +619,9 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
     protected LLVMExpressionNode getLLVMBuiltin(String name, LLVMExpressionNode[] args, FrameSlot stack, int callerArgumentCount, SourceSection sourceSection) {
         switch (name) {
             case "@llvm.memset.p0i8.i32":
+                return LLVMMemSetI32NodeGen.create(args[1], args[2], args[3], args[4], args[5], sourceSection);
             case "@llvm.memset.p0i8.i64":
-                return LLVMMemSetNodeGen.create(args[1], args[2], args[3], args[4], args[5], sourceSection);
+                return LLVMMemSetI64NodeGen.create(args[1], args[2], args[3], args[4], args[5], sourceSection);
             case "@llvm.donothing":
                 return LLVMNoOpNodeGen.create(sourceSection);
             case "@llvm.prefetch":
@@ -712,9 +710,9 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
             case "@llvm.objectsize.i64":
                 return LLVMI64ObjectSizeNodeGen.create(args[1], args[2], sourceSection);
             case "@llvm.copysign.f32":
-                return LLVMCopySignFloatFactory.create(args[1], args[2], sourceSection);
+                return LLVMCopySignFloatFactory.create(args[0], args[1], sourceSection);
             case "@llvm.copysign.f64":
-                return LLVMCopySignDoubleFactory.create(args[1], args[2], sourceSection);
+                return LLVMCopySignDoubleFactory.create(args[0], args[1], sourceSection);
 
             default:
                 throw new IllegalStateException("Missing LLVM builtin: " + name);
