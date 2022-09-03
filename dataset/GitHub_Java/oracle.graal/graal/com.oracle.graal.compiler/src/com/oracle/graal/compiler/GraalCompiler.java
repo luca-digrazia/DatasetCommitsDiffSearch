@@ -141,12 +141,12 @@ public class GraalCompiler {
 
         Suites.DEFAULT.getHighTier().apply(graph, highTierContext);
 
-        MidTierContext midTierContext = new MidTierContext(runtime, assumptions, replacements, target, optimisticOpts);
+        MidTierContext midTierContext = new MidTierContext(runtime, assumptions, replacements, target);
         Suites.DEFAULT.getMidTier().apply(graph, midTierContext);
 
         plan.runPhases(PhasePosition.LOW_LEVEL, graph);
 
-        LowTierContext lowTierContext = new LowTierContext(runtime, assumptions, replacements, target);
+        LowTierContext lowTierContext = new LowTierContext(runtime, assumptions, replacements, target, optimisticOpts);
         Suites.DEFAULT.getLowTier().apply(graph, lowTierContext);
 
         final SchedulePhase schedule = new SchedulePhase();
