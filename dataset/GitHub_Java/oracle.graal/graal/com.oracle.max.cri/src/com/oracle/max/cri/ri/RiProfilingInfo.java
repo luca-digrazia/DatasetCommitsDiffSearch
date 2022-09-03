@@ -24,18 +24,11 @@ package com.oracle.max.cri.ri;
 
 
 /**
- * Provides access to the profiling information of one specific method.
- * Every accessor method returns the information that is available at the time of invocation.
- * If a method is invoked multiple times, it may return significantly different results for every invocation
- * as the profiling information may be changed by other Java threads at any time.
+ * Represents profiling information for one specific method.
+ * Every accessor method returns the information that is available at the time of its invocation.
+ * If a method is invoked multiple times, it may return a significantly different results for every invocation.
  */
 public interface RiProfilingInfo {
-
-    /**
-     * Gets the length of the code associated with this profile.
-     */
-    int codeSize();
-
     /**
      * Returns an estimate of how often the branch at the given byte code was taken.
      * @return The estimated probability, with 0.0 meaning never and 1.0 meaning always, or -1 if this information is not available.
@@ -58,8 +51,8 @@ public interface RiProfilingInfo {
 
     /**
      * Returns information if the given BCI did ever throw an exception.
-     * @return {@link RiExceptionSeen#TRUE} if the instruction has thrown an exception at least once,
-     * {@link RiExceptionSeen#FALSE} if it never threw an exception, and {@link RiExceptionSeen#NOT_SUPPORTED}
+     * @return @link{RiExceptionSeen.TRUE} if the instruction has thrown an exception at least once,
+     * @link{RiExceptionSeen.FALSE} if it never threw an exception, and @link{RiExceptionSeen.UNKNOWN}
      * if this information was not recorded.
      */
     RiExceptionSeen getExceptionSeen(int bci);
@@ -70,12 +63,4 @@ public interface RiProfilingInfo {
      * @return the estimated execution count or -1 if not available.
      */
     int getExecutionCount(int bci);
-
-    /**
-     * Returns how frequently a method was deoptimized for the given deoptimization reason. This only indicates how
-     * often the method did fall back to the interpreter for the execution and does not indicate how often it was recompiled.
-     * @param reason the reason for which the number of deoptimizations should be queried
-     * @return the number of times the compiled method deoptimized for the given reason.
-     */
-    int getDeoptimizationCount(RiDeoptReason reason);
 }

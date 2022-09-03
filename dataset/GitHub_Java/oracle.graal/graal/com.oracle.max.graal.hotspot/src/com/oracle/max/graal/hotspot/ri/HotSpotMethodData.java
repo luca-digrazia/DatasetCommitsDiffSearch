@@ -27,7 +27,6 @@ import java.util.*;
 import sun.misc.*;
 
 import com.oracle.max.cri.ri.*;
-import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.hotspot.*;
 import com.oracle.max.graal.hotspot.Compiler;
 
@@ -46,7 +45,7 @@ public final class HotSpotMethodData extends CompilerObject {
     // TODO (ch) use same logic as in NodeClass?
     private static final Unsafe unsafe = Unsafe.getUnsafe();
     private static final HotSpotMethodDataAccessor NO_DATA_NO_EXCEPTION_ACCESSOR = new NoMethodData(RiExceptionSeen.FALSE);
-    private static final HotSpotMethodDataAccessor NO_DATA_EXCEPTION_POSSIBLY_NOT_RECORDED_ACCESSOR = new NoMethodData(RiExceptionSeen.NOT_SUPPORTED);
+    private static final HotSpotMethodDataAccessor NO_DATA_EXCEPTION_POSSIBLE_ACCESSOR = new NoMethodData(RiExceptionSeen.UNKNOWN);
     private static final HotSpotVMConfig config;
     // sorted by tag
     private static final HotSpotMethodDataAccessor[] PROFILE_DATA_ACCESSORS = {
@@ -58,6 +57,7 @@ public final class HotSpotMethodData extends CompilerObject {
     private Object hotspotMirror;
     private int normalDataSize;
     private int extraDataSize;
+    private boolean mature;
 
     private HotSpotMethodData(Compiler compiler) {
         super(compiler);
@@ -76,6 +76,19 @@ public final class HotSpotMethodData extends CompilerObject {
         return normalDataSize;
     }
 
+    public boolean isMature() {
+        // TODO (ch) maturity of profiling information is an issue in general. Not all optimizations require mature data as long as the code
+        // does deoptimize/recompile on violations (might decrease startup and increase peak performance).
+        // Maturity is currently used on several levels:
+        // 1) whole method data
+        // 2) individual branch/switch profiling data
+        // 3) MatureInvocationCount for eliminating exception edges
+        if (!mature) {
+            mature = compiler.getVMEntries().HotSpotMethodData_isMature(this);
+        }
+        return mature;
+    }
+
     public boolean isWithin(int position) {
         return position >= 0 && position < normalDataSize + extraDataSize;
     }
@@ -91,18 +104,18 @@ public final class HotSpotMethodData extends CompilerObject {
     }
 
     public HotSpotMethodDataAccessor getExtraData(int position) {
-        if (position >= normalDataSize + extraDataSize) {
+        if (position >= extraDataSize) {
             return null;
         }
         return getData(position);
     }
 
-    public static HotSpotMethodDataAccessor getNoDataAccessor(boolean exceptionPossiblyNotRecorded) {
-        if (exceptionPossiblyNotRecorded) {
-            return NO_DATA_EXCEPTION_POSSIBLY_NOT_RECORDED_ACCESSOR;
-        } else {
-            return NO_DATA_NO_EXCEPTION_ACCESSOR;
-        }
+    public static HotSpotMethodDataAccessor getNoDataNoExceptionAccessor() {
+        return NO_DATA_NO_EXCEPTION_ACCESSOR;
+    }
+
+    public static HotSpotMethodDataAccessor getNoDataExceptionPossibleAccessor() {
+        return NO_DATA_EXCEPTION_POSSIBLE_ACCESSOR;
     }
 
     private HotSpotMethodDataAccessor getData(int position) {
@@ -368,7 +381,7 @@ public final class HotSpotMethodData extends CompilerObject {
             RiResolvedType[] types;
             double[] probabilities;
 
-            if (entries <= 0 || totalCount < GraalOptions.MatureExecutionsTypeProfile) {
+            if (entries <= 0) {
                 return null;
             } else if (entries < sparseTypes.length) {
                 types = Arrays.copyOf(sparseTypes, entries);
@@ -446,6 +459,7 @@ public final class HotSpotMethodData extends CompilerObject {
         private static final int BRANCH_DATA_TAG = 7;
         private static final int BRANCH_DATA_SIZE = cellIndexToOffset(3);
         private static final int NOT_TAKEN_COUNT_OFFSET = cellIndexToOffset(2);
+        private static final int BRANCH_DATA_MATURE_COUNT = 40;
 
         public BranchData() {
             super(BRANCH_DATA_TAG, BRANCH_DATA_SIZE);
@@ -457,7 +471,7 @@ public final class HotSpotMethodData extends CompilerObject {
             long notTakenCount = data.readUnsignedInt(position, NOT_TAKEN_COUNT_OFFSET);
             long total = takenCount + notTakenCount;
 
-            if (total < GraalOptions.MatureExecutionsBranch) {
+            if (total < BRANCH_DATA_MATURE_COUNT) {
                 return -1;
             } else {
                 return takenCount / (double) total;
@@ -522,7 +536,7 @@ public final class HotSpotMethodData extends CompilerObject {
                 result[i - 1] = count;
             }
 
-            if (totalCount < GraalOptions.MatureExecutionsPerSwitchCase * length) {
+            if (totalCount < 10 * (length + 2)) {
                 return null;
             } else {
                 for (int i = 0; i < length; i++) {

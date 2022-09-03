@@ -26,17 +26,13 @@ import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.hotspot.*;
 import com.oracle.max.graal.hotspot.Compiler;
 
-/**
- * Dummy profiling information in case that a method was not executed frequently enough so that
- * no profiling information does exist yet.
- */
+
 public final class HotSpotNoProfilingInfo extends CompilerObject implements RiProfilingInfo {
     /**
      *
      */
     private static final long serialVersionUID = 4357945025049704109L;
-    // Be optimistic and return false for exceptionSeen. A methodDataOop is allocated in case of a deoptimization.
-    private static final HotSpotMethodDataAccessor noData = HotSpotMethodData.getNoDataAccessor(false);
+    private static final HotSpotMethodDataAccessor noData = HotSpotMethodData.getNoDataExceptionPossibleAccessor();
 
     public HotSpotNoProfilingInfo(Compiler compiler) {
         super(compiler);

@@ -23,7 +23,6 @@
 package com.oracle.max.graal.hotspot.ri;
 
 import com.oracle.max.cri.ri.*;
-import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.hotspot.*;
 import com.oracle.max.graal.hotspot.Compiler;
 
@@ -109,10 +108,7 @@ public final class HotSpotProfilingInfo extends CompilerObject implements RiProf
                 currentPosition = currentPosition + currentAccessor.getSize(methodData, currentPosition);
             }
 
-            if (!methodData.isWithin(currentPosition)) {
-                exceptionPossiblyNotRecorded = true;
-                Debug.metric("InsufficientSpaceForProfilingData").increment();
-            }
+            exceptionPossiblyNotRecorded = !methodData.isWithin(currentPosition);
         }
 
         noDataFound(exceptionPossiblyNotRecorded);

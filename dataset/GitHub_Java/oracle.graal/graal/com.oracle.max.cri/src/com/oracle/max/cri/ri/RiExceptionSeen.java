@@ -29,7 +29,7 @@ package com.oracle.max.cri.ri;
 public enum RiExceptionSeen {
     TRUE,
     FALSE,
-    NOT_SUPPORTED;
+    UNKNOWN;
 
     public static RiExceptionSeen get(boolean value) {
         return value ? TRUE : FALSE;
