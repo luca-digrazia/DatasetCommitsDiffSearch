@@ -86,8 +86,8 @@ import jdk.vm.ci.code.Architecture;
  * struct Node {
  *   unsigned typeId
  *   signed[] properties
- *   unsigned[] successorOrderIds
  *   unsigned[] inputOrderIds
+ *   unsigned[] successorOrderIds
  * }
  * </pre>
  *
@@ -152,7 +152,7 @@ public class GraphEncoder {
         GraphEncoder encoder = new GraphEncoder(architecture);
         encoder.prepare(graph);
         encoder.finishPrepare();
-        int startOffset = encoder.encode(graph);
+        long startOffset = encoder.encode(graph);
         return new EncodedGraph(encoder.getEncoding(), startOffset, encoder.getObjects(), encoder.getNodeClasses(), graph.getAssumptions(), graph.getMethods());
     }
 
@@ -202,7 +202,7 @@ public class GraphEncoder {
      *
      * @param graph The graph to encode
      */
-    public int encode(StructuredGraph graph) {
+    public long encode(StructuredGraph graph) {
         assert objectsArray != null && nodeClassesArray != null : "finishPrepare() must be called before encode()";
 
         NodeOrder nodeOrder = new NodeOrder(graph);
@@ -224,8 +224,8 @@ public class GraphEncoder {
             NodeClass<?> nodeClass = node.getNodeClass();
             writer.putUV(nodeClasses.getIndex(nodeClass));
             writeProperties(node, nodeClass.getData());
-            writeEdges(node, nodeClass.getEdges(Edges.Type.Successors), nodeOrder);
             writeEdges(node, nodeClass.getEdges(Edges.Type.Inputs), nodeOrder);
+            writeEdges(node, nodeClass.getEdges(Edges.Type.Successors), nodeOrder);
 
             /* Special handling for some nodes that require additional information for decoding. */
             if (node instanceof AbstractEndNode) {
@@ -277,7 +277,7 @@ public class GraphEncoder {
         }
 
         /* Write out the table of contents with the start offset for all nodes. */
-        int nodeTableStart = TypeConversion.asS4(writer.getBytesWritten());
+        long nodeTableStart = writer.getBytesWritten();
         writer.putUV(nodeCount);
         for (int i = 0; i < nodeCount; i++) {
             assert i == NULL_ORDER_ID || i == START_NODE_ORDER_ID || nodeStartOffsets[i] > 0;
@@ -366,7 +366,7 @@ public class GraphEncoder {
 
     protected void writeEdges(Node node, Edges edges, NodeOrder nodeOrder) {
         for (int idx = 0; idx < edges.getDirectCount(); idx++) {
-            if (GraphDecoder.skipEdge(node, edges, idx, true, false)) {
+            if (GraphDecoder.skipDirectEdge(node, edges, idx)) {
                 /* Edge is not needed for decoding, so we must not write it. */
                 continue;
             }
@@ -374,7 +374,7 @@ public class GraphEncoder {
             writeOrderId(edge, nodeOrder);
         }
         for (int idx = edges.getDirectCount(); idx < edges.getCount(); idx++) {
-            if (GraphDecoder.skipEdge(node, edges, idx, false, false)) {
+            if (GraphDecoder.skipIndirectEdge(node, edges, idx, false)) {
                 /* Edge is not needed for decoding, so we must not write it. */
                 continue;
             }

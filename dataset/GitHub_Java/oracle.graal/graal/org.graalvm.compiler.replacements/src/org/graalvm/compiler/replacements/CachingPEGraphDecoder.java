@@ -56,10 +56,9 @@ public class CachingPEGraphDecoder extends PEGraphDecoder {
     private final AllowAssumptions allowAssumptions;
     private final EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache;
 
-    public CachingPEGraphDecoder(Architecture architecture, StructuredGraph graph, Providers providers, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts,
-                    AllowAssumptions allowAssumptions,
-                    OptionValues options) {
-        super(architecture, graph, providers.getMetaAccess(), providers.getConstantReflection(), providers.getConstantFieldProvider(), providers.getStampProvider(), options);
+    public CachingPEGraphDecoder(Providers providers, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, AllowAssumptions allowAssumptions,
+                    Architecture architecture, OptionValues options) {
+        super(providers.getMetaAccess(), providers.getConstantReflection(), providers.getConstantFieldProvider(), providers.getStampProvider(), architecture, options);
 
         this.providers = providers;
         this.graphBuilderConfig = graphBuilderConfig;
@@ -75,22 +74,22 @@ public class CachingPEGraphDecoder extends PEGraphDecoder {
 
     @SuppressWarnings("try")
     private EncodedGraph createGraph(ResolvedJavaMethod method, BytecodeProvider intrinsicBytecodeProvider) {
-        StructuredGraph graphToEncode = new StructuredGraph.Builder(options, allowAssumptions).useProfilingInfo(false).method(method).build();
-        try (Debug.Scope scope = Debug.scope("createGraph", graphToEncode)) {
+        StructuredGraph graph = new StructuredGraph.Builder(options, allowAssumptions).useProfilingInfo(false).method(method).build();
+        try (Debug.Scope scope = Debug.scope("createGraph", graph)) {
             IntrinsicContext initialIntrinsicContext = intrinsicBytecodeProvider != null ? new IntrinsicContext(method, method, intrinsicBytecodeProvider, INLINE_AFTER_PARSING) : null;
             GraphBuilderPhase.Instance graphBuilderPhaseInstance = createGraphBuilderPhaseInstance(initialIntrinsicContext);
-            graphBuilderPhaseInstance.apply(graphToEncode);
+            graphBuilderPhaseInstance.apply(graph);
 
             PhaseContext context = new PhaseContext(providers);
-            new CanonicalizerPhase().apply(graphToEncode, context);
+            new CanonicalizerPhase().apply(graph, context);
             /*
              * ConvertDeoptimizeToGuardPhase reduces the number of merges in the graph, so that
              * fewer frame states will be created. This significantly reduces the number of nodes in
              * the initial graph.
              */
-            new ConvertDeoptimizeToGuardPhase().apply(graphToEncode, context);
+            new ConvertDeoptimizeToGuardPhase().apply(graph, context);
 
-            EncodedGraph encodedGraph = GraphEncoder.encodeSingleGraph(graphToEncode, architecture);
+            EncodedGraph encodedGraph = GraphEncoder.encodeSingleGraph(graph, architecture);
             graphCache.put(method, encodedGraph);
             return encodedGraph;
 
