@@ -52,8 +52,8 @@ import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI1Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
 import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMI32VectorNode;
 import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMVectorNode;
+import com.oracle.truffle.llvm.nodes.impl.control.LLVMConditionalPhiWriteNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMGlobalRootNode;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMMemCopyFactory.LLVMMemI32CopyFactory;
 import com.oracle.truffle.llvm.nodes.impl.literals.LLVMAggregateLiteralNode.LLVMEmptyStructLiteralNode;
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMAddressZeroNode;
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMAllocInstruction.LLVMAllocaInstruction;
@@ -261,6 +261,11 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
     }
 
     @Override
+    public LLVMNode createConditionalPhiWriteNode(LLVMExpressionNode create, LLVMNode phiWriteNode) {
+        return new LLVMConditionalPhiWriteNode((LLVMI1Node) create, phiWriteNode);
+    }
+
+    @Override
     public LLVMExpressionNode createAlloc(LLVMBaseType llvmType, LLVMExpressionNode numElements, int byteSize, int alignment) {
         return LLVMAllocFactory.createAlloc(runtime, llvmType, numElements, byteSize, alignment);
     }
@@ -306,12 +311,6 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
 
     public LLVMExpressionNode createStructureConstantNode(boolean packed, int structureSize, ResolvedType[] types, LLVMExpressionNode[] constants) {
         return LLVMAggregateFactory.createStructConstantNode(runtime, packed, structureSize, types, constants);
-    }
-
-    public LLVMNode createMemCopyNode(LLVMExpressionNode globalVarAddress, LLVMExpressionNode constant, LLVMExpressionNode lengthNode, LLVMExpressionNode alignNode,
-                    LLVMExpressionNode isVolatileNode) {
-        return LLVMMemI32CopyFactory.create((LLVMAddressNode) globalVarAddress, (LLVMAddressNode) constant, (LLVMI32Node) lengthNode, (LLVMI32Node) alignNode,
-                        (LLVMI1Node) isVolatileNode);
     }
 
 }

@@ -147,6 +147,8 @@ public interface NodeFactoryFacade {
 
     LLVMExpressionNode createArrayLiteral(List<LLVMExpressionNode> arrayValues, ResolvedType arrayType);
 
+    LLVMNode createConditionalPhiWriteNode(LLVMExpressionNode create, LLVMNode phiWriteNode);
+
     LLVMExpressionNode createAlloc(LLVMBaseType llvmType, LLVMExpressionNode numElements, int byteSize, int alignment);
 
     LLVMExpressionNode createAlloc(int size, int alignment);
@@ -190,7 +192,5 @@ public interface NodeFactoryFacade {
      * @return the constructed structure literal
      */
     LLVMExpressionNode createStructureConstantNode(boolean packed, int structSize, ResolvedType[] types, LLVMExpressionNode[] constants);
-
-    LLVMNode createMemCopyNode(LLVMExpressionNode globalVarAddress, LLVMExpressionNode constant, LLVMExpressionNode lengthNode, LLVMExpressionNode alignNode, LLVMExpressionNode isVolatileNode);
 
 }

@@ -29,7 +29,9 @@
  */
 package com.oracle.truffle.llvm.parser.factories;
 
+import com.intel.llvm.ireditor.lLVM_IR.TypedConstant;
 import com.intel.llvm.ireditor.types.ResolvedType;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
@@ -118,8 +120,7 @@ public final class LLVMAggregateFactory {
         int[] offsets = new int[types.length];
         LLVMStructWriteNode[] nodes = new LLVMStructWriteNode[types.length];
         int currentOffset = 0;
-        // FIXME we need to find a test case where alignment of structure constants matters and then
-        // supply the right alignment
+        // FIXME alignment
         LLVMExpressionNode alloc = runtime.allocateFunctionLifetime(structSize, LLVMStack.NO_ALIGNMENT_REQUIREMENTS);
         for (int i = 0; i < types.length; i++) {
             ResolvedType resolvedType = types[i];
