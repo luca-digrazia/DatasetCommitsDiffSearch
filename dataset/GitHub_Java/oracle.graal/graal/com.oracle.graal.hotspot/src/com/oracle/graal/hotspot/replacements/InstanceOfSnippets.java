@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.api.meta.DeoptimizationAction.*;
+import static com.oracle.graal.api.code.DeoptimizationAction.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
@@ -89,7 +89,7 @@ public class InstanceOfSnippets implements Snippets {
             }
             return falseValue;
         }
-        BeginNode anchorNode = BeginNode.anchor();
+        BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
         Word objectHub = loadHubIntrinsic(object, getWordKind(), anchorNode);
         // if we get an exact match: succeed immediately
         ExplodeLoopNode.explodeLoop();
@@ -118,7 +118,7 @@ public class InstanceOfSnippets implements Snippets {
             isNull.inc();
             return falseValue;
         }
-        BeginNode anchorNode = BeginNode.anchor();
+        BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
         Word objectHub = loadHubIntrinsic(object, getWordKind(), anchorNode);
         if (probability(LIKELY_PROBABILITY, objectHub.notEqual(exactHub))) {
             exactMiss.inc();
@@ -137,7 +137,7 @@ public class InstanceOfSnippets implements Snippets {
             isNull.inc();
             return falseValue;
         }
-        BeginNode anchorNode = BeginNode.anchor();
+        BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
         Word objectHub = loadHubIntrinsic(object, getWordKind(), anchorNode);
         if (probability(NOT_LIKELY_PROBABILITY, objectHub.readWord(superCheckOffset, LocationIdentity.FINAL_LOCATION).notEqual(hub))) {
             displayMiss.inc();
@@ -156,7 +156,7 @@ public class InstanceOfSnippets implements Snippets {
             isNull.inc();
             return falseValue;
         }
-        BeginNode anchorNode = BeginNode.anchor();
+        BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
         Word objectHub = loadHubIntrinsic(object, getWordKind(), anchorNode);
         // if we get an exact match: succeed immediately
         ExplodeLoopNode.explodeLoop();
@@ -183,7 +183,7 @@ public class InstanceOfSnippets implements Snippets {
             isNull.inc();
             return falseValue;
         }
-        BeginNode anchorNode = BeginNode.anchor();
+        BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
         Word hub = loadWordFromObject(mirror, klassOffset());
         Word objectHub = loadHubIntrinsic(object, getWordKind(), anchorNode);
         if (!checkUnknownSubType(hub, objectHub)) {
@@ -200,9 +200,8 @@ public class InstanceOfSnippets implements Snippets {
         private final SnippetInfo instanceofSecondary = snippet(InstanceOfSnippets.class, "instanceofSecondary");
         private final SnippetInfo instanceofDynamic = snippet(InstanceOfSnippets.class, "instanceofDynamic");
 
-        public Templates(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, CodeCacheProvider codeCache, LoweringProvider lowerer, Replacements replacements,
-                        TargetDescription target) {
-            super(metaAccess, constantReflection, codeCache, lowerer, replacements, target);
+        public Templates(CodeCacheProvider runtime, Replacements replacements, TargetDescription target) {
+            super(runtime, replacements, target);
         }
 
         @Override
@@ -212,29 +211,28 @@ public class InstanceOfSnippets implements Snippets {
                 ValueNode object = instanceOf.object();
                 TypeCheckHints hintInfo = new TypeCheckHints(instanceOf.type(), instanceOf.profile(), tool.assumptions(), InstanceOfMinHintHitProbability.getValue(), InstanceOfMaxHints.getValue());
                 final HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) instanceOf.type();
-                ConstantNode hub = ConstantNode.forConstant(type.klass(), metaAccess, instanceOf.graph());
+                ConstantNode hub = ConstantNode.forConstant(type.klass(), runtime, instanceOf.graph());
 
                 Arguments args;
 
-                StructuredGraph graph = hub.graph();
                 if (hintInfo.hintHitProbability >= hintHitProbabilityThresholdForDeoptimizingSnippet()) {
-                    Hints hints = createHints(hintInfo, metaAccess, false, graph);
-                    args = new Arguments(instanceofWithProfile, graph.getGuardsStage());
+                    Hints hints = createHints(hintInfo, runtime, false, hub.graph());
+                    args = new Arguments(instanceofWithProfile);
                     args.add("object", object);
                     args.addVarargs("hints", Word.class, StampFactory.forKind(wordKind()), hints.hubs);
                     args.addVarargs("hintIsPositive", boolean.class, StampFactory.forKind(Kind.Boolean), hints.isPositive);
                 } else if (hintInfo.exact != null) {
-                    args = new Arguments(instanceofExact, graph.getGuardsStage());
+                    args = new Arguments(instanceofExact);
                     args.add("object", object);
-                    args.add("exactHub", ConstantNode.forConstant(((HotSpotResolvedObjectType) hintInfo.exact).klass(), metaAccess, graph));
+                    args.add("exactHub", ConstantNode.forConstant(((HotSpotResolvedObjectType) hintInfo.exact).klass(), runtime, hub.graph()));
                 } else if (type.isPrimaryType()) {
-                    args = new Arguments(instanceofPrimary, graph.getGuardsStage());
+                    args = new Arguments(instanceofPrimary);
                     args.add("hub", hub);
                     args.add("object", object);
                     args.addConst("superCheckOffset", type.superCheckOffset());
                 } else {
-                    Hints hints = createHints(hintInfo, metaAccess, false, graph);
-                    args = new Arguments(instanceofSecondary, graph.getGuardsStage());
+                    Hints hints = createHints(hintInfo, runtime, false, hub.graph());
+                    args = new Arguments(instanceofSecondary);
                     args.add("hub", hub);
                     args.add("object", object);
                     args.addVarargs("hints", Word.class, StampFactory.forKind(getWordKind()), hints.hubs);
@@ -252,7 +250,7 @@ public class InstanceOfSnippets implements Snippets {
                 InstanceOfDynamicNode instanceOf = (InstanceOfDynamicNode) replacer.instanceOf;
                 ValueNode object = instanceOf.object();
 
-                Arguments args = new Arguments(instanceofDynamic, instanceOf.graph().getGuardsStage());
+                Arguments args = new Arguments(instanceofDynamic);
                 args.add("mirror", instanceOf.mirror());
                 args.add("object", object);
                 args.add("trueValue", replacer.trueValue);

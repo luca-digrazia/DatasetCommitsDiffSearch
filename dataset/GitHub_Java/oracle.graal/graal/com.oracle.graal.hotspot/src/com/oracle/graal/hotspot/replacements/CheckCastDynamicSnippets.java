@@ -22,22 +22,22 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.api.meta.DeoptimizationAction.*;
+import static com.oracle.graal.api.code.DeoptimizationAction.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.*;
-import static com.oracle.graal.nodes.PiNode.*;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
+import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
 import static com.oracle.graal.replacements.SnippetTemplate.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.replacements.*;
+import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
@@ -53,36 +53,35 @@ public class CheckCastDynamicSnippets implements Snippets {
         if (probability(NOT_FREQUENT_PROBABILITY, object == null)) {
             isNull.inc();
         } else {
-            BeginNode anchorNode = BeginNode.anchor();
+            BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
             Word objectHub = loadHubIntrinsic(object, getWordKind(), anchorNode);
             if (!checkUnknownSubType(hub, objectHub)) {
                 DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
             }
         }
-        BeginNode anchorNode = BeginNode.anchor();
-        return piCast(verifyOop(object), StampFactory.forNodeIntrinsic(), anchorNode);
+        BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
+        return unsafeCast(verifyOop(object), StampFactory.forNodeIntrinsic(), anchorNode);
     }
 
     public static class Templates extends AbstractTemplates {
 
         private final SnippetInfo dynamic = snippet(CheckCastDynamicSnippets.class, "checkcastDynamic");
 
-        public Templates(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, CodeCacheProvider codeCache, LoweringProvider lowerer, Replacements replacements,
-                        TargetDescription target) {
-            super(metaAccess, constantReflection, codeCache, lowerer, replacements, target);
+        public Templates(CodeCacheProvider runtime, Replacements replacements, TargetDescription target) {
+            super(runtime, replacements, target);
         }
 
         public void lower(CheckCastDynamicNode checkcast) {
             StructuredGraph graph = checkcast.graph();
             ValueNode object = checkcast.object();
 
-            Arguments args = new Arguments(dynamic, graph.getGuardsStage());
+            Arguments args = new Arguments(dynamic);
             args.add("hub", checkcast.hub());
             args.add("object", object);
 
             SnippetTemplate template = template(args);
             Debug.log("Lowering dynamic checkcast in %s: node=%s, template=%s, arguments=%s", graph, checkcast, template, args);
-            template.instantiate(metaAccess, checkcast, DEFAULT_REPLACER, args);
+            template.instantiate(runtime, checkcast, DEFAULT_REPLACER, args);
         }
     }
 }
