@@ -2770,12 +2770,12 @@ public final class PosixJavaNIOSubstitutions {
                 CFStringAppendCharacters(csref, chars, WordFactory.signed(len));
             }
             CFStringNormalize(csref, WordFactory.signed(form));
-            long len = CFStringGetLength(csref);
+            SignedWord len = CFStringGetLength(csref);
 
-            result = new char[(int) len];
+            result = new char[(int) len.rawValue()];
             try (PinnedObject resultPin = PinnedObject.create(result)) {
                 PointerBase resultChars = resultPin.addressOfArrayElement(0);
-                CFStringGetCharacters(csref, WordFactory.signed(len), resultChars);
+                CFStringGetCharacters(csref, len, resultChars);
             }
 
             CFRelease(csref);
