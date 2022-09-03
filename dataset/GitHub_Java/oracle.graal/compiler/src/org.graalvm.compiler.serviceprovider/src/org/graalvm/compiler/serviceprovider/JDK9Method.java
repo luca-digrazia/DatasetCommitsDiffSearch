@@ -25,7 +25,6 @@ package org.graalvm.compiler.serviceprovider;
 import java.io.InputStream;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
-import java.lang.reflect.Method;
 import java.util.Set;
 
 /**
@@ -51,14 +50,6 @@ public final class JDK9Method {
     public static MethodHandle lookupMethodHandle(Class<?> declaringClass, String name, Class<?>... parameterTypes) {
         try {
             return MethodHandles.lookup().unreflect(declaringClass.getMethod(name, parameterTypes));
-        } catch (Exception e) {
-            throw new InternalError(e);
-        }
-    }
-
-    private static Method lookupMethod(Class<?> declaringClass, String name, Class<?>... parameterTypes) {
-        try {
-            return declaringClass.getMethod(name, parameterTypes);
         } catch (Exception e) {
             throw new InternalError(e);
         }
@@ -109,10 +100,9 @@ public final class JDK9Method {
     }
 
     /**
-     * {@code java.lang.Module.addOpens(String, Module)}. This only seems to work correctly when
-     * invoked through reflection.
+     * {@code java.lang.Module.addOpens(String, Module)}.
      */
-    public static final Method addOpens;
+    public static final MethodHandle addOpens;
 
     /**
      * {@code java.lang.Module.isOpen(String, Module)}.
@@ -135,7 +125,7 @@ public final class JDK9Method {
                 MODULE_CLASS = Class.class.getMethod("getModule").getReturnType();
                 getModuleHandle = lookupMethodHandle(Class.class, "getModule");
                 getPackages = lookupMethodHandle(MODULE_CLASS, "getPackages");
-                addOpens = lookupMethod(MODULE_CLASS, "addOpens", String.class, MODULE_CLASS);
+                addOpens = lookupMethodHandle(MODULE_CLASS, "addOpens", String.class, MODULE_CLASS);
                 getResourceAsStream = lookupMethodHandle(MODULE_CLASS, "getResourceAsStream", String.class);
                 isOpenTo = lookupMethodHandle(MODULE_CLASS, "isOpen", String.class, MODULE_CLASS);
             } catch (NoSuchMethodException e) {
