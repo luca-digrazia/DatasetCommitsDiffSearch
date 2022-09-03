@@ -22,15 +22,13 @@
  */
 package com.oracle.graal.lir.debug;
 
-import jdk.vm.ci.meta.Value;
-
 /**
  * Provides abstract access to intervals for dumping.
  */
 public interface IntervalDumper {
 
     public interface IntervalVisitor {
-        void visitIntervalStart(Value parentOperand, Value splitOperand, Value location, Value hint, String typeName);
+        void visitIntervalStart(Object parentOperand, Object splitOperand, Object location, Object hint, String typeName, char typeChar);
 
         void visitRange(int from, int to);
 
@@ -50,7 +48,7 @@ public interface IntervalDumper {
      * <ul>
      * <li>Call {@link IntervalVisitor#visitRange}</li>
      * </ul>
-     * <li>For every use position:
+     * <li>For every range:
      * <ul>
      * <li>Call {@link IntervalVisitor#visitUsePos}</li>
      * </ul>

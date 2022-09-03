@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,47 +22,24 @@
  */
 package com.oracle.graal.printer;
 
-import java.io.OutputStream;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.io.*;
+import java.util.*;
 
-import jdk.vm.ci.code.DebugInfo;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaUtil;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph;
-import com.oracle.graal.compiler.gen.NodeLIRBuilder;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeBitMap;
-import com.oracle.graal.graph.NodeMap;
-import com.oracle.graal.graph.NodePosIterator;
-import com.oracle.graal.graph.Position;
-import com.oracle.graal.java.BciBlockMapping;
-import com.oracle.graal.java.BytecodeDisassembler;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.debug.IntervalDumper;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.java.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.debug.*;
 import com.oracle.graal.lir.debug.IntervalDumper.IntervalVisitor;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractEndNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.ValuePhiNode;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.cfg.ControlFlowGraph;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.phases.schedule.*;
 
 /**
  * Utility for printing Graal IR at various compilation phases.
@@ -73,7 +50,7 @@ class CFGPrinter extends CompilationPrinter {
     protected LIR lir;
     protected NodeLIRBuilder nodeLirGenerator;
     protected ControlFlowGraph cfg;
-    protected ScheduleResult schedule;
+    protected SchedulePhase schedule;
     protected ResolvedJavaMethod method;
 
     /**
@@ -503,7 +480,7 @@ class CFGPrinter extends CompilationPrinter {
             prefix = "B";
         } else if (node instanceof ValueNode) {
             ValueNode value = (ValueNode) node;
-            if (value.getStackKind() == JavaKind.Illegal) {
+            if (value.getStackKind() == Kind.Illegal) {
                 prefix = "v";
             } else {
                 prefix = String.valueOf(value.getStackKind().getTypeChar());
@@ -564,7 +541,7 @@ class CFGPrinter extends CompilationPrinter {
         end("intervals");
     }
 
-    public void printSchedule(String message, ScheduleResult theSchedule) {
+    public void printSchedule(String message, SchedulePhase theSchedule) {
         schedule = theSchedule;
         cfg = schedule.getCFG();
         printedNodes = new NodeBitMap(cfg.graph);

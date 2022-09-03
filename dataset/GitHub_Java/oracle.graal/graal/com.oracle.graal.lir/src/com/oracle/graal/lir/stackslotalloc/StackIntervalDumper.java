@@ -22,15 +22,15 @@
  */
 package com.oracle.graal.lir.stackslotalloc;
 
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.lir.VirtualStackSlot;
-import com.oracle.graal.lir.debug.IntervalDumper;
+import com.oracle.graal.lir.debug.*;
 
 class StackIntervalDumper implements IntervalDumper {
     private final StackInterval[] intervals;
 
-    StackIntervalDumper(StackInterval[] intervals) {
+    public StackIntervalDumper(StackInterval[] intervals) {
         this.intervals = intervals;
     }
 
@@ -46,7 +46,7 @@ class StackIntervalDumper implements IntervalDumper {
         Value hint = interval.locationHint() != null ? interval.locationHint().getOperand() : null;
         VirtualStackSlot operand = interval.getOperand();
         String type = operand.getLIRKind().getPlatformKind().toString();
-        char typeChar = operand.getPlatformKind().getTypeChar();
+        char typeChar = operand.getKind().getTypeChar();
         visitor.visitIntervalStart(operand, operand, interval.location(), hint, type, typeChar);
 
         // print ranges

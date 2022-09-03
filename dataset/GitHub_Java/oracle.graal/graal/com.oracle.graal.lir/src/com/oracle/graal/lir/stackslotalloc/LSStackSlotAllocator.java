@@ -76,7 +76,6 @@ public final class LSStackSlotAllocator extends AllocationPhase implements Stack
         lirGenRes.buildFrameMap(this);
     }
 
-    @SuppressWarnings("try")
     public void allocateStackSlots(FrameMapBuilderTool builder, LIRGenerationResult res) {
         if (builder.getNumberOfStackSlots() > 0) {
             try (DebugCloseable t = MainTimer.start()) {
@@ -94,7 +93,6 @@ public final class LSStackSlotAllocator extends AllocationPhase implements Stack
         private final List<? extends AbstractBlockBase<?>> sortedBlocks;
         private final int maxOpId;
 
-        @SuppressWarnings("try")
         private Allocator(LIR lir, FrameMapBuilderTool frameMapBuilder) {
             this.lir = lir;
             this.frameMapBuilder = frameMapBuilder;
@@ -112,7 +110,6 @@ public final class LSStackSlotAllocator extends AllocationPhase implements Stack
             }
         }
 
-        @SuppressWarnings("try")
         private void allocate() {
             Debug.dump(lir, "After StackSlot numbering");
 
@@ -200,7 +197,6 @@ public final class LSStackSlotAllocator extends AllocationPhase implements Stack
         // step 4: allocate stack slots
         // ====================
 
-        @SuppressWarnings("try")
         private void allocateStackSlots() {
             // create unhandled lists
             forEachInterval(unhandled::add);
