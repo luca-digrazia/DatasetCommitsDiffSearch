@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -76,6 +74,8 @@ import org.graalvm.compiler.nodes.debug.ControlFlowAnchored;
 import org.graalvm.compiler.nodes.extended.ValueAnchorNode;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 
+import jdk.vm.ci.code.BytecodeFrame;
+
 public class LoopEx {
     private final Loop<Block> loop;
     private LoopFragmentInside inside;
@@ -83,7 +83,6 @@ public class LoopEx {
     private CountedLoopInfo counted;
     private LoopsData data;
     private EconomicMap<Node, InductionVariable> ivs;
-    private boolean countedLoopChecked;
 
     LoopEx(Loop<Block> loop, LoopsData data) {
         this.loop = loop;
@@ -142,12 +141,10 @@ public class LoopEx {
     }
 
     public boolean isCounted() {
-        assert countedLoopChecked;
         return counted != null;
     }
 
     public CountedLoopInfo counted() {
-        assert countedLoopChecked;
         return counted;
     }
 
@@ -212,10 +209,6 @@ public class LoopEx {
     }
 
     public boolean detectCounted() {
-        if (countedLoopChecked) {
-            return isCounted();
-        }
-        countedLoopChecked = true;
         LoopBeginNode loopBegin = loopBegin();
         FixedNode next = loopBegin.next();
         while (next instanceof FixedGuardNode || next instanceof ValueAnchorNode || next instanceof FullInfopointNode) {
@@ -306,7 +299,7 @@ public class LoopEx {
                     }
                     break;
                 default:
-                    throw GraalError.shouldNotReachHere(condition.toString());
+                    throw GraalError.shouldNotReachHere();
             }
             counted = new CountedLoopInfo(this, iv, ifNode, limit, oneOff, negated ? ifNode.falseSuccessor() : ifNode.trueSuccessor());
             return true;
@@ -470,7 +463,7 @@ public class LoopEx {
             }
             if (node instanceof FrameState) {
                 FrameState frameState = (FrameState) node;
-                if (frameState.isExceptionHandlingBCI()) {
+                if (frameState.bci == BytecodeFrame.AFTER_EXCEPTION_BCI || frameState.bci == BytecodeFrame.UNWIND_BCI) {
                     return false;
                 }
             }

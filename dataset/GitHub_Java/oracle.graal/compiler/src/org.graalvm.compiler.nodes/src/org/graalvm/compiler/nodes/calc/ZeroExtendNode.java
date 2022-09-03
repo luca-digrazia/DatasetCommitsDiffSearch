@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,7 +23,6 @@
 package org.graalvm.compiler.nodes.calc;
 
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_1;
-import static org.graalvm.compiler.nodes.calc.BinaryArithmeticNode.getArithmeticOpTable;
 
 import org.graalvm.compiler.core.common.calc.CanonicalCondition;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable;
@@ -61,7 +58,7 @@ public final class ZeroExtendNode extends IntegerConvertNode<ZeroExtend, Narrow>
     }
 
     public ZeroExtendNode(ValueNode input, int inputBits, int resultBits, boolean inputAlwaysPositive) {
-        super(TYPE, getArithmeticOpTable(input).getZeroExtend(), inputBits, resultBits, input);
+        super(TYPE, ArithmeticOpTable::getZeroExtend, ArithmeticOpTable::getNarrow, inputBits, resultBits, input);
         this.inputAlwaysPositive = inputAlwaysPositive;
     }
 
@@ -80,16 +77,6 @@ public final class ZeroExtendNode extends IntegerConvertNode<ZeroExtend, Narrow>
             return synonym;
         }
         return canonical(null, input, inputBits, resultBits, view, alwaysPositive);
-    }
-
-    @Override
-    protected IntegerConvertOp<ZeroExtend> getOp(ArithmeticOpTable table) {
-        return table.getZeroExtend();
-    }
-
-    @Override
-    protected IntegerConvertOp<Narrow> getReverseOp(ArithmeticOpTable table) {
-        return table.getNarrow();
     }
 
     @Override
