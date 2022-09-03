@@ -151,17 +151,13 @@ public final class LLVMSymbolReadResolver {
                         resolvedNode = runtime.getNodeFactory().createSimpleConstantNoArray(runtime, null, type);
                         break;
                     default:
-                        unsupportedType(type);
+                        throw new UnsupportedOperationException("Unsupported Type for Zero Constant: " + type);
                 }
             }
 
             @Override
             public void visit(MetaType metaType) {
-                if (metaType == MetaType.DEBUG) {
-                    resolvedNode = runtime.getNodeFactory().createSimpleConstantNoArray(runtime, null, metaType);
-                } else {
-                    unsupportedType(metaType);
-                }
+                unsupportedType(metaType);
             }
 
             @Override
@@ -171,23 +167,23 @@ public final class LLVMSymbolReadResolver {
 
             @Override
             public void visit(ArrayType type) {
-                final int arraySize = runtime.getContext().getByteSize(type);
+                final int arraySize = runtime.getByteSize(type);
                 if (arraySize == 0) {
                     resolvedNode = null;
                 } else {
-                    final LLVMExpressionNode target = runtime.allocateFunctionLifetime(type, runtime.getContext().getByteSize(type), runtime.getContext().getByteAlignment(type));
+                    final LLVMExpressionNode target = runtime.allocateFunctionLifetime(type, runtime.getByteSize(type), runtime.getByteAlignment(type));
                     resolvedNode = runtime.getNodeFactory().createZeroNode(runtime, target, arraySize);
                 }
             }
 
             @Override
             public void visit(StructureType structureType) {
-                final int structSize = runtime.getContext().getByteSize(structureType);
+                final int structSize = runtime.getByteSize(structureType);
                 if (structSize == 0) {
                     final LLVMAddress minusOneNode = LLVMAddress.fromLong(-1);
                     resolvedNode = runtime.getNodeFactory().createLiteral(runtime, minusOneNode, new PointerType(structureType));
                 } else {
-                    final int alignment = runtime.getContext().getByteAlignment(structureType);
+                    final int alignment = runtime.getByteAlignment(structureType);
                     final LLVMExpressionNode addressnode = runtime.allocateFunctionLifetime(structureType, structSize, alignment);
                     resolvedNode = runtime.getNodeFactory().createZeroNode(runtime, addressnode, structSize);
                 }
@@ -211,7 +207,7 @@ public final class LLVMSymbolReadResolver {
 
             @Override
             public void visit(OpaqueType type) {
-                unsupportedType(type);
+                throw new UnsupportedOperationException("Unsupported Type for Zero Constant: " + type);
             }
         };
 
@@ -407,8 +403,7 @@ public final class LLVMSymbolReadResolver {
         @Override
         public void visit(FunctionDeclaration toResolve) {
             final boolean global = !Linkage.isFileLocal(toResolve.getLinkage());
-            final LLVMContext.FunctionFactory generator = i -> LLVMFunctionDescriptor.createDescriptor(runtime.getContext(), runtime.getLibraryName(), toResolve.getName(), toResolve.getType(),
-                            i);
+            final LLVMContext.FunctionFactory generator = i -> LLVMFunctionDescriptor.createDescriptor(runtime.getContext(), toResolve.getName(), toResolve.getType(), i);
             final Object value = runtime.getScope().lookupOrCreateFunction(runtime.getContext(), toResolve.getName(), global, generator);
             resolvedNode = runtime.getNodeFactory().createLiteral(runtime, value, toResolve.getType());
         }
@@ -416,8 +411,7 @@ public final class LLVMSymbolReadResolver {
         @Override
         public void visit(FunctionDefinition toResolve) {
             final boolean global = !Linkage.isFileLocal(toResolve.getLinkage());
-            final LLVMContext.FunctionFactory generator = i -> LLVMFunctionDescriptor.createDescriptor(runtime.getContext(), runtime.getLibraryName(), toResolve.getName(), toResolve.getType(),
-                            i);
+            final LLVMContext.FunctionFactory generator = i -> LLVMFunctionDescriptor.createDescriptor(runtime.getContext(), toResolve.getName(), toResolve.getType(), i);
             final Object value = runtime.getScope().lookupOrCreateFunction(runtime.getContext(), toResolve.getName(), global, generator);
             resolvedNode = runtime.getNodeFactory().createLiteral(runtime, value, toResolve.getType());
         }
@@ -488,14 +482,14 @@ public final class LLVMSymbolReadResolver {
                     throw new IllegalStateException("Indices on structs must be constant integers!");
                 }
                 AggregateType aggregate = (AggregateType) currentType;
-                final int indexedTypeLength = runtime.getContext().getIndexOffset(1, aggregate);
+                final int indexedTypeLength = runtime.getIndexOffset(1, aggregate);
                 currentType = aggregate.getElementType(1);
                 final LLVMExpressionNode indexNode = resolve(indexSymbol);
                 currentAddress = runtime.getNodeFactory().createTypedElementPointer(runtime, currentAddress, indexNode, indexedTypeLength, currentType);
             } else {
                 // the index is a constant integer
                 AggregateType aggregate = (AggregateType) currentType;
-                final int addressOffset = runtime.getContext().getIndexOffset(indexInteger, aggregate);
+                final int addressOffset = runtime.getIndexOffset(indexInteger, aggregate);
                 currentType = aggregate.getElementType(indexInteger);
 
                 // creating a pointer inserts type information, this needs to happen for the address

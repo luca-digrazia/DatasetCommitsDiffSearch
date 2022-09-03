@@ -34,7 +34,7 @@ import java.util.Objects;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
-public final class OpaqueType extends Type {
+public class OpaqueType extends Type {
 
     private final String name;
 

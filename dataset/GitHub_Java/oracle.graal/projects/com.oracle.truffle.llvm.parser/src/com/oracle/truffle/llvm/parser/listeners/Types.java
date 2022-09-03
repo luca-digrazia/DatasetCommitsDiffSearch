@@ -29,11 +29,16 @@
  */
 package com.oracle.truffle.llvm.parser.listeners;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.function.Consumer;
+
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
 import com.oracle.truffle.llvm.parser.records.Records;
 import com.oracle.truffle.llvm.parser.records.TypesRecord;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
 import com.oracle.truffle.llvm.runtime.types.DataSpecConverter;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
@@ -47,11 +52,6 @@ import com.oracle.truffle.llvm.runtime.types.VectorType;
 import com.oracle.truffle.llvm.runtime.types.VoidType;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.function.Consumer;
 
 public final class Types implements ParserListener, Iterable<Type> {
 
@@ -172,7 +172,7 @@ public final class Types implements ParserListener, Iterable<Type> {
                 final boolean isPacked = args[0] != 0;
                 final Type[] members = toTypes(args, 1, args.length);
                 if (structName != null) {
-                    type = new StructureType(LLVMIdentifier.toTypeIdentifier(structName), isPacked, members);
+                    type = new StructureType(LLVMIdentifier.toLocalIdentifier(structName), isPacked, members);
                     structName = null;
                     module.addGlobalType(type);
                 } else {
@@ -309,13 +309,13 @@ public final class Types implements ParserListener, Iterable<Type> {
         }
 
         @Override
-        public LLVMInteropType getInteropType() {
+        public LLVMSourceType getSourceType() {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException("Unresolved Forward-Referenced Type!");
         }
 
         @Override
-        public void setInteropType(LLVMInteropType sourceType) {
+        public void setSourceType(LLVMSourceType sourceType) {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException("Unresolved Forward-Referenced Type!");
         }
