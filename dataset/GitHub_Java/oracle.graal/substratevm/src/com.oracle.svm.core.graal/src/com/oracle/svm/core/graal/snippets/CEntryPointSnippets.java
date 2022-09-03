@@ -368,6 +368,7 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
     @Snippet
     public static int returnFromJavaToCSnippet() {
         if (MultiThreaded.getValue()) {
+            assert VMThreads.StatusSupport.isStatusJava() : "Should be coming from Java to native.";
             VMThreads.StatusSupport.setStatusNative();
         }
         return CEntryPointErrors.NO_ERROR;
