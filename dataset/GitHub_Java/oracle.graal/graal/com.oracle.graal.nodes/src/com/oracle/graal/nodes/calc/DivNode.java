@@ -35,7 +35,11 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = "/")
 public class DivNode extends BinaryArithmeticNode<Div> {
 
-    public DivNode(ValueNode x, ValueNode y) {
+    public static DivNode create(ValueNode x, ValueNode y) {
+        return USE_GENERATED_NODES ? new DivNodeGen(x, y) : new DivNode(x, y);
+    }
+
+    protected DivNode(ValueNode x, ValueNode y) {
         super(ArithmeticOpTable::getDiv, x, y);
     }
 
@@ -51,8 +55,8 @@ public class DivNode extends BinaryArithmeticNode<Div> {
             if (getOp(forX, forY).isNeutral(c)) {
                 return forX;
             }
-            if (c instanceof PrimitiveConstant && ((PrimitiveConstant) c).getKind().isNumericInteger()) {
-                long i = ((PrimitiveConstant) c).asLong();
+            if (c.getKind().isNumericInteger()) {
+                long i = c.asLong();
                 boolean signFlip = false;
                 if (i < 0) {
                     i = -i;
@@ -60,11 +64,11 @@ public class DivNode extends BinaryArithmeticNode<Div> {
                 }
                 ValueNode divResult = null;
                 if (CodeUtil.isPowerOf2(i)) {
-                    divResult = new RightShiftNode(forX, ConstantNode.forInt(CodeUtil.log2(i)));
+                    divResult = RightShiftNode.create(forX, ConstantNode.forInt(CodeUtil.log2(i)));
                 }
                 if (divResult != null) {
                     if (signFlip) {
-                        return new NegateNode(divResult);
+                        return NegateNode.create(divResult);
                     } else {
                         return divResult;
                     }

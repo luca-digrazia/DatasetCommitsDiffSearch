@@ -37,7 +37,7 @@ import com.oracle.graal.nodes.spi.*;
 public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArithmeticNode {
 
     public static MulNode create(ValueNode x, ValueNode y) {
-        return new MulNode(x, y);
+        return USE_GENERATED_NODES ? new MulNodeGen(x, y) : new MulNode(x, y);
     }
 
     protected MulNode(ValueNode x, ValueNode y) {
@@ -61,8 +61,8 @@ public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArit
                 return forX;
             }
 
-            if (c instanceof PrimitiveConstant && ((PrimitiveConstant) c).getKind().isNumericInteger()) {
-                long i = ((PrimitiveConstant) c).asLong();
+            if (c.getKind().isNumericInteger()) {
+                long i = c.asLong();
                 boolean signFlip = false;
                 if (i < 0) {
                     i = -i;
@@ -110,6 +110,6 @@ public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArit
             op1 = op2;
             op2 = tmp;
         }
-        builder.setResult(this, gen.emitMul(op1, op2, false));
+        builder.setResult(this, gen.emitMul(op1, op2));
     }
 }

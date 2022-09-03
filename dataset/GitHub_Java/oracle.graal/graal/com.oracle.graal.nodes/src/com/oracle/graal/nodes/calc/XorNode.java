@@ -36,7 +36,11 @@ import com.oracle.graal.nodes.util.*;
 @NodeInfo(shortName = "^")
 public class XorNode extends BinaryArithmeticNode<Xor> {
 
-    public XorNode(ValueNode x, ValueNode y) {
+    public static XorNode create(ValueNode x, ValueNode y) {
+        return USE_GENERATED_NODES ? new XorNodeGen(x, y) : new XorNode(x, y);
+    }
+
+    protected XorNode(ValueNode x, ValueNode y) {
         super(ArithmeticOpTable::getXor, x, y);
         assert x.stamp().isCompatible(y.stamp());
     }
@@ -52,7 +56,7 @@ public class XorNode extends BinaryArithmeticNode<Xor> {
             return ConstantNode.forPrimitive(stamp(), getOp(forX, forY).getZero(forX.stamp()));
         }
         if (forX.isConstant() && !forY.isConstant()) {
-            return new XorNode(forY, forX);
+            return XorNode.create(forY, forX);
         }
         if (forY.isConstant()) {
             Constant c = forY.asConstant();
@@ -60,11 +64,11 @@ public class XorNode extends BinaryArithmeticNode<Xor> {
                 return forX;
             }
 
-            if (c instanceof PrimitiveConstant && ((PrimitiveConstant) c).getKind().isNumericInteger()) {
-                long rawY = ((PrimitiveConstant) c).asLong();
+            if (c.getKind().isNumericInteger()) {
+                long rawY = c.asLong();
                 long mask = CodeUtil.mask(PrimitiveStamp.getBits(stamp()));
                 if ((rawY & mask) == mask) {
-                    return new NotNode(forX);
+                    return NotNode.create(forX);
                 }
             }
             return reassociate(this, ValueNode.isConstantPredicate(), forX, forY);

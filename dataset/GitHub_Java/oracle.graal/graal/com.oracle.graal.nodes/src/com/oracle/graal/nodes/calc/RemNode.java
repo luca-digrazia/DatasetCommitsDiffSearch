@@ -32,7 +32,11 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = "%")
 public class RemNode extends BinaryArithmeticNode<Rem> implements Lowerable {
 
-    public RemNode(ValueNode x, ValueNode y) {
+    public static RemNode create(ValueNode x, ValueNode y) {
+        return USE_GENERATED_NODES ? new RemNodeGen(x, y) : new RemNode(x, y);
+    }
+
+    protected RemNode(ValueNode x, ValueNode y) {
         super(ArithmeticOpTable::getRem, x, y);
     }
 

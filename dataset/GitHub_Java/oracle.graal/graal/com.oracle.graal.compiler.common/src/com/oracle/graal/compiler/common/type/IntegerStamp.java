@@ -752,7 +752,7 @@ public class IntegerStamp extends PrimitiveStamp {
         public Stamp foldStamp(Stamp input) {
             IntegerStamp stamp = (IntegerStamp) input;
             assert stamp.getBits() == 32;
-            return StampFactory.forKind(Kind.Float);
+            return StampFactory.forFloat(Kind.Float, stamp.lowerBound(), stamp.upperBound(), true);
         }
     },
 
@@ -767,7 +767,7 @@ public class IntegerStamp extends PrimitiveStamp {
         public Stamp foldStamp(Stamp input) {
             IntegerStamp stamp = (IntegerStamp) input;
             assert stamp.getBits() == 64;
-            return StampFactory.forKind(Kind.Float);
+            return StampFactory.forFloat(Kind.Float, stamp.lowerBound(), stamp.upperBound(), true);
         }
     },
 
@@ -782,7 +782,7 @@ public class IntegerStamp extends PrimitiveStamp {
         public Stamp foldStamp(Stamp input) {
             IntegerStamp stamp = (IntegerStamp) input;
             assert stamp.getBits() == 32;
-            return StampFactory.forKind(Kind.Double);
+            return StampFactory.forFloat(Kind.Double, stamp.lowerBound(), stamp.upperBound(), true);
         }
     },
 
@@ -797,7 +797,7 @@ public class IntegerStamp extends PrimitiveStamp {
         public Stamp foldStamp(Stamp input) {
             IntegerStamp stamp = (IntegerStamp) input;
             assert stamp.getBits() == 64;
-            return StampFactory.forKind(Kind.Double);
+            return StampFactory.forFloat(Kind.Double, stamp.lowerBound(), stamp.upperBound(), true);
         }
     });
 }

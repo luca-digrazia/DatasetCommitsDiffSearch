@@ -37,7 +37,7 @@ import com.oracle.graal.nodes.util.*;
 public class SubNode extends BinaryArithmeticNode<Sub> implements NarrowableArithmeticNode {
 
     public static SubNode create(ValueNode x, ValueNode y) {
-        return new SubNode(x, y);
+        return USE_GENERATED_NODES ? new SubNodeGen(x, y) : new SubNode(x, y);
     }
 
     protected SubNode(ValueNode x, ValueNode y) {
@@ -107,8 +107,8 @@ public class SubNode extends BinaryArithmeticNode<Sub> implements NarrowableArit
                     return reassociated;
                 }
             }
-            if (c instanceof PrimitiveConstant && ((PrimitiveConstant) c).getKind().isNumericInteger()) {
-                long i = ((PrimitiveConstant) c).asLong();
+            if (c.getKind().isNumericInteger()) {
+                long i = c.asLong();
                 if (i < 0 || ((IntegerStamp) StampFactory.forKind(forY.getKind())).contains(-i)) {
                     // Adding a negative is more friendly to the backend since adds are
                     // commutative, so prefer add when it fits.
@@ -137,6 +137,6 @@ public class SubNode extends BinaryArithmeticNode<Sub> implements NarrowableArit
 
     @Override
     public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        builder.setResult(this, gen.emitSub(builder.operand(getX()), builder.operand(getY()), false));
+        builder.setResult(this, gen.emitSub(builder.operand(getX()), builder.operand(getY())));
     }
 }

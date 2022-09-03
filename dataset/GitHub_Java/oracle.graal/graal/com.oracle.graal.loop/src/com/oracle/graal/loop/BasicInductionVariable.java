@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -86,7 +86,7 @@ public class BasicInductionVariable extends InductionVariable {
             return rawStride;
         }
         if (op instanceof SubNode) {
-            return graph().unique(new NegateNode(rawStride));
+            return graph().unique(NegateNode.create(rawStride));
         }
         throw GraalInternalError.shouldNotReachHere();
     }
@@ -103,16 +103,16 @@ public class BasicInductionVariable extends InductionVariable {
 
     @Override
     public long constantInit() {
-        return init.asJavaConstant().asLong();
+        return init.asConstant().asLong();
     }
 
     @Override
     public long constantStride() {
         if (op instanceof AddNode) {
-            return rawStride.asJavaConstant().asLong();
+            return rawStride.asConstant().asLong();
         }
         if (op instanceof SubNode) {
-            return -rawStride.asJavaConstant().asLong();
+            return -rawStride.asConstant().asLong();
         }
         throw GraalInternalError.shouldNotReachHere();
     }

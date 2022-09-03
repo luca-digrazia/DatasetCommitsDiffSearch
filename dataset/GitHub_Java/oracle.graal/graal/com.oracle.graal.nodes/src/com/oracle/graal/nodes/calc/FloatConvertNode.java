@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,7 +42,7 @@ public class FloatConvertNode extends UnaryArithmeticNode<FloatConvertOp> implem
     protected final FloatConvert op;
 
     public static FloatConvertNode create(FloatConvert op, ValueNode input) {
-        return new FloatConvertNode(op, input);
+        return USE_GENERATED_NODES ? new FloatConvertNodeGen(op, input) : new FloatConvertNode(op, input);
     }
 
     protected FloatConvertNode(FloatConvert op, ValueNode input) {
@@ -55,12 +55,12 @@ public class FloatConvertNode extends UnaryArithmeticNode<FloatConvertOp> implem
     }
 
     @Override
-    public Constant convert(Constant c, ConstantReflectionProvider constantReflection) {
+    public Constant convert(Constant c) {
         return getOp(getValue()).foldConstant(c);
     }
 
     @Override
-    public Constant reverse(Constant c, ConstantReflectionProvider constantReflection) {
+    public Constant reverse(Constant c) {
         FloatConvertOp reverse = ArithmeticOpTable.forStamp(stamp()).getFloatConvert(op.reverse());
         return reverse.foldConstant(c);
     }
