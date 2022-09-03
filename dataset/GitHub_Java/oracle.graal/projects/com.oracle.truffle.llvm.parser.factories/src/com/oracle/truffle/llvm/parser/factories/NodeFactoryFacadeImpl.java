@@ -92,8 +92,7 @@ import com.oracle.truffle.llvm.parser.LLVMType;
 import com.oracle.truffle.llvm.parser.base.facade.NodeFactoryFacade;
 import com.oracle.truffle.llvm.parser.base.model.enums.CompareOperator;
 import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDefinition;
-import com.oracle.truffle.llvm.parser.base.model.globals.GlobalConstant;
-import com.oracle.truffle.llvm.parser.base.model.globals.GlobalVariable;
+import com.oracle.truffle.llvm.parser.base.model.globals.GlobalValueSymbol;
 import com.oracle.truffle.llvm.parser.base.model.types.ArrayType;
 import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
 import com.oracle.truffle.llvm.parser.base.model.types.PointerType;
@@ -453,50 +452,25 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
     }
 
     @Override
-    public Object allocateGlobalVariable(GlobalVariable globalVariable) {
-        final String name = globalVariable.getName();
+    public Object allocateGlobalVariable(GlobalValueSymbol globalVariable) {
+        String name = globalVariable.getName();
 
-        final NativeResolver nativeResolver = () -> LLVMAddress.fromLong(runtime.getNativeHandle(name));
+        NativeResolver nativeResolver = () -> LLVMAddress.fromLong(runtime.getNativeHandle(name));
 
-        final LLVMGlobalVariableDescriptor descriptor;
+        LLVMGlobalVariableDescriptor descriptor;
+
         if (globalVariable.isStatic()) {
             descriptor = new LLVMGlobalVariableDescriptor(name, nativeResolver);
         } else {
-            final LLVMContext context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
+            LLVMContext context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
             descriptor = context.getGlobalVariableRegistry().lookupOrAdd(name, nativeResolver);
         }
 
         if ((globalVariable.getInitialiser() > 0 || !globalVariable.isExtern()) && !descriptor.isDeclared()) {
-            final Type resolvedType = ((PointerType) globalVariable.getType()).getPointeeType();
-            final int byteSize = runtime.getByteSize(resolvedType);
-            final LLVMAddress nativeStorage = LLVMHeap.allocateMemory(byteSize);
-            final LLVMAddressNode addressLiteralNode = (LLVMAddressNode) createLiteral(nativeStorage, LLVMBaseType.ADDRESS);
-            runtime.addDestructor(LLVMFreeFactory.create(addressLiteralNode));
-            descriptor.declare(nativeStorage);
-        }
-
-        return descriptor;
-    }
-
-    @Override
-    public Object allocateGlobalConstant(GlobalConstant globalConstant) {
-        final String name = globalConstant.getName();
-
-        final NativeResolver nativeResolver = () -> LLVMAddress.fromLong(runtime.getNativeHandle(name));
-
-        final LLVMGlobalVariableDescriptor descriptor;
-        if (globalConstant.isStatic()) {
-            descriptor = new LLVMGlobalVariableDescriptor(name, nativeResolver);
-        } else {
-            final LLVMContext context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
-            descriptor = context.getGlobalVariableRegistry().lookupOrAdd(name, nativeResolver);
-        }
-
-        if ((globalConstant.getInitialiser() > 0 || !globalConstant.isExtern()) && !descriptor.isDeclared()) {
-            final Type resolvedType = ((PointerType) globalConstant.getType()).getPointeeType();
-            final int byteSize = runtime.getByteSize(resolvedType);
-            final LLVMAddress nativeStorage = LLVMHeap.allocateMemory(byteSize);
-            final LLVMAddressNode addressLiteralNode = (LLVMAddressNode) createLiteral(nativeStorage, LLVMBaseType.ADDRESS);
+            Type resolvedType = ((PointerType) globalVariable.getType()).getPointeeType();
+            int byteSize = runtime.getByteSize(resolvedType);
+            LLVMAddress nativeStorage = LLVMHeap.allocateMemory(byteSize);
+            LLVMAddressNode addressLiteralNode = (LLVMAddressNode) createLiteral(nativeStorage, LLVMBaseType.ADDRESS);
             runtime.addDestructor(LLVMFreeFactory.create(addressLiteralNode));
             descriptor.declare(nativeStorage);
         }

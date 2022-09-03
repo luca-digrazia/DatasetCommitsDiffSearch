@@ -189,12 +189,10 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
     public void visit(CallInstruction call) {
         final Type targetType = call.getType();
         final LLVMBaseType targetLLVMType = targetType.getLLVMBaseType();
-        int argumentCount = getArgumentCount(call, targetType);
+        final int argumentCount = call.getArgumentCount() + (targetType instanceof StructureType ? 2 : 1);
         final LLVMExpressionNode[] argNodes = new LLVMExpressionNode[argumentCount];
         int argIndex = 0;
-        if (method.getModule().needsStackPointerArgument()) {
-            argNodes[argIndex++] = factoryFacade.createFrameRead(LLVMBaseType.ADDRESS, method.getStackSlot());
-        }
+        argNodes[argIndex++] = factoryFacade.createFrameRead(LLVMBaseType.ADDRESS, method.getStackSlot());
         if (targetType instanceof StructureType) {
             final int size = runtime.getByteSize(targetType);
             final int align = runtime.getByteAlignment(targetType);
@@ -221,17 +219,6 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
             }
         }
         createFrameWrite(result, call);
-    }
-
-    private int getArgumentCount(CallInstruction call, final Type targetType) {
-        int argumentCount = call.getArgumentCount();
-        if (targetType instanceof StructureType) {
-            argumentCount++;
-        }
-        if (method.getModule().needsStackPointerArgument()) {
-            argumentCount++;
-        }
-        return argumentCount;
     }
 
     @Override
@@ -504,20 +491,12 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
     @Override
     public void visit(VoidCallInstruction call) {
         final Symbol target = call.getCallTarget();
-        final int argumentCount;
-        int explicitArgumentCount = call.getArgumentCount();
-        if (method.getModule().needsStackPointerArgument()) {
-            argumentCount = explicitArgumentCount + 1;
-        } else {
-            argumentCount = explicitArgumentCount;
-        }
-        final LLVMExpressionNode[] args = new LLVMExpressionNode[argumentCount];
+        final int argumentCount = call.getArgumentCount();
+        final LLVMExpressionNode[] args = new LLVMExpressionNode[argumentCount + 1];
 
         int argIndex = 0;
-        if (method.getModule().needsStackPointerArgument()) {
-            args[argIndex++] = factoryFacade.createFrameRead(LLVMBaseType.ADDRESS, method.getStackSlot());
-        }
-        for (int i = 0; i < explicitArgumentCount; i++) {
+        args[argIndex++] = factoryFacade.createFrameRead(LLVMBaseType.ADDRESS, method.getStackSlot());
+        for (int i = 0; i < argumentCount; i++) {
             args[argIndex++] = symbols.resolve(call.getArgument(i));
         }
 
