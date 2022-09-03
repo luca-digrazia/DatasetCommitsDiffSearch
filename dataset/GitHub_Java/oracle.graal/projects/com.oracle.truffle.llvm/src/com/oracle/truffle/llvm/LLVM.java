@@ -89,7 +89,12 @@ public class LLVM {
                 if (code.getMimeType().equals(LLVMLanguage.LLVM_IR_MIME_TYPE)) {
                     LLVMParserResult parserResult = parseFile(code.getPath(), context);
                     mainFunction = parserResult.getMainFunction();
-                    handleParserResult(context, parserResult);
+                    context.getFunctionRegistry().register(parserResult.getParsedFunctions());
+                    context.registerStaticInitializer(parserResult.getStaticInits());
+                    context.registerStaticDestructor(parserResult.getStaticDestructors());
+                    if (!context.isParseOnly()) {
+                        parserResult.getStaticInits().call();
+                    }
                 } else if (code.getMimeType().equals(LLVMLanguage.SULONG_LIBRARY_MIME_TYPE)) {
                     final List<CallTarget> mainFunctions = new ArrayList<>();
                     final SulongLibrary library = new SulongLibrary(new File(code.getPath()));
@@ -104,8 +109,13 @@ public class LLVM {
                             } catch (IOException e) {
                                 throw new UncheckedIOException(e);
                             }
-                            handleParserResult(context, parserResult);
+                            context.getFunctionRegistry().register(parserResult.getParsedFunctions());
                             mainFunctions.add(parserResult.getMainFunction());
+                            context.registerStaticInitializer(parserResult.getStaticInits());
+                            context.registerStaticDestructor(parserResult.getStaticDestructors());
+                            if (!context.isParseOnly()) {
+                                parserResult.getStaticInits().call();
+                            }
                         });
                     } catch (IOException e) {
                         throw new UncheckedIOException(e);
@@ -131,17 +141,8 @@ public class LLVM {
                 if (dynamicLibraryPaths != null && dynamicLibraryPaths.length != 0) {
                     for (String s : dynamicLibraryPaths) {
                         LLVMParserResult result = parseFile(s, context);
-                        handleParserResult(context, result);
+                        context.getFunctionRegistry().register(result.getParsedFunctions());
                     }
-                }
-            }
-
-            private void handleParserResult(LLVMContext context, LLVMParserResult result) {
-                context.getFunctionRegistry().register(result.getParsedFunctions());
-                context.registerStaticInitializer(result.getStaticInits());
-                context.registerStaticDestructor(result.getStaticDestructors());
-                if (!context.isParseOnly()) {
-                    result.getStaticInits().call();
                 }
             }
 
