@@ -65,11 +65,7 @@ public final class LLVMTruffleObject implements LLVMObjectNativeLibrary.Provider
     }
 
     public static LLVMTruffleObject createNullPointer() {
-        return createPointer(0L);
-    }
-
-    public static LLVMTruffleObject createPointer(long ptr) {
-        return new LLVMTruffleObject(null, ptr, null, null);
+        return new LLVMTruffleObject(null, 0, null, null);
     }
 
     public LLVMTruffleObject(LLVMTruffleObject orig, Type type) {
@@ -121,8 +117,8 @@ public final class LLVMTruffleObject implements LLVMObjectNativeLibrary.Provider
     private static LLVMObjectNativeLibrary wrapLibrary(final LLVMObjectNativeLibrary lib) {
         return new LLVMObjectNativeLibrary() {
 
-            @Child private Node isNull;
-            @Child private BaseToPointerNode baseToPointer;
+            @Child Node isNull;
+            @Child BaseToPointerNode baseToPointer;
 
             @Override
             public boolean guard(Object obj) {
@@ -172,7 +168,7 @@ public final class LLVMTruffleObject implements LLVMObjectNativeLibrary.Provider
         protected abstract long executeToPointer(VirtualFrame frame, Object object, LLVMObjectNativeLibrary lib);
 
         @Specialization(guards = "lib.isPointer(frame, object)")
-        protected long doPointer(VirtualFrame frame, Object object, LLVMObjectNativeLibrary lib) {
+        long doPointer(VirtualFrame frame, Object object, LLVMObjectNativeLibrary lib) {
             try {
                 return lib.asPointer(frame, object);
             } catch (InteropException ex) {
@@ -182,8 +178,7 @@ public final class LLVMTruffleObject implements LLVMObjectNativeLibrary.Provider
 
         @Specialization(guards = "checkNull(isNull, object)")
         @SuppressWarnings("unused")
-        protected long doNull(TruffleObject object, LLVMObjectNativeLibrary lib,
-                        @Cached("createIsNull()") Node isNull) {
+        long doNull(TruffleObject object, LLVMObjectNativeLibrary lib, @Cached("createIsNull()") Node isNull) {
             return 0;
         }
 
