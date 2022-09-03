@@ -25,6 +25,7 @@ package com.oracle.graal.nodes.extended;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
@@ -33,12 +34,12 @@ import com.oracle.graal.nodes.type.*;
  */
 public final class ReadNode extends FloatableAccessNode implements Node.IterableNodeType, LIRLowerable, Canonicalizable, PiPushable {
 
-    public ReadNode(ValueNode object, ValueNode location, Stamp stamp, WriteBarrierType barrierType, boolean compress) {
-        super(object, location, stamp, barrierType, compress);
+    public ReadNode(ValueNode object, ValueNode location, Stamp stamp) {
+        super(object, location, stamp);
     }
 
-    public ReadNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, WriteBarrierType barrierType, boolean compress) {
-        super(object, location, stamp, guard, barrierType, compress);
+    public ReadNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard) {
+        super(object, location, stamp, guard);
     }
 
     private ReadNode(ValueNode object, int displacement, LocationIdentity locationIdentity, Kind kind) {
@@ -50,7 +51,7 @@ public final class ReadNode extends FloatableAccessNode implements Node.Iterable
          * Used by node intrinsics. Since the initial value for location is a parameter, i.e., a
          * LocalNode, the constructor cannot use the declared type LocationNode.
          */
-        super(object, location, StampFactory.forNodeIntrinsic(), guard, WriteBarrierType.NONE, false);
+        super(object, location, StampFactory.forNodeIntrinsic(), guard);
     }
 
     @Override
@@ -66,7 +67,7 @@ public final class ReadNode extends FloatableAccessNode implements Node.Iterable
 
     @Override
     public FloatingAccessNode asFloatingNode(ValueNode lastLocationAccess) {
-        return graph().unique(new FloatingReadNode(object(), location(), lastLocationAccess, stamp(), getGuard(), getWriteBarrierType(), compress()));
+        return graph().unique(new FloatingReadNode(object(), location(), lastLocationAccess, stamp(), getGuard()));
     }
 
     public static ValueNode canonicalizeRead(ValueNode read, LocationNode location, ValueNode object, CanonicalizerTool tool) {
@@ -76,7 +77,7 @@ public final class ReadNode extends FloatableAccessNode implements Node.Iterable
             return null;
         }
         if (runtime != null && object != null && object.isConstant()) {
-            if (location.getLocationIdentity() == LocationIdentity.FINAL_LOCATION && location instanceof ConstantLocationNode) {
+            if (location.getLocationIdentity() == LocationNode.FINAL_LOCATION && location instanceof ConstantLocationNode) {
                 long displacement = ((ConstantLocationNode) location).getDisplacement();
                 Kind kind = location.getValueKind();
                 if (object.kind() == Kind.Object) {
