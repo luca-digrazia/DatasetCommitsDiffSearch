@@ -111,12 +111,14 @@ public interface CompilerToVM {
      * 
      * @param name a well formed Java type in {@linkplain JavaType#getName() internal} format
      * @param accessingClass the context of resolution (may be null)
-     * @param resolve force resolution to a {@link ResolvedJavaType}. If true, this method will
+     * @param eagerResolve force resolution to a {@link ResolvedJavaType}. If true, this method will
      *            either return a {@link ResolvedJavaType} or throw an exception
      * @return a metaspace klass for {@code name}
-     * @throws LinkageError if {@code resolve == true} and the resolution failed
+     * @throws LinkageError if {@code eagerResolve == true} and the resolution failed
      */
-    long lookupType(String name, Class<?> accessingClass, boolean resolve);
+    long lookupType(String name, Class<?> accessingClass, boolean eagerResolve);
+
+    long lookupKlassByName(String name, Class<?> accessingClass);
 
     Object lookupConstantInPool(long metaspaceConstantPool, int cpi);
 

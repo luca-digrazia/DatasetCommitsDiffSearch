@@ -51,8 +51,6 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-
 public class CompilationTask implements Runnable, Comparable {
 
     // Keep static finals in a group with withinEnqueue as the last one. CompilationTask can be
@@ -127,12 +125,14 @@ public class CompilationTask implements Runnable, Comparable {
         return entryBCI;
     }
 
-    @SuppressFBWarnings(value = "NN_NAKED_NOTIFY")
     public void run() {
         withinEnqueue.set(Boolean.FALSE);
         try {
             runCompilation(true);
         } finally {
+            if (method.currentTask() == this) {
+                method.setCurrentTask(null);
+            }
             withinEnqueue.set(Boolean.TRUE);
             status.set(CompilationStatus.Finished);
             synchronized (this) {
@@ -263,8 +263,8 @@ public class CompilationTask implements Runnable, Comparable {
                 Suites suites = getSuites(providers);
                 ProfilingInfo profilingInfo = getProfilingInfo();
                 OptimisticOptimizations optimisticOpts = getOptimisticOpts(profilingInfo);
-                result = compileGraph(graph, null, cc, method, providers, backend, backend.getTarget(), graphCache, getGraphBuilderSuite(providers), optimisticOpts, profilingInfo,
-                                method.getSpeculationLog(), suites, new CompilationResult(), CompilationResultBuilderFactory.Default);
+                result = compileGraph(graph, cc, method, providers, backend, backend.getTarget(), graphCache, getGraphBuilderSuite(providers), optimisticOpts, profilingInfo,
+                                method.getSpeculationLog(), suites, true, new CompilationResult(), CompilationResultBuilderFactory.Default);
                 result.setId(getId());
                 result.setEntryBCI(entryBCI);
             } catch (Throwable e) {
