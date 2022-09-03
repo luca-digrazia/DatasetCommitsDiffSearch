@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,10 +24,8 @@ package org.graalvm.compiler.nodes.calc;
 
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_16;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_1;
-import static org.graalvm.compiler.nodes.calc.BinaryArithmeticNode.getArithmeticOpTable;
 
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable;
-import org.graalvm.compiler.core.common.type.ArithmeticOpTable.UnaryOp;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable.UnaryOp.Sqrt;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.lir.gen.ArithmeticLIRGeneratorTool;
@@ -49,7 +45,7 @@ public final class SqrtNode extends UnaryArithmeticNode<Sqrt> implements Arithme
     public static final NodeClass<SqrtNode> TYPE = NodeClass.create(SqrtNode.class);
 
     protected SqrtNode(ValueNode x) {
-        super(TYPE, getArithmeticOpTable(x).getSqrt(), x);
+        super(TYPE, ArithmeticOpTable::getSqrt, x);
     }
 
     public static ValueNode create(ValueNode x, NodeView view) {
@@ -58,11 +54,6 @@ public final class SqrtNode extends UnaryArithmeticNode<Sqrt> implements Arithme
             return ConstantNode.forPrimitive(op.foldStamp(x.stamp(view)), op.foldConstant(x.asConstant()));
         }
         return new SqrtNode(x);
-    }
-
-    @Override
-    protected UnaryOp<Sqrt> getOp(ArithmeticOpTable table) {
-        return table.getSqrt();
     }
 
     @Override

@@ -40,7 +40,7 @@ public class UnsignedDivNode extends IntegerDivRemNode implements LIRLowerable {
 
     public static final NodeClass<UnsignedDivNode> TYPE = NodeClass.create(UnsignedDivNode.class);
 
-    public UnsignedDivNode(ValueNode x, ValueNode y) {
+    protected UnsignedDivNode(ValueNode x, ValueNode y) {
         this(TYPE, x, y);
     }
 
