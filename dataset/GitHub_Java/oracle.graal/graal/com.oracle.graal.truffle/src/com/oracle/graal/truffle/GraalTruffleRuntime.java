@@ -121,7 +121,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
         }
     }
 
-    private String cachedIncludesExcludes;
     private ArrayList<String> includes;
     private ArrayList<String> excludes;
 
@@ -373,31 +372,25 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
         return null;
     }
 
-    final boolean acceptForCompilation(RootNode rootNode) {
-        String includesExcludes = TruffleCompileOnly.getValue();
-        if (includesExcludes != null) {
-            if (cachedIncludesExcludes != includesExcludes) {
+    boolean acceptForCompilation(RootNode rootNode) {
+        if (TruffleCompileOnly.getValue() != null) {
+            if (includes == null) {
                 parseCompileOnly();
-                this.cachedIncludesExcludes = includesExcludes;
             }
 
-            String name = rootNode.getName();
+            String name = rootNode.toString();
             boolean included = includes.isEmpty();
-            if (name != null) {
-                for (int i = 0; !included && i < includes.size(); i++) {
-                    if (name.contains(includes.get(i))) {
-                        included = true;
-                    }
+            for (int i = 0; !included && i < includes.size(); i++) {
+                if (name.contains(includes.get(i))) {
+                    included = true;
                 }
             }
             if (!included) {
                 return false;
             }
-            if (name != null) {
-                for (String exclude : excludes) {
-                    if (name.contains(exclude)) {
-                        return false;
-                    }
+            for (String exclude : excludes) {
+                if (name.contains(exclude)) {
+                    return false;
                 }
             }
         }
@@ -405,19 +398,17 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     }
 
     protected void parseCompileOnly() {
-        ArrayList<String> includesList = new ArrayList<>();
-        ArrayList<String> excludesList = new ArrayList<>();
+        includes = new ArrayList<>();
+        excludes = new ArrayList<>();
 
         String[] items = TruffleCompileOnly.getValue().split(",");
         for (String item : items) {
             if (item.startsWith("~")) {
-                excludesList.add(item.substring(1));
+                excludes.add(item.substring(1));
             } else {
-                includesList.add(item);
+                includes.add(item);
             }
         }
-        this.includes = includesList;
-        this.excludes = excludesList;
     }
 
     public abstract SpeculationLog createSpeculationLog();
