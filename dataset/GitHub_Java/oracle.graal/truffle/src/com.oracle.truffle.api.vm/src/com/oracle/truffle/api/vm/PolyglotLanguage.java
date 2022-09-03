@@ -40,9 +40,9 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.vm.LanguageCache.LoadedLanguage;
+import com.oracle.truffle.api.vm.PolyglotImpl.VMObject;
 
-@SuppressWarnings("deprecation")
-final class PolyglotLanguage extends AbstractLanguageImpl implements com.oracle.truffle.api.vm.PolyglotImpl.VMObject {
+final class PolyglotLanguage extends AbstractLanguageImpl implements VMObject {
 
     final PolyglotEngineImpl engine;
     final LanguageCache cache;
@@ -90,17 +90,8 @@ final class PolyglotLanguage extends AbstractLanguageImpl implements com.oracle.
         return false;
     }
 
-    Object getCurrentContext() {
-        Env env = PolyglotContextImpl.requireContext().contexts[index].env;
-        if (env == null) {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalStateException(
-                            "The language context is not yet initialized or already disposed. ");
-        }
-        return LANGUAGE.getContext(env);
-    }
-
-    boolean isHost() {
+    @Override
+    public boolean isHost() {
         return host;
     }
 
