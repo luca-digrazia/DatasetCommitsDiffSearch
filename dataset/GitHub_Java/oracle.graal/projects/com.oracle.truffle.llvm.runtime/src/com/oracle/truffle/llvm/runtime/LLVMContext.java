@@ -29,6 +29,7 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
+import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -57,15 +58,17 @@ import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayoutConverter.DataSpecConverterImpl;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceContext;
-import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
 import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import com.oracle.truffle.llvm.runtime.types.AggregateType;
 import com.oracle.truffle.llvm.runtime.types.DataSpecConverter;
+import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.Type;
+
+import sun.misc.Unsafe;
 
 public final class LLVMContext {
     private final List<Path> libraryPaths = new ArrayList<>();
@@ -90,7 +93,7 @@ public final class LLVMContext {
     private final LLVMScope globalScope;
     private final LLVMFunctionPointerRegistry functionPointerRegistry;
 
-    private final List<ContextExtension> contextExtensions;
+    private final List<ContextExtension> contextExtension;
 
     private final MaterializedFrame globalFrame = Truffle.getRuntime().createMaterializedFrame(new Object[0]);
     private final FrameDescriptor globalFrameDescriptor = globalFrame.getFrameDescriptor();
@@ -109,7 +112,19 @@ public final class LLVMContext {
 
     public static final class LLVMGlobalsStack {
 
-        private final LLVMMemory memory;
+        static final Unsafe UNSAFE = getUnsafe();
+
+        private static Unsafe getUnsafe() {
+            CompilerAsserts.neverPartOfCompilation();
+            try {
+                Field singleoneInstanceField = Unsafe.class.getDeclaredField("theUnsafe");
+                singleoneInstanceField.setAccessible(true);
+                return (Unsafe) singleoneInstanceField.get(null);
+            } catch (Exception e) {
+                throw new AssertionError();
+            }
+        }
+
         private final long lowerBounds;
         private final long upperBounds;
 
@@ -118,10 +133,8 @@ public final class LLVMContext {
 
         private long stackPointer;
 
-        @SuppressWarnings("deprecation")
         public LLVMGlobalsStack() {
-            this.memory = LLVMMemory.getInstance();
-            long stackAllocation = memory.allocateMemory(SIZE * 1024).getVal();
+            long stackAllocation = UNSAFE.allocateMemory(SIZE * 1024);
             this.lowerBounds = stackAllocation;
             this.upperBounds = stackAllocation + SIZE * 1024;
             this.stackPointer = upperBounds;
@@ -129,7 +142,7 @@ public final class LLVMContext {
 
         @TruffleBoundary
         public void free() {
-            memory.free(lowerBounds);
+            UNSAFE.freeMemory(lowerBounds);
         }
 
         public long allocateStackMemory(final long size) {
@@ -164,9 +177,9 @@ public final class LLVMContext {
         }
     }
 
-    public LLVMContext(Env env, List<ContextExtension> contextExtensions) {
+    public LLVMContext(Env env, List<ContextExtension> contextExtension) {
         this.env = env;
-        this.contextExtensions = contextExtensions;
+        this.contextExtension = contextExtension;
         this.initialized = false;
         this.cleanupNecessary = false;
 
@@ -239,7 +252,7 @@ public final class LLVMContext {
         for (int i = 0; i < values.length; i++) {
             result[i] = JavaInterop.asTruffleObject(values[i].getBytes());
         }
-        return new LLVMTruffleObject(LLVMTypedForeignObject.createUnknown(JavaInterop.asTruffleObject(result)));
+        return new LLVMTruffleObject(JavaInterop.asTruffleObject(result), PointerType.I8);
     }
 
     public void dispose(LLVMMemory memory) {
@@ -278,7 +291,7 @@ public final class LLVMContext {
 
     public <T> T getContextExtension(Class<T> type) {
         CompilerAsserts.neverPartOfCompilation();
-        for (ContextExtension ce : contextExtensions) {
+        for (ContextExtension ce : contextExtension) {
             if (ce.extensionClass() == type) {
                 return type.cast(ce);
             }
@@ -288,7 +301,7 @@ public final class LLVMContext {
 
     public boolean hasContextExtension(Class<?> type) {
         CompilerAsserts.neverPartOfCompilation();
-        for (ContextExtension ce : contextExtensions) {
+        for (ContextExtension ce : contextExtension) {
             if (ce.extensionClass() == type) {
                 return true;
             }
@@ -460,14 +473,6 @@ public final class LLVMContext {
         }
     }
 
-    private static TruffleObject getIdentityKey(TruffleObject obj) {
-        if (obj instanceof LLVMTypedForeignObject) {
-            return ((LLVMTypedForeignObject) obj).getForeign();
-        } else {
-            return obj;
-        }
-    }
-
     @TruffleBoundary
     public void releaseHandle(LLVMMemory memory, LLVMAddress address) {
         synchronized (handlesLock) {
@@ -478,7 +483,7 @@ public final class LLVMContext {
             }
 
             toManaged.remove(address);
-            toNative.remove(getIdentityKey(object));
+            toNative.remove(object);
             memory.free(address);
         }
     }
@@ -486,7 +491,7 @@ public final class LLVMContext {
     @TruffleBoundary
     public LLVMAddress getHandleForManagedObject(LLVMMemory memory, TruffleObject object) {
         synchronized (handlesLock) {
-            return toNative.computeIfAbsent(getIdentityKey(object), (k) -> {
+            return toNative.computeIfAbsent(object, (k) -> {
                 LLVMAddress allocatedMemory = memory.allocateMemory(Long.BYTES);
                 memory.putI64(allocatedMemory, 0xdeadbeef);
                 toManaged.put(allocatedMemory, object);
