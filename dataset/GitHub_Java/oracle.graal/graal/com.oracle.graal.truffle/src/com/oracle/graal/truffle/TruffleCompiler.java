@@ -23,22 +23,25 @@
 package com.oracle.graal.truffle;
 
 import static com.oracle.graal.compiler.GraalCompiler.compileGraph;
-import static jdk.vm.ci.code.CodeUtil.getCallingConvention;
+import static com.oracle.graal.compiler.GraalCompiler.getProfilingInfo;
+import static jdk.internal.jvmci.code.CodeUtil.getCallingConvention;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CallingConvention.Type;
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.CompilationResult;
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.SpeculationLog;
+import jdk.internal.jvmci.code.CallingConvention;
+import jdk.internal.jvmci.code.CallingConvention.Type;
+import jdk.internal.jvmci.code.CodeCacheProvider;
+import jdk.internal.jvmci.code.CompilationResult;
+import jdk.internal.jvmci.code.InstalledCode;
+import jdk.internal.jvmci.meta.Assumptions.Assumption;
+import jdk.internal.jvmci.meta.ConstantReflectionProvider;
+import jdk.internal.jvmci.meta.MetaAccessProvider;
+import jdk.internal.jvmci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.meta.SpeculationLog;
 
-import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.compiler.target.Backend;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
@@ -46,11 +49,12 @@ import com.oracle.graal.debug.DebugCloseable;
 import com.oracle.graal.debug.DebugEnvironment;
 import com.oracle.graal.debug.DebugMemUseTracker;
 import com.oracle.graal.debug.DebugTimer;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
 import com.oracle.graal.lir.phases.LIRSuites;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.PhaseSuite;
 import com.oracle.graal.phases.tiers.HighTierContext;
@@ -72,7 +76,6 @@ public abstract class TruffleCompiler {
     protected final LIRSuites lirSuites;
     protected final PartialEvaluator partialEvaluator;
     protected final Backend backend;
-    protected final SnippetReflectionProvider snippetReflection;
     protected final GraalTruffleCompilationListener compilationNotify;
 
     // @formatter:off
@@ -90,11 +93,10 @@ public abstract class TruffleCompiler {
     public static final OptimisticOptimizations Optimizations = OptimisticOptimizations.ALL.remove(OptimisticOptimizations.Optimization.UseExceptionProbability,
                     OptimisticOptimizations.Optimization.RemoveNeverExecutedCode, OptimisticOptimizations.Optimization.UseTypeCheckedInlining, OptimisticOptimizations.Optimization.UseTypeCheckHints);
 
-    public TruffleCompiler(Plugins plugins, Suites suites, LIRSuites lirSuites, Backend backend, SnippetReflectionProvider snippetReflection) {
+    public TruffleCompiler(Plugins plugins, Suites suites, LIRSuites lirSuites, Backend backend) {
         GraalTruffleRuntime graalTruffleRuntime = ((GraalTruffleRuntime) Truffle.getRuntime());
         this.compilationNotify = graalTruffleRuntime.getCompilationNotify();
         this.backend = backend;
-        this.snippetReflection = snippetReflection;
         Providers backendProviders = backend.getProviders();
         ConstantReflectionProvider constantReflection = new TruffleConstantReflectionProvider(backendProviders.getConstantReflection(), backendProviders.getMetaAccess());
         this.providers = backendProviders.copyWith(constantReflection);
@@ -173,8 +175,6 @@ public abstract class TruffleCompiler {
         }
 
         CompilationResult result = null;
-        List<AssumptionValidAssumption> validAssumptions = new ArrayList<>();
-        TruffleCompilationResultBuilderFactory factory = new TruffleCompilationResultBuilderFactory(graph, validAssumptions);
         try (DebugCloseable a = CompilationTime.start(); Scope s = Debug.scope("TruffleGraal.GraalCompiler", graph, providers.getCodeCache()); DebugCloseable c = CompilationMemUse.start()) {
             SpeculationLog speculationLog = graph.getSpeculationLog();
             if (speculationLog != null) {
@@ -184,16 +184,38 @@ public abstract class TruffleCompiler {
             CodeCacheProvider codeCache = providers.getCodeCache();
             CallingConvention cc = getCallingConvention(codeCache, Type.JavaCallee, graph.method(), false);
             CompilationResult compilationResult = new CompilationResult(name);
-            result = compileGraph(graph, cc, graph.method(), providers, backend, graphBuilderSuite, Optimizations, graph.getProfilingInfo(), suites, lirSuites, compilationResult, factory);
+            result = compileGraph(graph, cc, graph.method(), providers, backend, graphBuilderSuite, Optimizations, getProfilingInfo(graph), suites, lirSuites, compilationResult,
+                            CompilationResultBuilderFactory.Default);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
 
         compilationNotify.notifyCompilationGraalTierFinished((OptimizedCallTarget) predefinedInstalledCode, graph);
 
+        if (graph.isInlinedMethodRecordingEnabled()) {
+            result.setMethods(graph.method(), graph.getInlinedMethods());
+            result.setBytecodeSize(graph.getBytecodeSize());
+        } else {
+            assert result.getMethods() == null;
+        }
+
+        List<AssumptionValidAssumption> validAssumptions = new ArrayList<>();
+        Set<Assumption> newAssumptions = new HashSet<>();
+        for (Assumption assumption : graph.getAssumptions()) {
+            processAssumption(newAssumptions, assumption, validAssumptions);
+        }
+
+        if (result.getAssumptions() != null) {
+            for (Assumption assumption : result.getAssumptions()) {
+                processAssumption(newAssumptions, assumption, validAssumptions);
+            }
+        }
+
+        result.setAssumptions(newAssumptions.toArray(new Assumption[newAssumptions.size()]));
+
         InstalledCode installedCode;
         try (Scope s = Debug.scope("CodeInstall", providers.getCodeCache()); DebugCloseable a = CodeInstallationTime.start(); DebugCloseable c = CodeInstallationMemUse.start()) {
-            installedCode = providers.getCodeCache().addCode(graph.method(), result, graph.getSpeculationLog(), predefinedInstalledCode);
+            installedCode = providers.getCodeCache().addMethod(graph.method(), result, graph.getSpeculationLog(), predefinedInstalledCode);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
@@ -206,6 +228,17 @@ public abstract class TruffleCompiler {
     }
 
     protected abstract PhaseSuite<HighTierContext> createGraphBuilderSuite();
+
+    public void processAssumption(Set<Assumption> newAssumptions, Assumption assumption, List<AssumptionValidAssumption> manual) {
+        if (assumption != null) {
+            if (assumption instanceof AssumptionValidAssumption) {
+                AssumptionValidAssumption assumptionValidAssumption = (AssumptionValidAssumption) assumption;
+                manual.add(assumptionValidAssumption);
+            } else {
+                newAssumptions.add(assumption);
+            }
+        }
+    }
 
     public PartialEvaluator getPartialEvaluator() {
         return partialEvaluator;
