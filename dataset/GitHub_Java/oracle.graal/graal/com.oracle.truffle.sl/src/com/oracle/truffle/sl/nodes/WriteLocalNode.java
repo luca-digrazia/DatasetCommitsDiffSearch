@@ -22,63 +22,66 @@
  */
 package com.oracle.truffle.sl.nodes;
 
-import java.math.*;
-
-import com.oracle.truffle.api.codegen.*;
+import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.frame.*;
 
+@NodeChild(value = "rightNode", type = TypedNode.class)
 public abstract class WriteLocalNode extends FrameSlotNode {
 
-    @Child protected TypedNode rightNode;
-
-    public WriteLocalNode(FrameSlot slot, TypedNode right) {
+    public WriteLocalNode(FrameSlot slot) {
         super(slot);
-        this.rightNode = adoptChild(right);
     }
 
     public WriteLocalNode(WriteLocalNode node) {
-        this(node.slot, node.rightNode);
+        this(node.slot);
     }
 
-    @Specialization
-    public int doInteger(VirtualFrame frame, int right) {
+    @Specialization(guards = "isIntKind")
+    public int write(VirtualFrame frame, int right) {
         frame.setInt(slot, right);
         return right;
     }
 
-    @Specialization
-    public BigInteger doBigInteger(VirtualFrame frame, BigInteger right) {
-        frame.setObject(slot, right);
-        return right;
-    }
-
-    @Specialization
-    public boolean doBoolean(VirtualFrame frame, boolean right) {
+    @Specialization(guards = "isBooleanKind")
+    public boolean write(VirtualFrame frame, boolean right) {
         frame.setBoolean(slot, right);
         return right;
     }
 
-    @Specialization
-    public String doString(VirtualFrame frame, String right) {
+    @Specialization(guards = "isObjectKind")
+    public Object writeGeneric(VirtualFrame frame, Object right) {
         frame.setObject(slot, right);
         return right;
     }
 
-    @Generic
-    public Object doGeneric(VirtualFrame frame, Object right) {
-        frame.setObject(slot, right);
-        return right;
+    protected final boolean isIntKind() {
+        return isKind(FrameSlotKind.Int);
     }
 
-    @SpecializationListener
-    protected void onSpecialize(VirtualFrame frame, Object value) {
-        slot.setType(value.getClass());
-        frame.updateToLatestVersion();
+    protected final boolean isBooleanKind() {
+        return isKind(FrameSlotKind.Boolean);
     }
 
-    @Override
-    protected FrameSlotNode specialize(Class< ? > clazz) {
-        return WriteLocalNodeFactory.createSpecialized(this, clazz);
+    protected final boolean isObjectKind() {
+        if (slot.getKind() != FrameSlotKind.Object) {
+            CompilerDirectives.transferToInterpreter();
+            slot.setKind(FrameSlotKind.Object);
+        }
+        return true;
+    }
+
+    private boolean isKind(FrameSlotKind kind) {
+        return slot.getKind() == kind || initialSetKind(kind);
+    }
+
+    private boolean initialSetKind(FrameSlotKind kind) {
+        if (slot.getKind() == FrameSlotKind.Illegal) {
+            CompilerDirectives.transferToInterpreter();
+            slot.setKind(kind);
+            return true;
+        }
+        return false;
     }
 
 }
