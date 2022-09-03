@@ -28,24 +28,19 @@ import static jdk.vm.ci.common.JVMCIError.guarantee;
 import static jdk.vm.ci.common.JVMCIError.shouldNotReachHere;
 
 import java.lang.reflect.Modifier;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
-import org.graalvm.compiler.api.runtime.GraalJVMCICompiler;
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.bytecode.ResolvedJavaMethodBytecode;
-import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.PermanentBailoutException;
 import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.debug.DebugContext.Description;
 import org.graalvm.compiler.debug.Indent;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.Node.NodeIntrinsic;
@@ -111,7 +106,6 @@ import org.graalvm.compiler.replacements.nodes.BasicObjectCloneNode;
 import org.graalvm.compiler.replacements.nodes.BinaryMathIntrinsicNode;
 import org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode;
 import org.graalvm.compiler.word.WordCastNode;
-import org.graalvm.util.GuardedAnnotationAccess;
 
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.api.PointstoOptions;
@@ -145,7 +139,6 @@ import com.oracle.graal.pointsto.typestate.TypeState;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.runtime.JVMCI;
 
 public class MethodTypeFlowBuilder {
 
@@ -176,11 +169,7 @@ public class MethodTypeFlowBuilder {
     @SuppressWarnings("try")
     private boolean parse() {
         OptionValues options = bb.getOptions();
-        GraalJVMCICompiler compiler = (GraalJVMCICompiler) JVMCI.getRuntime().getCompiler();
-        SnippetReflectionProvider snippetReflection = compiler.getGraalRuntime().getRequiredCapability(SnippetReflectionProvider.class);
-        // Use the real SnippetReflectionProvider for dumping
-        Description description = new Description(method, toString());
-        DebugContext debug = DebugContext.create(options, description, Collections.singletonList(new GraalDebugHandlersFactory(snippetReflection)));
+        DebugContext debug = DebugContext.create(options, new GraalDebugHandlersFactory(bb.getProviders().getSnippetReflection()));
         try (Indent indent = debug.logAndIndent("parse graph %s", method)) {
 
             boolean needParsing = false;
@@ -200,15 +189,6 @@ public class MethodTypeFlowBuilder {
                 }
 
                 needParsing = true;
-
-                /*
-                 * The analysis bytecode parsing configuration needs to be as conservative as
-                 * possible and match the compilation bytecode parsing configuration which disables
-                 * liveness analysis to preserve the values of local variables beyond the
-                 * bytecode-liveness. This greatly helps debugging. See
-                 * CompileQueue.defaultParseFunction().
-                 */
-                options = new OptionValues(options, GraalOptions.OptClearNonLiveLocals, false);
                 graph = new StructuredGraph.Builder(options, debug).method(method).build();
             }
 
@@ -320,7 +300,7 @@ public class MethodTypeFlowBuilder {
 
     protected void apply() {
         // assert method.getAnnotation(Fold.class) == null : method;
-        if (GuardedAnnotationAccess.isAnnotationPresent(method, NodeIntrinsic.class)) {
+        if (method.getAnnotation(NodeIntrinsic.class) != null) {
             graph.getDebug().log("apply MethodTypeFlow on node intrinsic %s", method);
             AnalysisType returnType = (AnalysisType) method.getSignature().getReturnType(method.getDeclaringClass());
             if (returnType.getJavaKind() == JavaKind.Object) {

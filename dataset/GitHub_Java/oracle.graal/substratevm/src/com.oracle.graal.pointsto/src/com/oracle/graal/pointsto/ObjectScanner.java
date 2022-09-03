@@ -114,11 +114,8 @@ public abstract class ObjectScanner {
             JavaConstant fieldValue = bb.getConstantReflectionProvider().readFieldValue(field, receiver);
 
             if (fieldValue == null) {
-                StringBuilder backtrace = new StringBuilder();
-                buildObjectBacktrace(reason, backtrace);
                 throw AnalysisError.shouldNotReachHere("Could not find field " + field.format("%H.%n") +
-                                (receiver == null ? "" : " on " + bb.getSnippetReflectionProvider().asObject(Object.class, receiver).getClass()) +
-                                System.lineSeparator() + backtrace.toString());
+                                (receiver == null ? "" : " on " + bb.getSnippetReflectionProvider().asObject(Object.class, receiver).getClass()));
             }
 
             if (fieldValue.getJavaKind() == JavaKind.Object && bb.getHostVM().isRelocatedPointer(bb.getSnippetReflectionProvider().asObject(Object.class, fieldValue))) {
@@ -232,11 +229,6 @@ public abstract class ObjectScanner {
 
     private void unsupportedFeature(String key, String message, Object entry) {
         StringBuilder objectBacktrace = new StringBuilder();
-        AnalysisMethod method = buildObjectBacktrace(entry, objectBacktrace);
-        bb.getUnsupportedFeatures().addMessage(key, method, message, objectBacktrace.toString());
-    }
-
-    private AnalysisMethod buildObjectBacktrace(Object entry, StringBuilder objectBacktrace) {
         Object cur = entry;
         AnalysisMethod method = null;
 
@@ -254,7 +246,8 @@ public abstract class ObjectScanner {
         } else {
             objectBacktrace.append("\t[unknown] ").append(cur.toString());
         }
-        return method;
+
+        bb.getUnsupportedFeatures().addMessage(key, method, message, objectBacktrace.toString());
     }
 
     /**
@@ -275,7 +268,7 @@ public abstract class ObjectScanner {
             for (AnalysisField field : type.getInstanceFields(true)) {
                 if (field.getJavaKind() == JavaKind.Object && field.isAccessed()) {
                     assert !Modifier.isStatic(field.getModifiers());
-                    scanField(field, entry.constant, entry);
+                    scanField(field, entry.constant, entry.getReason());
                 }
             }
         } else if (type.isArray() && bb.getProviders().getWordTypes().asKind(type.getComponentType()) == JavaKind.Object) {
