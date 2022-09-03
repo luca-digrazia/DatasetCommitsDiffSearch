@@ -24,8 +24,15 @@ package com.oracle.graal.hotspot.meta;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.hotspot.*;
 
 public class HotSpotSnippetReflectionProvider implements SnippetReflectionProvider {
+
+    private final HotSpotGraalRuntimeProvider runtime;
+
+    public HotSpotSnippetReflectionProvider(HotSpotGraalRuntimeProvider runtime) {
+        this.runtime = runtime;
+    }
 
     @Override
     public JavaConstant forObject(Object object) {
@@ -33,8 +40,21 @@ public class HotSpotSnippetReflectionProvider implements SnippetReflectionProvid
     }
 
     @Override
-    public Object asObject(JavaConstant constant) {
-        return HotSpotObjectConstantImpl.asObject(constant);
+    public Object asObject(ResolvedJavaType type, JavaConstant constant) {
+        if (constant.isNull()) {
+            return null;
+        }
+        HotSpotObjectConstant hsConstant = (HotSpotObjectConstant) constant;
+        return hsConstant.asObject(type);
+    }
+
+    @Override
+    public <T> T asObject(Class<T> type, JavaConstant constant) {
+        if (constant.isNull()) {
+            return null;
+        }
+        HotSpotObjectConstant hsConstant = (HotSpotObjectConstant) constant;
+        return hsConstant.asObject(type);
     }
 
     @Override
@@ -42,8 +62,38 @@ public class HotSpotSnippetReflectionProvider implements SnippetReflectionProvid
         return HotSpotObjectConstantImpl.forBoxedValue(kind, value);
     }
 
-    @Override
-    public Object asBoxedValue(JavaConstant constant) {
-        return HotSpotObjectConstantImpl.asBoxedValue(constant);
+    public Object getSubstitutionGuardParameter(Class<?> type) {
+        if (type.isInstance(runtime)) {
+            return runtime;
+        }
+        if (type.isInstance(runtime.getConfig())) {
+            return runtime.getConfig();
+        }
+        return null;
+    }
+
+    // Lazily initialized
+    private ResolvedJavaType wordTypesType;
+    private ResolvedJavaType runtimeType;
+    private ResolvedJavaType configType;
+
+    public Object getInjectedNodeIntrinsicParameter(ResolvedJavaType type) {
+        if (wordTypesType == null) {
+            MetaAccessProvider metaAccess = runtime.getHostProviders().getMetaAccess();
+            wordTypesType = metaAccess.lookupJavaType(runtime.getHostProviders().getWordTypes().getClass());
+            runtimeType = metaAccess.lookupJavaType(runtime.getClass());
+            configType = metaAccess.lookupJavaType(runtime.getConfig().getClass());
+        }
+
+        if (type.isAssignableFrom(wordTypesType)) {
+            return runtime.getHostProviders().getWordTypes();
+        }
+        if (type.isAssignableFrom(runtimeType)) {
+            return runtime;
+        }
+        if (type.isAssignableFrom(configType)) {
+            return runtime.getConfig();
+        }
+        return null;
     }
 }
