@@ -40,7 +40,6 @@
  */
 package com.oracle.truffle.sl.runtime;
 
-import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.ExecutionContext;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.NodeFactory;
@@ -240,21 +239,19 @@ public final class SLContext extends ExecutionContext {
             return ((Number) a).longValue();
         } else if (a instanceof TruffleObject) {
             return a;
-        } else if (a instanceof SLContext) {
-            return a;
         }
         throw new IllegalStateException(a + " is not a Truffle value");
     }
 
-    public CallTarget parse(Source source) throws IOException {
-        return env.parse(source);
+    public Object evalAny(Source source) throws IOException {
+        return env.parse(source).call();
     }
 
     /**
      * Goes through the other registered languages to find an exported global symbol of the
      * specified name. The expected return type is either <code>TruffleObject</code>, or one of
      * wrappers of Java primitive types ({@link Integer}, {@link Double}).
-     *
+     * 
      * @param name the name of the symbol to search for
      * @return object representing the symbol or <code>null</code>
      */
