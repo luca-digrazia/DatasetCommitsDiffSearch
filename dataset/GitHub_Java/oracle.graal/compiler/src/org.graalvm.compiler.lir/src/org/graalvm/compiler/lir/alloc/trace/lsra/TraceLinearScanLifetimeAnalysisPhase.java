@@ -43,8 +43,7 @@ import org.graalvm.compiler.core.common.alloc.RegisterAllocationConfig;
 import org.graalvm.compiler.core.common.alloc.Trace;
 import org.graalvm.compiler.core.common.alloc.TraceBuilderResult;
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
-import org.graalvm.compiler.debug.Debug;
-import org.graalvm.compiler.debug.Debug.Scope;
+import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.Indent;
 import org.graalvm.compiler.lir.InstructionValueConsumer;
@@ -86,11 +85,13 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
 
     public static final class Analyser {
         private final TraceLinearScan allocator;
+        private final DebugContext debug;
         private final TraceBuilderResult traceBuilderResult;
         private int numInstructions;
 
         public Analyser(TraceLinearScan allocator, TraceBuilderResult traceBuilderResult) {
             this.allocator = allocator;
+            this.debug = allocator.getDebug();
             this.traceBuilderResult = traceBuilderResult;
         }
 
@@ -109,10 +110,6 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
         public void analyze() {
             countInstructions();
             buildIntervals();
-        }
-
-        private boolean isAllocated(AbstractBlockBase<?> currentBlock, AbstractBlockBase<?> other) {
-            return traceBuilderResult.getTraceForBlock(other).getId() < traceBuilderResult.getTraceForBlock(currentBlock).getId();
         }
 
         /**
@@ -191,11 +188,11 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
         };
 
         private void addUse(AllocatableValue operand, int from, int to, RegisterPriority registerPriority) {
-            if (!allocator.isProcessed(operand)) {
-                return;
-            }
             if (isRegister(operand)) {
-                addFixedUse(asRegisterValue(operand), from, to);
+                RegisterValue reg = asRegisterValue(operand);
+                if (allocator.isAllocatable(reg)) {
+                    addFixedUse(reg, from, to);
+                }
             } else {
                 assert isVariable(operand) : operand;
                 addVariableUse(asVariable(operand), from, to, registerPriority);
@@ -205,8 +202,8 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
         private void addFixedUse(RegisterValue reg, int from, int to) {
             FixedInterval interval = allocator.getOrCreateFixedInterval(reg);
             interval.addRange(from, to);
-            if (Debug.isLogEnabled()) {
-                Debug.log("add fixed use: %s, at %d", interval, to);
+            if (debug.isLogEnabled()) {
+                debug.log("add fixed use: %s, at %d", interval, to);
             }
         }
 
@@ -215,19 +212,19 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
             interval.addRange(from, to);
 
             // Register use position at even instruction id.
-            interval.addUsePos(to & ~1, registerPriority);
+            interval.addUsePos(to & ~1, registerPriority, allocator.getOptions());
 
-            if (Debug.isLogEnabled()) {
-                Debug.log("add use: %s, at %d (%s)", interval, to, registerPriority.name());
+            if (debug.isLogEnabled()) {
+                debug.log("add use: %s, at %d (%s)", interval, to, registerPriority.name());
             }
         }
 
         private void addDef(AllocatableValue operand, LIRInstruction op, RegisterPriority registerPriority) {
-            if (!allocator.isProcessed(operand)) {
-                return;
-            }
             if (isRegister(operand)) {
-                addFixedDef(asRegisterValue(operand), op);
+                RegisterValue reg = asRegisterValue(operand);
+                if (allocator.isAllocatable(reg)) {
+                    addFixedDef(reg, op);
+                }
             } else {
                 assert isVariable(operand) : operand;
                 addVariableDef(asVariable(operand), op, registerPriority);
@@ -249,12 +246,12 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
                  * Dead value - make vacuous interval also add register priority for dead intervals
                  */
                 interval.addRange(defPos, defPos + 1);
-                if (Debug.isLogEnabled()) {
-                    Debug.log("Warning: def of operand %s at %d occurs without use", reg, defPos);
+                if (debug.isLogEnabled()) {
+                    debug.log("Warning: def of operand %s at %d occurs without use", reg, defPos);
                 }
             }
-            if (Debug.isLogEnabled()) {
-                Debug.log("add fixed def: %s, at %d", interval, defPos);
+            if (debug.isLogEnabled()) {
+                debug.log("add fixed def: %s, at %d", interval, defPos);
             }
         }
 
@@ -268,8 +265,8 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
                  * Dead value - make vacuous interval also add register priority for dead intervals
                  */
                 interval.addRange(defPos, defPos + 1);
-                if (Debug.isLogEnabled()) {
-                    Debug.log("Warning: def of operand %s at %d occurs without use", operand, defPos);
+                if (debug.isLogEnabled()) {
+                    debug.log("Warning: def of operand %s at %d occurs without use", operand, defPos);
                 }
             } else {
                 /*
@@ -280,7 +277,7 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
             }
             if (!(op instanceof LabelOp)) {
                 // no use positions for labels
-                interval.addUsePos(defPos, registerPriority);
+                interval.addUsePos(defPos, registerPriority, allocator.getOptions());
             }
 
             changeSpillDefinitionPos(op, operand, interval, defPos);
@@ -290,18 +287,18 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
             }
             interval.addMaterializationValue(getMaterializedValue(op, operand, interval, allocator.neverSpillConstants(), allocator.getSpillMoveFactory()));
 
-            if (Debug.isLogEnabled()) {
-                Debug.log("add def: %s defPos %d (%s)", interval, defPos, registerPriority.name());
+            if (debug.isLogEnabled()) {
+                debug.log("add def: %s defPos %d (%s)", interval, defPos, registerPriority.name());
             }
             return interval;
         }
 
         private void addTemp(AllocatableValue operand, int tempPos, RegisterPriority registerPriority) {
-            if (!allocator.isProcessed(operand)) {
-                return;
-            }
             if (isRegister(operand)) {
-                addFixedTemp(asRegisterValue(operand), tempPos);
+                RegisterValue reg = asRegisterValue(operand);
+                if (allocator.isAllocatable(reg)) {
+                    addFixedTemp(reg, tempPos);
+                }
             } else {
                 assert isVariable(operand) : operand;
                 addVariableTemp(asVariable(operand), tempPos, registerPriority);
@@ -311,8 +308,8 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
         private void addFixedTemp(RegisterValue reg, int tempPos) {
             FixedInterval interval = allocator.getOrCreateFixedInterval(reg);
             interval.addRange(tempPos, tempPos + 1);
-            if (Debug.isLogEnabled()) {
-                Debug.log("add fixed temp: %s, at %d", interval, tempPos);
+            if (debug.isLogEnabled()) {
+                debug.log("add fixed temp: %s, at %d", interval, tempPos);
             }
         }
 
@@ -325,11 +322,11 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
                 interval.setFrom(tempPos);
             }
 
-            interval.addUsePos(tempPos, registerPriority);
+            interval.addUsePos(tempPos, registerPriority, allocator.getOptions());
             interval.addMaterializationValue(null);
 
-            if (Debug.isLogEnabled()) {
-                Debug.log("add temp: %s tempPos %d (%s)", interval, tempPos, RegisterPriority.MustHaveRegister.name());
+            if (debug.isLogEnabled()) {
+                debug.log("add temp: %s tempPos %d (%s)", interval, tempPos, RegisterPriority.MustHaveRegister.name());
             }
         }
 
@@ -395,7 +392,7 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
                                 fromValue = (AllocatableValue) targetValue;
                                 toValue = (AllocatableValue) registerHint;
                             }
-                            Debug.log("addRegisterHint %s to %s", fromValue, toValue);
+                            debug.log("addRegisterHint %s to %s", fromValue, toValue);
                             final TraceInterval to;
                             final IntervalHint from;
                             if (isRegister(toValue)) {
@@ -404,15 +401,15 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
                                     return null;
                                 }
                                 from = getIntervalHint(toValue);
-                                to = allocator.getOrCreateInterval(fromValue);
+                                to = allocator.getOrCreateInterval(asVariable(fromValue));
                             } else {
-                                to = allocator.getOrCreateInterval(toValue);
+                                to = allocator.getOrCreateInterval(asVariable(toValue));
                                 from = getIntervalHint(fromValue);
                             }
 
                             to.setLocationHint(from);
-                            if (Debug.isLogEnabled()) {
-                                Debug.log("operation at opId %d: added hint from interval %s to %s", op.id(), from, to);
+                            if (debug.isLogEnabled()) {
+                                debug.log("operation at opId %d: added hint from interval %s to %s", op.id(), from, to);
                             }
 
                             return registerHint;
@@ -469,7 +466,7 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
         @SuppressWarnings("try")
         private void buildIntervals() {
 
-            try (Indent indent = Debug.logAndIndent("build intervals")) {
+            try (Indent indent = debug.logAndIndent("build intervals")) {
 
                 // create a list with all caller-save registers (cpu, fpu, xmm)
                 RegisterArray callerSaveRegs = getCallerSavedRegisters();
@@ -480,7 +477,7 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
                 for (int blockId = blocks.length - 1; blockId >= 0; blockId--) {
                     final AbstractBlockBase<?> block = blocks[blockId];
 
-                    try (Indent indent2 = Debug.logAndIndent("handle block %d", block.getId())) {
+                    try (Indent indent2 = debug.logAndIndent("handle block %d", block.getId())) {
                         handleBlockEnd(block, (instructionIndex - 1) << 1);
 
                         /*
@@ -495,7 +492,7 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
                             numberInstruction(block, op, instructionIndex);
                             final int opId = op.id();
 
-                            try (Indent indent3 = Debug.logAndIndent("handle inst %d: %s", opId, op)) {
+                            try (Indent indent3 = debug.logAndIndent("handle inst %d: %s", opId, op)) {
 
                                 /*
                                  * Add a temp range for each register if operation destroys
@@ -507,8 +504,8 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
                                             addTemp(r.asValue(), opId, RegisterPriority.None);
                                         }
                                     }
-                                    if (Debug.isLogEnabled()) {
-                                        Debug.log("operation destroys all caller-save registers");
+                                    if (debug.isLogEnabled()) {
+                                        debug.log("operation destroys all caller-save registers");
                                     }
                                 }
 
@@ -533,23 +530,30 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
                         AbstractBlockBase<?> pred = blockId == 0 ? null : blocks[blockId - 1];
                         handleBlockBegin(block, pred);
                     }
-                    if (Debug.isDumpEnabled(Debug.VERY_DETAILED_LEVEL)) {
+                    if (debug.isDumpEnabled(DebugContext.VERY_DETAILED_LEVEL)) {
                         allocator.printIntervals("After Block " + block);
                     }
                 }   // end of block iteration
                 assert instructionIndex == 0 : "not at start?" + instructionIndex;
                 handleTraceBegin(blocks[0]);
 
-                // fix spill state for phi/incoming intervals
-                for (TraceInterval interval : allocator.intervals()) {
-                    if (interval != null && interval.spillState().equals(SpillState.NoDefinitionFound) && interval.spillDefinitionPos() != -1) {
-                        // there was a definition in a phi/incoming
-                        interval.setSpillState(SpillState.NoSpillStore);
-                    }
-                }
                 if (TraceRAuseInterTraceHints.getValue(allocator.getLIR().getOptions())) {
                     addInterTraceHints();
                 }
+                // fix spill state for phi/incoming intervals
+                for (TraceInterval interval : allocator.intervals()) {
+                    if (interval != null) {
+                        if (interval.spillState().equals(SpillState.NoDefinitionFound) && interval.spillDefinitionPos() != -1) {
+                            // there was a definition in a phi/incoming
+                            interval.setSpillState(SpillState.NoSpillStore);
+                        }
+                        if (interval.preSpilledAllocated()) {
+                            // pre-spill unused, start in memory intervals
+                            allocator.assignSpillSlot(interval);
+                        }
+                    }
+                }
+
                 for (FixedInterval interval1 : allocator.fixedIntervals()) {
                     if (interval1 != null) {
                         /* We use [-1, 0] to avoid intersection with incoming values. */
@@ -613,26 +617,29 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
             assert allocator.instructionForId(opId) == op : "must match";
         }
 
+        /**
+         * Add register hints for incoming values, i.e., values that are not defined in the trace.
+         *
+         * Due to the dominance property of SSA form, all values live at some point in the trace
+         * that are not defined in the trace are live at the beginning of it.
+         */
         @SuppressWarnings("try")
         private void addInterTraceHints() {
-            try (Scope s = Debug.scope("InterTraceHints", allocator)) {
-                GlobalLivenessInfo livenessInfo = allocator.getGlobalLivenessInfo();
-                // set hints for phi/incoming intervals
-                for (AbstractBlockBase<?> block : sortedBlocks()) {
-                    LabelOp label = (LabelOp) getLIR().getLIRforBlock(block).get(0);
-                    for (AbstractBlockBase<?> pred : block.getPredecessors()) {
-                        addInterTraceHints(livenessInfo, pred, block, label);
-                    }
+            try (DebugContext.Scope s = debug.scope("InterTraceHints", allocator)) {
+                AbstractBlockBase<?> traceHeadBlock = sortedBlocks()[0];
+                if (traceHeadBlock.getPredecessorCount() == 0) {
+                    return;
                 }
-            } catch (Throwable e) {
-                throw Debug.handle(e);
-            }
-        }
+                assert traceHeadBlock.getPredecessorCount() == 1 : "Trace head with more than one predecessor?!" + traceHeadBlock;
 
-        private void addInterTraceHints(GlobalLivenessInfo livenessInfo, AbstractBlockBase<?> from, AbstractBlockBase<?> to, LabelOp label) {
-            if (isAllocated(to, from)) {
-                int[] liveVars = livenessInfo.getBlockIn(to);
-                Value[] outLocation = livenessInfo.getOutLocation(from);
+                AbstractBlockBase<?> pred = traceHeadBlock.getPredecessors()[0];
+                assert traceBuilderResult.getTraceForBlock(pred).getId() < traceBuilderResult.getTraceForBlock(traceHeadBlock).getId() : "Not yet allocated? " + pred;
+
+                GlobalLivenessInfo livenessInfo = allocator.getGlobalLivenessInfo();
+                LabelOp label = (LabelOp) getLIR().getLIRforBlock(traceHeadBlock).get(0);
+
+                int[] liveVars = livenessInfo.getBlockIn(traceHeadBlock);
+                Value[] outLocation = livenessInfo.getOutLocation(pred);
 
                 for (int i = 0; i < liveVars.length; i++) {
                     int varNum = liveVars[i];
@@ -644,32 +651,32 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
                         }
                     }
                 }
+            } catch (Throwable e) {
+                throw debug.handle(e);
             }
         }
 
         private void addInterTraceHint(LabelOp label, int varNum, Value fromValue) {
-            assert isRegister(fromValue) || isVariable(fromValue) || isStackSlotValue(fromValue) || isShadowedRegisterValue(fromValue) : "Wrong fromValue: " + fromValue;
+            assert isRegister(fromValue) || isStackSlotValue(fromValue) || isShadowedRegisterValue(fromValue) : "Wrong fromValue: " + fromValue;
             TraceInterval to = allocator.intervalFor(varNum);
             if (to == null) {
                 // variable not live -> do nothing
                 return;
             }
-            if (isVariableOrRegister(fromValue)) {
-                IntervalHint from = getIntervalHint((AllocatableValue) fromValue);
-                setHint(label, to, from);
+            if (isRegister(fromValue)) {
+                IntervalHint from = allocator.getOrCreateFixedInterval(asRegisterValue(fromValue));
+                setHint(label, to, from, debug);
             } else if (isStackSlotValue(fromValue)) {
-                setSpillSlot(label, to, (AllocatableValue) fromValue);
+                setSpillSlot(label, to, (AllocatableValue) fromValue, debug);
             } else if (TraceRAshareSpillInformation.getValue(allocator.getLIR().getOptions()) && isShadowedRegisterValue(fromValue)) {
                 ShadowedRegisterValue shadowedRegisterValue = asShadowedRegisterValue(fromValue);
                 IntervalHint from = getIntervalHint(shadowedRegisterValue.getRegister());
-                setHint(label, to, from);
-                setSpillSlot(label, to, shadowedRegisterValue.getStackSlot());
-            } else {
-                throw GraalError.shouldNotReachHere();
+                setHint(label, to, from, debug);
+                setSpillSlot(label, to, shadowedRegisterValue.getStackSlot(), debug);
             }
         }
 
-        private static void setHint(final LIRInstruction op, TraceInterval to, IntervalHint from) {
+        private static void setHint(final LIRInstruction op, TraceInterval to, IntervalHint from, DebugContext debug) {
             IntervalHint currentHint = to.locationHint(false);
             if (currentHint == null) {
                 /*
@@ -677,21 +684,21 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
                  * interval.
                  */
                 to.setLocationHint(from);
-                if (Debug.isLogEnabled()) {
-                    Debug.log("operation at opId %d: added hint from interval %s to %s", op.id(), from, to);
+                if (debug.isLogEnabled()) {
+                    debug.log("operation at opId %d: added hint from interval %s to %s", op.id(), from, to);
                 }
             }
         }
 
-        private static void setSpillSlot(LIRInstruction op, TraceInterval interval, AllocatableValue spillSlot) {
+        private static void setSpillSlot(LIRInstruction op, TraceInterval interval, AllocatableValue spillSlot, DebugContext debug) {
             if (interval.spillSlot() == null) {
                 interval.setSpillSlot(spillSlot);
                 interval.setSpillState(SpillState.StartInMemory);
-                if (Debug.isLogEnabled()) {
-                    Debug.log("operation at opId %d: added spill slot %s to interval %s", op.id(), spillSlot, interval);
+                if (debug.isLogEnabled()) {
+                    debug.log("operation at opId %d: added spill slot %s to interval %s", op.id(), spillSlot, interval);
                 }
-            } else if (Debug.isLogEnabled()) {
-                Debug.log("operation at opId %d: has already a slot assigned %s", op.id(), interval.spillSlot());
+            } else if (debug.isLogEnabled()) {
+                debug.log("operation at opId %d: has already a slot assigned %s", op.id(), interval.spillSlot());
             }
         }
 
@@ -699,7 +706,7 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
             if (isRegister(from)) {
                 return allocator.getOrCreateFixedInterval(asRegisterValue(from));
             }
-            return allocator.getOrCreateInterval(from);
+            return allocator.getOrCreateInterval(asVariable(from));
         }
 
     }
