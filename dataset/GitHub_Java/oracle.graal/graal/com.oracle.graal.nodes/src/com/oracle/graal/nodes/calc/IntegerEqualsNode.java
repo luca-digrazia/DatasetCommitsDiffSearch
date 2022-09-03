@@ -35,9 +35,14 @@ import com.oracle.graal.nodes.util.*;
 public class IntegerEqualsNode extends CompareNode {
 
     public IntegerEqualsNode(ValueNode x, ValueNode y) {
-        super(Condition.EQ, false, x, y);
+        super(Condition.EQ, x, y);
         assert !x.getKind().isNumericFloat() && x.getKind() != Kind.Object;
         assert !y.getKind().isNumericFloat() && y.getKind() != Kind.Object;
+    }
+
+    @Override
+    public boolean unorderedIsTrue() {
+        return false;
     }
 
     @Override
