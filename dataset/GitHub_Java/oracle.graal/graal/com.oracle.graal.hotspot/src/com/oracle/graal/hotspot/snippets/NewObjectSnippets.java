@@ -22,12 +22,12 @@
  */
 package com.oracle.graal.hotspot.snippets;
 
-import static com.oracle.graal.api.code.UnsignedMath.*;
 import static com.oracle.graal.hotspot.nodes.CastFromHub.*;
 import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
 import static com.oracle.graal.snippets.SnippetTemplate.Arguments.*;
 import static com.oracle.graal.snippets.nodes.DirectObjectStoreNode.*;
 import static com.oracle.graal.snippets.nodes.ExplodeLoopNode.*;
+import static com.oracle.max.criutils.UnsignedMath.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
@@ -59,9 +59,8 @@ public class NewObjectSnippets implements SnippetsInterface {
         Word thread = thread();
         Word top = loadWordFromWord(thread, threadTlabTopOffset());
         Word end = loadWordFromWord(thread, threadTlabEndOffset());
-        Word available = end.minus(top);
-        if (available.aboveOrEqual(Word.fromInt(size))) {
-            Word newTop = top.plus(size);
+        Word newTop = top.plus(size);
+        if (newTop.belowOrEqual(end)) {
             storeObject(thread, 0, threadTlabTopOffset(), newTop);
             return top;
         }

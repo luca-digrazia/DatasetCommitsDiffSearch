@@ -22,16 +22,18 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
+import static com.oracle.graal.hotspot.target.amd64.AMD64NewMultiArrayStubCallOp.*;
+
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.target.amd64.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.word.*;
+import com.oracle.graal.snippets.*;
 
 /**
  * Node implementing a call to HotSpot's {@code new_multi_array} stub.
@@ -44,8 +46,6 @@ public class NewMultiArrayStubCall extends FixedWithNextNode implements LIRGenLo
     @Input private final ValueNode dims;
     private final int rank;
 
-    public static final Descriptor NEW_MULTI_ARRAY = new Descriptor("new_multi_array", false, Object.class, Word.class, int.class, Word.class);
-
     public NewMultiArrayStubCall(ValueNode hub, int rank, ValueNode dims) {
         super(defaultStamp);
         this.hub = hub;
@@ -56,7 +56,8 @@ public class NewMultiArrayStubCall extends FixedWithNextNode implements LIRGenLo
     @Override
     public boolean inferStamp() {
         if (stamp() == defaultStamp && hub.isConstant()) {
-            updateStamp(StampFactory.exactNonNull(HotSpotResolvedObjectType.fromMetaspaceKlass(hub.asConstant())));
+            HotSpotKlassOop klassOop = (HotSpotKlassOop) this.hub.asConstant().asObject();
+            updateStamp(StampFactory.exactNonNull(klassOop.type));
             return true;
         }
         return false;
@@ -64,11 +65,22 @@ public class NewMultiArrayStubCall extends FixedWithNextNode implements LIRGenLo
 
     @Override
     public void generate(LIRGenerator gen) {
-        RuntimeCallTarget stub = gen.getRuntime().lookupRuntimeCall(NewMultiArrayStubCall.NEW_MULTI_ARRAY);
-        Variable result = gen.emitCall(stub, stub.getCallingConvention(), true, gen.operand(hub), Constant.forInt(rank), gen.operand(dims));
+        RegisterValue hubFixed = HUB.asValue(Kind.Object);
+        RegisterValue resultFixed = RESULT.asValue(Kind.Object);
+        RegisterValue rankFixed = RANK.asValue(Kind.Int);
+        RegisterValue dimsFixed = DIMS.asValue(gen.target().wordKind);
+        gen.emitMove(gen.operand(hub), hubFixed);
+        gen.emitMove(gen.operand(dims), dimsFixed);
+        gen.emitMove(Constant.forInt(rank), rankFixed);
+        LIRFrameState state = gen.state();
+        gen.append(new AMD64NewMultiArrayStubCallOp(resultFixed, hubFixed, rankFixed, dimsFixed, state));
+        Variable result = gen.emitMove(resultFixed);
         gen.setResult(this, result);
     }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native Object call(Word hub, @ConstantNodeParameter int rank, Word dims);
+    public static Object call(Object hub, @ConstantNodeParameter int rank, Word dims) {
+        throw new UnsupportedOperationException();
+    }
 }
