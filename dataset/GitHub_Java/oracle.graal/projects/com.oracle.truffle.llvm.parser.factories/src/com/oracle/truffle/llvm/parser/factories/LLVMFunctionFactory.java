@@ -73,8 +73,6 @@ import com.oracle.truffle.llvm.runtime.types.VoidType;
 
 final class LLVMFunctionFactory {
 
-    private static final boolean DISABLE_PROFILING = true;
-
     private LLVMFunctionFactory() {
     }
 
@@ -123,13 +121,6 @@ final class LLVMFunctionFactory {
             throw new AssertionError();
         }
         LLVMExpressionNode argNode = LLVMArgNodeGen.create(argIndex);
-        if (argIndex < LLVMCallNode.USER_ARGUMENT_OFFSET) {
-            // Do not profile the stackpointer
-            return argNode;
-        }
-        if (DISABLE_PROFILING) {
-            return argNode;
-        }
         if (paramType instanceof PrimitiveType) {
             switch (((PrimitiveType) paramType).getPrimitiveKind()) {
                 case I8:
@@ -158,9 +149,6 @@ final class LLVMFunctionFactory {
 
     static LLVMExpressionNode createFunctionCall(LLVMExpressionNode functionNode, LLVMExpressionNode[] argNodes, FunctionType functionType, SourceSection sourceSection) {
         LLVMExpressionNode callNode = new LLVMCallNode(functionType, functionNode, argNodes, sourceSection);
-        if (DISABLE_PROFILING) {
-            return callNode;
-        }
         if (functionType.getReturnType() instanceof PrimitiveType) {
             switch (((PrimitiveType) functionType.getReturnType()).getPrimitiveKind()) {
                 case I8:
