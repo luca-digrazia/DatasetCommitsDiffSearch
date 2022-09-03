@@ -46,4 +46,16 @@ public interface Invoke extends StateSplit {
     void intrinsify(Node node);
 
     Graph graph();
+
+    double probability();
+
+    void setProbability(double value);
+
+    boolean useForInlining();
+
+    void setUseForInlining(boolean value);
+
+    boolean megamorph();
+
+    void setMegamorph(boolean megamorph);
 }
