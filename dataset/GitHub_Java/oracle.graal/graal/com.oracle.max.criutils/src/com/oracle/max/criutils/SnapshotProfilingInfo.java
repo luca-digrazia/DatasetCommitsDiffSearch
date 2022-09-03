@@ -24,31 +24,31 @@ package com.oracle.max.criutils;
 
 import java.io.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 /**
  * A profiling info snapshot that can be {@linkplain #save(File, File) saved} to
- * and {@linkplain #load(File, CodeCacheProvider) loaded} from a file.
+ * and {@linkplain #load(File, RiRuntime) loaded} from a file.
  */
-public class SnapshotProfilingInfo implements ProfilingInfo, Serializable {
+public class SnapshotProfilingInfo implements RiProfilingInfo, Serializable {
 
     private static final long serialVersionUID = -5837615128782960391L;
     private final double[] branchTaken;
     private final double[][] switches;
-    private final JavaTypeProfile[] typeProfiles;
-    private final ExceptionSeen[] exceptions;
+    private final RiTypeProfile[] typeProfiles;
+    private final RiExceptionSeen[] exceptions;
     private final int[] executions;
     private final int[] deopts;
 
-    public SnapshotProfilingInfo(ProfilingInfo other) {
+    public SnapshotProfilingInfo(RiProfilingInfo other) {
         int codeSize = other.codeSize();
         branchTaken = new double[codeSize];
         switches = new double[codeSize][];
-        typeProfiles = new JavaTypeProfile[codeSize];
-        exceptions = new ExceptionSeen[codeSize];
+        typeProfiles = new RiTypeProfile[codeSize];
+        exceptions = new RiExceptionSeen[codeSize];
         executions = new int[codeSize];
-        deopts = new int[DeoptimizationReason.values().length];
+        deopts = new int[RiDeoptReason.values().length];
 
         for (int bci = 0; bci < codeSize; bci++) {
             executions[bci] = other.getExecutionCount(bci);
@@ -57,7 +57,7 @@ public class SnapshotProfilingInfo implements ProfilingInfo, Serializable {
             switches[bci] = other.getSwitchProbabilities(bci);
             typeProfiles[bci] = other.getTypeProfile(bci);
         }
-        for (DeoptimizationReason reason: DeoptimizationReason.values()) {
+        for (RiDeoptReason reason: RiDeoptReason.values()) {
             deopts[reason.ordinal()] = other.getDeoptimizationCount(reason);
         }
     }
@@ -73,33 +73,34 @@ public class SnapshotProfilingInfo implements ProfilingInfo, Serializable {
     public double[] getSwitchProbabilities(int bci) {
         return bci < switches.length ? switches[bci] : null;
     }
-    public JavaTypeProfile getTypeProfile(int bci) {
+    public RiTypeProfile getTypeProfile(int bci) {
         return bci < typeProfiles.length ? typeProfiles[bci] : null;
     }
-    public ExceptionSeen getExceptionSeen(int bci) {
-        return bci < exceptions.length ? exceptions[bci] : ExceptionSeen.NOT_SUPPORTED;
+    public RiExceptionSeen getExceptionSeen(int bci) {
+        return bci < exceptions.length ? exceptions[bci] : RiExceptionSeen.NOT_SUPPORTED;
     }
     public int getExecutionCount(int bci) {
         return bci < executions.length ? executions[bci] : -1;
     }
-    public int getDeoptimizationCount(DeoptimizationReason reason) {
+    public int getDeoptimizationCount(RiDeoptReason reason) {
         return deopts[reason.ordinal()];
     }
 
     @Override
     public String toString() {
-        return CodeUtil.profileToString(this, null, "; ");
+        return CiUtil.profileToString(this, null, "; ");
     }
 
     /**
      * Deserializes a profile snapshot from a file.
      *
      * @param file a file created by {@link #save(File, File)}
-     * @param runtime the runtime used to resolve {@link ResolvedJavaType}s during deserialization
+     * @param runtime the runtime used to resolve {@link RiResolvedType}s during deserialization
+     * @return
      * @throws ClassNotFoundException
      * @throws IOException
      */
-    public static SnapshotProfilingInfo load(File file, CodeCacheProvider runtime) throws ClassNotFoundException, IOException {
+    public static SnapshotProfilingInfo load(File file, RiRuntime runtime) throws ClassNotFoundException, IOException {
         SnapshotProfilingInfo.SnapshotObjectInputStream ois = new SnapshotObjectInputStream(new BufferedInputStream(new FileInputStream(file), (int) file.length()), runtime);
         try {
             return (SnapshotProfilingInfo) ois.readObject();
@@ -125,7 +126,7 @@ public class SnapshotProfilingInfo implements ProfilingInfo, Serializable {
         if (txtFile != null) {
             PrintStream out = new PrintStream(txtFile);
             try {
-                out.println(CodeUtil.profileToString(this, null, CodeUtil.NEW_LINE));
+                out.println(CiUtil.profileToString(this, null, CiUtil.NEW_LINE));
             } finally {
                 out.close();
             }
@@ -148,16 +149,16 @@ public class SnapshotProfilingInfo implements ProfilingInfo, Serializable {
 
         @Override
         protected Object replaceObject(Object obj) throws IOException {
-            if (obj instanceof ResolvedJavaType) {
-                return new RiResolvedTypePlaceholder(((ResolvedJavaType) obj).toJava());
+            if (obj instanceof RiResolvedType) {
+                return new RiResolvedTypePlaceholder(((RiResolvedType) obj).toJava());
             }
             return obj;
         }
     }
 
     static class SnapshotObjectInputStream extends ObjectInputStream {
-        private final CodeCacheProvider runtime;
-        public SnapshotObjectInputStream(InputStream in, CodeCacheProvider runtime) throws IOException {
+        private final RiRuntime runtime;
+        public SnapshotObjectInputStream(InputStream in, RiRuntime runtime) throws IOException {
             super(in);
             enableResolveObject(true);
             this.runtime = runtime;
@@ -166,7 +167,7 @@ public class SnapshotProfilingInfo implements ProfilingInfo, Serializable {
         @Override
         protected Object resolveObject(Object obj) throws IOException {
             if (obj instanceof SnapshotProfilingInfo.RiResolvedTypePlaceholder) {
-                ResolvedJavaType type = runtime.getResolvedJavaType(((SnapshotProfilingInfo.RiResolvedTypePlaceholder) obj).javaMirror);
+                RiResolvedType type = runtime.getType(((SnapshotProfilingInfo.RiResolvedTypePlaceholder) obj).javaMirror);
                 return type;
             }
             return obj;

@@ -22,15 +22,19 @@
  */
 package com.oracle.graal.hotspot.ri;
 
+import java.io.*;
 import java.lang.annotation.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 
+import com.oracle.graal.compiler.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.counters.*;
+import com.oracle.graal.java.bytecode.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
-import com.oracle.graal.java.bytecode.*;
 
 /**
  * Implementation of RiMethod for resolved HotSpot methods.
@@ -56,8 +60,9 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
     private HotSpotMethodData methodData;
     private byte[] code;
     private boolean canBeInlined;
-    private CiGenericCallback callback;
     private int compilationComplexity;
+
+    private CompilationTask currentTask;
 
     private HotSpotMethodResolvedImpl() {
         super(null);
@@ -82,7 +87,7 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
     @Override
     public byte[] code() {
         if (code == null) {
-            code = compiler.getVMEntries().RiMethod_code(this);
+            code = compiler.getCompilerToVM().RiMethod_code(this);
             assert code.length == codeSize : "expected: " + codeSize + ", actual: " + code.length;
         }
         return code;
@@ -95,13 +100,13 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
 
     @Override
     public RiExceptionHandler[] exceptionHandlers() {
-        return compiler.getVMEntries().RiMethod_exceptionHandlers(this);
+        return compiler.getCompilerToVM().RiMethod_exceptionHandlers(this);
     }
 
     @Override
     public boolean hasBalancedMonitors() {
         if (hasBalancedMonitors == null) {
-            hasBalancedMonitors = compiler.getVMEntries().RiMethod_hasBalancedMonitors(this);
+            hasBalancedMonitors = compiler.getCompilerToVM().RiMethod_hasBalancedMonitors(this);
         }
         return hasBalancedMonitors;
     }
@@ -152,18 +157,23 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
 
     @Override
     public StackTraceElement toStackTraceElement(int bci) {
-        return CiUtil.toStackTraceElement(this, bci);
+        if (bci < 0 || bci >= codeSize) {
+            // HotSpot code can only construct stack trace elements for valid bcis
+            StackTraceElement ste = compiler.getCompilerToVM().RiMethod_toStackTraceElement(this, 0);
+            return new StackTraceElement(ste.getClassName(), ste.getMethodName(), ste.getFileName(), -1);
+        }
+        return compiler.getCompilerToVM().RiMethod_toStackTraceElement(this, bci);
     }
 
     @Override
     public RiResolvedMethod uniqueConcreteMethod() {
-        return (RiResolvedMethod) compiler.getVMEntries().RiMethod_uniqueConcreteMethod(this);
+        return (RiResolvedMethod) compiler.getCompilerToVM().RiMethod_uniqueConcreteMethod(this);
     }
 
     @Override
     public RiSignature signature() {
         if (signature == null) {
-            signature = new HotSpotSignature(compiler, compiler.getVMEntries().RiMethod_signature(this));
+            signature = new HotSpotSignature(compiler, compiler.getCompilerToVM().RiMethod_signature(this));
         }
         return signature;
     }
@@ -174,11 +184,16 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
     }
 
     public boolean hasCompiledCode() {
-        return compiler.getVMEntries().RiMethod_hasCompiledCode(this);
+        return compiler.getCompilerToVM().RiMethod_hasCompiledCode(this);
     }
 
     public int compiledCodeSize() {
-        return compiler.getVMEntries().RiMethod_getCompiledCodeSize(this);
+        int result = compiler.getCompilerToVM().RiMethod_getCompiledCodeSize(this);
+        if (result > 0) {
+            assert result > MethodEntryCounters.getCodeSize();
+            result =  result - MethodEntryCounters.getCodeSize();
+        }
+        return result;
     }
 
     @Override
@@ -193,7 +208,7 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
 
     @Override
     public int invocationCount() {
-        return compiler.getVMEntries().RiMethod_invocationCount(this);
+        return compiler.getCompilerToVM().RiMethod_invocationCount(this);
     }
 
     @Override
@@ -212,17 +227,72 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
         return compilationComplexity;
     }
 
+    private static final MethodFilter profilingInfoFilter = GraalOptions.PIFilter == null ? null : new MethodFilter(GraalOptions.PIFilter);
+
+    /**
+     * Determines if the profiling info cache should be used for this method.
+     */
+    private boolean useProfilingInfoCache() {
+        return GraalOptions.PICache != null && (profilingInfoFilter == null || profilingInfoFilter.matches(this));
+    }
+
+    private RiProfilingInfo loadProfilingInfo() {
+        if (!useProfilingInfoCache()) {
+            return null;
+        }
+        synchronized (this) {
+            File file = new File(GraalOptions.PICache, JniMangle.mangleMethod(holder, name, signature(), false));
+            if (file.exists()) {
+                try {
+                    SnapshotProfilingInfo snapshot = SnapshotProfilingInfo.load(file, compiler.getRuntime());
+                    if (snapshot.codeSize() != codeSize) {
+                        // The class file was probably changed - ignore the saved profile
+                        return null;
+                    }
+                    return snapshot;
+                } catch (Exception e) {
+                    // ignore
+                }
+            }
+            return null;
+        }
+    }
+
+    private void saveProfilingInfo(RiProfilingInfo info) {
+        if (useProfilingInfoCache()) {
+            synchronized (this) {
+                String base = JniMangle.mangleMethod(holder, name, signature(), false);
+                File file = new File(GraalOptions.PICache, base);
+                File txtFile = new File(GraalOptions.PICache, base + ".txt");
+                SnapshotProfilingInfo snapshot = info instanceof SnapshotProfilingInfo ? (SnapshotProfilingInfo) info : new SnapshotProfilingInfo(info);
+                try {
+                    snapshot.save(file, txtFile);
+                } catch (IOException e) {
+                    // ignore
+                }
+            }
+        }
+    }
+
     @Override
     public RiProfilingInfo profilingInfo() {
-        if (methodData == null) {
-            methodData = compiler.getVMEntries().RiMethod_methodData(this);
+        RiProfilingInfo info = loadProfilingInfo();
+        if (info != null) {
+            return info;
         }
 
-        if (methodData == null) {
-            return new HotSpotNoProfilingInfo(compiler);
-        } else {
-            return new HotSpotProfilingInfo(compiler, methodData);
+        if (GraalOptions.UseProfilingInformation && methodData == null) {
+            methodData = compiler.getCompilerToVM().RiMethod_methodData(this);
         }
+
+        if (methodData == null || (!methodData.hasNormalData() && !methodData.hasExtraData())) {
+            // Be optimistic and return false for exceptionSeen. A methodDataOop is allocated in case of a deoptimization.
+            info = BaseProfilingInfo.get(RiExceptionSeen.FALSE);
+        } else {
+            info = new HotSpotProfilingInfo(compiler, methodData, codeSize);
+            saveProfilingInfo(info);
+        }
+        return info;
     }
 
     @Override
@@ -236,50 +306,6 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
     @Override
     public RiConstantPool getConstantPool() {
         return ((HotSpotTypeResolvedImpl) holder()).constantPool();
-    }
-
-    @Override
-    public void dumpProfile() {
-        TTY.println("profile info for %s", this);
-        TTY.println("canBeStaticallyBound: " + canBeStaticallyBound());
-        TTY.println("invocationCount: " + invocationCount());
-        RiProfilingInfo profilingInfo = this.profilingInfo();
-        for (int i = 0; i < codeSize(); i++) {
-            if (profilingInfo.getExecutionCount(i) != -1) {
-                TTY.println("  executionCount@%d: %d", i, profilingInfo.getExecutionCount(i));
-            }
-
-            if (profilingInfo.getBranchTakenProbability(i) != -1) {
-                TTY.println("  branchProbability@%d: %f", i, profilingInfo.getBranchTakenProbability(i));
-            }
-
-            double[] switchProbabilities = profilingInfo.getSwitchProbabilities(i);
-            if (switchProbabilities != null) {
-                TTY.print("  switchProbabilities@%d:", i);
-                for (int j = 0; j < switchProbabilities.length; j++) {
-                    TTY.print(" %f", switchProbabilities[j]);
-                }
-                TTY.println();
-            }
-
-            if (profilingInfo.getExceptionSeen(i) != RiExceptionSeen.FALSE) {
-                TTY.println("  exceptionSeen@%d: %s", i, profilingInfo.getExceptionSeen(i).name());
-            }
-
-            RiTypeProfile typeProfile = profilingInfo.getTypeProfile(i);
-            if (typeProfile != null) {
-                RiResolvedType[] types = typeProfile.getTypes();
-                double[] probabilities = typeProfile.getProbabilities();
-                if (types != null && probabilities != null) {
-                    assert types.length == probabilities.length : "length must match";
-                    TTY.print("  types@%d:", i);
-                    for (int j = 0; j < types.length; j++) {
-                        TTY.print(" %s (%f)", types[j], probabilities[j]);
-                    }
-                    TTY.println(" not recorded (%f)", typeProfile.getNotRecordedProbability());
-                }
-            }
-        }
     }
 
     @Override
@@ -339,21 +365,21 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
 
     @Override
     public boolean canBeInlined() {
-        return canBeInlined && callback == null;
-    }
-    public void neverInline() {
-        this.canBeInlined = false;
-    }
-
-    public CiGenericCallback callback() {
-        return callback;
-    }
-    public void setCallback(CiGenericCallback callback) {
-        this.callback = callback;
+        return canBeInlined;
     }
 
     @Override
     public int vtableEntryOffset() {
-        return compiler.getVMEntries().RiMethod_vtableEntryOffset(this);
+        return compiler.getCompilerToVM().RiMethod_vtableEntryOffset(this);
+    }
+
+    @Override
+    public void setCurrentTask(CompilationTask task) {
+        currentTask = task;
+    }
+
+    @Override
+    public CompilationTask currentTask() {
+        return currentTask;
     }
 }

@@ -28,6 +28,7 @@ import java.lang.annotation.*;
 import java.util.*;
 
 import com.oracle.max.cri.ri.*;
+import com.oracle.max.cri.ri.RiTypeProfile.ProfiledType;
 
 /**
  * Miscellaneous collection of utility methods used in the {@code CRI} project.
@@ -67,12 +68,12 @@ public class CiUtil {
      *            or local class.
      * @return the simple name
      */
-    public static String getSimpleName(Class<?> clazz, boolean withEnclosingClass) {
+    public static String getSimpleName(Class< ? > clazz, boolean withEnclosingClass) {
         final String simpleName = clazz.getSimpleName();
         if (simpleName.length() != 0) {
             if (withEnclosingClass) {
                 String prefix = "";
-                Class<?> enclosingClass = clazz;
+                Class< ? > enclosingClass = clazz;
                 while ((enclosingClass = enclosingClass.getEnclosingClass()) != null) {
                     prefix = prefix + enclosingClass.getSimpleName() + ".";
                 }
@@ -95,6 +96,7 @@ public class CiUtil {
 
     public static final int K = 1024;
     public static final int M = 1024 * 1024;
+
     public static boolean isOdd(int n) {
         return (n & 1) == 1;
     }
@@ -124,8 +126,8 @@ public class CiUtil {
     }
 
     /**
-     * Computes the log (base 2) of the specified integer, rounding down.
-     * (E.g {@code log2(8) = 3}, {@code log2(21) = 4})
+     * Computes the log (base 2) of the specified integer, rounding down. (E.g {@code log2(8) = 3}, {@code log2(21) = 4}
+     * )
      *
      * @param val the value
      * @return the log base 2 of the value
@@ -136,8 +138,7 @@ public class CiUtil {
     }
 
     /**
-     * Computes the log (base 2) of the specified long, rounding down.
-     * (E.g {@code log2(8) = 3}, {@code log2(21) = 4})
+     * Computes the log (base 2) of the specified long, rounding down. (E.g {@code log2(8) = 3}, {@code log2(21) = 4})
      *
      * @param val the value
      * @return the log base 2 of the value
@@ -154,6 +155,7 @@ public class CiUtil {
 
     /**
      * Gets a word with the nth bit set.
+     *
      * @param n the nth bit to set
      * @return an integer value with the nth bit set
      */
@@ -163,6 +165,7 @@ public class CiUtil {
 
     /**
      * Gets a word with the right-most n bits set.
+     *
      * @param n the number of right most bits to set
      * @return an integer value with the right-most n bits set
      */
@@ -196,6 +199,7 @@ public class CiUtil {
         }
         return internalNameToJava(riType.name(), qualified);
     }
+
     /**
      * Converts a given type to its Java programming language name. The following are examples of strings returned by
      * this method:
@@ -330,6 +334,7 @@ public class CiUtil {
         }
         return sb.toString();
     }
+
     /**
      * Gets a string for a given field formatted according to a given format specification. A format specification is
      * composed of characters that are to be copied verbatim to the result and specifiers that denote an attribute of
@@ -350,8 +355,8 @@ public class CiUtil {
      *
      * @param format a format specification
      * @param field the field to be formatted
-     * @param kinds if {@code true} then {@code field}'s type is printed in the
-     *            {@linkplain CiKind#jniName JNI} form of its {@linkplain CiKind kind}
+     * @param kinds if {@code true} then {@code field}'s type is printed in the {@linkplain CiKind#jniName JNI} form of
+     *            its {@linkplain CiKind kind}
      * @return the result of formatting this field according to {@code format}
      * @throws IllegalFormatException if an illegal specifier is encountered in {@code format}
      */
@@ -406,14 +411,6 @@ public class CiUtil {
     }
 
     /**
-     * Gets a stack trace element for a given method and bytecode index.
-     */
-    public static StackTraceElement toStackTraceElement(RiMethod method, @SuppressWarnings("unused") int bci) {
-        // TODO(tw): Look if we can use bci to get the line number.
-        return new StackTraceElement(CiUtil.toJavaName(method.holder()), method.name(), null, -1);
-    }
-
-    /**
      * Converts a Java source-language class name into the internal form.
      *
      * @param className the class name
@@ -424,8 +421,7 @@ public class CiUtil {
     }
 
     /**
-     * Creates a set that uses reference-equality instead of {@link Object#equals(Object)}
-     * when comparing values.
+     * Creates a set that uses reference-equality instead of {@link Object#equals(Object)} when comparing values.
      *
      * @param <T> the type of elements in the set
      * @return a set based on reference-equality
@@ -435,8 +431,8 @@ public class CiUtil {
     }
 
     /**
-     * Prepends the String {@code indentation} to every line in String {@code lines},
-     * including a possibly non-empty line following the final newline.
+     * Prepends the String {@code indentation} to every line in String {@code lines}, including a possibly non-empty
+     * line following the final newline.
      */
     public static String indent(String lines, String indentation) {
         if (lines.length() == 0) {
@@ -537,26 +533,26 @@ public class CiUtil {
     }
 
     /**
-     * Convenient shortcut for calling {@link #appendLocation(StringBuilder, RiMethod, int)}
-     * without having to supply a a {@link StringBuilder} instance and convert the result
-     * to a string.
+     * Convenient shortcut for calling {@link #appendLocation(StringBuilder, RiMethod, int)} without having to supply a
+     * a {@link StringBuilder} instance and convert the result to a string.
      */
     public static String toLocation(RiResolvedMethod method, int bci) {
         return appendLocation(new StringBuilder(), method, bci).toString();
     }
 
-
     /**
-     * Appends a string representation of a location specified by a given method and bci to
-     * a given {@link StringBuilder}. If a stack trace element with a non-null file name
-     * and non-negative line number is {@linkplain RiMethod#toStackTraceElement(int) available}
-     * for the given method, then the string returned is the {@link StackTraceElement#toString()}
-     * value of the stack trace element, suffixed by the bci location. For example:
+     * Appends a string representation of a location specified by a given method and bci to a given
+     * {@link StringBuilder}. If a stack trace element with a non-null file name and non-negative line number is
+     * {@linkplain RiMethod#toStackTraceElement(int) available} for the given method, then the string returned is the
+     * {@link StackTraceElement#toString()} value of the stack trace element, suffixed by the bci location. For example:
+     *
      * <pre>
      *     java.lang.String.valueOf(String.java:2930) [bci: 12]
      * </pre>
-     * Otherwise, the string returned is the value of {@code CiUtil.format("%H.%n(%p)"}, suffixed
-     * by the bci location. For example:
+     *
+     * Otherwise, the string returned is the value of {@code CiUtil.format("%H.%n(%p)"}, suffixed by the bci location.
+     * For example:
+     *
      * <pre>
      *     java.lang.String.valueOf(int) [bci: 12]
      * </pre>
@@ -567,11 +563,15 @@ public class CiUtil {
      * @return
      */
     public static StringBuilder appendLocation(StringBuilder sb, RiResolvedMethod method, int bci) {
-        StackTraceElement ste = method.toStackTraceElement(bci);
-        if (ste.getFileName() != null && ste.getLineNumber() > 0) {
-            sb.append(ste);
+        if (method != null) {
+            StackTraceElement ste = method.toStackTraceElement(bci);
+            if (ste.getFileName() != null && ste.getLineNumber() > 0) {
+                sb.append(ste);
+            } else {
+                sb.append(CiUtil.format("%H.%n(%p)", method));
+            }
         } else {
-            sb.append(CiUtil.format("%H.%n(%p)", method));
+            sb.append("Null method");
         }
         return sb.append(" [bci: ").append(bci).append(']');
     }
@@ -629,6 +629,7 @@ public class CiUtil {
      * Formats a location present in a register or frame reference map.
      */
     public static class RefMapFormatter {
+
         /**
          * The size of a stack slot.
          */
@@ -642,8 +643,8 @@ public class CiUtil {
         public final CiArchitecture arch;
 
         /**
-         * The offset (in bytes) from the slot pointed to by {@link #fp} to the slot
-         * corresponding to bit 0 in the frame reference map.
+         * The offset (in bytes) from the slot pointed to by {@link #fp} to the slot corresponding to bit 0 in the frame
+         * reference map.
          */
         public final int refMapToFPOffset;
 
@@ -728,12 +729,80 @@ public class CiUtil {
         return result;
     }
 
-    public static Class<?>[] signatureToTypes(RiSignature signature, RiType accessingClass) {
+    public static Class< ? >[] signatureToTypes(RiSignature signature, RiResolvedType accessingClass) {
         int count = signature.argumentCount(false);
-        Class<?>[] result = new Class<?>[count];
+        Class< ? >[] result = new Class< ? >[count];
         for (int i = 0; i < result.length; ++i) {
-            result[i] = ((RiResolvedType) signature.argumentTypeAt(i, accessingClass)).toJava();
+            result[i] = signature.argumentTypeAt(i, accessingClass).resolve(accessingClass).toJava();
         }
         return result;
+    }
+
+    /**
+     * Formats some profiling information associated as a string.
+     *
+     * @param info the profiling info to format
+     * @param method an optional method that augments the profile string returned
+     * @param sep the separator to use for each separate profile record
+     */
+    public static String profileToString(RiProfilingInfo info, RiResolvedMethod method, String sep) {
+        StringBuilder buf = new StringBuilder(100);
+        if (method != null) {
+            buf.append(String.format("canBeStaticallyBound: %b%s", method.canBeStaticallyBound(), sep)).
+            append(String.format("invocationCount: %d%s", method.invocationCount(), sep));
+        }
+        for (int i = 0; i < info.codeSize(); i++) {
+            if (info.getExecutionCount(i) != -1) {
+                buf.append(String.format("executionCount@%d: %d%s", i, info.getExecutionCount(i), sep));
+            }
+
+            if (info.getBranchTakenProbability(i) != -1) {
+                buf.append(String.format("branchProbability@%d: %.3f%s", i, info.getBranchTakenProbability(i), sep));
+            }
+
+            double[] switchProbabilities = info.getSwitchProbabilities(i);
+            if (switchProbabilities != null) {
+                buf.append(String.format("switchProbabilities@%d:", i));
+                for (int j = 0; j < switchProbabilities.length; j++) {
+                    buf.append(String.format(" %.3f", switchProbabilities[j]));
+                }
+                buf.append(sep);
+            }
+
+            if (info.getExceptionSeen(i) != RiExceptionSeen.FALSE) {
+                buf.append(String.format("exceptionSeen@%d: %s%s", i, info.getExceptionSeen(i).name(), sep));
+            }
+
+            RiTypeProfile typeProfile = info.getTypeProfile(i);
+            if (typeProfile != null) {
+                ProfiledType[] ptypes = typeProfile.getTypes();
+                if (ptypes != null) {
+                    buf.append(String.format("types@%d:", i));
+                    for (int j = 0; j < ptypes.length; j++) {
+                        ProfiledType ptype = ptypes[j];
+                        buf.append(String.format(" %.3f (%s)%s", ptype.probability, ptype.type, sep));
+                    }
+                    buf.append(String.format(" %.3f <not recorded>%s", typeProfile.getNotRecordedProbability(), sep));
+                }
+            }
+        }
+
+        boolean firstDeoptReason = true;
+        for (RiDeoptReason reason: RiDeoptReason.values()) {
+            int count = info.getDeoptimizationCount(reason);
+            if (count > 0) {
+                if (firstDeoptReason) {
+                    buf.append("deoptimization history").append(sep);
+                    firstDeoptReason = false;
+                }
+                buf.append(String.format(" %s: %d%s", reason.name(), count, sep));
+            }
+        }
+        if (buf.length() == 0) {
+            return "";
+        }
+        String s = buf.toString();
+        assert s.endsWith(sep);
+        return s.substring(0, s.length() - sep.length());
     }
 }

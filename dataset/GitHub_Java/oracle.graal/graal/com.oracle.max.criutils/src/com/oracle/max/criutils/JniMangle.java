@@ -22,7 +22,8 @@
  */
 package com.oracle.max.criutils;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 /**
  * A utility for mangling Java method name and signatures into C function names.
@@ -60,7 +61,7 @@ public final class JniMangle {
     }
 
     /**
-     * The delimiter in the string returned by {@link #mangleMethod(ResolvedJavaType, String, Signature, boolean)} separating
+     * The delimiter in the string returned by {@link #mangleMethod(TypeDescriptor, String, SignatureDescriptor, boolean)} separating
      * the short mangled form from the suffix to be added to obtain the long mangled form.
      */
     public static final char LONG_NAME_DELIMITER = ' ';
@@ -78,9 +79,9 @@ public final class JniMangle {
      * @param splitSuffix determines if {@link #LONG_NAME_DELIMITER} should be used as described above
      * @return the symbol for the C function as described above
      */
-    public static String mangleMethod(ResolvedJavaType declaringClass, String name, Signature signature, boolean splitSuffix) {
+    public static String mangleMethod(RiResolvedType declaringClass, String name, RiSignature signature, boolean splitSuffix) {
         final StringBuilder result = new StringBuilder(100);
-        final String declaringClassName = MetaUtil.toJavaName(declaringClass);
+        final String declaringClassName = CiUtil.toJavaName(declaringClass);
         result.append("Java_").append(mangle(declaringClassName)).append('_').append(mangle(name));
         if (signature != null) {
             if (splitSuffix) {
