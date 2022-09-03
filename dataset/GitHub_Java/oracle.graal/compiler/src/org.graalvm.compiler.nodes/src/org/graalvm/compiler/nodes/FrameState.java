@@ -41,6 +41,8 @@ import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.bytecode.Bytecodes;
 import org.graalvm.compiler.core.common.type.StampFactory;
+import org.graalvm.compiler.debug.Debug;
+import org.graalvm.compiler.debug.DebugCounter;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.IterableNodeType;
 import org.graalvm.compiler.graph.NodeClass;
@@ -69,6 +71,8 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 @NodeInfo(nameTemplate = "@{p#code/s}:{p#bci}", cycles = CYCLES_0, size = SIZE_1)
 public final class FrameState extends VirtualState implements IterableNodeType {
     public static final NodeClass<FrameState> TYPE = NodeClass.create(FrameState.class);
+
+    private static final DebugCounter FRAMESTATES_COUNTER = Debug.counter("FrameStateCount");
 
     /**
      * Marker value for the second slot of values that occupy two local variable or expression stack
@@ -153,6 +157,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         this.duringCall = duringCall;
         assert !this.rethrowException || this.stackSize == 1 : "must have exception on top of the stack";
         assert this.locksSize() == this.monitorIdCount();
+        FRAMESTATES_COUNTER.increment();
     }
 
     public FrameState(FrameState outerFrameState, Bytecode code, int bci, List<ValueNode> values, int localsSize, int stackSize, boolean rethrowException, boolean duringCall,
@@ -244,7 +249,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         if (fs == null) {
             return null;
         }
-        return new NodeSourcePosition(toSourcePosition(fs.outerFrameState()), fs.code.getMethod(), fs.bci);
+        return new NodeSourcePosition(null, toSourcePosition(fs.outerFrameState()), fs.code.getMethod(), fs.bci);
     }
 
     /**
