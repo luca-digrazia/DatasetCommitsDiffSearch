@@ -33,7 +33,8 @@ package com.oracle.truffle.api.interop;
  * <li>{@link #READABLE}: if {@link Message#READ reading} an existing key is supported.
  * <li>{@link #MODIFIABLE}: if {@link Message#WRITE writing} an existing key is supported.
  * <li>{@link #INSERTABLE} if {@link Message#WRITE writing} a new key is supported.
- * <li>{@link #INVOCABLE}: if {@link Message#INVOKE invoking} an existing key is supported.
+ * <li>{@link #INVOCABLE}: if {@link Message#createInvoke(int) invoking} an existing key is
+ * supported.
  * <li>{@link #REMOVABLE} if {@link Message#REMOVE removing} an existing key is supported.
  * <li>{@link #INTERNAL} if an existing key is internal.
  * <p>
@@ -42,8 +43,8 @@ package com.oracle.truffle.api.interop;
  * {@link Message#WRITE} message will succeed. Read or write can fail due to some momentary bad
  * state. An object field is expected not to be readable resp. writable when it's known that the
  * field can not be read (e.g. a bean property without a getter) resp. can not be written to (e.g. a
- * bean property without a setter). The same applies to invocable flag and {@link Message#INVOKE}
- * message.
+ * bean property without a setter). The same applies to invocable flag and
+ * {@link Message#createInvoke(int) invoke} message.
  * <p>
  *
  * @since 0.26
@@ -53,49 +54,50 @@ public final class KeyInfo {
     /**
      * Value of the key info if the key has no capability.
      *
-     * @since 0.33
+     * @since 0.32
      */
     public static final int NONE = 0;
 
     /**
      * Single bit that is set if {@link Message#READ reading} an existing key is supported.
      *
-     * @since 0.33
+     * @since 0.32
      */
     public static final int READABLE = 1 << 1;
 
     /**
      * Single bit that is set if {@link Message#WRITE writing} an existing key is supported.
      *
-     * @since 0.33
+     * @since 0.32
      */
     public static final int MODIFIABLE = 1 << 2;
 
     /**
-     * Single bit that is set if {@link Message#INVOKE invoking} an existing key is supported.
+     * Single bit that is set if {@link Message#createInvoke(int) invoking} an existing key is
+     * supported.
      *
-     * @since 0.33
+     * @since 0.32
      */
     public static final int INVOCABLE = 1 << 3;
 
     /**
      * Single bit that is set if an existing key is internal.
      *
-     * @since 0.33
+     * @since 0.32
      */
     public static final int INTERNAL = 1 << 4;
 
     /**
      * Single bit that is set if {@link Message#REMOVE removing} an existing key is supported.
      *
-     * @since 0.33
+     * @since 0.32
      */
     public static final int REMOVABLE = 1 << 5;
 
     /**
      * Single bit that is set if {@link Message#WRITE writing} a new key is supported.
      *
-     * @since 0.33
+     * @since 0.32
      */
     public static final int INSERTABLE = 1 << 6;
 
@@ -134,7 +136,7 @@ public final class KeyInfo {
     }
 
     /**
-     * Test if {@link Message#INVOKE invoking} an existing key is supported.
+     * Test if {@link Message#createInvoke(int) invoking} an existing key is supported.
      *
      * @since 0.26
      */
@@ -154,7 +156,7 @@ public final class KeyInfo {
     /**
      * Test if {@link Message#WRITE writing} a new key is supported.
      *
-     * @since 0.33
+     * @since 0.32
      */
     public static boolean isRemovable(int infoBits) {
         return (infoBits & REMOVABLE) != 0;
@@ -163,7 +165,7 @@ public final class KeyInfo {
     /**
      * Test if {@link Message#WRITE writing} an existing key is supported.
      *
-     * @since 0.33
+     * @since 0.32
      */
     public static boolean isModifiable(int infoBits) {
         return (infoBits & MODIFIABLE) != 0;
@@ -172,7 +174,7 @@ public final class KeyInfo {
     /**
      * Test if {@link Message#WRITE writing} a new key is supported.
      *
-     * @since 0.33
+     * @since 0.32
      */
     public static boolean isInsertable(int infoBits) {
         return (infoBits & INSERTABLE) != 0;
@@ -180,7 +182,7 @@ public final class KeyInfo {
 
     /**
      * @since 0.26
-     * @deprecated in 0.33 use integer constants in {@link KeyInfo} instead. For example
+     * @deprecated in 0.32 use integer constants in {@link KeyInfo} instead. For example
      *             <code> KeyInfo.newBuilder().setWritable(true).setReadable(true).build()</code>
      *             becomes <code>
      *             {@link #READABLE READABLE} | {@link #MODIFIABLE MODIFIABLE} | {@link #INSERTABLE
@@ -196,7 +198,7 @@ public final class KeyInfo {
      * {@link #build() creation}.
      *
      * @since 0.26
-     * @deprecated in 0.33 use integer constants in {@link KeyInfo} instead. For example
+     * @deprecated in 0.32 use integer constants in {@link KeyInfo} instead. For example
      *             <code> KeyInfo.newBuilder().setWritable(true).setReadable(true).build()</code>
      *             becomes <code>
      *             {@link #READABLE READABLE} | {@link #MODIFIABLE MODIFIABLE} | {@link #INSERTABLE
@@ -258,6 +260,16 @@ public final class KeyInfo {
          */
         public Builder setRemovable(boolean removable) {
             setBit(5, removable);
+            return this;
+        }
+
+        /**
+         * Set removability flag.
+         *
+         * @since 0.32
+         */
+        public Builder setInsertable(boolean removable) {
+            setBit(6, removable);
             return this;
         }
 
