@@ -49,8 +49,6 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
      */
     boolean canInlineConstant(Constant c);
 
-    boolean canStoreConstant(Constant c, boolean isCompressed);
-
     RegisterAttributes attributes(Register register);
 
     AllocatableValue newVariable(PlatformKind kind);
@@ -69,7 +67,7 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
 
     void emitMembar(int barriers);
 
-    void emitDeoptimize(Value actionAndReason, Value failedSpeculation, DeoptimizingNode deopting);
+    void emitDeoptimize(Value actionAndReason, DeoptimizingNode deopting);
 
     void emitNullCheck(ValueNode v, DeoptimizingNode deopting);
 
