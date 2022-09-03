@@ -111,10 +111,10 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
      * The Graal-specific Truffle runtime associated with this compiler.
      */
 
-    protected final Providers lastTierProviders;
-    protected final Suites lastTierSuites;
+    protected final Providers providers;
+    protected final Suites suites;
     protected final GraphBuilderConfiguration config;
-    protected final LIRSuites lastTierLirSuites;
+    protected final LIRSuites lirSuites;
     protected final Providers firstTierProviders;
     protected final Suites firstTierSuites;
     protected final LIRSuites firstTierLirSuites;
@@ -129,14 +129,13 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
                     UseTypeCheckedInlining,
                     UseTypeCheckHints);
 
-    public TruffleCompilerImpl(TruffleCompilerRuntime runtime, Plugins plugins, Suites lastTierSuites, LIRSuites lastTierLirSuites, Backend backend, Suites firstTierSuites,
-                    LIRSuites firstTierLirSuites,
+    public TruffleCompilerImpl(TruffleCompilerRuntime runtime, Plugins plugins, Suites suites, LIRSuites lirSuites, Backend backend, Suites firstTierSuites, LIRSuites firstTierLirSuites,
                     Providers firstTierProviders, SnippetReflectionProvider snippetReflection) {
         this.backend = backend;
         this.snippetReflection = snippetReflection;
-        this.lastTierProviders = backend.getProviders();
-        this.lastTierSuites = lastTierSuites;
-        this.lastTierLirSuites = lastTierLirSuites;
+        this.providers = backend.getProviders();
+        this.suites = suites;
+        this.lirSuites = lirSuites;
         this.codeInstallationTaskFactory = new TrufflePostCodeInstallationTaskFactory();
         backend.addCodeInstallationTask(codeInstallationTaskFactory);
 
@@ -155,7 +154,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
     }
 
     private ResolvedJavaType[] getSkippedExceptionTypes(TruffleCompilerRuntime runtime) {
-        final MetaAccessProvider metaAccess = lastTierProviders.getMetaAccess();
+        final MetaAccessProvider metaAccess = providers.getMetaAccess();
         ResolvedJavaType[] head = metaAccess.lookupJavaTypes(new Class<?>[]{
                         ArithmeticException.class,
                         IllegalArgumentException.class,
@@ -424,11 +423,11 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
         CompilationResult result = null;
 
         try (DebugCloseable a = CompilationTime.start(debug);
-                        DebugContext.Scope s = debug.scope("TruffleGraal.GraalCompiler", graph, lastTierProviders.getCodeCache());
+                        DebugContext.Scope s = debug.scope("TruffleGraal.GraalCompiler", graph, providers.getCodeCache());
                         DebugCloseable c = CompilationMemUse.start(debug)) {
-            Suites selectedSuites = lastTierSuites;
-            LIRSuites selectedLirSuites = lastTierLirSuites;
-            Providers selectedProviders = lastTierProviders;
+            Suites selectedSuites = suites;
+            LIRSuites selectedLirSuites = lirSuites;
+            Providers selectedProviders = providers;
             if (task != null && !task.isLastTier()) {
                 selectedSuites = firstTierSuites;
                 selectedLirSuites = firstTierLirSuites;
@@ -448,6 +447,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
         try (DebugCloseable a = CodeInstallationTime.start(debug); DebugCloseable c = CodeInstallationMemUse.start(debug)) {
             InstalledCode installedCode = createInstalledCode(compilable);
 
+            // Install the new code.
             backend.createInstalledCode(debug, graph.method(), compilationRequest, result, graph.getSpeculationLog(), installedCode, false);
         } catch (Throwable e) {
             throw debug.handle(e);
