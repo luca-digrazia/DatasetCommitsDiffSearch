@@ -24,25 +24,18 @@ package org.graalvm.util.test;
 
 import static org.junit.Assert.assertEquals;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Random;
 import java.util.function.BiFunction;
 
-import org.graalvm.util.CollectionsUtil;
-import org.graalvm.util.EconomicMap;
-import org.graalvm.util.EconomicSet;
 import org.graalvm.util.Equivalence;
+import org.graalvm.util.EconomicMap;
+import org.graalvm.util.UnmodifiableMapCursor;
 import org.graalvm.util.MapCursor;
 import org.graalvm.util.ObjectSizeEstimate;
-import org.graalvm.util.UnmodifiableMapCursor;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -452,85 +445,5 @@ public class CollectionTest {
                 sparseMap.replaceAll(function);
             }
         };
-    }
-
-    @Test
-    public void testIterableConcat() {
-        List<String> i1 = Arrays.asList("1", "2", "3");
-        List<String> i2 = Arrays.asList();
-        List<String> i3 = Arrays.asList("4", "5");
-        List<String> i4 = Arrays.asList();
-        List<String> i5 = Arrays.asList("6");
-        List<String> iNull = null;
-
-        List<String> actual = new ArrayList<>();
-        List<String> expected = new ArrayList<>();
-        expected.addAll(i1);
-        expected.addAll(i2);
-        expected.addAll(i3);
-        expected.addAll(i4);
-        expected.addAll(i5);
-        Iterable<String> iterable = CollectionsUtil.concat(Arrays.asList(i1, i2, i3, i4, i5));
-        for (String s : iterable) {
-            actual.add(s);
-        }
-        Assert.assertEquals(expected, actual);
-
-        Iterator<String> iter = iterable.iterator();
-        while (iter.hasNext()) {
-            iter.next();
-        }
-        try {
-            iter.next();
-            Assert.fail("Expected NoSuchElementException");
-        } catch (NoSuchElementException e) {
-            // Expected
-        }
-        try {
-            CollectionsUtil.concat(i1, iNull);
-            Assert.fail("Expected NullPointerException");
-        } catch (NullPointerException e) {
-            // Expected
-        }
-
-        Iterable<Object> emptyIterable = CollectionsUtil.concat(Collections.emptyList());
-        Assert.assertFalse(emptyIterable.iterator().hasNext());
-    }
-
-    @Test
-    public void testSetRemoval() {
-        ArrayList<Integer> initialList = new ArrayList<>();
-        ArrayList<Integer> removalList = new ArrayList<>();
-        ArrayList<Integer> finalList = new ArrayList<>();
-        EconomicSet<Integer> set = EconomicSet.create(Equivalence.IDENTITY);
-        set.add(1);
-        set.add(2);
-        set.add(3);
-        set.add(4);
-        set.add(5);
-        set.add(6);
-        set.add(7);
-        set.add(8);
-        set.add(9);
-        Iterator<Integer> i1 = set.iterator();
-        while (i1.hasNext()) {
-            initialList.add(i1.next());
-        }
-        int size = 0;
-        Iterator<Integer> i2 = set.iterator();
-        while (i2.hasNext()) {
-            Integer elem = i2.next();
-            if (size++ < 8) {
-                i2.remove();
-            }
-            removalList.add(elem);
-        }
-        Iterator<Integer> i3 = set.iterator();
-        while (i3.hasNext()) {
-            finalList.add(i3.next());
-        }
-        Assert.assertEquals(initialList, removalList);
-        Assert.assertEquals(1, finalList.size());
-        Assert.assertEquals(new Integer(9), finalList.get(0));
     }
 }

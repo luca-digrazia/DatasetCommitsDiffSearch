@@ -35,13 +35,6 @@ public interface EconomicMap<K, V> extends UnmodifiableEconomicMap<K, V> {
 
     V put(K key, V value);
 
-    default void putAll(EconomicMap<K, V> other) {
-        MapCursor<K, V> e = other.getEntries();
-        while (e.advance()) {
-            put(e.getKey(), e.getValue());
-        }
-    }
-
     void clear();
 
     V removeKey(K key);
@@ -59,7 +52,7 @@ public interface EconomicMap<K, V> extends UnmodifiableEconomicMap<K, V> {
     }
 
     /**
-     * Creates a new map that guarantees insertion order on the key set with the default
+     * Creates a new map that guarantees insertion order on the key set with the the default
      * {@link Equivalence#DEFAULT} comparison strategy for keys.
      */
     static <K, V> EconomicMap<K, V> create() {
@@ -67,7 +60,7 @@ public interface EconomicMap<K, V> extends UnmodifiableEconomicMap<K, V> {
     }
 
     /**
-     * Creates a new map that guarantees insertion order on the key set with the default
+     * Creates a new map that guarantees insertion order on the key set with the the default
      * {@link Equivalence#DEFAULT} comparison strategy for keys and initializes with a specified
      * capacity.
      */
@@ -84,7 +77,7 @@ public interface EconomicMap<K, V> extends UnmodifiableEconomicMap<K, V> {
     }
 
     /**
-     * Creates a new map that guarantees insertion order on the key set with the default
+     * Creates a new map that guarantees insertion order on the key set with the the default
      * {@link Equivalence#DEFAULT} comparison strategy for keys and copies all elements from the
      * specified existing map.
      */

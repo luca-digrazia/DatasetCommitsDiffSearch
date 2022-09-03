@@ -30,7 +30,6 @@ import java.util.Iterator;
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.code.SourceStackTraceBailoutException;
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
-import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.graph.Graph;
@@ -53,7 +52,6 @@ import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.LoopEndNode;
 import org.graalvm.compiler.nodes.LoopExitNode;
 import org.graalvm.compiler.nodes.PhiNode;
-import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.ProxyNode;
 import org.graalvm.compiler.nodes.StateSplit;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -67,6 +65,7 @@ import org.graalvm.compiler.nodes.spi.ValueProxy;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionValue;
+import org.graalvm.util.CollectionFactory;
 import org.graalvm.util.EconomicSet;
 import org.graalvm.util.Equivalence;
 
@@ -95,7 +94,7 @@ public class GraphUtil {
                 unsafeNodes = collectUnsafeNodes(node.graph());
             }
             if (GraphUtil.Options.VerifyKillCFGUnusedNodes.getValue()) {
-                EconomicSet<Node> collectedUnusedNodes = unusedNodes = EconomicSet.create(Equivalence.IDENTITY);
+                EconomicSet<Node> collectedUnusedNodes = unusedNodes = CollectionFactory.newSet(Equivalence.IDENTITY);
                 nodeEventScope = node.graph().trackNodeEvents(new Graph.NodeEventListener() {
                     @Override
                     public void event(Graph.NodeEvent e, Node n) {
@@ -137,7 +136,7 @@ public class GraphUtil {
      * Collects all node in the graph which have non-optional inputs that are null.
      */
     private static EconomicSet<Node> collectUnsafeNodes(Graph graph) {
-        EconomicSet<Node> unsafeNodes = EconomicSet.create(Equivalence.IDENTITY);
+        EconomicSet<Node> unsafeNodes = CollectionFactory.newSet(Equivalence.IDENTITY);
         for (Node n : graph.getNodes()) {
             for (Position pos : n.inputPositions()) {
                 Node input = pos.get(n);
@@ -681,20 +680,6 @@ public class GraphUtil {
         } else {
             return null;
         }
-    }
-
-    public static ValueNode skipPiWhileNonNull(ValueNode node) {
-        ValueNode n = node;
-        while (n instanceof PiNode) {
-            PiNode piNode = (PiNode) n;
-            ObjectStamp originalStamp = (ObjectStamp) piNode.getOriginalNode().stamp();
-            if (originalStamp.nonNull()) {
-                n = piNode.getOriginalNode();
-            } else {
-                break;
-            }
-        }
-        return n;
     }
 
     /**

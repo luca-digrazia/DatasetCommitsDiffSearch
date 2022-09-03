@@ -29,14 +29,6 @@ public interface UnmodifiableEconomicMap<K, V> {
 
     V get(K key);
 
-    default V get(K key, V defaultValue) {
-        V v = get(key);
-        if (v == null) {
-            return defaultValue;
-        }
-        return v;
-    }
-
     boolean containsKey(K key);
 
     int size();

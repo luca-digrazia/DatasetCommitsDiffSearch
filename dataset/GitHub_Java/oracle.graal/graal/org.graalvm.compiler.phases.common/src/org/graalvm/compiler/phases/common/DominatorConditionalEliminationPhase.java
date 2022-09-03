@@ -104,10 +104,6 @@ public class DominatorConditionalEliminationPhase extends BasePhase<PhaseContext
     private static final DebugCounter counterLFFolded = Debug.counter("ConstantLFFolded");
     private final boolean fullSchedule;
 
-    public static BasePhase<PhaseContext> create(boolean fullSchedule) {
-        return new NewConditionalEliminationPhase(fullSchedule);
-    }
-
     public DominatorConditionalEliminationPhase(boolean fullSchedule) {
         this.fullSchedule = fullSchedule;
     }
@@ -404,9 +400,9 @@ public class DominatorConditionalEliminationPhase extends BasePhase<PhaseContext
                                 counterLFFolded.increment();
                                 if (c.stamp() instanceof ObjectStamp) {
                                     GuardedConstantStamp cos = new GuardedConstantStamp(c.asJavaConstant(), (ObjectStamp) c.stamp());
-                                    return Pair.create(pair.getLeft(), cos);
+                                    return new Pair<>(pair.getLeft(), cos);
                                 }
-                                return Pair.create(pair.getLeft(), c.stamp());
+                                return new Pair<>(pair.getLeft(), c.stamp());
                             }
                         }
                     }
@@ -423,7 +419,7 @@ public class DominatorConditionalEliminationPhase extends BasePhase<PhaseContext
                 for (InfoElement infoElement : infos.getInfoElements(n)) {
                     Stamp s = infoElement.getStamp();
                     if (s instanceof GuardedConstantStamp) {
-                        return Pair.create(infoElement, s);
+                        return new Pair<>(infoElement, s);
                     }
                 }
                 return null;
@@ -442,14 +438,14 @@ public class DominatorConditionalEliminationPhase extends BasePhase<PhaseContext
                     for (InfoElement infoElement : info.getInfoElements(value)) {
                         Stamp result = unary.foldStamp(infoElement.getStamp());
                         if (result != null) {
-                            return Pair.create(infoElement, result);
+                            return new Pair<>(infoElement, result);
                         }
                     }
                     Pair<InfoElement, Stamp> foldResult = recursiveFoldStamp(value, info);
                     if (foldResult != null) {
                         Stamp result = unary.foldStamp(foldResult.getRight());
                         if (result != null) {
-                            return Pair.create(foldResult.getLeft(), result);
+                            return new Pair<>(foldResult.getLeft(), result);
                         }
                     }
                 } else if (node instanceof BinaryNode) {
@@ -460,14 +456,14 @@ public class DominatorConditionalEliminationPhase extends BasePhase<PhaseContext
                         for (InfoElement infoElement : info.getInfoElements(x)) {
                             Stamp result = binary.foldStamp(infoElement.stamp, y.stamp());
                             if (result != null) {
-                                return Pair.create(infoElement, result);
+                                return new Pair<>(infoElement, result);
                             }
                         }
                         Pair<InfoElement, Stamp> foldResult = recursiveFoldStamp(x, info);
                         if (foldResult != null) {
                             Stamp result = binary.foldStamp(foldResult.getRight(), y.stamp());
                             if (result != null) {
-                                return Pair.create(foldResult.getLeft(), result);
+                                return new Pair<>(foldResult.getLeft(), result);
                             }
                         }
                     } else if (x instanceof LoadFieldNode || y instanceof LoadFieldNode) {
@@ -476,7 +472,7 @@ public class DominatorConditionalEliminationPhase extends BasePhase<PhaseContext
                         if (foldResult != null) {
                             Stamp result = binary.foldStamp(useX ? foldResult.getRight() : x.stamp(), useX ? y.stamp() : foldResult.getRight());
                             if (result != null) {
-                                return Pair.create(foldResult.getLeft(), result);
+                                return new Pair<>(foldResult.getLeft(), result);
                             }
                         }
                     }

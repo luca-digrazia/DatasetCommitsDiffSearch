@@ -22,6 +22,8 @@
  */
 package org.graalvm.compiler.nodes;
 
+import static org.graalvm.compiler.core.common.CompilationIdentifier.INVALID_COMPILATION_ID;
+
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Iterator;
@@ -404,7 +406,7 @@ public class GraphEncoder {
      */
     @SuppressWarnings("try")
     public static boolean verifyEncoding(StructuredGraph originalGraph, EncodedGraph encodedGraph, Architecture architecture) {
-        StructuredGraph decodedGraph = new StructuredGraph.Builder(originalGraph.getOptions(), AllowAssumptions.YES).method(originalGraph.method()).build();
+        StructuredGraph decodedGraph = new StructuredGraph(originalGraph.method(), AllowAssumptions.YES, INVALID_COMPILATION_ID);
         GraphDecoder decoder = new GraphDecoder(architecture);
         decoder.decode(decodedGraph, encodedGraph);
 
