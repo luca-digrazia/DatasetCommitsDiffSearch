@@ -22,19 +22,14 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.compiler.common.GraalOptions.UseGraalQueries;
-import jdk.internal.jvmci.code.TargetDescription;
-import jdk.internal.jvmci.meta.MetaAccessProvider;
-import jdk.internal.jvmci.service.ServiceProvider;
-import sun.reflect.ConstantPool;
-import sun.reflect.Reflection;
+import sun.reflect.*;
 
-import com.oracle.graal.api.replacements.SnippetReflectionProvider;
-import com.oracle.graal.debug.query.DelimitationAPI;
-import com.oracle.graal.debug.query.GraalQueryAPI;
-import com.oracle.graal.nodes.spi.LoweringProvider;
-import com.oracle.graal.nodes.spi.Replacements;
-import com.oracle.graal.nodes.spi.ReplacementsProvider;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.hotspot.*;
+import com.oracle.jvmci.meta.*;
+import com.oracle.jvmci.service.*;
 
 @ServiceProvider(ReplacementsProvider.class)
 public class HotSpotSubstitutions implements ReplacementsProvider {
@@ -44,10 +39,6 @@ public class HotSpotSubstitutions implements ReplacementsProvider {
         replacements.registerSubstitutions(System.class, SystemSubstitutions.class);
         replacements.registerSubstitutions(Thread.class, ThreadSubstitutions.class);
         replacements.registerSubstitutions(Reflection.class, ReflectionSubstitutions.class);
-        replacements.registerSubstitutions(ConstantPool.class, ConstantPoolSubstitutions.class);
-        if (UseGraalQueries.getValue()) {
-            replacements.registerSubstitutions(GraalQueryAPI.class, GraalQueryAPISubstitutions.class);
-            replacements.registerSubstitutions(DelimitationAPI.class, DelimitationAPISubstitutions.class);
-        }
+        replacements.registerSubstitutions(CompilerToVMImpl.class, CompilerToVMImplSubstitutions.class);
     }
 }

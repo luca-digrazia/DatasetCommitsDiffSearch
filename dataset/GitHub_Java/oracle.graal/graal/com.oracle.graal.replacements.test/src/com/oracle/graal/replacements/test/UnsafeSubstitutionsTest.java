@@ -22,13 +22,14 @@
  */
 package com.oracle.graal.replacements.test;
 
-import static jdk.internal.jvmci.common.UnsafeAccess.*;
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.jvmci.common.UnsafeAccess.*;
 
 import org.junit.*;
 
 import sun.misc.*;
+
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * Tests the VM independent intrinsification of {@link Unsafe} methods.
@@ -347,35 +348,6 @@ public class UnsafeSubstitutionsTest extends MethodSubstitutionTest {
         unsafe.putFloat(address + 40, value);
         unsafe.putDouble(address + 48, value);
         return unsafeDirectMemoryRead(unsafe, address);
-    }
-
-    static class MyObject {
-        int i = 42;
-        final int j = 24;
-        final String a = "a";
-        final String b;
-
-        public MyObject(String b) {
-            this.b = b;
-            Thread.dumpStack();
-        }
-
-        @Override
-        public String toString() {
-            return j + a + b + i;
-        }
-    }
-
-    @SuppressWarnings("all")
-    public static String unsafeAllocateInstance(Unsafe unsafe) throws InstantiationException {
-        return unsafe.allocateInstance(MyObject.class).toString();
-    }
-
-    @Test
-    public void testAllocateInstance() throws Exception {
-        System.out.println("result: " + unsafeAllocateInstance(unsafe));
-        test("unsafeAllocateInstance", unsafe);
-        test("unsafeAllocateInstance", (Object) null);
     }
 
     @Test

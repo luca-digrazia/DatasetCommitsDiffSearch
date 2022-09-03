@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,22 @@
  */
 package com.oracle.graal.replacements;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
+import com.oracle.jvmci.meta.*;
+
+// JaCoCo Exclude
 
 /**
  * Substitutions for {@link java.lang.reflect.Array} methods.
  */
-@ClassSubstitution(java.lang.reflect.Array.class)
 public class ArraySubstitutions {
 
-    @MethodSubstitution
-    public static Object newInstance(Class<?> componentType, int length) throws NegativeArraySizeException {
-        if (componentType == null) {
-            DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.NullCheckException);
+    public static int getLength(Object array) {
+        if (!array.getClass().isArray()) {
+            DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
         }
-        return DynamicNewArrayNode.newArray(componentType, length);
+        return ArrayLengthNode.arrayLength(array);
     }
+
 }
