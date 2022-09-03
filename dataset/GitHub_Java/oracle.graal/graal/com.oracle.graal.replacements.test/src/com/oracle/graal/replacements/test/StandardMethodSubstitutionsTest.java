@@ -422,7 +422,7 @@ public class StandardMethodSubstitutionsTest extends MethodSubstitutionTest {
 
     @Test
     public void testFloatSubstitutions() {
-        assertInGraph(test("floatToIntBits"), ReinterpretNode.class); // Java
+        assertInGraph(test("floatToIntBits"), ConvertNode.class); // Java
         test("intBitsToFloat");
     }
 
@@ -438,7 +438,7 @@ public class StandardMethodSubstitutionsTest extends MethodSubstitutionTest {
 
     @Test
     public void testDoubleSubstitutions() {
-        assertInGraph(test("doubleToLongBits"), ReinterpretNode.class); // Java
+        assertInGraph(test("doubleToLongBits"), ConvertNode.class); // Java
         test("longBitsToDouble");
     }
 
