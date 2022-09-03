@@ -32,6 +32,7 @@ import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
+import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 
 /**
@@ -362,16 +363,16 @@ public final class RedundantMoveElimination {
             /*
              * Value procedure for the instruction's output and temp values
              */
-            class OutputValueConsumer implements ValueConsumer {
+            class OutputValueProc extends ValueProcedure {
 
                 int opValueNum;
 
-                OutputValueConsumer(int opValueNum) {
+                OutputValueProc(int opValueNum) {
                     this.opValueNum = opValueNum;
                 }
 
                 @Override
-                public void visitValue(Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
+                public Value doValue(Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
                     int stateIdx = getStateIdx(operand);
                     if (stateIdx >= 0) {
                         /*
@@ -380,18 +381,19 @@ public final class RedundantMoveElimination {
                         state[stateIdx] = encodeValueNum(opValueNum++, !operand.getLIRKind().isValue());
                         Debug.log("set def %d for register %s(%d): %d", opValueNum, operand, stateIdx, state[stateIdx]);
                     }
+                    return operand;
                 }
             }
 
-            OutputValueConsumer outputValueConsumer = new OutputValueConsumer(valueNum);
+            OutputValueProc outputValueProc = new OutputValueProc(valueNum);
 
-            op.visitEachTemp(outputValueConsumer);
+            op.forEachTemp(outputValueProc);
             /*
              * Semantically the output values are written _after_ the temp values
              */
-            op.visitEachOutput(outputValueConsumer);
+            op.forEachOutput(outputValueProc);
 
-            valueNum = outputValueConsumer.opValueNum;
+            valueNum = outputValueProc.opValueNum;
 
             if (op.hasState()) {
                 /*
