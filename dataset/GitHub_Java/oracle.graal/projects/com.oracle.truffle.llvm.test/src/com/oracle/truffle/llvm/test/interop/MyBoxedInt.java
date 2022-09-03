@@ -33,16 +33,17 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.nodes.RootNode;
 
 public final class MyBoxedInt implements TruffleObject {
     public int value = 42;
 
     @Override
     public ForeignAccess getForeignAccess() {
-        return ForeignAccess.create(MyBoxedInt.class, new ForeignAccess.Factory26() {
+        return ForeignAccess.create(MyBoxedInt.class, new ForeignAccess.Factory18() {
 
             @Override
             public CallTarget accessWrite() {
@@ -51,7 +52,7 @@ public final class MyBoxedInt implements TruffleObject {
 
             @Override
             public CallTarget accessUnbox() {
-                return Truffle.getRuntime().createCallTarget(new RootNode(null) {
+                return Truffle.getRuntime().createCallTarget(new RootNode(LLVMLanguage.class, null, null) {
 
                     @Override
                     public Object execute(VirtualFrame frame) {
@@ -92,7 +93,7 @@ public final class MyBoxedInt implements TruffleObject {
 
             @Override
             public CallTarget accessIsBoxed() {
-                return Truffle.getRuntime().createCallTarget(new RootNode(null) {
+                return Truffle.getRuntime().createCallTarget(new RootNode(LLVMLanguage.class, null, null) {
 
                     @Override
                     public Object execute(VirtualFrame frame) {
@@ -118,11 +119,6 @@ public final class MyBoxedInt implements TruffleObject {
 
             @Override
             public CallTarget accessExecute(int argumentsLength) {
-                return null;
-            }
-
-            @Override
-            public CallTarget accessKeyInfo() {
                 return null;
             }
         });
