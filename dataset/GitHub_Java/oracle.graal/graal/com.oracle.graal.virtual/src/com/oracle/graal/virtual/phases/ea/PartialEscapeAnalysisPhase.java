@@ -39,6 +39,7 @@ import com.oracle.graal.phases.common.CanonicalizerPhase.CustomCanonicalizer;
 import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.virtual.nodes.*;
+import com.oracle.graal.virtual.phases.ea.EffectList.Effect;
 
 public class PartialEscapeAnalysisPhase extends Phase {
 
@@ -46,15 +47,13 @@ public class PartialEscapeAnalysisPhase extends Phase {
     private final Assumptions assumptions;
     private CustomCanonicalizer customCanonicalizer;
     private final boolean iterative;
-    private final boolean readElimination;
 
     private boolean changed;
 
-    public PartialEscapeAnalysisPhase(MetaAccessProvider runtime, Assumptions assumptions, boolean iterative, boolean readElimination) {
+    public PartialEscapeAnalysisPhase(MetaAccessProvider runtime, Assumptions assumptions, boolean iterative) {
         this.runtime = runtime;
         this.assumptions = assumptions;
         this.iterative = iterative;
-        this.readElimination = readElimination;
     }
 
     public boolean hasChanged() {
@@ -77,7 +76,7 @@ public class PartialEscapeAnalysisPhase extends Phase {
             return;
         }
 
-        if (!readElimination) {
+        if (!GraalOptions.OptEarlyReadElimination) {
             boolean analyzableNodes = false;
             for (Node node : graph.getNodes()) {
                 if (node instanceof VirtualizableAllocation) {
@@ -108,7 +107,11 @@ public class PartialEscapeAnalysisPhase extends Phase {
                     changed = true;
 
                     // apply the effects collected during the escape analysis iteration
-                    List<Node> obsoleteNodes = closure.applyEffects(graph);
+                    ArrayList<Node> obsoleteNodes = new ArrayList<>();
+                    for (Effect effect : closure.getEffects()) {
+                        effect.apply(graph, obsoleteNodes);
+                    }
+                    trace("%s\n", closure.getEffects());
 
                     Debug.dump(graph, "after PartialEscapeAnalysis iteration");
                     assert noObsoleteNodes(graph, obsoleteNodes);
@@ -124,11 +127,9 @@ public class PartialEscapeAnalysisPhase extends Phase {
             });
         }
 
-        if (DynamicCounterNode.enabled && readElimination) {
-            for (Node node : graph.getNodes()) {
-                if (node instanceof LoadFieldNode) {
-                    DynamicCounterNode.addCounterBefore("load non-elim", 1, false, (FixedNode) node);
-                }
+        for (Node node : graph.getNodes()) {
+            if (node instanceof LoadFieldNode) {
+                DynamicCounterNode.addCounterBefore("load non-elim", 1, false, (FixedNode) node);
             }
         }
     }
@@ -141,7 +142,7 @@ public class PartialEscapeAnalysisPhase extends Phase {
         return true;
     }
 
-    static boolean noObsoleteNodes(StructuredGraph graph, List<Node> obsoleteNodes) {
+    static boolean noObsoleteNodes(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
         // helper code that determines the paths that keep obsolete nodes alive:
 
         NodeFlood flood = graph.createNodeFlood();
