@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.nodes.java;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.Assumptions.AssumptionResult;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -29,8 +31,6 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.jvmci.meta.*;
-import com.oracle.jvmci.meta.Assumptions.AssumptionResult;
 
 /**
  * The {@code InstanceOfNode} represents an instanceof test.
@@ -42,7 +42,7 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
     protected final ResolvedJavaType type;
     protected JavaTypeProfile profile;
 
-    private InstanceOfNode(ResolvedJavaType type, ValueNode object, JavaTypeProfile profile) {
+    public InstanceOfNode(ResolvedJavaType type, ValueNode object, JavaTypeProfile profile) {
         this(TYPE, type, object, profile);
     }
 
@@ -55,7 +55,7 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
 
     public static LogicNode create(ResolvedJavaType type, ValueNode object, JavaTypeProfile profile) {
         ObjectStamp objectStamp = (ObjectStamp) object.stamp();
-        LogicNode constantValue = findSynonym(object, type, objectStamp.type(), objectStamp.nonNull(), objectStamp.isExactType());
+        LogicNode constantValue = findSynonym(type, objectStamp.type(), objectStamp.nonNull(), objectStamp.isExactType());
         if (constantValue != null) {
             return constantValue;
         } else {
@@ -100,7 +100,7 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
     }
 
     private ValueNode checkInstanceOf(ValueNode forValue, ResolvedJavaType inputType, boolean nonNull, boolean exactType) {
-        ValueNode result = findSynonym(forValue, type(), inputType, nonNull, exactType);
+        ValueNode result = findSynonym(type(), inputType, nonNull, exactType);
         if (result != null) {
             return result;
         }
@@ -114,7 +114,7 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
         return null;
     }
 
-    public static LogicNode findSynonym(ValueNode object, ResolvedJavaType type, ResolvedJavaType inputType, boolean nonNull, boolean exactType) {
+    public static LogicNode findSynonym(ResolvedJavaType type, ResolvedJavaType inputType, boolean nonNull, boolean exactType) {
         if (inputType == null) {
             return null;
         }
@@ -138,10 +138,6 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
                 // since the subtype comparison was only performed on a declared type we don't
                 // really know if it might be true at run time...
             }
-        }
-
-        if (type.isFinal() && nonNull) {
-            return TypeCheckNode.create(type, object);
         }
         return null;
     }
