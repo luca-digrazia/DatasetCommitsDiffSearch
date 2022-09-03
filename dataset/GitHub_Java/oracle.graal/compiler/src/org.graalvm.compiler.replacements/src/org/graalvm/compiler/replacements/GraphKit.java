@@ -29,7 +29,6 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.graalvm.api.word.LocationIdentity;
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
@@ -46,8 +45,6 @@ import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.InvokeNode;
-import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
-import org.graalvm.compiler.nodes.KillingBeginNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.MergeNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -57,7 +54,6 @@ import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderTool;
 import org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext;
-import org.graalvm.compiler.nodes.java.ExceptionObjectNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.spi.StampProvider;
 import org.graalvm.compiler.nodes.type.StampTool;
@@ -368,7 +364,7 @@ public class GraphKit implements GraphBuilderTool {
         pushStructure(s);
     }
 
-    private IfStructure saveLastIfNode() {
+    private IfStructure saveLastNode() {
         IfStructure s = getTopStructure(IfStructure.class);
         switch (s.state) {
             case CONDITION:
@@ -389,19 +385,19 @@ public class GraphKit implements GraphBuilderTool {
     }
 
     public void thenPart() {
-        IfStructure s = saveLastIfNode();
+        IfStructure s = saveLastNode();
         lastFixedNode = (FixedWithNextNode) s.thenPart;
         s.state = IfState.THEN_PART;
     }
 
     public void elsePart() {
-        IfStructure s = saveLastIfNode();
+        IfStructure s = saveLastNode();
         lastFixedNode = (FixedWithNextNode) s.elsePart;
         s.state = IfState.ELSE_PART;
     }
 
     public void endIf() {
-        IfStructure s = saveLastIfNode();
+        IfStructure s = saveLastNode();
 
         FixedWithNextNode thenPart = s.thenPart instanceof FixedWithNextNode ? (FixedWithNextNode) s.thenPart : null;
         FixedWithNextNode elsePart = s.elsePart instanceof FixedWithNextNode ? (FixedWithNextNode) s.elsePart : null;
@@ -433,132 +429,5 @@ public class GraphKit implements GraphBuilderTool {
         }
         s.state = IfState.FINISHED;
         popStructure();
-    }
-
-    static class InvokeWithExceptionStructure extends Structure {
-        protected enum State {
-            INVOKE,
-            NO_EXCEPTION_EDGE,
-            EXCEPTION_EDGE,
-            FINISHED
-        }
-
-        protected State state;
-        protected ExceptionObjectNode exceptionObject;
-        protected FixedNode noExceptionEdge;
-        protected FixedNode exceptionEdge;
-    }
-
-    public InvokeWithExceptionNode startInvokeWithException(ResolvedJavaMethod method, InvokeKind invokeKind,
-                    FrameStateBuilder frameStateBuilder, int invokeBci, int exceptionEdgeBci, ValueNode... args) {
-
-        assert method.isStatic() == (invokeKind == InvokeKind.Static);
-        Signature signature = method.getSignature();
-        JavaType returnType = signature.getReturnType(null);
-        assert checkArgs(method, args);
-        StampPair returnStamp = graphBuilderPlugins.getOverridingStamp(this, returnType, false);
-        if (returnStamp == null) {
-            returnStamp = StampFactory.forDeclaredType(graph.getAssumptions(), returnType, false);
-        }
-        ExceptionObjectNode exceptionObject = add(new ExceptionObjectNode(getMetaAccess()));
-        if (frameStateBuilder != null) {
-            FrameStateBuilder exceptionState = frameStateBuilder.copy();
-            exceptionState.clearStack();
-            exceptionState.push(JavaKind.Object, exceptionObject);
-            exceptionState.setRethrowException(false);
-            exceptionObject.setStateAfter(exceptionState.create(exceptionEdgeBci, exceptionObject));
-        }
-        MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, method, args, returnStamp, invokeBci));
-        InvokeWithExceptionNode invoke = append(new InvokeWithExceptionNode(callTarget, exceptionObject, invokeBci));
-        AbstractBeginNode noExceptionEdge = graph.add(KillingBeginNode.create(LocationIdentity.any()));
-        invoke.setNext(noExceptionEdge);
-        if (frameStateBuilder != null) {
-            if (invoke.getStackKind() != JavaKind.Void) {
-                frameStateBuilder.push(returnType.getJavaKind(), invoke);
-            }
-            invoke.setStateAfter(frameStateBuilder.create(invokeBci, invoke));
-            if (invoke.getStackKind() != JavaKind.Void) {
-                frameStateBuilder.pop(returnType.getJavaKind());
-            }
-        }
-        lastFixedNode = null;
-
-        InvokeWithExceptionStructure s = new InvokeWithExceptionStructure();
-        s.state = InvokeWithExceptionStructure.State.INVOKE;
-        s.noExceptionEdge = noExceptionEdge;
-        s.exceptionEdge = exceptionObject;
-        s.exceptionObject = exceptionObject;
-        pushStructure(s);
-
-        return invoke;
-    }
-
-    private InvokeWithExceptionStructure saveLastInvokeWithExceptionNode() {
-        InvokeWithExceptionStructure s = getTopStructure(InvokeWithExceptionStructure.class);
-        switch (s.state) {
-            case INVOKE:
-                assert lastFixedNode == null;
-                break;
-            case NO_EXCEPTION_EDGE:
-                s.noExceptionEdge = lastFixedNode;
-                break;
-            case EXCEPTION_EDGE:
-                s.exceptionEdge = lastFixedNode;
-                break;
-            case FINISHED:
-                assert false;
-                break;
-        }
-        lastFixedNode = null;
-        return s;
-    }
-
-    public void noExceptionPart() {
-        InvokeWithExceptionStructure s = saveLastInvokeWithExceptionNode();
-        lastFixedNode = (FixedWithNextNode) s.noExceptionEdge;
-        s.state = InvokeWithExceptionStructure.State.NO_EXCEPTION_EDGE;
-    }
-
-    public void exceptionPart() {
-        InvokeWithExceptionStructure s = saveLastInvokeWithExceptionNode();
-        lastFixedNode = (FixedWithNextNode) s.exceptionEdge;
-        s.state = InvokeWithExceptionStructure.State.EXCEPTION_EDGE;
-    }
-
-    public ExceptionObjectNode exceptionObject() {
-        InvokeWithExceptionStructure s = getTopStructure(InvokeWithExceptionStructure.class);
-        return s.exceptionObject;
-    }
-
-    /**
-     * Finishes a control flow started with {@link #startInvokeWithException}. If necessary, creates
-     * a merge of the non-exception and exception edges. The merge node is returned and the
-     * non-exception edge is the first forward end of the merge, the exception edge is the second
-     * forward end (relevant for phi nodes).
-     */
-    public AbstractMergeNode endInvokeWithException() {
-        InvokeWithExceptionStructure s = saveLastInvokeWithExceptionNode();
-        FixedWithNextNode noExceptionEdge = s.noExceptionEdge instanceof FixedWithNextNode ? (FixedWithNextNode) s.noExceptionEdge : null;
-        FixedWithNextNode exceptionEdge = s.exceptionEdge instanceof FixedWithNextNode ? (FixedWithNextNode) s.exceptionEdge : null;
-        AbstractMergeNode merge = null;
-        if (noExceptionEdge != null && exceptionEdge != null) {
-            EndNode noExceptionEnd = graph.add(new EndNode());
-            graph.addAfterFixed(noExceptionEdge, noExceptionEnd);
-            EndNode exceptionEnd = graph.add(new EndNode());
-            graph.addAfterFixed(exceptionEdge, exceptionEnd);
-            merge = graph.add(new MergeNode());
-            merge.addForwardEnd(noExceptionEnd);
-            merge.addForwardEnd(exceptionEnd);
-            lastFixedNode = merge;
-        } else if (noExceptionEdge != null) {
-            lastFixedNode = noExceptionEdge;
-        } else if (exceptionEdge != null) {
-            lastFixedNode = exceptionEdge;
-        } else {
-            assert lastFixedNode == null;
-        }
-        s.state = InvokeWithExceptionStructure.State.FINISHED;
-        popStructure();
-        return merge;
     }
 }
