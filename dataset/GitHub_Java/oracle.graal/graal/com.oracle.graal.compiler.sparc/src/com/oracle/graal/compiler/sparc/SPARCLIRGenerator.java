@@ -865,7 +865,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     private void moveBetweenFpGp(AllocatableValue dst, AllocatableValue src) {
-        StackSlot tempSlot = getTempSlot(LIRKind.value(Kind.Long));
+        StackSlot tempSlot = getTempSlot(LIRKind.derive(dst));
         append(new MoveFpGp(dst, src, tempSlot));
     }
 
