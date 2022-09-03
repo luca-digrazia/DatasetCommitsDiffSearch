@@ -52,7 +52,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
     protected void emitIndirectCall(IndirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
         AllocatableValue targetAddress = AMD64.rax.asValue();
         gen.emitMove(targetAddress, operand(callTarget.computedAddress()));
-        append(new AMD64Call.IndirectCallOp(callTarget.targetMethod(), result, parameters, temps, targetAddress, callState));
+        append(new AMD64Call.IndirectCallOp(callTarget.target(), result, parameters, temps, targetAddress, callState));
     }
 
     @Override
@@ -470,6 +470,11 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
 
         Value[] parameters = visitInvokeArguments(gen.getResult().getFrameMap().registerConfig.getCallingConvention(CallingConvention.Type.JavaCall, null, sig, gen.target(), false), node.arguments());
         append(new AMD64BreakpointOp(parameters));
+    }
+
+    @Override
+    public void visitInfopointNode(InfopointNode i) {
+        append(new InfopointOp(stateFor(i.getState()), i.reason));
     }
 
     @Override

@@ -31,7 +31,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "/")
-public class IntegerDivNode extends FixedBinaryNode implements Lowerable, LIRLowerable {
+public class IntegerDivNode extends FixedBinaryNode implements Canonicalizable, Lowerable, LIRLowerable {
 
     public IntegerDivNode(ValueNode x, ValueNode y) {
         super(x.stamp().unrestricted(), x, y);
@@ -43,30 +43,30 @@ public class IntegerDivNode extends FixedBinaryNode implements Lowerable, LIRLow
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        if (forX.isConstant() && forY.isConstant()) {
-            long y = forY.asConstant().asLong();
+    public Node canonical(CanonicalizerTool tool) {
+        if (getX().isConstant() && getY().isConstant()) {
+            long y = getY().asConstant().asLong();
             if (y == 0) {
                 return this; // this will trap, can not canonicalize
             }
-            return ConstantNode.forIntegerStamp(stamp(), forX.asConstant().asLong() / y);
-        } else if (forY.isConstant()) {
-            long c = forY.asConstant().asLong();
+            return ConstantNode.forIntegerStamp(stamp(), getX().asConstant().asLong() / y, graph());
+        } else if (getY().isConstant()) {
+            long c = getY().asConstant().asLong();
             if (c == 1) {
-                return forX;
+                return getX();
             }
             if (c == -1) {
-                return new NegateNode(forX);
+                return graph().unique(new NegateNode(getX()));
             }
             long abs = Math.abs(c);
-            if (CodeUtil.isPowerOf2(abs) && forX.stamp() instanceof IntegerStamp) {
-                ValueNode dividend = forX;
-                IntegerStamp stampX = (IntegerStamp) forX.stamp();
+            if (CodeUtil.isPowerOf2(abs) && getX().stamp() instanceof IntegerStamp) {
+                ValueNode dividend = getX();
+                IntegerStamp stampX = (IntegerStamp) getX().stamp();
                 int log2 = CodeUtil.log2(abs);
                 // no rounding if dividend is positive or if its low bits are always 0
                 if (stampX.canBeNegative() || (stampX.upMask() & (abs - 1)) != 0) {
                     int bits = PrimitiveStamp.getBits(stamp());
-                    RightShiftNode sign = new RightShiftNode(forX, ConstantNode.forInt(bits - 1));
+                    RightShiftNode sign = new RightShiftNode(getX(), ConstantNode.forInt(bits - 1));
                     UnsignedRightShiftNode round = new UnsignedRightShiftNode(sign, ConstantNode.forInt(bits - log2));
                     dividend = IntegerArithmeticNode.add(dividend, round);
                 }
@@ -79,13 +79,13 @@ public class IntegerDivNode extends FixedBinaryNode implements Lowerable, LIRLow
         }
 
         // Convert the expression ((a - a % b) / b) into (a / b).
-        if (forX instanceof IntegerSubNode) {
-            IntegerSubNode integerSubNode = (IntegerSubNode) forX;
+        if (getX() instanceof IntegerSubNode) {
+            IntegerSubNode integerSubNode = (IntegerSubNode) getX();
             if (integerSubNode.getY() instanceof IntegerRemNode) {
                 IntegerRemNode integerRemNode = (IntegerRemNode) integerSubNode.getY();
                 if (integerSubNode.stamp().isCompatible(this.stamp()) && integerRemNode.stamp().isCompatible(this.stamp()) && integerSubNode.getX() == integerRemNode.getX() &&
-                                forY == integerRemNode.getY()) {
-                    return new IntegerDivNode(integerSubNode.getX(), forY);
+                                this.getY() == integerRemNode.getY()) {
+                    return graph().add(new IntegerDivNode(integerSubNode.getX(), this.getY()));
                 }
             }
         }

@@ -30,27 +30,27 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "|/|")
-public class UnsignedDivNode extends FixedBinaryNode implements Lowerable, LIRLowerable {
+public class UnsignedDivNode extends FixedBinaryNode implements Canonicalizable, Lowerable, LIRLowerable {
 
     public UnsignedDivNode(ValueNode x, ValueNode y) {
         super(x.stamp().unrestricted(), x, y);
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        if (forX.isConstant() && forY.isConstant()) {
-            long yConst = forY.asConstant().asLong();
+    public Node canonical(CanonicalizerTool tool) {
+        if (getX().isConstant() && getY().isConstant()) {
+            long yConst = getY().asConstant().asLong();
             if (yConst == 0) {
                 return this; // this will trap, cannot canonicalize
             }
-            return ConstantNode.forIntegerStamp(stamp(), UnsignedMath.divide(forX.asConstant().asLong(), yConst));
-        } else if (forY.isConstant()) {
-            long c = forY.asConstant().asLong();
+            return ConstantNode.forIntegerStamp(stamp(), UnsignedMath.divide(getX().asConstant().asLong(), yConst), graph());
+        } else if (getY().isConstant()) {
+            long c = getY().asConstant().asLong();
             if (c == 1) {
-                return forX;
+                return getX();
             }
             if (CodeUtil.isPowerOf2(c)) {
-                return new UnsignedRightShiftNode(forX, ConstantNode.forInt(CodeUtil.log2(c)));
+                return graph().unique(new UnsignedRightShiftNode(getX(), ConstantNode.forInt(CodeUtil.log2(c), graph())));
             }
         }
         return this;
