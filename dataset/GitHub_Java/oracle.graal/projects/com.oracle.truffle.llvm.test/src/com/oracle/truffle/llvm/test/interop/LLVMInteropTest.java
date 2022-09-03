@@ -488,7 +488,7 @@ public final class LLVMInteropTest {
         Assert.assertEquals(9, value);
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test(expected = PolyglotException.class)
     public void test042() throws Exception {
         Runner runner = new Runner("interop042");
         runner.run();
@@ -1038,20 +1038,20 @@ public final class LLVMInteropTest {
         }
     }
 
-    private static final Path TEST_DIR = new File(TestOptions.TEST_SUITE_PATH, "interop").toPath();
-    private static final String FILENAME = "O0_MEM2REG.bc";
+    private static final Path TEST_DIR = new File(TestOptions.PROJECT_ROOT + "/../cache/tests/interoptests").toPath();
+    private static final String FILE_SUFFIX = "_clang_O0_MEM2REG.bc";
 
     private static final class Runner {
-        private final String testName;
+        private final String fileName;
         private final Context context;
 
-        Runner(String testName) {
-            this.testName = testName;
+        Runner(String fileName) {
+            this.fileName = fileName;
             this.context = Context.create();
         }
 
         public Value findGlobalSymbol(String string) {
-            return context.lookup("llvm", string);
+            return context.importSymbol(string);
         }
 
         void export(Object foreignObject, String name) {
@@ -1060,7 +1060,7 @@ public final class LLVMInteropTest {
 
         int run() {
             try {
-                File file = new File(TEST_DIR.toFile(), testName + "/" + FILENAME);
+                File file = new File(TEST_DIR.toFile(), "/" + fileName + "/" + fileName + FILE_SUFFIX);
                 Source source = Source.newBuilder("llvm", file).build();
                 return context.eval(source).asInt();
             } catch (RuntimeException e) {
