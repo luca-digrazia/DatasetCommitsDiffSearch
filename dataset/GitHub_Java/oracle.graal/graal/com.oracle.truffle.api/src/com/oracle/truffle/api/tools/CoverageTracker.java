@@ -27,14 +27,11 @@ package com.oracle.truffle.api.tools;
 import java.io.*;
 import java.util.*;
 import java.util.Map.Entry;
-import java.util.concurrent.atomic.*;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.instrument.impl.*;
 import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.nodes.Node.Child;
 import com.oracle.truffle.api.source.*;
 
 /**
@@ -52,7 +49,7 @@ import com.oracle.truffle.api.source.*;
  * <p>
  * <ul>
  * <li>"Execution call" on a node is is defined as invocation of a node method that is instrumented
- * to produce the event {@link TruffleEventReceiver#enter(Node, VirtualFrame)};</li>
+ * to produce the event {@link TruffleEventListener#enter(Node, VirtualFrame)};</li>
  * <li>Execution calls are tabulated only at <em>instrumented</em> nodes, i.e. those for which
  * {@linkplain Node#isInstrumentable() isInstrumentable() == true};</li>
  * <li>Execution calls are tabulated only at nodes present in the AST when originally created;
@@ -75,13 +72,13 @@ import com.oracle.truffle.api.source.*;
 public final class CoverageTracker extends InstrumentationTool {
 
     /** Counting data. */
-    private final Map<LineLocation, CoverageCounter> counters = new HashMap<>();
+    private final Map<LineLocation, CoverageRecord> coverageMap = new HashMap<>();
 
-    /** For disposal. */
+    /** Needed for disposal. */
     private final List<Instrument> instruments = new ArrayList<>();
 
     /**
-     * Counting is restricted to nodes holding this tag.
+     * Coverage counting is restricted to nodes holding this tag.
      */
     private final SyntaxTag countingTag;
 
@@ -112,7 +109,7 @@ public final class CoverageTracker extends InstrumentationTool {
 
     @Override
     protected void internalReset() {
-        counters.clear();
+        coverageMap.clear();
     }
 
     @Override
@@ -142,32 +139,31 @@ public final class CoverageTracker extends InstrumentationTool {
          * every line associated with an appropriately tagged AST node; iterable in order of source
          * name, then line number.
          */
-        final TreeSet<Entry<LineLocation, CoverageCounter>> entries = new TreeSet<>(new LineLocationEntryComparator());
+        final TreeSet<Entry<LineLocation, CoverageRecord>> entries = new TreeSet<>(new LineLocationEntryComparator());
 
-        final Map<Source, Long[]> results = new HashMap<>();
-
-        for (Entry<LineLocation, CoverageCounter> entry : counters.entrySet()) {
+        for (Entry<LineLocation, CoverageRecord> entry : coverageMap.entrySet()) {
             entries.add(entry);
         }
+        final Map<Source, Long[]> result = new HashMap<>();
         Source curSource = null;
         Long[] curLineTable = null;
-        for (Entry<LineLocation, CoverageCounter> entry : entries) {
+        for (Entry<LineLocation, CoverageRecord> entry : entries) {
             final LineLocation key = entry.getKey();
             final Source source = key.getSource();
             final int lineNo = key.getLineNumber();
             if (source != curSource) {
                 if (curSource != null) {
-                    results.put(curSource, curLineTable);
+                    result.put(curSource, curLineTable);
                 }
                 curSource = source;
                 curLineTable = new Long[source.getLineCount()];
             }
-            curLineTable[lineNo - 1] = entry.getValue().count.longValue();
+            curLineTable[lineNo - 1] = entry.getValue().count;
         }
         if (curSource != null) {
-            results.put(curSource, curLineTable);
+            result.put(curSource, curLineTable);
         }
-        return results;
+        return result;
     }
 
     /**
@@ -183,14 +179,14 @@ public final class CoverageTracker extends InstrumentationTool {
          * every line associated with an appropriately tagged AST node; iterable in order of source
          * name, then line number.
          */
-        final TreeSet<Entry<LineLocation, CoverageCounter>> entries = new TreeSet<>(new LineLocationEntryComparator());
+        final TreeSet<Entry<LineLocation, CoverageRecord>> entries = new TreeSet<>(new LineLocationEntryComparator());
 
-        for (Entry<LineLocation, CoverageCounter> entry : counters.entrySet()) {
+        for (Entry<LineLocation, CoverageRecord> entry : coverageMap.entrySet()) {
             entries.add(entry);
         }
         Source curSource = null;
         int curLineNo = 1;
-        for (Entry<LineLocation, CoverageCounter> entry : entries) {
+        for (Entry<LineLocation, CoverageRecord> entry : entries) {
             final LineLocation key = entry.getKey();
             final Source source = key.getSource();
             final int lineNo = key.getLineNumber();
@@ -208,7 +204,7 @@ public final class CoverageTracker extends InstrumentationTool {
             while (curLineNo < lineNo) {
                 displayLine(out, null, curSource, curLineNo++);
             }
-            displayLine(out, entry.getValue().count, curSource, curLineNo++);
+            displayLine(out, entry.getValue(), curSource, curLineNo++);
         }
         if (curSource != null) {
             while (curLineNo <= curSource.getLineCount()) {
@@ -217,51 +213,42 @@ public final class CoverageTracker extends InstrumentationTool {
         }
     }
 
-    private static void displayLine(PrintStream out, AtomicLong value, Source source, int lineNo) {
-        if (value == null) {
+    private static void displayLine(PrintStream out, CoverageRecord record, Source source, int lineNo) {
+        if (record == null) {
             out.format("%14s", " ");
         } else {
-            out.format("(%12d)", value.longValue());
+            out.format("(%12d)", record.count);
         }
         out.format(" %3d: ", lineNo);
         out.println(source.getCode(lineNo));
     }
 
     /**
-     * A receiver for events at each instrumented AST location. This receiver counts
-     * "execution calls" to the instrumented node and is <em>stateful</em>. State in receivers must
-     * be considered carefully since ASTs, along with all instrumentation (including event receivers
-     * such as this) are routinely cloned by the Truffle runtime. AST cloning is <em>shallow</em>
-     * (for non- {@link Child} nodes), so in this case the actual count <em>is shared</em> among all
-     * the clones; the count is also held in a table indexed by source line.
-     * <p>
-     * In contrast, a primitive field would <em>not</em> be shared among clones and resulting counts
-     * would not be accurate.
+     * A listener for events at each instrumented AST location. This listener counts
+     * "execution calls" to the instrumented node.
      */
-    private final class CoverageEventReceiver extends DefaultEventReceiver {
+    private final class CoverageRecord extends DefaultEventListener {
 
-        /**
-         * Shared by all clones of the associated instrument and by the table of counters for the
-         * line.
-         */
-        private final AtomicLong count;
+        private final SourceSection srcSection; // The text of the code being counted
+        private Instrument instrument;  // The attached Instrument, in case need to remove.
+        private long count = 0;
 
-        CoverageEventReceiver(AtomicLong count) {
-            this.count = count;
+        CoverageRecord(SourceSection srcSection) {
+            this.srcSection = srcSection;
         }
 
         @Override
-        @TruffleBoundary
-        public void enter(Node node, VirtualFrame frame) {
+        public void enter(Node node, VirtualFrame vFrame) {
             if (isEnabled()) {
-                count.getAndIncrement();
+                count++;
             }
         }
+
     }
 
-    private static final class LineLocationEntryComparator implements Comparator<Entry<LineLocation, CoverageCounter>> {
+    private static final class LineLocationEntryComparator implements Comparator<Entry<LineLocation, CoverageRecord>> {
 
-        public int compare(Entry<LineLocation, CoverageCounter> e1, Entry<LineLocation, CoverageCounter> e2) {
+        public int compare(Entry<LineLocation, CoverageRecord> e1, Entry<LineLocation, CoverageRecord> e2) {
             return LineLocation.COMPARATOR.compare(e1.getKey(), e2.getKey());
         }
     }
@@ -279,38 +266,28 @@ public final class CoverageTracker extends InstrumentationTool {
                 if (srcSection == null) {
                     // TODO (mlvdv) report this?
                 } else {
+                    // Get the source line where the
                     final LineLocation lineLocation = srcSection.getLineLocation();
-                    CoverageCounter counter = counters.get(lineLocation);
-                    if (counter != null) {
+                    CoverageRecord record = coverageMap.get(lineLocation);
+                    if (record != null) {
                         // Another node starts on same line; count only the first (textually)
-                        if (srcSection.getCharIndex() > counter.srcSection.getCharIndex()) {
-                            // Counter already in place, corresponds to code earlier on line
+                        if (srcSection.getCharIndex() > record.srcSection.getCharIndex()) {
+                            // Existing record, corresponds to code earlier on line
                             return;
                         } else {
-                            // Counter already in place, corresponds to later code; replace it
-                            counter.instrument.dispose();
+                            // Existing record, corresponds to code at a later position; replace it
+                            record.instrument.dispose();
                         }
                     }
-                    final AtomicLong count = new AtomicLong();
-                    final CoverageEventReceiver eventReceiver = new CoverageEventReceiver(count);
-                    final Instrument instrument = Instrument.create(eventReceiver, CoverageTracker.class.getSimpleName());
+
+                    final CoverageRecord coverage = new CoverageRecord(srcSection);
+                    final Instrument instrument = Instrument.create(coverage, CoverageTracker.class.getSimpleName());
+                    coverage.instrument = instrument;
                     instruments.add(instrument);
                     probe.attach(instrument);
-                    counters.put(lineLocation, new CoverageCounter(srcSection, instrument, count));
+                    coverageMap.put(lineLocation, coverage);
                 }
             }
-        }
-    }
-
-    private class CoverageCounter {
-        final SourceSection srcSection;
-        final Instrument instrument;
-        final AtomicLong count;
-
-        CoverageCounter(SourceSection srcSection, Instrument instrument, AtomicLong count) {
-            this.srcSection = srcSection;
-            this.instrument = instrument;
-            this.count = count;
         }
     }
 
