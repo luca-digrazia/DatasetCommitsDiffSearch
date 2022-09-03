@@ -24,7 +24,7 @@ package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.hotspot.meta.HotSpotResolvedObjectTypeImpl.*;
+import static com.oracle.graal.hotspot.meta.HotSpotResolvedObjectType.*;
 
 import java.lang.annotation.*;
 import java.lang.reflect.*;
@@ -45,7 +45,7 @@ import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 public class HotSpotResolvedJavaField extends CompilerObject implements ResolvedJavaField {
 
     private static final long serialVersionUID = 7692985878836955683L;
-    private final HotSpotResolvedObjectTypeImpl holder;
+    private final HotSpotResolvedObjectType holder;
     private final String name;
     private JavaType type;
     private final int offset;
@@ -55,7 +55,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
      */
     private final int modifiers;
 
-    public HotSpotResolvedJavaField(HotSpotResolvedObjectTypeImpl holder, String name, JavaType type, long offset, int modifiers) {
+    public HotSpotResolvedJavaField(HotSpotResolvedObjectType holder, String name, JavaType type, long offset, int modifiers) {
         this.holder = holder;
         this.name = name;
         this.type = type;
@@ -101,8 +101,8 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
     }
 
     /**
-     * If the compiler is configured for AOT mode, {@link #readConstantValue(JavaConstant)} should
-     * be only called for snippets or replacements.
+     * If the compiler is configured for AOT mode, {@link #readConstantValue(Constant)} should be
+     * only called for snippets or replacements.
      */
     private static boolean isCalledForSnippets() {
         MetaAccessProvider metaAccess = runtime().getHostProviders().getMetaAccess();
@@ -194,7 +194,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
      * {@code receiver} is (assignable to) {@link StableOptionValue}.
      */
     @Override
-    public JavaConstant readConstantValue(JavaConstant receiver) {
+    public Constant readConstantValue(Constant receiver) {
         assert !ImmutableCode.getValue() || isCalledForSnippets() : receiver;
 
         if (receiver == null) {
@@ -218,14 +218,14 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
             if (object != null) {
                 if (isFinal()) {
                     if (isInObject(object)) {
-                        JavaConstant value = readValue(receiver);
+                        Constant value = readValue(receiver);
                         if (assumeNonStaticFinalFieldsAsFinal(object.getClass()) || !value.isDefaultForKind()) {
                             return value;
                         }
                     }
                 } else if (isStable()) {
                     if (isInObject(object)) {
-                        JavaConstant value = readValue(receiver);
+                        Constant value = readValue(receiver);
                         if (assumeDefaultStableFieldsAsFinal(object.getClass()) || !value.isDefaultForKind()) {
                             return value;
                         }
@@ -255,11 +255,11 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
         if (isStatic()) {
             return false;
         }
-        return getDeclaringClass().isAssignableFrom(HotSpotResolvedObjectTypeImpl.fromObjectClass(object.getClass()));
+        return getDeclaringClass().isAssignableFrom(HotSpotResolvedObjectType.fromClass(object.getClass()));
     }
 
     @Override
-    public JavaConstant readValue(JavaConstant receiver) {
+    public Constant readValue(Constant receiver) {
         if (receiver == null) {
             assert isStatic();
             if (holder.isInitialized()) {
@@ -279,8 +279,8 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
 
     /**
      * Usually {@link Stable} fields are not considered constant if the value is the
-     * {@link JavaConstant#isDefaultForKind default value}. For some special classes we want to
-     * override this behavior.
+     * {@link Constant#isDefaultForKind default value}. For some special classes we want to override
+     * this behavior.
      */
     private static boolean assumeDefaultStableFieldsAsFinal(Class<?> clazz) {
         // HotSpotVMConfig has a lot of zero-value fields which we know are stable and want to be
@@ -292,7 +292,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
     }
 
     @Override
-    public HotSpotResolvedObjectTypeImpl getDeclaringClass() {
+    public HotSpotResolvedObjectType getDeclaringClass() {
         return holder;
     }
 
