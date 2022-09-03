@@ -207,13 +207,6 @@ public abstract class TruffleLanguage<C> {
         String name();
 
         /**
-         * Unique name of your language implementation.
-         *
-         * @return the implementation name of your language
-         */
-        String implementationName() default "";
-
-        /**
          * Unique string identifying the language version. This name will be exposed to users via
          * the {@link com.oracle.truffle.api.vm.PolyglotEngine.Language#getVersion()} getter.
          *
@@ -892,28 +885,8 @@ public abstract class TruffleLanguage<C> {
          * @return object representing the symbol or <code>null</code> if it does not exist
          * @since 0.8 or earlier
          */
-        @TruffleBoundary
         public Object importSymbol(String symbolName) {
             return AccessAPI.engineAccess().importSymbol(vmObject, this, symbolName);
-        }
-
-        /**
-         * Looks up symbol in the top-most scope of the language. Returns <code>null</code> if no
-         * symbol was found.
-         * <p>
-         * The returned object can either be <code>TruffleObject</code> (e.g. a native object from
-         * the other language) to support interoperability between languages, {@link String} or one
-         * of the Java primitive wrappers ( {@link Integer}, {@link Double}, {@link Byte},
-         * {@link Boolean}, etc.).
-         * <p>
-         *
-         * @param language the language too lookup. must not be null.
-         * @param symbolName the name of the symbol in the top-most scope.
-         * @since 0.27
-         */
-        @TruffleBoundary
-        public Object lookupSymbol(@SuppressWarnings("hiding") LanguageInfo language, String symbolName) {
-            return AccessAPI.engineAccess().lookupSymbol(vmObject, this, language, symbolName);
         }
 
         /**
@@ -955,7 +928,6 @@ public abstract class TruffleLanguage<C> {
          * @param value the value to export for
          * @since 0.27
          */
-        @TruffleBoundary
         public void exportSymbol(String symbolName, Object value) {
             AccessAPI.engineAccess().exportSymbol(vmObject, symbolName, value);
         }
@@ -970,7 +942,6 @@ public abstract class TruffleLanguage<C> {
          * @return a boolean that indicates if the MIME type is supported
          * @since 0.11
          */
-        @TruffleBoundary
         public boolean isMimeTypeSupported(String mimeType) {
             checkDisposed();
             return AccessAPI.engineAccess().isMimeTypeSupported(vmObject, mimeType);
@@ -990,7 +961,6 @@ public abstract class TruffleLanguage<C> {
          * @return the call target representing the parsed result
          * @since 0.8 or earlier
          */
-        @TruffleBoundary
         public CallTarget parse(Source source, String... argumentNames) {
             CompilerAsserts.neverPartOfCompilation();
             checkDisposed();
@@ -1004,7 +974,6 @@ public abstract class TruffleLanguage<C> {
          * @return reader, never <code>null</code>
          * @since 0.8 or earlier
          */
-        @TruffleBoundary
         public InputStream in() {
             checkDisposed();
             return in;
@@ -1017,7 +986,6 @@ public abstract class TruffleLanguage<C> {
          * @return writer, never <code>null</code>
          * @since 0.8 or earlier
          */
-        @TruffleBoundary
         public OutputStream out() {
             checkDisposed();
             return out;
@@ -1030,7 +998,6 @@ public abstract class TruffleLanguage<C> {
          * @return writer, never <code>null</code>
          * @since 0.8 or earlier
          */
-        @TruffleBoundary
         public OutputStream err() {
             checkDisposed();
             return err;
@@ -1050,7 +1017,6 @@ public abstract class TruffleLanguage<C> {
          * @return instance of T or <code>null</code> if there is no such service available
          * @since 0.12
          */
-        @TruffleBoundary
         public <T> T lookup(Class<T> type) {
             checkDisposed();
             for (Object obj : services) {
@@ -1074,7 +1040,6 @@ public abstract class TruffleLanguage<C> {
          * @since 0.26
          */
         @SuppressWarnings("static-method")
-        @TruffleBoundary
         public <S> S lookup(InstrumentInfo instrument, Class<S> type) {
             return AccessAPI.engineAccess().lookup(instrument, type);
         }
@@ -1091,7 +1056,6 @@ public abstract class TruffleLanguage<C> {
          * @return the registered service or <code>null</code> if none is found
          * @since 0.26
          */
-        @TruffleBoundary
         public <S> S lookup(@SuppressWarnings("hiding") LanguageInfo language, Class<S> type) {
             if (this.language == language) {
                 throw new IllegalArgumentException("Cannot request services from the current language.");
@@ -1107,7 +1071,6 @@ public abstract class TruffleLanguage<C> {
          *
          * @since 0.26
          */
-        @TruffleBoundary
         public Map<String, LanguageInfo> getLanguages() {
             return AccessAPI.engineAccess().getLanguages(vmObject);
         }
@@ -1119,7 +1082,6 @@ public abstract class TruffleLanguage<C> {
          *
          * @since 0.26
          */
-        @TruffleBoundary
         public Map<String, InstrumentInfo> getInstruments() {
             return AccessAPI.engineAccess().getInstruments(vmObject);
         }
@@ -1151,7 +1113,6 @@ public abstract class TruffleLanguage<C> {
          * @return read-only view of configuration options for this language
          * @since 0.11
          */
-        @TruffleBoundary
         public Map<String, Object> getConfig() {
             checkDisposed();
             return config;
