@@ -366,6 +366,7 @@ public class ArrayCopySnippets implements SnippetsInterface{
             gen.setResult(this, obj);
         }
     }
+
     private static class DirectStoreNode extends FixedWithNextNode implements LIRLowerable {
         @Input private ValueNode address;
         @Input private ValueNode value;
@@ -394,7 +395,6 @@ public class ArrayCopySnippets implements SnippetsInterface{
             gen.emitStore(new CiAddress(v.kind, gen.operand(address)), v, false);
         }
     }
-
     private static class DirectObjectStoreNode extends FixedWithNextNode implements Lowerable {
         @Input private ValueNode object;
         @Input private ValueNode value;

@@ -231,21 +231,19 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
     @Override
     public void compileMethod(final HotSpotMethodResolved method, final int entryBCI, boolean blocking) throws Throwable {
         try {
-            if (Thread.currentThread() instanceof CompilerThread) {
-                if (method.holder().name().contains("java/util/concurrent")) {
-                    // This is required to avoid deadlocking a compiler thread. The issue is that a
-                    // java.util.concurrent.BlockingQueue is used to implement the compilation worker
-                    // queues. If a compiler thread triggers a compilation, then it may be blocked trying
-                    // to add something to its own queue.
-                    return;
-                }
+            if (Thread.currentThread() instanceof CompilerThread && method.holder().name().contains("java/util/concurrent")) {
+                // This is required to avoid deadlocking a compiler thread. The issue is that a
+                // java.util.concurrent.BlockingQueue is used to implement the compilation worker
+                // queues. If a compiler thread triggers a compilation, then it may be blocked trying
+                // to add something to its own queue.
+                return;
             }
 
             Runnable runnable = new Runnable() {
 
                 public void run() {
                     try {
-                        final PhasePlan plan = getDefaultPhasePlan();
+                        PhasePlan plan = getDefaultPhasePlan();
                         GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(compiler.getRuntime());
                         plan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
                         long startTime = 0;
@@ -259,12 +257,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
                         CiTargetMethod result = null;
                         TTY.Filter filter = new TTY.Filter(GraalOptions.PrintFilter, method);
                         try {
-                            result = Debug.scope("Compiling", method, new Callable<CiTargetMethod>() {
-                                @Override
-                                public CiTargetMethod call() throws Exception {
-                                    return compiler.getCompiler().compileMethod(method, -1, plan);
-                                }
-                            });
+                            result = compiler.getCompiler().compileMethod(method, -1, plan);
                         } finally {
                             filter.remove();
                             if (printCompilation) {
@@ -390,7 +383,9 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
 
     private PhasePlan getDefaultPhasePlan() {
         PhasePlan phasePlan = new PhasePlan();
-        phasePlan.addPhase(PhasePosition.HIGH_LEVEL, intrinsifyArrayCopy);
+        if (GraalOptions.Intrinsify) {
+            phasePlan.addPhase(PhasePosition.HIGH_LEVEL, intrinsifyArrayCopy);
+        }
         return phasePlan;
     }
 }

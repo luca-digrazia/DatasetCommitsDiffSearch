@@ -480,25 +480,10 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     @Override
     public void visitCheckCast(CheckCastNode x) {
-        XirArgument[] hints = getTypeCheckHints(x);
-        XirSnippet snippet = xir.genCheckCast(site(x), toXirArgument(x.object()), toXirArgument(x.targetClassInstruction()), x.targetClass(), hints, x.hintsExact());
+        XirSnippet snippet = xir.genCheckCast(site(x), toXirArgument(x.object()), toXirArgument(x.targetClassInstruction()), x.targetClass());
         emitXir(snippet, x, state(), true);
         // The result of a checkcast is the unmodified object, so no need to allocate a new variable for it.
         setResult(x, operand(x.object()));
-    }
-
-    private XirArgument[] getTypeCheckHints(TypeCheckNode x) {
-        XirArgument[] hints;
-        if (!GraalOptions.UseInstanceOfHints || x.hints() == null || x.hints().length == 0) {
-            hints = new XirArgument[0];
-        } else {
-            assert x.hints().length == x.hintInstructions().size();
-            hints = new XirArgument[x.hints().length];
-            for (int i = 0; i < x.hints().length; i++) {
-                hints[i] = toXirArgument(x.hintInstructions().get(i));
-            }
-        }
-        return hints;
     }
 
     @Override
@@ -699,9 +684,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     @Override
     public void emitGuardCheck(BooleanNode comp) {
-        if (comp instanceof IsTypeNode) {
-            emitTypeGuard((IsTypeNode) comp);
-        } else if (comp instanceof NullCheckNode && !((NullCheckNode) comp).expectedNull) {
+        if (comp instanceof NullCheckNode && !((NullCheckNode) comp).expectedNull) {
             emitNullCheckGuard((NullCheckNode) comp);
         } else if (comp instanceof ConstantNode && comp.asConstant().asBoolean()) {
             // True constant, nothing to emit.
@@ -715,15 +698,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     protected abstract void emitNullCheckGuard(NullCheckNode node);
 
-    private void emitTypeGuard(IsTypeNode node) {
-        load(operand(node.object()));
-        LIRDebugInfo info = state();
-        XirArgument clazz = toXirArgument(node.type().getEncoding(Representation.ObjectHub));
-        XirSnippet typeCheck = xir.genTypeCheck(site(node), toXirArgument(node.object()), clazz, node.type());
-        emitXir(typeCheck, node, info, false);
-    }
-
-
     public void emitBranch(BooleanNode node, LabelRef trueSuccessor, LabelRef falseSuccessor, LIRDebugInfo info) {
         if (node instanceof NullCheckNode) {
             emitNullCheckBranch((NullCheckNode) node, trueSuccessor, falseSuccessor, info);
@@ -733,6 +707,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             emitInstanceOfBranch((InstanceOfNode) node, trueSuccessor, falseSuccessor, info);
         } else if (node instanceof ConstantNode) {
             emitConstantBranch(((ConstantNode) node).asConstant().asBoolean(), trueSuccessor, falseSuccessor, info);
+        } else if (node instanceof IsTypeNode) {
+            emitTypeBranch((IsTypeNode) node, trueSuccessor, falseSuccessor, info);
         } else {
             throw Util.unimplemented(node.toString());
         }
@@ -754,17 +730,25 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     private void emitInstanceOfBranch(InstanceOfNode x, LabelRef trueSuccessor, LabelRef falseSuccessor, LIRDebugInfo info) {
-        XirArgument[] hints = getTypeCheckHints(x);
         XirArgument obj = toXirArgument(x.object());
-        XirSnippet snippet = xir.genInstanceOf(site(x), obj, toXirArgument(x.targetClassInstruction()), x.targetClass(), hints, x.hintsExact());
+        XirSnippet snippet = xir.genInstanceOf(site(x), obj, toXirArgument(x.targetClassInstruction()), x.targetClass());
         emitXir(snippet, x, info, null, false, x.negated() ? falseSuccessor : trueSuccessor, x.negated() ? trueSuccessor : falseSuccessor);
     }
-
 
     public void emitConstantBranch(boolean value, LabelRef trueSuccessorBlock, LabelRef falseSuccessorBlock, LIRDebugInfo info) {
         LabelRef block = value ? trueSuccessorBlock : falseSuccessorBlock;
         if (block != null) {
             emitJump(block, info);
+        }
+    }
+
+    public void emitTypeBranch(IsTypeNode x, LabelRef trueSuccessor, LabelRef falseSuccessor, LIRDebugInfo info) {
+        XirArgument thisClass = toXirArgument(x.objectClass());
+        XirArgument otherClass = toXirArgument(x.type().getEncoding(Representation.ObjectHub));
+        XirSnippet snippet = xir.genTypeBranch(site(x), thisClass, otherClass, x.type());
+        emitXir(snippet, x, info, null, false, trueSuccessor, falseSuccessor);
+        if (trueSuccessor != null) {
+            emitJump(trueSuccessor, null);
         }
     }
 
@@ -798,11 +782,10 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     private Variable emitInstanceOfConditional(InstanceOfNode x, CiValue trueValue, CiValue falseValue) {
-        XirArgument[] hints = getTypeCheckHints(x);
         XirArgument obj = toXirArgument(x.object());
         XirArgument trueArg = toXirArgument(x.negated() ? falseValue : trueValue);
         XirArgument falseArg = toXirArgument(x.negated() ? trueValue : falseValue);
-        XirSnippet snippet = xir.genMaterializeInstanceOf(site(x), obj, toXirArgument(x.targetClassInstruction()), trueArg, falseArg, x.targetClass(), hints, x.hintsExact());
+        XirSnippet snippet = xir.genMaterializeInstanceOf(site(x), obj, toXirArgument(x.targetClassInstruction()), trueArg, falseArg, x.targetClass());
         return (Variable) emitXir(snippet, null, null, false);
     }
 
