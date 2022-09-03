@@ -59,13 +59,13 @@ public abstract class LLVMAddressGetElementPtrNode extends LLVMExpressionNode {
         @Specialization
         public LLVMTruffleObject executeTruffleObject(LLVMTruffleObject addr, int val) {
             int incr = getTypeWidth() * val;
-            return new LLVMTruffleObject(addr.getObject(), addr.getOffset() + incr, getTargetType());
+            return new LLVMTruffleObject(addr.getObject(), addr.getOffset() + incr);
         }
 
         @Specialization
         public LLVMTruffleObject executeTruffleObject(TruffleObject addr, int val) {
             int incr = getTypeWidth() * val;
-            return new LLVMTruffleObject(addr, incr, getTargetType());
+            return new LLVMTruffleObject(addr, incr);
         }
 
     }
@@ -87,13 +87,13 @@ public abstract class LLVMAddressGetElementPtrNode extends LLVMExpressionNode {
         @Specialization
         public LLVMTruffleObject executeTruffleObject(LLVMTruffleObject addr, long val) {
             long incr = getTypeWidth() * val;
-            return new LLVMTruffleObject(addr.getObject(), addr.getOffset() + incr, getTargetType());
+            return new LLVMTruffleObject(addr.getObject(), addr.getOffset() + incr);
         }
 
         @Specialization
         public LLVMTruffleObject executeTruffleObject(TruffleObject addr, long val) {
             long incr = getTypeWidth() * val;
-            return new LLVMTruffleObject(addr, incr, getTargetType());
+            return new LLVMTruffleObject(addr, incr);
         }
 
     }
