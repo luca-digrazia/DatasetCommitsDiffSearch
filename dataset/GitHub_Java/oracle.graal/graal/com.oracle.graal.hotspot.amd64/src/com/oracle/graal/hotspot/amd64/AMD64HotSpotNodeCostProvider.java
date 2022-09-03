@@ -22,6 +22,13 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_15;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_50;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_6;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_80;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_30;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_4;
+
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.hotspot.nodes.HotSpotNodeCostProvider;
 import com.oracle.graal.nodeinfo.NodeCycles;
@@ -35,10 +42,12 @@ import jdk.vm.ci.amd64.AMD64.CPUFeature;
 import jdk.vm.ci.code.TargetDescription;
 
 public class AMD64HotSpotNodeCostProvider extends HotSpotNodeCostProvider {
-    private final TargetDescription target;
+    private final boolean avx2;
+    private final boolean sse41;
 
     public AMD64HotSpotNodeCostProvider(TargetDescription target) {
-        this.target = target;
+        this.avx2 = ((AMD64) target.arch).getFeatures().contains(CPUFeature.AVX2);
+        this.sse41 = ((AMD64) target.arch).getFeatures().contains(CPUFeature.SSE4_1);
     }
 
     @Override
@@ -48,18 +57,17 @@ public class AMD64HotSpotNodeCostProvider extends HotSpotNodeCostProvider {
             switch (u.getOperation()) {
                 case LOG:
                 case LOG10:
-                    return NodeCycles.CYCLES_15;
+                    return CYCLES_15;
                 default:
                     break;
             }
         } else if (n instanceof ReturnNode) {
-            return NodeCycles.CYCLES_6;
+            return CYCLES_6;
         } else if (n instanceof ArrayEqualsNode) {
-            AMD64 amd64 = (AMD64) target.arch;
-            if (amd64.getFeatures().contains(CPUFeature.AVX2)) {
-                return NodeCycles.CYCLES_200;
-            } else if (amd64.getFeatures().contains(CPUFeature.SSE4_1)) {
-                return NodeCycles.CYCLES_100;
+            if (avx2) {
+                return CYCLES_50;
+            } else if (sse41) {
+                return CYCLES_80;
             }
         }
         return super.cycles(n);
@@ -72,19 +80,12 @@ public class AMD64HotSpotNodeCostProvider extends HotSpotNodeCostProvider {
             switch (u.getOperation()) {
                 case LOG:
                 case LOG10:
-                    return NodeSize.SIZE_30;
+                    return SIZE_30;
                 default:
                     break;
             }
         } else if (n instanceof ReturnNode) {
-            return NodeSize.SIZE_4;
-        } else if (n instanceof ArrayEqualsNode) {
-            AMD64 amd64 = (AMD64) target.arch;
-            if (amd64.getFeatures().contains(CPUFeature.AVX2)) {
-                return NodeSize.SIZE_200;
-            } else if (amd64.getFeatures().contains(CPUFeature.SSE4_1)) {
-                return NodeSize.SIZE_200;
-            }
+            return SIZE_4;
         }
         return super.size(n);
     }
