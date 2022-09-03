@@ -107,13 +107,13 @@ public abstract class LLVMNativeConvertNode extends LLVMNode {
 
         @Specialization
         protected long addressToNative(VirtualFrame frame, LLVMGlobal address,
-                        @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
+                        @Cached("toNative()") LLVMToNativeNode globalAccess) {
             return globalAccess.executeWithTarget(frame, address).getVal();
         }
 
         @Specialization
         protected long doLLVMTruffleObject(VirtualFrame frame, LLVMTruffleObject truffleObject,
-                        @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
+                        @Cached("toNative()") LLVMToNativeNode toNative) {
             return toNative.executeWithTarget(frame, truffleObject).getVal();
         }
     }
