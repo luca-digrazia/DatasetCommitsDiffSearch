@@ -33,11 +33,9 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.Verbosity;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.graph.*;
@@ -100,7 +98,7 @@ public final class SchedulePhase extends Phase {
 
         @Override
         protected HashSet<FloatingReadNode> processBlock(Block block, HashSet<FloatingReadNode> currentState) {
-            for (Node node : blockToNodesMap.get(block)) {
+            for (Node node : getBlockToNodesMap().get(block)) {
                 if (node instanceof FloatingReadNode) {
                     currentState.add((FloatingReadNode) node);
                 } else if (node instanceof MemoryCheckpoint.Single) {
@@ -184,49 +182,37 @@ public final class SchedulePhase extends Phase {
 
         @Override
         protected Map<LocationIdentity, Node> processBlock(Block block, Map<LocationIdentity, Node> currentState) {
-
-            if (block.getBeginNode() instanceof MergeNode) {
-                MergeNode mergeNode = (MergeNode) block.getBeginNode();
-                for (PhiNode phi : mergeNode.usages().filter(PhiNode.class)) {
-                    if (phi.type() == PhiType.Memory) {
-                        LocationIdentity identity = (LocationIdentity) phi.getIdentity();
-                        locationKilledBy(identity, phi, currentState);
-                    }
-                }
-            }
-            currentState.putAll(blockToKillMapInit.get(block));
+            Map<LocationIdentity, Node> initKillMap = getBlockToKillMap().get(block);
+            initKillMap.putAll(currentState);
 
             for (Node node : block.getNodes()) {
                 if (node instanceof MemoryCheckpoint.Single) {
                     LocationIdentity identity = ((MemoryCheckpoint.Single) node).getLocationIdentity();
-                    locationKilledBy(identity, node, currentState);
+                    initKillMap.put(identity, node);
                 } else if (node instanceof MemoryCheckpoint.Multi) {
                     for (LocationIdentity identity : ((MemoryCheckpoint.Multi) node).getLocationIdentities()) {
-                        locationKilledBy(identity, node, currentState);
+                        initKillMap.put(identity, node);
                     }
                 }
                 assert MemoryCheckpoint.TypeAssertion.correctType(node);
             }
 
-            blockToKillMap.put(block, currentState);
-            return cloneState(currentState);
-        }
-
-        private void locationKilledBy(LocationIdentity identity, Node checkpoint, Map<LocationIdentity, Node> state) {
-            state.put(identity, checkpoint);
-            if (identity == ANY_LOCATION) {
-                for (LocationIdentity locid : state.keySet()) {
-                    state.put(locid, checkpoint);
-                }
-            }
+            return cloneState(initKillMap);
         }
 
         @Override
         protected Map<LocationIdentity, Node> merge(Block merge, List<Map<LocationIdentity, Node>> states) {
+            return merge(merge, states, false);
+        }
+
+        protected Map<LocationIdentity, Node> merge(Block merge, List<Map<LocationIdentity, Node>> states, boolean loopbegin) {
             assert merge.getBeginNode() instanceof MergeNode;
             MergeNode mergeNode = (MergeNode) merge.getBeginNode();
 
             Map<LocationIdentity, Node> initKillMap = new HashMap<>();
+            if (loopbegin) {
+                initKillMap.putAll(getBlockToKillMap().get(merge));
+            }
             for (Map<LocationIdentity, Node> state : states) {
                 for (LocationIdentity locid : state.keySet()) {
                     if (initKillMap.containsKey(locid)) {
@@ -239,7 +225,10 @@ public final class SchedulePhase extends Phase {
                 }
             }
 
-            mergeToKillMap.set(mergeNode, cloneState(initKillMap));
+            getMergeToKillMap().set(mergeNode, cloneState(initKillMap));
+            if (!loopbegin) {
+                initKillMap.putAll(getBlockToKillMap().get(merge));
+            }
             return initKillMap;
         }
 
@@ -253,26 +242,15 @@ public final class SchedulePhase extends Phase {
             LoopInfo<Map<LocationIdentity, Node>> info = ReentrantBlockIterator.processLoop(this, loop, new HashMap<>(state));
 
             assert loop.header.getBeginNode() instanceof LoopBeginNode;
-            Map<LocationIdentity, Node> headerState = merge(loop.header, info.endStates);
-            // getBlockToKillMap().put(loop.header, headerState);
+            Map<LocationIdentity, Node> headerState = merge(loop.header, info.endStates, true);
+            getBlockToKillMap().put(loop.header, headerState);
 
-            int i = 0;
-            for (Block exit : loop.exits) {
-                Map<LocationIdentity, Node> exitState = info.exitStates.get(i++);
+            for (Map<LocationIdentity, Node> exitState : info.exitStates) {
                 for (LocationIdentity key : headerState.keySet()) {
                     exitState.put(key, headerState.get(key));
                 }
-
-                Node begin = exit.getBeginNode();
-                assert begin instanceof LoopExitNode;
-                for (Node usage : begin.usages()) {
-                    if (usage instanceof ProxyNode && ((ProxyNode) usage).type() == PhiType.Memory) {
-                        ProxyNode proxy = (ProxyNode) usage;
-                        LocationIdentity identity = (LocationIdentity) proxy.getIdentity();
-                        locationKilledBy(identity, proxy, exitState);
-                    }
-                }
             }
+
             return info.exitStates;
         }
     }
@@ -284,7 +262,6 @@ public final class SchedulePhase extends Phase {
      * Map from blocks to the nodes in each block.
      */
     private BlockMap<List<ScheduledNode>> blockToNodesMap;
-    private BlockMap<Map<LocationIdentity, Node>> blockToKillMapInit;
     private BlockMap<Map<LocationIdentity, Node>> blockToKillMap;
     private NodeMap<Map<LocationIdentity, Node>> mergeToKillMap;
     private final Map<FloatingNode, List<FixedNode>> phantomUsages = new IdentityHashMap<>();
@@ -337,10 +314,8 @@ public final class SchedulePhase extends Phase {
         } else if (memsched == MemoryScheduling.OPTIMAL && selectedStrategy != SchedulingStrategy.EARLIEST && graph.getNodes(FloatingReadNode.class).isNotEmpty()) {
             mergeToKillMap = graph.createNodeMap();
 
-            blockToKillMapInit = new BlockMap<>(cfg);
             blockToKillMap = new BlockMap<>(cfg);
             for (Block b : cfg.getBlocks()) {
-                blockToKillMapInit.put(b, new HashMap<LocationIdentity, Node>());
                 blockToKillMap.put(b, new HashMap<LocationIdentity, Node>());
             }
 
@@ -352,7 +327,7 @@ public final class SchedulePhase extends Phase {
                 Node first = n.lastLocationAccess();
                 assert first != null;
 
-                Map<LocationIdentity, Node> killMap = blockToKillMapInit.get(forKillLocation(first));
+                Map<LocationIdentity, Node> killMap = blockToKillMap.get(forKillLocation(first));
                 killMap.put(n.location().getLocationIdentity(), first);
             }
 
@@ -381,27 +356,20 @@ public final class SchedulePhase extends Phase {
     private void printSchedule(String desc) {
         Debug.printf("=== %s / %s / %s (%s) ===\n", getCFG().getStartBlock().getBeginNode().graph(), selectedStrategy, memsched, desc);
         for (Block b : getCFG().getBlocks()) {
-            Debug.printf("==== b: %s (loopDepth: %s). ", b, b.getLoopDepth());
+            Debug.printf("==== b: %s. ", b);
             Debug.printf("dom: %s. ", b.getDominator());
             Debug.printf("post-dom: %s. ", b.getPostdominator());
             Debug.printf("preds: %s. ", b.getPredecessors());
             Debug.printf("succs: %s ====\n", b.getSuccessors());
-            BlockMap<Map<LocationIdentity, Node>> killMaps = blockToKillMap;
+            BlockMap<Map<LocationIdentity, Node>> killMaps = getBlockToKillMap();
             if (killMaps != null) {
-                if (b.getBeginNode() instanceof MergeNode) {
-                    MergeNode merge = (MergeNode) b.getBeginNode();
-                    Debug.printf("M merge kills: \n");
-                    for (LocationIdentity locId : mergeToKillMap.get(merge).keySet()) {
-                        Debug.printf("M %s killed by %s\n", locId, mergeToKillMap.get(merge).get(locId));
-                    }
-                }
                 Debug.printf("X block kills: \n");
                 for (LocationIdentity locId : killMaps.get(b).keySet()) {
                     Debug.printf("X %s killed by %s\n", locId, killMaps.get(b).get(locId));
                 }
             }
 
-            if (blockToNodesMap.get(b) != null) {
+            if (getBlockToNodesMap().get(b) != null) {
                 for (Node n : nodesFor(b)) {
                     printNode(n);
                 }
@@ -443,6 +411,14 @@ public final class SchedulePhase extends Phase {
      */
     public BlockMap<List<ScheduledNode>> getBlockToNodesMap() {
         return blockToNodesMap;
+    }
+
+    public BlockMap<Map<LocationIdentity, Node>> getBlockToKillMap() {
+        return blockToKillMap;
+    }
+
+    public NodeMap<Map<LocationIdentity, Node>> getMergeToKillMap() {
+        return mergeToKillMap;
     }
 
     /**
@@ -564,8 +540,9 @@ public final class SchedulePhase extends Phase {
         // iterate the dominator tree
         while (true) {
             iterations++;
+            assert earliestBlock.dominates(previousBlock) : "iterations: " + iterations;
             Node lastKill = blockToKillMap.get(currentBlock).get(locid);
-            assert lastKill != null : "should be never null, due to init of killMaps: " + currentBlock + ", location: " + locid;
+            boolean isAtEarliest = earliestBlock == previousBlock && previousBlock != currentBlock;
 
             if (lastKill.equals(upperBound)) {
                 // assign node to the block which kills the location
@@ -575,6 +552,7 @@ public final class SchedulePhase extends Phase {
                 // schedule read out of the loop if possible, in terms of killMaps and earliest
                 // schedule
                 if (currentBlock != earliestBlock && previousBlock != earliestBlock) {
+                    assert earliestBlock.dominates(currentBlock);
                     Block t = currentBlock;
                     while (t.getLoop() != null && t.getDominator() != null && earliestBlock.dominates(t)) {
                         Block dom = t.getDominator();
@@ -589,12 +567,17 @@ public final class SchedulePhase extends Phase {
 
                 if (!outOfLoop && previousBlock.getBeginNode() instanceof MergeNode) {
                     // merges kill locations right at the beginning of a block. if a merge is the
-                    // killing node, we assign it to the dominating block.
+                    // killing node, we assign it to the dominating node.
 
                     MergeNode merge = (MergeNode) previousBlock.getBeginNode();
-                    Node killer = mergeToKillMap.get(merge).get(locid);
+                    Node killer = getMergeToKillMap().get(merge).get(locid);
 
                     if (killer != null && killer == merge) {
+                        // check if we violate earliest schedule condition
+                        if (isAtEarliest) {
+                            printIterations(iterations, "earliest bound in merge: " + earliestBlock);
+                            return earliestBlock;
+                        }
                         printIterations(iterations, "kill by merge: " + currentBlock);
                         return currentBlock;
                     }
@@ -604,6 +587,11 @@ public final class SchedulePhase extends Phase {
                 // kills the location, therefore schedule read to previous block.
                 printIterations(iterations, "regular kill: " + previousBlock);
                 return previousBlock;
+            }
+
+            if (isAtEarliest) {
+                printIterations(iterations, "earliest bound: " + earliestBlock);
+                return earliestBlock;
             }
 
             if (upperBoundBlock == currentBlock) {
@@ -782,12 +770,12 @@ public final class SchedulePhase extends Phase {
                     // If a FrameState is an outer FrameState this method behaves as if the inner
                     // FrameState was the actual usage, by recursing.
                     blocksForUsage(node, unscheduledUsage, closure, strategy);
-                } else if (unscheduledUsage instanceof AbstractBeginNode) {
-                    // Only FrameStates can be connected to BeginNodes.
+                } else if (unscheduledUsage instanceof MergeNode) {
+                    // Only FrameStates can be connected to MergeNodes.
                     if (!(usage instanceof FrameState)) {
                         throw new SchedulingError(usage.toString());
                     }
-                    // If a FrameState belongs to a BeginNode then it's inputs will be placed at the
+                    // If a FrameState belongs to a MergeNode then it's inputs will be placed at the
                     // common dominator of all EndNodes.
                     for (Node pred : unscheduledUsage.cfgPredecessors()) {
                         closure.apply(cfg.getNodeToBlock().get(pred));
@@ -797,7 +785,7 @@ public final class SchedulePhase extends Phase {
                     if (!(usage instanceof FrameState)) {
                         throw new SchedulingError(usage.toString());
                     }
-                    if (!(unscheduledUsage instanceof NodeWithState)) {
+                    if (!(unscheduledUsage instanceof StateSplit || unscheduledUsage instanceof DeoptimizingNode)) {
                         throw new SchedulingError(unscheduledUsage.toString());
                     }
                     // Otherwise: Put the input into the same block as the usage.
@@ -873,7 +861,7 @@ public final class SchedulePhase extends Phase {
     private static List<ScheduledNode> filterSchedulableNodes(List<ScheduledNode> list) {
         List<ScheduledNode> result = new ArrayList<>();
         for (ScheduledNode n : list) {
-            if (!(n instanceof PhiNode)) {
+            if (!(n instanceof LocalNode) && !(n instanceof PhiNode)) {
                 result.add(n);
             }
         }
@@ -996,7 +984,7 @@ public final class SchedulePhase extends Phase {
     }
 
     private void addToLatestSorting(Block b, ScheduledNode i, List<ScheduledNode> sortedInstructions, NodeBitMap visited, List<FloatingReadNode> reads, NodeBitMap beforeLastLocation) {
-        if (i == null || visited.isMarked(i) || cfg.getNodeToBlock().get(i) != b || i instanceof PhiNode) {
+        if (i == null || visited.isMarked(i) || cfg.getNodeToBlock().get(i) != b || i instanceof PhiNode || i instanceof LocalNode) {
             return;
         }
 
@@ -1057,7 +1045,7 @@ public final class SchedulePhase extends Phase {
     private void addToEarliestSorting(Block b, ScheduledNode i, List<ScheduledNode> sortedInstructions, NodeBitMap visited) {
         ScheduledNode instruction = i;
         while (true) {
-            if (instruction == null || visited.isMarked(instruction) || cfg.getNodeToBlock().get(instruction) != b || instruction instanceof PhiNode) {
+            if (instruction == null || visited.isMarked(instruction) || cfg.getNodeToBlock().get(instruction) != b || instruction instanceof PhiNode || instruction instanceof LocalNode) {
                 return;
             }
 
