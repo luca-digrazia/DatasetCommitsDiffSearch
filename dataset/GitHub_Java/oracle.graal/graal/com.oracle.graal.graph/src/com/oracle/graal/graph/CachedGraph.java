@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.graph;
 
-import java.util.*;
-import java.util.function.*;
-
 /**
  * This class is a container of a graph that needs to be readonly and optionally a lazily created
  * mutable copy of the graph.
@@ -42,9 +39,9 @@ public class CachedGraph {
         return readonlyCopy;
     }
 
-    public Graph getMutableCopy(Consumer<Map<Node, Node>> duplicationMapCallback) {
+    public Graph getMutableCopy() {
         if (mutableCopy == null) {
-            mutableCopy = readonlyCopy.copy(duplicationMapCallback);
+            mutableCopy = readonlyCopy.copy();
         }
         return mutableCopy;
     }
