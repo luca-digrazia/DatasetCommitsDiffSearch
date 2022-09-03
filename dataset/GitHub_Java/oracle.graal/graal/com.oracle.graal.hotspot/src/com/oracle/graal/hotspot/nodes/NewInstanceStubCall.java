@@ -23,24 +23,26 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.word.*;
 
 /**
  * A call to the {@link NewInstanceStub}.
  */
-public class NewInstanceStubCall extends DeoptimizingStubCall implements LIRLowerable {
+public class NewInstanceStubCall extends DeoptimizingStubCall implements LIRGenLowerable {
 
     private static final Stamp defaultStamp = StampFactory.objectNonNull();
 
     @Input private ValueNode hub;
 
-    public static final ForeignCallDescriptor NEW_INSTANCE = new ForeignCallDescriptor("new_instance", Object.class, Word.class);
+    public static final Descriptor NEW_INSTANCE = new Descriptor("new_instance", false, Object.class, Word.class);
 
     public NewInstanceStubCall(ValueNode hub) {
         super(defaultStamp);
@@ -57,9 +59,9 @@ public class NewInstanceStubCall extends DeoptimizingStubCall implements LIRLowe
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        ForeignCallLinkage linkage = gen.getLIRGeneratorTool().getForeignCalls().lookupForeignCall(NEW_INSTANCE);
-        Value result = gen.getLIRGeneratorTool().emitForeignCall(linkage, this, gen.operand(hub));
+    public void generate(LIRGenerator gen) {
+        RuntimeCallTarget stub = gen.getRuntime().lookupRuntimeCall(NEW_INSTANCE);
+        Variable result = gen.emitCall(stub, stub.getCallingConvention(), this, gen.operand(hub));
         gen.setResult(this, result);
     }
 

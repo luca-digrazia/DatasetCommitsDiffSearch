@@ -32,7 +32,6 @@ import com.oracle.graal.api.meta.ResolvedJavaMethod;
 import com.oracle.graal.api.meta.ResolvedJavaType;
 import com.oracle.graal.graph.GraalInternalError;
 import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.hotspot.meta.HotSpotResolvedJavaMethod;
 import com.oracle.graal.hotspot.meta.HotSpotResolvedObjectType;
 import com.oracle.graal.hotspot.meta.HotSpotSignature;
@@ -44,7 +43,8 @@ import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.java.MethodCallTargetNode;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.java.SelfReplacingMethodCallTargetNode;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.spi.Canonicalizable;
+import com.oracle.graal.nodes.type.StampFactory;
 import com.oracle.graal.replacements.nodes.MacroNode;
 
 /**
@@ -176,9 +176,9 @@ public abstract class AbstractMethodHandleNode extends MacroNode implements Cano
         // Create a method from the vmtarget pointer
         Class<?> c = (Class<?>) clazz.asObject();
         HotSpotResolvedObjectType holderClass = (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromClass(c);
-        HotSpotResolvedJavaMethod targetMethod = HotSpotResolvedJavaMethod.fromMetaspace(vmtarget.asLong());
+        HotSpotResolvedJavaMethod targetMethod = holderClass.createMethod(vmtarget.asLong());
 
-        // In lambda forms we erase signature types to avoid resolving issues
+        // In lamda forms we erase signature types to avoid resolving issues
         // involving class loaders. When we optimize a method handle invoke
         // to a direct call we must cast the receiver and arguments to its
         // actual types.
@@ -200,7 +200,7 @@ public abstract class AbstractMethodHandleNode extends MacroNode implements Cano
 
         // Try to get the most accurate receiver type
         if (this instanceof MethodHandleLinkToVirtualNode || this instanceof MethodHandleLinkToInterfaceNode) {
-            ResolvedJavaType receiverType = ObjectStamp.typeOrNull(getReceiver().stamp());
+            ResolvedJavaType receiverType = getReceiver().objectStamp().type();
             if (receiverType != null) {
                 ResolvedJavaMethod concreteMethod = receiverType.findUniqueConcreteMethod(targetMethod);
                 if (concreteMethod != null) {
@@ -233,7 +233,7 @@ public abstract class AbstractMethodHandleNode extends MacroNode implements Cano
             ResolvedJavaType targetType = (ResolvedJavaType) type;
             if (!targetType.isPrimitive()) {
                 ValueNode argument = arguments.get(index);
-                ResolvedJavaType argumentType = ObjectStamp.typeOrNull(argument.stamp());
+                ResolvedJavaType argumentType = argument.objectStamp().type();
                 if (argumentType == null || (argumentType.isAssignableFrom(targetType) && !argumentType.equals(targetType))) {
                     PiNode piNode = graph().unique(new PiNode(argument, StampFactory.declared(targetType)));
                     arguments.set(index, piNode);
@@ -273,20 +273,9 @@ public abstract class AbstractMethodHandleNode extends MacroNode implements Cano
             ValueNode[] args = replacementArguments.toArray(new ValueNode[replacementArguments.size()]);
             callTarget = new SelfReplacingMethodCallTargetNode(invokeKind, targetMethod, targetArguments, returnType, replacementTargetMethod, args, replacementReturnType);
         }
-        graph().add(callTarget);
 
-        // The call target can have a different return type than the invoker,
-        // e.g. the target returns an Object but the invoker void. In this case
-        // we need to use the stamp of the invoker. Note: always using the
-        // invoker's stamp would be wrong because it's a less concrete type
-        // (usually java.lang.Object).
-        InvokeNode invoke;
-        if (callTarget.returnStamp().kind() != stamp().kind()) {
-            invoke = new InvokeNode(callTarget, getBci(), stamp());
-        } else {
-            invoke = new InvokeNode(callTarget, getBci());
-        }
-        graph().add(invoke);
+        graph().add(callTarget);
+        InvokeNode invoke = graph().add(new InvokeNode(callTarget, getBci()));
         invoke.setStateAfter(stateAfter());
         return invoke;
     }

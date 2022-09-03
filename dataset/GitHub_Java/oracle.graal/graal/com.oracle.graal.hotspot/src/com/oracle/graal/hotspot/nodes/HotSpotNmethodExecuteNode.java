@@ -30,9 +30,11 @@ import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.phases.common.*;
 
 public class HotSpotNmethodExecuteNode extends AbstractCallNode implements Lowerable {
 
@@ -47,12 +49,21 @@ public class HotSpotNmethodExecuteNode extends AbstractCallNode implements Lower
 
     @Override
     public LocationIdentity[] getLocationIdentities() {
-        return new LocationIdentity[]{LocationIdentity.ANY_LOCATION};
+        return new LocationIdentity[]{LocationNode.ANY_LOCATION};
     }
 
     @Override
     public void lower(LoweringTool tool, LoweringType loweringType) {
-        replaceWithInvoke(tool.getRuntime());
+        if (code.isConstant() && code.asConstant().asObject() instanceof HotSpotNmethod) {
+            HotSpotNmethod nmethod = (HotSpotNmethod) code.asConstant().asObject();
+            InvokeNode invoke = replaceWithInvoke(tool.getRuntime());
+            StructuredGraph graph = (StructuredGraph) nmethod.getGraph();
+            if (graph != null) {
+                InliningUtil.inline(invoke, (StructuredGraph) nmethod.getGraph(), false);
+            }
+        } else {
+            replaceWithInvoke(tool.getRuntime());
+        }
     }
 
     protected InvokeNode replaceWithInvoke(MetaAccessProvider tool) {

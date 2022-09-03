@@ -135,7 +135,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitMove(Value input) {
-        Variable result = newVariable(input.getPlatformKind());
+        Variable result = newVariable(input.getKind());
         emitMove(result, input);
         return result;
     }
@@ -784,12 +784,13 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    protected void emitForeignCall(ForeignCallLinkage linkage, Value result, Value[] arguments, Value[] temps, LIRFrameState info) {
-        long maxOffset = linkage.getMaxCallTargetOffset();
+    protected void emitCall(RuntimeCallTarget callTarget, Value result, Value[] arguments, Value[] temps, LIRFrameState info) {
+
+        long maxOffset = callTarget.getMaxCallTargetOffset();
         if (maxOffset != (int) maxOffset) {
-            append(new AMD64Call.DirectFarForeignCallOp(this, linkage, result, arguments, temps, info));
+            append(new AMD64Call.DirectFarRuntimeCallOp(this, callTarget, result, arguments, temps, info));
         } else {
-            append(new AMD64Call.DirectNearForeignCallOp(linkage, result, arguments, temps, info));
+            append(new AMD64Call.DirectNearRuntimeCallOp(callTarget, result, arguments, temps, info));
         }
     }
 

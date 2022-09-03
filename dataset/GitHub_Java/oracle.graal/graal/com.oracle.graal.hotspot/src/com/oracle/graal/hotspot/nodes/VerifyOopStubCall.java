@@ -22,21 +22,21 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.hotspot.target.*;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * Node implementing a call to HotSpot's object pointer verification stub.
- *
- * @see AMD64VerifyOopStubCallOp
+ * Call to {@link VerifyOopStub}.
  */
-public class VerifyOopStubCall extends FixedWithNextNode implements LIRGenLowerable {
+public class VerifyOopStubCall extends DeoptimizingStubCall implements LIRGenLowerable {
 
-    @Input private final ValueNode object;
+    @Input private ValueNode object;
+    public static final Descriptor VERIFY_OOP = new Descriptor("verify_oop", false, Object.class, Object.class);
 
     public VerifyOopStubCall(ValueNode object) {
         super(StampFactory.objectNonNull());
@@ -45,14 +45,10 @@ public class VerifyOopStubCall extends FixedWithNextNode implements LIRGenLowera
 
     @Override
     public void generate(LIRGenerator gen) {
-        LIRDebugInfo info = gen.state();
-        AMD64VerifyOopStubCallOp op = new AMD64VerifyOopStubCallOp(gen.operand(object), info);
-        gen.append(op);
+        RuntimeCallTarget stub = gen.getRuntime().lookupRuntimeCall(VerifyOopStubCall.VERIFY_OOP);
+        gen.emitCall(stub, stub.getCallingConvention(), this, gen.operand(object));
     }
 
-    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static Object call(Object object) {
-        throw new UnsupportedOperationException();
-    }
+    public static native Object call(Object object);
 }

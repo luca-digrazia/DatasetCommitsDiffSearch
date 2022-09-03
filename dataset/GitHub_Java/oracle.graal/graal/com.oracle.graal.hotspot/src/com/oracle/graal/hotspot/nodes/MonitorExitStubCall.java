@@ -22,43 +22,39 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.hotspot.target.amd64.AMD64MonitorEnterStubCallOp.*;
-
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.hotspot.target.amd64.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.word.*;
 
 /**
- * Node implementing a call to HotSpot's {@code graal_monitorexit} stub.
- *
- * @see AMD64MonitorExitStubCallOp
+ * Node implementing a call to {@code GraalRuntime::monitorexit}.
  */
-public class MonitorExitStubCall extends FixedWithNextNode implements LIRGenLowerable {
+public class MonitorExitStubCall extends DeoptimizingStubCall implements LIRGenLowerable {
 
-    @Input private final ValueNode object;
+    @Input private ValueNode object;
+    private int lockDepth;
+    public static final Descriptor MONITOREXIT = new Descriptor("monitorexit", true, void.class, Object.class, Word.class);
 
-    public MonitorExitStubCall(ValueNode object) {
+    public MonitorExitStubCall(ValueNode object, int lockDepth) {
         super(StampFactory.forVoid());
         this.object = object;
+        this.lockDepth = lockDepth;
     }
 
     @Override
     public void generate(LIRGenerator gen) {
-        RegisterValue objectFixed = OBJECT.asValue(Kind.Object);
-        RegisterValue lockFixed = LOCK.asValue(gen.target().wordKind);
-        // The register allocator cannot handle stack -> register moves so we use an LEA here
-        gen.emitMove(gen.emitLea(gen.peekLock()), lockFixed);
-        gen.emitMove(gen.operand(object), objectFixed);
-        gen.append(new AMD64MonitorExitStubCallOp(objectFixed, lockFixed, gen.state()));
+        assert lockDepth != -1;
+        HotSpotLIRGenerator hsGen = (HotSpotLIRGenerator) gen;
+        StackSlot slot = hsGen.getLockSlot(lockDepth);
+        RuntimeCallTarget stub = gen.getRuntime().lookupRuntimeCall(MonitorExitStubCall.MONITOREXIT);
+        gen.emitCall(stub, stub.getCallingConvention(), this, gen.operand(object), gen.emitAddress(slot));
     }
 
-    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static void call(Object hub) {
-        throw new UnsupportedOperationException();
-    }
+    public static native void call(Object object, @ConstantNodeParameter int lockDepth);
 }
