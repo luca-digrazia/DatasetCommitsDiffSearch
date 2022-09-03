@@ -22,29 +22,31 @@
  */
 package com.oracle.graal.lir.amd64;
 
+import com.oracle.jvmci.amd64.*;
+import com.oracle.jvmci.code.Register;
+import com.oracle.jvmci.code.StackSlotValue;
+import com.oracle.jvmci.meta.Kind;
+import com.oracle.jvmci.meta.AllocatableValue;
+import com.oracle.jvmci.meta.Value;
+import com.oracle.jvmci.meta.JavaConstant;
+
+import static com.oracle.jvmci.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import static java.lang.Double.*;
 import static java.lang.Float.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
-import jdk.internal.jvmci.amd64.*;
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MIOp;
-import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MOp;
-import com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize;
+import com.oracle.graal.asm.amd64.AMD64Assembler.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.LoadConstantOp;
+import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.StandardOp.NullCheck;
-import com.oracle.graal.lir.StandardOp.ValueMoveOp;
 import com.oracle.graal.lir.asm.*;
+import com.oracle.jvmci.common.*;
 
 public class AMD64Move {
 
-    private abstract static class AbstractMoveOp extends AMD64LIRInstruction implements ValueMoveOp {
+    private abstract static class AbstractMoveOp extends AMD64LIRInstruction implements MoveOp {
         public static final LIRInstructionClass<AbstractMoveOp> TYPE = LIRInstructionClass.create(AbstractMoveOp.class);
 
         private Kind moveKind;
@@ -70,16 +72,16 @@ public class AMD64Move {
         public static final LIRInstructionClass<MoveToRegOp> TYPE = LIRInstructionClass.create(MoveToRegOp.class);
 
         @Def({REG, HINT}) protected AllocatableValue result;
-        @Use({REG, STACK}) protected AllocatableValue input;
+        @Use({REG, STACK, CONST}) protected Value input;
 
-        public MoveToRegOp(Kind moveKind, AllocatableValue result, AllocatableValue input) {
+        public MoveToRegOp(Kind moveKind, AllocatableValue result, Value input) {
             super(TYPE, moveKind);
             this.result = result;
             this.input = input;
         }
 
         @Override
-        public AllocatableValue getInput() {
+        public Value getInput() {
             return input;
         }
 
@@ -94,68 +96,36 @@ public class AMD64Move {
         public static final LIRInstructionClass<MoveFromRegOp> TYPE = LIRInstructionClass.create(MoveFromRegOp.class);
 
         @Def({REG, STACK}) protected AllocatableValue result;
-        @Use({REG, HINT}) protected AllocatableValue input;
+        @Use({REG, CONST, HINT}) protected Value input;
 
-        public MoveFromRegOp(Kind moveKind, AllocatableValue result, AllocatableValue input) {
+        public MoveFromRegOp(Kind moveKind, AllocatableValue result, Value input) {
             super(TYPE, moveKind);
             this.result = result;
             this.input = input;
         }
 
         @Override
-        public AllocatableValue getInput() {
+        public Value getInput() {
             return input;
         }
 
         @Override
-        public AllocatableValue getResult() {
-            return result;
-        }
-    }
-
-    @Opcode("MOVE")
-    public static class MoveFromConstOp extends AMD64LIRInstruction implements LoadConstantOp {
-        public static final LIRInstructionClass<MoveFromConstOp> TYPE = LIRInstructionClass.create(MoveFromConstOp.class);
-
-        @Def({REG, STACK}) protected AllocatableValue result;
-        private final JavaConstant input;
-
-        public MoveFromConstOp(AllocatableValue result, JavaConstant input) {
-            super(TYPE);
-            this.result = result;
-            this.input = input;
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            if (isRegister(result)) {
-                const2reg(crb, masm, result, input);
-            } else {
-                assert isStackSlot(result);
-                const2stack(crb, masm, result, input);
-            }
-        }
-
-        public Constant getConstant() {
-            return input;
-        }
-
         public AllocatableValue getResult() {
             return result;
         }
     }
 
     @Opcode("STACKMOVE")
-    public static final class AMD64StackMove extends AMD64LIRInstruction implements ValueMoveOp {
+    public static final class AMD64StackMove extends AMD64LIRInstruction implements MoveOp {
         public static final LIRInstructionClass<AMD64StackMove> TYPE = LIRInstructionClass.create(AMD64StackMove.class);
 
         @Def({STACK}) protected AllocatableValue result;
-        @Use({STACK, HINT}) protected AllocatableValue input;
+        @Use({STACK, HINT}) protected Value input;
         @Alive({OperandFlag.STACK, OperandFlag.UNINITIALIZED}) private StackSlotValue backupSlot;
 
         private Register scratch;
 
-        public AMD64StackMove(AllocatableValue result, AllocatableValue input, Register scratch, StackSlotValue backupSlot) {
+        public AMD64StackMove(AllocatableValue result, Value input, Register scratch, StackSlotValue backupSlot) {
             super(TYPE);
             this.result = result;
             this.input = input;
@@ -164,7 +134,7 @@ public class AMD64Move {
         }
 
         @Override
-        public AllocatableValue getInput() {
+        public Value getInput() {
             return input;
         }
 
@@ -230,14 +200,14 @@ public class AMD64Move {
     }
 
     @Opcode("STACKMOVE")
-    public static final class AMD64PushPopStackMove extends AMD64LIRInstruction implements ValueMoveOp {
+    public static final class AMD64PushPopStackMove extends AMD64LIRInstruction implements MoveOp {
         public static final LIRInstructionClass<AMD64PushPopStackMove> TYPE = LIRInstructionClass.create(AMD64PushPopStackMove.class);
 
         @Def({STACK}) protected AllocatableValue result;
-        @Use({STACK, HINT}) protected AllocatableValue input;
+        @Use({STACK, HINT}) protected Value input;
         private final OperandSize size;
 
-        public AMD64PushPopStackMove(OperandSize size, AllocatableValue result, AllocatableValue input) {
+        public AMD64PushPopStackMove(OperandSize size, AllocatableValue result, Value input) {
             super(TYPE);
             this.result = result;
             this.input = input;
@@ -245,7 +215,7 @@ public class AMD64Move {
         }
 
         @Override
-        public AllocatableValue getInput() {
+        public Value getInput() {
             return input;
         }
 
@@ -706,10 +676,6 @@ public class AMD64Move {
                 break;
             case Short:
                 assert NumUtil.isShort(imm) : "Is not in short range: " + imm;
-                AMD64MIOp.MOV.emit(masm, OperandSize.WORD, dest, (int) imm);
-                break;
-            case Char:
-                assert NumUtil.isUShort(imm) : "Is not in char range: " + imm;
                 AMD64MIOp.MOV.emit(masm, OperandSize.WORD, dest, (int) imm);
                 break;
             case Int:
