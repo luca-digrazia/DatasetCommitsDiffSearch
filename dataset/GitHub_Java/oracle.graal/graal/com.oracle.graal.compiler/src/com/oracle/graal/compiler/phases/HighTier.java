@@ -24,14 +24,12 @@ package com.oracle.graal.compiler.phases;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.compiler.phases.HighTier.Options.*;
-import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.*;
-
 import com.oracle.graal.loop.phases.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.common.cfs.*;
+import com.oracle.graal.phases.common.cfs.IterativeFlowSensitiveReductionPhase;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.virtual.phases.ea.*;
@@ -58,7 +56,7 @@ public class HighTier extends PhaseSuite<HighTierContext> {
                 appendPhase(new IterativeInliningPhase(canonicalizer));
             } else {
                 appendPhase(new InliningPhase(canonicalizer));
-                appendPhase(new DeadCodeEliminationPhase(OPTIONAL));
+                appendPhase(new DeadCodeEliminationPhase());
 
                 boolean reduceOrEliminate = FlowSensitiveReduction.getValue() || ConditionalElimination.getValue();
                 if (reduceOrEliminate && OptCanonicalizer.getValue()) {
