@@ -41,7 +41,7 @@ public abstract class VirtualStackSlot extends StackSlotValue {
 
     @Override
     public String toString() {
-        return "vstack(" + id + ")" + getKindSuffix();
+        return "VirtualSlot" + id + getKindSuffix();
     }
 
     @Override
