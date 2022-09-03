@@ -36,6 +36,7 @@ import java.util.Set;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.impl.Accessor;
+import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -66,175 +67,6 @@ public final class Instrumenter {
         node.accept(visitor);
         return visitor.source;
     }
-
-    private enum ToolState {
-
-        /** Not yet installed, inert. */
-        UNINSTALLED,
-
-        /** Installed, collecting data. */
-        ENABLED,
-
-        /** Installed, not collecting data. */
-        DISABLED,
-
-        /** Was installed, but now removed, inactive, and no longer usable. */
-        DISPOSED;
-    }
-
-    /**
-     * {@linkplain Instrument Instrumentation}-based tools that gather data during Guest Language
-     * program execution.
-     * <p>
-     * Tools share a common <em>life cycle</em>:
-     * <ul>
-     * <li>A newly created tool is inert until {@linkplain #install(Instrumenter) installed}.</li>
-     * <li>An installed tool becomes <em>enabled</em> and immediately begins installing
-     * {@linkplain Instrument instrumentation} on subsequently created ASTs and collecting data from
-     * those instruments</li>
-     * <li>A tool may only be installed once.</li>
-     * <li>It should be possible to install multiple instances of a tool, possibly (but not
-     * necessarily) configured differently with respect to what data is being collected.</li>
-     * <li>Once installed, a tool can be {@linkplain #setEnabled(boolean) enabled and disabled}
-     * arbitrarily.</li>
-     * <li>A disabled tool:
-     * <ul>
-     * <li>Collects no data;</li>
-     * <li>Retains existing AST instrumentation;</li>
-     * <li>Continues to instrument newly created ASTs; and</li>
-     * <li>Retains previously collected data.</li>
-     * </ul>
-     * </li>
-     * <li>An installed tool may be {@linkplain #reset() reset} at any time, which leaves the tool
-     * installed but with all previously collected data removed.</li>
-     * <li>A {@linkplain #dispose() disposed} tool removes all instrumentation (but not
-     * {@linkplain Probe probes}) and becomes permanently disabled; previously collected data
-     * persists.</li>
-     * </ul>
-     * <p>
-     * Tool-specific methods that access data collected by the tool should:
-     * <ul>
-     * <li>Return modification-safe representations of the data; and</li>
-     * <li>Not change the state of the data.</li>
-     * </ul>
-     * <b>Note:</b><br>
-     * Tool installation is currently <em>global</em> to the Truffle Execution environment. When
-     * language-agnostic management of individual execution environments is added to the platform,
-     * installation will be (optionally) specific to a single execution environment.
-     */
-    public abstract static class Tool {
-        // TODO (mlvdv) still thinking about the most appropriate name for this class of tools
-
-        private ToolState toolState = ToolState.UNINSTALLED;
-
-        private Instrumenter instrumenter;
-
-        protected Tool() {
-        }
-
-        final void install(Instrumenter inst) {
-            checkUninstalled();
-            this.instrumenter = inst;
-
-            if (internalInstall()) {
-                toolState = ToolState.ENABLED;
-            }
-            instrumenter.tools.add(this);
-        }
-
-        /**
-         * @return whether the tool is currently collecting data.
-         */
-        public final boolean isEnabled() {
-            return toolState == ToolState.ENABLED;
-        }
-
-        /**
-         * Switches tool state between <em>enabled</em> (collecting data) and <em>disabled</em> (not
-         * collecting data, but keeping data already collected).
-         *
-         * @throws IllegalStateException if not yet installed or disposed.
-         */
-        public final void setEnabled(boolean isEnabled) {
-            checkInstalled();
-            internalSetEnabled(isEnabled);
-            toolState = isEnabled ? ToolState.ENABLED : ToolState.DISABLED;
-        }
-
-        /**
-         * Clears any data already collected, but otherwise does not change the state of the tool.
-         *
-         * @throws IllegalStateException if not yet installed or disposed.
-         */
-        public final void reset() {
-            checkInstalled();
-            internalReset();
-        }
-
-        /**
-         * Makes the tool permanently <em>disabled</em>, removes instrumentation, but keeps data
-         * already collected.
-         *
-         * @throws IllegalStateException if not yet installed or disposed.
-         */
-        public final void dispose() {
-            checkInstalled();
-            internalDispose();
-            toolState = ToolState.DISPOSED;
-            instrumenter.tools.remove(this);
-        }
-
-        /**
-         * @return whether the installation succeeded.
-         */
-        protected abstract boolean internalInstall();
-
-        /**
-         * No subclass action required.
-         *
-         * @param isEnabled
-         */
-        protected void internalSetEnabled(boolean isEnabled) {
-        }
-
-        protected abstract void internalReset();
-
-        protected abstract void internalDispose();
-
-        protected final Instrumenter getInstrumenter() {
-            return instrumenter;
-        }
-
-        /**
-         * Ensure that the tool is currently installed.
-         *
-         * @throws IllegalStateException
-         */
-        private void checkInstalled() throws IllegalStateException {
-            if (toolState == ToolState.UNINSTALLED) {
-                throw new IllegalStateException("Tool " + getClass().getSimpleName() + " not yet installed");
-            }
-            if (toolState == ToolState.DISPOSED) {
-                throw new IllegalStateException("Tool " + getClass().getSimpleName() + " has been disposed");
-            }
-        }
-
-        /**
-         * Ensure that the tool has not yet been installed.
-         *
-         * @throws IllegalStateException
-         */
-        private void checkUninstalled() {
-            if (toolState != ToolState.UNINSTALLED) {
-                throw new IllegalStateException("Tool " + getClass().getSimpleName() + " has already been installed");
-            }
-        }
-    }
-
-    private final Object vm;
-
-    /** Tools that have been created, but not yet disposed. */
-    private final Set<Tool> tools = Collections.synchronizedSet(new LinkedHashSet<Tool>());
 
     private final Set<ASTProber> astProbers = Collections.synchronizedSet(new LinkedHashSet<ASTProber>());
 
@@ -271,50 +103,17 @@ public final class Instrumenter {
         }
     }
 
-    Instrumenter(Object vm) {
-        this.vm = vm;
+    Instrumenter() {
     }
 
     /**
-     * Returns {@code true} if the AST node can be "instrumented" by {@linkplain #probe(Node)
-     * Probing}.
-     * <p>
-     * <b>Note:</b> instrumentation requires a appropriate {@linkplain #createWrapperNode(Node)
-     * WrapperNode}.
-     */
-    public boolean isInstrumentable(Node node) {
-        return ACCESSOR.isInstrumentable(vm, node);
-    }
-
-    /**
-     * For AST nodes that are {@linkplain #isInstrumentable() instrumentable}, returns a
-     * <em>wrapper node</em> that:
-     * <ol>
-     * <li>implements {@link WrapperNode}</li>
-     * <li>has the node as its single child, and</li>
-     * <li>whose type is safe for replacement of the node in the parent.</li>
-     * </ol>
-     *
-     * @return an appropriately typed {@link WrapperNode}
-     */
-    public WrapperNode createWrapperNode(Node node) {
-        return ACCESSOR.createWrapperNode(vm, node);
-    }
-
-    /**
-     * Prepares an AST node for {@linkplain Instrument instrumentation}, where the node is presumed
-     * to be part of a well-formed Truffle AST that has not yet been executed.
-     * <p>
-     * <em>Probing</em> a node is idempotent:
-     * <ul>
-     * <li>If the node has not been Probed, modifies the AST by first inserting a
-     * {@linkplain #createWrapperNode(Node) wrapper node} between the node and its parent and then
-     * returning the newly created Probe associated with the wrapper.</li>
-     * <li>If the node has been Probed, returns the Probe associated with its existing wrapper.</li>
-     * <li>No more than one {@link Probe} may be associated with a node, so a wrapper may not wrap
-     * another wrapper.</li>
-     * </ul>
-     * It is a runtime error to attempt Probing an AST node with no parent.
+     * Enables {@linkplain Instrument instrumentation} of a node, where the node is presumed to be
+     * part of a well-formed Truffle AST that is not being executed. If this node has not already
+     * been probed, modifies the AST by inserting a {@linkplain WrapperNode wrapper node} between
+     * the node and its parent; the wrapper node must be provided by implementations of
+     * {@link Node#createWrapperNode()}. No more than one {@link Probe} may be associated with a
+     * node, so a {@linkplain WrapperNode wrapper} may not wrap another {@linkplain WrapperNode
+     * wrapper}.
      *
      * @return a (possibly newly created) {@link Probe} associated with this node.
      * @throws ProbeException (unchecked) when a probe cannot be created, leaving the AST unchanged
@@ -343,12 +142,12 @@ public final class Instrumenter {
             return wrapper.getProbe();
         }
 
-        if (!isInstrumentable(node)) {
+        if (!(node.isInstrumentable())) {
             throw new ProbeException(ProbeFailure.Reason.NOT_INSTRUMENTABLE, parent, node, null);
         }
 
         // Create a new wrapper/probe with this node as its child.
-        final WrapperNode wrapper = createWrapperNode(node);
+        final WrapperNode wrapper = node.createWrapperNode();
 
         if (wrapper == null || !(wrapper instanceof Node)) {
             throw new ProbeException(ProbeFailure.Reason.NO_WRAPPER, parent, node, wrapper);
@@ -366,7 +165,7 @@ public final class Instrumenter {
         final Probe probe = new Probe(this, l, probeNode, sourceSection);
         probes.add(new WeakReference<>(probe));
         probeNode.probe = probe;  // package private access
-        wrapper.insertEventHandlerNode(probeNode);
+        wrapper.insertProbe(probeNode);
         node.replace(wrapperNode);
         if (TRACE) {
             final String location = sourceSection == null ? "<unknown>" : sourceSection.getShortDescription();
@@ -475,81 +274,6 @@ public final class Instrumenter {
         astProbers.remove(prober);
     }
 
-    /**
-     * <em>Attaches</em> a {@link SimpleInstrumentListener listener} to a {@link Probe}, creating a
-     * <em>binding</em> called an {@link Instrument}. Until the Instrument is
-     * {@linkplain Instrument#dispose() disposed}, it routes synchronous notification of
-     * {@linkplain EventHandlerNode execution events} taking place at the Probe's AST location to
-     * the listener.
-     *
-     * @param probe source of execution events
-     * @param listener receiver of execution events
-     * @param instrumentInfo optional documentation about the Instrument
-     * @return a handle for access to the binding
-     */
-    @SuppressWarnings("static-method")
-    public Instrument attach(Probe probe, SimpleInstrumentListener listener, String instrumentInfo) {
-        final Instrument instrument = new Instrument.SimpleInstrument(listener, instrumentInfo);
-        probe.attach(instrument);
-        return instrument;
-    }
-
-    /**
-     * <em>Attaches</em> a {@link StandardInstrumentListener listener} to a {@link Probe}, creating
-     * a <em>binding</em> called an {@link Instrument}. Until the Instrument is
-     * {@linkplain Instrument#dispose() disposed}, it routes synchronous notification of
-     * {@linkplain EventHandlerNode execution events} taking place at the Probe's AST location to
-     * the listener.
-     *
-     * @param probe source of execution events
-     * @param listener receiver of execution events
-     * @param instrumentInfo optional documentation about the Instrument
-     * @return a handle for access to the binding
-     */
-    @SuppressWarnings("static-method")
-    public Instrument attach(Probe probe, StandardInstrumentListener listener, String instrumentInfo) {
-        final Instrument instrument = new Instrument.StandardInstrument(listener, instrumentInfo);
-        probe.attach(instrument);
-        return instrument;
-    }
-
-    /**
-     * <em>Attaches</em> a {@link AdvancedInstrumentResultListener listener} to a {@link Probe},
-     * creating a <em>binding</em> called an {@link Instrument}. Until the Instrument is
-     * {@linkplain Instrument#dispose() disposed}, it routes synchronous notification of
-     * {@linkplain EventHandlerNode execution events} taking place at the Probe's AST location to
-     * the listener.
-     * <p>
-     * This Instrument executes efficiently, subject to full Truffle optimization, a client-provided
-     * AST fragment every time the Probed node is entered.
-     * <p>
-     * Any {@link RuntimeException} thrown by execution of the fragment is caught by the framework
-     * and reported to the listener; there is no other notification.
-     *
-     * @param probe probe source of execution events
-     * @param listener optional client callback for results/failure notification
-     * @param rootFactory provider of AST fragments on behalf of the client
-     * @param requiredResultType optional requirement, any non-assignable result is reported to the
-     *            the listener, if any, as a failure
-     * @param instrumentInfo instrumentInfo optional documentation about the Instrument
-     * @return a handle for access to the binding
-     */
-    @SuppressWarnings("static-method")
-    public Instrument attach(Probe probe, AdvancedInstrumentResultListener listener, AdvancedInstrumentRootFactory rootFactory, Class<?> requiredResultType, String instrumentInfo) {
-        final Instrument instrument = new Instrument.AdvancedInstrument(listener, rootFactory, requiredResultType, instrumentInfo);
-        probe.attach(instrument);
-        return instrument;
-    }
-
-    /**
-     * Connects the tool to some part of the Truffle runtime, and enable data collection to start.
-     *
-     * @throws IllegalStateException if the tool has previously been installed or has been disposed.
-     */
-    public void install(Tool tool) {
-        tool.install(this);
-    }
-
     @SuppressWarnings("unused")
     void executionStarted(Source s) {
     }
@@ -571,7 +295,6 @@ public final class Instrumenter {
         return afterTagTrap;
     }
 
-    // TODO (mlvdv) build this in as a VM event?
     /**
      * Enables instrumentation in a newly created AST by applying all registered instances of
      * {@link ASTProber}.
@@ -604,18 +327,8 @@ public final class Instrumenter {
     static final class AccessorInstrument extends Accessor {
 
         @Override
-        protected Instrumenter createInstrumenter(Object vm) {
-            return new Instrumenter(vm);
-        }
-
-        @Override
-        protected boolean isInstrumentable(Object vm, Node node) {
-            return super.isInstrumentable(vm, node);
-        }
-
-        @Override
-        public WrapperNode createWrapperNode(Object vm, Node node) {
-            return super.createWrapperNode(vm, node);
+        protected Instrumenter createInstrumenter() {
+            return new Instrumenter();
         }
 
         @SuppressWarnings("rawtypes")
