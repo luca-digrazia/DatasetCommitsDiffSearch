@@ -36,7 +36,6 @@ import sun.misc.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
@@ -46,8 +45,8 @@ import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.java.*;
 import com.oracle.graal.java.GraphBuilderPhase.Instance;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
@@ -351,7 +350,7 @@ public class ReplacementsImpl implements Replacements {
             original = metaAccess.lookupJavaConstructor((Constructor<?>) originalMember);
         }
         if (Debug.isLogEnabled()) {
-            Debug.log("substitution: %s --> %s", original.format("%H.%n(%p) %r"), substitute.format("%H.%n(%p) %r"));
+            Debug.log("substitution: %s --> %s", MetaUtil.format("%H.%n(%p) %r", original), MetaUtil.format("%H.%n(%p) %r", substitute));
         }
 
         cr.methodSubstitutions.put(original, substitute);
@@ -429,20 +428,6 @@ public class ReplacementsImpl implements Replacements {
     }
 
     /**
-     * Calls in snippets to methods matching one of these filters are elided. Only void methods are
-     * considered for elision.
-     */
-    private static final MethodFilter[] MethodsElidedInSnippets = getMethodsElidedInSnippets();
-
-    private static MethodFilter[] getMethodsElidedInSnippets() {
-        String commaSeparatedPatterns = System.getProperty("graal.MethodsElidedInSnippets");
-        if (commaSeparatedPatterns != null) {
-            return MethodFilter.parse(commaSeparatedPatterns);
-        }
-        return null;
-    }
-
-    /**
      * Creates and preprocesses a graph for a replacement.
      */
     protected class GraphMaker {
@@ -515,9 +500,9 @@ public class ReplacementsImpl implements Replacements {
         }
 
         /**
-         * Filter nodes which have side effects and shouldn't be deleted from snippets when
-         * converting deoptimizations to guards. Currently this only allows exception constructors
-         * to be eliminated to cover the case when Java assertions are in the inlined code.
+         * Filter nodes has side effects and shouldn't be deleted from snippets when converting
+         * deoptimizations to guards. Currently this only allows exception constructors to be
+         * eliminated to cover the case when Java assertions are in the inlined code.
          *
          * @param node
          * @return true for nodes that have side effects and are unsafe to delete
@@ -569,12 +554,7 @@ public class ReplacementsImpl implements Replacements {
             final StructuredGraph graph = new StructuredGraph(methodToParse);
             try (Scope s = Debug.scope("buildInitialGraph", graph)) {
                 MetaAccessProvider metaAccess = providers.getMetaAccess();
-
-                if (MethodsElidedInSnippets != null && methodToParse.getSignature().getReturnKind() == Kind.Void && MethodFilter.matches(MethodsElidedInSnippets, methodToParse)) {
-                    graph.addAfterFixed(graph.start(), graph.add(new ReturnNode(null)));
-                } else {
-                    createGraphBuilder(metaAccess, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(graph);
-                }
+                createGraphBuilder(metaAccess, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(graph);
                 new WordTypeVerificationPhase(metaAccess, snippetReflection, target.wordKind).apply(graph);
                 new WordTypeRewriterPhase(metaAccess, snippetReflection, target.wordKind).apply(graph);
 
@@ -665,8 +645,8 @@ public class ReplacementsImpl implements Replacements {
                                     targetGraph = intrinsicGraph;
                                 } else {
                                     if (callee.getName().startsWith("$jacoco")) {
-                                        throw new GraalInternalError("Parsing call to JaCoCo instrumentation method " + callee.format("%H.%n(%p)") + " from " + methodToParse.format("%H.%n(%p)") +
-                                                        " while preparing replacement " + method.format("%H.%n(%p)") + ". Placing \"//JaCoCo Exclude\" anywhere in " +
+                                        throw new GraalInternalError("Parsing call to JaCoCo instrumentation method " + format("%H.%n(%p)", callee) + " from " + format("%H.%n(%p)", methodToParse) +
+                                                        " while preparing replacement " + format("%H.%n(%p)", method) + ". Placing \"//JaCoCo Exclude\" anywhere in " +
                                                         methodToParse.getDeclaringClass().getSourceFileName() + " should fix this.");
                                     }
                                     targetGraph = parseGraph(callee, policy, inliningDepth + 1);
@@ -735,7 +715,7 @@ public class ReplacementsImpl implements Replacements {
             dimensions++;
         }
 
-        Class<?> baseClass = base.getKind() != Kind.Object ? base.getKind().toJavaClass() : resolveClass(base.toJavaName(), false);
+        Class<?> baseClass = base.getKind() != Kind.Object ? base.getKind().toJavaClass() : resolveClass(toJavaName(base), false);
         return dimensions == 0 ? baseClass : Array.newInstance(baseClass, new int[dimensions]).getClass();
     }
 

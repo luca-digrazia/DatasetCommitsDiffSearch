@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.hotspot.meta;
 
+import static com.oracle.graal.api.meta.MetaUtil.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.meta.HotSpotResolvedObjectType.*;
@@ -324,7 +325,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
 
     @Override
     public String toString() {
-        return format("HotSpotField<%H.%n %t:") + offset + ">";
+        return format("HotSpotField<%H.%n %t:", this) + offset + ">";
     }
 
     @Override
@@ -338,11 +339,8 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
      * @return true if field has {@link Stable} annotation, false otherwise
      */
     public boolean isStable() {
-        if ((runtime().getConfig().jvmAccFieldStable & modifiers) != 0) {
-            return true;
-        }
-        assert getAnnotation(Stable.class) == null;
-        return false;
+        Annotation annotation = getAnnotation(Stable.class);
+        return annotation != null;
     }
 
     @Override
