@@ -164,8 +164,11 @@ public class TruffleTreeDumpHandler implements DebugDumpHandler {
                     if (inlinedCallTarget instanceof OptimizedCallTarget && callNode instanceof OptimizedDirectCallNode) {
                         TruffleInliningDecision decision = inlining.findByCall((OptimizedDirectCallNode) callNode);
                         if (decision != null && decision.isInline()) {
-                            InliningGraphPrintHandler inliningGraphPrintHandler = new InliningGraphPrintHandler(decision);
-                            inliningGraphPrintHandler.visit(inlinedCallTarget, printer.new GraphPrintAdapter());
+                            try {
+                                g.visit(inlinedCallTarget, new InliningGraphPrintHandler(decision));
+                            } catch (IOException ex) {
+                                ex.printStackTrace();
+                            }
                             SourceSection sourceSection = callNode.getEncapsulatingSourceSection();
                             g.connectNodes(node, inlinedCallTarget, sourceSection != null ? sourceSection.toString() : null);
                         }
