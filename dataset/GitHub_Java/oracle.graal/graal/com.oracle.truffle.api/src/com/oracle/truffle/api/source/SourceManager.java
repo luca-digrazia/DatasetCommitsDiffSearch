@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,7 +33,7 @@ import com.oracle.truffle.api.*;
  * A representation of source code information, suitable for hash table keys with equality defined
  * in terms of content. There are three kinds of sources supported at present.
  * <ul>
- * <li><strong>File:</strong> Each file is represented as a canonical object, indexed by the
+ * <li><strong>File:</strong>Each file is represented as a canonical object, indexed by the
  * absolute, canonical path name of the file. The textual contents of the file may be supplied when
  * the object is created, or it may be read lazily. Only one lazy attempt will be made to read a
  * file, and failure will result silently in null content.</li>
@@ -43,25 +43,11 @@ import com.oracle.truffle.api.*;
  * <li><strong>Fake Files:</strong> A named text string used for testing; its contents can be
  * retrieved by name, unlike literal sources.</li>
  * </ul>
- * <p>
- * <strong>Cache:</strong>
- * <ol>
- * <li>Access to source file contents via {@link Source#getInputStream()} or
- * {@link Source#getReader()} does <em>not</em> by itself result in the file's contents being cached
- * in the {@link Source} object.</li>
- * <li>Access to source file contents via {@link Source#getCode()} or any other {@link Source}
- * methods related to file's contents <em>will</em> result in the contents being cached in the
- * {@link Source} object.</li>
- * <li>Once source file contents have been cached, access to source file contents via
- * {@link Source#getInputStream()} or {@link Source#getReader()} will be provided from the cache.</li>
- * <li>Any access to source file contents via the cache will result in a timestamp check and
- * possible cache reload.</li>
- * </ol>
  */
 public final class SourceManager {
 
     // Only files and fake files are indexed.
-    private final Map<String, SourceImpl> pathToSource = new HashMap<>();
+    private final Map<String, SourceImpl> sourceMap = new HashMap<>();
 
     public SourceManager() {
 
@@ -71,29 +57,24 @@ public final class SourceManager {
      * Gets the canonical representation of a source file, whose contents will be read lazily and
      * then cached.
      * 
-     * @param reset forces any existing {@link Source} cache to be cleared, forcing a re-read
+     * @param reset forces any existing {@link Source} cache to be cleared, forcing a re-read.
      */
     public Source get(String fileName, boolean reset) {
-
-        SourceImpl source = pathToSource.get(fileName);
+        SourceImpl source = sourceMap.get(fileName);
         if (source == null) {
-            final File file = new File(fileName);
-            String path = null;
-            if (file.exists()) {
-                try {
-                    path = file.getCanonicalPath();
-                } catch (IOException e) {
-                    throw new RuntimeException("Can't find file " + fileName);
-                }
+            String path = findPath(fileName);
+            if (path == null) {
+                throw new RuntimeException("Can't find file " + fileName);
             }
-            source = pathToSource.get(path);
+            source = sourceMap.get(path);
             if (source == null) {
-                source = new FileSourceImpl(file, fileName, path);
-                pathToSource.put(path, source);
+                source = new FileSourceImpl(fileName, path);
+                sourceMap.put(path, source);
             }
-        }
-        if (reset) {
-            source.reset();
+        } else {
+            if (reset) {
+                source.reset();
+            }
         }
         return source;
     }
@@ -130,8 +111,20 @@ public final class SourceManager {
      */
     public Source getFakeFile(String name, String code) {
         final SourceImpl source = new LiteralSourceImpl(name, code);
-        pathToSource.put(name, source);
+        sourceMap.put(name, source);
         return source;
+    }
+
+    // If it names a real file, get the (canonical) normalized absolute path.
+    private static String findPath(String name) {
+        final File file = new File(name);
+        if (file.exists()) {
+            try {
+                return file.getCanonicalPath();
+            } catch (IOException e) {
+            }
+        }
+        return null;
     }
 
     private static String readCode(Reader reader) throws IOException {
@@ -149,7 +142,8 @@ public final class SourceManager {
         return builder.toString();
     }
 
-    private abstract static class SourceImpl implements Source {
+    // TODO (mlvdv) make this private once some related code changes propagate
+    public abstract static class SourceImpl implements Source {
 
         protected TextMap textMap = null;
 
@@ -273,17 +267,16 @@ public final class SourceManager {
 
     private static class FileSourceImpl extends SourceImpl {
 
-        private final File file;
         private final String name; // Name used originally to describe the source
+        private String code = null;
         private final String path;  // Normalized path description of an actual file
+        private boolean readAttempted;
 
-        private String code = null;  // A cache of the file's contents
-        private long timeStamp;      // timestamp of the cache in the file system
-
-        public FileSourceImpl(File file, String name, String path) {
-            this.file = file;
+        public FileSourceImpl(String name, String path) {
             this.name = name;
             this.path = path;
+            this.readAttempted = false;
+
         }
 
         @Override
@@ -293,10 +286,10 @@ public final class SourceManager {
 
         @Override
         public String getCode() {
-            if (code == null || timeStamp != file.lastModified()) {
+            if (code == null && !readAttempted) {
+                readAttempted = true;
                 try {
                     code = readCode(getReader());
-                    timeStamp = file.lastModified();
                 } catch (IOException e) {
                 }
             }
@@ -310,11 +303,11 @@ public final class SourceManager {
 
         @Override
         public Reader getReader() {
-            if (code != null && timeStamp == file.lastModified()) {
+            if (code != null) {
                 return new StringReader(code);
             }
             try {
-                return new FileReader(file);
+                return new BufferedReader(new FileReader(path));
             } catch (FileNotFoundException e) {
                 throw new RuntimeException("Can't find file " + path);
             }
@@ -323,6 +316,7 @@ public final class SourceManager {
         @Override
         protected void reset() {
             this.code = null;
+            this.readAttempted = false;
         }
 
     }
