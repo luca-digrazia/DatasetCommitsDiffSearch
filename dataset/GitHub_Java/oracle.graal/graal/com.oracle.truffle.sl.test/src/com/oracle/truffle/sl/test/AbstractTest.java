@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,6 +29,7 @@ import org.junit.*;
 import com.oracle.truffle.sl.*;
 
 public class AbstractTest {
+
     public static final int REPEATS = 10;
     private static final String NEWLINE = System.getProperty("line.separator");
 
@@ -48,15 +49,13 @@ public class AbstractTest {
         return result.toString();
     }
 
-    protected void executeSL(String[] input, String[] expectedOutput, boolean useConsole) {
-        InputStream in = new ByteArrayInputStream(concat(input).getBytes());
-
+    protected static void executeSL(String[] input, String[] expectedOutput, boolean useConsole) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         PrintStream printer = new PrintStream(useConsole ? new SplitOutputStream(out, System.err) : out);
         PrintStream origErr = System.err;
         System.setErr(printer);
 
-        SimpleLanguage.run(in, printer, REPEATS, true);
+        SimpleLanguage.run("(test)", concat(input), printer, REPEATS, false);
 
         System.setErr(origErr);
         Assert.assertEquals(repeat(concat(expectedOutput), REPEATS), new String(out.toByteArray()));

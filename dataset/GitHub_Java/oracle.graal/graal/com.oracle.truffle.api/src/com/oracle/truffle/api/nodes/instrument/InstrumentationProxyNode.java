@@ -22,22 +22,26 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.api;
+package com.oracle.truffle.api.nodes.instrument;
+
+import com.oracle.truffle.api.nodes.instrument.InstrumentationProbeNode.ProbeChain;
 
 /**
- * Information about the runtime context of a Truffle program.
+ * Interface implemented by language-specific Truffle <strong>proxy nodes</strong>: nodes that do
+ * not participate in the language's execution semantics, but which are inserted into an AST so that
+ * tools (e.g. tracers, analyzers, debuggers) can be notified of AST interpretation events and
+ * possibly intervene.
+ * <p>
+ * Language-specific proxy nodes call notification methods on an attached {@linkplain ProbeChain
+ * probe chain} which passes along {@linkplain InstrumentationProbeEvents events} to any
+ * {@linkplain InstrumentationProbeNode probes} that might have been attached.
  */
-public interface ExecutionContext {
+public interface InstrumentationProxyNode extends InstrumentationNode {
 
     /**
-     * Gets the name of the language, possibly with version number. in short enough form that it
-     * might be used for an interactive prompt.
+     * Gets the chain of probes to which events at this node are delegated. Note that a chain of
+     * probes may be used by more than one proxy.
      */
-    String getLanguageShortName();
-
-    /**
-     * Gets access to debugging services, {@code null} if not enabled in this context.
-     */
-    DebugManager getDebugManager();
+    ProbeChain getProbeChain();
 
 }

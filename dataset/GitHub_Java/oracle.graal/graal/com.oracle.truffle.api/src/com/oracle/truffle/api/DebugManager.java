@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,32 +24,44 @@
  */
 package com.oracle.truffle.api;
 
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.nodes.instrument.*;
-import com.oracle.truffle.api.nodes.instrument.InstrumentationProbeNode.ProbeChain;
+import com.oracle.truffle.api.source.*;
 
 /**
  * Language-agnostic access to AST-based debugging support.
  * <p>
- * <strong>Disclaimer:</strong> this interface is under development and will change.
+ * <strong>WARNING:</strong> this interface is under development and will change substantially.
  */
 public interface DebugManager {
 
     /**
-     * Receives notification of a suspended execution context; execution resumes when this method
-     * returns.
-     * 
-     * @param astNode a guest language AST node that represents the current execution site, assumed
-     *            not to be any kind of {@link InstrumentationNode},
-     * @param frame execution frame at the site where execution suspended
+     * Sets a breakpoint at a line-based location.
      */
-    void haltedAt(Node astNode, MaterializedFrame frame);
+    LineBreakpoint setBreakpoint(SourceLineLocation lineLocation);
 
-    void notifyFinishedLoading(Source source);
+    /**
+     * Sets a breakpoint at a line-based location with a boolean expression in the guest language to
+     * serve as a break condition.
+     */
+    LineBreakpoint setConditionalBreakpoint(SourceLineLocation lineLocation, String condition);
 
-    void notifyStartLoading(Source source);
+    /**
+     * Gets a list of current breakpoints.
+     */
+    LineBreakpoint[] getBreakpoints();
 
-    ProbeChain getProbeChain(SourceSection sourceSection);
+    /**
+     * Removes a breakpoint at a line-based location.
+     */
+    void removeBreakpoint(SourceLineLocation lineLocation);
+
+    /**
+     * Description of a line-based breakpoint.
+     */
+    interface LineBreakpoint {
+
+        SourceLineLocation getSourceLineLocation();
+
+        String getDebugStatus();
+    }
 
 }
