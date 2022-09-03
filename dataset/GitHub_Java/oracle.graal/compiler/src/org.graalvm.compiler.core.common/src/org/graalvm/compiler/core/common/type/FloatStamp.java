@@ -532,11 +532,9 @@ public class FloatStamp extends PrimitiveStamp {
                             assert a.getJavaKind() == b.getJavaKind();
                             switch (a.getJavaKind()) {
                                 case Float:
-                                    float floatDivisor = b.asFloat();
-                                    return (floatDivisor == 0) ? null : JavaConstant.forFloat(a.asFloat() / floatDivisor);
+                                    return JavaConstant.forFloat(a.asFloat() / b.asFloat());
                                 case Double:
-                                    double doubleDivisor = b.asDouble();
-                                    return (doubleDivisor == 0) ? null : JavaConstant.forDouble(a.asDouble() / doubleDivisor);
+                                    return JavaConstant.forDouble(a.asDouble() / b.asDouble());
                                 default:
                                     throw GraalError.shouldNotReachHere();
                             }

@@ -25,16 +25,28 @@ package org.graalvm.compiler.core.common.calc;
 import org.graalvm.compiler.debug.GraalError;
 
 public enum FloatConvert {
-    F2I,
-    D2I,
-    F2L,
-    D2L,
-    I2F,
-    L2F,
-    D2F,
-    I2D,
-    L2D,
-    F2D;
+    F2I(FloatConvertCategory.FloatingPointToInteger, 32),
+    D2I(FloatConvertCategory.FloatingPointToInteger, 64),
+    F2L(FloatConvertCategory.FloatingPointToInteger, 32),
+    D2L(FloatConvertCategory.FloatingPointToInteger, 64),
+    I2F(FloatConvertCategory.IntegerToFloatingPoint, 32),
+    L2F(FloatConvertCategory.IntegerToFloatingPoint, 64),
+    D2F(FloatConvertCategory.FloatingPointToFloatingPoint, 64),
+    I2D(FloatConvertCategory.IntegerToFloatingPoint, 32),
+    L2D(FloatConvertCategory.IntegerToFloatingPoint, 64),
+    F2D(FloatConvertCategory.FloatingPointToFloatingPoint, 32);
+
+    private final FloatConvertCategory category;
+    private final int inputBits;
+
+    FloatConvert(FloatConvertCategory category, int inputBits) {
+        this.category = category;
+        this.inputBits = inputBits;
+    }
+
+    public FloatConvertCategory getCategory() {
+        return category;
+    }
 
     public FloatConvert reverse() {
         switch (this) {
@@ -61,5 +73,9 @@ public enum FloatConvert {
             default:
                 throw GraalError.shouldNotReachHere();
         }
+    }
+
+    public int getInputBits() {
+        return inputBits;
     }
 }
