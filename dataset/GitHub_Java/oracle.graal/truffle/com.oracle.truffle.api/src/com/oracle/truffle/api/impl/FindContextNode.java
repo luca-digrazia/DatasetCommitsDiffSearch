@@ -28,19 +28,17 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.nodes.Node;
 
 public final class FindContextNode<C> extends Node {
-    private final TruffleLanguage<C> language;
-    private final ContextReference<C> ref;
+    private final Class<? extends TruffleLanguage<C>> languageClass;
 
-    public FindContextNode(TruffleLanguage<C> language) {
-        this.ref = ContextReference.create(language);
-        this.language = language;
+    public FindContextNode(Class<? extends TruffleLanguage<C>> type) {
+        this.languageClass = type;
     }
 
     public C executeFindContext() {
-        return ExecutionImpl.findContext(language.getClass());
+        return ExecutionImpl.findContext(languageClass);
     }
 
-    public TruffleLanguage<C> getTruffleLanguage() {
-        return language;
+    public Class<? extends TruffleLanguage<C>> getLanguageClass() {
+        return languageClass;
     }
 }
