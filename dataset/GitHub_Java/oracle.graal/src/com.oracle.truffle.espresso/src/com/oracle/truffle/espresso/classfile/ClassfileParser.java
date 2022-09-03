@@ -58,7 +58,7 @@ public class ClassfileParser {
     public static final int JAVA_10_VERSION = 54;
     public static final int JAVA_11_VERSION = 55;
 
-    private static final int MAJOR_VERSION_JAVA_MIN = JAVA_5_VERSION;
+    private static final int MAJOR_VERSION_JAVA_MIN = JAVA_6_VERSION;
     private static final int MAJOR_VERSION_JAVA_MAX = JAVA_11_VERSION;
 
     public static final int STRICTER_ACCESS_CTRL_CHECK_VERSION = JAVA_5_VERSION;
@@ -224,13 +224,11 @@ public class ClassfileParser {
 
         Optional<AttributeInfo> optEnclosingMethod = Arrays.stream(attributes).filter(a -> a.getName().equals("EnclosingMethod")).findAny();
         Optional<AttributeInfo> optInnerClasses = Arrays.stream(attributes).filter(a -> a.getName().equals("InnerClasses")).findAny();
-        Optional<AttributeInfo> optVisibleAnnotations = Arrays.stream(attributes).filter(a -> a.getName().equals("RuntimeVisibleAnnotations")).findAny();
 
         return ObjectKlass.create(context, typeDescriptor.toString(), superClass, localInterfaces, methods, fields, accessFlags,
                         (EnclosingMethodAttribute) optEnclosingMethod.orElse(null),
                         (InnerClassesAttribute) optInnerClasses.orElse(null),
-                        pool,
-                        optVisibleAnnotations.orElse(null));
+                        pool);
     }
 
     private MethodInfo.Builder[] parseMethods() {
@@ -259,17 +257,10 @@ public class ClassfileParser {
         MethodInfo.Builder builder = new MethodInfo.Builder().setName(name).setSignature(context.getSignatureDescriptors().make(value)).setModifiers(flags);
 
         Optional<AttributeInfo> optCode = Arrays.stream(attributes).filter(a -> a.getName().equals("Code")).findAny();
-        Optional<AttributeInfo> optExceptions = Arrays.stream(attributes).filter(a -> a.getName().equals("Exceptions")).findAny();
-
 
         if (optCode.isPresent()) {
             CodeAttribute code = (CodeAttribute) optCode.get();
             builder.setMaxLocals(code.getMaxLocals()).setMaxStackSize(code.getMaxStack()).setCode(code.getCode()).setExceptionHandlers(code.getExceptionHandlers());
-        }
-
-        if (optExceptions.isPresent()) {
-            ExceptionsAttribute exceptions = (ExceptionsAttribute) optExceptions.get();
-            builder.setCheckedExceptions(exceptions);
         }
 
         return builder;
@@ -294,24 +285,11 @@ public class ClassfileParser {
                 return parseEnclosingMethodAttribute(name);
             case "InnerClasses":
                 return parseInnerClasses(name);
-            case "Exceptions":
-                return parseExceptions(name);
             default:
                 int length = stream.readS4();
                 byte[] info = stream.readByteArray(length);
                 return new AttributeInfo(name, info);
         }
-    }
-
-    private ExceptionsAttribute parseExceptions(String name) {
-        int length = stream.readS4();
-        int entryCount = stream.readU2();
-        int[] entries = new int[entryCount];
-        for (int i = 0; i < entryCount; ++i) {
-            int index = stream.readU2();
-            entries[i] = index;
-        }
-        return new ExceptionsAttribute(name, entries);
     }
 
     private InnerClassesAttribute parseInnerClasses(String name) {

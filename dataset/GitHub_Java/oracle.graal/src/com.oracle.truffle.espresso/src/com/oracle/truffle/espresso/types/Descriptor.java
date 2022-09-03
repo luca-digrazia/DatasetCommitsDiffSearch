@@ -63,7 +63,6 @@ public abstract class Descriptor implements Comparable<Descriptor> {
         return value.hashCode();
     }
 
-    @Override
     public final int compareTo(Descriptor other) {
         return value.compareTo(other.value);
     }

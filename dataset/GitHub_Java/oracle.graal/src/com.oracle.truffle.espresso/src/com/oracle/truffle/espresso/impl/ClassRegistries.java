@@ -26,30 +26,31 @@ package com.oracle.truffle.espresso.impl;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.classfile.ClassfileParser;
-import com.oracle.truffle.espresso.classfile.ClassfileStream;
-import com.oracle.truffle.espresso.meta.MetaUtil;
+import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.ClasspathFile;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.runtime.StaticObjectClass;
 import com.oracle.truffle.espresso.types.TypeDescriptor;
 
 public class ClassRegistries {
 
-    private final ClassRegistry bootClassRegistry;
-    private final ConcurrentHashMap<StaticObject, ClassRegistry> registries;
+    private final ConcurrentHashMap<TypeDescriptor, Klass> bootClassRegistry = new ConcurrentHashMap<>();;
+
+    private final ConcurrentHashMap<Object, ClassRegistry> registries = new ConcurrentHashMap<>();
     private final EspressoContext context;
 
     public ClassRegistries(EspressoContext context) {
         this.context = context;
-        this.registries = new ConcurrentHashMap<>();
-        this.bootClassRegistry = new BootClassRegistry(context);
+        // Primitive classes do not have a .class definition, inject them directly in the BCL.
+        for (JavaKind kind : JavaKind.values()) {
+            if (kind.isPrimitive()) {
+                bootClassRegistry.put(context.getTypeDescriptors().make(kind.getTypeChar() + ""), new PrimitiveKlass(context, kind));
+            }
+        }
     }
 
-    public Klass findLoadedClass(TypeDescriptor type, StaticObject classLoader) {
-        assert classLoader != null;
+    public Klass findLoadedClass(TypeDescriptor type, Object classLoader) {
         if (type.isArray()) {
             Klass pepe = findLoadedClass(type.getComponentType(), classLoader);
             if (pepe != null) {
@@ -57,8 +58,8 @@ public class ClassRegistries {
             }
             return null;
         }
-        if (StaticObject.isNull(classLoader)) {
-            return bootClassRegistry.findLoadedClass(type);
+        if (classLoader == null) {
+            return bootClassRegistry.get(type);
         }
         ClassRegistry registry = registries.get(classLoader);
         if (registry == null) {
@@ -68,37 +69,51 @@ public class ClassRegistries {
     }
 
     @CompilerDirectives.TruffleBoundary
-    public Klass resolveWithBootClassLoader(TypeDescriptor type) {
-        return resolve(type, StaticObject.NULL);
-    }
+    public Klass resolve(TypeDescriptor type, Object classLoader) {
 
-    @CompilerDirectives.TruffleBoundary
-    public Klass resolve(TypeDescriptor type, StaticObject classLoader) {
-        assert classLoader != null;
         Klass k = findLoadedClass(type, classLoader);
         if (k != null) {
             return k;
         }
-        if (StaticObject.isNull(classLoader)) {
-            return bootClassRegistry.resolve(type);
+        if (classLoader == null) {
+            // TODO(peterssen): Make boot class registry thread-safe. Class loading is not a
+            // trivial operation, it loads super classes as well, which discards computeIfAbsent.
+            Klass klass = bootClassRegistry.get(type);
+
+            if (klass == null) {
+                Klass hostClass = null;
+                String className = type.toJavaName();
+
+                if (type.isPrimitive()) {
+                    throw EspressoError.shouldNotReachHere("Primitives must be in the registry");
+                }
+
+                if (type.isArray()) {
+                    int dim = type.getArrayDimensions();
+                    Klass arrType = resolve(type.getElementalType(), classLoader);
+                    for (int i = 0; i < dim; ++i) {
+                        arrType = arrType.getArrayClass();
+                    }
+                    return arrType;
+                }
+
+                // System.err.println("Try load BCL: " + type.toString());
+                ClasspathFile classpathFile = context.getBootClasspath().readClassFile(className);
+                if (classpathFile == null) {
+                    return null;
+                }
+                ClassfileParser parser = new ClassfileParser(classLoader, classpathFile, className, hostClass, context);
+                klass = parser.parseClass();
+                Klass loadedFirst = bootClassRegistry.putIfAbsent(type, klass);
+                if (loadedFirst != null) {
+                    klass = loadedFirst;
+                }
+            }
+
+            return klass;
         } else {
-            ClassRegistry registry = registries.computeIfAbsent(classLoader, cl -> new GuestClassRegistry(context, cl));
+            ClassRegistry registry = registries.computeIfAbsent(classLoader, cl -> new ClassRegistryImpl(context, cl));
             return registry.resolve(type);
         }
-    }
-
-    public Klass defineKlass(String name, byte[] bytes, StaticObject classLoader) {
-        assert classLoader != null;
-        ClasspathFile cpf = new ClasspathFile(bytes, null, name);
-        ClassfileParser parser = new ClassfileParser(classLoader, new ClassfileStream(bytes, 0, bytes.length, cpf), name, null, EspressoLanguage.getCurrentContext());
-
-        // TODO(peterssen): Propagate errors to the guest.
-        // Class parsing should be moved to ClassRegistry.
-        StaticObjectClass klass = (StaticObjectClass) parser.parseClass().mirror();
-
-        ClassRegistry registry = StaticObject.isNull(classLoader) ? bootClassRegistry : registries.get(classLoader);
-        TypeDescriptor descriptor = context.getTypeDescriptors().make(MetaUtil.toInternalName(name));
-        registry.defineKlass(descriptor, klass.getMirror());
-        return klass.getMirror();
     }
 }

@@ -245,7 +245,6 @@ import com.oracle.truffle.espresso.bytecode.BytecodeLookupSwitch;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.bytecode.BytecodeTableSwitch;
 import com.oracle.truffle.espresso.bytecode.Bytecodes;
-import com.oracle.truffle.espresso.bytecode.DualStack;
 import com.oracle.truffle.espresso.bytecode.InterpreterToVM;
 import com.oracle.truffle.espresso.bytecode.OperandStack;
 import com.oracle.truffle.espresso.classfile.ClassConstant;
@@ -266,9 +265,9 @@ import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 
 public class EspressoRootNode extends RootNode {
+    private final TruffleLanguage<EspressoContext> language;
     private final MethodInfo method;
     private final InterpreterToVM vm;
 
@@ -289,6 +288,7 @@ public class EspressoRootNode extends RootNode {
     @CompilerDirectives.TruffleBoundary
     public EspressoRootNode(TruffleLanguage<EspressoContext> language, MethodInfo method, InterpreterToVM vm) {
         super(language, initFrameDescriptor(method));
+        this.language = language;
         this.method = method;
         this.vm = vm;
         this.bs = new BytecodeStream(method.getCode());
@@ -320,17 +320,13 @@ public class EspressoRootNode extends RootNode {
         int curBCI = 0;
 
         // slots = locals... + stack
-        final OperandStack stack = new DualStack(method.getMaxStackSize());
+        final OperandStack stack = new OperandStack(method.getMaxStackSize());
         frame.setObject(stackSlot, stack);
 
         initArguments(frame, locals);
 
         loop: while (true) {
             try {
-
-                CompilerAsserts.partialEvaluationConstant(bs.currentBC(curBCI));
-                CompilerAsserts.partialEvaluationConstant(curBCI);
-
                 switch (bs.currentBC(curBCI)) {
                     case NOP:
                         break;
@@ -577,7 +573,7 @@ public class EspressoRootNode extends RootNode {
                         vm.setArrayDouble(stack.popDouble(), stack.popInt(), nullCheck(stack.popObject()));
                         break;
                     case AASTORE:
-                        vm.setArrayObject(stack.popObject(), stack.popInt(), (StaticObjectArray) nullCheck(stack.popObject()));
+                        vm.setArrayObject(stack.popObject(), stack.popInt(), nullCheck(stack.popObject()));
                         break;
                     case BASTORE:
                         vm.setArrayByte((byte) stack.popInt(), stack.popInt(), nullCheck(stack.popObject()));
@@ -884,10 +880,10 @@ public class EspressoRootNode extends RootNode {
                         continue loop;
                     case TABLESWITCH:
                         // TODO(peterssen): Inline this.
-                        curBCI = tableSwitch(bs, curBCI, stack.popInt());
+                        curBCI = tableSwitch(stack, bs, curBCI);
                         continue loop;
                     case LOOKUPSWITCH:
-                        curBCI = lookupSwitch(bs, curBCI, stack.popInt());
+                        curBCI = lookupSwitch(stack, bs, curBCI);
                         continue loop;
                     case IRETURN:
                         return exitMethodAndReturn(stack.popInt());
@@ -981,7 +977,7 @@ public class EspressoRootNode extends RootNode {
                         throw new UnsupportedOperationException("breakpoints not supported.");
                     case INVOKEDYNAMIC:
                         throw new UnsupportedOperationException("invokedynamic not supported."); // design
-                        // fart
+                                                                                                 // fart
                 }
             } catch (FrameSlotTypeException e) {
                 CompilerDirectives.transferToInterpreter();
@@ -1001,7 +997,7 @@ public class EspressoRootNode extends RootNode {
                 // TODO(peterssen): Host should not throw invalid VME (not in the boot classpath).
                 CompilerDirectives.transferToInterpreter();
                 Meta meta = EspressoLanguage.getCurrentContext().getMeta();
-                StaticObject ex = meta.initEx(e.getClass());
+                StaticObject ex = meta.createEx(e.getClass());
                 ExceptionHandler handler = resolveExceptionHandlers(bs.currentBCI(curBCI), ex);
                 if (handler != null) {
                     stack.clear();
@@ -1016,6 +1012,7 @@ public class EspressoRootNode extends RootNode {
         }
     }
 
+    @CompilerDirectives.TruffleBoundary
     private ExceptionHandler resolveExceptionHandlers(int bci, StaticObject ex) {
         ExceptionHandler[] handlers = getMethod().getExceptionHandlers();
         for (ExceptionHandler handler : handlers) {
@@ -1109,8 +1106,7 @@ public class EspressoRootNode extends RootNode {
     private void invokeVirtual(OperandStack stack, MethodInfo method) {
         if (Modifier.isFinal(method.getModifiers())) {
             // TODO(peterssen): Intercept/hook methods on primitive arrays e.g. int[].clone().
-            // Receiver can be a primitive array (not a StaticObject).
-            Object receiver = nullCheck(stack.peekReceiver(method));
+            StaticObject receiver = (StaticObject) nullCheck(stack.peekReceiver(method));
             invoke(stack, method, receiver);
         } else {
             resolveAndInvoke(stack, method);
@@ -1124,6 +1120,7 @@ public class EspressoRootNode extends RootNode {
         return methodInfo;
     }
 
+    @CompilerDirectives.TruffleBoundary
     private MethodInfo resolveInterfaceMethod(int opcode, char cpi) {
         assert opcode == INVOKEINTERFACE;
         ConstantPool pool = getConstantPool();
@@ -1131,25 +1128,21 @@ public class EspressoRootNode extends RootNode {
         return methodInfo;
     }
 
-    @CompilerDirectives.TruffleBoundary
-    private Object call(CallTarget target, Object... arguments) {
-        return target.call(arguments);
-    }
-
-    private void invoke(OperandStack stack, MethodInfo method, Object receiver) {
+    private void invoke(OperandStack stack, MethodInfo method, StaticObject receiver) {
         CallTarget redirectedMethod = vm.getIntrinsic(method);
         if (redirectedMethod != null) {
             invokeRedirectedMethodViaVM(stack, method, redirectedMethod);
         } else {
-            Object[] arguments = popArguments(stack, method);
+            Object[] arguments = stack.popArguments(method);
             CallTarget target = method.getCallTarget();
             assert receiver == null || arguments[0] == receiver;
             JavaKind resultKind = method.getSignature().resultKind();
-            Object result = call(target, arguments);
-            pushKind(stack, result, resultKind);
+            Object result = target.call(arguments);
+            stack.pushKind(result, resultKind);
         }
     }
 
+    @CompilerDirectives.TruffleBoundary
     private void resolveAndInvoke(OperandStack stack, MethodInfo method) {
         // TODO(peterssen): Ignore return type on method signature.
         // TODO(peterssen): Intercept/hook methods on primitive arrays e.g. int[].clone().
@@ -1159,17 +1152,20 @@ public class EspressoRootNode extends RootNode {
         invoke(stack, target, receiver);
     }
 
+    @CompilerDirectives.TruffleBoundary
     private void invokeRedirectedMethodViaVM(OperandStack stack, MethodInfo originalMethod, CallTarget intrinsic) {
-        Object[] originalCalleeParameters = popArguments(stack, originalMethod);
+        Object[] originalCalleeParameters = stack.popArguments(originalMethod);
         Object returnValue = intrinsic.call(originalCalleeParameters);
-        pushKindIntrinsic(stack, returnValue, originalMethod.getSignature().resultKind());
+        stack.pushKindIntrinsic(returnValue, originalMethod.getSignature().resultKind());
     }
 
+    @CompilerDirectives.TruffleBoundary
     private StaticObject allocateArray(Klass componentType, int length) {
         assert !componentType.isPrimitive();
         return vm.newArray(componentType, length);
     }
 
+    @CompilerDirectives.TruffleBoundary
     private StaticObject allocateMultiArray(OperandStack stack, Klass klass, int allocatedDimensions) {
         assert klass.isArray();
         int[] dimensions = new int[allocatedDimensions];
@@ -1179,6 +1175,7 @@ public class EspressoRootNode extends RootNode {
         return vm.newMultiArray(klass, dimensions);
     }
 
+    @CompilerDirectives.TruffleBoundary
     private void pushPoolConstant(OperandStack stack, char cpi) {
         ConstantPool pool = getConstantPool();
         PoolConstant constant = pool.at(cpi);
@@ -1203,6 +1200,7 @@ public class EspressoRootNode extends RootNode {
         return this.method.getConstantPool();
     }
 
+    @CompilerDirectives.TruffleBoundary
     private boolean instanceOf(Object instance, Klass typeToCheck) {
         return vm.instanceOf(instance, typeToCheck);
     }
@@ -1289,8 +1287,8 @@ public class EspressoRootNode extends RootNode {
         return value >>> bits;
     }
 
-    private int lookupSwitch(BytecodeStream bs, int curBCI, int key) {
-        return lookupSearch(new BytecodeLookupSwitch(bs, bs.currentBCI(curBCI)), key);
+    private int lookupSwitch(OperandStack stack, BytecodeStream bs, int curBCI) {
+        return lookupSearch(new BytecodeLookupSwitch(bs, bs.currentBCI(curBCI)), stack.popInt());
     }
 
     /**
@@ -1320,13 +1318,14 @@ public class EspressoRootNode extends RootNode {
      * correctly.
      */
     @ExplodeLoop
-    private static int tableSwitch(BytecodeStream bs, int curBCI, int index) {
+    private static int tableSwitch(OperandStack stack, BytecodeStream bs, int curBCI) {
         BytecodeTableSwitch switchHelper = new BytecodeTableSwitch(bs, bs.currentBCI(curBCI));
         int low = switchHelper.lowKey();
         CompilerAsserts.partialEvaluationConstant(low);
         int high = switchHelper.highKey();
         CompilerAsserts.partialEvaluationConstant(high);
         assert low <= high;
+        int index = stack.popInt();
         for (int i = low; i <= high; ++i) {
             if (i == index) {
                 CompilerAsserts.partialEvaluationConstant(switchHelper.targetAt(i - low));
@@ -1394,18 +1393,21 @@ public class EspressoRootNode extends RootNode {
 
     // endregion
 
+    @CompilerDirectives.TruffleBoundary
     private Klass resolveType(int opcode, char cpi) {
         // TODO(peterssen): Check opcode.
         ConstantPool pool = getConstantPool();
         return pool.classAt(cpi).resolve(pool, cpi);
     }
 
+    @CompilerDirectives.TruffleBoundary
     private FieldInfo resolveField(int opcode, char cpi) {
         // TODO(peterssen): Check opcode.
         ConstantPool pool = getConstantPool();
         return pool.fieldAt(cpi).resolve(pool, cpi);
     }
 
+    @CompilerDirectives.TruffleBoundary
     private void putField(OperandStack stack, FieldInfo field, boolean isStatic) {
         assert Modifier.isStatic(field.getFlags()) == isStatic;
 
@@ -1452,6 +1454,7 @@ public class EspressoRootNode extends RootNode {
         }
     }
 
+    @CompilerDirectives.TruffleBoundary
     private void getField(OperandStack stack, FieldInfo field, boolean isStatic) {
         if (isStatic) {
             field.getDeclaringClass().initialize();
@@ -1491,124 +1494,6 @@ public class EspressoRootNode extends RootNode {
                 break;
             default:
                 assert false : "unexpected kind";
-        }
-    }
-
-    @ExplodeLoop
-    private static Object[] popArguments(OperandStack stack, MethodInfo method) {
-        boolean hasReceiver = !method.isStatic();
-        // TODO(peterssen): Check parameter count.
-        int argCount = method.getSignature().getParameterCount(false);
-
-        int extraParam = hasReceiver ? 1 : 0;
-        Object[] arguments = new Object[argCount + extraParam];
-
-        for (int i = argCount - 1; i >= 0; --i) {
-            JavaKind expectedKind = method.getSignature().getParameterKind(i);
-            switch (expectedKind) {
-                case Boolean:
-                    int b = stack.popInt();
-                    assert b == 0 || b == 1;
-                    arguments[i + extraParam] = (b != 0);
-                    break;
-                case Byte:
-                    arguments[i + extraParam] = (byte) stack.popInt();
-                    break;
-                case Short:
-                    arguments[i + extraParam] = (short) stack.popInt();
-                    break;
-                case Char:
-                    arguments[i + extraParam] = (char) stack.popInt();
-                    break;
-                case Int:
-                    arguments[i + extraParam] = stack.popInt();
-                    break;
-                case Float:
-                    arguments[i + extraParam] = stack.popFloat();
-                    break;
-                case Long:
-                    arguments[i + extraParam] = stack.popLong();
-                    break;
-                case Double:
-                    arguments[i + extraParam] = stack.popDouble();
-                    break;
-                case Object:
-                    arguments[i + extraParam] = stack.popObject();
-                    break;
-                case Void:
-                case Illegal:
-                    throw EspressoError.shouldNotReachHere();
-            }
-        }
-        if (hasReceiver) {
-            arguments[0] = stack.popObject();
-        }
-        return arguments;
-    }
-
-    private static void pushKind(OperandStack stack, Object returnValue, JavaKind kind) {
-        switch (kind) {
-            case Boolean:
-            case Byte:
-            case Short:
-            case Char:
-            case Int:
-                stack.pushInt((int) returnValue);
-                break;
-            case Float:
-                stack.pushFloat((float) returnValue);
-                break;
-            case Long:
-                stack.pushLong((long) returnValue);
-                break;
-            case Double:
-                stack.pushDouble((double) returnValue);
-                break;
-            case Object:
-                stack.pushObject(returnValue);
-                break;
-            case Void:
-                // do not push
-                break;
-            case Illegal:
-                throw EspressoError.shouldNotReachHere();
-        }
-    }
-
-    private static void pushKindIntrinsic(OperandStack stack, Object returnValue, JavaKind kind) {
-        switch (kind) {
-            case Boolean:
-                stack.pushInt(((boolean) returnValue) ? 1 : 0);
-                break;
-            case Byte:
-                stack.pushInt((int) (byte) returnValue);
-                break;
-            case Short:
-                stack.pushInt((int) (short) returnValue);
-                break;
-            case Char:
-                stack.pushInt((int) (char) returnValue);
-                break;
-            case Int:
-                stack.pushInt((int) returnValue);
-                break;
-            case Float:
-                stack.pushFloat((float) returnValue);
-                break;
-            case Long:
-                stack.pushLong((long) returnValue);
-                break;
-            case Double:
-                stack.pushDouble((double) returnValue);
-                break;
-            case Object:
-                stack.pushObject(returnValue);
-                break;
-            case Void:
-                // do not push
-                break;
-            case Illegal:
-                throw EspressoError.shouldNotReachHere();
         }
     }
 

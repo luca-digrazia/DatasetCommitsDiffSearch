@@ -23,8 +23,6 @@
 
 package com.oracle.truffle.espresso.intrinsics;
 
-import static com.oracle.truffle.espresso.meta.Meta.meta;
-
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
@@ -33,6 +31,8 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 import com.oracle.truffle.espresso.runtime.StaticObjectWrapper;
+
+import static com.oracle.truffle.espresso.meta.Meta.meta;
 
 @EspressoIntrinsics
 public class Target_java_lang_Object {
