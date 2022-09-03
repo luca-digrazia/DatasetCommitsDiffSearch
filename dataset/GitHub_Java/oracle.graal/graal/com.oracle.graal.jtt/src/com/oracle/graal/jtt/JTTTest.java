@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,45 +22,60 @@
  */
 package com.oracle.graal.jtt;
 
-import static com.oracle.graal.api.meta.MetaUtil.*;
-import static java.lang.reflect.Modifier.*;
+import static java.lang.reflect.Modifier.isStatic;
 
-import java.lang.reflect.*;
+import java.util.Collections;
+import java.util.Set;
 
-import org.junit.*;
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.nodes.*;
+import org.junit.Assert;
+
+import com.oracle.graal.compiler.common.CompilationIdentifier;
+import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ParameterNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 
 /**
  * Base class for the JTT tests.
  * <p>
- * These tests are executed twice: once with arguments passed to the execution and
- * once with the arguments bound to the test's parameters during compilation.
- * The latter is a good test of canonicalization.
+ * These tests are executed twice: once with arguments passed to the execution and once with the
+ * arguments bound to the test's parameters during compilation. The latter is a good test of
+ * canonicalization.
  */
 public class JTTTest extends GraalCompilerTest {
 
+    public static final class DummyTestClass {
+    }
+
+    protected static final Set<DeoptimizationReason> EMPTY = Collections.<DeoptimizationReason> emptySet();
     /**
      * The arguments which, if non-null, will replace the Locals in the test method's graph.
      */
     Object[] argsToBind;
 
+    public JTTTest() {
+        Assert.assertNotNull(getCodeCache());
+    }
+
     @Override
-    protected StructuredGraph parse(Method m) {
-        StructuredGraph graph = super.parse(m);
+    protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId) {
+        StructuredGraph graph = super.parseEager(m, allowAssumptions, compilationId);
         if (argsToBind != null) {
             Object receiver = isStatic(m.getModifiers()) ? null : this;
             Object[] args = argsWithReceiver(receiver, argsToBind);
-            JavaType[] parameterTypes = signatureToTypes(runtime.lookupJavaMethod(m));
+            JavaType[] parameterTypes = m.toParameterTypes();
             assert parameterTypes.length == args.length;
-            for (int i = 0; i < argsToBind.length; i++) {
-                LocalNode local = graph.getLocal(i);
-                Constant c = Constant.forBoxed(parameterTypes[i].getKind(), argsToBind[i]);
-                ConstantNode replacement = ConstantNode.forConstant(c, runtime, graph);
-                local.replaceAtUsages(replacement);
+            for (ParameterNode param : graph.getNodes(ParameterNode.TYPE)) {
+                JavaConstant c = getSnippetReflection().forBoxed(parameterTypes[param.index()].getJavaKind(), args[param.index()]);
+                ConstantNode replacement = ConstantNode.forConstant(c, getMetaAccess(), graph);
+                param.replaceAtUsages(replacement);
             }
         }
         return graph;
@@ -74,11 +89,11 @@ public class JTTTest extends GraalCompilerTest {
     Double delta;
 
     @Override
-    protected void assertEquals(Object expected, Object actual) {
+    protected void assertDeepEquals(Object expected, Object actual) {
         if (delta != null) {
             Assert.assertEquals(((Number) expected).doubleValue(), ((Number) actual).doubleValue(), delta);
         } else {
-            super.assertEquals(expected, actual);
+            super.assertDeepEquals(expected, actual);
         }
     }
 
@@ -89,10 +104,32 @@ public class JTTTest extends GraalCompilerTest {
     }
 
     protected void runTest(String name, Object... args) {
-        //System.out.println(getClass().getSimpleName() + "." + name);
-        super.test(name, args);
-        this.argsToBind = args;
-        super.test(name, args);
-        this.argsToBind = null;
+        runTest(EMPTY, name, args);
+    }
+
+    protected void runTest(Set<DeoptimizationReason> shouldNotDeopt, String name, Object... args) {
+        runTest(shouldNotDeopt, true, false, name, args);
+    }
+
+    protected void runTest(Set<DeoptimizationReason> shouldNotDeopt, boolean bind, boolean noProfile, String name, Object... args) {
+        ResolvedJavaMethod method = getResolvedJavaMethod(name);
+        Object receiver = method.isStatic() ? null : this;
+
+        Result expect = executeExpected(method, receiver, args);
+
+        if (noProfile) {
+            method.reprofile();
+        }
+
+        testAgainstExpected(method, expect, shouldNotDeopt, receiver, args);
+        if (args.length > 0 && bind) {
+            if (noProfile) {
+                method.reprofile();
+            }
+
+            this.argsToBind = args;
+            testAgainstExpected(method, expect, shouldNotDeopt, receiver, args);
+            this.argsToBind = null;
+        }
     }
 }

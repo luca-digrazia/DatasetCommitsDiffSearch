@@ -22,15 +22,18 @@
  */
 package com.oracle.graal.replacements.test;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
-import com.oracle.graal.api.meta.ProfilingInfo.TriState;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.compiler.common.CompilationIdentifier;
+import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.nodes.StructuredGraph;
+
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.meta.JavaTypeProfile;
+import jdk.vm.ci.meta.JavaTypeProfile.ProfiledType;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.TriState;
 
 /**
- * Base class for checkcast and instanceof test classes.
+ * Base class for instanceof test classes.
  */
 public abstract class TypeCheckTest extends GraalCompilerTest {
 
@@ -39,13 +42,17 @@ public abstract class TypeCheckTest extends GraalCompilerTest {
     protected JavaTypeProfile currentProfile;
 
     @Override
-    protected InstalledCode getCode(final ResolvedJavaMethod method, final StructuredGraph graph) {
-        boolean forceCompile = false;
+    protected StructuredGraph parseForCompile(ResolvedJavaMethod method, CompilationIdentifier compilationId) {
+        StructuredGraph graph = super.parseForCompile(method, compilationId);
         if (currentProfile != null) {
             replaceProfile(graph, currentProfile);
-            forceCompile = true;
         }
-        return super.getCode(method, graph, forceCompile);
+        return graph;
+    }
+
+    @Override
+    protected InstalledCode getCode(final ResolvedJavaMethod method, final StructuredGraph graph) {
+        return getCode(method, graph, currentProfile != null);
     }
 
     protected JavaTypeProfile profile(Class<?>... types) {

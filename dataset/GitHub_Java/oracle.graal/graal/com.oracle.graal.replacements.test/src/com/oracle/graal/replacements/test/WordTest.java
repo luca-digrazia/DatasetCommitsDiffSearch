@@ -22,17 +22,21 @@
  */
 package com.oracle.graal.replacements.test;
 
-import java.lang.reflect.*;
+import org.junit.Test;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.test.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.Snippet.*;
-import com.oracle.graal.word.*;
+import com.oracle.graal.api.replacements.Snippet;
+import com.oracle.graal.compiler.common.CompilationIdentifier;
+import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.replacements.ReplacementsImpl;
+import com.oracle.graal.replacements.Snippets;
+import com.oracle.graal.word.Pointer;
+import com.oracle.graal.word.Unsigned;
+import com.oracle.graal.word.Word;
+import com.oracle.graal.word.WordBase;
+
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Tests for the {@link Word} type.
@@ -42,19 +46,16 @@ public class WordTest extends GraalCompilerTest implements Snippets {
     private final ReplacementsImpl installer;
 
     public WordTest() {
-        TargetDescription target = Graal.getRequiredCapability(CodeCacheProvider.class).getTarget();
-        installer = new ReplacementsImpl(runtime, new Assumptions(false), target);
+        installer = (ReplacementsImpl) getReplacements();
     }
-
-    private static final ThreadLocal<SnippetInliningPolicy> inliningPolicy = new ThreadLocal<>();
 
     @Override
-    protected StructuredGraph parse(Method m) {
-        ResolvedJavaMethod resolvedMethod = runtime.lookupJavaMethod(m);
-        return installer.makeGraph(resolvedMethod, null, inliningPolicy.get());
+    protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId) {
+        // create a copy to assign a valid compilation id
+        return installer.makeGraph(m, null, null).copyWithIdentifier(compilationId);
     }
 
-    @LongTest
+    @Test
     public void construction() {
         long[] words = new long[]{Long.MIN_VALUE, Long.MIN_VALUE + 1, -1L, 0L, 1L, Long.MAX_VALUE - 1, Long.MAX_VALUE, Integer.MAX_VALUE - 1L, Integer.MAX_VALUE, Integer.MAX_VALUE + 1L,
                         Integer.MIN_VALUE - 1L, Integer.MIN_VALUE, Integer.MIN_VALUE + 1L};
@@ -66,7 +67,7 @@ public class WordTest extends GraalCompilerTest implements Snippets {
         }
     }
 
-    @LongTest
+    @Test
     public void testArithmetic() {
         long[] words = new long[]{Long.MIN_VALUE, Long.MIN_VALUE + 1, -1L, 0L, 1L, Long.MAX_VALUE - 1, Long.MAX_VALUE, Integer.MAX_VALUE - 1L, Integer.MAX_VALUE, Integer.MAX_VALUE + 1L,
                         Integer.MIN_VALUE - 1L, Integer.MIN_VALUE, Integer.MIN_VALUE + 1L};
@@ -103,7 +104,7 @@ public class WordTest extends GraalCompilerTest implements Snippets {
         }
     }
 
-    @LongTest
+    @Test
     public void testCompare() {
         long[] words = new long[]{Long.MIN_VALUE, Long.MIN_VALUE + 1, -1L, 0L, 1L, Long.MAX_VALUE - 1, Long.MAX_VALUE};
         for (long word1 : words) {
@@ -114,6 +115,20 @@ public class WordTest extends GraalCompilerTest implements Snippets {
                 }
             }
         }
+    }
+
+    @Test
+    public void testCast() {
+        test("cast", 1234L);
+    }
+
+    @Snippet
+    public static long cast(long input) {
+        WordBase base = Word.signed(input);
+        Unsigned unsigned = (Unsigned) base;
+        Pointer pointer = (Pointer) unsigned;
+        Word word = (Word) pointer;
+        return word.rawValue();
     }
 
     @Snippet

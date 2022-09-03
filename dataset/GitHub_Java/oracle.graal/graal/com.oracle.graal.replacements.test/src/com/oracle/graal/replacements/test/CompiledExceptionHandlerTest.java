@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,16 +22,23 @@
  */
 package com.oracle.graal.replacements.test;
 
-import java.lang.reflect.*;
+import org.junit.Assert;
+import org.junit.Test;
 
-import org.junit.*;
+import com.oracle.graal.compiler.common.CompilationIdentifier;
+import com.oracle.graal.compiler.phases.HighTier;
+import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
+import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo;
+import com.oracle.graal.nodes.java.ExceptionObjectNode;
+import com.oracle.graal.options.OptionValue;
+import com.oracle.graal.options.OptionValue.OverrideScope;
+import com.oracle.graal.phases.tiers.Suites;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Tests compilation of a hot exception handler.
@@ -39,30 +46,37 @@ import com.oracle.graal.phases.common.*;
 public class CompiledExceptionHandlerTest extends GraalCompilerTest {
 
     @Override
-    protected void editPhasePlan(ResolvedJavaMethod method, StructuredGraph graph, PhasePlan phasePlan) {
-        phasePlan.disablePhase(InliningPhase.class);
+    @SuppressWarnings("try")
+    protected Suites createSuites() {
+        try (OverrideScope scope = OptionValue.override(HighTier.Options.Inline, false)) {
+            return super.createSuites();
+        }
     }
 
     @Override
-    protected StructuredGraph parse(Method m) {
-        StructuredGraph graph = super.parse(m);
+    protected InlineInfo bytecodeParserShouldInlineInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
+        /*
+         * We don't care whether other invokes are inlined or not, but we definitely don't want
+         * another explicit exception handler in the graph.
+         */
+        return InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
+    }
+
+    @Override
+    protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId) {
+        StructuredGraph graph = super.parseEager(m, allowAssumptions, compilationId);
         int handlers = graph.getNodes().filter(ExceptionObjectNode.class).count();
         Assert.assertEquals(1, handlers);
         return graph;
     }
 
-    private static void raiseException(String s) {
-        throw new RuntimeException(s);
+    @BytecodeParserNeverInline(invokeWithException = true)
+    private static void raiseExceptionSimple(String s) {
+        throw new RuntimeException("Raising exception with message \"" + s + "\"");
     }
 
     @Test
     public void test1() {
-        // Ensure the profile shows a hot exception
-        for (int i = 0; i < 10000; i++) {
-            test1Snippet("");
-            test1Snippet(null);
-        }
-
         test("test1Snippet", "a string");
         test("test1Snippet", (String) null);
     }
@@ -70,26 +84,21 @@ public class CompiledExceptionHandlerTest extends GraalCompilerTest {
     public static String test1Snippet(String message) {
         if (message != null) {
             try {
-                raiseException(message);
+                raiseExceptionSimple(message);
             } catch (Exception e) {
-                return message;
+                return message + e.getMessage();
             }
         }
         return null;
     }
 
+    @BytecodeParserNeverInline(invokeWithException = true)
     private static void raiseException(String m1, String m2, String m3, String m4, String m5) {
         throw new RuntimeException(m1 + m2 + m3 + m4 + m5);
     }
 
     @Test
     public void test2() {
-        // Ensure the profile shows a hot exception
-        for (int i = 0; i < 10000; i++) {
-            test2Snippet("m1", "m2", "m3", "m4", "m5");
-            test2Snippet(null, "m2", "m3", "m4", "m5");
-        }
-
         test("test2Snippet", "m1", "m2", "m3", "m4", "m5");
         test("test2Snippet", null, "m2", "m3", "m4", "m5");
     }
@@ -103,25 +112,5 @@ public class CompiledExceptionHandlerTest extends GraalCompilerTest {
             }
         }
         return m4 + m3;
-    }
-
-    @Test
-    public void test3() {
-        // Ensure the profile shows a hot exception
-        for (int i = 0; i < 10000; i++) {
-            test3Snippet("object1", "object2");
-            test3Snippet(null, "object2");
-        }
-
-        test("test3Snippet", (Object) null, "object2");
-        test("test3Snippet", "object1", "object2");
-    }
-
-    public static String test3Snippet(Object o, Object o2) {
-        try {
-            return o.toString();
-        } catch (NullPointerException e) {
-            return String.valueOf(o2);
-        }
     }
 }

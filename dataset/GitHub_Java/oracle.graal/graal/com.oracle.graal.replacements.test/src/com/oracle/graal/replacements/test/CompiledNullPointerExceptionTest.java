@@ -22,9 +22,12 @@
  */
 package com.oracle.graal.replacements.test;
 
+import static com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.BytecodeExceptionMode.CheckAll;
+
 import org.junit.Assert;
 import org.junit.Test;
 
+import com.oracle.graal.compiler.common.CompilationIdentifier;
 import com.oracle.graal.compiler.phases.HighTier;
 import com.oracle.graal.compiler.test.GraalCompilerTest;
 import com.oracle.graal.nodes.StructuredGraph;
@@ -32,9 +35,8 @@ import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.extended.BytecodeExceptionNode;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.BytecodeExceptionMode;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin;
+import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo;
 import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.options.OptionValue.OverrideScope;
 import com.oracle.graal.phases.tiers.Suites;
@@ -55,20 +57,18 @@ public class CompiledNullPointerExceptionTest extends GraalCompilerTest {
     }
 
     @Override
-    protected GraphBuilderConfiguration editGraphBuilderConfiguration(GraphBuilderConfiguration conf) {
-        GraphBuilderConfiguration ret = super.editGraphBuilderConfiguration(conf);
-        ret.getPlugins().prependInlineInvokePlugin(new InlineInvokePlugin() {
-            @Override
-            public InlineInfo shouldInlineInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
-                return InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
-            }
-        });
-        return ret.withBytecodeExceptionMode(BytecodeExceptionMode.CheckAll);
+    protected InlineInfo bytecodeParserShouldInlineInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
+        return InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
     }
 
     @Override
-    protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
-        StructuredGraph graph = super.parseEager(m, allowAssumptions);
+    protected GraphBuilderConfiguration editGraphBuilderConfiguration(GraphBuilderConfiguration conf) {
+        return super.editGraphBuilderConfiguration(conf).withBytecodeExceptionMode(CheckAll);
+    }
+
+    @Override
+    protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId) {
+        StructuredGraph graph = super.parseEager(m, allowAssumptions, compilationId);
         int handlers = graph.getNodes().filter(BytecodeExceptionNode.class).count();
         Assert.assertEquals(1, handlers);
         return graph;

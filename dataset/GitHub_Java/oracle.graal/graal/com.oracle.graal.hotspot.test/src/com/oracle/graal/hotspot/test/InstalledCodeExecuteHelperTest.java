@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,64 +22,74 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import java.lang.reflect.*;
+import static java.lang.reflect.Modifier.isStatic;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.nodes.spi.*;
+import org.junit.Assert;
+import org.junit.Test;
+
+import com.oracle.graal.compiler.common.CompilationIdentifier;
+import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ParameterNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+
+import jdk.vm.ci.code.InvalidInstalledCodeException;
+import jdk.vm.ci.hotspot.HotSpotInstalledCode;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public class InstalledCodeExecuteHelperTest extends GraalCompilerTest {
 
-    private static final int ITERATIONS = 100000000;
+    private static final int ITERATIONS = 100000;
+    Object[] argsToBind;
 
-    // TODO this is not a test, move it somewhere else
-    // CheckStyle: stop system..print check
-    public void test1() throws NoSuchMethodException, SecurityException {
+    @Test
+    public void test1() throws InvalidInstalledCodeException {
+        final ResolvedJavaMethod fooMethod = getResolvedJavaMethod("foo");
+        final HotSpotInstalledCode fooCode = (HotSpotInstalledCode) getCode(fooMethod);
 
-        final Method benchrMethod = InstalledCodeExecuteHelperTest.class.getMethod("bench", long.class, long.class);
-        final ResolvedJavaMethod benchJavaMethod = Graal.getRequiredCapability(GraalCodeCacheProvider.class).lookupJavaMethod(benchrMethod);
-        HotSpotInstalledCode benchCode = (HotSpotInstalledCode) getCode(benchJavaMethod, parse(benchrMethod));
+        argsToBind = new Object[]{fooCode};
 
-        final Method wrapperMethod = InstalledCodeExecuteHelperTest.class.getMethod("executeWrapper", long.class, long.class, Object.class, Object.class, Object.class);
-        final ResolvedJavaMethod wrapperJavaMethod = Graal.getRequiredCapability(GraalCodeCacheProvider.class).lookupJavaMethod(wrapperMethod);
-        HotSpotInstalledCode wrapperCode = (HotSpotInstalledCode) getCode(wrapperJavaMethod, parse(wrapperMethod));
+        final ResolvedJavaMethod benchmarkMethod = getResolvedJavaMethod("benchmark");
+        final HotSpotInstalledCode installedBenchmarkCode = (HotSpotInstalledCode) getCode(benchmarkMethod);
 
-        final Method fooMethod = InstalledCodeExecuteHelperTest.class.getMethod("foo", Object.class, Object.class, Object.class);
-        final HotSpotResolvedJavaMethod fooJavaMethod = (HotSpotResolvedJavaMethod) Graal.getRequiredCapability(GraalCodeCacheProvider.class).lookupJavaMethod(fooMethod);
-        HotSpotInstalledCode fooCode = (HotSpotInstalledCode) getCode(fooJavaMethod, parse(fooMethod));
+        Assert.assertEquals(Integer.valueOf(42), benchmark(fooCode));
 
-        System.out.println(wrapperCode.executeVarargs(fooCode.getnmethod(), fooJavaMethod.getMetaspaceMethod(), null, null, null));
-
-        long nmethod = fooCode.getnmethod();
-        long metaspacemethod = fooJavaMethod.getMetaspaceMethod();
-
-        System.out.println("Without replaced InstalledCode.execute:" + bench(nmethod, metaspacemethod));
-
-        System.out.println("WITH replaced InstalledCode.execute:" + benchCode.executeVarargs(nmethod, metaspacemethod));
+        Assert.assertEquals(Integer.valueOf(42), installedBenchmarkCode.executeVarargs(argsToBind[0]));
 
     }
 
-    // CheckStyle: resume system..print check
-
-    public static Long bench(long nmethod, long metaspacemethod) {
-        long start = System.currentTimeMillis();
-
-        for (int i = 0; i < ITERATIONS; i++) {
-            HotSpotInstalledCode.executeHelper(nmethod, metaspacemethod, null, null, null);
+    public static Integer benchmark(HotSpotInstalledCode code) throws InvalidInstalledCodeException {
+        int val = 0;
+        for (int j = 0; j < 100; j++) {
+            for (int i = 0; i < ITERATIONS; i++) {
+                val = (Integer) code.executeVarargs();
+            }
         }
-
-        long end = System.currentTimeMillis();
-        return (end - start);
+        return val;
     }
 
-    public static Object foo(@SuppressWarnings("unused") Object a1, @SuppressWarnings("unused") Object a2, @SuppressWarnings("unused") Object a3) {
+    public static Integer foo() {
         return 42;
     }
 
-    public static Object executeWrapper(long nmethod, long metaspaceMethod, Object arg1, Object arg2, Object arg3) {
-        return HotSpotInstalledCode.executeHelper(nmethod, metaspaceMethod, arg1, arg2, arg3);
+    @Override
+    protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId) {
+        StructuredGraph graph = super.parseEager(m, allowAssumptions, compilationId);
+        if (argsToBind != null) {
+            Object receiver = isStatic(m.getModifiers()) ? null : this;
+            Object[] args = argsWithReceiver(receiver, argsToBind);
+            JavaType[] parameterTypes = m.toParameterTypes();
+            assert parameterTypes.length == args.length;
+            for (int i = 0; i < argsToBind.length; i++) {
+                ParameterNode param = graph.getParameter(i);
+                JavaConstant c = getSnippetReflection().forBoxed(parameterTypes[i].getJavaKind(), argsToBind[i]);
+                ConstantNode replacement = ConstantNode.forConstant(c, getMetaAccess(), graph);
+                param.replaceAtUsages(replacement);
+            }
+        }
+        return graph;
     }
-
 }

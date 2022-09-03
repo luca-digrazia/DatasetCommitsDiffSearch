@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,140 +22,144 @@
  */
 package com.oracle.graal.replacements.test;
 
-import java.lang.reflect.*;
+import org.junit.Assert;
+import org.junit.Test;
 
-import org.junit.*;
+import com.oracle.graal.api.replacements.Snippet;
+import com.oracle.graal.compiler.common.CompilationIdentifier;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.nodes.NamedLocationIdentity;
+import com.oracle.graal.nodes.ReturnNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.calc.SignExtendNode;
+import com.oracle.graal.nodes.extended.JavaReadNode;
+import com.oracle.graal.nodes.extended.JavaWriteNode;
+import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
+import com.oracle.graal.phases.OptimisticOptimizations;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.tiers.HighTierContext;
+import com.oracle.graal.replacements.ReplacementsImpl;
+import com.oracle.graal.replacements.Snippets;
+import com.oracle.graal.word.Pointer;
+import com.oracle.graal.word.Word;
+import com.oracle.graal.word.nodes.WordCastNode;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.Snippet.SnippetInliningPolicy;
-import com.oracle.graal.word.*;
-import com.oracle.graal.word.nodes.*;
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Tests for the {@link Pointer} read and write operations.
  */
 public class PointerTest extends GraalCompilerTest implements Snippets {
 
-    private static final LocationIdentity ID = new NamedLocationIdentity("ID");
-    private static final Kind[] KINDS = new Kind[]{Kind.Byte, Kind.Char, Kind.Short, Kind.Int, Kind.Long, Kind.Float, Kind.Double, Kind.Object};
+    private static final LocationIdentity ID = NamedLocationIdentity.mutable("ID");
+    private static final JavaKind[] KINDS = new JavaKind[]{JavaKind.Byte, JavaKind.Char, JavaKind.Short, JavaKind.Int, JavaKind.Long, JavaKind.Float, JavaKind.Double, JavaKind.Object};
     private final TargetDescription target;
     private final ReplacementsImpl installer;
 
     public PointerTest() {
-        target = Graal.getRequiredCapability(CodeCacheProvider.class).getTarget();
-        installer = new ReplacementsImpl(runtime, new Assumptions(false), target);
+        target = getCodeCache().getTarget();
+        installer = (ReplacementsImpl) getProviders().getReplacements();
     }
 
-    private static final ThreadLocal<SnippetInliningPolicy> inliningPolicy = new ThreadLocal<>();
-
     @Override
-    protected StructuredGraph parse(Method m) {
-        ResolvedJavaMethod resolvedMethod = runtime.lookupJavaMethod(m);
-        return installer.makeGraph(resolvedMethod, null, inliningPolicy.get());
+    protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId) {
+        return installer.makeGraph(m, null, null);
     }
 
     @Test
     public void testRead1() {
-        for (Kind kind : KINDS) {
-            assertRead(parse("read" + kind.name() + "1"), kind, false, ID);
+        for (JavaKind kind : KINDS) {
+            assertRead(parseEager("read" + kind.name() + "1", AllowAssumptions.YES), kind, true, ID);
         }
     }
 
     @Test
     public void testRead2() {
-        for (Kind kind : KINDS) {
-            assertRead(parse("read" + kind.name() + "2"), kind, true, ID);
+        for (JavaKind kind : KINDS) {
+            assertRead(parseEager("read" + kind.name() + "2", AllowAssumptions.YES), kind, true, ID);
         }
     }
 
     @Test
     public void testRead3() {
-        for (Kind kind : KINDS) {
-            assertRead(parse("read" + kind.name() + "3"), kind, false, LocationIdentity.ANY_LOCATION);
+        for (JavaKind kind : KINDS) {
+            assertRead(parseEager("read" + kind.name() + "3", AllowAssumptions.YES), kind, true, LocationIdentity.any());
         }
     }
 
     @Test
     public void testWrite1() {
-        for (Kind kind : KINDS) {
-            assertWrite(parse("write" + kind.name() + "1"), kind, false, ID);
+        for (JavaKind kind : KINDS) {
+            assertWrite(parseEager("write" + kind.name() + "1", AllowAssumptions.YES), true, ID);
         }
     }
 
     @Test
     public void testWrite2() {
-        for (Kind kind : KINDS) {
-            assertWrite(parse("write" + kind.name() + "2"), kind, true, ID);
+        for (JavaKind kind : KINDS) {
+            assertWrite(parseEager("write" + kind.name() + "2", AllowAssumptions.YES), true, ID);
         }
     }
 
     @Test
     public void testWrite3() {
-        for (Kind kind : KINDS) {
-            assertWrite(parse("write" + kind.name() + "3"), kind, false, LocationIdentity.ANY_LOCATION);
+        for (JavaKind kind : KINDS) {
+            assertWrite(parseEager("write" + kind.name() + "3", AllowAssumptions.YES), true, LocationIdentity.any());
         }
     }
 
-    private void assertRead(StructuredGraph graph, Kind kind, boolean indexConvert, LocationIdentity locationIdentity) {
+    private void assertRead(StructuredGraph graph, JavaKind kind, boolean indexConvert, LocationIdentity locationIdentity) {
         WordCastNode cast = (WordCastNode) graph.start().next();
 
-        ReadNode read = (ReadNode) cast.next();
-        Assert.assertEquals(kind.getStackKind(), read.kind());
+        JavaReadNode read = (JavaReadNode) cast.next();
+        Assert.assertEquals(kind.getStackKind(), read.stamp().getStackKind());
 
-        Assert.assertEquals(cast, read.object());
-        Assert.assertEquals(graph.getLocal(0), cast.getInput());
-        Assert.assertEquals(target.wordKind, cast.kind());
+        OffsetAddressNode address = (OffsetAddressNode) read.getAddress();
+        Assert.assertEquals(cast, address.getBase());
+        Assert.assertEquals(graph.getParameter(0), cast.getInput());
+        Assert.assertEquals(target.wordJavaKind, cast.stamp().getStackKind());
 
-        IndexedLocationNode location = (IndexedLocationNode) read.location();
-        Assert.assertEquals(kind, location.getValueKind());
-        Assert.assertEquals(locationIdentity, location.getLocationIdentity());
-        Assert.assertEquals(1, location.getIndexScaling());
+        Assert.assertEquals(locationIdentity, read.getLocationIdentity());
 
         if (indexConvert) {
-            ConvertNode convert = (ConvertNode) location.getIndex();
-            Assert.assertEquals(ConvertNode.Op.I2L, convert.opcode);
-            Assert.assertEquals(graph.getLocal(1), convert.value());
+            SignExtendNode convert = (SignExtendNode) address.getOffset();
+            Assert.assertEquals(convert.getInputBits(), 32);
+            Assert.assertEquals(convert.getResultBits(), 64);
+            Assert.assertEquals(graph.getParameter(1), convert.getValue());
         } else {
-            Assert.assertEquals(graph.getLocal(1), location.getIndex());
+            Assert.assertEquals(graph.getParameter(1), address.getOffset());
         }
 
         ReturnNode ret = (ReturnNode) read.next();
         Assert.assertEquals(read, ret.result());
     }
 
-    private void assertWrite(StructuredGraph graph, Kind kind, boolean indexConvert, LocationIdentity locationIdentity) {
+    private void assertWrite(StructuredGraph graph, boolean indexConvert, LocationIdentity locationIdentity) {
         WordCastNode cast = (WordCastNode) graph.start().next();
 
-        WriteNode write = (WriteNode) cast.next();
-        Assert.assertEquals(graph.getLocal(2), write.value());
-        Assert.assertEquals(Kind.Void, write.kind());
-        Assert.assertEquals(FrameState.AFTER_BCI, write.stateAfter().bci);
+        JavaWriteNode write = (JavaWriteNode) cast.next();
+        Assert.assertEquals(graph.getParameter(2), write.value());
+        Assert.assertEquals(BytecodeFrame.AFTER_BCI, write.stateAfter().bci);
 
-        Assert.assertEquals(cast, write.object());
-        Assert.assertEquals(graph.getLocal(0), cast.getInput());
-        Assert.assertEquals(target.wordKind, cast.kind());
+        OffsetAddressNode address = (OffsetAddressNode) write.getAddress();
+        Assert.assertEquals(cast, address.getBase());
+        Assert.assertEquals(graph.getParameter(0), cast.getInput());
+        Assert.assertEquals(target.wordJavaKind, cast.stamp().getStackKind());
 
-        IndexedLocationNode location = (IndexedLocationNode) write.location();
-        Assert.assertEquals(kind, location.getValueKind());
-        Assert.assertEquals(locationIdentity, location.getLocationIdentity());
-        Assert.assertEquals(1, location.getIndexScaling());
+        Assert.assertEquals(locationIdentity, write.getLocationIdentity());
 
         if (indexConvert) {
-            ConvertNode convert = (ConvertNode) location.getIndex();
-            Assert.assertEquals(ConvertNode.Op.I2L, convert.opcode);
-            Assert.assertEquals(graph.getLocal(1), convert.value());
+            SignExtendNode convert = (SignExtendNode) address.getOffset();
+            Assert.assertEquals(convert.getInputBits(), 32);
+            Assert.assertEquals(convert.getResultBits(), 64);
+            Assert.assertEquals(graph.getParameter(1), convert.getValue());
         } else {
-            Assert.assertEquals(graph.getLocal(1), location.getIndex());
+            Assert.assertEquals(graph.getParameter(1), address.getOffset());
         }
 
         ReturnNode ret = (ReturnNode) write.next();
@@ -164,250 +168,249 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
 
     @Snippet
     public static byte readByte1(Object o, int offset) {
-        return Word.fromObject(o).readByte(offset, ID);
+        return Word.objectToTrackedPointer(o).readByte(offset, ID);
     }
 
     @Snippet
     public static byte readByte2(Object o, int offset) {
-        return Word.fromObject(o).readByte(Word.signed(offset), ID);
+        return Word.objectToTrackedPointer(o).readByte(Word.signed(offset), ID);
     }
 
     @Snippet
     public static byte readByte3(Object o, int offset) {
-        return Word.fromObject(o).readByte(offset);
+        return Word.objectToTrackedPointer(o).readByte(offset);
     }
 
     @Snippet
     public static void writeByte1(Object o, int offset, byte value) {
-        Word.fromObject(o).writeByte(offset, value, ID);
+        Word.objectToTrackedPointer(o).writeByte(offset, value, ID);
     }
 
     @Snippet
     public static void writeByte2(Object o, int offset, byte value) {
-        Word.fromObject(o).writeByte(Word.signed(offset), value, ID);
+        Word.objectToTrackedPointer(o).writeByte(Word.signed(offset), value, ID);
     }
 
     @Snippet
     public static void writeByte3(Object o, int offset, byte value) {
-        Word.fromObject(o).writeByte(offset, value);
+        Word.objectToTrackedPointer(o).writeByte(offset, value);
     }
 
     @Snippet
     public static char readChar1(Object o, int offset) {
-        return Word.fromObject(o).readChar(offset, ID);
+        return Word.objectToTrackedPointer(o).readChar(offset, ID);
     }
 
     @Snippet
     public static char readChar2(Object o, int offset) {
-        return Word.fromObject(o).readChar(Word.signed(offset), ID);
+        return Word.objectToTrackedPointer(o).readChar(Word.signed(offset), ID);
     }
 
     @Snippet
     public static char readChar3(Object o, int offset) {
-        return Word.fromObject(o).readChar(offset);
+        return Word.objectToTrackedPointer(o).readChar(offset);
     }
 
     @Snippet
     public static void writeChar1(Object o, int offset, char value) {
-        Word.fromObject(o).writeChar(offset, value, ID);
+        Word.objectToTrackedPointer(o).writeChar(offset, value, ID);
     }
 
     @Snippet
     public static void writeChar2(Object o, int offset, char value) {
-        Word.fromObject(o).writeChar(Word.signed(offset), value, ID);
+        Word.objectToTrackedPointer(o).writeChar(Word.signed(offset), value, ID);
     }
 
     @Snippet
     public static void writeChar3(Object o, int offset, char value) {
-        Word.fromObject(o).writeChar(offset, value);
+        Word.objectToTrackedPointer(o).writeChar(offset, value);
     }
 
     @Snippet
     public static short readShort1(Object o, int offset) {
-        return Word.fromObject(o).readShort(offset, ID);
+        return Word.objectToTrackedPointer(o).readShort(offset, ID);
     }
 
     @Snippet
     public static short readShort2(Object o, int offset) {
-        return Word.fromObject(o).readShort(Word.signed(offset), ID);
+        return Word.objectToTrackedPointer(o).readShort(Word.signed(offset), ID);
     }
 
     @Snippet
     public static short readShort3(Object o, int offset) {
-        return Word.fromObject(o).readShort(offset);
+        return Word.objectToTrackedPointer(o).readShort(offset);
     }
 
     @Snippet
     public static void writeShort1(Object o, int offset, short value) {
-        Word.fromObject(o).writeShort(offset, value, ID);
+        Word.objectToTrackedPointer(o).writeShort(offset, value, ID);
     }
 
     @Snippet
     public static void writeShort2(Object o, int offset, short value) {
-        Word.fromObject(o).writeShort(Word.signed(offset), value, ID);
+        Word.objectToTrackedPointer(o).writeShort(Word.signed(offset), value, ID);
     }
 
     @Snippet
     public static void writeShort3(Object o, int offset, short value) {
-        Word.fromObject(o).writeShort(offset, value);
+        Word.objectToTrackedPointer(o).writeShort(offset, value);
     }
 
     @Snippet
     public static int readInt1(Object o, int offset) {
-        return Word.fromObject(o).readInt(offset, ID);
+        return Word.objectToTrackedPointer(o).readInt(offset, ID);
     }
 
     @Snippet
     public static int readInt2(Object o, int offset) {
-        return Word.fromObject(o).readInt(Word.signed(offset), ID);
+        return Word.objectToTrackedPointer(o).readInt(Word.signed(offset), ID);
     }
 
     @Snippet
     public static int readInt3(Object o, int offset) {
-        return Word.fromObject(o).readInt(offset);
+        return Word.objectToTrackedPointer(o).readInt(offset);
     }
 
     @Snippet
     public static void writeInt1(Object o, int offset, int value) {
-        Word.fromObject(o).writeInt(offset, value, ID);
+        Word.objectToTrackedPointer(o).writeInt(offset, value, ID);
     }
 
     @Snippet
     public static void writeInt2(Object o, int offset, int value) {
-        Word.fromObject(o).writeInt(Word.signed(offset), value, ID);
+        Word.objectToTrackedPointer(o).writeInt(Word.signed(offset), value, ID);
     }
 
     @Snippet
     public static void writeInt3(Object o, int offset, int value) {
-        Word.fromObject(o).writeInt(offset, value);
+        Word.objectToTrackedPointer(o).writeInt(offset, value);
     }
 
     @Snippet
     public static long readLong1(Object o, int offset) {
-        return Word.fromObject(o).readLong(offset, ID);
+        return Word.objectToTrackedPointer(o).readLong(offset, ID);
     }
 
     @Snippet
     public static long readLong2(Object o, int offset) {
-        return Word.fromObject(o).readLong(Word.signed(offset), ID);
+        return Word.objectToTrackedPointer(o).readLong(Word.signed(offset), ID);
     }
 
     @Snippet
     public static long readLong3(Object o, int offset) {
-        return Word.fromObject(o).readLong(offset);
+        return Word.objectToTrackedPointer(o).readLong(offset);
     }
 
     @Snippet
     public static void writeLong1(Object o, int offset, long value) {
-        Word.fromObject(o).writeLong(offset, value, ID);
+        Word.objectToTrackedPointer(o).writeLong(offset, value, ID);
     }
 
     @Snippet
     public static void writeLong2(Object o, int offset, long value) {
-        Word.fromObject(o).writeLong(Word.signed(offset), value, ID);
+        Word.objectToTrackedPointer(o).writeLong(Word.signed(offset), value, ID);
     }
 
     @Snippet
     public static void writeLong3(Object o, int offset, long value) {
-        Word.fromObject(o).writeLong(offset, value);
+        Word.objectToTrackedPointer(o).writeLong(offset, value);
     }
 
     @Snippet
     public static float readFloat1(Object o, int offset) {
-        return Word.fromObject(o).readFloat(offset, ID);
+        return Word.objectToTrackedPointer(o).readFloat(offset, ID);
     }
 
     @Snippet
     public static float readFloat2(Object o, int offset) {
-        return Word.fromObject(o).readFloat(Word.signed(offset), ID);
+        return Word.objectToTrackedPointer(o).readFloat(Word.signed(offset), ID);
     }
 
     @Snippet
     public static float readFloat3(Object o, int offset) {
-        return Word.fromObject(o).readFloat(offset);
+        return Word.objectToTrackedPointer(o).readFloat(offset);
     }
 
     @Snippet
     public static void writeFloat1(Object o, int offset, float value) {
-        Word.fromObject(o).writeFloat(offset, value, ID);
+        Word.objectToTrackedPointer(o).writeFloat(offset, value, ID);
     }
 
     @Snippet
     public static void writeFloat2(Object o, int offset, float value) {
-        Word.fromObject(o).writeFloat(Word.signed(offset), value, ID);
+        Word.objectToTrackedPointer(o).writeFloat(Word.signed(offset), value, ID);
     }
 
     @Snippet
     public static void writeFloat3(Object o, int offset, float value) {
-        Word.fromObject(o).writeFloat(offset, value);
+        Word.objectToTrackedPointer(o).writeFloat(offset, value);
     }
 
     @Snippet
     public static double readDouble1(Object o, int offset) {
-        return Word.fromObject(o).readDouble(offset, ID);
+        return Word.objectToTrackedPointer(o).readDouble(offset, ID);
     }
 
     @Snippet
     public static double readDouble2(Object o, int offset) {
-        return Word.fromObject(o).readDouble(Word.signed(offset), ID);
+        return Word.objectToTrackedPointer(o).readDouble(Word.signed(offset), ID);
     }
 
     @Snippet
     public static double readDouble3(Object o, int offset) {
-        return Word.fromObject(o).readDouble(offset);
+        return Word.objectToTrackedPointer(o).readDouble(offset);
     }
 
     @Snippet
     public static void writeDouble1(Object o, int offset, double value) {
-        Word.fromObject(o).writeDouble(offset, value, ID);
+        Word.objectToTrackedPointer(o).writeDouble(offset, value, ID);
     }
 
     @Snippet
     public static void writeDouble2(Object o, int offset, double value) {
-        Word.fromObject(o).writeDouble(Word.signed(offset), value, ID);
+        Word.objectToTrackedPointer(o).writeDouble(Word.signed(offset), value, ID);
     }
 
     @Snippet
     public static void writeDouble3(Object o, int offset, double value) {
-        Word.fromObject(o).writeDouble(offset, value);
+        Word.objectToTrackedPointer(o).writeDouble(offset, value);
     }
 
     @Snippet
     public static Object readObject1(Object o, int offset) {
-        return Word.fromObject(o).readObject(offset, ID);
+        return Word.objectToTrackedPointer(o).readObject(offset, ID);
     }
 
     @Snippet
     public static Object readObject2(Object o, int offset) {
-        return Word.fromObject(o).readObject(Word.signed(offset), ID);
+        return Word.objectToTrackedPointer(o).readObject(Word.signed(offset), ID);
     }
 
     @Snippet
     public static Object readObject3(Object o, int offset) {
-        return Word.fromObject(o).readObject(offset);
+        return Word.objectToTrackedPointer(o).readObject(offset);
     }
 
     @Snippet
     public static void writeObject1(Object o, int offset, Object value) {
-        Word.fromObject(o).writeObject(offset, value, ID);
+        Word.objectToTrackedPointer(o).writeObject(offset, value, ID);
     }
 
     @Snippet
     public static void writeObject2(Object o, int offset, Object value) {
-        Word.fromObject(o).writeObject(Word.signed(offset), value, ID);
+        Word.objectToTrackedPointer(o).writeObject(Word.signed(offset), value, ID);
     }
 
     @Snippet
     public static void writeObject3(Object o, int offset, Object value) {
-        Word.fromObject(o).writeObject(offset, value);
+        Word.objectToTrackedPointer(o).writeObject(offset, value);
     }
 
     private void assertNumWordCasts(String snippetName, int expectedWordCasts) {
-        Assumptions assumptions = new Assumptions(true);
-        HighTierContext context = new HighTierContext(runtime(), assumptions, replacements, null, null, OptimisticOptimizations.ALL);
+        HighTierContext context = new HighTierContext(getProviders(), null, OptimisticOptimizations.ALL);
 
-        StructuredGraph graph = parse(snippetName);
-        new CanonicalizerPhase(false).apply(graph, context);
+        StructuredGraph graph = parseEager(snippetName, AllowAssumptions.YES);
+        new CanonicalizerPhase().apply(graph, context);
         Assert.assertEquals(expectedWordCasts, graph.getNodes().filter(WordCastNode.class).count());
     }
 
@@ -418,7 +421,7 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
 
     @Snippet
     public static void unusedFromObject(Object o) {
-        Word.fromObject(o);
+        Word.objectToTrackedPointer(o);
     }
 
     @Test
@@ -428,7 +431,7 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
 
     @Snippet
     public static void unusedRawValue(Object o) {
-        Word.fromObject(o).rawValue();
+        Word.objectToTrackedPointer(o).rawValue();
     }
 
     @Test
@@ -438,7 +441,7 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
 
     @Snippet
     public static long usedRawValue(Object o) {
-        return Word.fromObject(o).rawValue();
+        return Word.objectToTrackedPointer(o).rawValue();
     }
 
     @Test
