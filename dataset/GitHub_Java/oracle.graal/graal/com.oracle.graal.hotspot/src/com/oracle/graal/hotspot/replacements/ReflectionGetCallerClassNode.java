@@ -26,7 +26,6 @@ import static com.oracle.graal.compiler.GraalCompiler.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -39,8 +38,8 @@ public class ReflectionGetCallerClassNode extends MacroNode implements Canonical
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
-        ConstantNode callerClassNode = getCallerClassNode(tool.getMetaAccess());
+    public ValueNode canonical(CanonicalizerTool tool) {
+        ConstantNode callerClassNode = getCallerClassNode(tool.runtime());
         if (callerClassNode != null) {
             return callerClassNode;
         }
@@ -49,7 +48,7 @@ public class ReflectionGetCallerClassNode extends MacroNode implements Canonical
 
     @Override
     public void lower(LoweringTool tool) {
-        ConstantNode callerClassNode = getCallerClassNode(tool.getMetaAccess());
+        ConstantNode callerClassNode = getCallerClassNode(tool.getRuntime());
 
         if (callerClassNode != null) {
             graph().replaceFixedWithFloating(this, callerClassNode);
@@ -64,10 +63,10 @@ public class ReflectionGetCallerClassNode extends MacroNode implements Canonical
      * If inlining is deep enough this method returns a {@link ConstantNode} of the caller class by
      * walking the the stack.
      * 
-     * @param metaAccess
+     * @param runtime
      * @return ConstantNode of the caller class, or null
      */
-    private ConstantNode getCallerClassNode(MetaAccessProvider metaAccess) {
+    private ConstantNode getCallerClassNode(MetaAccessProvider runtime) {
         if (!shouldIntrinsify(getTargetMethod())) {
             return null;
         }
@@ -92,8 +91,8 @@ public class ReflectionGetCallerClassNode extends MacroNode implements Canonical
                 default:
                     if (!method.ignoredBySecurityStackWalk()) {
                         // We have reached the desired frame; return the holder class.
-                        HotSpotResolvedObjectType callerClass = method.getDeclaringClass();
-                        return ConstantNode.forObject(callerClass.mirror(), metaAccess, graph());
+                        HotSpotResolvedObjectType callerClass = (HotSpotResolvedObjectType) method.getDeclaringClass();
+                        return ConstantNode.forObject(callerClass.mirror(), runtime, graph());
                     }
                     break;
             }

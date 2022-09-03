@@ -22,17 +22,17 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
-public abstract class WriteBarrier extends FixedWithNextNode implements Lowerable {
+public abstract class WriteBarrier extends FixedWithNextNode implements Lowerable, IterableNodeType {
 
     @Input private ValueNode object;
-    @OptionalInput private ValueNode value;
-    @OptionalInput(InputType.Association) private LocationNode location;
+    @Input private ValueNode value;
+    @Input private LocationNode location;
     private final boolean precise;
 
     public WriteBarrier(ValueNode object, ValueNode value, LocationNode location, boolean precise) {
@@ -62,6 +62,6 @@ public abstract class WriteBarrier extends FixedWithNextNode implements Lowerabl
     @Override
     public void lower(LoweringTool tool) {
         assert graph().getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA;
-        tool.getLowerer().lower(this, tool);
+        tool.getRuntime().lower(this, tool);
     }
 }
