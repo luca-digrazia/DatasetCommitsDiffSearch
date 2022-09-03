@@ -285,7 +285,6 @@ public abstract class TVMCI {
         return (T) fallbackEngineData;
     }
 
-    @SuppressWarnings("unused")
     protected void reportPolymorphicSpecialize(Node node) {
     }
 }
