@@ -27,8 +27,8 @@ import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.*;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 import static com.oracle.graal.phases.GraalOptions.*;
+import static com.oracle.graal.replacements.nodes.BranchProbabilityNode.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
@@ -89,8 +89,7 @@ public class InstanceOfSnippets implements Snippets {
             }
             return falseValue;
         }
-        BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
-        Word objectHub = loadHubIntrinsic(object, getWordKind(), anchorNode);
+        Word objectHub = loadHub(object);
         // if we get an exact match: succeed immediately
         ExplodeLoopNode.explodeLoop();
         for (int i = 0; i < hints.length; i++) {
@@ -118,8 +117,7 @@ public class InstanceOfSnippets implements Snippets {
             isNull.inc();
             return falseValue;
         }
-        BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
-        Word objectHub = loadHubIntrinsic(object, getWordKind(), anchorNode);
+        Word objectHub = loadHub(object);
         if (probability(LIKELY_PROBABILITY, objectHub.notEqual(exactHub))) {
             exactMiss.inc();
             return falseValue;
@@ -137,8 +135,7 @@ public class InstanceOfSnippets implements Snippets {
             isNull.inc();
             return falseValue;
         }
-        BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
-        Word objectHub = loadHubIntrinsic(object, getWordKind(), anchorNode);
+        Word objectHub = loadHub(object);
         if (probability(NOT_LIKELY_PROBABILITY, objectHub.readWord(superCheckOffset, LocationIdentity.FINAL_LOCATION).notEqual(hub))) {
             displayMiss.inc();
             return falseValue;
@@ -157,8 +154,7 @@ public class InstanceOfSnippets implements Snippets {
             isNull.inc();
             return falseValue;
         }
-        BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
-        Word objectHub = loadHubIntrinsic(object, getWordKind(), anchorNode);
+        Word objectHub = loadHub(object);
         // if we get an exact match: succeed immediately
         ExplodeLoopNode.explodeLoop();
         for (int i = 0; i < hints.length; i++) {
@@ -186,8 +182,7 @@ public class InstanceOfSnippets implements Snippets {
         }
 
         Word hub = loadWordFromObject(mirror, klassOffset());
-        BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
-        Word objectHub = loadHubIntrinsic(object, getWordKind(), anchorNode);
+        Word objectHub = loadHub(object);
         if (!checkUnknownSubType(hub, objectHub)) {
             return falseValue;
         }
