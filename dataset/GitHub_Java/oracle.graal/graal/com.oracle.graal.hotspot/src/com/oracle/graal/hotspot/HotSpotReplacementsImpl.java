@@ -27,8 +27,11 @@ import java.lang.reflect.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.hotspot.word.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.*;
 
@@ -67,7 +70,32 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
             if (!config.useCRC32Intrinsics) {
                 return null;
             }
+        } else if (substituteClass == StringSubstitutions.class) {
+            /*
+             * AMD64's String.equals substitution needs about 8 registers so we better disable the
+             * substitution if there is some register pressure.
+             */
+            if (GraalOptions.RegisterPressure.getValue() != null) {
+                return null;
+            }
         }
         return super.registerMethodSubstitution(cr, originalMethod, substituteMethod);
+    }
+
+    @Override
+    public Class<? extends FixedWithNextNode> getMacroSubstitution(ResolvedJavaMethod method) {
+        HotSpotResolvedJavaMethod hsMethod = (HotSpotResolvedJavaMethod) method;
+        int intrinsicId = hsMethod.intrinsicId();
+        if (intrinsicId != 0) {
+            /*
+             * The methods of MethodHandle that need substitution are signature-polymorphic, i.e.,
+             * the VM replicates them for every signature that they are actually used for.
+             * Therefore, we cannot use the usual annotation-driven mechanism to define the
+             */
+            if (MethodHandleNode.lookupMethodHandleIntrinsic(method, providers.getConstantReflection().getMethodHandleAccess()) != null) {
+                return MethodHandleNode.class;
+            }
+        }
+        return super.getMacroSubstitution(method);
     }
 }

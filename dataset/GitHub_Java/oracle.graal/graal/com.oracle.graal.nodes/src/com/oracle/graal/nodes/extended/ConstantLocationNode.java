@@ -23,49 +23,45 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
  * Location node that has a constant displacement. Can represent addresses of the form [base + disp]
  * where base is a node and disp is a constant.
  */
-@NodeInfo(nameTemplate = "Loc {p#locationIdentity/s}")
-public class ConstantLocationNode extends LocationNode {
+@NodeInfo(nameTemplate = "&({p#locationIdentity/s})")
+public final class ConstantLocationNode extends LocationNode {
 
-    private final long displacement;
+    public static final NodeClass<ConstantLocationNode> TYPE = NodeClass.create(ConstantLocationNode.class);
+    protected final LocationIdentity locationIdentity;
+    protected final long displacement;
 
-    public long displacement() {
-        return displacement;
-    }
-
-    public static ConstantLocationNode create(Object identity, Kind kind, long displacement, Graph graph) {
-        return graph.unique(new ConstantLocationNode(identity, kind, displacement));
-    }
-
-    protected ConstantLocationNode(Object identity, Kind kind, long displacement) {
-        super(identity, kind);
+    public ConstantLocationNode(LocationIdentity identity, long displacement) {
+        super(TYPE, StampFactory.forVoid());
+        this.locationIdentity = identity;
         this.displacement = displacement;
     }
 
     @Override
-    protected ConstantLocationNode addDisplacement(long x) {
-        return create(locationIdentity(), getValueKind(), displacement + x, graph());
+    public LocationIdentity getLocationIdentity() {
+        return locationIdentity;
+    }
+
+    public long getDisplacement() {
+        return displacement;
     }
 
     @Override
-    public Value generateAddress(LIRGeneratorTool gen, Value base) {
-        return gen.emitLea(base, displacement(), Value.ILLEGAL, 0);
+    public Value generateAddress(NodeMappableLIRBuilder builder, LIRGeneratorTool gen, Value base) {
+        return gen.emitAddress(base, getDisplacement(), Value.ILLEGAL, 0);
     }
 
     @Override
-    public Value generateLoad(LIRGeneratorTool gen, Value base, DeoptimizingNode deopting) {
-        return gen.emitLoad(getValueKind(), base, displacement(), Value.ILLEGAL, 0, deopting);
-    }
-
-    @Override
-    public void generateStore(LIRGeneratorTool gen, Value base, Value value, DeoptimizingNode deopting) {
-        gen.emitStore(getValueKind(), base, displacement(), Value.ILLEGAL, 0, value, deopting);
+    public IntegerStamp getDisplacementStamp() {
+        return StampFactory.forInteger(64, displacement, displacement);
     }
 }

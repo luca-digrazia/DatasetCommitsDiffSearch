@@ -22,25 +22,19 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.nodes.spi.Proxy;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(allowedUsageTypes = {InputType.Guard}, nameTemplate = "Proxy({i#value})")
-public final class GuardProxyNode extends ProxyNode implements GuardingNode, Proxy, LIRLowerable, Canonicalizable {
+public final class GuardProxyNode extends ProxyNode implements GuardingNode, Proxy, LIRLowerable {
 
     public static final NodeClass<GuardProxyNode> TYPE = NodeClass.create(GuardProxyNode.class);
     @OptionalInput(InputType.Guard) GuardingNode value;
 
-    public GuardProxyNode(GuardingNode value, LoopExitNode proxyPoint) {
+    public GuardProxyNode(GuardingNode value, AbstractBeginNode proxyPoint) {
         super(TYPE, StampFactory.forVoid(), proxyPoint);
         this.value = value;
     }
@@ -61,12 +55,5 @@ public final class GuardProxyNode extends ProxyNode implements GuardingNode, Pro
 
     public Node getOriginalNode() {
         return (value == null ? null : value.asNode());
-    }
-
-    public Node canonical(CanonicalizerTool tool) {
-        if (value == null) {
-            return null;
-        }
-        return this;
     }
 }

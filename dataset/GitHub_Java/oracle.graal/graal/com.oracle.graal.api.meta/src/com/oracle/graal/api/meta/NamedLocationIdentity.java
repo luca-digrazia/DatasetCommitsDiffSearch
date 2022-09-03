@@ -24,25 +24,71 @@ package com.oracle.graal.api.meta;
 
 import java.util.*;
 
+import com.oracle.graal.api.meta.Kind.FormatWithToString;
+
 /**
  * A {@link LocationIdentity} with a name.
  */
-public class NamedLocationIdentity implements LocationIdentity {
+public final class NamedLocationIdentity extends LocationIdentity implements FormatWithToString {
+
+    /**
+     * Map for asserting all {@link NamedLocationIdentity} instances have a unique name.
+     */
+    static class DB {
+        private static final HashMap<String, NamedLocationIdentity> map = new HashMap<>();
+
+        static boolean checkUnique(NamedLocationIdentity identity) {
+            NamedLocationIdentity oldValue = map.put(identity.name, identity);
+            if (oldValue != null) {
+                throw new AssertionError("identity " + identity + " already exists");
+            }
+            return true;
+        }
+    }
 
     protected final String name;
 
+    private NamedLocationIdentity(String name, boolean immutable) {
+        super(immutable);
+        this.name = name;
+    }
+
     /**
-     * Creates a named unique location identity for read and write operations.
-     * 
+     * Creates a named unique location identity for read and write operations against mutable
+     * memory.
+     *
      * @param name the name of the new location identity
      */
-    public NamedLocationIdentity(String name) {
-        this.name = name;
+    public static NamedLocationIdentity mutable(String name) {
+        return create(name, false);
+    }
+
+    /**
+     * Creates a named unique location identity for read operations against immutable memory.
+     * Immutable memory will never have a visible write in the graph, which is more restictive than
+     * Java final.
+     *
+     * @param name the name of the new location identity
+     */
+    public static NamedLocationIdentity immutable(String name) {
+        return create(name, true);
+    }
+
+    /**
+     * Creates a named unique location identity for read and write operations.
+     *
+     * @param name the name of the new location identity
+     * @param immutable true if the location is immutable
+     */
+    private static NamedLocationIdentity create(String name, boolean immutable) {
+        NamedLocationIdentity id = new NamedLocationIdentity(name, immutable);
+        assert DB.checkUnique(id);
+        return id;
     }
 
     @Override
     public String toString() {
-        return name;
+        return name + (isImmutable() ? ":final" : "");
     }
 
     /**
@@ -59,7 +105,7 @@ public class NamedLocationIdentity implements LocationIdentity {
     private static EnumMap<Kind, LocationIdentity> initArrayLocations() {
         EnumMap<Kind, LocationIdentity> result = new EnumMap<>(Kind.class);
         for (Kind kind : Kind.values()) {
-            result.put(kind, new NamedLocationIdentity("Array: " + kind.getJavaName()));
+            result.put(kind, NamedLocationIdentity.mutable("Array: " + kind.getJavaName()));
         }
         return result;
     }

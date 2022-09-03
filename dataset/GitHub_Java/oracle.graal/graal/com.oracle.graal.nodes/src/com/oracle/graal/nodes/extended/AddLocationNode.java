@@ -23,7 +23,11 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
@@ -32,11 +36,12 @@ import com.oracle.graal.nodes.spi.*;
  * Location node that is the sum of two other location nodes. Can represent locations in the form of
  * [(base + x) + y] where base is a node and x and y are location nodes.
  */
-@NodeInfo(nameTemplate = "AddLoc {p#locationIdentity/s}")
-public final class AddLocationNode extends LocationNode implements Canonicalizable {
+@NodeInfo(nameTemplate = "&+({p#locationIdentity/s})")
+public final class AddLocationNode extends LocationNode implements Canonicalizable.Binary<LocationNode> {
 
-    @Input private ValueNode x;
-    @Input private ValueNode y;
+    public static final NodeClass<AddLocationNode> TYPE = NodeClass.create(AddLocationNode.class);
+    @Input(InputType.Association) ValueNode x;
+    @Input(InputType.Association) ValueNode y;
 
     public LocationNode getX() {
         return (LocationNode) x;
@@ -46,60 +51,62 @@ public final class AddLocationNode extends LocationNode implements Canonicalizab
         return (LocationNode) y;
     }
 
-    public static AddLocationNode create(LocationNode x, LocationNode y, Graph graph) {
-        assert x.getValueKind().equals(y.getValueKind()) && x.locationIdentity() == y.locationIdentity();
-        return graph.unique(new AddLocationNode(x, y));
-    }
-
-    private AddLocationNode(LocationNode x, LocationNode y) {
-        super(x.locationIdentity(), x.getValueKind());
+    public AddLocationNode(LocationNode x, LocationNode y) {
+        super(TYPE, StampFactory.forVoid());
+        assert x.getLocationIdentity().equals(y.getLocationIdentity());
         this.x = x;
         this.y = y;
     }
 
     @Override
-    protected LocationNode addDisplacement(long displacement) {
-        LocationNode added = getX().addDisplacement(displacement);
-        return graph().unique(new AddLocationNode(added, getY()));
+    public LocationIdentity getLocationIdentity() {
+        return getX().getLocationIdentity();
     }
 
-    @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (x instanceof ConstantLocationNode) {
-            return getY().addDisplacement(((ConstantLocationNode) x).displacement());
+    public LocationNode canonical(CanonicalizerTool tool, LocationNode forX, LocationNode forY) {
+        if (forX instanceof ConstantLocationNode) {
+            return canonical((ConstantLocationNode) forX, forY);
         }
-        if (y instanceof ConstantLocationNode) {
-            return getX().addDisplacement(((ConstantLocationNode) y).displacement());
+        if (forY instanceof ConstantLocationNode) {
+            return canonical((ConstantLocationNode) forY, forX);
         }
-
-        if (x instanceof IndexedLocationNode && y instanceof IndexedLocationNode) {
-            IndexedLocationNode xIdx = (IndexedLocationNode) x;
-            IndexedLocationNode yIdx = (IndexedLocationNode) y;
-            if (xIdx.indexScaling() == yIdx.indexScaling()) {
-                long displacement = xIdx.displacement() + yIdx.displacement();
-                ValueNode index = IntegerArithmeticNode.add(xIdx.index(), yIdx.index());
-                return IndexedLocationNode.create(locationIdentity(), getValueKind(), displacement, index, graph(), xIdx.indexScaling());
+        if (forX instanceof IndexedLocationNode && forY instanceof IndexedLocationNode) {
+            IndexedLocationNode xIdx = (IndexedLocationNode) forX;
+            IndexedLocationNode yIdx = (IndexedLocationNode) forY;
+            if (xIdx.getIndexScaling() == yIdx.getIndexScaling()) {
+                long displacement = xIdx.getDisplacement() + yIdx.getDisplacement();
+                ValueNode index = BinaryArithmeticNode.add(xIdx.getIndex(), yIdx.getIndex());
+                return new IndexedLocationNode(getLocationIdentity(), displacement, index, xIdx.getIndexScaling());
             }
         }
+        return this;
+    }
 
+    private LocationNode canonical(ConstantLocationNode constant, LocationNode other) {
+        if (other instanceof ConstantLocationNode) {
+            ConstantLocationNode otherConst = (ConstantLocationNode) other;
+            return new ConstantLocationNode(getLocationIdentity(), otherConst.getDisplacement() + constant.getDisplacement());
+        } else if (other instanceof IndexedLocationNode) {
+            IndexedLocationNode otherIdx = (IndexedLocationNode) other;
+            return new IndexedLocationNode(getLocationIdentity(), otherIdx.getDisplacement() + constant.getDisplacement(), otherIdx.getIndex(), otherIdx.getIndexScaling());
+        } else if (other instanceof AddLocationNode) {
+            AddLocationNode otherAdd = (AddLocationNode) other;
+            LocationNode newInner = otherAdd.canonical(constant, otherAdd.getX());
+            if (newInner != otherAdd) {
+                return new AddLocationNode(newInner, otherAdd.getY());
+            }
+        }
         return this;
     }
 
     @Override
-    public Value generateLea(LIRGeneratorTool gen, Value base) {
-        Value xAddr = getX().generateLea(gen, base);
-        return getY().generateLea(gen, xAddr);
+    public Value generateAddress(NodeMappableLIRBuilder builder, LIRGeneratorTool gen, Value base) {
+        Value xAddr = getX().generateAddress(builder, gen, base);
+        return getY().generateAddress(builder, gen, xAddr);
     }
 
     @Override
-    public Value generateLoad(LIRGeneratorTool gen, Value base, DeoptimizingNode deopting) {
-        Value xAddr = getX().generateLea(gen, base);
-        return getY().generateLoad(gen, xAddr, deopting);
-    }
-
-    @Override
-    public void generateStore(LIRGeneratorTool gen, Value base, Value value, DeoptimizingNode deopting) {
-        Value xAddr = getX().generateLea(gen, base);
-        getY().generateStore(gen, xAddr, value, deopting);
+    public IntegerStamp getDisplacementStamp() {
+        return (IntegerStamp) IntegerStamp.OPS.getAdd().foldStamp(getX().getDisplacementStamp(), getY().getDisplacementStamp());
     }
 }

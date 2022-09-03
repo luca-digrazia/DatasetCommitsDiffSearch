@@ -38,7 +38,7 @@ import com.oracle.graal.nodes.virtual.*;
  * The {@code LoadFieldNode} represents a read of a static or instance field.
  */
 @NodeInfo(nameTemplate = "#{p#field/s}")
-public final class LoadFieldNode extends AccessFieldNode implements Canonicalizable.Unary<ValueNode>, Virtualizable, UncheckedInterfaceProvider {
+public final class LoadFieldNode extends AccessFieldNode implements Canonicalizable.Unary<ValueNode>, VirtualizableRoot, UncheckedInterfaceProvider {
 
     public static final NodeClass<LoadFieldNode> TYPE = NodeClass.create(LoadFieldNode.class);
 
@@ -60,7 +60,7 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
     }
 
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forObject) {
-        if (tool.allUsagesAvailable() && hasNoUsages() && !isVolatile() && (isStatic() || StampTool.isPointerNonNull(forObject.stamp()))) {
+        if (hasNoUsages() && !isVolatile() && (isStatic() || StampTool.isPointerNonNull(forObject.stamp()))) {
             return null;
         }
         MetaAccessProvider metaAccess = tool.getMetaAccess();
@@ -70,11 +70,9 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
             if (constant != null) {
                 return constant;
             }
-            if (tool.allUsagesAvailable()) {
-                PhiNode phi = asPhi(metaAccess, constantReflection, forObject);
-                if (phi != null) {
-                    return phi;
-                }
+            PhiNode phi = asPhi(metaAccess, constantReflection, forObject);
+            if (phi != null) {
+                return phi;
             }
         }
         if (!isStatic() && forObject.isNullConstant()) {

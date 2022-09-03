@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampPair;
-import com.oracle.graal.graph.IterableNodeType;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.spi.UncheckedInterfaceProvider;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * The {@code Parameter} instruction is a placeholder for an incoming argument to a function call.
@@ -37,14 +36,22 @@ public final class ParameterNode extends AbstractLocalNode implements IterableNo
 
     public static final NodeClass<ParameterNode> TYPE = NodeClass.create(ParameterNode.class);
 
-    private Stamp uncheckedStamp;
-
-    public ParameterNode(int index, StampPair stamp) {
-        super(TYPE, index, stamp.getTrustedStamp());
-        this.uncheckedStamp = stamp.getUncheckedStamp();
+    public ParameterNode(int index, Stamp stamp) {
+        super(TYPE, index, stamp);
     }
 
     public Stamp uncheckedStamp() {
-        return uncheckedStamp;
+        ResolvedJavaMethod method = graph().method();
+        if (method != null) {
+            JavaType parameterType;
+            if (method.isStatic() || index() > 0) {
+                int signatureIndex = method.isStatic() ? index() : index() - 1;
+                parameterType = method.getSignature().getParameterType(signatureIndex, method.getDeclaringClass());
+            } else {
+                parameterType = method.getDeclaringClass();
+            }
+            return UncheckedInterfaceProvider.uncheckedOrNull(parameterType, stamp());
+        }
+        return null;
     }
 }

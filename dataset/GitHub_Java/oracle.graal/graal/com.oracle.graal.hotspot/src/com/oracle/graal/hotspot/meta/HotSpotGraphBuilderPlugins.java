@@ -105,13 +105,17 @@ public class HotSpotGraphBuilderPlugins {
         Registration r = new Registration(plugins, System.class);
         r.register0("currentTimeMillis", new InvocationPlugin() {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.addPush(Kind.Long, new ForeignCallNode(foreignCalls, SystemSubstitutions.JAVA_TIME_MILLIS, StampFactory.forKind(Kind.Long)));
+                ForeignCallNode foreignCall = new ForeignCallNode(foreignCalls, SystemSubstitutions.JAVA_TIME_MILLIS, StampFactory.forKind(Kind.Long));
+                b.push(Kind.Long, b.append(foreignCall));
+                foreignCall.setStateAfter(b.createStateAfter());
                 return true;
             }
         });
         r.register0("nanoTime", new InvocationPlugin() {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.addPush(Kind.Long, new ForeignCallNode(foreignCalls, SystemSubstitutions.JAVA_TIME_NANOS, StampFactory.forKind(Kind.Long)));
+                ForeignCallNode foreignCall = new ForeignCallNode(foreignCalls, SystemSubstitutions.JAVA_TIME_NANOS, StampFactory.forKind(Kind.Long));
+                b.push(Kind.Long, b.append(foreignCall));
+                foreignCall.setStateAfter(b.createStateAfter());
                 return true;
             }
         });
@@ -127,7 +131,7 @@ public class HotSpotGraphBuilderPlugins {
                 ValueNode javaThread = WordOperationPlugin.readOp(b, Kind.Object, thread, location, BarrierType.NONE, compressible);
                 boolean exactType = compressible;
                 boolean nonNull = true;
-                b.addPush(Kind.Object, new PiNode(javaThread, metaAccess.lookupJavaType(Thread.class), exactType, nonNull));
+                b.push(Kind.Object, b.append(new PiNode(javaThread, metaAccess.lookupJavaType(Thread.class), exactType, nonNull)));
                 return true;
             }
         });
@@ -140,7 +144,8 @@ public class HotSpotGraphBuilderPlugins {
                 if (receiver.isConstant()) {
                     Object object = ((HotSpotObjectConstantImpl) receiver.get().asConstant()).object();
                     StableOptionValue<?> option = (StableOptionValue<?>) object;
-                    b.addPush(Kind.Object, ConstantNode.forConstant(HotSpotObjectConstantImpl.forObject(option.getValue()), b.getMetaAccess()));
+                    ConstantNode value = b.append(ConstantNode.forConstant(HotSpotObjectConstantImpl.forObject(option.getValue()), b.getMetaAccess()));
+                    b.push(Kind.Object, value);
                     return true;
                 }
                 return false;
