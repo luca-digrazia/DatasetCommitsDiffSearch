@@ -32,17 +32,6 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LocationIdentity;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import sun.misc.Unsafe;
-
 import com.oracle.graal.api.directives.GraalDirectives;
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.common.calc.UnsignedMath;
@@ -52,6 +41,12 @@ import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.graph.Edges;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeList;
+import com.oracle.graal.graphbuilderconf.GraphBuilderContext;
+import com.oracle.graal.graphbuilderconf.InvocationPlugin;
+import com.oracle.graal.graphbuilderconf.InvocationPlugin.Receiver;
+import com.oracle.graal.graphbuilderconf.InvocationPlugins;
+import com.oracle.graal.graphbuilderconf.InvocationPlugins.Registration;
+import com.oracle.graal.graphbuilderconf.MethodSubstitutionPlugin;
 import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.DeoptimizeNode;
 import com.oracle.graal.nodes.FixedGuardNode;
@@ -83,11 +78,6 @@ import com.oracle.graal.nodes.extended.MembarNode;
 import com.oracle.graal.nodes.extended.UnboxNode;
 import com.oracle.graal.nodes.extended.UnsafeLoadNode;
 import com.oracle.graal.nodes.extended.UnsafeStoreNode;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin.Receiver;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.Registration;
 import com.oracle.graal.nodes.java.ClassIsAssignableFromNode;
 import com.oracle.graal.nodes.java.CompareAndSwapNode;
 import com.oracle.graal.nodes.java.DynamicNewArrayNode;
@@ -111,10 +101,30 @@ import com.oracle.graal.replacements.nodes.arithmetic.IntegerAddExactNode;
 import com.oracle.graal.replacements.nodes.arithmetic.IntegerMulExactNode;
 import com.oracle.graal.replacements.nodes.arithmetic.IntegerSubExactNode;
 
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LocationIdentity;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.options.Option;
+import jdk.vm.ci.options.OptionValue;
+import sun.misc.Unsafe;
+
 /**
  * Provides non-runtime specific {@link InvocationPlugin}s.
  */
 public class StandardGraphBuilderPlugins {
+
+    // @formatter:off
+    static class Options {
+        @Option(help = "Enable use of intrinsics for the JMH Blackhole class")
+        public static final OptionValue<Boolean> UseBlackholeSubstitution = new OptionValue<>(true);
+    }
+    // @formatter:on
 
     public static void registerInvocationPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins, boolean allowDeoptimization) {
         registerObjectPlugins(plugins);
@@ -136,7 +146,9 @@ public class StandardGraphBuilderPlugins {
         registerEdgesPlugins(metaAccess, plugins);
         registerGraalDirectivesPlugins(plugins);
         registerBoxingPlugins(plugins);
-        registerJMHBlackholePlugins(plugins);
+        if (Options.UseBlackholeSubstitution.getValue()) {
+            registerJMHBlackholePlugins(plugins);
+        }
         registerJFRThrowablePlugins(plugins);
     }
 
@@ -766,24 +778,32 @@ public class StandardGraphBuilderPlugins {
         };
         String[] names = {"org.openjdk.jmh.infra.Blackhole", "org.openjdk.jmh.logic.BlackHole"};
         for (String name : names) {
-            Registration r = new Registration(plugins, name);
-            for (JavaKind kind : JavaKind.values()) {
-                if ((kind.isPrimitive() && kind != JavaKind.Void) || kind == JavaKind.Object) {
-                    Class<?> javaClass = kind == JavaKind.Object ? Object.class : kind.toJavaClass();
-                    r.register2("consume", Receiver.class, javaClass, blackholePlugin);
+            Class<?> blackholeClass;
+            blackholeClass = MethodSubstitutionPlugin.resolveClass(name, true);
+            if (blackholeClass != null) {
+                Registration r = new Registration(plugins, blackholeClass);
+                for (JavaKind kind : JavaKind.values()) {
+                    if ((kind.isPrimitive() && kind != JavaKind.Void) || kind == JavaKind.Object) {
+                        Class<?> javaClass = kind == JavaKind.Object ? Object.class : kind.toJavaClass();
+                        r.register2("consume", Receiver.class, javaClass, blackholePlugin);
+                    }
                 }
+                r.register2("consume", Receiver.class, Object[].class, blackholePlugin);
             }
-            r.register2("consume", Receiver.class, Object[].class, blackholePlugin);
         }
     }
 
     private static void registerJFRThrowablePlugins(InvocationPlugins plugins) {
-        Registration r = new Registration(plugins, "oracle.jrockit.jfr.jdkevents.ThrowableTracer");
-        r.register2("traceThrowable", Throwable.class, String.class, new InvocationPlugin() {
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode throwable, ValueNode message) {
-                b.add(new VirtualizableInvokeMacroNode(b.getInvokeKind(), targetMethod, b.bci(), b.getInvokeReturnType(), throwable, message));
-                return true;
-            }
-        });
+        String name = "oracle.jrockit.jfr.jdkevents.ThrowableTracer";
+        Class<?> tracerClass = MethodSubstitutionPlugin.resolveClass(name, true);
+        if (tracerClass != null) {
+            Registration r = new Registration(plugins, tracerClass);
+            r.register2("traceThrowable", Throwable.class, String.class, new InvocationPlugin() {
+                public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode throwable, ValueNode message) {
+                    b.add(new VirtualizableInvokeMacroNode(b.getInvokeKind(), targetMethod, b.bci(), b.getInvokeReturnType(), throwable, message));
+                    return true;
+                }
+            });
+        }
     }
 }
