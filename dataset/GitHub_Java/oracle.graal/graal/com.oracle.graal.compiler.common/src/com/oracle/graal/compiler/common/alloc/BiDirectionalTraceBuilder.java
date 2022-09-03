@@ -28,6 +28,7 @@ import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
 import java.util.Deque;
+import java.util.List;
 
 import com.oracle.graal.compiler.common.alloc.TraceBuilderResult.TrivialTracePredicate;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
@@ -55,7 +56,7 @@ public final class BiDirectionalTraceBuilder {
     }
 
     private static Deque<AbstractBlockBase<?>> createQueue(AbstractBlockBase<?>[] blocks) {
-        ArrayList<AbstractBlockBase<?>> queue = new ArrayList<>(Arrays.asList(blocks));
+        List<AbstractBlockBase<?>> queue = Arrays.asList(blocks);
         queue.sort(BiDirectionalTraceBuilder::compare);
         return new ArrayDeque<>(queue);
     }

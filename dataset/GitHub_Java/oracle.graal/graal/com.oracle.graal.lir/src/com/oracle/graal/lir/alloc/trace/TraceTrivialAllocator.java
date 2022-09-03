@@ -22,48 +22,45 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
-import static com.oracle.graal.lir.LIRValueUtil.*;
-import static com.oracle.graal.lir.alloc.trace.TraceRegisterAllocationPhase.*;
+import static com.oracle.graal.lir.LIRValueUtil.asVariable;
+import static com.oracle.graal.lir.LIRValueUtil.isVariable;
+import static com.oracle.graal.lir.alloc.trace.TraceUtil.isTrivialTrace;
 
-import java.util.*;
+import java.util.List;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
-import com.oracle.graal.compiler.common.alloc.*;
-import com.oracle.graal.compiler.common.alloc.TraceBuilder.TraceBuilderResult;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.BlockEndOp;
+import com.oracle.graal.compiler.common.alloc.Trace;
+import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.lir.LIR;
+import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.LIRInstruction.OperandFlag;
+import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
-import com.oracle.graal.lir.phases.*;
-import com.oracle.graal.lir.ssi.*;
-import com.oracle.graal.lir.util.*;
+import com.oracle.graal.lir.ValueProcedure;
+import com.oracle.graal.lir.Variable;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.ssi.SSIUtil;
+import com.oracle.graal.lir.util.VariableVirtualStackValueMap;
+
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.Value;
 
 /**
  * Allocates a trivial trace i.e. a trace consisting of a single block with no instructions other
- * than the {@link LabelOp} and the {@link BlockEndOp}.
+ * than the {@link LabelOp} and the {@link JumpOp}.
  */
-public class TraceTrivialAllocator extends AllocationPhase {
-
-    private final TraceBuilderResult<?> resultTraces;
-
-    public TraceTrivialAllocator(TraceBuilderResult<?> resultTraces) {
-        this.resultTraces = resultTraces;
-    }
+final class TraceTrivialAllocator extends TraceAllocationPhase<TraceAllocationPhase.TraceAllocationContext> {
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> trace, SpillMoveFactory spillMoveFactory,
-                    RegisterAllocationConfig registerAllocationConfig) {
+    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, Trace trace, TraceAllocationContext context) {
         LIR lir = lirGenRes.getLIR();
+        TraceBuilderResult resultTraces = context.resultTraces;
         assert isTrivialTrace(lir, trace) : "Not a trivial trace! " + trace;
-        B block = trace.iterator().next();
+        AbstractBlockBase<?> block = trace.getBlocks()[0];
 
         AbstractBlockBase<?> pred = TraceUtil.getBestTraceInterPredecessor(resultTraces, block);
 
-        VariableVirtualStackValueMap<Variable, Value> variableMap = new VariableVirtualStackValueMap<>(lir.nextVariable(), 0);
+        VariableVirtualStackValueMap<Variable, Value> variableMap = new VariableVirtualStackValueMap<>(lir.numVariables(), 0);
         SSIUtil.forEachValuePair(lir, block, pred, (to, from) -> {
             if (isVariable(to)) {
                 variableMap.put(asVariable(to), from);
@@ -72,7 +69,9 @@ public class TraceTrivialAllocator extends AllocationPhase {
 
         ValueProcedure outputConsumer = (value, mode, flags) -> {
             if (isVariable(value)) {
-                return variableMap.get(asVariable(value));
+                Value incomingValue = variableMap.get(asVariable(value));
+                assert !flags.contains(OperandFlag.COMPOSITE);
+                return incomingValue;
             }
             return value;
         };

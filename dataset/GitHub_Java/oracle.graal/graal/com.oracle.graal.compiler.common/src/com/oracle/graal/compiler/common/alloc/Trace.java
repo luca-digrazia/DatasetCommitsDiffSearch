@@ -23,40 +23,47 @@
 package com.oracle.graal.compiler.common.alloc;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
-import java.util.List;
 
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 
 /**
  * Represents a list of sequentially executed {@code AbstractBlockBase blocks}.
  */
-public class Trace<T extends AbstractBlockBase<T>> {
-    private final List<T> blocks;
-    private int id;
+public class Trace {
+    private final AbstractBlockBase<?>[] blocks;
+    private final ArrayList<Trace> successors;
+    private int id = -1;
 
-    public Trace(Collection<T> blocks) {
-        this.blocks = new ArrayList<>(blocks);
+    public Trace(Collection<AbstractBlockBase<?>> blocks) {
+        this(blocks.toArray(new AbstractBlockBase<?>[0]));
     }
 
-    public Trace(List<T> blocks) {
+    public Trace(AbstractBlockBase<?>[] blocks) {
         this.blocks = blocks;
+        this.successors = new ArrayList<>();
     }
 
-    public List<T> getBlocks() {
+    public AbstractBlockBase<?>[] getBlocks() {
         return blocks;
     }
 
+    public ArrayList<Trace> getSuccessors() {
+        return successors;
+    }
+
     public int size() {
-        return getBlocks().size();
+        return getBlocks().length;
     }
 
     @Override
     public String toString() {
-        return "Trace" + blocks;
+        return "Trace" + Arrays.toString(blocks);
     }
 
     public int getId() {
+        assert id != -1 : "id not initialized!";
         return id;
     }
 
