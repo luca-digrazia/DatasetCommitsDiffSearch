@@ -167,14 +167,14 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
             });
         }
 
-        private static void rewirePiNodes(GuardingNode node, Stamp guardedValueStamp, ValueNode newInput) {
+        private static void rewirePiNodes(GuardingNode node, Stamp guardedValueStamp, ValueProxy newInput) {
             ValueNode unproxified = GraphUtil.unproxify(newInput);
             for (Node usage : node.asNode().usages().snapshot()) {
                 if (usage instanceof PiNode) {
                     PiNode piNode = (PiNode) usage;
 
                     if (piNode.getOriginalNode() != newInput && GraphUtil.unproxify(piNode.getOriginalNode()) == unproxified) {
-                        piNode.setOriginalNode(newInput);
+                        piNode.setOriginalNode((ValueNode) newInput.asNode());
                     }
 
                     if (piNode.getOriginalNode() == newInput) {
@@ -506,7 +506,7 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
             return map.get(value);
         }
 
-        protected boolean rewireGuards(GuardingNode guard, boolean result, ValueNode proxifiedInput, Stamp guardedValueStamp, GuardRewirer rewireGuardFunction) {
+        protected boolean rewireGuards(GuardingNode guard, boolean result, ValueProxy proxifiedInput, Stamp guardedValueStamp, GuardRewirer rewireGuardFunction) {
             counterStampsFound.increment();
             return rewireGuardFunction.rewire(guard, result, guardedValueStamp, proxifiedInput);
         }
@@ -519,9 +519,7 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
             InfoElement infoElement = getInfoElements(node);
             if (infoElement != null) {
                 assert infoElement.getStamp() == StampFactory.tautology() || infoElement.getStamp() == StampFactory.contradiction();
-                // No proxified input required.
-                ValueNode proxifiedInput = null;
-                return rewireGuards(infoElement.getGuard(), infoElement.getStamp() == StampFactory.tautology(), proxifiedInput, infoElement.getStamp(), rewireGuardFunction);
+                return rewireGuards(infoElement.getGuard(), infoElement.getStamp() == StampFactory.tautology(), infoElement.getProxifiedInput(), infoElement.getStamp(), rewireGuardFunction);
             }
             if (node instanceof UnaryOpLogicNode) {
                 UnaryOpLogicNode unaryLogicNode = (UnaryOpLogicNode) node;
@@ -650,18 +648,8 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
                         return rewireGuards(guard, true, newInput, guardedValueStamp, rewireGuardFunction);
                     } else {
                         return tryProveCondition(shortCircuitOrNode.getY(), (innerGuard, innerResult, innerGuardedValueStamp, innerNewInput) -> {
-                            ValueNode proxifiedInput = newInput;
-                            if (proxifiedInput == null) {
-                                proxifiedInput = innerNewInput;
-                            } else if (innerNewInput != null) {
-                                if (innerNewInput != newInput) {
-                                    // Cannot canonicalize due to different proxied inputs.
-                                    return false;
-                                }
-                            }
-                            // Can only canonicalize if the guards are equal.
-                            if (innerGuard == guard) {
-                                return rewireGuards(guard, innerResult ^ shortCircuitOrNode.isYNegated(), proxifiedInput, guardedValueStamp, rewireGuardFunction);
+                            if (innerGuard == guard && newInput == innerNewInput) {
+                                return rewireGuards(guard, innerResult ^ shortCircuitOrNode.isYNegated(), newInput, innerGuardedValueStamp, rewireGuardFunction);
                             }
                             return false;
                         });
@@ -677,8 +665,9 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
             assert guard != null;
             if (newStamp != null) {
                 ValueNode value = maybeProxiedValue;
-                ValueNode proxiedValue = value;
+                ValueProxy proxiedValue = null;
                 if (value instanceof ValueProxy) {
+                    proxiedValue = (ValueProxy) value;
                     value = GraphUtil.unproxify(value);
                 }
                 counterStampsRegistered.increment();
@@ -814,7 +803,7 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
          * @param newInput new input to pi nodes depending on the new guard
          * @return whether the transformation could be applied
          */
-        boolean rewire(GuardingNode guard, boolean result, Stamp guardedValueStamp, ValueNode newInput);
+        boolean rewire(GuardingNode guard, boolean result, Stamp guardedValueStamp, ValueProxy newInput);
     }
 
     protected static class PendingTest {
@@ -830,10 +819,10 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
     protected static final class InfoElement {
         private final Stamp stamp;
         private final GuardingNode guard;
-        private final ValueNode proxifiedInput;
+        private final ValueProxy proxifiedInput;
         private final InfoElement parent;
 
-        public InfoElement(Stamp stamp, GuardingNode guard, ValueNode proxifiedInput, InfoElement parent) {
+        public InfoElement(Stamp stamp, GuardingNode guard, ValueProxy proxifiedInput, InfoElement parent) {
             this.stamp = stamp;
             this.guard = guard;
             this.proxifiedInput = proxifiedInput;
@@ -852,7 +841,7 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
             return guard;
         }
 
-        public ValueNode getProxifiedInput() {
+        public ValueProxy getProxifiedInput() {
             return proxifiedInput;
         }
 
