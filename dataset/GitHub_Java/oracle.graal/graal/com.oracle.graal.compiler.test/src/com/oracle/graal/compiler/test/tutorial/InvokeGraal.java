@@ -23,17 +23,17 @@
 package com.oracle.graal.compiler.test.tutorial;
 
 import java.lang.reflect.*;
+import java.util.*;
 import java.util.concurrent.atomic.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.code.CallingConvention.Type;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.debug.Debug.Scope;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CallingConvention.Type;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.nodes.*;
@@ -58,9 +58,7 @@ public class InvokeGraal {
         /* Ask the hosting Java VM for the entry point object to the Graal API. */
         RuntimeProvider runtimeProvider = Graal.getRequiredCapability(RuntimeProvider.class);
 
-        /*
-         * The default backend (architecture, VM configuration) that the hosting VM is running on.
-         */
+        /* The default backend (architecture, VM configuration) that the hosting VM is running on. */
         backend = runtimeProvider.getHostBackend();
         /* Access to all of the Graal API providers, as implemented by the hosting VM. */
         providers = backend.getProviders();
@@ -123,8 +121,13 @@ public class InvokeGraal {
             CompilationResult compilationResult = new CompilationResult();
             CompilationResultBuilderFactory factory = CompilationResultBuilderFactory.Default;
 
+            /* Advanced configuration objects that are not mandatory. */
+            Map<ResolvedJavaMethod, StructuredGraph> cache = null;
+            SpeculationLog speculationLog = null;
+
             /* Invoke the whole Graal compilation pipeline. */
-            GraalCompiler.compileGraph(graph, callingConvention, method, providers, backend, target, graphBuilderSuite, optimisticOpts, profilingInfo, suites, lirSuites, compilationResult, factory);
+            GraalCompiler.compileGraph(graph, callingConvention, method, providers, backend, target, cache, graphBuilderSuite, optimisticOpts, profilingInfo, speculationLog, suites, lirSuites,
+                            compilationResult, factory);
 
             /*
              * Install the compilation result into the VM, i.e., copy the byte[] array that contains

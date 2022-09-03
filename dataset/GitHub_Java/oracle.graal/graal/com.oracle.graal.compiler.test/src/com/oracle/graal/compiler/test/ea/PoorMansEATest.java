@@ -22,17 +22,17 @@
  */
 package com.oracle.graal.compiler.test.ea;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-
 import org.junit.*;
 
 import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
@@ -57,17 +57,16 @@ public class PoorMansEATest extends GraalCompilerTest {
         test("test1Snippet");
     }
 
-    @SuppressWarnings("try")
     private void test(final String snippet) {
         try (Scope s = Debug.scope("PoorMansEATest", new DebugDumpScope(snippet))) {
             StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
-            HighTierContext highTierContext = getDefaultHighTierContext();
-            new InliningPhase(new CanonicalizerPhase()).apply(graph, highTierContext);
+            HighTierContext highTierContext = new HighTierContext(getProviders(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
+            new InliningPhase(new CanonicalizerPhase(true)).apply(graph, highTierContext);
             PhaseContext context = new PhaseContext(getProviders());
-            new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
+            new LoweringPhase(new CanonicalizerPhase(true), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
 
             // remove framestates in order to trigger the simplification.
-            cleanup: for (FrameState fs : graph.getNodes(FrameState.TYPE).snapshot()) {
+            cleanup: for (FrameState fs : graph.getNodes(FrameState.class).snapshot()) {
                 for (Node input : fs.inputs()) {
                     if (input instanceof NewInstanceNode) {
                         fs.replaceAtUsages(null);
@@ -76,7 +75,7 @@ public class PoorMansEATest extends GraalCompilerTest {
                     }
                 }
             }
-            new CanonicalizerPhase().apply(graph, context);
+            new CanonicalizerPhase(true).apply(graph, context);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }

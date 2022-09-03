@@ -23,26 +23,64 @@
 package com.oracle.graal.api.code;
 
 import java.io.*;
+import java.lang.invoke.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 
 /**
- * Class for recording optimistic assumptions made during compilation.
- * Recorded assumption can be visited for subsequent processing using
- * an implementation of the {@link CiAssumptionProcessor} interface.
+ * Class for recording assumptions made during compilation.
  */
 public final class Assumptions implements Serializable, Iterable<Assumptions.Assumption> {
 
     private static final long serialVersionUID = 5152062717588239131L;
 
+    /**
+     * Abstract base class for assumptions. An assumption assumes a property of the runtime that may
+     * be invalidated by subsequent execution (e.g., that a class has no subclasses implementing
+     * {@link NoFinalizableSubclass Object.finalize()}).
+     */
     public abstract static class Assumption implements Serializable {
 
         private static final long serialVersionUID = -1936652569665112915L;
     }
 
     /**
-     * An assumption about a unique subtype of a given type.
+     * An assumption that a given class has no subclasses implementing {@link Object#finalize()}).
+     */
+    public static final class NoFinalizableSubclass extends Assumption {
+
+        private static final long serialVersionUID = 6451169735564055081L;
+
+        private ResolvedJavaType receiverType;
+
+        public NoFinalizableSubclass(ResolvedJavaType receiverType) {
+            this.receiverType = receiverType;
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 + receiverType.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof NoFinalizableSubclass) {
+                NoFinalizableSubclass other = (NoFinalizableSubclass) obj;
+                return other.receiverType.equals(receiverType);
+            }
+            return false;
+        }
+
+        @Override
+        public String toString() {
+            return "NoFinalizableSubclass[receiverType=" + receiverType.toJavaName() + "]";
+        }
+
+    }
+
+    /**
+     * An assumption that a given type has a given unique subtype.
      */
     public static final class ConcreteSubtype extends Assumption {
 
@@ -61,6 +99,8 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
         public ConcreteSubtype(ResolvedJavaType context, ResolvedJavaType subtype) {
             this.context = context;
             this.subtype = subtype;
+            assert subtype.isConcrete() : subtype.toString() + " : " + context.toString();
+            assert !subtype.isArray() || subtype.getElementalType().isFinal() : subtype.toString() + " : " + context.toString();
         }
 
         @Override
@@ -76,22 +116,27 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
         public boolean equals(Object obj) {
             if (obj instanceof ConcreteSubtype) {
                 ConcreteSubtype other = (ConcreteSubtype) obj;
-                return other.context == context && other.subtype == subtype;
+                return other.context.equals(context) && other.subtype.equals(subtype);
             }
             return false;
+        }
+
+        @Override
+        public String toString() {
+            return "ConcreteSubtype[context=" + context.toJavaName() + ", subtype=" + subtype.toJavaName() + "]";
         }
     }
 
     /**
-     * An assumption about a unique implementation of a virtual method.
+     * An assumption that a given virtual method has a given unique implementation.
      */
     public static final class ConcreteMethod extends Assumption {
 
         private static final long serialVersionUID = -7636746737947390059L;
 
         /**
-         * A virtual (or interface) method whose unique implementation for the receiver type
-         * in {@link #context} is {@link #impl}.
+         * A virtual (or interface) method whose unique implementation for the receiver type in
+         * {@link #context} is {@link #impl}.
          */
         public final ResolvedJavaMethod method;
 
@@ -125,91 +170,105 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
         public boolean equals(Object obj) {
             if (obj instanceof ConcreteMethod) {
                 ConcreteMethod other = (ConcreteMethod) obj;
-                return other.method == method && other.context == context && other.impl == impl;
+                return other.method.equals(method) && other.context.equals(context) && other.impl.equals(impl);
             }
             return false;
+        }
+
+        @Override
+        public String toString() {
+            return "ConcreteMethod[method=" + method.format("%H.%n(%p)%r") + ", context=" + context.toJavaName() + ", impl=" + impl.format("%H.%n(%p)%r") + "]";
         }
     }
 
     /**
-     * An assumption that specified that a method was used during the compilation.
+     * An assumption that a given call site's method handle did not change.
      */
-    public static final class MethodContents extends Assumption {
+    public static final class CallSiteTargetValue extends Assumption {
 
-        private static final long serialVersionUID = -4821594103928571659L;
+        private static final long serialVersionUID = 1732459941784550371L;
 
-        public final ResolvedJavaMethod method;
+        public final CallSite callSite;
+        public final MethodHandle methodHandle;
 
-        public MethodContents(ResolvedJavaMethod method) {
-            this.method = method;
+        public CallSiteTargetValue(CallSite callSite, MethodHandle methodHandle) {
+            this.callSite = callSite;
+            this.methodHandle = methodHandle;
         }
 
         @Override
         public int hashCode() {
             final int prime = 31;
             int result = 1;
-            result = prime * result + method.hashCode();
+            result = prime * result + callSite.hashCode();
+            result = prime * result + methodHandle.hashCode();
             return result;
         }
 
         @Override
         public boolean equals(Object obj) {
-            if (obj instanceof ConcreteMethod) {
-                ConcreteMethod other = (ConcreteMethod) obj;
-                return other.method == method;
+            if (obj instanceof CallSiteTargetValue) {
+                CallSiteTargetValue other = (CallSiteTargetValue) obj;
+                return callSite.equals(other.callSite) && methodHandle.equals(other.methodHandle);
             }
             return false;
         }
+
+        @Override
+        public String toString() {
+            return "CallSiteTargetValue[callSite=" + callSite + ", methodHandle=" + methodHandle + "]";
+        }
     }
 
-    /**
-     * Array with the assumptions. This field is directly accessed from C++ code in the Graal/HotSpot implementation.
-     */
-    private Assumption[] list;
-
-    private int count;
+    private final Set<Assumption> assumptions = new HashSet<>();
 
     /**
      * Returns whether any assumptions have been registered.
+     *
      * @return {@code true} if at least one assumption has been registered, {@code false} otherwise.
      */
     public boolean isEmpty() {
-        return count == 0;
+        return assumptions.isEmpty();
+    }
+
+    @Override
+    public int hashCode() {
+        throw new UnsupportedOperationException("hashCode");
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj instanceof Assumptions) {
+            Assumptions that = (Assumptions) obj;
+            if (!this.assumptions.equals(that.assumptions)) {
+                return false;
+            }
+            return true;
+        }
+        return false;
     }
 
     @Override
     public Iterator<Assumption> iterator() {
-        return new Iterator<Assumptions.Assumption>() {
-            int index;
-            public void remove() {
-                throw new UnsupportedOperationException();
-            }
-            public Assumption next() {
-                if (index >= count) {
-                    throw new NoSuchElementException();
-                }
-                return list[index++];
-            }
-            public boolean hasNext() {
-                return index < count;
-            }
-        };
+        return assumptions.iterator();
     }
 
     /**
      * Records an assumption that the specified type has no finalizable subclasses.
      *
      * @param receiverType the type that is assumed to have no finalizable subclasses
-     * @return {@code true} if the assumption was recorded and can be assumed; {@code false} otherwise
      */
-    @SuppressWarnings("static-method")
-    public boolean recordNoFinalizableSubclassAssumption(ResolvedJavaType receiverType) {
-        // TODO (thomaswue): Record that assumption correctly.
-        return false;
+    public void recordNoFinalizableSubclassAssumption(ResolvedJavaType receiverType) {
+        record(new NoFinalizableSubclass(receiverType));
     }
 
     /**
-     * Records that {@code subtype} is the only concrete subtype in the class hierarchy below {@code context}.
+     * Records that {@code subtype} is the only concrete subtype in the class hierarchy below
+     * {@code context}.
+     *
      * @param context the root of the subtree of the class hierarchy that this assumptions is about
      * @param subtype the one concrete subtype
      */
@@ -229,34 +288,27 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
         record(new ConcreteMethod(method, context, impl));
     }
 
+    public void record(Assumption assumption) {
+        assumptions.add(assumption);
+    }
+
     /**
-     * Records that {@code method} was used during the compilation.
-     *
-     * @param method a method whose contents were used
+     * Gets a copy of the assumptions recorded in this object as an array.
      */
-    public void recordMethodContents(ResolvedJavaMethod method) {
-        record(new MethodContents(method));
+    public Assumption[] toArray() {
+        return assumptions.toArray(new Assumption[assumptions.size()]);
     }
 
-    private void record(Assumption assumption) {
-        if (list == null) {
-            list = new Assumption[4];
-        } else {
-            for (int i = 0; i < count; ++i) {
-                if (assumption.equals(list[i])) {
-                    return;
-                }
-            }
-        }
-        if (list.length == count) {
-            Assumption[] newList = new Assumption[list.length * 2];
-            for (int i = 0; i < list.length; ++i) {
-                newList[i] = list[i];
-            }
-            list = newList;
-        }
-        list[count] = assumption;
-        count++;
+    /**
+     * Copies assumptions recorded by another {@link Assumptions} object into this object.
+     */
+    public void record(Assumptions other) {
+        assert other != this;
+        assumptions.addAll(other.assumptions);
     }
 
+    @Override
+    public String toString() {
+        return "Assumptions[" + assumptions + "]";
+    }
 }

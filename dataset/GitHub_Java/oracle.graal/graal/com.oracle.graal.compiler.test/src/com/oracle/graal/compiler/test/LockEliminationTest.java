@@ -22,13 +22,14 @@
  */
 package com.oracle.graal.compiler.test;
 
-import com.oracle.jvmci.meta.ResolvedJavaMethod;
 import org.junit.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
@@ -61,9 +62,9 @@ public class LockEliminationTest extends GraalCompilerTest {
         test("testSynchronizedSnippet", new A(), new A());
 
         StructuredGraph graph = getGraph("testSynchronizedSnippet");
-        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders()));
         new LockEliminationPhase().apply(graph);
-        assertDeepEquals(1, graph.getNodes().filter(RawMonitorEnterNode.class).count());
+        assertDeepEquals(1, graph.getNodes().filter(MonitorEnterNode.class).count());
         assertDeepEquals(1, graph.getNodes().filter(MonitorExitNode.class).count());
     }
 
@@ -79,21 +80,21 @@ public class LockEliminationTest extends GraalCompilerTest {
         test("testSynchronizedMethodSnippet", new A());
 
         StructuredGraph graph = getGraph("testSynchronizedMethodSnippet");
-        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders()));
         new LockEliminationPhase().apply(graph);
-        assertDeepEquals(1, graph.getNodes().filter(RawMonitorEnterNode.class).count());
+        assertDeepEquals(1, graph.getNodes().filter(MonitorEnterNode.class).count());
         assertDeepEquals(1, graph.getNodes().filter(MonitorExitNode.class).count());
     }
 
     private StructuredGraph getGraph(String snippet) {
         ResolvedJavaMethod method = getResolvedJavaMethod(snippet);
         StructuredGraph graph = parseEager(method, AllowAssumptions.YES);
-        HighTierContext context = getDefaultHighTierContext();
-        new CanonicalizerPhase().apply(graph, context);
-        new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
-        new CanonicalizerPhase().apply(graph, context);
+        HighTierContext context = new HighTierContext(getProviders(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
+        new CanonicalizerPhase(true).apply(graph, context);
+        new InliningPhase(new CanonicalizerPhase(true)).apply(graph, context);
+        new CanonicalizerPhase(true).apply(graph, context);
         new DeadCodeEliminationPhase().apply(graph);
-        new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
+        new LoweringPhase(new CanonicalizerPhase(true), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
         new ValueAnchorCleanupPhase().apply(graph);
         new LockEliminationPhase().apply(graph);
         return graph;

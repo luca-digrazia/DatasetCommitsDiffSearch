@@ -24,12 +24,12 @@ package com.oracle.graal.replacements.test;
 
 import org.junit.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * Tests compilation of a hot exception handler.
@@ -48,8 +48,8 @@ public class CompiledExceptionHandlerTest extends GraalCompilerTest {
         return graph;
     }
 
-    private static void raiseExceptionSimple(String s) {
-        throw new RuntimeException("Raising exception with message \"" + s + "\"");
+    private static void raiseException(String s) {
+        throw new RuntimeException(s);
     }
 
     @Test
@@ -67,7 +67,7 @@ public class CompiledExceptionHandlerTest extends GraalCompilerTest {
     public static String test1Snippet(String message) {
         if (message != null) {
             try {
-                raiseExceptionSimple(message);
+                raiseException(message);
             } catch (Exception e) {
                 return message + e.getMessage();
             }

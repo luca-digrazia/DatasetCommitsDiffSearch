@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -37,7 +37,7 @@ import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.hotspot.replacements.arraycopy.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
@@ -627,15 +627,15 @@ public class WriteBarrierVerificationTest extends GraalCompilerTest {
     private void testPredicate(final String snippet, final GraphPredicate expectedBarriers, final int... removedBarrierIndices) {
         try (Scope d = Debug.scope("WriteBarrierVerificationTest", new DebugDumpScope(snippet))) {
             final StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
-            HighTierContext highTierContext = getDefaultHighTierContext();
-            new InliningPhase(new CanonicalizerPhase()).apply(graph, highTierContext);
+            HighTierContext highTierContext = new HighTierContext(getProviders(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
+            new InliningPhase(new CanonicalizerPhase(true)).apply(graph, highTierContext);
 
             MidTierContext midTierContext = new MidTierContext(getProviders(), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo(), null);
 
-            new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, highTierContext);
+            new LoweringPhase(new CanonicalizerPhase(true), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, highTierContext);
             new GuardLoweringPhase().apply(graph, midTierContext);
             new LoopSafepointInsertionPhase().apply(graph);
-            new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.MID_TIER).apply(graph, highTierContext);
+            new LoweringPhase(new CanonicalizerPhase(true), LoweringTool.StandardLoweringStage.MID_TIER).apply(graph, highTierContext);
 
             new WriteBarrierAdditionPhase(config).apply(graph);
 
@@ -657,13 +657,15 @@ public class WriteBarrierVerificationTest extends GraalCompilerTest {
                     if (node instanceof WriteNode) {
                         WriteNode write = (WriteNode) node;
                         LocationIdentity obj = write.getLocationIdentity();
-                        if (obj.toString().equals("barrierIndex")) {
-                            /*
-                             * A "barrierIndex" variable was found and is checked against the input
-                             * barrier array.
-                             */
-                            if (eliminateBarrier(write.value().asJavaConstant().asInt(), removedBarrierIndices)) {
-                                return true;
+                        if (obj instanceof ResolvedJavaField) {
+                            if (((ResolvedJavaField) obj).getName().equals("barrierIndex")) {
+                                /*
+                                 * A "barrierIndex" variable was found and is checked against the
+                                 * input barrier array.
+                                 */
+                                if (eliminateBarrier(write.value().asJavaConstant().asInt(), removedBarrierIndices)) {
+                                    return true;
+                                }
                             }
                         }
                     } else if (node instanceof SerialWriteBarrier || node instanceof G1PostWriteBarrier) {

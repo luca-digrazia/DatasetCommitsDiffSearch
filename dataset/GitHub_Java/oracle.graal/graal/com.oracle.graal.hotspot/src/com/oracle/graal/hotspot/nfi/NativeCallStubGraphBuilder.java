@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,12 +30,12 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
-import com.oracle.graal.word.phases.*;
 
 /**
  * Utility creating a graph for a stub used to call a native function.
@@ -53,16 +53,15 @@ public class NativeCallStubGraphBuilder {
     public static StructuredGraph getGraph(HotSpotProviders providers, RawNativeCallNodeFactory factory, long functionPointer, Class<?> returnType, Class<?>... argumentTypes) {
         try {
             ResolvedJavaMethod method = providers.getMetaAccess().lookupJavaMethod(NativeCallStubGraphBuilder.class.getMethod("libCall", Object.class, Object.class, Object.class));
-            StructuredGraph g = new StructuredGraph(method);
+            StructuredGraph g = new StructuredGraph(method, AllowAssumptions.NO);
             ParameterNode arg0 = g.unique(new ParameterNode(0, StampFactory.forKind(Kind.Object)));
             ParameterNode arg1 = g.unique(new ParameterNode(1, StampFactory.forKind(Kind.Object)));
             ParameterNode arg2 = g.unique(new ParameterNode(2, StampFactory.forKind(Kind.Object)));
-            FrameState frameState = g.add(new FrameState(method, 0, Arrays.asList(new ValueNode[]{arg0, arg1, arg2}), 3, 0, false, false, new ArrayList<MonitorIdNode>(),
-                            new ArrayList<EscapeObjectState>()));
+            FrameState frameState = g.add(new FrameState(null, method, 0, Arrays.asList(new ValueNode[]{arg0, arg1, arg2}), 3, 0, false, false, null, new ArrayList<EscapeObjectState>()));
             g.start().setStateAfter(frameState);
             List<ValueNode> parameters = new ArrayList<>();
             FixedWithNextNode fixedWithNext = getParameters(g, arg0, argumentTypes.length, argumentTypes, parameters, providers);
-            Constant functionPointerNode = Constant.forLong(functionPointer);
+            JavaConstant functionPointerNode = JavaConstant.forLong(functionPointer);
 
             ValueNode[] arguments = new ValueNode[parameters.size()];
 
@@ -92,7 +91,7 @@ public class NativeCallStubGraphBuilder {
 
             ReturnNode returnNode = g.add(new ReturnNode(boxedResult));
             callNode.setNext(returnNode);
-            (new WordTypeRewriterPhase(providers.getMetaAccess(), providers.getSnippetReflection(), Kind.Long)).apply(g);
+            (new HotSpotWordTypeRewriterPhase(providers.getMetaAccess(), providers.getSnippetReflection(), providers.getConstantReflection(), Kind.Long)).apply(g);
             return g;
         } catch (NoSuchMethodException e) {
             throw GraalInternalError.shouldNotReachHere("Call Stub method not found");
@@ -118,10 +117,10 @@ public class NativeCallStubGraphBuilder {
                 // array value
                 Kind arrayElementKind = getElementKind(type);
                 LocationIdentity locationIdentity = NamedLocationIdentity.getArrayLocation(arrayElementKind);
-                int displacement = getArrayBaseOffset(arrayElementKind);
+                int displacement = runtime().getArrayBaseOffset(arrayElementKind);
                 ConstantNode index = ConstantNode.forInt(0, g);
-                int indexScaling = getArrayIndexScale(arrayElementKind);
-                IndexedLocationNode locationNode = IndexedLocationNode.create(locationIdentity, arrayElementKind, displacement, index, g, indexScaling);
+                int indexScaling = runtime().getArrayIndexScale(arrayElementKind);
+                IndexedLocationNode locationNode = g.unique(new IndexedLocationNode(locationIdentity, displacement, index, indexScaling));
                 Stamp wordStamp = StampFactory.forKind(providers.getCodeCache().getTarget().wordKind);
                 ComputeAddressNode arrayAddress = g.unique(new ComputeAddressNode(boxedElement, locationNode, wordStamp));
                 args.add(arrayAddress);

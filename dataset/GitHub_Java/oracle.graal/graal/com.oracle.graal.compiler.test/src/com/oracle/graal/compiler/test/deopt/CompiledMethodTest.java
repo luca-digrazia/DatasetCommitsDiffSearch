@@ -22,11 +22,10 @@
  */
 package com.oracle.graal.compiler.test.deopt;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
 import org.junit.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
@@ -54,11 +53,11 @@ public class CompiledMethodTest extends GraalCompilerTest {
     public void test1() {
         final ResolvedJavaMethod javaMethod = getResolvedJavaMethod("testMethod");
         final StructuredGraph graph = parseEager(javaMethod, AllowAssumptions.NO);
-        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders()));
         new DeadCodeEliminationPhase().apply(graph);
 
         for (ConstantNode node : ConstantNode.getConstantNodes(graph)) {
-            if (node.getStackKind() == Kind.Object && " ".equals(getSnippetReflection().asObject(String.class, node.asJavaConstant()))) {
+            if (node.getKind() == Kind.Object && " ".equals(getSnippetReflection().asObject(String.class, node.asJavaConstant()))) {
                 node.replace(graph, ConstantNode.forConstant(getSnippetReflection().forObject("-"), getMetaAccess(), graph));
             }
         }

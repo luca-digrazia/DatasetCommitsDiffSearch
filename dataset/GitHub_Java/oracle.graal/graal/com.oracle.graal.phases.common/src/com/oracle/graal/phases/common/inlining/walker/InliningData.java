@@ -23,12 +23,12 @@
 package com.oracle.graal.phases.common.inlining.walker;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.common.inlining.walker.CallsiteHolderDummy.*;
 
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.Assumptions.AssumptionResult;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
@@ -108,10 +108,10 @@ public class InliningData {
         return (arg instanceof AbstractNewObjectNode) || (arg instanceof AllocatedObjectNode) || (arg instanceof VirtualObjectNode);
     }
 
-    private String checkTargetConditionsHelper(ResolvedJavaMethod method, int invokeBci) {
+    private String checkTargetConditionsHelper(ResolvedJavaMethod method) {
         if (method == null) {
             return "the method is not resolved";
-        } else if (method.isNative() && (!Intrinsify.getValue() || !InliningUtil.canIntrinsify(context.getReplacements(), method, invokeBci))) {
+        } else if (method.isNative() && (!Intrinsify.getValue() || !InliningUtil.canIntrinsify(context.getReplacements(), method))) {
             return "it is a non-intrinsic native method";
         } else if (method.isAbstract()) {
             return "it is an abstract method";
@@ -129,7 +129,7 @@ public class InliningData {
     }
 
     private boolean checkTargetConditions(Invoke invoke, ResolvedJavaMethod method) {
-        final String failureMessage = checkTargetConditionsHelper(method, invoke.bci());
+        final String failureMessage = checkTargetConditionsHelper(method);
         if (failureMessage == null) {
             return true;
         } else {
@@ -194,17 +194,17 @@ public class InliningData {
         }
 
         if (callTarget.graph().getAssumptions() != null) {
-            AssumptionResult<ResolvedJavaType> leafConcreteSubtype = holder.findLeafConcreteSubtype();
-            if (leafConcreteSubtype != null) {
-                ResolvedJavaMethod resolvedMethod = leafConcreteSubtype.getResult().resolveConcreteMethod(targetMethod, contextType);
+            ResolvedJavaType uniqueSubtype = holder.findUniqueConcreteSubtype();
+            if (uniqueSubtype != null) {
+                ResolvedJavaMethod resolvedMethod = uniqueSubtype.resolveConcreteMethod(targetMethod, contextType);
                 if (resolvedMethod != null) {
-                    return getAssumptionInlineInfo(invoke, resolvedMethod, leafConcreteSubtype);
+                    return getAssumptionInlineInfo(invoke, resolvedMethod, new Assumptions.ConcreteSubtype(holder, uniqueSubtype));
                 }
             }
 
-            AssumptionResult<ResolvedJavaMethod> concrete = holder.findUniqueConcreteMethod(targetMethod);
+            ResolvedJavaMethod concrete = holder.findUniqueConcreteMethod(targetMethod);
             if (concrete != null) {
-                return getAssumptionInlineInfo(invoke, concrete.getResult(), concrete);
+                return getAssumptionInlineInfo(invoke, concrete, new Assumptions.ConcreteMethod(targetMethod, holder, concrete));
             }
         }
 
@@ -337,7 +337,7 @@ public class InliningData {
         }
     }
 
-    private InlineInfo getAssumptionInlineInfo(Invoke invoke, ResolvedJavaMethod concrete, AssumptionResult<?> takenAssumption) {
+    private InlineInfo getAssumptionInlineInfo(Invoke invoke, ResolvedJavaMethod concrete, Assumptions.Assumption takenAssumption) {
         assert concrete.isConcrete();
         if (checkTargetConditions(invoke, concrete)) {
             return new AssumptionInlineInfo(invoke, concrete, takenAssumption);
@@ -559,7 +559,7 @@ public class InliningData {
         assert graphQueue.size() <= maxGraphs;
         for (int i = 0; i < info.numberOfMethods(); i++) {
             CallsiteHolder ch = methodInvocation.buildCallsiteHolderForElement(i);
-            assert !contains(ch.graph());
+            assert (ch == DUMMY_CALLSITE_HOLDER) || !contains(ch.graph());
             graphQueue.push(ch);
             assert graphQueue.size() <= maxGraphs;
         }
@@ -732,8 +732,12 @@ public class InliningData {
             }
             CallsiteHolder queuedTargetCH = iter.next();
             Inlineable targetIE = currentInvocation().callee().inlineableElementAt(i);
-            InlineableGraph targetIG = (InlineableGraph) targetIE;
-            assert queuedTargetCH.method().equals(targetIG.getGraph().method());
+            if (targetIE instanceof InlineableMacroNode) {
+                assert queuedTargetCH == DUMMY_CALLSITE_HOLDER;
+            } else {
+                InlineableGraph targetIG = (InlineableGraph) targetIE;
+                assert queuedTargetCH.method().equals(targetIG.getGraph().method());
+            }
         }
         return true;
     }

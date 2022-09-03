@@ -22,15 +22,14 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class PushThroughIfTest extends GraalCompilerTest {
 
@@ -59,20 +58,20 @@ public class PushThroughIfTest extends GraalCompilerTest {
 
     private void test(String snippet, String reference) {
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
-        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
-        for (FrameState fs : graph.getNodes(FrameState.TYPE).snapshot()) {
+        Debug.dump(graph, "Graph");
+        for (FrameState fs : graph.getNodes(FrameState.class).snapshot()) {
             fs.replaceAtUsages(null);
             GraphUtil.killWithUnusedFloatingInputs(fs);
         }
-        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
-        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders()));
 
         StructuredGraph referenceGraph = parseEager(reference, AllowAssumptions.YES);
-        for (FrameState fs : referenceGraph.getNodes(FrameState.TYPE).snapshot()) {
+        for (FrameState fs : referenceGraph.getNodes(FrameState.class).snapshot()) {
             fs.replaceAtUsages(null);
             GraphUtil.killWithUnusedFloatingInputs(fs);
         }
-        new CanonicalizerPhase().apply(referenceGraph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase(true).apply(referenceGraph, new PhaseContext(getProviders()));
         assertEquals(referenceGraph, graph);
     }
 }

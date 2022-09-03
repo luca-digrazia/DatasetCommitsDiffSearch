@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,7 +26,6 @@ import static com.oracle.graal.nodes.java.ForeignCallDescriptors.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -37,14 +36,13 @@ import com.oracle.graal.nodes.spi.*;
  * constructor.
  */
 @NodeInfo
-public final class RegisterFinalizerNode extends AbstractStateSplit implements Canonicalizable.Unary<ValueNode>, LIRLowerable, Virtualizable, DeoptimizingNode.DeoptAfter {
+public class RegisterFinalizerNode extends AbstractStateSplit implements Canonicalizable.Unary<ValueNode>, LIRLowerable, Virtualizable, DeoptimizingNode.DeoptAfter {
 
-    public static final NodeClass TYPE = NodeClass.get(RegisterFinalizerNode.class);
     @OptionalInput(InputType.State) FrameState deoptState;
     @Input ValueNode value;
 
     public RegisterFinalizerNode(ValueNode value) {
-        super(TYPE, StampFactory.forVoid());
+        super(StampFactory.forVoid());
         this.value = value;
     }
 

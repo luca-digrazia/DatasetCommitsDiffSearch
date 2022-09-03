@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,40 +22,20 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class IntegerEqualsCanonicalizerTest extends GraalCompilerTest {
 
     @Test
-    public void testSubtractEqualsZero() {
-        test("testSubtractEqualsZeroSnippet", "testSubtractEqualsZeroReference");
-    }
-
-    public static int testSubtractEqualsZeroReference(int a, int b) {
-        if (a == b) {
-            return 1;
-        }
-        return 0;
-    }
-
-    public static int testSubtractEqualsZeroSnippet(int a, int b) {
-        if (a - b == 0) {
-            return 1;
-        }
-        return 0;
-    }
-
-    /**
-     * Tests the canonicalization of (x >>> const) == 0 to x |test| (-1 << const).
-     */
-    @Test
     public void testShiftEquals() {
+        /*
+         * tests the canonicalization of (x >>> const) == 0 to x |test| (-1 << const)
+         */
         test("testShiftEqualsSnippet", "testShiftEqualsReference");
     }
 
@@ -134,8 +114,8 @@ public class IntegerEqualsCanonicalizerTest extends GraalCompilerTest {
 
     private StructuredGraph getCanonicalizedGraph(String snippet) {
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
-        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
-        for (FrameState state : graph.getNodes(FrameState.TYPE).snapshot()) {
+        new CanonicalizerPhase(false).apply(graph, new PhaseContext(getProviders()));
+        for (FrameState state : graph.getNodes(FrameState.class).snapshot()) {
             state.replaceAtUsages(null);
             state.safeDelete();
         }

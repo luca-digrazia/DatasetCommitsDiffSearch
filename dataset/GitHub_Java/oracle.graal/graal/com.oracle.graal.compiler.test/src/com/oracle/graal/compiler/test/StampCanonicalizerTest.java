@@ -24,13 +24,15 @@ package com.oracle.graal.compiler.test;
 
 import org.junit.*;
 
-import com.oracle.graal.compiler.phases.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 /**
- * This class tests some specific patterns the stamp system should be able to canonicalize away using
- * {@link IntegerStamp#mask()}.
+ * This class tests some specific patterns the stamp system should be able to canonicalize away
+ * using {@link IntegerStamp#upMask()}.
  */
 public class StampCanonicalizerTest extends GraalCompilerTest {
 
@@ -95,9 +97,20 @@ public class StampCanonicalizerTest extends GraalCompilerTest {
         testZeroReturn("divStamp2");
     }
 
+    public static int distinctMask(int a, int b) {
+        int x = a & 0xaaaa;
+        int y = (b & 0x5555) | 0x1;
+        return x == y ? 1 : 0;
+    }
+
+    @Test
+    public void testDistinctMask() {
+        testZeroReturn("distinctMask");
+    }
+
     private void testZeroReturn(String methodName) {
-        StructuredGraph graph = parse(methodName);
-        new CanonicalizerPhase(null, runtime(), null).apply(graph);
+        StructuredGraph graph = parseEager(methodName, AllowAssumptions.YES);
+        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders()));
         new DeadCodeEliminationPhase().apply(graph);
         assertConstantReturn(graph, 0);
     }

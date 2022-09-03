@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.compiler.test.ea;
 
+import static org.junit.Assert.*;
+
 import java.util.concurrent.*;
 
 import org.junit.*;
@@ -77,13 +79,13 @@ public class IterativeInliningTest extends GraalCompilerTest {
 
     final ReturnNode getReturn(String snippet) {
         processMethod(snippet);
-        assertDeepEquals(1, graph.getNodes(ReturnNode.TYPE).count());
-        return graph.getNodes(ReturnNode.TYPE).first();
+        assertDeepEquals(1, graph.getNodes(ReturnNode.class).count());
+        return graph.getNodes(ReturnNode.class).first();
     }
 
     private void processMethod(final String snippet) {
         graph = parseEager(snippet, AllowAssumptions.YES);
         HighTierContext context = new HighTierContext(getProviders(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
-        new IterativeInliningPhase(new CanonicalizerPhase()).apply(graph, context);
+        new IterativeInliningPhase(new CanonicalizerPhase(true)).apply(graph, context);
     }
 }

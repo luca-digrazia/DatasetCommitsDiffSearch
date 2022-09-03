@@ -26,9 +26,12 @@ import java.util.*;
 
 import org.junit.*;
 
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.common.inlining.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class InvokeExceptionTest extends GraalCompilerTest {
 
@@ -58,13 +61,14 @@ public class InvokeExceptionTest extends GraalCompilerTest {
     }
 
     private void test(String snippet) {
-        StructuredGraph graph = parseProfiled(snippet);
-        Collection<Invoke> hints = new ArrayList<>();
+        StructuredGraph graph = parseProfiled(snippet, AllowAssumptions.NO);
+        Map<Invoke, Double> hints = new HashMap<>();
         for (Invoke invoke : graph.getInvokes()) {
-            hints.add(invoke);
+            hints.put(invoke, 1000d);
         }
-        new InliningPhase(null, runtime(), hints, null, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
-        new CanonicalizerPhase(null, runtime(), null).apply(graph);
+        HighTierContext context = new HighTierContext(getProviders(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
+        new InliningPhase(hints, new CanonicalizerPhase(true)).apply(graph, context);
+        new CanonicalizerPhase(true).apply(graph, context);
         new DeadCodeEliminationPhase().apply(graph);
     }
 }

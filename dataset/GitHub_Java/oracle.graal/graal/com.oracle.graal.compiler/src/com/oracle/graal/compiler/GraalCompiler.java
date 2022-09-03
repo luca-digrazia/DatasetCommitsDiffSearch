@@ -44,9 +44,9 @@ import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.phases.*;
-import com.oracle.graal.lir.phases.PreAllocationOptimizationPhase.PreAllocationOptimizationContext;
-import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase.PostAllocationOptimizationContext;
-import com.oracle.graal.lir.phases.AllocationPhase.AllocationContext;
+import com.oracle.graal.lir.phases.LIRHighTierPhase.LIRHighTierContext;
+import com.oracle.graal.lir.phases.LIRLowTierPhase.LIRLowTierContext;
+import com.oracle.graal.lir.phases.LIRMidTierPhase.LIRMidTierContext;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.spi.*;
@@ -265,7 +265,6 @@ public class GraalCompiler {
             graph.maybeCompress();
 
             SchedulePhase schedule = new SchedulePhase();
-            schedule.setScheduleConstants(true);
             schedule.apply(graph);
             Debug.dump(schedule, "Final HIR schedule");
             return schedule;
@@ -280,7 +279,7 @@ public class GraalCompiler {
             LIRGenerationResult lirGen = null;
             lirGen = emitLIR(backend, target, schedule, graph, stub, cc, registerConfig, lirSuites);
             try (Scope s = Debug.scope("CodeGen", lirGen, lirGen.getLIR())) {
-                emitCode(backend, graph.getAssumptions(), graph.method(), graph.getInlinedMethods(), lirGen, compilationResult, installedCodeOwner, factory);
+                emitCode(backend, graph.getAssumptions(), graph.getMethods(), lirGen, compilationResult, installedCodeOwner, factory);
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }
@@ -340,7 +339,7 @@ public class GraalCompiler {
                 throw Debug.handle(e);
             }
 
-            try (Scope s = Debug.scope("LIRStages", nodeLirGen)) {
+            try (Scope s = Debug.scope("LIRTier", nodeLirGen)) {
                 return emitLowLevel(target, codeEmittingOrder, linearScanOrder, lirGenRes, lirGen, lirSuites);
             } catch (Throwable e) {
                 throw Debug.handle(e);
@@ -352,20 +351,20 @@ public class GraalCompiler {
 
     public static <T extends AbstractBlock<T>> LIRGenerationResult emitLowLevel(TargetDescription target, List<T> codeEmittingOrder, List<T> linearScanOrder, LIRGenerationResult lirGenRes,
                     LIRGeneratorTool lirGen, LIRSuites lirSuites) {
-        PreAllocationOptimizationContext preAllocOptContext = new PreAllocationOptimizationContext(lirGen);
-        lirSuites.getPreAllocationOptimizationStage().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, preAllocOptContext);
+        LIRHighTierContext highTierContext = new LIRHighTierContext(lirGen);
+        lirSuites.getHighTier().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, highTierContext);
 
-        AllocationContext allocContext = new AllocationContext(lirGen.getSpillMoveFactory());
-        lirSuites.getAllocationStage().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, allocContext);
+        LIRMidTierContext midTierContext = new LIRMidTierContext();
+        lirSuites.getMidTier().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, midTierContext);
 
-        PostAllocationOptimizationContext postAllocOptContext = new PostAllocationOptimizationContext();
-        lirSuites.getPostAllocationOptimizationStage().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, postAllocOptContext);
+        LIRLowTierContext lowTierContext = new LIRLowTierContext();
+        lirSuites.getLowTier().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, lowTierContext);
 
         return lirGenRes;
     }
 
-    public static void emitCode(Backend backend, Assumptions assumptions, ResolvedJavaMethod rootMethod, Set<ResolvedJavaMethod> inlinedMethods, LIRGenerationResult lirGenRes,
-                    CompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner, CompilationResultBuilderFactory factory) {
+    public static void emitCode(Backend backend, Assumptions assumptions, Set<ResolvedJavaMethod> methods, LIRGenerationResult lirGenRes, CompilationResult compilationResult,
+                    ResolvedJavaMethod installedCodeOwner, CompilationResultBuilderFactory factory) {
         FrameMap frameMap = lirGenRes.getFrameMap();
         CompilationResultBuilder crb = backend.newCompilationResultBuilder(lirGenRes, frameMap, compilationResult, factory);
         backend.emitCode(crb, lirGenRes.getLIR(), installedCodeOwner);
@@ -373,8 +372,8 @@ public class GraalCompiler {
         if (assumptions != null && !assumptions.isEmpty()) {
             compilationResult.setAssumptions(assumptions.toArray());
         }
-        if (inlinedMethods != null) {
-            compilationResult.setMethods(rootMethod, inlinedMethods);
+        if (methods != null) {
+            compilationResult.setMethods(methods.toArray(new ResolvedJavaMethod[methods.size()]));
         }
 
         if (Debug.isMeterEnabled()) {

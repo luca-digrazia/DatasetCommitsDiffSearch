@@ -33,6 +33,7 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.ReplacementsImpl.FrameStateProcessing;
+import com.oracle.graal.replacements.Snippet.SnippetInliningPolicy;
 import com.oracle.graal.word.*;
 
 /**
@@ -45,12 +46,14 @@ public class ObjectAccessTest extends GraalCompilerTest implements Snippets {
     private final ReplacementsImpl installer;
 
     public ObjectAccessTest() {
-        installer = (ReplacementsImpl) getReplacements();
+        installer = new ReplacementsImpl(getProviders(), getSnippetReflection(), getTarget());
     }
+
+    private static final ThreadLocal<SnippetInliningPolicy> inliningPolicy = new ThreadLocal<>();
 
     @Override
     protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
-        return installer.makeGraph(m, null, null, null, FrameStateProcessing.CollapseFrameForSingleSideEffect);
+        return installer.makeGraph(m, null, inliningPolicy.get(), FrameStateProcessing.CollapseFrameForSingleSideEffect);
     }
 
     @Test
@@ -70,7 +73,7 @@ public class ObjectAccessTest extends GraalCompilerTest implements Snippets {
     @Test
     public void testRead3() {
         for (Kind kind : KINDS) {
-            assertRead(parseEager("read" + kind.name() + "3", AllowAssumptions.YES), kind, true, LocationIdentity.any());
+            assertRead(parseEager("read" + kind.name() + "3", AllowAssumptions.YES), kind, true, LocationIdentity.ANY_LOCATION);
         }
     }
 
@@ -91,7 +94,7 @@ public class ObjectAccessTest extends GraalCompilerTest implements Snippets {
     @Test
     public void testWrite3() {
         for (Kind kind : KINDS) {
-            assertWrite(parseEager("write" + kind.name() + "3", AllowAssumptions.YES), true, LocationIdentity.any());
+            assertWrite(parseEager("write" + kind.name() + "3", AllowAssumptions.YES), true, LocationIdentity.ANY_LOCATION);
         }
     }
 

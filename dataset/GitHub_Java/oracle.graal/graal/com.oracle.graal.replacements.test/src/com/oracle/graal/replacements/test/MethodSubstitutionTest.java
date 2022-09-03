@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.replacements.test;
 
+import static org.junit.Assert.*;
+
 import java.lang.reflect.*;
 
 import com.oracle.graal.api.code.*;
@@ -50,9 +52,9 @@ public abstract class MethodSubstitutionTest extends GraalCompilerTest {
             StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
             HighTierContext context = new HighTierContext(getProviders(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
             Debug.dump(graph, "Graph");
-            new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
+            new InliningPhase(new CanonicalizerPhase(true)).apply(graph, context);
             Debug.dump(graph, "Graph");
-            new CanonicalizerPhase().apply(graph, context);
+            new CanonicalizerPhase(true).apply(graph, context);
             new DeadCodeEliminationPhase().apply(graph);
 
             assertNotInGraph(graph, Invoke.class);

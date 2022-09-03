@@ -22,27 +22,21 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static com.oracle.graal.graph.iterators.NodePredicates.isNotA;
+import static com.oracle.graal.graph.iterators.NodePredicates.*;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.iterators.NodeIterable;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.ParameterNode;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.java.MonitorExitNode;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
-import com.oracle.graal.phases.common.inlining.InliningPhase;
-import com.oracle.graal.phases.tiers.HighTierContext;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.common.inlining.*;
+import com.oracle.graal.phases.tiers.*;
 
 /**
  * In the following tests, the usages of local variable "a" are replaced with the integer constant
@@ -75,7 +69,7 @@ public class MonitorGraphTest extends GraalCompilerTest {
     @Test
     public void test2() {
         StructuredGraph graph = parseAndProcess("test2Snippet");
-        NodeIterable<MonitorExitNode> monitors = graph.getNodes(MonitorExitNode.TYPE);
+        NodeIterable<MonitorExitNode> monitors = graph.getNodes(MonitorExitNode.class);
         Assert.assertEquals(1, monitors.count());
         Assert.assertEquals(monitors.first().stateAfter().bci, 3);
     }
@@ -91,22 +85,20 @@ public class MonitorGraphTest extends GraalCompilerTest {
 
     private StructuredGraph parseAndProcess(String snippet) {
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
-        ParameterNode param = graph.getNodes(ParameterNode.TYPE).first();
+        ParameterNode param = graph.getNodes(ParameterNode.class).first();
         if (param != null) {
             ConstantNode constant = ConstantNode.forInt(0, graph);
-            for (Node n : param.usages().snapshot()) {
-                if (!(n instanceof FrameState)) {
-                    n.replaceFirstInput(param, constant);
-                }
+            for (Node n : param.usages().filter(isNotA(FrameState.class)).snapshot()) {
+                n.replaceFirstInput(param, constant);
             }
         }
         Map<Invoke, Double> hints = new HashMap<>();
         for (Invoke invoke : graph.getInvokes()) {
             hints.put(invoke, 1000d);
         }
-        HighTierContext context = getDefaultHighTierContext();
-        new InliningPhase(hints, new CanonicalizerPhase()).apply(graph, context);
-        new CanonicalizerPhase().apply(graph, context);
+        HighTierContext context = new HighTierContext(getProviders(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
+        new InliningPhase(hints, new CanonicalizerPhase(true)).apply(graph, context);
+        new CanonicalizerPhase(true).apply(graph, context);
         new DeadCodeEliminationPhase().apply(graph);
         return graph;
     }

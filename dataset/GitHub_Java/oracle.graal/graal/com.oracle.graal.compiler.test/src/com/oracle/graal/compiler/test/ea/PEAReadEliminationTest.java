@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.compiler.test.ea;
 
+import static org.junit.Assert.*;
+
 import java.util.*;
 
 import org.junit.*;
@@ -197,7 +199,7 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
     public void testPhi() {
         processMethod("testPhiSnippet");
         assertTrue(graph.getNodes().filter(LoadFieldNode.class).isEmpty());
-        List<ReturnNode> returnNodes = graph.getNodes(ReturnNode.TYPE).snapshot();
+        List<ReturnNode> returnNodes = graph.getNodes(ReturnNode.class).snapshot();
         assertDeepEquals(2, returnNodes.size());
         assertTrue(returnNodes.get(0).predecessor() instanceof StoreFieldNode);
         assertTrue(returnNodes.get(1).predecessor() instanceof StoreFieldNode);
@@ -237,14 +239,14 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
 
     final ReturnNode getReturn(String snippet) {
         processMethod(snippet);
-        assertDeepEquals(1, graph.getNodes(ReturnNode.TYPE).count());
-        return graph.getNodes(ReturnNode.TYPE).first();
+        assertDeepEquals(1, graph.getNodes(ReturnNode.class).count());
+        return graph.getNodes(ReturnNode.class).first();
     }
 
     protected void processMethod(final String snippet) {
         graph = parseEager(snippet, AllowAssumptions.NO);
         HighTierContext context = new HighTierContext(getProviders(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
-        new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
-        new PartialEscapePhase(false, true, new CanonicalizerPhase(), null).apply(graph, context);
+        new InliningPhase(new CanonicalizerPhase(true)).apply(graph, context);
+        new PartialEscapePhase(false, true, new CanonicalizerPhase(true), null).apply(graph, context);
     }
 }

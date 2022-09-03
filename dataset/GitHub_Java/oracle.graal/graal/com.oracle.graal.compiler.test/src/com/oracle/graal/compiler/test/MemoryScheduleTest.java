@@ -23,6 +23,8 @@
 package com.oracle.graal.compiler.test;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static org.junit.Assert.*;
+
 import java.util.*;
 
 import org.junit.*;
@@ -262,8 +264,8 @@ public class MemoryScheduleTest extends GraphScheduleTest {
     public void testArrayCopy() {
         SchedulePhase schedule = getFinalSchedule("testArrayCopySnippet", TestMode.INLINED_WITHOUT_FRAMESTATES);
         StructuredGraph graph = schedule.getCFG().getStartBlock().getBeginNode().graph();
-        assertDeepEquals(1, graph.getNodes(ReturnNode.TYPE).count());
-        ReturnNode ret = graph.getNodes(ReturnNode.TYPE).first();
+        assertDeepEquals(1, graph.getNodes(ReturnNode.class).count());
+        ReturnNode ret = graph.getNodes(ReturnNode.class).first();
         assertTrue(ret.result() + " should be a FloatingReadNode", ret.result() instanceof FloatingReadNode);
         assertDeepEquals(schedule.getCFG().blockFor(ret), schedule.getCFG().blockFor(ret.result()));
         assertReadWithinAllReturnBlocks(schedule, true);
@@ -541,11 +543,11 @@ public class MemoryScheduleTest extends GraphScheduleTest {
 
     private void assertReadWithinAllReturnBlocks(SchedulePhase schedule, boolean withinReturnBlock) {
         StructuredGraph graph = schedule.getCFG().graph;
-        assertTrue(graph.getNodes(ReturnNode.TYPE).isNotEmpty());
+        assertTrue(graph.getNodes(ReturnNode.class).isNotEmpty());
 
         int withRead = 0;
         int returnBlocks = 0;
-        for (ReturnNode returnNode : graph.getNodes(ReturnNode.TYPE)) {
+        for (ReturnNode returnNode : graph.getNodes(ReturnNode.class)) {
             Block block = schedule.getCFG().getNodeToBlock().get(returnNode);
             for (Node node : schedule.getBlockToNodesMap().get(block)) {
                 if (node instanceof FloatingReadNode) {
@@ -598,7 +600,7 @@ public class MemoryScheduleTest extends GraphScheduleTest {
         try (Scope d = Debug.scope("FloatingReadTest", graph)) {
             try (OverrideScope s = OptionValue.override(OptScheduleOutOfLoops, schedulingStrategy == SchedulingStrategy.LATEST_OUT_OF_LOOPS, OptImplicitNullChecks, false)) {
                 HighTierContext context = new HighTierContext(getProviders(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
-                CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
+                CanonicalizerPhase canonicalizer = new CanonicalizerPhase(true);
                 canonicalizer.apply(graph, context);
                 if (mode == TestMode.INLINED_WITHOUT_FRAMESTATES) {
                     new InliningPhase(canonicalizer).apply(graph, context);

@@ -22,13 +22,13 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 /**
  * In the following tests, the scalar type system of the compiler should be complete enough to see
@@ -131,9 +131,9 @@ public class ScalarTypeSystemTest extends GraalCompilerTest {
     private void test(final String snippet, final String referenceSnippet) {
         // No debug scope to reduce console noise for @Test(expected = ...) tests
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
-        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+        Debug.dump(graph, "Graph");
         PhaseContext context = new PhaseContext(getProviders());
-        new CanonicalizerPhase().apply(graph, context);
+        new CanonicalizerPhase(true).apply(graph, context);
         StructuredGraph referenceGraph = parseEager(referenceSnippet, AllowAssumptions.NO);
         assertEquals(referenceGraph, graph);
     }

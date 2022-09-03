@@ -22,15 +22,12 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import static com.oracle.graal.compiler.common.UnsafeAccess.*;
-
 import java.lang.ref.*;
 
 import org.junit.*;
 
-import sun.misc.*;
-
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
@@ -160,7 +157,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
     }
 
     public static Object test5Snippet() throws Exception {
-        return unsafe.getObject(wr, config.useCompressedOops ? 12L : 16L);
+        return UnsafeAccess.unsafe.getObject(wr, config.useCompressedOops ? 12L : 16L);
     }
 
     /**
@@ -169,7 +166,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
      */
     @Test
     public void test6() throws Exception {
-        test2("testUnsafeLoad", unsafe, wr, new Long(referentOffset), null);
+        test2("testUnsafeLoad", wr, new Long(referentOffset), null);
     }
 
     /**
@@ -178,7 +175,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
      */
     @Test
     public void test7() throws Exception {
-        test2("testUnsafeLoad", unsafe, con, new Long(referentOffset), null);
+        test2("testUnsafeLoad", con, new Long(referentOffset), null);
     }
 
     /**
@@ -188,7 +185,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
      */
     @Test
     public void test8() throws Exception {
-        test2("testUnsafeLoad", unsafe, wr, new Long(config.useCompressedOops ? 20 : 32), null);
+        test2("testUnsafeLoad", wr, new Long(config.useCompressedOops ? 20 : 32), null);
     }
 
     /**
@@ -198,7 +195,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
      */
     @Test
     public void test10() throws Exception {
-        test2("testUnsafeLoad", unsafe, wr, new Long(config.useCompressedOops ? 6 : 8), new Integer(config.useCompressedOops ? 6 : 8));
+        test2("testUnsafeLoad", wr, new Long(config.useCompressedOops ? 6 : 8), new Integer(config.useCompressedOops ? 6 : 8));
     }
 
     /**
@@ -208,7 +205,7 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
      */
     @Test
     public void test9() throws Exception {
-        test2("testUnsafeLoad", unsafe, wr, new Long(config.useCompressedOops ? 10 : 16), new Integer(config.useCompressedOops ? 10 : 16));
+        test2("testUnsafeLoad", wr, new Long(config.useCompressedOops ? 10 : 16), new Integer(config.useCompressedOops ? 10 : 16));
     }
 
     static Object[] src = new Object[1];
@@ -232,17 +229,16 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
         test2("testArrayCopy", src, dst, dst.length);
     }
 
-    public static Object testUnsafeLoad(Unsafe theUnsafe, Object a, Object b, Object c) throws Exception {
+    public static Object testUnsafeLoad(Object a, Object b, Object c) throws Exception {
         final int offset = (c == null ? 0 : ((Integer) c).intValue());
         final long displacement = (b == null ? 0 : ((Long) b).longValue());
-        return theUnsafe.getObject(a, offset + displacement);
+        return UnsafeLoadNode.load(a, offset + displacement, Kind.Object, LocationIdentity.ANY_LOCATION);
     }
 
-    private HotSpotInstalledCode getInstalledCode(String name, boolean withUnsafePrefix) throws Exception {
-        final ResolvedJavaMethod javaMethod = withUnsafePrefix ? getResolvedJavaMethod(WriteBarrierAdditionTest.class, name, Unsafe.class, Object.class, Object.class, Object.class)
-                        : getResolvedJavaMethod(WriteBarrierAdditionTest.class, name, Object.class, Object.class, Object.class);
-        final HotSpotInstalledCode installedCode = (HotSpotInstalledCode) getCode(javaMethod);
-        return installedCode;
+    private HotSpotInstalledCode getInstalledCode(String name) throws Exception {
+        final ResolvedJavaMethod javaMethod = getResolvedJavaMethod(WriteBarrierAdditionTest.class, name, Object.class, Object.class, Object.class);
+        final HotSpotInstalledCode installedBenchmarkCode = (HotSpotInstalledCode) getCode(javaMethod);
+        return installedBenchmarkCode;
     }
 
     private void testHelper(final String snippetName, final int expectedBarriers) throws Exception, SecurityException {
@@ -252,11 +248,10 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
             HighTierContext highContext = new HighTierContext(getProviders(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
             MidTierContext midContext = new MidTierContext(getProviders(), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo(), null);
             new NodeIntrinsificationPhase(getProviders(), getSnippetReflection()).apply(graph);
-            new InliningPhase(new InlineEverythingPolicy(), new CanonicalizerPhase()).apply(graph, highContext);
-            new CanonicalizerPhase().apply(graph, highContext);
-            new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, highContext);
+            new InliningPhase(new InlineEverythingPolicy(), new CanonicalizerPhase(true)).apply(graph, highContext);
+            new LoweringPhase(new CanonicalizerPhase(true), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, highContext);
             new GuardLoweringPhase().apply(graph, midContext);
-            new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.MID_TIER).apply(graph, midContext);
+            new LoweringPhase(new CanonicalizerPhase(true), LoweringTool.StandardLoweringStage.MID_TIER).apply(graph, midContext);
             new WriteBarrierAdditionPhase(config).apply(graph);
             Debug.dump(graph, "After Write Barrier Addition");
 
@@ -298,8 +293,8 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
         }
     }
 
-    private void test2(final String snippet, Object... args) throws Exception {
-        HotSpotInstalledCode code = getInstalledCode(snippet, args[0] instanceof Unsafe);
-        code.executeVarargs(args);
+    private void test2(final String snippet, Object a, Object b, Object c) throws Exception {
+        HotSpotInstalledCode code = getInstalledCode(snippet);
+        code.executeVarargs(a, b, c);
     }
 }

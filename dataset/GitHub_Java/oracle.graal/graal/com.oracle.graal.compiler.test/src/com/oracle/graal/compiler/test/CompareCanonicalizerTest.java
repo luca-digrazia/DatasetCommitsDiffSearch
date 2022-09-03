@@ -36,7 +36,7 @@ public class CompareCanonicalizerTest extends GraalCompilerTest {
 
     private StructuredGraph getCanonicalizedGraph(String name) {
         StructuredGraph graph = parseEager(name, AllowAssumptions.YES);
-        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders()));
         return graph;
     }
 
@@ -53,7 +53,7 @@ public class CompareCanonicalizerTest extends GraalCompilerTest {
             StructuredGraph graph = parseEager("canonicalCompare" + i, AllowAssumptions.NO);
             assertEquals(referenceGraph, graph);
         }
-        new CanonicalizerPhase().apply(referenceGraph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase(true).apply(referenceGraph, new PhaseContext(getProviders()));
         for (int i = 1; i < 4; i++) {
             StructuredGraph graph = getCanonicalizedGraph("canonicalCompare" + i);
             assertEquals(referenceGraph, graph);
@@ -131,8 +131,8 @@ public class CompareCanonicalizerTest extends GraalCompilerTest {
         result = getResult(getCanonicalizedGraph("integerTestCanonicalization2"));
         assertTrue(result.isConstant() && result.asJavaConstant().asLong() == 1);
         StructuredGraph graph = getCanonicalizedGraph("integerTestCanonicalization3");
-        assertDeepEquals(1, graph.getNodes(ReturnNode.TYPE).count());
-        assertTrue(graph.getNodes(ReturnNode.TYPE).first().result() instanceof ConditionalNode);
+        assertDeepEquals(1, graph.getNodes(ReturnNode.class).count());
+        assertTrue(graph.getNodes(ReturnNode.class).first().result() instanceof ConditionalNode);
     }
 
     public static int integerTestCanonicalization1(boolean b) {

@@ -52,14 +52,14 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
 
     public PointerTest() {
         target = getCodeCache().getTarget();
-        installer = (ReplacementsImpl) getProviders().getReplacements();
+        installer = new ReplacementsImpl(getProviders(), getSnippetReflection(), getTarget());
     }
 
     private static final ThreadLocal<SnippetInliningPolicy> inliningPolicy = new ThreadLocal<>();
 
     @Override
     protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
-        return installer.makeGraph(m, null, null, inliningPolicy.get(), FrameStateProcessing.CollapseFrameForSingleSideEffect);
+        return installer.makeGraph(m, null, inliningPolicy.get(), FrameStateProcessing.CollapseFrameForSingleSideEffect);
     }
 
     @Test
@@ -79,7 +79,7 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
     @Test
     public void testRead3() {
         for (Kind kind : KINDS) {
-            assertRead(parseEager("read" + kind.name() + "3", AllowAssumptions.YES), kind, true, LocationIdentity.any());
+            assertRead(parseEager("read" + kind.name() + "3", AllowAssumptions.YES), kind, true, LocationIdentity.ANY_LOCATION);
         }
     }
 
@@ -100,7 +100,7 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
     @Test
     public void testWrite3() {
         for (Kind kind : KINDS) {
-            assertWrite(parseEager("write" + kind.name() + "3", AllowAssumptions.YES), true, LocationIdentity.any());
+            assertWrite(parseEager("write" + kind.name() + "3", AllowAssumptions.YES), true, LocationIdentity.ANY_LOCATION);
         }
     }
 
@@ -403,7 +403,7 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
         HighTierContext context = new HighTierContext(getProviders(), null, null, OptimisticOptimizations.ALL);
 
         StructuredGraph graph = parseEager(snippetName, AllowAssumptions.YES);
-        new CanonicalizerPhase().apply(graph, context);
+        new CanonicalizerPhase(false).apply(graph, context);
         Assert.assertEquals(expectedWordCasts, graph.getNodes().filter(WordCastNode.class).count());
     }
 

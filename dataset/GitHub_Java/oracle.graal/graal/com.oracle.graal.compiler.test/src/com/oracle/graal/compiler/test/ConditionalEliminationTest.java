@@ -24,13 +24,19 @@ package com.oracle.graal.compiler.test;
 
 import org.junit.*;
 
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 /**
- * Collection of tests for {@link ConditionalEliminationPhase} including those that triggered bugs
- * in this phase.
+ * Collection of tests for {@link com.oracle.graal.phases.common.ConditionalEliminationPhase}
+ * including those that triggered bugs in this phase.
  */
 public class ConditionalEliminationTest extends GraalCompilerTest {
+
+    public static Object field;
 
     static class Entry {
 
@@ -76,17 +82,49 @@ public class ConditionalEliminationTest extends GraalCompilerTest {
         } while (true);
     }
 
-    /**
-     * This test presents a code pattern that triggered a bug where a (non-eliminated) checkcast
-     * caused an enclosing instanceof (for the same object and target type) to be incorrectly
-     * eliminated.
-     */
-    @Test
-    public void testReanchoringIssue() {
-        Entry end = new Entry("end");
-        EntryWithNext e1 = new EntryWithNext("e1", end);
-        EntryWithNext e2 = new EntryWithNext("e2", e1);
-
-        test("search", e2, "e3", new Entry("e4"));
+    public static int testRedundantComparesSnippet(int[] array) {
+        if (array == null) {
+            return 0;
+        }
+        return array[0] + array[1] + array[2] + array[3];
     }
+
+    @Test
+    public void testRedundantCompares() {
+        StructuredGraph graph = parseEager("testRedundantComparesSnippet", AllowAssumptions.YES);
+        CanonicalizerPhase canonicalizer = new CanonicalizerPhase(true);
+        PhaseContext context = new PhaseContext(getProviders());
+
+        new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
+        canonicalizer.apply(graph, context);
+        new FloatingReadPhase().apply(graph);
+        new ConditionalEliminationPhase().apply(graph, context);
+        canonicalizer.apply(graph, context);
+
+        assertDeepEquals(1, graph.getNodes().filter(GuardNode.class).count());
+    }
+
+    public static String testInstanceOfCheckCastSnippet(Object e) {
+        if (e instanceof Entry) {
+            return ((Entry) e).name;
+        }
+        return null;
+    }
+
+    @Test
+    @Ignore
+    public void testInstanceOfCheckCastLowered() {
+        StructuredGraph graph = parseEager("testInstanceOfCheckCastSnippet", AllowAssumptions.YES);
+
+        CanonicalizerPhase canonicalizer = new CanonicalizerPhase(true);
+        PhaseContext context = new PhaseContext(getProviders());
+
+        new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
+        canonicalizer.apply(graph, context);
+        new ConditionalEliminationPhase().apply(graph, context);
+        canonicalizer.apply(graph, context);
+
+        assertDeepEquals(0, graph.getNodes().filter(GuardNode.class).count());
+    }
+
 }

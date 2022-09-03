@@ -23,6 +23,8 @@
 
 package com.oracle.graal.hotspot.test;
 
+import static org.junit.Assert.*;
+
 import org.junit.*;
 
 import com.oracle.graal.compiler.test.*;
@@ -179,8 +181,8 @@ public class ClassSubstitutionsTests extends GraalCompilerTest {
 
     private void testConstantReturn(String name, Object value) {
         StructuredGraph result = test(name);
-        ReturnNode ret = result.getNodes(ReturnNode.TYPE).first();
-        assertDeepEquals(1, result.getNodes(ReturnNode.TYPE).count());
+        ReturnNode ret = result.getNodes(ReturnNode.class).first();
+        assertDeepEquals(1, result.getNodes(ReturnNode.class).count());
 
         assertDeepEquals(true, ret.result().isConstant());
         assertDeepEquals(value, ret.result().asJavaConstant().asBoxedPrimitive());

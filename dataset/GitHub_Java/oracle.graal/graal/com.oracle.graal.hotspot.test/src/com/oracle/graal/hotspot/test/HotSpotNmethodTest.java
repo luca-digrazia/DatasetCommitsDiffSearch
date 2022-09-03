@@ -28,7 +28,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 
 public class HotSpotNmethodTest extends GraalCompilerTest {
 
@@ -36,14 +36,13 @@ public class HotSpotNmethodTest extends GraalCompilerTest {
 
     @Test
     public void testInstallCodeInvalidation() {
-        final ResolvedJavaMethod testJavaMethod = runtime.lookupJavaMethod(getMethod("foo"));
-        final StructuredGraph graph = parse("otherFoo");
-        final HotSpotNmethod nmethod = (HotSpotNmethod) getCode(testJavaMethod, graph);
+        final ResolvedJavaMethod testJavaMethod = getResolvedJavaMethod("foo");
+        final HotSpotNmethod nmethod = (HotSpotNmethod) getCode(testJavaMethod, parseEager("otherFoo", AllowAssumptions.YES));
         Assert.assertTrue(nmethod.isValid());
         Object result;
         try {
-            result = nmethod.execute("a", "b", "c");
-            assertEquals(43, result);
+            result = nmethod.executeVarargs(null, "b", "c");
+            assertDeepEquals(43, result);
         } catch (InvalidInstalledCodeException e) {
             Assert.fail("Code was invalidated");
         }
@@ -51,7 +50,7 @@ public class HotSpotNmethodTest extends GraalCompilerTest {
         nmethod.invalidate();
         Assert.assertFalse(nmethod.isValid());
         try {
-            result = nmethod.execute(null, null, null);
+            result = nmethod.executeVarargs(null, null, null);
             Assert.fail("Code was not invalidated");
         } catch (InvalidInstalledCodeException e) {
         }
@@ -59,14 +58,27 @@ public class HotSpotNmethodTest extends GraalCompilerTest {
     }
 
     @Test
+    public void testInstallCodeInvalidationWhileRunning() {
+        final ResolvedJavaMethod testJavaMethod = getResolvedJavaMethod("foo");
+        final HotSpotNmethod nmethod = (HotSpotNmethod) getCode(testJavaMethod, parseEager("otherFoo", AllowAssumptions.YES));
+        Object result;
+        try {
+            result = nmethod.executeVarargs(nmethod, null, null);
+            assertDeepEquals(43, result);
+        } catch (InvalidInstalledCodeException e) {
+            Assert.fail("Code was invalidated");
+        }
+        Assert.assertFalse(nmethod.isValid());
+    }
+
+    @Test
     public void testInstalledCodeCalledFromCompiledCode() {
-        final ResolvedJavaMethod testJavaMethod = runtime.lookupJavaMethod(getMethod("foo"));
-        final StructuredGraph graph = parse("otherFoo");
-        final HotSpotNmethod nmethod = (HotSpotNmethod) getCode(testJavaMethod, graph);
+        final ResolvedJavaMethod testJavaMethod = getResolvedJavaMethod("foo");
+        final HotSpotNmethod nmethod = (HotSpotNmethod) getCode(testJavaMethod, parseEager("otherFoo", AllowAssumptions.YES));
         Assert.assertTrue(nmethod.isValid());
         try {
             for (int i = 0; i < ITERATION_COUNT; ++i) {
-                nmethod.execute("a", "b", "c");
+                nmethod.executeVarargs(null, "b", "c");
             }
         } catch (InvalidInstalledCodeException e) {
             Assert.fail("Code was invalidated");
@@ -74,12 +86,15 @@ public class HotSpotNmethodTest extends GraalCompilerTest {
     }
 
     @SuppressWarnings("unused")
-    public static Object foo(Object a1, Object a2, Object a3) {
+    public static Object foo(HotSpotNmethod method, Object a2, Object a3) {
         return 42;
     }
 
     @SuppressWarnings("unused")
-    public static Object otherFoo(Object a1, Object a2, Object a3) {
+    public static Object otherFoo(HotSpotNmethod method, Object a2, Object a3) {
+        if (method != null) {
+            method.invalidate();
+        }
         return 43;
     }
 }

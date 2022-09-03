@@ -136,7 +136,7 @@ public class TruffleCacheImpl implements TruffleCache {
             lastUsed.put(key, counter++);
             cache.put(key, markerGraph);
 
-            for (ParameterNode param : graph.getNodes(ParameterNode.TYPE)) {
+            for (ParameterNode param : graph.getNodes(ParameterNode.class)) {
                 if (param.getKind() == Kind.Object) {
                     ValueNode actualArgument = arguments.get(param.index());
                     param.setStamp(param.stamp().join(actualArgument.stamp()));
@@ -164,7 +164,7 @@ public class TruffleCacheImpl implements TruffleCache {
                 canonicalizer.apply(graph, phaseContext);
 
                 boolean inliningProgress = false;
-                for (MethodCallTargetNode methodCallTarget : graph.getNodes(MethodCallTargetNode.TYPE)) {
+                for (MethodCallTargetNode methodCallTarget : graph.getNodes(MethodCallTargetNode.class)) {
                     if (!graph.getMark().equals(mark)) {
                         mark = lookupProcessMacroSubstitutions(graph, mark);
                     }
@@ -269,7 +269,7 @@ public class TruffleCacheImpl implements TruffleCache {
     }
 
     protected StructuredGraph parseGraph(StructuredGraph graph, final PhaseContext phaseContext) {
-        new GraphBuilderPhase.Instance(phaseContext.getMetaAccess(), phaseContext.getStampProvider(), null, config, optimisticOptimizations, false).apply(graph);
+        new GraphBuilderPhase.Instance(phaseContext.getMetaAccess(), phaseContext.getStampProvider(), null, config, optimisticOptimizations).apply(graph);
         return graph;
     }
 

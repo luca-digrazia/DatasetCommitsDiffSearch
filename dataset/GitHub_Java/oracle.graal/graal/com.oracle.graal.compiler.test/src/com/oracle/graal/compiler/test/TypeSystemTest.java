@@ -22,29 +22,20 @@
  */
 package com.oracle.graal.compiler.test;
 
-import java.io.BufferedInputStream;
-import java.io.ByteArrayInputStream;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.TTY;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.java.CheckCastNode;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.ConditionalEliminationPhase;
-import com.oracle.graal.phases.schedule.SchedulePhase;
-import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.schedule.*;
+import com.oracle.graal.phases.tiers.*;
 
 /**
  * In the following tests, the scalar type system of the compiler should be complete enough to see
@@ -187,13 +178,11 @@ public class TypeSystemTest extends GraalCompilerTest {
          * reference graph.
          */
         new ConditionalEliminationPhase().apply(graph, new PhaseContext(getProviders()));
-        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders()));
         // a second canonicalizer is needed to process nested MaterializeNodes
-        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders()));
         StructuredGraph referenceGraph = parseEager(referenceSnippet, AllowAssumptions.NO);
-        new ConditionalEliminationPhase().apply(referenceGraph, new PhaseContext(getProviders()));
-        new CanonicalizerPhase().apply(referenceGraph, new PhaseContext(getProviders()));
-        new CanonicalizerPhase().apply(referenceGraph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase(true).apply(referenceGraph, new PhaseContext(getProviders()));
         assertEquals(referenceGraph, graph);
     }
 
@@ -241,8 +230,8 @@ public class TypeSystemTest extends GraalCompilerTest {
 
     private <T extends Node> void testHelper(String snippet, Class<T> clazz) {
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
-        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
-        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders()));
         Debug.dump(graph, "Graph " + snippet);
         Assert.assertFalse("shouldn't have nodes of type " + clazz, graph.getNodes().filter(clazz).iterator().hasNext());
     }

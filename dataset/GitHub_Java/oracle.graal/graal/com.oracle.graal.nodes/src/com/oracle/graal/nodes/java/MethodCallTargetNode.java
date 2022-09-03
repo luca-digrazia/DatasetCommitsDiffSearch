@@ -95,6 +95,10 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
     }
 
     public static ResolvedJavaMethod findSpecialCallTarget(InvokeKind invokeKind, ValueNode receiver, ResolvedJavaMethod targetMethod, ResolvedJavaType contextType) {
+        if (targetMethod.getName().equals("getProperties") && receiver.graph().method().getDeclaringClass().getName().equals("Ljava/lang/Character;")) {
+            System.console();
+        }
+
         if (invokeKind.isDirect()) {
             return null;
         }

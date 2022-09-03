@@ -220,15 +220,15 @@ public class StructuredGraph extends Graph {
     }
 
     public StructuredGraph copy(String newName, ResolvedJavaMethod newMethod) {
-        return copy(newName, newMethod, AllowAssumptions.from(assumptions != null), isMethodRecordingEnabled());
+        return copy(newName, newMethod, AllowAssumptions.from(assumptions != null));
     }
 
-    public StructuredGraph copy(String newName, ResolvedJavaMethod newMethod, AllowAssumptions allowAssumptions, boolean enableMethodRecording) {
+    public StructuredGraph copy(String newName, ResolvedJavaMethod newMethod, AllowAssumptions allowAssumptions) {
         StructuredGraph copy = new StructuredGraph(newName, newMethod, graphId, entryBCI, allowAssumptions);
         if (allowAssumptions == AllowAssumptions.YES && assumptions != null) {
             copy.assumptions.record(assumptions);
         }
-        if (!enableMethodRecording) {
+        if (!isMethodRecordingEnabled()) {
             copy.disableMethodRecording();
         }
         copy.setGuardsStage(getGuardsStage());

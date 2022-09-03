@@ -23,10 +23,10 @@
 package com.oracle.graal.compiler.test;
 
 import static com.oracle.graal.graph.iterators.NodePredicates.*;
-import jdk.internal.jvmci.debug.*;
 
 import org.junit.*;
 
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
@@ -179,39 +179,28 @@ public class IfCanonicalizerTest extends GraalCompilerTest {
         return v - 1;
     }
 
-    @Test
-    public void test9() {
-        testCombinedIf("test9Snippet", 2);
-        test("test9Snippet", -1);
-        test("test9Snippet", 1025);
-    }
-
-    public static int test9Snippet(int n) {
-        return (n < 0) ? 1 : (n >= 1024) ? 1024 : n + 1;
-    }
-
     private void testCombinedIf(String snippet, int count) {
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
         PhaseContext context = new PhaseContext(getProviders());
-        new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
+        new LoweringPhase(new CanonicalizerPhase(true), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
         new FloatingReadPhase().apply(graph);
-        MidTierContext midContext = new MidTierContext(getProviders(), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo());
+        MidTierContext midContext = new MidTierContext(getProviders(), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo(), null);
         new GuardLoweringPhase().apply(graph, midContext);
-        new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.MID_TIER).apply(graph, midContext);
+        new LoweringPhase(new CanonicalizerPhase(true), LoweringTool.StandardLoweringStage.MID_TIER).apply(graph, midContext);
         new ValueAnchorCleanupPhase().apply(graph);
-        new CanonicalizerPhase().apply(graph, context);
+        new CanonicalizerPhase(true).apply(graph, context);
         assertDeepEquals(count, graph.getNodes().filter(IfNode.class).count());
     }
 
     private void test(String snippet) {
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
-        ParameterNode param = graph.getNodes(ParameterNode.TYPE).iterator().next();
+        ParameterNode param = graph.getNodes(ParameterNode.class).iterator().next();
         ConstantNode constant = ConstantNode.forInt(0, graph);
         for (Node n : param.usages().filter(isNotA(FrameState.class)).snapshot()) {
             n.replaceFirstInput(param, constant);
         }
         Debug.dump(graph, "Graph");
-        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders()));
         for (FrameState fs : param.usages().filter(FrameState.class).snapshot()) {
             fs.replaceFirstInput(param, null);
             param.safeDelete();

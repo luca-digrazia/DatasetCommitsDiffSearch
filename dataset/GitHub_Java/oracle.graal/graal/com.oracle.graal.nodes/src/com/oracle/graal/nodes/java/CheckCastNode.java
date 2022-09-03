@@ -44,7 +44,6 @@ import com.oracle.graal.nodes.type.*;
 @NodeInfo
 public final class CheckCastNode extends FixedWithNextNode implements Canonicalizable, Simplifiable, Lowerable, Virtualizable, ValueProxy {
 
-    public static final NodeClass TYPE = NodeClass.get(CheckCastNode.class);
     @Input protected ValueNode object;
     protected final ResolvedJavaType type;
     protected final JavaTypeProfile profile;
@@ -56,7 +55,7 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
     protected final boolean forStoreCheck;
 
     public CheckCastNode(ResolvedJavaType type, ValueNode object, JavaTypeProfile profile, boolean forStoreCheck) {
-        super(TYPE, StampFactory.declaredTrusted(type));
+        super(StampFactory.declaredTrusted(type));
         assert type != null;
         this.type = type;
         this.object = object;
@@ -64,18 +63,10 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
         this.forStoreCheck = forStoreCheck;
     }
 
-    public static ValueNode create(ResolvedJavaType inputType, ValueNode object, JavaTypeProfile profile, boolean forStoreCheck, Assumptions assumptions) {
-        ResolvedJavaType type = inputType;
+    public static ValueNode create(ResolvedJavaType type, ValueNode object, JavaTypeProfile profile, boolean forStoreCheck) {
         ValueNode synonym = findSynonym(type, object);
         if (synonym != null) {
             return synonym;
-        }
-        if (assumptions != null) {
-            ResolvedJavaType uniqueConcreteType = type.findUniqueConcreteSubtype();
-            if (uniqueConcreteType != null && !uniqueConcreteType.equals(type)) {
-                assumptions.recordConcreteSubtype(type, uniqueConcreteType);
-                type = uniqueConcreteType;
-            }
         }
         return new CheckCastNode(type, object, profile, forStoreCheck);
     }
