@@ -44,6 +44,7 @@ public class DebugInfo implements Serializable {
     private final BytecodePosition bytecodePosition;
     private final BitSet registerRefMap;
     private final BitSet frameRefMap;
+    private final short deoptimizationReason;
     private RegisterSaveLayout calleeSaveInfo;
 
     /**
@@ -54,10 +55,11 @@ public class DebugInfo implements Serializable {
      * @param registerRefMap the register map
      * @param frameRefMap the reference map for {@code frame}, which may be {@code null}
      */
-    public DebugInfo(BytecodePosition codePos, BitSet registerRefMap, BitSet frameRefMap) {
+    public DebugInfo(BytecodePosition codePos, BitSet registerRefMap, BitSet frameRefMap, short deoptimizationReason) {
         this.bytecodePosition = codePos;
         this.registerRefMap = registerRefMap;
         this.frameRefMap = frameRefMap;
+        this.deoptimizationReason = deoptimizationReason;
     }
 
     /**
@@ -122,6 +124,15 @@ public class DebugInfo implements Serializable {
      */
     public BitSet getFrameRefMap() {
         return frameRefMap;
+    }
+
+    /**
+     * Identifies the reason in case a deoptimization happens at this program counter.
+     * 
+     * @return the reason of the deoptimization
+     */
+    public short getDeoptimizationReason() {
+        return deoptimizationReason;
     }
 
     /**
