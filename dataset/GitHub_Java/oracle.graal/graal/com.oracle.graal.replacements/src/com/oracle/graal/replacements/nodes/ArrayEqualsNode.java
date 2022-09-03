@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,118 +22,199 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.util.*;
+import static com.oracle.graal.nodeinfo.InputType.Memory;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_100;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_50;
+
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.NamedLocationIdentity;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.ValueNodeUtil;
+import com.oracle.graal.nodes.memory.MemoryAccess;
+import com.oracle.graal.nodes.memory.MemoryNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.Value;
+
+// JaCoCo Exclude
 
 /**
  * Compares two arrays with the same length.
  */
-public class ArrayEqualsNode extends FixedWithNextNode implements LIRGenLowerable, Canonicalizable, Virtualizable {
+@NodeInfo(cycles = CYCLES_100, size = SIZE_50)
+public final class ArrayEqualsNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable, Virtualizable, MemoryAccess {
 
-    /** {@link Kind} of the arrays to compare. */
-    private final Kind kind;
+    public static final NodeClass<ArrayEqualsNode> TYPE = NodeClass.create(ArrayEqualsNode.class);
+    /** {@link JavaKind} of the arrays to compare. */
+    protected final JavaKind kind;
 
     /** One array to be tested for equality. */
-    @Input private ValueNode array1;
+    @Input ValueNode array1;
 
     /** The other array to be tested for equality. */
-    @Input private ValueNode array2;
+    @Input ValueNode array2;
 
     /** Length of both arrays. */
-    @Input private ValueNode length;
+    @Input ValueNode length;
 
-    public ArrayEqualsNode(ValueNode array1, ValueNode array2, ValueNode length) {
-        super(StampFactory.forKind(Kind.Boolean));
+    @OptionalInput(Memory) MemoryNode lastLocationAccess;
 
-        assert array1.stamp().equals(array2.stamp());
-        ObjectStamp stamp = (ObjectStamp) array1.stamp();
-        ResolvedJavaType componentType = stamp.type().getComponentType();
-        this.kind = componentType.getKind();
-
+    public ArrayEqualsNode(ValueNode array1, ValueNode array2, ValueNode length, @ConstantNodeParameter JavaKind kind) {
+        super(TYPE, StampFactory.forKind(JavaKind.Boolean));
+        this.kind = kind;
         this.array1 = array1;
         this.array2 = array2;
         this.length = length;
     }
 
+    public ValueNode getArray1() {
+        return array1;
+    }
+
+    public ValueNode getArray2() {
+        return array2;
+    }
+
+    public ValueNode getLength() {
+        return length;
+    }
+
+    private static boolean arrayEquals(ConstantReflectionProvider constantReflection, JavaConstant a, JavaConstant b, int len) {
+        for (int i = 0; i < len; i++) {
+            JavaConstant aElem = constantReflection.readArrayElement(a, i);
+            JavaConstant bElem = constantReflection.readArrayElement(b, i);
+            if (!constantReflection.constantEquals(aElem, bElem)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (usages().isEmpty()) {
+        if (tool.allUsagesAvailable() && hasNoUsages()) {
             return null;
         }
-        if (GraphUtil.unproxify(array1) == GraphUtil.unproxify(array2)) {
-            return ConstantNode.forBoolean(true, graph());
+        ValueNode a1 = GraphUtil.unproxify(array1);
+        ValueNode a2 = GraphUtil.unproxify(array2);
+        if (a1 == a2) {
+            return ConstantNode.forBoolean(true);
+        }
+        if (a1.isConstant() && a2.isConstant() && length.isConstant()) {
+            ConstantNode c1 = (ConstantNode) a1;
+            ConstantNode c2 = (ConstantNode) a2;
+            if (c1.getStableDimension() >= 1 && c2.getStableDimension() >= 1) {
+                boolean ret = arrayEquals(tool.getConstantReflection(), c1.asJavaConstant(), c2.asJavaConstant(), length.asJavaConstant().asInt());
+                return ConstantNode.forBoolean(ret);
+            }
         }
         return this;
     }
 
+    @Override
     public void virtualize(VirtualizerTool tool) {
-        State state1 = tool.getObjectState(array1);
-        if (state1 != null) {
-            State state2 = tool.getObjectState(array2);
-            if (state2 != null) {
-                if (state1.getVirtualObject() == state2.getVirtualObject()) {
-                    // the same virtual objects will always have the same contents
+        ValueNode alias1 = tool.getAlias(array1);
+        ValueNode alias2 = tool.getAlias(array2);
+        if (alias1 == alias2) {
+            // the same virtual objects will always have the same contents
+            tool.replaceWithValue(ConstantNode.forBoolean(true, graph()));
+        } else if (alias1 instanceof VirtualObjectNode && alias2 instanceof VirtualObjectNode) {
+            VirtualObjectNode virtual1 = (VirtualObjectNode) alias1;
+            VirtualObjectNode virtual2 = (VirtualObjectNode) alias2;
+
+            if (virtual1.entryCount() == virtual2.entryCount()) {
+                int entryCount = virtual1.entryCount();
+                boolean allEqual = true;
+                for (int i = 0; i < entryCount; i++) {
+                    ValueNode entry1 = tool.getEntry(virtual1, i);
+                    ValueNode entry2 = tool.getEntry(virtual2, i);
+                    if (entry1 != entry2) {
+                        // the contents might be different
+                        allEqual = false;
+                    }
+                    if (entry1.stamp().alwaysDistinct(entry2.stamp())) {
+                        // the contents are different
+                        tool.replaceWithValue(ConstantNode.forBoolean(false, graph()));
+                        return;
+                    }
+                }
+                if (allEqual) {
                     tool.replaceWithValue(ConstantNode.forBoolean(true, graph()));
-                } else if (state1.getVirtualObject().entryCount() == state2.getVirtualObject().entryCount()) {
-                    int entryCount = state1.getVirtualObject().entryCount();
-                    boolean allEqual = true;
-                    for (int i = 0; i < entryCount; i++) {
-                        ValueNode entry1 = state1.getEntry(i);
-                        ValueNode entry2 = state2.getEntry(i);
-                        if (entry1 != entry2) {
-                            // the contents might be different
-                            allEqual = false;
-                        }
-                        if (entry1.stamp().alwaysDistinct(entry2.stamp())) {
-                            // the contents are different
-                            tool.replaceWithValue(ConstantNode.forBoolean(false, graph()));
-                            return;
-                        }
-                    }
-                    if (allEqual) {
-                        tool.replaceWithValue(ConstantNode.forBoolean(true, graph()));
-                    }
                 }
             }
         }
     }
 
     @NodeIntrinsic
-    public static native boolean equals(boolean[] array1, boolean[] array2, int length);
+    public static native boolean equals(Object array1, Object array2, int length, @ConstantNodeParameter JavaKind kind);
 
-    @NodeIntrinsic
-    public static native boolean equals(byte[] array1, byte[] array2, int length);
+    public static boolean equals(boolean[] array1, boolean[] array2, int length) {
+        return equals(array1, array2, length, JavaKind.Boolean);
+    }
 
-    @NodeIntrinsic
-    public static native boolean equals(char[] array1, char[] array2, int length);
+    public static boolean equals(byte[] array1, byte[] array2, int length) {
+        return equals(array1, array2, length, JavaKind.Byte);
+    }
 
-    @NodeIntrinsic
-    public static native boolean equals(short[] array1, short[] array2, int length);
+    public static boolean equals(char[] array1, char[] array2, int length) {
+        return equals(array1, array2, length, JavaKind.Char);
+    }
 
-    @NodeIntrinsic
-    public static native boolean equals(int[] array1, int[] array2, int length);
+    public static boolean equals(short[] array1, short[] array2, int length) {
+        return equals(array1, array2, length, JavaKind.Short);
+    }
 
-    @NodeIntrinsic
-    public static native boolean equals(long[] array1, long[] array2, int length);
+    public static boolean equals(int[] array1, int[] array2, int length) {
+        return equals(array1, array2, length, JavaKind.Int);
+    }
 
-    @NodeIntrinsic
-    public static native boolean equals(float[] array1, float[] array2, int length);
+    public static boolean equals(long[] array1, long[] array2, int length) {
+        return equals(array1, array2, length, JavaKind.Long);
+    }
 
-    @NodeIntrinsic
-    public static native boolean equals(double[] array1, double[] array2, int length);
+    public static boolean equals(float[] array1, float[] array2, int length) {
+        return equals(array1, array2, length, JavaKind.Float);
+    }
+
+    public static boolean equals(double[] array1, double[] array2, int length) {
+        return equals(array1, array2, length, JavaKind.Double);
+    }
 
     @Override
-    public void generate(NodeLIRGenerator gen) {
-        Variable result = gen.newVariable(Kind.Int);
-        gen.emitArrayEquals(kind, result, gen.operand(array1), gen.operand(array2), gen.operand(length));
+    public void generate(NodeLIRBuilderTool gen) {
+        Value result = gen.getLIRGeneratorTool().emitArrayEquals(kind, gen.operand(array1), gen.operand(array2), gen.operand(length));
         gen.setResult(this, result);
+    }
+
+    @Override
+    public LocationIdentity getLocationIdentity() {
+        return NamedLocationIdentity.getArrayLocation(kind);
+    }
+
+    @Override
+    public MemoryNode getLastLocationAccess() {
+        return lastLocationAccess;
+    }
+
+    @Override
+    public void setLastLocationAccess(MemoryNode lla) {
+        updateUsages(ValueNodeUtil.asNode(lastLocationAccess), ValueNodeUtil.asNode(lla));
+        lastLocationAccess = lla;
     }
 }
