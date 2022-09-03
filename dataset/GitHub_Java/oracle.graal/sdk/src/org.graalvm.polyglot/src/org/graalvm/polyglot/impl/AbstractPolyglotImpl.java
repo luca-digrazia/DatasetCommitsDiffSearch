@@ -106,8 +106,6 @@ public abstract class AbstractPolyglotImpl {
             }
         }
 
-        public abstract boolean useContextClassLoader();
-
         public abstract Engine newEngine(AbstractEngineImpl impl);
 
         public abstract Context newContext(AbstractContextImpl impl);
@@ -153,7 +151,6 @@ public abstract class AbstractPolyglotImpl {
 
     public final void setConstructors(APIAccess constructors) {
         this.api = constructors;
-        initialize();
     }
 
     public APIAccess getAPIAccess() {
@@ -162,9 +159,6 @@ public abstract class AbstractPolyglotImpl {
 
     public MonitoringAccess getMonitoring() {
         return monitoring;
-    }
-
-    protected void initialize() {
     }
 
     public abstract Engine buildEngine(OutputStream out, OutputStream err, InputStream in, Map<String, String> arguments, long timeout, TimeUnit timeoutUnit, boolean sandbox,
@@ -291,12 +285,6 @@ public abstract class AbstractPolyglotImpl {
         }
 
         public abstract boolean isAvailable(Object impl);
-
-        public abstract boolean hasLines(Object impl);
-
-        public abstract boolean hasColumns(Object impl);
-
-        public abstract boolean hasCharIndex(Object impl);
 
         public abstract int getStartLine(Object impl);
 

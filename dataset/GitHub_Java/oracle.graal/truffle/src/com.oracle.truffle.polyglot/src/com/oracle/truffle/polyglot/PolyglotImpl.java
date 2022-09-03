@@ -49,7 +49,6 @@ import java.io.OutputStream;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -67,7 +66,6 @@ import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl;
 import org.graalvm.polyglot.io.FileSystem;
 import org.graalvm.polyglot.io.MessageTransport;
-import org.graalvm.polyglot.proxy.Proxy;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
@@ -115,21 +113,10 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
     private final PolyglotExecutionListener executionListenerImpl = new PolyglotExecutionListener(this);
     private final AtomicReference<PolyglotEngineImpl> preInitializedEngineRef = new AtomicReference<>();
 
-    final Map<Class<?>, PolyglotValue> primitiveValues = new HashMap<>();
-    Value hostNull; // effectively final
-    PolyglotValue disconnectedHostValue;
-
     /**
      * Internal method do not use.
      */
     public PolyglotImpl() {
-    }
-
-    @Override
-    protected void initialize() {
-        this.hostNull = getAPIAccess().newValue(HostObject.NULL, PolyglotValue.createHostNull(this));
-        PolyglotValue.createDefaultValues(this, null, primitiveValues);
-        disconnectedHostValue = new PolyglotValue.HostValue(this);
     }
 
     /**
@@ -259,44 +246,25 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
     @Override
     @TruffleBoundary
     public Value asValue(Object hostValue) {
-        PolyglotContextImpl currentContext = PolyglotContextImpl.current();
-        if (currentContext != null) {
-            // if we are currently entered in a context just use it and bind the value to it.
-            return currentContext.asValue(hostValue);
-        }
-
-        /*
-         * No entered context. Try to do something reasonable.
-         */
         assert !(hostValue instanceof Value);
-        PolyglotContextImpl valueContext = null;
+        PolyglotLanguageContext languageContext = null;
         Object guestValue = null;
-        if (hostValue == null) {
-            return hostNull;
-        } else if (isGuestPrimitive(hostValue)) {
-            return getAPIAccess().newValue(hostValue, primitiveValues.get(hostValue.getClass()));
-        } else if (HostWrapper.isInstance(hostValue)) {
-            HostWrapper hostWrapper = HostWrapper.asInstance(hostValue);
-            // host wrappers can nicely reuse the associated context
-            guestValue = hostWrapper.getGuestObject();
-            valueContext = hostWrapper.getContext();
-            return valueContext.asValue(guestValue);
+        if (hostValue instanceof PolyglotList) {
+            languageContext = ((PolyglotList<?>) hostValue).languageContext;
+            guestValue = ((PolyglotList<?>) hostValue).guestObject;
+        } else if (hostValue instanceof PolyglotMap) {
+            languageContext = ((PolyglotMap<?, ?>) hostValue).languageContext;
+            guestValue = ((PolyglotMap<?, ?>) hostValue).guestObject;
+        } else if (hostValue instanceof PolyglotFunction) {
+            languageContext = ((PolyglotFunction<?, ?>) hostValue).languageContext;
+            guestValue = ((PolyglotFunction<?, ?>) hostValue).guestObject;
+        }
+        if (languageContext == null) {
+            PolyglotContextImpl context = PolyglotContextImpl.current();
+            languageContext = context.getHostContext();
+            return languageContext.asValue(languageContext.toGuestValue(hostValue));
         } else {
-            /*
-             * We currently cannot support doing interop without a context so we create our own
-             * value representations wit null for this case. No interop messages are used until they
-             * are unboxed in PolyglotContextImpl#toGuestValue where a context will be attached.
-             */
-            if (hostValue instanceof TruffleObject) {
-                guestValue = hostValue;
-            } else if (hostValue instanceof Proxy) {
-                guestValue = PolyglotProxy.toProxyGuestObject(null, (Proxy) hostValue);
-            } else if (hostValue instanceof Class) {
-                guestValue = HostObject.forClass((Class<?>) hostValue, null);
-            } else {
-                guestValue = HostObject.forObject(hostValue, null);
-            }
-            return getAPIAccess().newValue(guestValue, disconnectedHostValue);
+            return languageContext.asValue(guestValue);
         }
     }
 
@@ -692,12 +660,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         public boolean isNativeAccessAllowed(Object vmObject, Env env) {
             PolyglotLanguageContext context = (PolyglotLanguageContext) vmObject;
             return context.context.config.nativeAccessAllowed;
-        }
-
-        @Override
-        public boolean inContextPreInitialization(Object vmObject) {
-            PolyglotLanguageContext context = (PolyglotLanguageContext) vmObject;
-            return context.context.inContextPreInitialization;
         }
 
         @Override
