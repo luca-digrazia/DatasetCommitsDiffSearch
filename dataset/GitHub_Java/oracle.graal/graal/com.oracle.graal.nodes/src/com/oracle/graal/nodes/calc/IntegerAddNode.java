@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,7 +32,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "+")
-public class IntegerAddNode extends IntegerArithmeticNode implements NarrowableArithmeticNode {
+public class IntegerAddNode extends IntegerArithmeticNode implements Canonicalizable, NarrowableArithmeticNode {
 
     public IntegerAddNode(ValueNode x, ValueNode y) {
         super(StampTool.add(x.stamp(), y.stamp()), x, y);
@@ -50,41 +50,41 @@ public class IntegerAddNode extends IntegerArithmeticNode implements NarrowableA
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        if (forX.isConstant() && !forY.isConstant()) {
-            return new IntegerAddNode(forY, forX);
+    public Node canonical(CanonicalizerTool tool) {
+        if (getX().isConstant() && !getY().isConstant()) {
+            return graph().unique(new IntegerAddNode(getY(), getX()));
         }
-        if (forX instanceof IntegerSubNode) {
-            IntegerSubNode sub = (IntegerSubNode) forX;
-            if (sub.getY() == forY) {
+        if (getX() instanceof IntegerSubNode) {
+            IntegerSubNode sub = (IntegerSubNode) getX();
+            if (sub.getY() == getY()) {
                 // (a - b) + b
                 return sub.getX();
             }
         }
-        if (forY instanceof IntegerSubNode) {
-            IntegerSubNode sub = (IntegerSubNode) forY;
-            if (sub.getY() == forX) {
+        if (getY() instanceof IntegerSubNode) {
+            IntegerSubNode sub = (IntegerSubNode) getY();
+            if (sub.getY() == getX()) {
                 // b + (a - b)
                 return sub.getX();
             }
         }
-        if (forX.isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(forX.asConstant(), forY.asConstant()));
-        } else if (forY.isConstant()) {
-            long c = forY.asConstant().asLong();
+        if (getX().isConstant()) {
+            return ConstantNode.forPrimitive(evalConst(getX().asConstant(), getY().asConstant()), graph());
+        } else if (getY().isConstant()) {
+            long c = getY().asConstant().asLong();
             if (c == 0) {
-                return forX;
+                return getX();
             }
             // canonicalize expressions like "(a + 1) + 2"
-            BinaryNode reassociated = BinaryNode.reassociate(this, ValueNode.isConstantPredicate(), forX, forY);
+            BinaryNode reassociated = BinaryNode.reassociate(this, ValueNode.isConstantPredicate());
             if (reassociated != this) {
                 return reassociated;
             }
         }
-        if (forX instanceof NegateNode) {
-            return IntegerArithmeticNode.sub(forY, ((NegateNode) forX).getValue());
-        } else if (forY instanceof NegateNode) {
-            return IntegerArithmeticNode.sub(forX, ((NegateNode) forY).getValue());
+        if (getX() instanceof NegateNode) {
+            return IntegerArithmeticNode.sub(graph(), getY(), ((NegateNode) getX()).getValue());
+        } else if (getY() instanceof NegateNode) {
+            return IntegerArithmeticNode.sub(graph(), getX(), ((NegateNode) getY()).getValue());
         }
         return this;
     }

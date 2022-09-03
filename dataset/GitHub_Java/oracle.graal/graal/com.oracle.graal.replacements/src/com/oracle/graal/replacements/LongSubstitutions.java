@@ -39,7 +39,7 @@ public class LongSubstitutions {
         if (i == 0) {
             return 64;
         }
-        return 63 - BitScanReverseNode.unsafeScan(i);
+        return 63 - BitScanReverseNode.scan(i);
     }
 
     @MethodSubstitution
@@ -47,7 +47,7 @@ public class LongSubstitutions {
         if (i == 0) {
             return 64;
         }
-        return BitScanForwardNode.unsafeScan(i);
+        return BitScanForwardNode.scan(i);
     }
 
     @MethodSubstitution

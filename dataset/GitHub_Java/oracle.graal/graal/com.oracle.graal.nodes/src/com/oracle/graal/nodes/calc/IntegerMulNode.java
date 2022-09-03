@@ -32,7 +32,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "*")
-public class IntegerMulNode extends IntegerArithmeticNode implements NarrowableArithmeticNode {
+public class IntegerMulNode extends IntegerArithmeticNode implements Canonicalizable, NarrowableArithmeticNode {
 
     public IntegerMulNode(ValueNode x, ValueNode y) {
         super(x.stamp().unrestricted(), x, y);
@@ -46,31 +46,31 @@ public class IntegerMulNode extends IntegerArithmeticNode implements NarrowableA
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        if (forX.isConstant() && !forY.isConstant()) {
-            return new IntegerMulNode(forY, forX);
+    public Node canonical(CanonicalizerTool tool) {
+        if (getX().isConstant() && !getY().isConstant()) {
+            return graph().unique(new IntegerMulNode(getY(), getX()));
         }
-        if (forX.isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(forX.asConstant(), forY.asConstant()));
-        } else if (forY.isConstant()) {
-            long c = forY.asConstant().asLong();
+        if (getX().isConstant()) {
+            return ConstantNode.forPrimitive(evalConst(getX().asConstant(), getY().asConstant()), graph());
+        } else if (getY().isConstant()) {
+            long c = getY().asConstant().asLong();
             if (c == 1) {
-                return forX;
+                return getX();
             }
             if (c == 0) {
-                return ConstantNode.forIntegerStamp(stamp(), 0);
+                return ConstantNode.forIntegerStamp(stamp(), 0, graph());
             }
             long abs = Math.abs(c);
             if (abs > 0 && CodeUtil.isPowerOf2(abs)) {
-                LeftShiftNode shift = new LeftShiftNode(forX, ConstantNode.forInt(CodeUtil.log2(abs)));
+                LeftShiftNode shift = graph().unique(new LeftShiftNode(getX(), ConstantNode.forInt(CodeUtil.log2(abs), graph())));
                 if (c < 0) {
-                    return new NegateNode(shift);
+                    return graph().unique(new NegateNode(shift));
                 } else {
                     return shift;
                 }
             }
             // canonicalize expressions like "(a * 1) * 2"
-            return BinaryNode.reassociate(this, ValueNode.isConstantPredicate(), forX, forY);
+            return BinaryNode.reassociate(this, ValueNode.isConstantPredicate());
         }
         return this;
     }

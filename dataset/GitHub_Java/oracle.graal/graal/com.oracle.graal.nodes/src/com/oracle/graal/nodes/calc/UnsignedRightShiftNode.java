@@ -31,7 +31,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = ">>>")
-public final class UnsignedRightShiftNode extends ShiftNode {
+public final class UnsignedRightShiftNode extends ShiftNode implements Canonicalizable {
 
     public UnsignedRightShiftNode(ValueNode x, ValueNode y) {
         super(x, y);
@@ -54,39 +54,39 @@ public final class UnsignedRightShiftNode extends ShiftNode {
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        if (forX.isConstant() && forY.isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(forX.asConstant(), forY.asConstant()));
-        } else if (forY.isConstant()) {
-            int amount = forY.asConstant().asInt();
+    public Node canonical(CanonicalizerTool tool) {
+        if (getX().isConstant() && getY().isConstant()) {
+            return ConstantNode.forPrimitive(evalConst(getX().asConstant(), getY().asConstant()), graph());
+        } else if (getY().isConstant()) {
+            int amount = getY().asConstant().asInt();
             int originalAmout = amount;
             int mask = getShiftAmountMask();
             amount &= mask;
             if (amount == 0) {
-                return forX;
+                return getX();
             }
-            if (forX instanceof ShiftNode) {
-                ShiftNode other = (ShiftNode) forX;
+            if (getX() instanceof ShiftNode) {
+                ShiftNode other = (ShiftNode) getX();
                 if (other.getY().isConstant()) {
                     int otherAmount = other.getY().asConstant().asInt() & mask;
                     if (other instanceof UnsignedRightShiftNode) {
                         int total = amount + otherAmount;
                         if (total != (total & mask)) {
-                            return ConstantNode.forIntegerKind(getKind(), 0);
+                            return ConstantNode.forIntegerKind(getKind(), 0, graph());
                         }
-                        return new UnsignedRightShiftNode(other.getX(), ConstantNode.forInt(total));
+                        return graph().unique(new UnsignedRightShiftNode(other.getX(), ConstantNode.forInt(total, graph())));
                     } else if (other instanceof LeftShiftNode && otherAmount == amount) {
                         if (getKind() == Kind.Long) {
-                            return new AndNode(other.getX(), ConstantNode.forLong(-1L >>> amount));
+                            return graph().unique(new AndNode(other.getX(), ConstantNode.forLong(-1L >>> amount, graph())));
                         } else {
                             assert getKind() == Kind.Int;
-                            return new AndNode(other.getX(), ConstantNode.forInt(-1 >>> amount));
+                            return graph().unique(new AndNode(other.getX(), ConstantNode.forInt(-1 >>> amount, graph())));
                         }
                     }
                 }
             }
             if (originalAmout != amount) {
-                return new UnsignedRightShiftNode(forX, ConstantNode.forInt(amount));
+                return graph().unique(new UnsignedRightShiftNode(getX(), ConstantNode.forInt(amount, graph())));
             }
         }
         return this;

@@ -49,13 +49,13 @@ public class IntegerRemNode extends FixedBinaryNode implements Canonicalizable, 
             if (y == 0) {
                 return this; // this will trap, can not canonicalize
             }
-            return ConstantNode.forIntegerStamp(stamp(), x().asConstant().asLong() % y);
+            return ConstantNode.forIntegerStamp(stamp(), x().asConstant().asLong() % y, graph());
         } else if (y().isConstant()) {
             long c = y().asConstant().asLong();
             if (c == 1 || c == -1) {
-                return ConstantNode.forIntegerStamp(stamp(), 0);
+                return ConstantNode.forIntegerStamp(stamp(), 0, graph());
             } else if (c > 0 && CodeUtil.isPowerOf2(c) && x().stamp() instanceof IntegerStamp && ((IntegerStamp) x().stamp()).isPositive()) {
-                return new AndNode(x(), ConstantNode.forIntegerStamp(stamp(), c - 1));
+                return graph().unique(new AndNode(x(), ConstantNode.forIntegerStamp(stamp(), c - 1, graph())));
             }
         }
         return this;

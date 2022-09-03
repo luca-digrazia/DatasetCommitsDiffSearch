@@ -24,6 +24,7 @@ package com.oracle.graal.truffle.nodes.arithmetic;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -35,7 +36,7 @@ import com.oracle.truffle.api.*;
  * Node representing an exact integer addition that will throw an {@link ArithmeticException} in
  * case the addition would overflow the 32 bit range.
  */
-public class IntegerAddExactNode extends IntegerAddNode implements IntegerExactArithmeticNode {
+public class IntegerAddExactNode extends IntegerAddNode implements Canonicalizable, IntegerExactArithmeticNode {
 
     public IntegerAddExactNode(ValueNode x, ValueNode y) {
         super(x, y);
@@ -49,13 +50,13 @@ public class IntegerAddExactNode extends IntegerAddNode implements IntegerExactA
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        if (forX.isConstant() && !forY.isConstant()) {
-            return new IntegerAddExactNode(forY, forX);
+    public Node canonical(CanonicalizerTool tool) {
+        if (getX().isConstant() && !getY().isConstant()) {
+            return graph().unique(new IntegerAddExactNode(getY(), getX()));
         }
-        if (forX.isConstant()) {
-            Constant xConst = forX.asConstant();
-            Constant yConst = forY.asConstant();
+        if (getX().isConstant()) {
+            Constant xConst = getX().asConstant();
+            Constant yConst = getY().asConstant();
             assert xConst.getKind() == yConst.getKind();
             try {
                 if (xConst.getKind() == Kind.Int) {
@@ -67,10 +68,10 @@ public class IntegerAddExactNode extends IntegerAddNode implements IntegerExactA
             } catch (ArithmeticException ex) {
                 // The operation will result in an overflow exception, so do not canonicalize.
             }
-        } else if (forY.isConstant()) {
-            long c = forY.asConstant().asLong();
+        } else if (getY().isConstant()) {
+            long c = getY().asConstant().asLong();
             if (c == 0) {
-                return forX;
+                return getX();
             }
         }
         return this;

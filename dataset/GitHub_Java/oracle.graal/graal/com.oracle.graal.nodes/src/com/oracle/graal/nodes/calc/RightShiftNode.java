@@ -31,7 +31,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = ">>")
-public final class RightShiftNode extends ShiftNode {
+public final class RightShiftNode extends ShiftNode implements Canonicalizable {
 
     public RightShiftNode(ValueNode x, ValueNode y) {
         super(x, y);
@@ -49,22 +49,22 @@ public final class RightShiftNode extends ShiftNode {
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        if (forX.stamp() instanceof IntegerStamp && ((IntegerStamp) forX.stamp()).isPositive()) {
-            return new UnsignedRightShiftNode(forX, forY);
+    public Node canonical(CanonicalizerTool tool) {
+        if (getX().stamp() instanceof IntegerStamp && ((IntegerStamp) getX().stamp()).isPositive()) {
+            return graph().unique(new UnsignedRightShiftNode(getX(), getY()));
         }
-        if (forX.isConstant() && forY.isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(forX.asConstant(), forY.asConstant()));
-        } else if (forY.isConstant()) {
-            int amount = forY.asConstant().asInt();
+        if (getX().isConstant() && getY().isConstant()) {
+            return ConstantNode.forPrimitive(evalConst(getX().asConstant(), getY().asConstant()), graph());
+        } else if (getY().isConstant()) {
+            int amount = getY().asConstant().asInt();
             int originalAmout = amount;
             int mask = getShiftAmountMask();
             amount &= mask;
             if (amount == 0) {
-                return forX;
+                return getX();
             }
-            if (forX instanceof ShiftNode) {
-                ShiftNode other = (ShiftNode) forX;
+            if (getX() instanceof ShiftNode) {
+                ShiftNode other = (ShiftNode) getX();
                 if (other.getY().isConstant()) {
                     int otherAmount = other.getY().asConstant().asInt() & mask;
                     if (other instanceof RightShiftNode) {
@@ -74,10 +74,10 @@ public final class RightShiftNode extends ShiftNode {
                             IntegerStamp istamp = (IntegerStamp) other.getX().stamp();
 
                             if (istamp.isPositive()) {
-                                return ConstantNode.forIntegerKind(getKind(), 0);
+                                return ConstantNode.forIntegerKind(getKind(), 0, graph());
                             }
                             if (istamp.isStrictlyNegative()) {
-                                return ConstantNode.forIntegerKind(getKind(), -1L);
+                                return ConstantNode.forIntegerKind(getKind(), -1L, graph());
                             }
 
                             /*
@@ -85,14 +85,14 @@ public final class RightShiftNode extends ShiftNode {
                              * full shift for this kind
                              */
                             assert total >= mask;
-                            return new RightShiftNode(other.getX(), ConstantNode.forInt(mask));
+                            return graph().unique(new RightShiftNode(other.getX(), ConstantNode.forInt(mask, graph())));
                         }
-                        return new RightShiftNode(other.getX(), ConstantNode.forInt(total));
+                        return graph().unique(new RightShiftNode(other.getX(), ConstantNode.forInt(total, graph())));
                     }
                 }
             }
             if (originalAmout != amount) {
-                return new RightShiftNode(forX, ConstantNode.forInt(amount));
+                return graph().unique(new RightShiftNode(getX(), ConstantNode.forInt(amount, graph())));
             }
         }
         return this;

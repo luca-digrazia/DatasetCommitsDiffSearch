@@ -47,9 +47,9 @@ public class UnsignedRemNode extends FixedBinaryNode implements Canonicalizable,
         } else if (y().isConstant()) {
             long c = y().asConstant().asLong();
             if (c == 1) {
-                return ConstantNode.forIntegerStamp(stamp(), 0);
+                return ConstantNode.forIntegerStamp(stamp(), 0, graph());
             } else if (CodeUtil.isPowerOf2(c)) {
-                return new AndNode(x(), ConstantNode.forIntegerStamp(stamp(), c - 1));
+                return graph().unique(new AndNode(x(), ConstantNode.forIntegerStamp(stamp(), c - 1, graph())));
             }
         }
         return this;

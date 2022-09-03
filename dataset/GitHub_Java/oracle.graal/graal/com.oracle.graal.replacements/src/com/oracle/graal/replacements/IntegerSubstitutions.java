@@ -39,7 +39,7 @@ public class IntegerSubstitutions {
         if (i == 0) {
             return 32;
         }
-        return 31 - BitScanReverseNode.unsafeScan(i);
+        return 31 - BitScanReverseNode.scan(i);
     }
 
     @MethodSubstitution
@@ -47,7 +47,7 @@ public class IntegerSubstitutions {
         if (i == 0) {
             return 32;
         }
-        return BitScanForwardNode.unsafeScan(i);
+        return BitScanForwardNode.scan(i);
     }
 
     @MethodSubstitution

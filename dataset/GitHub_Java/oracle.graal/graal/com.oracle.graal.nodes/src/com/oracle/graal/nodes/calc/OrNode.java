@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,10 +30,9 @@ import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(shortName = "|")
-public final class OrNode extends BitLogicNode {
+public final class OrNode extends BitLogicNode implements Canonicalizable {
 
     public OrNode(ValueNode x, ValueNode y) {
         super(StampTool.or(x.stamp(), y.stamp()), x, y);
@@ -52,25 +51,25 @@ public final class OrNode extends BitLogicNode {
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY)) {
-            return forX;
+    public Node canonical(CanonicalizerTool tool) {
+        if (getX() == getY()) {
+            return getX();
         }
-        if (forX.isConstant() && !forY.isConstant()) {
-            return new OrNode(forY, forX);
+        if (getX().isConstant() && !getY().isConstant()) {
+            return graph().unique(new OrNode(getY(), getX()));
         }
-        if (forX.isConstant()) {
-            return ConstantNode.forPrimitive(stamp(), evalConst(forX.asConstant(), forY.asConstant()));
-        } else if (forY.isConstant()) {
-            long rawY = forY.asConstant().asLong();
+        if (getX().isConstant()) {
+            return ConstantNode.forPrimitive(stamp(), evalConst(getX().asConstant(), getY().asConstant()), graph());
+        } else if (getY().isConstant()) {
+            long rawY = getY().asConstant().asLong();
             long mask = IntegerStamp.defaultMask(PrimitiveStamp.getBits(stamp()));
             if ((rawY & mask) == mask) {
-                return ConstantNode.forIntegerStamp(stamp(), mask);
+                return ConstantNode.forIntegerStamp(stamp(), mask, graph());
             }
             if ((rawY & mask) == 0) {
-                return forX;
+                return getX();
             }
-            return BinaryNode.reassociate(this, ValueNode.isConstantPredicate(), forX, forY);
+            return BinaryNode.reassociate(this, ValueNode.isConstantPredicate());
         }
         return this;
     }
