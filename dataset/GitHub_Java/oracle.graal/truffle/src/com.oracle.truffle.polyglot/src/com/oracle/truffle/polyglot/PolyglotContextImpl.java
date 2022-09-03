@@ -237,8 +237,8 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     /**
-     * Marks all code from this context as unusable. It's important that a context is only disposed
-     * when there is no code that could rely on the singleContextAssumption.
+     * Marks all code from this context as unusable. Its important that a context is only disposed
+     * there is no code that could rely on the singleContextAssumption.
      */
     static void disposeStaticContext(PolyglotContextImpl context) {
         SingleContextState state = singleContextState;
@@ -246,21 +246,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             synchronized (state) {
                 if (state.singleContextAssumption.isValid()) {
                     assert state.singleContext == context;
-                    state.singleContext = null;
-                }
-            }
-        }
-    }
-
-    /**
-     * Invalidates the global single context assumption when creating an unbound Engine.
-     */
-    static void invalidateStaticContextAssumption() {
-        SingleContextState state = singleContextState;
-        if (state.singleContextAssumption.isValid()) {
-            synchronized (state) {
-                if (state.singleContextAssumption.isValid()) {
-                    state.singleContextAssumption.invalidate();
                     state.singleContext = null;
                 }
             }
@@ -800,29 +785,26 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
 
     @Override
     public Value asValue(Object hostValue) {
-        try {
-            PolyglotLanguageContext targetLanguageContext;
-            if (hostValue instanceof Value) {
-                // fast path for when no context migration is necessary
-                PolyglotValue value = (PolyglotValue) getAPIAccess().getImpl((Value) hostValue);
-                if (value.languageContext != null && value.languageContext.context == this) {
-                    return (Value) hostValue;
-                }
-                targetLanguageContext = getHostContext();
-            } else if (HostWrapper.isInstance(hostValue)) {
-                // host wrappers can nicely reuse the associated context
-                targetLanguageContext = HostWrapper.asInstance(hostValue).getLanguageContext();
-                if (this != targetLanguageContext.context) {
-                    // this will fail later in toGuestValue when migrating
-                    // or succeed in case of host languages.
-                    targetLanguageContext = getHostContext();
-                }
-            } else {
-                targetLanguageContext = getHostContext();
-            }
-            return targetLanguageContext.asValue(targetLanguageContext.toGuestValue(hostValue));
-        } catch (Throwable e) {
-            throw PolyglotImpl.wrapGuestException(this.getHostContext(), e);
+        if (hostValue instanceof Value) {
+            return (Value) hostValue;
+        }
+        PolyglotLanguageContext context = null;
+        Object guestValue = null;
+        if (hostValue instanceof PolyglotList) {
+            context = ((PolyglotList<?>) hostValue).languageContext;
+            guestValue = ((PolyglotList<?>) hostValue).guestObject;
+        } else if (hostValue instanceof PolyglotMap) {
+            context = ((PolyglotMap<?, ?>) hostValue).languageContext;
+            guestValue = ((PolyglotMap<?, ?>) hostValue).guestObject;
+        } else if (hostValue instanceof PolyglotFunction) {
+            context = ((PolyglotFunction<?, ?>) hostValue).languageContext;
+            guestValue = ((PolyglotFunction<?, ?>) hostValue).guestObject;
+        }
+        if (context == null) {
+            context = getHostContext();
+            return context.asValue(context.toGuestValue(hostValue));
+        } else {
+            return context.asValue(guestValue);
         }
     }
 
