@@ -26,6 +26,7 @@ package com.oracle.truffle.tools.debug.shell.server;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 import com.oracle.truffle.api.debug.Breakpoint;
@@ -43,7 +44,6 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.vm.PolyglotEngine.Language;
 import com.oracle.truffle.tools.debug.shell.REPLMessage;
-import com.oracle.truffle.tools.debug.shell.server.REPLServer.Context;
 
 /**
  * Server-side REPL implementation of an {@linkplain REPLMessage "op"}.
@@ -354,15 +354,14 @@ public abstract class REPLHandler {
         @Override
         public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
             final REPLMessage reply = createReply();
-            int deleteCount = 0;
-            for (Breakpoint breakpoint : replServer.getBreakpoints()) {
-                breakpoint.dispose();
-                deleteCount++;
-            }
-            if (deleteCount == 0) {
+            final Collection<Breakpoint> breakpoints = replServer.getBreakpoints();
+            if (breakpoints.isEmpty()) {
                 return finishReplyFailed(reply, "no breakpoints to delete");
             }
-            return finishReplySucceeded(reply, Integer.toString(deleteCount) + " breakpoints deleted");
+            for (Breakpoint breakpoint : breakpoints) {
+                breakpoint.dispose();
+            }
+            return finishReplySucceeded(reply, Integer.toString(breakpoints.size()) + " breakpoints deleted");
         }
     };
 
@@ -404,19 +403,30 @@ public abstract class REPLHandler {
         }
     };
     public static final REPLHandler EVAL_HANDLER = new REPLHandler(REPLMessage.EVAL) {
+        @SuppressWarnings("unused")
         @Override
         public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
             final REPLMessage reply = createReply();
             final String sourceName = request.get(REPLMessage.SOURCE_NAME);
             reply.put(REPLMessage.SOURCE_NAME, sourceName);
-            final Context serverContext = replServer.getCurrentContext();
-            reply.put(REPLMessage.DEBUG_LEVEL, Integer.toString(serverContext.getLevel()));
+            reply.put(REPLMessage.DEBUG_LEVEL, Integer.toString(replServer.getCurrentContext().getLevel()));
 
             final String source = request.get(REPLMessage.CODE);
             final Visualizer visualizer = replServer.getVisualizer();
+
             final Integer frameNumber = request.getIntValue(REPLMessage.FRAME_NUMBER);
+            FrameInstance frameInstance = null;
+            if (frameNumber != null) {
+                final List<FrameDebugDescription> stack = replServer.getCurrentContext().getStack();
+                if (frameNumber < 0 || frameNumber >= stack.size()) {
+                    return finishReplyFailed(reply, "invalid frame number");
+                }
+                final FrameDebugDescription frameDescription = stack.get(frameNumber);
+                // frameInstance = frameDescription == null ? null :
+                // frameDescription.frameInstance();
+            }
             try {
-                Object returnValue = serverContext.eval(source, frameNumber);
+                Object returnValue = replServer.getCurrentContext().eval(source, frameInstance);
                 return finishReplySucceeded(reply, visualizer.displayValue(returnValue, 0));
             } catch (QuitException ex) {
                 throw ex;

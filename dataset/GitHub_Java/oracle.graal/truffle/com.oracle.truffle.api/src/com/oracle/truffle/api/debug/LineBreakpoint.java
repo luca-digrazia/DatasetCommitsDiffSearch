@@ -24,24 +24,32 @@
  */
 package com.oracle.truffle.api.debug;
 
-import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.api.source.LineLocation;
 
-// TODO (mlvdv) generic?
 /**
  * A breakpoint associated with a {@linkplain LineLocation source line location}.
  *
  * @see Debugger
  */
-abstract class LineBreakpoint extends Breakpoint {
+public abstract class LineBreakpoint extends Breakpoint {
 
-    LineBreakpoint(State state, int ignoreCount, boolean isOneShot) {
+    private final LineLocation lineLocation;
+
+    protected LineBreakpoint(State state, LineLocation lineLocation, int ignoreCount, boolean isOneShot) {
         super(state, ignoreCount, isOneShot);
+        this.lineLocation = lineLocation;
     }
 
     /**
      * Gets the {@linkplain LineLocation source line location} that specifies where this breakpoint
      * will trigger.
      */
-    public abstract LineLocation getLineLocation();
+    public final LineLocation getLineLocation() {
+        return lineLocation;
+    }
 
+    @Override
+    public String getLocationDescription() {
+        return "Line: " + lineLocation.getShortDescription();
+    }
 }

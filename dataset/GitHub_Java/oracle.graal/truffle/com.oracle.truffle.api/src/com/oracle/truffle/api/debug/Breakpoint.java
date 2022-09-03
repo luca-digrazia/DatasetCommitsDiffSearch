@@ -24,21 +24,19 @@
  */
 package com.oracle.truffle.api.debug;
 
-import com.oracle.truffle.api.instrument.Instrument;
 import java.io.IOException;
+
+import javax.sound.midi.Instrument;
 
 import com.oracle.truffle.api.instrument.Instrumenter;
 import com.oracle.truffle.api.instrument.Probe;
 import com.oracle.truffle.api.source.Source;
 
 /**
- * Breakpoint in a {@link com.oracle.truffle.api.vm.PolyglotEngine} with
- * {@link com.oracle.truffle.api.debug debugging turned on}. You can ask
- * {@link Debugger#setLineBreakpoint(int, com.oracle.truffle.api.source.LineLocation, boolean)} or
- * {@link Debugger#setTagBreakpoint(int, com.oracle.truffle.api.instrument.SyntaxTag, boolean)} to
- * create an instance of {@link Breakpoint}.
+ * Breakpoint in an executing {@link com.oracle.truffle.api.vm.PolyglotEngine}.
+ *
+ * @see Debugger
  */
-@SuppressWarnings("javadoc")
 public abstract class Breakpoint {
 
     /**
@@ -110,7 +108,7 @@ public abstract class Breakpoint {
 
     private State state;
 
-    Breakpoint(State state, int ignoreCount, boolean isOneShot) {
+    protected Breakpoint(State state, int ignoreCount, boolean isOneShot) {
         this.state = state;
         this.isOneShot = isOneShot;
         this.ignoreCount = ignoreCount;
@@ -199,7 +197,7 @@ public abstract class Breakpoint {
         assert state == s;
     }
 
-    final void setState(State state) {
+    protected final void setState(State state) {
         this.state = state;
     }
 

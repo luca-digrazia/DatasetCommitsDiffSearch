@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -51,7 +50,6 @@ import com.oracle.truffle.api.instrument.TagInstrument;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.LineLocation;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.source.SourceSection;
 
 /**
  * Represents debugging related state of a {@link com.oracle.truffle.api.vm.PolyglotEngine}.
@@ -425,7 +423,7 @@ public final class Debugger {
                     doHalt(node, vFrame.materialize());
                 }
 
-                public void onReturnExceptional(Probe probe, Node node, VirtualFrame vFrame, Throwable exception) {
+                public void onReturnExceptional(Probe probe, Node node, VirtualFrame vFrame, Exception exception) {
                     doHalt(node, vFrame.materialize());
                 }
 
@@ -483,7 +481,7 @@ public final class Debugger {
                     doHalt(node, vFrame.materialize());
                 }
 
-                public void onReturnExceptional(Probe probe, Node node, VirtualFrame vFrame, Throwable exception) {
+                public void onReturnExceptional(Probe probe, Node node, VirtualFrame vFrame, Exception exception) {
                     doHalt(node, vFrame.materialize());
                 }
 
@@ -566,7 +564,7 @@ public final class Debugger {
                     doHalt(node, vFrame.materialize());
                 }
 
-                public void onReturnExceptional(Probe probe, Node node, VirtualFrame vFrame, Throwable exception) {
+                public void onReturnExceptional(Probe probe, Node node, VirtualFrame vFrame, Exception exception) {
                     doHalt(node, vFrame.materialize());
                 }
 
@@ -680,9 +678,6 @@ public final class Debugger {
          */
         private MaterializedFrame haltedFrame;
 
-        /** Subset of the Truffle stack corresponding to the current execution. */
-        private List<FrameDebugDescription> contextStack;
-
         private DebugExecutionContext(Source executionSource, DebugExecutionContext previousContext) {
             this(executionSource, previousContext, -1);
         }
@@ -753,56 +748,7 @@ public final class Debugger {
             // Clean up, just in cased the one-shot breakpoints got confused
             lineBreaks.disposeOneShots();
 
-            // Includes the "caller" frame (not iterated)
-            final int contextStackDepth = (currentStackDepth() - contextStackBase) + 1;
-
-            final List<String> recentWarnings = new ArrayList<>(warnings);
-            warnings.clear();
-
-            final List<FrameDebugDescription> frames = new ArrayList<>();
-            // Map the Truffle stack for this execution, ignore nested executions
-            // Ignore frames for which no CallNode is available.
-            // The top/current/0 frame is not produced by the iterator.
-            frames.add(new FrameDebugDescription(0, haltedNode, haltedFrame));
-            Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<FrameInstance>() {
-                int stackIndex = 1;
-                int frameIndex = 1;
-
-                @Override
-                public FrameInstance visitFrame(FrameInstance frameInstance) {
-                    if (stackIndex < contextStackDepth) {
-                        final Node callNode = frameInstance.getCallNode();
-                        if (callNode != null) {
-                            final SourceSection sourceSection = callNode.getEncapsulatingSourceSection();
-                            if (sourceSection != null && sourceSection.getIdentifier() != SourceSection.UNKNOWN) {
-                                frames.add(new FrameDebugDescription(frameIndex, frameInstance));
-                                frameIndex++;
-                            } else if (TRACE) {
-                                if (callNode != null) {
-                                    contextTrace("HIDDEN frame added: " + callNode);
-                                } else {
-                                    contextTrace("HIDDEN frame added");
-                                }
-                                frames.add(new FrameDebugDescription(frameIndex, frameInstance));
-                                frameIndex++;
-                            }
-                        } else if (TRACE) {
-                            if (callNode != null) {
-                                contextTrace("HIDDEN frame added: " + callNode);
-                            } else {
-                                contextTrace("HIDDEN frame added");
-                            }
-                            frames.add(new FrameDebugDescription(frameIndex, frameInstance));
-                            frameIndex++;
-                        }
-                        stackIndex++;
-                        return null;
-                    }
-                    return frameInstance;
-                }
-            });
-            contextStack = Collections.unmodifiableList(frames);
-
+            final int contextStackDepth = currentStackDepth() - contextStackBase;
             if (TRACE) {
                 final String reason = haltReason == null ? "" : haltReason + "";
                 final String where = before ? "BEFORE" : "AFTER";
@@ -811,9 +757,12 @@ public final class Debugger {
                 // printStack(OUT);
             }
 
+            final List<String> recentWarnings = new ArrayList<>(warnings);
+            warnings.clear();
+
             try {
                 // Pass control to the debug client with current execution suspended
-                ACCESSOR.dispatchEvent(vm, new SuspendedEvent(Debugger.this, contextStack, recentWarnings));
+                ACCESSOR.dispatchEvent(vm, new SuspendedEvent(Debugger.this, astNode, mFrame, recentWarnings, contextStackDepth));
                 // Debug client finished normally, execution resumes
                 // Presume that the client has set a new strategy (or default to Continue)
                 running = true;
@@ -891,8 +840,8 @@ public final class Debugger {
         debugContext = debugContext.predecessor;
     }
 
-    Object evalInContext(SuspendedEvent ev, String code, Node node, MaterializedFrame frame) throws IOException {
-        return ACCESSOR.evalInContext(vm, ev, code, node, frame);
+    Object evalInContext(SuspendedEvent ev, String code, FrameInstance frame) throws IOException {
+        return ACCESSOR.evalInContext(vm, ev, code, frame);
     }
 
     @SuppressWarnings("rawtypes")
@@ -925,8 +874,8 @@ public final class Debugger {
         }
 
         @Override
-        protected Object evalInContext(Object vm, SuspendedEvent ev, String code, Node node, MaterializedFrame frame) throws IOException {
-            return super.evalInContext(vm, ev, code, node, frame);
+        protected Object evalInContext(Object vm, SuspendedEvent ev, String code, FrameInstance frame) throws IOException {
+            return super.evalInContext(vm, ev, code, frame);
         }
     }
 

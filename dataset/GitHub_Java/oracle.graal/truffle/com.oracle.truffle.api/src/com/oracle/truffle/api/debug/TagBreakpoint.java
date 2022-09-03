@@ -24,23 +24,31 @@
  */
 package com.oracle.truffle.api.debug;
 
-import com.oracle.truffle.api.instrument.*;
+import com.oracle.truffle.api.instrument.SyntaxTag;
 
-// TODO (mlvdv) generic?
 /**
  * A breakpoint associated with a {@link SyntaxTag}.
  *
  * @see Debugger
  */
-abstract class TagBreakpoint extends Breakpoint {
+public abstract class TagBreakpoint extends Breakpoint {
 
-    TagBreakpoint(State state, int ignoreCount, boolean isOneShot) {
+    private final SyntaxTag tag;
+
+    protected TagBreakpoint(State state, SyntaxTag tag, int ignoreCount, boolean isOneShot) {
         super(state, ignoreCount, isOneShot);
+        this.tag = tag;
     }
 
     /**
      * Gets the tag that specifies where this breakpoint will trigger.
      */
-    public abstract SyntaxTag getTag();
+    public final SyntaxTag getTag() {
+        return tag;
+    }
 
+    @Override
+    public String getLocationDescription() {
+        return "Tag " + tag.name();
+    }
 }

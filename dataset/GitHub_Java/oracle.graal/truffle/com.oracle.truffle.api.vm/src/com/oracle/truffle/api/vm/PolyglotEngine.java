@@ -181,23 +181,14 @@ public class PolyglotEngine {
      * makes them available for later evaluation via
      * {@link #eval(com.oracle.truffle.api.source.Source)} method.
      *
-     * @return new builder to create isolated polyglot engine with pre-registered languages
+     * @return new, isolated virtual machine with pre-registered languages
      */
-    public static PolyglotEngine.Builder newBuilder() {
+    public static PolyglotEngine.Builder buildNew() {
         // making Builder non-static inner class is a
         // nasty trick to avoid the Builder class to appear
         // in Javadoc next to PolyglotEngine class
         PolyglotEngine vm = new PolyglotEngine();
         return vm.new Builder();
-    }
-
-    /**
-     * @return new builder
-     * @deprecated use {@link #newBuilder()}
-     */
-    @Deprecated
-    public static PolyglotEngine.Builder buildNew() {
-        return newBuilder();
     }
 
     /**
@@ -292,7 +283,7 @@ public class PolyglotEngine {
          */
         public Builder globalSymbol(String name, Object obj) {
             final Object truffleReady;
-            if (obj instanceof TruffleObject || obj instanceof Number || obj instanceof String || obj instanceof Character || obj instanceof Boolean) {
+            if (obj instanceof Number || obj instanceof String || obj instanceof Character || obj instanceof Boolean) {
                 truffleReady = obj;
             } else {
                 if (JAVA_INTEROP_ENABLED) {
