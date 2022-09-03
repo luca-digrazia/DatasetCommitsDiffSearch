@@ -272,7 +272,7 @@ import org.graalvm.compiler.bytecode.Bytecodes;
 import org.graalvm.compiler.bytecode.Bytes;
 import org.graalvm.compiler.bytecode.ResolvedJavaMethodBytecode;
 import org.graalvm.compiler.bytecode.ResolvedJavaMethodBytecodeProvider;
-import org.graalvm.compiler.core.common.PermanentBailoutException;
+import org.graalvm.compiler.common.PermanentBailoutException;
 import org.graalvm.compiler.core.common.LocationIdentity;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.calc.FloatConvert;
@@ -3048,7 +3048,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
         int nextBCI = stream.nextBCI();
         int nextBC = stream.readUByte(nextBCI);
-        if (nextBCI <= currentBlock.endBci && nextBC == Bytecodes.GETFIELD) {
+        if (nextBC == Bytecodes.GETFIELD) {
             stream.next();
             genGetField(lookupField(stream.readCPI(), Bytecodes.GETFIELD), value);
         } else {
@@ -3431,7 +3431,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
         int next = getStream().nextBCI();
         int value = getStream().readUByte(next);
-        if (next <= currentBlock.endBci && (value == Bytecodes.IFEQ || value == Bytecodes.IFNE)) {
+        if (value == Bytecodes.IFEQ || value == Bytecodes.IFNE) {
             getStream().next();
             BciBlock firstSucc = currentBlock.getSuccessor(0);
             BciBlock secondSucc = currentBlock.getSuccessor(1);
