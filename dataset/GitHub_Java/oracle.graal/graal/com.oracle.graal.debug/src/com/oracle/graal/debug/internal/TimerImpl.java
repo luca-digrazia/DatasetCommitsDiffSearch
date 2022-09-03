@@ -23,7 +23,6 @@
 package com.oracle.graal.debug.internal;
 
 import java.lang.management.*;
-import java.util.concurrent.*;
 
 import com.oracle.graal.debug.*;
 
@@ -41,7 +40,7 @@ public final class TimerImpl extends DebugValue implements DebugTimer {
     /**
      * Records the most recent active timer.
      */
-    private static final ThreadLocal<AbstractTimer> currentTimer = new ThreadLocal<>();
+    private static ThreadLocal<AbstractTimer> currentTimer = new ThreadLocal<>();
 
     private final DebugValue flat;
 
@@ -86,10 +85,6 @@ public final class TimerImpl extends DebugValue implements DebugTimer {
     @Override
     public String toString(long value) {
         return valueToString(value);
-    }
-
-    public TimeUnit getTimeUnit() {
-        return TimeUnit.NANOSECONDS;
     }
 
     private abstract class AbstractTimer implements TimerCloseable {
