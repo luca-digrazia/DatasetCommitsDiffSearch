@@ -32,7 +32,7 @@ import com.oracle.truffle.dsl.processor.node.NodeChildData.*;
 import com.oracle.truffle.dsl.processor.template.*;
 import com.oracle.truffle.dsl.processor.typesystem.*;
 
-public class NodeData extends Template implements Comparable<NodeData> {
+public class NodeData extends Template {
 
     private final String nodeId;
     private NodeData declaringNode;
@@ -84,15 +84,6 @@ public class NodeData extends Template implements Comparable<NodeData> {
                 continue;
             }
             if (specialization.findParameter("frameValue") != null) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public boolean needsImplicitCast(ProcessorContext context) {
-        for (NodeChildData child : getChildren()) {
-            if (child.needsImplicitCast(context)) {
                 return true;
             }
         }
@@ -583,7 +574,4 @@ public class NodeData extends Template implements Comparable<NodeData> {
         return null;
     }
 
-    public int compareTo(NodeData o) {
-        return getNodeId().compareTo(o.getNodeId());
-    }
 }
