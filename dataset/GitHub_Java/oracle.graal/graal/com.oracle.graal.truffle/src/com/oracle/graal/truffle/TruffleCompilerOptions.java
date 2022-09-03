@@ -37,7 +37,7 @@ public class TruffleCompilerOptions {
     /**
      * Instructs the Truffle Compiler to compile call targets only if their name contains at least one element of a comma-separated list of includes.
      * Excludes are prefixed with a tilde (~).
-     * <p>
+     *
      * The format in EBNF:
      * <pre>
      * CompileOnly = Element, { ',', Element } ;
@@ -76,6 +76,21 @@ public class TruffleCompilerOptions {
 
     @Option(help = "Enable call target splitting", type = OptionType.Expert)
     public static final OptionValue<Boolean> TruffleSplitting = new OptionValue<>(true);
+
+    @Option(help = "Experimental: Enable the new version of truffle splitting.", type = OptionType.Debug)
+    public static final OptionValue<Boolean> TruffleSplittingNew = new OptionValue<>(false);
+
+    @Option(help = "Experimental. New splitting only: Whether or not splitting should be based instance comparisons of non TypedObjects", type = OptionType.Debug)
+    public static final OptionValue<Boolean> TruffleSplittingClassInstanceStamps = new OptionValue<>(false);
+
+    @Option(help = "Experimental. New splitting only: Whether or not splitting should be based instance comparisons of TypedObjects", type = OptionType.Debug)
+    public static final OptionValue<Boolean> TruffleSplittingTypeInstanceStamps = new OptionValue<>(true);
+
+    @Option(help = "Experimental. New splitting only: The number of calls until splitting is performed. ", type = OptionType.Debug)
+    public static final OptionValue<Integer> TruffleSplittingStartCallCount = new OptionValue<>(3);
+
+    @Option(help = "Experimental. New splitting only: Split everything aggressively. ", type = OptionType.Debug)
+    public static final OptionValue<Boolean> TruffleSplittingAggressive = new OptionValue<>(false);
 
     @Option(help = "Enable on stack replacement for Truffle loops.", type = OptionType.Debug)
     public static final OptionValue<Boolean> TruffleOSR = new OptionValue<>(true);
@@ -173,15 +188,6 @@ public class TruffleCompilerOptions {
 
     @Option(help = "Enable/disable builtin profiles in com.oracle.truffle.api.profiles.", type = OptionType.Debug)
     public static final OptionValue<Boolean> TruffleProfilingEnabled = new OptionValue<>(true);
-
-    @Option(help = "Instrument branches and output profiling information to the standard output.")
-    public static final OptionValue<Boolean> TruffleInstrumentBranches = new OptionValue<>(false);
-
-    @Option(help = "Regex filter for branch instrumentation.")
-    public static final OptionValue<String> TruffleInstrumentBranchesFilter = new OptionValue<>("");
-
-    @Option(help = "Branch instrumentation count.")
-    public static final OptionValue<Integer> TruffleInstrumentBranchesCount = new OptionValue<>(10000);
 
     // @formatter:on
 }
