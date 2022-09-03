@@ -51,25 +51,6 @@ public class IntegerEqualsCanonicalizerTest extends GraalCompilerTest {
         return 0;
     }
 
-    @Test
-    public void testSubtractEqualsZeroLong() {
-        test("testSubtractEqualsZeroLongSnippet", "testSubtractEqualsZeroLongReference");
-    }
-
-    public static int testSubtractEqualsZeroLongReference(long a, long b) {
-        if (a == b) {
-            return 1;
-        }
-        return 0;
-    }
-
-    public static int testSubtractEqualsZeroLongSnippet(long a, long b) {
-        if (a - b == 0) {
-            return 1;
-        }
-        return 0;
-    }
-
     /**
      * Tests the canonicalization of (x >>> const) == 0 to x |test| (-1 << const).
      */
@@ -143,6 +124,19 @@ public class IntegerEqualsCanonicalizerTest extends GraalCompilerTest {
         field = x == y ? 1 : 0;
         field = array1Length == array2Length ? 1 : 0;
         field = array1Length == (-array2Length) ? 1 : 0;
+    }
+
+    public static boolean testNormalIntegerTest(int a) {
+        return (a & 8) != 0;
+    }
+
+    public static boolean testAlternateIntegerTest(int a) {
+        return (a & 8) == 8;
+    }
+
+    @Test
+    public void testIntegerTest() {
+        test("testNormalIntegerTest", "testAlternateIntegerTest");
     }
 
     private void test(String snippet, String referenceSnippet) {

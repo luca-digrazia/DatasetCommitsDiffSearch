@@ -112,19 +112,34 @@ public class ConditionalEliminationTest11 extends ConditionalEliminationTestBase
         testConditionalElimination("test4Snippet", "referenceSnippet");
     }
 
-    public static int test5Snippet(int a) {
-        if ((a & 5) == 5) {
+    @SuppressWarnings("all")
+    public static int reference5Snippet(int a) {
+        if ((a & 15) == 15) {
             GraalDirectives.deoptimize();
         }
-        if ((a & 7) != 0) {
-            return 0;
+        if (a > 0) {
+            a |= 32;
         }
-        return 1;
+        return a;
     }
 
+    @SuppressWarnings("all")
+    public static int test5Snippet(int a) {
+        if ((a & 8) != 8) {
+            GraalDirectives.deoptimize();
+        }
+        if (a > 0) {
+            a |= 32;
+        }
+        if ((a & 15) == 15) {
+            GraalDirectives.deoptimize();
+        }
+        return a;
+    }
+
+    @Ignore
     @Test
     public void test5() {
-        // Shouldn't be possible to optimize this
         testConditionalElimination("test5Snippet", "test5Snippet");
     }
 
@@ -148,83 +163,7 @@ public class ConditionalEliminationTest11 extends ConditionalEliminationTestBase
 
     @Test
     public void test6() {
+        // Shouldn't be able to optimize this
         testConditionalElimination("test6Snippet", "reference6Snippet");
     }
-
-    public static int test7Snippet(int a) {
-        if ((a & 15) == 15) {
-            GraalDirectives.deoptimize();
-        }
-        if ((a & 8) == 8) {
-            GraalDirectives.deoptimize();
-        }
-        return a;
-    }
-
-    public static int reference7Snippet(int a) {
-        if ((a & 8) == 8) {
-            GraalDirectives.deoptimize();
-        }
-        return a;
-    }
-
-    @Test
-    public void test7() {
-        testConditionalElimination("test7Snippet", "reference7Snippet");
-    }
-
-    public static int test8Snippet(int a) {
-        if ((a & 16) == 16) {
-            GraalDirectives.deoptimize();
-        }
-        if ((a & 8) != 8) {
-            GraalDirectives.deoptimize();
-        }
-        if ((a & 44) != 44) {
-            GraalDirectives.deoptimize();
-        }
-        return a;
-    }
-
-    public static int reference8Snippet(int a) {
-        if ((a & 60) != 44) {
-            GraalDirectives.deoptimize();
-        }
-        return a;
-    }
-
-    @Ignore("requires merging of bit tests")
-    @Test
-    public void test8() {
-        testConditionalElimination("test8Snippet", "reference8Snippet");
-    }
-
-    public static int test9Snippet(int a) {
-        if ((a & 16) == 16) {
-            GraalDirectives.deoptimize();
-        }
-        if ((a & 8) != 8) {
-            GraalDirectives.deoptimize();
-        }
-        if ((a & 44) != 44) {
-            GraalDirectives.deoptimize();
-        }
-        if (a != 44) {
-            GraalDirectives.deoptimize();
-        }
-        return a;
-    }
-
-    public static int reference9Snippet(int a) {
-        if (a != 44) {
-            GraalDirectives.deoptimize();
-        }
-        return a;
-    }
-
-    @Test
-    public void test9() {
-        testConditionalElimination("test9Snippet", "reference9Snippet");
-    }
-
 }

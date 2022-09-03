@@ -22,13 +22,18 @@
  */
 package com.oracle.graal.nodes.calc;
 
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.PrimitiveConstant;
+import jdk.vm.ci.meta.TriState;
+
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.common.type.AbstractPointerStamp;
 import com.oracle.graal.compiler.common.type.FloatStamp;
 import com.oracle.graal.compiler.common.type.IntegerStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.debug.GraalError;
-import com.oracle.graal.graph.IterableNodeType;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.Canonicalizable.BinaryCommutative;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
@@ -40,14 +45,8 @@ import com.oracle.graal.nodes.LogicNode;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.util.GraphUtil;
 
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.PrimitiveConstant;
-import jdk.vm.ci.meta.TriState;
-
 @NodeInfo(shortName = "==")
-public final class IntegerEqualsNode extends CompareNode implements BinaryCommutative<ValueNode>, IterableNodeType {
+public final class IntegerEqualsNode extends CompareNode implements BinaryCommutative<ValueNode> {
     public static final NodeClass<IntegerEqualsNode> TYPE = NodeClass.create(IntegerEqualsNode.class);
 
     public IntegerEqualsNode(ValueNode x, ValueNode y) {
@@ -108,7 +107,7 @@ public final class IntegerEqualsNode extends CompareNode implements BinaryCommut
         } else if (newX.stamp() instanceof AbstractPointerStamp && newY.stamp() instanceof AbstractPointerStamp) {
             return new IntegerEqualsNode(newX, newY);
         }
-        throw GraalError.shouldNotReachHere();
+        throw JVMCIError.shouldNotReachHere();
     }
 
     @Override
@@ -175,8 +174,7 @@ public final class IntegerEqualsNode extends CompareNode implements BinaryCommut
              * a & c == c is the same as a & c != 0, if c is a single bit.
              */
             AndNode andNode = (AndNode) nonConstant;
-            if (constant instanceof PrimitiveConstant && Long.bitCount(((PrimitiveConstant) constant).asLong()) == 1 && andNode.getY().isConstant() &&
-                            andNode.getY().asJavaConstant().equals(constant)) {
+            if (constant instanceof PrimitiveConstant && Long.bitCount(((PrimitiveConstant) constant).asLong()) == 1 && andNode.getY().isConstant() && andNode.getY().asJavaConstant().equals(constant)) {
                 return new LogicNegationNode(new IntegerTestNode(andNode.getX(), andNode.getY()));
             }
         }
