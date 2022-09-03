@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,27 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Rem;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 @NodeInfo(shortName = "%")
-public class RemNode extends BinaryArithmeticNode implements Lowerable {
+public class RemNode extends BinaryArithmeticNode<Rem> implements Lowerable {
 
-    public static RemNode create(ValueNode x, ValueNode y) {
-        return USE_GENERATED_NODES ? new RemNodeGen(x, y) : new RemNode(x, y);
+    public static final NodeClass<RemNode> TYPE = NodeClass.create(RemNode.class);
+
+    public RemNode(ValueNode x, ValueNode y) {
+        this(TYPE, x, y);
     }
 
-    protected RemNode(ValueNode x, ValueNode y) {
-        super(ArithmeticOpTable.forStamp(x.stamp()).getRem(), x, y);
+    protected RemNode(NodeClass<? extends RemNode> c, ValueNode x, ValueNode y) {
+        super(c, ArithmeticOpTable::getRem, x, y);
     }
 
     @Override
@@ -45,7 +51,7 @@ public class RemNode extends BinaryArithmeticNode implements Lowerable {
     }
 
     @Override
-    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        builder.setResult(this, gen.emitRem(builder.operand(getX()), builder.operand(getY()), null));
+    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+        nodeValueMap.setResult(this, gen.emitRem(nodeValueMap.operand(getX()), nodeValueMap.operand(getY()), null));
     }
 }
