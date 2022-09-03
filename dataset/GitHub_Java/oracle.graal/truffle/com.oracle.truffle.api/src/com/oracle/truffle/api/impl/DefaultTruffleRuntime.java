@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,12 +24,29 @@
  */
 package com.oracle.truffle.api.impl;
 
-import java.util.*;
+import java.util.Iterator;
+import java.util.Objects;
+import java.util.ServiceConfigurationError;
+import java.util.ServiceLoader;
 
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.unsafe.*;
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerOptions;
+import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleRuntime;
+import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.FrameInstance;
+import com.oracle.truffle.api.frame.FrameInstanceVisitor;
+import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.api.nodes.IndirectCallNode;
+import com.oracle.truffle.api.nodes.LoopNode;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RepeatingNode;
+import com.oracle.truffle.api.nodes.RootNode;
 
 /**
  * Default implementation of the Truffle runtime if the virtual machine does not provide a better
@@ -40,11 +57,27 @@ import com.oracle.truffle.api.unsafe.*;
  */
 public final class DefaultTruffleRuntime implements TruffleRuntime {
 
-    private final ThreadLocal<LinkedList<FrameInstance>> stackTraces = new ThreadLocal<>();
-    private final ThreadLocal<FrameInstance> currentFrames = new ThreadLocal<>();
-    private final Map<RootCallTarget, Void> callTargets = Collections.synchronizedMap(new WeakHashMap<RootCallTarget, Void>());
+    private final ThreadLocal<DefaultFrameInstance> stackTraces = new ThreadLocal<>();
+    private final DefaultTVMCI tvmci = new DefaultTVMCI();
+
+    private final TVMCI.Test<CallTarget> testTvmci = new TVMCI.Test<CallTarget>() {
+
+        @Override
+        public CallTarget createTestCallTarget(String testName, RootNode testNode) {
+            return createCallTarget(testNode);
+        }
+
+        @Override
+        public void finishWarmup(CallTarget callTarget) {
+            // do nothing if we have no compiler
+        }
+    };
 
     public DefaultTruffleRuntime() {
+    }
+
+    public DefaultTVMCI getTvmci() {
+        return tvmci;
     }
 
     @Override
@@ -52,18 +85,22 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
         return "Default Truffle Runtime";
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public RootCallTarget createCallTarget(RootNode rootNode) {
         DefaultCallTarget target = new DefaultCallTarget(rootNode);
         rootNode.setCallTarget(target);
-        callTargets.put(target, null);
+        getTvmci().onLoad(target);
         return target;
     }
 
+    @Override
     public DirectCallNode createDirectCallNode(CallTarget target) {
+        Objects.requireNonNull(target);
         return new DefaultDirectCallNode(target);
     }
 
+    @Override
     public IndirectCallNode createIndirectCallNode() {
         return new DefaultIndirectCallNode();
     }
@@ -98,61 +135,77 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
         return new DefaultAssumption(name);
     }
 
-    private LinkedList<FrameInstance> getThreadLocalStackTrace() {
-        LinkedList<FrameInstance> result = stackTraces.get();
-        if (result == null) {
-            result = new LinkedList<>();
-            stackTraces.set(result);
-        }
-        return result;
-    }
-
-    public FrameInstance setCurrentFrame(FrameInstance newValue) {
-        FrameInstance oldValue = currentFrames.get();
-        currentFrames.set(newValue);
-        return oldValue;
-    }
-
-    public void pushFrame(FrameInstance frame) {
-        getThreadLocalStackTrace().addFirst(frame);
-    }
-
-    public void popFrame() {
-        getThreadLocalStackTrace().removeFirst();
-    }
-
     @Override
     public <T> T iterateFrames(FrameInstanceVisitor<T> visitor) {
         T result = null;
-        for (FrameInstance frameInstance : getThreadLocalStackTrace()) {
+        DefaultFrameInstance frameInstance = getThreadLocalStackTrace();
+        while (frameInstance != null) {
             result = visitor.visitFrame(frameInstance);
             if (result != null) {
                 return result;
             }
+            frameInstance = frameInstance.callerFrame;
         }
         return result;
     }
 
     @Override
     public FrameInstance getCallerFrame() {
-        return getThreadLocalStackTrace().peekFirst();
-    }
-
-    @Override
-    public Collection<RootCallTarget> getCallTargets() {
-        return Collections.unmodifiableSet(callTargets.keySet());
+        DefaultFrameInstance currentFrame = getThreadLocalStackTrace();
+        if (currentFrame != null) {
+            return currentFrame.callerFrame;
+        } else {
+            return null;
+        }
     }
 
     @Override
     public FrameInstance getCurrentFrame() {
-        return currentFrames.get();
+        return getThreadLocalStackTrace();
+    }
+
+    private DefaultFrameInstance getThreadLocalStackTrace() {
+        return stackTraces.get();
+    }
+
+    private void setThreadLocalStackTrace(DefaultFrameInstance topFrame) {
+        stackTraces.set(topFrame);
+    }
+
+    void pushFrame(VirtualFrame frame, CallTarget target) {
+        setThreadLocalStackTrace(new DefaultFrameInstance(frame, target, null, getThreadLocalStackTrace()));
+    }
+
+    void pushFrame(VirtualFrame frame, CallTarget target, Node parentCallNode) {
+        DefaultFrameInstance currentFrame = getThreadLocalStackTrace();
+        // we need to ensure that frame instances are immutable so we need to recreate the parent
+        // frame
+        if (currentFrame != null) {
+            currentFrame = new DefaultFrameInstance(currentFrame.frame, currentFrame.target, parentCallNode, currentFrame.callerFrame);
+        }
+        setThreadLocalStackTrace(new DefaultFrameInstance(frame, target, null, currentFrame));
+    }
+
+    void popFrame() {
+        DefaultFrameInstance callerFrame = getThreadLocalStackTrace().callerFrame;
+        if (callerFrame != null) {
+            setThreadLocalStackTrace(new DefaultFrameInstance(callerFrame.frame, callerFrame.target, null, callerFrame.callerFrame));
+        } else {
+            setThreadLocalStackTrace(null);
+        }
     }
 
     public <T> T getCapability(Class<T> capability) {
-        if (capability == UnsafeAccessFactory.class) {
-            return capability.cast(new UnsafeAccessFactoryImpl());
+        if (capability == TVMCI.Test.class) {
+            return capability.cast(testTvmci);
         }
-        return null;
+
+        final Iterator<T> it = ServiceLoader.load(capability).iterator();
+        try {
+            return it.hasNext() ? it.next() : null;
+        } catch (ServiceConfigurationError e) {
+            return null;
+        }
     }
 
     public void notifyTransferToInterpreter() {
@@ -163,6 +216,58 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
             throw new IllegalArgumentException("Repeating node must be of type Node.");
         }
         return new DefaultLoopNode(repeating);
+    }
+
+    public boolean isProfilingEnabled() {
+        return false;
+    }
+
+    private static class DefaultFrameInstance implements FrameInstance {
+
+        private final CallTarget target;
+        private final VirtualFrame frame;
+        private final Node callNode;
+        private final DefaultFrameInstance callerFrame;
+
+        DefaultFrameInstance(VirtualFrame frame, CallTarget target, Node callNode, DefaultFrameInstance callerFrame) {
+            this.target = target;
+            this.frame = frame;
+            this.callNode = callNode;
+            this.callerFrame = callerFrame;
+        }
+
+        @SuppressWarnings("deprecation")
+        public final Frame getFrame(FrameAccess access) {
+            if (access == FrameAccess.NONE) {
+                return null;
+            }
+            Frame localFrame = this.frame;
+            switch (access) {
+                case READ_ONLY: {
+                    // assert that it is really used read only
+                    assert (localFrame = new ReadOnlyFrame(localFrame)) != null;
+                    return localFrame;
+                }
+                case READ_WRITE:
+                    return localFrame;
+                case MATERIALIZE:
+                    return localFrame.materialize();
+            }
+            throw new AssertionError();
+        }
+
+        public final boolean isVirtualFrame() {
+            return false;
+        }
+
+        public final CallTarget getCallTarget() {
+            return target;
+        }
+
+        public Node getCallNode() {
+            return callNode;
+        }
+
     }
 
 }
