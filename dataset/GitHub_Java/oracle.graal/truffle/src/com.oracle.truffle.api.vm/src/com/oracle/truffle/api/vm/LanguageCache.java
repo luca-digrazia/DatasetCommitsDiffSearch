@@ -27,7 +27,6 @@ package com.oracle.truffle.api.vm;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.JarURLConnection;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.file.Path;
@@ -45,9 +44,6 @@ import java.util.TreeSet;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleOptions;
-import com.oracle.truffle.api.TruffleLanguage.ContextPolicy;
-import com.oracle.truffle.api.TruffleLanguage.Registration;
-
 import java.io.PrintStream;
 
 /**
@@ -68,9 +64,8 @@ final class LanguageCache implements Comparable<LanguageCache> {
     private final boolean interactive;
     private final boolean internal;
     private final ClassLoader loader;
-    private final TruffleLanguage<?> globalInstance;
     private String languageHome;
-    private volatile ContextPolicy policy;
+    final TruffleLanguage<?> singletonLanguage;
     private volatile Class<? extends TruffleLanguage<?>> languageClass;
 
     static {
@@ -92,11 +87,12 @@ final class LanguageCache implements Comparable<LanguageCache> {
         this.internal = Boolean.valueOf(info.getProperty(prefix + "internal"));
         this.languageHome = url;
         if (TruffleOptions.AOT) {
-            initializeLanguageClass();
-            assert languageClass != null;
-            assert policy != null;
+            this.languageClass = loadLanguageClass();
+            this.singletonLanguage = readSingleton(languageClass);
+        } else {
+            this.languageClass = null;
+            this.singletonLanguage = null;
         }
-        this.globalInstance = null;
     }
 
     private static TreeSet<String> parseList(Properties info, String prefix) {
@@ -124,10 +120,9 @@ final class LanguageCache implements Comparable<LanguageCache> {
         this.internal = internal;
         this.dependentLanguages = Collections.emptySet();
         this.loader = instance.getClass().getClassLoader();
+        this.singletonLanguage = instance;
         this.languageClass = (Class<? extends TruffleLanguage<?>>) instance.getClass();
         this.languageHome = null;
-        this.policy = ContextPolicy.SHARED;
-        this.globalInstance = instance;
     }
 
     static Map<String, LanguageCache> languages() {
@@ -199,30 +194,9 @@ final class LanguageCache implements Comparable<LanguageCache> {
                 }
                 String languageHome = System.getProperty(id + ".home");
                 if (languageHome == null && connection instanceof JarURLConnection) {
-
-                    /* The previous implementation used a `URL.getPath()`, but
-                       OS Windows is offended by leading slash and maybe other irrelevant characters.
-                       Therefore, for JDK 1.7+ a preferred way to go is URL -> URI -> Path.
-
-                       Also, Paths are more strict than Files and URLs, so we can't create an invalid Path from a
-                       random string like "/C:/". This leads us to the `URISyntaxException` for URL -> URI
-                       conversion and `java.nio.file.InvalidPathException` for URI -> Path conversion.
-
-                       For fixing further bugs at this point, please read
-                       http://tools.ietf.org/html/rfc1738
-                       http://tools.ietf.org/html/rfc2396 (supersedes rfc1738)
-                       http://tools.ietf.org/html/rfc3986 (supersedes rfc2396)
-
-                       http://url.spec.whatwg.org/ does not contain URI interpretation.
-                       When you call `URI.toASCIIString()` all reserved and non-ASCII characters are percent-quoted.
-                    */
-                    Path path;
-                    try {
-                        path = Paths.get(((JarURLConnection) connection).getJarFileURL().toURI());
-                    } catch (URISyntaxException e) {
-                        throw new RuntimeException(e);
-                    }
-
+                    // (tfel): This seems a bit brittle, but is actually the best API
+                    // for this I could find.
+                    Path path = Paths.get(((JarURLConnection) connection).getJarFileURL().getPath());
                     languageHome = path.getParent().toString();
                 }
                 list.add(new LanguageCache(id, prefix, p, loader, languageHome));
@@ -296,56 +270,71 @@ final class LanguageCache implements Comparable<LanguageCache> {
         return languageHome;
     }
 
-    TruffleLanguage<?> loadLanguage() {
-        if (globalInstance != null) {
-            return globalInstance;
-        }
+    LoadedLanguage loadLanguage() {
         TruffleLanguage<?> instance;
+        boolean singleton = true;
         try {
-            instance = getLanguageClass().newInstance();
+            if (TruffleOptions.AOT) {
+                instance = singletonLanguage;
+                if (instance == null) {
+                    instance = this.languageClass.newInstance();
+                    singleton = false;
+                }
+            } else {
+                Class<? extends TruffleLanguage<?>> clazz = loadLanguageClass();
+                instance = readSingleton(clazz);
+                if (instance == null) {
+                    instance = clazz.newInstance();
+                    singleton = false;
+                }
+            }
         } catch (Exception e) {
             throw new IllegalStateException("Cannot create instance of " + name + " language implementation. Public default constructor expected in " + className + ".", e);
         }
-        return instance;
-    }
-
-    Class<? extends TruffleLanguage<?>> getLanguageClass() {
-        if (!TruffleOptions.AOT) {
-            initializeLanguageClass();
-        }
-        return this.languageClass;
-    }
-
-    ContextPolicy getPolicy() {
-        initializeLanguageClass();
-        return policy;
+        return new LoadedLanguage(instance, singleton);
     }
 
     @SuppressWarnings("unchecked")
-    private void initializeLanguageClass() {
+    Class<? extends TruffleLanguage<?>> getLanguageClass() {
+        if (TruffleOptions.AOT) {
+            TruffleLanguage<?> instance = singletonLanguage;
+            if (instance != null) {
+                return (Class<? extends TruffleLanguage<?>>) instance.getClass();
+            } else {
+                return this.languageClass;
+            }
+        } else {
+            return loadLanguageClass();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Class<? extends TruffleLanguage<?>> loadLanguageClass() {
         if (languageClass == null) {
             synchronized (this) {
                 if (languageClass == null) {
                     try {
-                        Class<?> loadedClass = Class.forName(className, true, loader);
-                        Registration reg = loadedClass.getAnnotation(Registration.class);
-                        if (reg == null) {
-                            policy = ContextPolicy.EXCLUSIVE;
-                        } else {
-                            policy = loadedClass.getAnnotation(Registration.class).contextPolicy();
-                        }
-                        languageClass = (Class<? extends TruffleLanguage<?>>) loadedClass;
+                        languageClass = (Class<? extends TruffleLanguage<?>>) Class.forName(className, true, loader);
                     } catch (Exception e) {
                         throw new IllegalStateException("Cannot load language " + name + ". Language implementation class " + className + " failed to load.", e);
                     }
                 }
             }
         }
+        return languageClass;
     }
 
     @Override
     public String toString() {
         return "LanguageCache [id=" + id + ", name=" + name + ", implementationName=" + implementationName + ", version=" + version + ", className=" + className + "]";
+    }
+
+    private static TruffleLanguage<?> readSingleton(Class<?> languageClass) {
+        try {
+            return (TruffleLanguage<?>) languageClass.getField("INSTANCE").get(null);
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     static void resetNativeImageCacheLanguageHomes() {

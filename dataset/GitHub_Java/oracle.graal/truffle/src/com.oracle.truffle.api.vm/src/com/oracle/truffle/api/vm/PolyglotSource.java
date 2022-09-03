@@ -43,7 +43,6 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractSourceImpl;
 
 import com.oracle.truffle.api.TruffleOptions;
-import com.oracle.truffle.api.source.impl.SourceAccessor;
 
 class PolyglotSource extends AbstractSourceImpl {
 
@@ -110,17 +109,17 @@ class PolyglotSource extends AbstractSourceImpl {
     }
 
     @Override
-    public String getCode(Object impl) {
+    public CharSequence getCode(Object impl) {
         com.oracle.truffle.api.source.Source source = (com.oracle.truffle.api.source.Source) impl;
 
-        return source.getCode();
+        return source.getCharacters();
     }
 
     @Override
-    public String getCode(Object impl, int lineNumber) {
+    public CharSequence getCode(Object impl, int lineNumber) {
         com.oracle.truffle.api.source.Source source = (com.oracle.truffle.api.source.Source) impl;
 
-        return source.getCode(lineNumber);
+        return source.getCharacters(lineNumber);
     }
 
     @Override
@@ -196,7 +195,7 @@ class PolyglotSource extends AbstractSourceImpl {
 
     static String getMimeType(Path filePath) throws IOException {
         if (!TruffleOptions.AOT) {
-            Collection<ClassLoader> loaders = SourceAccessor.allLoaders();
+            Collection<ClassLoader> loaders = VMAccessor.allLoaders();
             for (ClassLoader l : loaders) {
                 for (FileTypeDetector detector : ServiceLoader.load(FileTypeDetector.class, l)) {
                     String mimeType = detector.probeContentType(filePath);
@@ -221,15 +220,16 @@ class PolyglotSource extends AbstractSourceImpl {
         return impl.equals(otherImpl);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public Source build(String language, Object origin, URI uri, String name, String content, boolean interactive, boolean internal) {
+    public Source build(String language, Object origin, URI uri, String name, CharSequence content, boolean interactive, boolean internal) throws IOException {
+        assert language != null;
         com.oracle.truffle.api.source.Source.Builder<?, ?, ?> builder;
         boolean needsName = false;
         if (origin instanceof File) {
             builder = com.oracle.truffle.api.source.Source.newBuilder((File) origin);
         } else if (origin instanceof CharSequence) {
-            // TODO add support for real CharSequence sources.
-            builder = com.oracle.truffle.api.source.Source.newBuilder(((CharSequence) origin).toString());
+            builder = com.oracle.truffle.api.source.Source.newBuilder(((CharSequence) origin));
             needsName = true;
         } else if (origin instanceof Reader) {
             builder = com.oracle.truffle.api.source.Source.newBuilder((Reader) origin);
@@ -262,16 +262,16 @@ class PolyglotSource extends AbstractSourceImpl {
             builder.interactive();
         }
 
-        builder.mimeType("x-unknown");
+        builder.language(language);
 
         try {
-            return engineImpl.getAPIAccess().newSource(language, builder.build());
+            return engineImpl.getAPIAccess().newSource(language, ((com.oracle.truffle.api.source.Source.Builder<IOException, ?, ?>) builder).build());
+        } catch (IOException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
-            if (e instanceof RuntimeException) {
-                throw (RuntimeException) e;
-            } else {
-                throw new RuntimeException(e);
-            }
+            throw new AssertionError();
         }
     }
 

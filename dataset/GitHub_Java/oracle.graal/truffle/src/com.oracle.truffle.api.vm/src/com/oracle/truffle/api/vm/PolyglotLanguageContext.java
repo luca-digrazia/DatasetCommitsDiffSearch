@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.APIAccess;
@@ -56,7 +57,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
 
     final PolyglotContextImpl context;
     final PolyglotLanguage language;
-    volatile PolyglotSourceCache sourceCache;
+    volatile Map<Source, CallTarget> sourceCache;
     final Map<String, Object> config;
     final boolean eventsEnabled;
     volatile Map<Class<?>, PolyglotValue> valueCache;
@@ -95,11 +96,11 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         defaultValueCache = new PolyglotValue.Default(this);
 
         assert language.isInitialized();
-        PolyglotSourceCache languageSourceCache = language.sourceCache;
+        Map<Source, CallTarget> languageSourceCache = language.sourceCache;
         if (languageSourceCache != null) {
             this.sourceCache = languageSourceCache;
         } else {
-            this.sourceCache = new PolyglotSourceCache();
+            this.sourceCache = new ConcurrentHashMap<>();
         }
     }
 
@@ -114,13 +115,13 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
     Value getHostBindings() {
         Value bindings = this.hostBindings;
         if (bindings == null) {
-            Object prev = context.enterIfNeeded();
+            Object prev = enter();
             try {
                 initializeLanguageBindings();
             } catch (Throwable e) {
                 throw PolyglotImpl.wrapGuestException(this, e);
             } finally {
-                context.leaveIfNeeded(prev);
+                leave(prev);
             }
             bindings = hostBindings;
             assert bindings != null;
@@ -151,11 +152,29 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         return env != null && initialized;
     }
 
-    CallTarget parseCached(PolyglotLanguage accessingLanguage, Source source, String[] argumentNames) throws AssertionError {
+    CallTarget parseCached(PolyglotLanguage accessingLanguage, com.oracle.truffle.api.source.Source source, String[] argumentNames) throws AssertionError {
         ensureInitialized(accessingLanguage);
-        PolyglotSourceCache cache = this.sourceCache;
-        assert cache != null;
-        return cache.parseCached(this, source, argumentNames);
+        assert this.sourceCache != null;
+
+        if (argumentNames == null || argumentNames.length == 0) {
+            return this.sourceCache.computeIfAbsent(source, new Function<Source, CallTarget>() {
+                public CallTarget apply(Source t) {
+                    return parseImpl(t, null);
+                }
+
+            });
+        } else {
+            // cache is not implemented for argument names
+            return parseImpl(source, argumentNames);
+        }
+    }
+
+    private CallTarget parseImpl(com.oracle.truffle.api.source.Source t, String[] argumentNames) throws AssertionError {
+        CallTarget target = LANGUAGE.parse(requireEnv(), t, null, argumentNames);
+        if (target == null) {
+            throw new AssertionError(String.format("Parsing resulted in a null CallTarget for %s.", t));
+        }
+        return target;
     }
 
     Env requireEnv() {
@@ -166,6 +185,14 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                             "No language context is active on this thread.");
         }
         return localEnv;
+    }
+
+    Object enter() {
+        return context.enter();
+    }
+
+    void leave(Object prev) {
+        context.leave(prev);
     }
 
     boolean finalizeContext() {
@@ -213,7 +240,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         assert Thread.currentThread() == thread;
         synchronized (context) {
             activePolyglotThreads.add(thread);
-            return context.enter();
+            return enter();
         }
     }
 
