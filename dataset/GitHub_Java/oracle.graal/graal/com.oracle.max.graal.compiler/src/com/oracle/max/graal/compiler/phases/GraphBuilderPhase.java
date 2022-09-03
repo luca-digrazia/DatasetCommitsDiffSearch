@@ -1148,7 +1148,7 @@ public final class GraphBuilderPhase extends Phase {
                     lastInstr = null;
                     return fixed;
                 }
-            } else if (prev != cur) {
+            } else {
                 prev.replaceAtPredecessors(fixed);
                 lastInstr = null;
                 return fixed;

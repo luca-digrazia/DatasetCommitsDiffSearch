@@ -46,11 +46,8 @@ public class GlobalValueNumberingPhase extends Phase {
                 apply(input, visited);
             }
             Node newNode = n.graph().ideal(n);
-            if (newNode != n) {
-                GraalMetrics.GlobalValueNumberingHits++;
-                if (GraalOptions.TraceGVN) {
-                    TTY.println("GVN applied and new node is " + newNode);
-                }
+            if (GraalOptions.TraceGVN && newNode != n) {
+                TTY.println("GVN applied and new node is " + newNode);
             }
         }
     }

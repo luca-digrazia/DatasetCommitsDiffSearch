@@ -28,7 +28,12 @@ import com.sun.cri.ci.*;
 
 public abstract class BooleanNode extends FloatingNode {
 
-    public BooleanNode(CiKind kind, Graph graph) {
-        super(kind, graph);
+    public BooleanNode(CiKind kind, int inputCount, int successorCount, Graph graph) {
+        super(kind, inputCount, successorCount, graph);
+    }
+
+
+    public BooleanNode negate() {
+        throw new IllegalStateException();
     }
 }

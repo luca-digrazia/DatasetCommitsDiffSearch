@@ -461,8 +461,12 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     @Override
     public void visitIf(If x) {
-        assert x.defaultSuccessor() == x.falseSuccessor() : "wrong destination";
-        emitBooleanBranch(x.compare(), getLIRBlock(x.trueSuccessor()),  getLIRBlock(x.falseSuccessor()));
+        Condition cond = emitBooleanBranch(x.compare());
+        emitBranch(x.compare(), cond, getLIRBlock(x.trueSuccessor()), getLIRBlock(x.falseSuccessor()));
+        assert x.defaultSuccessor() == x.falseSuccessor() : "wrong destination above";
+        LIRBlock block = getLIRBlock(x.defaultSuccessor());
+        assert block != null : x;
+        lir.jump(block);
     }
 
     public void emitBranch(BooleanNode n, Condition cond, LIRBlock trueSuccessor, LIRBlock falseSucc) {
@@ -480,26 +484,18 @@ public abstract class LIRGenerator extends ValueVisitor {
         lir.branch(cond, trueSuccessor);
     }
 
-    public void emitBooleanBranch(BooleanNode node, LIRBlock trueSuccessor, LIRBlock falseSuccessor) {
+    public Condition emitBooleanBranch(BooleanNode node) {
         if (node instanceof Compare) {
-            emitCompare((Compare) node, trueSuccessor, falseSuccessor);
+            return emitCompare((Compare) node);
         } else {
             throw Util.unimplemented(node.toString());
         }
     }
 
-    public void emitCompare(Compare compare, LIRBlock trueSuccessorBlock, LIRBlock falseSuccessorBlock) {
+    public Condition emitCompare(Compare compare) {
         CiKind kind = compare.x().kind;
 
         Condition cond = compare.condition();
-        boolean unorderedIsTrue = compare.unorderedIsTrue();
-
-        if (trueSuccessorBlock == null) {
-            cond = cond.negate();
-            unorderedIsTrue = !unorderedIsTrue;
-            trueSuccessorBlock = falseSuccessorBlock;
-            falseSuccessorBlock = null;
-        }
 
         LIRItem xitem = new LIRItem(compare.x(), this);
         LIRItem yitem = new LIRItem(compare.y(), this);
@@ -527,20 +523,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         CiValue left = xin.result();
         CiValue right = yin.result();
         lir.cmp(cond, left, right);
-
-        if (compare.x().kind.isFloat() || compare.x().kind.isDouble()) {
-            LIRBlock unorderedSuccBlock = falseSuccessorBlock;
-            if (unorderedIsTrue) {
-                unorderedSuccBlock = trueSuccessorBlock;
-            }
-            lir.branch(cond, trueSuccessorBlock, unorderedSuccBlock);
-        } else {
-            lir.branch(cond, trueSuccessorBlock);
-        }
-
-        if (falseSuccessorBlock != null) {
-            lir.jump(falseSuccessorBlock);
-        }
+        return cond;
     }
 
     @Override
@@ -760,10 +743,12 @@ public abstract class LIRGenerator extends ValueVisitor {
             if (deoptimizationStubs == null) {
                 deoptimizationStubs = new ArrayList<DeoptimizationStub>();
             }
+
             DeoptimizationStub stub = new DeoptimizationStub(DeoptAction.InvalidateReprofile, state);
             deoptimizationStubs.add(stub);
 
-            emitBooleanBranch(comp, null, new LIRBlock(stub.label, stub.info));
+            Condition cond = emitBooleanBranch(comp);
+            lir.branch(cond.negate(), stub.label, stub.info);
         }
     }
 
