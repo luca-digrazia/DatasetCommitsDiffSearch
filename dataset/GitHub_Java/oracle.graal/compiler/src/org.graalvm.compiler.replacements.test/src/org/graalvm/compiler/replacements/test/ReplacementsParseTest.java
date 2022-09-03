@@ -24,7 +24,6 @@
  */
 package org.graalvm.compiler.replacements.test;
 
-import static org.graalvm.compiler.debug.DebugOptions.DumpOnError;
 import static org.graalvm.compiler.java.BytecodeParserOptions.InlinePartialIntrinsicExitDuringParsing;
 
 import java.util.function.Function;
@@ -49,11 +48,9 @@ import org.graalvm.compiler.java.BytecodeParser.BytecodeParserError;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
-import org.graalvm.compiler.nodes.StructuredGraph.Builder;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.extended.OpaqueNode;
+import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin.Receiver;
@@ -616,10 +613,7 @@ public class ReplacementsParseTest extends ReplacementsTest {
     @Test
     public void testAssertionInMethodSubstitution() {
         try {
-            ResolvedJavaMethod method = getResolvedJavaMethod("div");
-            // avoid dumping graphs and printing exception since and exception is expected
-            OptionValues options = new OptionValues(getInitialOptions(), DumpOnError, false);
-            parse(new Builder(options, getDebugContext(options, null, method), AllowAssumptions.YES).method(method).compilationId(getCompilationId(method)), getEagerGraphBuilderSuite());
+            parseEager("div", StructuredGraph.AllowAssumptions.YES);
             throw GraalError.shouldNotReachHere("BytecodeParser should have complained about using assertion in an intrinsic.");
         } catch (BytecodeParserError e) {
             // Expected behavior
