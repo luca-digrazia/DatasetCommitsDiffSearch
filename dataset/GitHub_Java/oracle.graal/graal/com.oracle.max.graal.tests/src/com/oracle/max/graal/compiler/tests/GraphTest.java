@@ -94,31 +94,7 @@ public abstract class GraphTest {
                 found = m;
             }
         }
-        if (found != null) {
-            return parse(found);
-        } else {
-            throw new RuntimeException("method not found: " + methodName);
-        }
-    }
-
-    /**
-     * Parses a Java method to produce a graph.
-     *
-     * @param methodName the name of the method in {@code this.getClass()} to be parsed
-     */
-    protected StructuredGraph parseProfiled(String methodName) {
-        Method found = null;
-        for (Method m : this.getClass().getMethods()) {
-            if (m.getName().equals(methodName)) {
-                Assert.assertNull(found);
-                found = m;
-            }
-        }
-        if (found != null) {
-            return parseProfiled(found);
-        } else {
-            throw new RuntimeException("method not found: " + methodName);
-        }
+        return parse(found);
     }
 
     /**
@@ -128,16 +104,6 @@ public abstract class GraphTest {
         RiResolvedMethod riMethod = runtime.getRiMethod(m);
         StructuredGraph graph = new StructuredGraph(riMethod);
         new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getSnippetDefault()).apply(graph);
-        return graph;
-    }
-
-    /**
-     * Parses a Java method to produce a graph.
-     */
-    protected StructuredGraph parseProfiled(Method m) {
-        RiResolvedMethod riMethod = runtime.getRiMethod(m);
-        StructuredGraph graph = new StructuredGraph(riMethod);
-        new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getDefault()).apply(graph);
         return graph;
     }
 
