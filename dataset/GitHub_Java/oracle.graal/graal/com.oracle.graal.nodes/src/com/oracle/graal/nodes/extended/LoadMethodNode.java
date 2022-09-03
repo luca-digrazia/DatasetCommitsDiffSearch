@@ -136,8 +136,4 @@ public final class LoadMethodNode extends FixedWithNextNode implements Lowerable
     public ResolvedJavaType getReceiverType() {
         return receiverType;
     }
-
-    public ResolvedJavaType getCallerType() {
-        return callerType;
-    }
 }
