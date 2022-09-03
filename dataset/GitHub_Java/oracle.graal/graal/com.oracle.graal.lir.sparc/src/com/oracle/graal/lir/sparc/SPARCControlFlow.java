@@ -348,7 +348,6 @@ public class SPARCControlFlow {
             case Object:
                 new Movcc(cond, CC.Xcc, asRegister(other), asRegister(result)).emit(masm);
                 break;
-            case Float:
             case Double:
                 FCond fc = null;
                 switch (cond) {

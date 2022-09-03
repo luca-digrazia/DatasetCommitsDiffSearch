@@ -60,17 +60,9 @@ public enum SPARCCompare {
         @Override
         protected void verify() {
             super.verify();
-
-            // @formatter:off
-            assert  (name().startsWith("I") && (x.getKind() == Kind.Int || x.getKind()==Kind.Byte) &&
-                            (y.getKind().getStackKind() == Kind.Int || y.getKind().getStackKind() == Kind.Byte)) ||
-                    (name().startsWith("L") && x.getKind() == Kind.Long && y.getKind() == Kind.Long) ||
-                    (name().startsWith("A") && x.getKind() == Kind.Object && y.getKind() == Kind.Object) ||
-                    (name().startsWith("F") && x.getKind() == Kind.Float && y.getKind() == Kind.Float) ||
-                    (name().startsWith("D") && x.getKind() == Kind.Double && y.getKind() == Kind.Double)
-                    : "Name; " + name() + " x: " + x + " y: " + y;
-
-            // @formatter:on
+            assert (name().startsWith("I") && x.getKind() == Kind.Int && y.getKind().getStackKind() == Kind.Int) || (name().startsWith("L") && x.getKind() == Kind.Long && y.getKind() == Kind.Long) ||
+                            (name().startsWith("A") && x.getKind() == Kind.Object && y.getKind() == Kind.Object) ||
+                            (name().startsWith("F") && x.getKind() == Kind.Float && y.getKind() == Kind.Float) || (name().startsWith("D") && x.getKind() == Kind.Double && y.getKind() == Kind.Double);
         }
     }
 
@@ -114,11 +106,11 @@ public enum SPARCCompare {
                         throw GraalInternalError.shouldNotReachHere("Only null object constants are allowed in comparisons");
                     }
                 case FCMP:
-                    new Fcmp(CC.Fcc0, Opfs.Fcmps, asFloatReg(x), asFloatReg(y)).emit(masm);
-                    break;
+                    // masm.ucomiss(asFloatReg(x), (AMD64Address) crb.asFloatConstRef(y));
+                    // break;
                 case DCMP:
-                    new Fcmp(CC.Fcc0, Opfs.Fcmpd, asDoubleReg(x), asDoubleReg(y)).emit(masm);
-                    break;
+                    // masm.ucomisd(asDoubleReg(x), (AMD64Address) crb.asDoubleConstRef(y));
+                    // break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();
             }
