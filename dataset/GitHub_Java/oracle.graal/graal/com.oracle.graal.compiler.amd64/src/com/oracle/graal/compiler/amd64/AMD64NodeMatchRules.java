@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,14 +39,18 @@ import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.SS;
 import com.oracle.graal.asm.NumUtil;
 import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MIOp;
 import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64RMOp;
+import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64RRMOp;
 import com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize;
 import com.oracle.graal.asm.amd64.AMD64Assembler.SSEOp;
+import com.oracle.graal.asm.amd64.AMD64Assembler.AVXOp;
+import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.gen.NodeLIRBuilder;
 import com.oracle.graal.compiler.gen.NodeMatchRules;
 import com.oracle.graal.compiler.match.ComplexMatchResult;
 import com.oracle.graal.compiler.match.MatchRule;
 import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.lir.LIRFrameState;
 import com.oracle.graal.lir.LabelRef;
 import com.oracle.graal.lir.amd64.AMD64AddressValue;
@@ -65,15 +69,16 @@ import com.oracle.graal.nodes.calc.ReinterpretNode;
 import com.oracle.graal.nodes.calc.SignExtendNode;
 import com.oracle.graal.nodes.calc.UnsignedRightShiftNode;
 import com.oracle.graal.nodes.calc.ZeroExtendNode;
-import com.oracle.graal.nodes.extended.UnsafeCastNode;
 import com.oracle.graal.nodes.memory.Access;
 import com.oracle.graal.nodes.memory.WriteNode;
+import com.oracle.graal.nodes.util.GraphUtil;
 
+import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.amd64.AMD64Kind;
-import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.amd64.AMD64.CPUFeature;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LIRKind;
 import jdk.vm.ci.meta.PlatformKind;
 import jdk.vm.ci.meta.Value;
 
@@ -109,16 +114,8 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
             case DOUBLE:
                 return OperandSize.SD;
             default:
-                throw JVMCIError.shouldNotReachHere("unsupported memory access type " + getMemoryKind(access));
+                throw GraalError.shouldNotReachHere("unsupported memory access type " + getMemoryKind(access));
         }
-    }
-
-    protected ValueNode uncast(ValueNode value) {
-        if (value instanceof UnsafeCastNode) {
-            UnsafeCastNode cast = (UnsafeCastNode) value;
-            return cast.getOriginalNode();
-        }
-        return value;
     }
 
     protected ComplexMatchResult emitCompareBranchMemory(IfNode ifNode, CompareNode compare, ValueNode value, Access access) {
@@ -127,7 +124,7 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
 
         if (value.isConstant()) {
             JavaConstant constant = value.asJavaConstant();
-            if (constant != null && kind == AMD64Kind.QWORD && !NumUtil.isInt(constant.asLong())) {
+            if (constant != null && kind == AMD64Kind.QWORD && !constant.getJavaKind().isObject() && !NumUtil.isInt(constant.asLong())) {
                 // Only imm32 as long
                 return null;
             }
@@ -135,30 +132,20 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
                 Debug.log("Skipping constant compares for float kinds");
                 return null;
             }
-            if (constant != null && constant.getJavaKind() == JavaKind.Object && !constant.isNull()) {
-                Debug.log("Skipping constant compares for Object kinds");
-                return null;
-            }
         }
 
         // emitCompareBranchMemory expects the memory on the right, so mirror the condition if
         // that's not true. It might be mirrored again the actual compare is emitted but that's
         // ok.
-        Condition finalCondition = uncast(compare.getX()) == access ? cond.mirror() : cond;
+        Condition finalCondition = GraphUtil.unproxify(compare.getX()) == access ? cond.mirror() : cond;
         return new ComplexMatchResult() {
+            @Override
             public Value evaluate(NodeLIRBuilder builder) {
                 LabelRef trueLabel = getLIRBlock(ifNode.trueSuccessor());
                 LabelRef falseLabel = getLIRBlock(ifNode.falseSuccessor());
                 boolean unorderedIsTrue = compare.unorderedIsTrue();
                 double trueLabelProbability = ifNode.probability(ifNode.trueSuccessor());
-                Value other;
-                JavaConstant constant = value.asJavaConstant();
-                if (constant != null) {
-                    other = gen.emitJavaConstant(constant);
-                } else {
-                    other = operand(value);
-                }
-
+                Value other = operand(value);
                 AMD64AddressValue address = (AMD64AddressValue) operand(access.getAddress());
                 getLIRGeneratorTool().emitCompareBranchMemory(kind, other, address, getState(access), finalCondition, unorderedIsTrue, trueLabel, falseLabel, trueLabelProbability);
                 return null;
@@ -224,7 +211,7 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
                     op = MOVSXD;
                     break;
                 default:
-                    throw JVMCIError.unimplemented("unsupported sign extension (" + fromBits + " bit -> " + toBits + " bit)");
+                    throw GraalError.unimplemented("unsupported sign extension (" + fromBits + " bit -> " + toBits + " bit)");
             }
         } else {
             kind = AMD64Kind.DWORD;
@@ -240,7 +227,7 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
                 case 32:
                     return null;
                 default:
-                    throw JVMCIError.unimplemented("unsupported sign extension (" + fromBits + " bit -> " + toBits + " bit)");
+                    throw GraalError.unimplemented("unsupported sign extension (" + fromBits + " bit -> " + toBits + " bit)");
             }
         }
         if (kind != null && op != null) {
@@ -252,7 +239,7 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
     private Value emitReinterpretMemory(LIRKind to, Access access) {
         AMD64AddressValue address = (AMD64AddressValue) operand(access.getAddress());
         LIRFrameState state = getState(access);
-        return getLIRGeneratorTool().emitLoad(to, address, state);
+        return getArithmeticLIRGenerator().emitLoad(to, address, state);
     }
 
     @MatchRule("(If (IntegerTest Read=access value))")
@@ -271,6 +258,10 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
     @MatchRule("(If (FloatEquals=compare value FloatingRead=access))")
     @MatchRule("(If (FloatLessThan=compare value Read=access))")
     @MatchRule("(If (FloatLessThan=compare value FloatingRead=access))")
+    @MatchRule("(If (PointerEquals=compare value Read=access))")
+    @MatchRule("(If (PointerEquals=compare value FloatingRead=access))")
+    @MatchRule("(If (ObjectEquals=compare value Read=access))")
+    @MatchRule("(If (ObjectEquals=compare value FloatingRead=access))")
     public ComplexMatchResult ifCompareMemory(IfNode root, CompareNode compare, ValueNode value, Access access) {
         return emitCompareBranchMemory(root, compare, value, access);
     }
@@ -304,12 +295,23 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
                         getState(access));
     }
 
+    private ComplexMatchResult binaryRead(AMD64RRMOp op, OperandSize size, ValueNode value, Access access) {
+        return builder -> getArithmeticLIRGenerator().emitBinaryMemory(op, size, getLIRGeneratorTool().asAllocatable(operand(value)), (AMD64AddressValue) operand(access.getAddress()),
+                        getState(access));
+    }
+
     @MatchRule("(Add value Read=access)")
     @MatchRule("(Add value FloatingRead=access)")
     public ComplexMatchResult addMemory(ValueNode value, Access access) {
         OperandSize size = getMemorySize(access);
         if (size.isXmmType()) {
-            return binaryRead(SSEOp.ADD, size, value, access);
+            TargetDescription target = getLIRGeneratorTool().target();
+            boolean isAvx = ((AMD64) target.arch).getFeatures().contains(CPUFeature.AVX);
+            if (isAvx) {
+                return binaryRead(AVXOp.ADD, size, value, access);
+            } else {
+                return binaryRead(SSEOp.ADD, size, value, access);
+            }
         } else {
             return binaryRead(ADD.getRMOpcode(size), size, value, access);
         }
@@ -320,7 +322,13 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
     public ComplexMatchResult subMemory(ValueNode value, Access access) {
         OperandSize size = getMemorySize(access);
         if (size.isXmmType()) {
-            return binaryRead(SSEOp.SUB, size, value, access);
+            TargetDescription target = getLIRGeneratorTool().target();
+            boolean isAvx = ((AMD64) target.arch).getFeatures().contains(CPUFeature.AVX);
+            if (isAvx) {
+                return binaryRead(AVXOp.SUB, size, value, access);
+            } else {
+                return binaryRead(SSEOp.SUB, size, value, access);
+            }
         } else {
             return binaryRead(SUB.getRMOpcode(size), size, value, access);
         }
@@ -331,7 +339,13 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
     public ComplexMatchResult mulMemory(ValueNode value, Access access) {
         OperandSize size = getMemorySize(access);
         if (size.isXmmType()) {
-            return binaryRead(SSEOp.MUL, size, value, access);
+            TargetDescription target = getLIRGeneratorTool().target();
+            boolean isAvx = ((AMD64) target.arch).getFeatures().contains(CPUFeature.AVX);
+            if (isAvx) {
+                return binaryRead(AVXOp.MUL, size, value, access);
+            } else {
+                return binaryRead(SSEOp.MUL, size, value, access);
+            }
         } else {
             return binaryRead(AMD64RMOp.IMUL, size, value, access);
         }
@@ -374,7 +388,7 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
     public ComplexMatchResult writeNarrow(WriteNode root, NarrowNode narrow) {
         return builder -> {
             LIRKind writeKind = getLIRGeneratorTool().getLIRKind(root.value().stamp());
-            getLIRGeneratorTool().emitStore(writeKind, operand(root.getAddress()), operand(narrow.getValue()), state(root));
+            getArithmeticLIRGenerator().emitStore(writeKind, operand(root.getAddress()), operand(narrow.getValue()), state(root));
             return null;
         };
     }
@@ -417,7 +431,7 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
             case L2F:
                 return emitConvertMemoryOp(AMD64Kind.SINGLE, SSEOp.CVTSI2SS, QWORD, access);
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalError.shouldNotReachHere();
         }
     }
 
@@ -429,6 +443,18 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
             return emitReinterpretMemory(kind, access);
         };
 
+    }
+
+    @MatchRule("(Write object Reinterpret=reinterpret)")
+    public ComplexMatchResult writeReinterpret(WriteNode root, ReinterpretNode reinterpret) {
+        return builder -> {
+            LIRKind kind = getLIRGeneratorTool().getLIRKind(reinterpret.getValue().stamp());
+            AllocatableValue value = getLIRGeneratorTool().asAllocatable(operand(reinterpret.getValue()));
+
+            AMD64AddressValue address = (AMD64AddressValue) operand(root.getAddress());
+            getArithmeticLIRGenerator().emitStore((AMD64Kind) kind.getPlatformKind(), address, value, getState(root));
+            return null;
+        };
     }
 
     @Override
