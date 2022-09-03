@@ -142,6 +142,7 @@ import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
 import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
 import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
 import com.oracle.truffle.llvm.nodes.base.vector.LLVMI32VectorNode;
+import com.oracle.truffle.llvm.nodes.control.LLVMConditionalPhiWriteNode;
 import com.oracle.truffle.llvm.nodes.exception.LLVMInvokeNode;
 import com.oracle.truffle.llvm.nodes.exception.LLVMLandingPadNode.LLVMAddressLandingPadNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMFunctionBodyNode;
@@ -155,6 +156,7 @@ import com.oracle.truffle.llvm.nodes.memory.LLVMAllocInstructionFactory.LLVMI32A
 import com.oracle.truffle.llvm.nodes.memory.LLVMAllocInstructionFactory.LLVMI64AllocaInstructionNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.LLVMInsertValueNode.LLVMInsertDoubleValueNode;
 import com.oracle.truffle.llvm.nodes.memory.LLVMInsertValueNode.LLVMInsertFloatValueNode;
+import com.oracle.truffle.llvm.nodes.op.logical.integer.LLVMI1LogicalNodeFactory.LLVMI1XorNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMBlockNode;
 import com.oracle.truffle.llvm.nodes.others.LLVMBlockNode.LLVMBlockControlFlowNode;
 import com.oracle.truffle.llvm.nodes.others.LLVMBlockNode.LLVMBlockNoControlFlowNode;
@@ -584,11 +586,10 @@ public class LLVMVisitor implements LLVMParserRuntime {
                         LLVMNode phiWriteNode = getWriteNode(visitValueRef, phiSlot, valueRef.getType());
                         LLVMNode conditionalPhiWriteNode;
                         if (isTrueCondition) {
-                            conditionalPhiWriteNode = factoryFacade.createConditionalPhiWriteNode(conditionNode, phiWriteNode);
+                            conditionalPhiWriteNode = new LLVMConditionalPhiWriteNode(conditionNode, phiWriteNode);
                         } else {
                             LLVMExpressionNode rightNode = factoryFacade.createLiteral(true, LLVMBaseType.I1);
-                            LLVMExpressionNode create = factoryFacade.createLogicalOperation(conditionNode, rightNode, LLVMLogicalInstructionType.XOR, LLVMBaseType.I1, null);
-                            conditionalPhiWriteNode = factoryFacade.createConditionalPhiWriteNode(create, phiWriteNode);
+                            conditionalPhiWriteNode = new LLVMConditionalPhiWriteNode(LLVMI1XorNodeGen.create(conditionNode, (LLVMI1Node) rightNode), phiWriteNode);
                         }
                         statements.add(conditionalPhiWriteNode);
                     }

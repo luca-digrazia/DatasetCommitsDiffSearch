@@ -153,6 +153,4 @@ public interface NodeFactoryFacade {
 
     LLVMAddressNode createArrayLiteral(List<LLVMExpressionNode> arrayValues, ResolvedType arrayType);
 
-    LLVMNode createConditionalPhiWriteNode(LLVMExpressionNode create, LLVMNode phiWriteNode);
-
 }
