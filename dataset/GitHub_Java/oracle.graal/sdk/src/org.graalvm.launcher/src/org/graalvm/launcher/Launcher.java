@@ -133,6 +133,11 @@ public abstract class Launcher {
             this.exitCode = exitCode;
         }
 
+        AbortException(int exitCode) {
+            super(null, null);
+            this.exitCode = exitCode;
+        }
+
         int getExitCode() {
             return exitCode;
         }
@@ -185,7 +190,6 @@ public abstract class Launcher {
      *            null, nothing will be printed.
      * @param exitCode the exit code of the launcher process.
      */
-    @SuppressWarnings("static-method")
     protected final AbortException abort(String message, int exitCode) {
         throw new AbortException(message, exitCode);
     }
@@ -254,7 +258,7 @@ public abstract class Launcher {
                 throw abort(message + " (" + e.getClass().getSimpleName() + ")", exitCode);
             }
         }
-        throw abort((Throwable) e, exitCode);
+        throw abort(e);
     }
 
     /**
@@ -954,7 +958,7 @@ public abstract class Launcher {
             // TODO use String[] for command to avoid a copy later
             List<String> command = new ArrayList<>(jvmArgs.size() + args.size() + (polyglotOptions == null ? 0 : polyglotOptions.size()) + 4);
             Path executable = getGraalVMBinaryPath("java");
-            String classpath = getClasspath(jvmArgs);
+            String classpath = getClasspath();
             if (classpath != null) {
                 command.add("-classpath");
                 command.add(classpath);
@@ -966,7 +970,7 @@ public abstract class Launcher {
             exec(executable, command);
         }
 
-        private String getClasspath(List<String> jvmArgs) {
+        private String getClasspath() {
             assert isAOT();
             assert CLASSPATH != null;
             StringBuilder sb = new StringBuilder();
@@ -977,27 +981,6 @@ public abstract class Launcher {
                     System.err.println(String.format("Warning: %s does not exit", resolved));
                 }
                 sb.append(resolved);
-                sb.append(File.pathSeparatorChar);
-            }
-            String classpathFromArgs = null;
-            Iterator<String> iterator = jvmArgs.iterator();
-            while (iterator.hasNext()) {
-                String jvmArg = iterator.next();
-                if (jvmArg.equals("-cp") || jvmArg.equals("-classpath")) {
-                    if (iterator.hasNext()) {
-                        iterator.remove();
-                        classpathFromArgs = iterator.next();
-                        iterator.remove();
-                        // no break, pick the last one
-                    }
-                }
-                if (jvmArg.startsWith("-Djava.class.path=")) {
-                    iterator.remove();
-                    classpathFromArgs = jvmArg.substring("-Djava.class.path=".length());
-                }
-            }
-            if (classpathFromArgs != null) {
-                sb.append(classpathFromArgs);
                 sb.append(File.pathSeparatorChar);
             }
             if (sb.length() == 0) {
