@@ -27,7 +27,6 @@ import java.lang.reflect.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.snippets.Word.Operation;
 import com.oracle.graal.snippets.nodes.*;
 
@@ -59,35 +58,17 @@ public @interface Snippet {
         boolean shouldInline(ResolvedJavaMethod method, ResolvedJavaMethod caller);
 
         /**
-         * The default inlining policy which inlines everything except for methods
-         * in any of the following categories.
-         * <ul>
-         * <li>{@linkplain Fold foldable} methods</li>
-         * <li>{@linkplain NodeIntrinsic node intrinsics}</li>
-         * <li>native methods</li>
-         * <li>constructors of {@link Throwable} classes</li>
-         * </ul>
+         * The default inlining policy which inlines everything except for
+         * constructors of {@link Throwable} classes.
          */
         InliningPolicy Default = new InliningPolicy() {
             public boolean shouldInline(ResolvedJavaMethod method, ResolvedJavaMethod caller) {
-                if (Modifier.isNative(method.accessFlags())) {
-                    return false;
-                }
-                if (method.getAnnotation(Fold.class) != null) {
-                    return false;
-                }
-                if (method.getAnnotation(NodeIntrinsic.class) != null) {
-                    return false;
-                }
                 if (Throwable.class.isAssignableFrom(method.holder().toJava())) {
                     if (method.name().equals("<init>")) {
                         return false;
                     }
                 }
                 if (method.getAnnotation(Operation.class) != null) {
-                    return false;
-                }
-                if (BoxingMethodPool.isSpecialMethodStatic(method)) {
                     return false;
                 }
                 return true;
@@ -119,25 +100,17 @@ public @interface Snippet {
          * The name of this parameter.
          */
         String value();
-    }
 
-    /**
-     * Denotes a snippet parameter representing 0 or more arguments that will be bound during snippet
-     * template {@linkplain SnippetTemplate#instantiate instantiation}. During snippet template creation,
-     * its value must be an array whose length specifies the number of arguments (the contents
-     * of the array are ignored) bound to the parameter during {@linkplain SnippetTemplate#instantiate instantiation}.
-     *
-     * Such a parameter must be used in a counted loop in the snippet preceded by a call
-     * to {@link ExplodeLoopNode#explodeLoop()}. The counted looped must be a
-     * standard iteration over all the loop's elements (i.e. {@code for (T e : arr) ... }).
-     */
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target(ElementType.PARAMETER)
-    public @interface VarargsParameter {
         /**
-         * The name of this parameter.
+         * Determines if this parameter represents 0 or more arguments. During snippet template creation,
+         * its value must be an array whose length specifies the number of arguments (the contents
+         * of the array are ignored) bound to the parameter during {@linkplain SnippetTemplate#instantiate instantiation}.
+         *
+         * Such a parameter must be used in a counted loop in the snippet preceded by a call
+         * to {@link ExplodeLoopNode#explodeLoop()}. The counted looped must be a
+         * standard iteration over all the loop's elements (i.e. {@code for (T e : arr) ... }).
          */
-        String value();
+        boolean multiple() default false;
     }
 
     /**
@@ -154,18 +127,18 @@ public @interface Snippet {
     }
 
     /**
-     * Wrapper for the prototype value of a {@linkplain VarargsParameter varargs} parameter.
+     * Wrapper for the prototype value of a {@linkplain Parameter#multiple() multiple} parameter.
      */
-    public static class Varargs {
+    public static class Multiple {
         public final Object array;
         private final Class componentType;
         private final int length;
 
-        public static Varargs vargargs(Class componentType, int length) {
-            return new Varargs(Array.newInstance(componentType, length));
+        public static Multiple multiple(Class componentType, int length) {
+            return new Multiple(Array.newInstance(componentType, length));
         }
 
-        public Varargs(Object array) {
+        public Multiple(Object array) {
             assert array != null;
             this.componentType = array.getClass().getComponentType();
             assert this.componentType != null;
@@ -175,8 +148,8 @@ public @interface Snippet {
 
         @Override
         public boolean equals(Object obj) {
-            if (obj instanceof Varargs) {
-                Varargs other = (Varargs) obj;
+            if (obj instanceof Multiple) {
+                Multiple other = (Multiple) obj;
                 return other.componentType == componentType &&
                         other.length == length;
             }
