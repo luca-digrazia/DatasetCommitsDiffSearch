@@ -71,15 +71,13 @@ public final class WordCastNode extends FixedWithNextNode implements LIRLowerabl
         assert getKind() != input.getKind();
         assert generator.getLIRGeneratorTool().target().getSizeInBytes(getKind()) == generator.getLIRGeneratorTool().target().getSizeInBytes(input.getKind());
 
-        Value value = generator.operand(input);
         LIRKind kind = generator.getLIRGeneratorTool().getLIRKind(stamp());
         if (kind.isValue()) {
-            // only add reference information, but never drop it
-            kind = value.getLIRKind().changeType(kind.getPlatformKind());
+            kind = kind.makeDerivedReference();
         }
 
         AllocatableValue result = generator.getLIRGeneratorTool().newVariable(kind);
-        generator.getLIRGeneratorTool().emitMove(result, value);
+        generator.getLIRGeneratorTool().emitMove(result, generator.operand(input));
         generator.setResult(this, result);
     }
 }
