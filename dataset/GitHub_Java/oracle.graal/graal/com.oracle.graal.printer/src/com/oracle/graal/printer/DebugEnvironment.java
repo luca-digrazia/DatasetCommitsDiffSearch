@@ -23,7 +23,7 @@
 package com.oracle.graal.printer;
 
 import static com.oracle.graal.compiler.GraalDebugConfig.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.io.*;
 import java.util.*;
@@ -33,10 +33,10 @@ import com.oracle.graal.debug.*;
 
 public class DebugEnvironment {
 
-    public static GraalDebugConfig initialize(PrintStream log) {
+    public static void initialize(PrintStream log) {
         if (!Debug.isEnabled()) {
             log.println("WARNING: Scope debugging needs to be enabled with -esa or -D" + Debug.Initialization.INITIALIZER_PROPERTY_NAME + "=true");
-            return null;
+            return;
         }
         List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
         dumpHandlers.add(new GraphPrinterDumpHandler());
@@ -49,8 +49,7 @@ public class DebugEnvironment {
         if (DecompileAfterPhase.getValue() != null) {
             dumpHandlers.add(new DecompilerDebugDumpHandler());
         }
-        GraalDebugConfig debugConfig = new GraalDebugConfig(Log.getValue(), Meter.getValue(), TrackMemUse.getValue(), Time.getValue(), Dump.getValue(), MethodFilter.getValue(), log, dumpHandlers);
-        Debug.setConfig(debugConfig);
-        return debugConfig;
+        GraalDebugConfig hotspotDebugConfig = new GraalDebugConfig(Log.getValue(), Meter.getValue(), Time.getValue(), Dump.getValue(), MethodFilter.getValue(), log, dumpHandlers);
+        Debug.setConfig(hotspotDebugConfig);
     }
 }

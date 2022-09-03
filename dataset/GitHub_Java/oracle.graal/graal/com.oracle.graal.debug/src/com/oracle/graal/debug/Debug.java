@@ -231,7 +231,7 @@ public class Debug {
         }
 
         @Override
-        public Indent logAndIndent(String msg, Object... args) {
+        public Indent logIndent(String msg, Object... args) {
             return this;
         }
 
@@ -240,9 +240,6 @@ public class Debug {
             return this;
         }
 
-        @Override
-        public void close() {
-        }
     }
 
     private static final NoLogger noLoggerInstance = new NoLogger();
@@ -284,9 +281,9 @@ public class Debug {
      * @param msg The format string of the log message
      * @param args The arguments referenced by the log message string
      * @return The new indentation level
-     * @see Indent#logAndIndent
+     * @see Indent#logIndent
      */
-    public static Indent logAndIndent(String msg, Object... args) {
+    public static Indent logIndent(String msg, Object... args) {
         if (ENABLED) {
             DebugScope scope = DebugScope.getInstance();
             scope.log(msg, args);
@@ -303,7 +300,7 @@ public class Debug {
      * @param args The arguments referenced by the log message string
      * @return The new indentation level
      */
-    public static Indent logAndIndent(boolean enabled, String msg, Object... args) {
+    public static Indent logIndent(boolean enabled, String msg, Object... args) {
         if (ENABLED) {
             DebugScope scope = DebugScope.getInstance();
             boolean saveLogEnabled = scope.isLogEnabled();
@@ -356,20 +353,8 @@ public class Debug {
         return null;
     }
 
-    /**
-     * Creates a {@linkplain DebugMetric metric} that is enabled iff debugging is
-     * {@linkplain #isEnabled() enabled} or the system property whose name is formed by adding to
-     * {@value #ENABLE_METRIC_PROPERTY_NAME_PREFIX} to {@code name} is
-     * {@linkplain Boolean#getBoolean(String) true}. If the latter condition is true, then the
-     * returned metric is {@linkplain DebugMetric#isConditional() unconditional} otherwise it is
-     * conditional.
-     * <p>
-     * A disabled metric has virtually no overhead.
-     */
     public static DebugMetric metric(String name) {
-        if (Boolean.getBoolean(ENABLE_METRIC_PROPERTY_NAME_PREFIX + name)) {
-            return new MetricImpl(name, false);
-        } else if (ENABLED) {
+        if (ENABLED) {
             return new MetricImpl(name, true);
         } else {
             return VOID_METRIC;
@@ -453,36 +438,10 @@ public class Debug {
         public boolean isConditional() {
             return false;
         }
-
-        public long getCurrentValue() {
-            return 0L;
-        }
     };
 
-    /**
-     * @see #timer(String)
-     */
-    public static final String ENABLE_TIMER_PROPERTY_NAME_PREFIX = "graal.debug.timer.";
-
-    /**
-     * @see #metric(String)
-     */
-    public static final String ENABLE_METRIC_PROPERTY_NAME_PREFIX = "graal.debug.metric.";
-
-    /**
-     * Creates a {@linkplain DebugTimer timer} that is enabled iff debugging is
-     * {@linkplain #isEnabled() enabled} or the system property whose name is formed by adding to
-     * {@value #ENABLE_TIMER_PROPERTY_NAME_PREFIX} to {@code name} is
-     * {@linkplain Boolean#getBoolean(String) true}. If the latter condition is true, then the
-     * returned timer is {@linkplain DebugMetric#isConditional() unconditional} otherwise it is
-     * conditional.
-     * <p>
-     * A disabled timer has virtually no overhead.
-     */
     public static DebugTimer timer(String name) {
-        if (Boolean.getBoolean(ENABLE_TIMER_PROPERTY_NAME_PREFIX + name)) {
-            return new TimerImpl(name, false);
-        } else if (ENABLED) {
+        if (ENABLED) {
             return new TimerImpl(name, true);
         } else {
             return VOID_TIMER;
@@ -501,14 +460,6 @@ public class Debug {
 
         public boolean isConditional() {
             return false;
-        }
-
-        public long getCurrentValue() {
-            return 0L;
-        }
-
-        public TimeUnit getTimeUnit() {
-            return null;
         }
     };
 }
