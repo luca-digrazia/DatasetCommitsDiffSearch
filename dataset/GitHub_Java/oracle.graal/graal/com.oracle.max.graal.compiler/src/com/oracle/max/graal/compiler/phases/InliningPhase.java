@@ -118,7 +118,7 @@ public class InliningPhase extends Phase {
     private RiMethod inlineInvoke(Invoke invoke, int iterations, float ratio) {
         RiMethod parent = invoke.stateAfter().method();
         RiTypeProfile profile = parent.typeProfile(invoke.bci);
-        if (GraalOptions.Intrinsify && compilation.runtime.intrinsicGraph(parent, invoke.bci, invoke.target, invoke.arguments()) != null) {
+        if (GraalOptions.Intrinsify && compilation.runtime.intrinsicGraph(invoke.target, invoke.arguments()) != null) {
             // Always intrinsify.
             return invoke.target;
         }
@@ -209,12 +209,6 @@ public class InliningPhase extends Phase {
     }
 
     private boolean checkInvokeConditions(Invoke invoke) {
-        if (!invoke.canInline()) {
-            if (GraalOptions.TraceInlining) {
-                TTY.println("not inlining %s because the invoke is manually set to be non-inlinable", methodName(invoke.target, invoke));
-            }
-            return false;
-        }
         if (invoke.stateAfter() == null) {
             if (GraalOptions.TraceInlining) {
                 TTY.println("not inlining %s because the invoke has no after state", methodName(invoke.target, invoke));
@@ -323,7 +317,6 @@ public class InliningPhase extends Phase {
     }
 
     private void inlineMethod(Invoke invoke, RiMethod method) {
-        RiMethod parent = invoke.stateAfter().method();
         FrameState stateAfter = invoke.stateAfter();
         FixedNode exceptionEdge = invoke.exceptionEdge();
         if (exceptionEdge instanceof Placeholder) {
@@ -346,7 +339,13 @@ public class InliningPhase extends Phase {
 
         CompilerGraph graph = null;
         if (GraalOptions.Intrinsify) {
-            graph = (CompilerGraph) compilation.runtime.intrinsicGraph(parent, invoke.bci, method, invoke.arguments());
+            graph = (CompilerGraph) compilation.runtime.intrinsicGraph(method, invoke.arguments());
+            if (graph != null && graph.getNodes(Merge.class).iterator().hasNext()) {
+                WriteMemoryCheckpointNode checkpoint = new WriteMemoryCheckpointNode(invoke.graph());
+                checkpoint.setStateAfter(invoke.stateAfter());
+                checkpoint.setNext(invoke.next());
+                invoke.setNext(checkpoint);
+            }
         }
         if (graph != null) {
             if (GraalOptions.TraceInlining) {
@@ -365,7 +364,7 @@ public class InliningPhase extends Phase {
                 TTY.println("Building graph for %s, locals: %d, stack: %d", methodName(method, invoke), method.maxLocals(), method.maxStackSize());
             }
             graph = new CompilerGraph(null);
-            new GraphBuilderPhase(compilation, method, true).apply(graph);
+            new GraphBuilderPhase(compilation, method, true, true).apply(graph);
         }
 
         invoke.inputs().clearAll();
@@ -405,25 +404,14 @@ public class InliningPhase extends Phase {
         } else {
             pred = new Placeholder(compilation.graph);
         }
-        invoke.replaceAtPredecessors(pred);
+        invoke.predecessors().get(0).successors().replace(invoke, pred);
         replacements.put(startNode, pred);
 
         Map<Node, Node> duplicates = compilation.graph.addDuplicate(nodes, replacements);
 
-        FrameState stateBefore = null;
         for (Node node : duplicates.values()) {
-            if (node instanceof Invoke && ((Invoke) node).canInline()) {
+            if (node instanceof Invoke) {
                 newInvokes.add((Invoke) node);
-            } else if (node instanceof FrameState) {
-                FrameState frameState = (FrameState) node;
-                if (frameState.bci == FrameState.BEFORE_BCI) {
-                    if (stateBefore == null) {
-                        stateBefore = stateAfter.duplicateModified(invoke.bci, false, invoke.kind, parameters);
-                    }
-                    frameState.replaceAndDelete(stateBefore);
-                } else if (frameState.bci == FrameState.AFTER_BCI) {
-                    frameState.replaceAndDelete(stateAfter);
-                }
             }
         }
 

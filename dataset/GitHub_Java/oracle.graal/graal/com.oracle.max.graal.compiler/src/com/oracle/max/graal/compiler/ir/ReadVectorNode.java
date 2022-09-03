@@ -47,9 +47,7 @@ public final class ReadVectorNode extends AccessVectorNode {
 
     @Override
     public Node copy(Graph into) {
-        ReadVectorNode x = new ReadVectorNode(null, null, null, into);
-        super.copyInto(x);
-        return x;
+        return new ReadVectorNode(null, null, null, into);
     }
 
 

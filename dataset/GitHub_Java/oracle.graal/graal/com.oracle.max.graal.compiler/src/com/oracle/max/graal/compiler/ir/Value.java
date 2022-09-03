@@ -154,7 +154,7 @@ public abstract class Value extends Node {
      * @param v the visitor to accept
      */
     public void accept(ValueVisitor v) {
-        throw new IllegalStateException("No visit method for this node (" + this.getClass().getSimpleName() + ")");
+        throw new IllegalStateException("No visit method for this node");
     }
 
     public void print(LogStream out) {

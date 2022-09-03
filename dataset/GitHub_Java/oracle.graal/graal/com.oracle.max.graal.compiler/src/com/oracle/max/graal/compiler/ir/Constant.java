@@ -35,6 +35,9 @@ import com.sun.cri.ri.*;
  */
 public final class Constant extends BooleanNode {
 
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
+
     public final CiConstant value;
 
     /**
@@ -43,13 +46,21 @@ public final class Constant extends BooleanNode {
      * @param graph
      */
     public Constant(CiConstant value, Graph graph) {
-        super(value.kind.stackKind(), graph);
+        super(value.kind.stackKind(), INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.value = value;
     }
 
     @Override
     public void accept(ValueVisitor v) {
         v.visitConstant(this);
+    }
+
+    @Override
+    public BooleanNode negate() {
+        if (kind != CiKind.Boolean) {
+            throw new IllegalStateException();
+        }
+        return Constant.forBoolean(!value.asBoolean(), graph());
     }
 
     /**

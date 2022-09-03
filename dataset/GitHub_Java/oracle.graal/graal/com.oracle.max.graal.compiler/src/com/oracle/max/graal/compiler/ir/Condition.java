@@ -22,6 +22,7 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import com.sun.cri.bytecode.Bytecodes.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
@@ -79,16 +80,6 @@ public enum Condition {
      */
     BT("|<|"),
 
-    /**
-     * Operation produced an overflow.
-     */
-    OF("overflow"),
-
-    /**
-     * Operation did not produce an overflow.
-     */
-    NOF("noOverflow"),
-
     TRUE("TRUE");
 
     public final String operator;
@@ -129,8 +120,6 @@ public enum Condition {
             case BE: return AT;
             case AT: return BE;
             case AE: return BT;
-            case OF: return NOF;
-            case NOF: return OF;
         }
         throw new IllegalArgumentException(this.toString());
     }

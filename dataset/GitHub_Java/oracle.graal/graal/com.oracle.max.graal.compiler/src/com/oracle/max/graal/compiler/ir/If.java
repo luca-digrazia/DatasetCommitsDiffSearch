@@ -60,8 +60,8 @@ public final class If extends ControlSplit {
         inputs().set(super.inputCount() + INPUT_COMPARE, n);
     }
 
-    public If(BooleanNode condition, double probability, Graph graph) {
-        super(CiKind.Illegal, 2, new double[] {probability, 1 - probability}, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    public If(BooleanNode condition, Graph graph) {
+        super(CiKind.Illegal, 2, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setCompare(condition);
     }
 
@@ -106,14 +106,6 @@ public final class If extends ControlSplit {
     }
 
     @Override
-    public boolean verify() {
-        assertTrue(compare() != null);
-        assertTrue(trueSuccessor() != null);
-        assertTrue(falseSuccessor() != null);
-        return true;
-    }
-
-    @Override
     public void print(LogStream out) {
         out.print("if ").
         print(compare()).
@@ -130,9 +122,7 @@ public final class If extends ControlSplit {
 
     @Override
     public Node copy(Graph into) {
-        If x = new If(null, probability(0), into);
-        super.copyInto(x);
-        return x;
+        return new If(null, into);
     }
 
     @SuppressWarnings("unchecked")

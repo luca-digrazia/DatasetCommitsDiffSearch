@@ -27,36 +27,39 @@ import com.sun.cri.ci.*;
 
 
 public abstract class AccessVectorNode extends AbstractVectorNode {
+    private static final int INPUT_COUNT = 2;
+    private static final int INPUT_OBJECT = 0;
+    private static final int INPUT_LOCATION = 1;
+    private static final int SUCCESSOR_COUNT = 0;
 
-    @NodeInput
-    private Value object;
-
-    @NodeInput
-    private LocationNode location;
-
-    @NodeInput
-    private final NodeInputList<Node> dependencies = new NodeInputList<Node>(this);
-
-    public Value object() {
-        return object;
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
     }
 
-    public void setObject(Value x) {
-        updateUsages(object, x);
-        object = x;
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
+    public void setObject(Value object) {
+        inputs().set(super.inputCount() + INPUT_OBJECT, object);
+    }
+
+    public Value object() {
+        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
+    }
+
+    public void setLocation(LocationNode object) {
+        inputs().set(super.inputCount() + INPUT_LOCATION, object);
     }
 
     public LocationNode location() {
-        return location;
+        return (LocationNode) inputs().get(super.inputCount() + INPUT_LOCATION);
     }
 
-    public void setLocation(LocationNode x) {
-        updateUsages(location, x);
-        location = x;
-    }
-
-    public AccessVectorNode(CiKind kind, AbstractVectorNode vector, Value object, LocationNode location, Graph graph) {
-        super(kind, vector, graph);
+    public AccessVectorNode(CiKind kind, int inputCount, int successorCount, AbstractVectorNode vector, Value object, LocationNode location, Graph graph) {
+        super(kind, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, vector, graph);
         setObject(object);
         setLocation(location);
     }
