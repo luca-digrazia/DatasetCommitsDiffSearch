@@ -41,9 +41,6 @@ public final class FrameState extends VirtualState implements Node.IterableNodeT
 
     protected final int stackSize;
 
-    /**
-     * @see BytecodeFrame#rethrowException
-     */
     private boolean rethrowException;
 
     private boolean duringCall;
@@ -163,9 +160,6 @@ public final class FrameState extends VirtualState implements Node.IterableNodeT
         this.outerFrameState = x;
     }
 
-    /**
-     * @see BytecodeFrame#rethrowException
-     */
     public boolean rethrowException() {
         return rethrowException;
     }
@@ -245,7 +239,7 @@ public final class FrameState extends VirtualState implements Node.IterableNodeT
                 copy.remove(copy.size() - 1);
             }
             ValueNode lastSlot = copy.get(copy.size() - 1);
-            assert lastSlot.kind().getStackKind() == popKind.getStackKind();
+            assert lastSlot.kind().getStackKind() == popKind.getStackKind() || (lastSlot instanceof BoxedVirtualObjectNode && popKind == Kind.Object);
             copy.remove(copy.size() - 1);
         }
         Collections.addAll(copy, pushedValues);

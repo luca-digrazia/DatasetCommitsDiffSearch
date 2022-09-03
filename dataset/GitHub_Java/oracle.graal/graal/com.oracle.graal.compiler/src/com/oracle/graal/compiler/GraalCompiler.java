@@ -180,7 +180,7 @@ public class GraalCompiler {
         new LoweringPhase(target, runtime, replacements, assumptions).apply(graph);
 
         if (GraalOptions.OptPushThroughPi) {
-            new PushNodesThroughPi().apply(graph);
+            new PushThroughPiPhase().apply(graph);
             if (GraalOptions.OptCanonicalizer) {
                 new CanonicalizerPhase(runtime, assumptions).apply(graph);
             }
@@ -220,10 +220,10 @@ public class GraalCompiler {
 
         plan.runPhases(PhasePosition.LOW_LEVEL, graph);
 
-        new GuardLoweringPhase(target).apply(graph);
-
         // Add safepoints to loops
         new SafepointInsertionPhase().apply(graph);
+
+        new GuardLoweringPhase(target).apply(graph);
 
         final SchedulePhase schedule = new SchedulePhase();
         schedule.apply(graph);
