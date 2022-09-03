@@ -42,7 +42,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -50,7 +49,6 @@ import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
 
 /**
  * Implementation of a sampling based profiler for
@@ -114,10 +112,8 @@ public final class CPUSampler implements Closeable {
             descriptors.add(OptionDescriptor.newBuilder(CLI.DELAY_PERIOD, ID + ".Delay").category(OptionCategory.USER).help("Delay the sampling for this many milliseconds (default: 0).").build());
             descriptors.add(OptionDescriptor.newBuilder(CLI.STACK_LIMIT, ID + ".StackLimit").category(OptionCategory.USER).help("Maximum number of maximum stack elements.").build());
             descriptors.add(OptionDescriptor.newBuilder(CLI.OUTPUT, ID + ".Output").category(OptionCategory.USER).help("Print a 'histogram' or 'calltree' as output (default:HISTOGRAM).").build());
-            descriptors.add(OptionDescriptor.newBuilder(CLI.MODE, ID + ".Mode").category(OptionCategory.USER).help(
-                            "Describes level of sampling detail. NOTE: Increased detail can lead to reduced accuracy. Modes:" + System.lineSeparator() +
-                                            "'compiled' - samples roots excluding inlined functions (default)" + System.lineSeparator() + "'roots' - samples roots including inlined functions" +
-                                            System.lineSeparator() + "'statements' - samples all statements.").build());
+            descriptors.add(OptionDescriptor.newBuilder(CLI.MODE, ID + ".Mode").category(OptionCategory.USER).help("Describes level of sampling detail. NOTE: Increased detail can lead to reduced accuracy. Modes:" + System.lineSeparator() +
+                            "'compiled' - samples roots excluding inlined functions (default)" + System.lineSeparator() + "'roots' - samples roots including inlined functions" + System.lineSeparator() + "'statements' - samples all statements.").build());
             descriptors.add(OptionDescriptor.newBuilder(CLI.SAMPLE_INTERNAL, ID + ".SampleInternal").category(OptionCategory.USER).help("Capture internal elements (default:false).").build());
             descriptors.add(OptionDescriptor.newBuilder(CLI.FILTER_ROOT, ID + ".FilterRootName").category(OptionCategory.USER).help(
                             "Wildcard filter for program roots. (eg. Math.*, default:*).").build());
@@ -445,12 +441,7 @@ public final class CPUSampler implements Closeable {
 
     private void computeHistogramImpl(Collection<CallTreeNode<HitCounts>> children, Map<SourceLocation, List<CallTreeNode<HitCounts>>> histogram) {
         for (CallTreeNode<HitCounts> treeNode : children) {
-            List<CallTreeNode<HitCounts>> nodes = histogram.computeIfAbsent(treeNode.getSourceLocation(), new Function<SourceLocation, List<CallTreeNode<HitCounts>>>() {
-                @Override
-                public List<CallTreeNode<HitCounts>> apply(SourceLocation sourceLocation) {
-                    return new ArrayList<>();
-                }
-            });
+            List<CallTreeNode<HitCounts>> nodes = histogram.computeIfAbsent(treeNode.getSourceLocation(), k -> new ArrayList<>());
             nodes.add(treeNode);
             computeHistogramImpl(treeNode.getChildren(), histogram);
         }
@@ -598,27 +589,31 @@ public final class CPUSampler implements Closeable {
 
         static final OptionType<Output> CLI_OUTPUT_TYPE = new OptionType<>("Output",
                         Output.HISTOGRAM,
-                        new Function<String, Output>() {
-                            @Override
-                            public Output apply(String s) {
-                                try {
-                                    return Output.valueOf(s.toUpperCase());
-                                } catch (IllegalArgumentException e) {
-                                    throw new IllegalArgumentException("Output can be: histogram or calltree");
-                                }
+                        (String string) -> {
+                            try {
+                                return Output.valueOf(string.toUpperCase());
+                            } catch (IllegalArgumentException e) {
+                                throw new IllegalArgumentException("Output can be: histogram or calltree");
+                            }
+                        },
+                        cliOutput -> {
+                            if (cliOutput == null) {
+                                throw new IllegalArgumentException();
                             }
                         });
 
         static final OptionType<Mode> CLI_MODE_TYPE = new OptionType<>("Mode",
                         Mode.COMPILED,
-                        new Function<String, Mode>() {
-                            @Override
-                            public Mode apply(String s) {
-                                try {
-                                    return Mode.valueOf(s.toUpperCase());
-                                } catch (IllegalArgumentException e) {
-                                    throw new IllegalArgumentException("Mode can be: compiled, roots or statements.");
-                                }
+                        (String string) -> {
+                            try {
+                                return Mode.valueOf(string.toUpperCase());
+                            } catch (IllegalArgumentException e) {
+                                throw new IllegalArgumentException("Mode can be: compiled, roots or statements.");
+                            }
+                        },
+                        cliOutput -> {
+                            if (cliOutput == null) {
+                                throw new IllegalArgumentException();
                             }
                         });
 
@@ -670,20 +665,17 @@ public final class CPUSampler implements Closeable {
             final Map<SourceLocation, List<CallTreeNode<CPUSampler.HitCounts>>> histogram = sampler.computeHistogram();
 
             List<List<CallTreeNode<CPUSampler.HitCounts>>> lines = new ArrayList<>(histogram.values());
-            Collections.sort(lines, new Comparator<List<CallTreeNode<HitCounts>>>() {
-                @Override
-                public int compare(List<CallTreeNode<HitCounts>> o1, List<CallTreeNode<HitCounts>> o2) {
-                    long sum1 = 0;
-                    for (CallTreeNode<CPUSampler.HitCounts> tree : o1) {
-                        sum1 += tree.getPayload().getSelfHitCount();
-                    }
-
-                    long sum2 = 0;
-                    for (CallTreeNode<CPUSampler.HitCounts> tree : o2) {
-                        sum2 += tree.getPayload().getSelfHitCount();
-                    }
-                    return Long.compare(sum2, sum1);
+            Collections.sort(lines, (List<CallTreeNode<CPUSampler.HitCounts>> o1, List<CallTreeNode<CPUSampler.HitCounts>> o2) -> {
+                long sum1 = 0;
+                for (CallTreeNode<CPUSampler.HitCounts> tree : o1) {
+                    sum1 += tree.getPayload().getSelfHitCount();
                 }
+
+                long sum2 = 0;
+                for (CallTreeNode<CPUSampler.HitCounts> tree : o2) {
+                    sum2 += tree.getPayload().getSelfHitCount();
+                }
+                return Long.compare(sum2, sum1);
             });
 
             int maxLength = 10;
@@ -726,12 +718,7 @@ public final class CPUSampler implements Closeable {
 
         private static void printSamplingCallTreeRec(CPUSampler sampler, int maxRootLength, String prefix, Collection<CallTreeNode<CPUSampler.HitCounts>> children, PrintStream out) {
             List<CallTreeNode<CPUSampler.HitCounts>> sortedChildren = new ArrayList<>(children);
-            Collections.sort(sortedChildren, new Comparator<CallTreeNode<HitCounts>>() {
-                @Override
-                public int compare(CallTreeNode<HitCounts> o1, CallTreeNode<HitCounts> o2) {
-                    return Long.compare(o2.getPayload().getHitCount(), o1.getPayload().getHitCount());
-                }
-            });
+            Collections.sort(sortedChildren, (o1, o2) -> Long.compare(o2.getPayload().getHitCount(), o1.getPayload().getHitCount()));
 
             for (CallTreeNode<CPUSampler.HitCounts> treeNode : sortedChildren) {
                 if (treeNode == null) {
