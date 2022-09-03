@@ -24,8 +24,13 @@ package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
+
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.graph.Node.ConstantNodeParameter;
+import com.oracle.graal.graph.Node.NodeIntrinsic;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Substitutions for {@link java.lang.System} methods.
@@ -36,6 +41,20 @@ public class SystemSubstitutions {
     public static final ForeignCallDescriptor JAVA_TIME_MILLIS = new ForeignCallDescriptor("javaTimeMillis", long.class);
     public static final ForeignCallDescriptor JAVA_TIME_NANOS = new ForeignCallDescriptor("javaTimeNanos", long.class);
 
+    @MacroSubstitution(macro = ArrayCopyNode.class)
+    public static native void arraycopy(Object src, int srcPos, Object dest, int destPos, int length);
+
+    @MethodSubstitution
+    public static long currentTimeMillis() {
+        return callLong(JAVA_TIME_MILLIS);
+    }
+
+    @MethodSubstitution
+    public static long nanoTime() {
+        return callLong(JAVA_TIME_NANOS);
+    }
+
+    @MacroSubstitution(macro = SystemIdentityHashCodeNode.class)
     @MethodSubstitution
     public static int identityHashCode(Object x) {
         if (probability(NOT_FREQUENT_PROBABILITY, x == null)) {
@@ -43,5 +62,14 @@ public class SystemSubstitutions {
         }
 
         return computeHashCode(x);
+    }
+
+    @NodeIntrinsic(value = ForeignCallNode.class, setStampFromReturnType = true)
+    public static long callLong(@ConstantNodeParameter ForeignCallDescriptor descriptor) {
+        if (descriptor == JAVA_TIME_MILLIS) {
+            return System.currentTimeMillis();
+        }
+        assert descriptor == JAVA_TIME_NANOS;
+        return System.nanoTime();
     }
 }
