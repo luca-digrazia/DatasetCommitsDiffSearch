@@ -46,8 +46,8 @@ import com.oracle.graal.phases.schedule.*;
  * a method and at each loop header.
  *
  * A schedule is created so that floating nodes can also be taken into account. The weight of a node
- * is determined heuristically in the {@link ProfileCompiledMethodsPhase#getNodeWeight(Node)}
- * method.
+ * is determined heuristically in the
+ * {@link ProfileCompiledMethodsPhase#getNodeWeight(ScheduledNode)} method.
  *
  * Additionally, there's a second counter that's only increased for code sections without invokes.
  */
@@ -57,9 +57,9 @@ public class ProfileCompiledMethodsPhase extends Phase {
     private static final String GROUP_NAME_WITHOUT = "~profiled weight (invoke-free sections)";
     private static final String GROUP_NAME_INVOKES = "~profiled invokes";
 
-    private static final boolean WITH_SECTION_HEADER = Boolean.parseBoolean(System.getProperty("ProfileCompiledMethodsPhase.WITH_SECTION_HEADER", "false"));
-    private static final boolean WITH_INVOKE_FREE_SECTIONS = Boolean.parseBoolean(System.getProperty("ProfileCompiledMethodsPhase.WITH_FREE_SECTIONS", "false"));
-    private static final boolean WITH_INVOKES = Boolean.parseBoolean(System.getProperty("ProfileCompiledMethodsPhase.WITH_INVOKES", "true"));
+    private static final boolean WITH_SECTION_HEADER = false;
+    private static boolean WITH_INVOKE_FREE_SECTIONS = false;
+    private static boolean WITH_INVOKES = true;
 
     @Override
     protected void run(StructuredGraph graph) {
@@ -117,17 +117,17 @@ public class ProfileCompiledMethodsPhase extends Phase {
         double count = 0;
         for (Block block : blocks) {
             double blockProbability = probabilities.applyAsDouble(block.getBeginNode());
-            for (Node node : schedule.getBlockToNodesMap().get(block)) {
+            for (ScheduledNode node : schedule.getBlockToNodesMap().get(block)) {
                 count += blockProbability * getNodeWeight(node);
             }
         }
         return count;
     }
 
-    private static double getNodeWeight(Node node) {
-        if (node instanceof AbstractMergeNode) {
-            return ((AbstractMergeNode) node).phiPredecessorCount();
-        } else if (node instanceof AbstractBeginNode || node instanceof AbstractEndNode || node instanceof MonitorIdNode || node instanceof ConstantNode || node instanceof ParameterNode ||
+    private static double getNodeWeight(ScheduledNode node) {
+        if (node instanceof MergeNode) {
+            return ((MergeNode) node).phiPredecessorCount();
+        } else if (node instanceof BeginNode || node instanceof AbstractEndNode || node instanceof MonitorIdNode || node instanceof ConstantNode || node instanceof ParameterNode ||
                         node instanceof CallTargetNode || node instanceof ValueProxy || node instanceof VirtualObjectNode || node instanceof ReinterpretNode) {
             return 0;
         } else if (node instanceof AccessMonitorNode) {
@@ -136,9 +136,9 @@ public class ProfileCompiledMethodsPhase extends Phase {
             return 2;
         } else if (node instanceof LogicNode || node instanceof ConvertNode || node instanceof BinaryNode || node instanceof NotNode) {
             return 1;
-        } else if (node instanceof IntegerDivNode || node instanceof DivNode || node instanceof IntegerRemNode || node instanceof RemNode) {
+        } else if (node instanceof IntegerDivNode || node instanceof FloatDivNode || node instanceof IntegerRemNode || node instanceof FloatRemNode) {
             return 10;
-        } else if (node instanceof MulNode) {
+        } else if (node instanceof IntegerMulNode || node instanceof FloatMulNode) {
             return 3;
         } else if (node instanceof Invoke) {
             return 5;
@@ -150,8 +150,6 @@ public class ProfileCompiledMethodsPhase extends Phase {
             return node.successors().count();
         } else if (node instanceof AbstractNewObjectNode) {
             return 10;
-        } else if (node instanceof VirtualState) {
-            return 0;
         }
         return 2;
     }

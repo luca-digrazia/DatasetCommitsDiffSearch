@@ -28,14 +28,14 @@ public class BlockMap<T> {
 
     @SuppressWarnings("unchecked")
     public BlockMap(AbstractControlFlowGraph<?> cfg) {
-        data = (T[]) new Object[cfg.getBlocks().length];
+        data = (T[]) new Object[cfg.getBlocks().size()];
     }
 
-    public T get(AbstractBlockBase<?> block) {
+    public T get(AbstractBlock<?> block) {
         return data[block.getId()];
     }
 
-    public void put(AbstractBlockBase<?> block, T value) {
+    public void put(AbstractBlock<?> block, T value) {
         data[block.getId()] = value;
     }
 }

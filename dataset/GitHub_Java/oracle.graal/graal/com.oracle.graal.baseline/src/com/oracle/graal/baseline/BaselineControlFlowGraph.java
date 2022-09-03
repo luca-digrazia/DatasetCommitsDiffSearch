@@ -35,15 +35,10 @@ public class BaselineControlFlowGraph implements AbstractControlFlowGraph<BciBlo
     private Collection<Loop<BciBlock>> loops;
     private BitSet visited;
 
-    public static BaselineControlFlowGraph compute(BciBlockMapping blockMap) {
-        BaselineControlFlowGraph cfg = new BaselineControlFlowGraph(blockMap);
-        cfg.computeLoopInformation();
-        return cfg;
-    }
-
-    private BaselineControlFlowGraph(BciBlockMapping blockMap) {
+    public BaselineControlFlowGraph(BciBlockMapping blockMap) {
         blocks = blockMap.blocks;
         loops = new ArrayList<>();
+        computeLoopInformation();
     }
 
     public List<BciBlock> getBlocks() {

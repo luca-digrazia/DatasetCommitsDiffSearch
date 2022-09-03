@@ -22,11 +22,16 @@
  */
 package com.oracle.graal.nodes.cfg;
 
+import java.util.*;
+
+import com.oracle.graal.compiler.common.cfg.*;
+
 public class CFGVerifier {
+
     public static boolean verify(ControlFlowGraph cfg) {
         for (Block block : cfg.getBlocks()) {
             assert block.getId() >= 0;
-            assert cfg.getBlocks()[block.getId()] == block;
+            assert cfg.getBlocks().get(block.getId()) == block;
 
             for (Block pred : block.getPredecessors()) {
                 assert pred.getSuccessors().contains(block);
@@ -47,37 +52,68 @@ public class CFGVerifier {
                 assert dominated.getDominator() == block;
             }
 
-            assert cfg.getLoops() == null || !block.isLoopHeader() || block.getLoop().header == block : block.beginNode;
+            Block postDominatorBlock = block.getPostdominator();
+            if (postDominatorBlock != null) {
+                assert block.getSuccessorCount() > 0 : "block has post-dominator block, but no successors";
+
+                BlockMap<Boolean> visitedBlocks = new BlockMap<>(cfg);
+                visitedBlocks.put(block, true);
+
+                Deque<Block> stack = new ArrayDeque<>();
+                for (Block sux : block.getSuccessors()) {
+                    visitedBlocks.put(sux, true);
+                    stack.push(sux);
+                }
+
+                while (stack.size() > 0) {
+                    Block tos = stack.pop();
+                    assert tos.getId() <= postDominatorBlock.getId();
+                    if (tos == postDominatorBlock) {
+                        continue; // found a valid path
+                    }
+                    assert tos.getSuccessorCount() > 0 : "no path found";
+
+                    for (Block sux : tos.getSuccessors()) {
+                        if (visitedBlocks.get(sux) == null) {
+                            visitedBlocks.put(sux, true);
+                            stack.push(sux);
+                        }
+                    }
+                }
+            }
+
+            assert cfg.getLoops() == null || !block.isLoopHeader() || block.getLoop().getHeader() == block : block.beginNode;
         }
 
         if (cfg.getLoops() != null) {
-            for (Loop loop : cfg.getLoops()) {
-                assert loop.header.isLoopHeader();
+            for (Loop<Block> loop : cfg.getLoops()) {
+                assert loop.getHeader().isLoopHeader();
 
-                for (Block block : loop.blocks) {
-                    assert block.getId() >= loop.header.getId();
+                for (Block block : loop.getBlocks()) {
+                    assert block.getId() >= loop.getHeader().getId();
 
-                    Loop blockLoop = block.getLoop();
+                    Loop<?> blockLoop = block.getLoop();
                     while (blockLoop != loop) {
                         assert blockLoop != null;
-                        blockLoop = blockLoop.parent;
+                        blockLoop = blockLoop.getParent();
                     }
 
                     if (!(block.isLoopHeader() && block.getLoop() == loop)) {
                         for (Block pred : block.getPredecessors()) {
-                            if (!loop.blocks.contains(pred)) {
+                            if (!loop.getBlocks().contains(pred)) {
+                                assert false : "Loop " + loop + " does not contain " + pred;
                                 return false;
                             }
                         }
                     }
                 }
 
-                for (Block block : loop.exits) {
-                    assert block.getId() >= loop.header.getId();
+                for (Block block : loop.getExits()) {
+                    assert block.getId() >= loop.getHeader().getId();
 
-                    Loop blockLoop = block.getLoop();
+                    Loop<?> blockLoop = block.getLoop();
                     while (blockLoop != null) {
-                        blockLoop = blockLoop.parent;
+                        blockLoop = blockLoop.getParent();
                         assert blockLoop != loop;
                     }
                 }

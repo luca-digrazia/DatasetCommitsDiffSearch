@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertTrue;
 
 import java.util.*;
 
@@ -42,21 +42,21 @@ public class SimpleCFGTest extends GraalCompilerTest {
     public void testImplies() {
         StructuredGraph graph = new StructuredGraph();
 
-        AbstractEndNode trueEnd = graph.add(EndNode.create());
-        AbstractEndNode falseEnd = graph.add(EndNode.create());
+        AbstractEndNode trueEnd = graph.add(new EndNode());
+        AbstractEndNode falseEnd = graph.add(new EndNode());
 
-        BeginNode trueBegin = graph.add(BeginNode.create());
+        BeginNode trueBegin = graph.add(new BeginNode());
         trueBegin.setNext(trueEnd);
-        BeginNode falseBegin = graph.add(BeginNode.create());
+        BeginNode falseBegin = graph.add(new BeginNode());
         falseBegin.setNext(falseEnd);
 
-        IfNode ifNode = graph.add(IfNode.create(null, trueBegin, falseBegin, 0.5));
+        IfNode ifNode = graph.add(new IfNode(null, trueBegin, falseBegin, 0.5));
         graph.start().setNext(ifNode);
 
-        MergeNode merge = graph.add(MergeNode.create());
+        MergeNode merge = graph.add(new MergeNode());
         merge.addForwardEnd(trueEnd);
         merge.addForwardEnd(falseEnd);
-        ReturnNode returnNode = graph.add(ReturnNode.create(null));
+        ReturnNode returnNode = graph.add(new ReturnNode(null));
         merge.setNext(returnNode);
 
         dumpGraph(graph);
@@ -65,24 +65,24 @@ public class SimpleCFGTest extends GraalCompilerTest {
 
         List<Block> blocks = cfg.getBlocks();
         // check number of blocks
-        assertDeepEquals(4, blocks.size());
+        assertEquals(4, blocks.size());
 
         // check block - node assignment
-        assertDeepEquals(blocks.get(0), cfg.blockFor(graph.start()));
-        assertDeepEquals(blocks.get(0), cfg.blockFor(ifNode));
-        assertDeepEquals(blocks.get(1), cfg.blockFor(trueBegin));
-        assertDeepEquals(blocks.get(1), cfg.blockFor(trueEnd));
-        assertDeepEquals(blocks.get(2), cfg.blockFor(falseBegin));
-        assertDeepEquals(blocks.get(2), cfg.blockFor(falseEnd));
-        assertDeepEquals(blocks.get(3), cfg.blockFor(merge));
-        assertDeepEquals(blocks.get(3), cfg.blockFor(returnNode));
+        assertEquals(blocks.get(0), cfg.blockFor(graph.start()));
+        assertEquals(blocks.get(0), cfg.blockFor(ifNode));
+        assertEquals(blocks.get(1), cfg.blockFor(trueBegin));
+        assertEquals(blocks.get(1), cfg.blockFor(trueEnd));
+        assertEquals(blocks.get(2), cfg.blockFor(falseBegin));
+        assertEquals(blocks.get(2), cfg.blockFor(falseEnd));
+        assertEquals(blocks.get(3), cfg.blockFor(merge));
+        assertEquals(blocks.get(3), cfg.blockFor(returnNode));
 
         // check postOrder
         Iterator<Block> it = cfg.postOrder().iterator();
         for (int i = blocks.size() - 1; i >= 0; i--) {
             assertTrue(it.hasNext());
             Block b = it.next();
-            assertDeepEquals(blocks.get(i), b);
+            assertEquals(blocks.get(i), b);
         }
 
         // check dominators
