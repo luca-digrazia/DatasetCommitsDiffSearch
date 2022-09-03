@@ -26,6 +26,7 @@ import org.junit.*;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 
@@ -36,17 +37,14 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
         public static final byte RETURN = 1;
         public static final byte ADD = 2;
         public static final byte IFZERO = 3;
-        public static final byte POP = 4;
     }
 
     public static class Program extends RootNode {
-        private final String name;
-        @CompilationFinal private final byte[] bytecodes;
+        @CompilationFinal final byte[] bytecodes;
         @CompilationFinal private final FrameSlot[] locals;
         @CompilationFinal private final FrameSlot[] stack;
 
-        public Program(String name, byte[] bytecodes, int maxLocals, int maxStack) {
-            this.name = name;
+        public Program(byte[] bytecodes, int maxLocals, int maxStack) {
             this.bytecodes = bytecodes;
             locals = new FrameSlot[maxLocals];
             stack = new FrameSlot[maxStack];
@@ -72,9 +70,9 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
             }
         }
 
-        @Override
-        public String toString() {
-            return name;
+        @TruffleBoundary
+        public void print(String name, int value) {
+            System.out.println(name + "=" + value);
         }
 
         @Override
@@ -91,14 +89,14 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
                         value = bytecodes[bci + 1];
                         setInt(frame, ++topOfStack, value);
                         bci = bci + 2;
-                        continue;
+                        break;
                     case Bytecode.RETURN:
                         return getInt(frame, topOfStack);
                     case Bytecode.ADD:
                         setInt(frame, topOfStack - 1, getInt(frame, topOfStack) + getInt(frame, topOfStack - 1));
                         topOfStack--;
                         bci = bci + 1;
-                        continue;
+                        break;
                     case Bytecode.IFZERO:
                         if (getInt(frame, topOfStack--) == 0) {
                             bci = bytecodes[bci + 1];
@@ -107,10 +105,6 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
                             bci = bci + 2;
                             continue;
                         }
-                    case Bytecode.POP:
-                        topOfStack--;
-                        bci++;
-                        continue;
                 }
             }
         }
@@ -121,16 +115,16 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
     }
 
     @Test
-    public void constReturnProgram() {
+    public void simpleProgram() {
         byte[] bytecodes = new byte[]{
         /* 0: */Bytecode.CONST,
         /* 1: */42,
         /* 2: */Bytecode.RETURN};
-        assertPartialEvalEquals("constant42", new Program("constReturnProgram", bytecodes, 0, 2));
+        assertPartialEvalEquals("constant42", new Program(bytecodes, 0, 2));
     }
 
     @Test
-    public void constAddProgram() {
+    public void simpleProgramWithAdd() {
         byte[] bytecodes = new byte[]{
         /* 0: */Bytecode.CONST,
         /* 1: */40,
@@ -138,11 +132,11 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
         /* 3: */2,
         /* 4: */Bytecode.ADD,
         /* 5: */Bytecode.RETURN};
-        assertPartialEvalEquals("constant42", new Program("constAddProgram", bytecodes, 0, 2));
+        assertPartialEvalEquals("constant42", new Program(bytecodes, 0, 2));
     }
 
     @Test
-    public void simpleIfProgram() {
+    public void simpleProgramWithIf() {
         byte[] bytecodes = new byte[]{
         /* 0: */Bytecode.CONST,
         /* 1: */40,
@@ -153,27 +147,11 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
         /* 6: */Bytecode.CONST,
         /* 7: */42,
         /* 8: */Bytecode.RETURN};
-        assertPartialEvalEquals("constant42", new Program("simpleIfProgram", bytecodes, 0, 3));
-    }
-
-    @Test
-    public void ifAndPopProgram() {
-        byte[] bytecodes = new byte[]{
-        /* 0: */Bytecode.CONST,
-        /* 1: */40,
-        /* 2: */Bytecode.CONST,
-        /* 3: */1,
-        /* 4: */Bytecode.IFZERO,
-        /* 5: */9,
-        /* 6: */Bytecode.POP,
-        /* 7: */Bytecode.CONST,
-        /* 8: */42,
-        /* 9: */Bytecode.RETURN};
-        assertPartialEvalEquals("constant42", new Program("ifAndPopProgram", bytecodes, 0, 3));
+        assertPartialEvalEquals("constant42", new Program(bytecodes, 0, 3));
     }
 
     @Test(timeout = 1000)
-    public void manyIfsProgram() {
+    public void simpleProgramWithManyIfs() {
         byte[] bytecodes = new byte[]{
         /* 0: */Bytecode.CONST,
         /* 1: */40,
@@ -220,6 +198,6 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
         /* 42: */Bytecode.CONST,
         /* 43: */42,
         /* 44: */Bytecode.RETURN};
-        assertPartialEvalEquals("constant42", new Program("manyIfsProgram", bytecodes, 0, 3));
+        assertPartialEvalEquals("constant42", new Program(bytecodes, 0, 3));
     }
 }

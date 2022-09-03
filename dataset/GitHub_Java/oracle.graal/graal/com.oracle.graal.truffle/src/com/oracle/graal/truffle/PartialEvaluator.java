@@ -85,7 +85,7 @@ public class PartialEvaluator {
 
     public PartialEvaluator(Providers providers, GraphBuilderConfiguration configForRoot, TruffleCache truffleCache, SnippetReflectionProvider snippetReflection) {
         this.providers = providers;
-        this.canonicalizer = new CanonicalizerPhase();
+        this.canonicalizer = new CanonicalizerPhase(!ImmutableCode.getValue());
         this.snippetReflection = snippetReflection;
         this.truffleCache = truffleCache;
         this.callDirectMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.getCallDirectMethod());
@@ -276,14 +276,13 @@ public class PartialEvaluator {
             }
         }
 
-        // Perform conditional elimination.
-        new DominatorConditionalEliminationPhase(false).apply(graph);
-
-        canonicalizer.apply(graph, tierContext);
+        // Perform dead code elimination. Dead nodes mainly come from parse time canonicalizations.
+        new DeadCodeEliminationPhase().apply(graph);
 
         // Do single partial escape and canonicalization pass.
         try (Scope pe = Debug.scope("TrufflePartialEscape", graph)) {
             new PartialEscapePhase(true, canonicalizer).apply(graph, tierContext);
+            new IncrementalCanonicalizerPhase<>(canonicalizer, new ConditionalEliminationPhase()).apply(graph, tierContext);
         } catch (Throwable t) {
             Debug.handle(t);
         }

@@ -55,27 +55,20 @@ public interface GraphBuilderPlugin {
     }
 
     /**
-     * Plugin for specifying what is inlined during graph parsing.
+     * Plugin for customizing how the graph builder handles a CHECKCAST instruction in the context
+     * of the instruction that consumes it from the stack.
      */
-    public interface InlineInvokePlugin extends GraphBuilderPlugin {
+    public interface CheckCastPlugin extends GraphBuilderPlugin {
+        boolean apply(GraphBuilderContext builder, ResolvedJavaType type, ValueNode object, JavaTypeProfile profileForTypeCheck);
+    }
 
-        /**
-         * Gets the method to be inlined for a call to a given method. A non-null return value other
-         * than {@code method} is interpreted as a
-         * {@linkplain GraphBuilderContext#parsingReplacement() replacement} by the graph builder
-         * context used for inlining it.
-         *
-         * @param method the target method of an invoke
-         * @param args the arguments to the invoke
-         * @param returnType the return type derived from {@code method}'s signature
-         * @return the method to inline for a call to {@code method} or null if the call should not
-         *         be inlined
-         */
-        ResolvedJavaMethod getInlinedMethod(GraphBuilderContext builder, ResolvedJavaMethod method, ValueNode[] args, JavaType returnType);
+    public interface InlineInvokePlugin extends GraphBuilderPlugin {
 
         default void postInline(@SuppressWarnings("unused") ResolvedJavaMethod inlinedTargetMethod) {
 
         }
+
+        ResolvedJavaMethod getInlinedMethod(GraphBuilderContext builder, ResolvedJavaMethod method, ValueNode[] args, JavaType returnType, int depth);
     }
 
     public interface LoopExplosionPlugin extends GraphBuilderPlugin {
@@ -89,10 +82,9 @@ public interface GraphBuilderPlugin {
     }
 
     /**
-     * Plugin for handling an invocation based on some property of the method being invoked such as
-     * any annotations it may have.
+     * Plugin for handling an invocation based on the annotations of the invoked method.
      */
-    public interface GenericInvocationPlugin extends GraphBuilderPlugin {
+    public interface AnnotatedInvocationPlugin extends GraphBuilderPlugin {
         /**
          * Executes this plugin for an invocation of a given method with a given set of arguments.
          *
