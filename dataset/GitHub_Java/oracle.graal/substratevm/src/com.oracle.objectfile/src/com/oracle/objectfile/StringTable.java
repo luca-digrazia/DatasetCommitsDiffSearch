@@ -22,15 +22,18 @@
  */
 package com.oracle.objectfile;
 
-import java.io.CharConversionException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
+import com.oracle.objectfile.io.AssemblyBuffer;
+import com.oracle.objectfile.io.InputDisassembler;
 import com.oracle.objectfile.io.OutputAssembler;
-import com.oracle.objectfile.io.Utf8;
 
 /**
  * Representation of a string section that complies to the usual format (plain list of \0-terminated
@@ -53,25 +56,23 @@ public class StringTable {
     }
 
     public StringTable(ByteBuffer buffer) {
-        read(buffer);
+        read(AssemblyBuffer.createInputDisassembler(buffer), buffer.limit() - buffer.position());
     }
 
-    public void read(ByteBuffer buffer) {
-        try {
-            // FIXME: this is wrong if suffix encoding is used (?)
-            while (buffer.position() < buffer.limit()) {
-                final int index = buffer.position();
-                String s = Utf8.utf8ToString(true, buffer);
-                if (stringMap.containsKey(index)) {
-                    throw new IllegalStateException("offset cannot be re-used");
-                }
-                stringMap.put(index, s);
-                stringToIndexMap.put(s, index);
+    public void read(InputDisassembler db, int size) {
+        int charsRead = 0;
+        // FIXME: this is wrong if suffix encoding is used
+        while (charsRead < size) {
+            final String s = db.readZeroTerminatedString();
+            if (stringMap.get(charsRead) != null) {
+                throw new IllegalStateException("offset cannot be re-used");
             }
-            totalSize = buffer.position();
-        } catch (CharConversionException e) {
-            throw new RuntimeException(e);
+            Integer index = charsRead;
+            stringMap.put(index, s);
+            stringToIndexMap.put(s, index);
+            charsRead += s.length() + 1; // also count the trailing 0 char
         }
+        totalSize = charsRead;
     }
 
     /**
@@ -79,13 +80,14 @@ public class StringTable {
      * during from-scratch construction of the string table only!
      */
     public long add(String s) {
+        // TODO improve this entire class: it would probably be better to operate on a blob
         Integer index = stringToIndexMap.get(s);
         if (index != null) {
             return index;
         }
         int newIndex = totalSize;
         stringMap.put(newIndex, s);
-        totalSize += Utf8.utf8Length(s) + 1 /* zero termination */;
+        totalSize += s.length() + 1;
         return newIndex;
     }
 
@@ -101,23 +103,55 @@ public class StringTable {
         return stringMap.get(indexFor(s));
     }
 
+    /**
+     * Retrieve a String from the table.
+     */
+    public String fromIndex(int index) {
+        Integer floorKey = stringMap.floorKey(index);
+        Map.Entry<Integer, String> ent = stringMap.floorEntry(index);
+        if (ent != null) {
+            assert index >= floorKey;
+            String toReturn = ent.getValue().substring(index - floorKey);
+            if (index != floorKey) {
+                // store it in the map for fast subsequent access
+                stringMap.put(index, toReturn);
+            }
+            return toReturn;
+        }
+        return null;
+    }
+
+    private List<Integer> sortedKeys() {
+        List<Integer> keys = Arrays.asList(stringMap.keySet().toArray(INTEGER_ARRAY_SENTINEL));
+        Collections.sort(keys);
+        return keys;
+    }
+
+    private static final Integer[] INTEGER_ARRAY_SENTINEL = new Integer[0];
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("str\nindex   string\n==========================================================================\n");
-        for (Integer idx : stringMap.keySet()) {
+        for (Integer idx : sortedKeys()) {
             sb.append(String.format("%5d   %s\n", idx, stringMap.get(idx)));
         }
         return sb.toString();
     }
 
     public void write(OutputAssembler out) {
-        ByteBuffer blob = ByteBuffer.allocate(totalSize);
-        for (Integer index : stringMap.keySet()) {
-            assert blob.position() == index;
+        byte[] blob = new byte[totalSize];
+        int w = 0;
+        for (Integer index : sortedKeys()) {
+            assert index == w;
             String s = stringMap.get(index);
-            Utf8.substringToUtf8(blob, s, 0, s.length(), true);
+            byte[] sb = s.getBytes();
+            assert sb.length == s.length();
+            System.arraycopy(sb, 0, blob, w, sb.length);
+            blob[w + sb.length] = 0;
+            w += sb.length + 1;
         }
-        out.writeBlob(blob.array());
+        assert w == blob.length;
+        out.writeBlob(blob);
     }
 
 }
