@@ -167,7 +167,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
         return true;
     }
 
-    private static final String SystemClassName = "Ljava/lang/System;";
+    private static final String SystemClassName = MetaUtil.toInternalName(System.class.getName());
 
     @Override
     public Constant readConstantValue(Constant receiver) {
