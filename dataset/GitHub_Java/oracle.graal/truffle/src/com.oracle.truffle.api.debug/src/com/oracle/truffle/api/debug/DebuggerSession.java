@@ -855,7 +855,7 @@ public final class DebuggerSession implements Closeable {
             }
         }
         if (s.isKill()) {   // ComposedStrategy can become kill
-            throw new KillException(source.getContext().getInstrumentedNode());
+            throw new KillException();
         }
     }
 
@@ -968,7 +968,7 @@ public final class DebuggerSession implements Closeable {
 
         setSteppingStrategy(currentThread, strategy, true);
         if (strategy.isKill()) {
-            throw new KillException(context.getInstrumentedNode());
+            throw new KillException();
         } else if (strategy.isUnwind()) {
             ThreadDeath unwind = context.createUnwind(null, rootBinding);
             ((SteppingStrategy.Unwind) strategy).unwind = unwind;
@@ -1073,9 +1073,6 @@ public final class DebuggerSession implements Closeable {
         LanguageInfo info = rootNode.getLanguageInfo();
         if (info == null) {
             throw new IllegalArgumentException("Cannot evaluate in context using a without an associated TruffleLanguage.");
-        }
-        if (!info.isInteractive()) {
-            throw new IllegalStateException("Can not evaluate in a non-interactive language.");
         }
 
         final Source source = Source.newBuilder(code).name("eval in context").language(info.getId()).mimeType("content/unknown").build();
