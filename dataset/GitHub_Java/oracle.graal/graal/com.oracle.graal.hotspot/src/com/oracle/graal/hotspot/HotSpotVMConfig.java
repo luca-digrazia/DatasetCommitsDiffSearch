@@ -137,9 +137,6 @@ public final class HotSpotVMConfig extends CompilerObject {
      */
     public int threadTlabEndOffset;
 
-    /**
-     * The value of JavaThread::threadObj_offset().
-     */
     public int threadObjectOffset;
 
     /**
@@ -234,11 +231,6 @@ public final class HotSpotVMConfig extends CompilerObject {
      * Value of JVM_ACC_HAS_FINALIZER in accessFlags.hpp.
      */
     public int klassHasFinalizerFlag;
-
-    /**
-     * The value of JavaThread::is_method_handle_return_offset().
-     */
-    public int threadIsMethodHandleReturnOffset;
 
     /**
      * Offset of the _exception_oop field in Thread (defined in thread.hpp). This field is used to
@@ -400,8 +392,7 @@ public final class HotSpotVMConfig extends CompilerObject {
     public long threadIsInterruptedAddress;
     public long vmMessageAddress;
     public long identityHashCodeAddress;
-    public long exceptionHandlerForPcAddress;
-    public long exceptionHandlerForReturnAddressAddress;
+    public long handleExceptionForPcAddress;
 
     public int deoptReasonNullCheck;
     public int deoptReasonRangeCheck;
