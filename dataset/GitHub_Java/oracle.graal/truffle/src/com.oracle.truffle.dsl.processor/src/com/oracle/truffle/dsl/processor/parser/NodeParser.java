@@ -103,6 +103,7 @@ import com.oracle.truffle.dsl.processor.model.SpecializationData.SpecializationK
 import com.oracle.truffle.dsl.processor.model.SpecializationThrowsData;
 import com.oracle.truffle.dsl.processor.model.TemplateMethod;
 import com.oracle.truffle.dsl.processor.model.TypeSystemData;
+import java.util.BitSet;
 
 public class NodeParser extends AbstractParser<NodeData> {
 
@@ -1753,14 +1754,14 @@ public class NodeParser extends AbstractParser<NodeData> {
 
     private static void verifyFrame(NodeData node) {
         final List<NodeExecutionData> childExecutions = node.getChildExecutions();
-        final ExecutableTypeData[] requiresFrameParameter = new ExecutableTypeData[childExecutions.size()];
+        final BitSet requiresFrameParameter = new BitSet(childExecutions.size());
         boolean needsCheck = false;
         for (int i = 0; i < childExecutions.size(); i++) {
             final NodeChildData childExecution = childExecutions.get(i).getChild();
             if (childExecution != null) {
                 for (ExecutableTypeData executable : childExecution.getNodeData().getExecutableTypes()) {
                     if (executable.getFrameParameter() != null) {
-                        requiresFrameParameter[i] = executable;
+                        requiresFrameParameter.set(i);
                         needsCheck = true;
                         break;
                     }
@@ -1770,34 +1771,18 @@ public class NodeParser extends AbstractParser<NodeData> {
         if (needsCheck) {
             for (ExecutableTypeData executable : node.getExecutableTypes()) {
                 if (executable.getFrameParameter() == null) {
-                    for (int executionIndex = executable.getEvaluatedCount(); executionIndex < node.getExecutionCount(); executionIndex++) {
-                        if (requiresFrameParameter[executionIndex] != null) {
-                            node.addError(String.format(
-                                            "Child execution method: %s called from method: %s requires a frame parameter.",
-                                            printMethodSignature(requiresFrameParameter[executionIndex].getMethod()),
-                                            printMethodSignature(executable.getMethod())));
+                    int evaluated = 0;
+                    for (int executionIndex = 0; executionIndex < node.getExecutionCount(); executionIndex++) {
+                        if (evaluated < executable.getEvaluatedCount()) {
+                            evaluated++;
                         }
+                    }
+                    if (requiresFrameParameter.nextSetBit(evaluated) >= 0) {
+                        executable.addError("Child execution requires a frame parameter.");
                     }
                 }
             }
         }
-    }
-
-    private static String printMethodSignature(final ExecutableElement method) {
-        final StringBuilder result = new StringBuilder();
-        result.append(ElementUtils.getSimpleName(method.getReturnType())).append(' ').append(ElementUtils.getSimpleName((TypeElement) method.getEnclosingElement())).append("::").append(
-                        method.getSimpleName()).append('(');
-        boolean first = true;
-        for (VariableElement parameter : method.getParameters()) {
-            if (first) {
-                first = false;
-            } else {
-                result.append(", ");
-            }
-            result.append(ElementUtils.getSimpleName(parameter.asType()));
-        }
-        result.append(')');
-        return result.toString();
     }
 
     private static void verifyConstructors(NodeData nodeData) {
