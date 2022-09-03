@@ -42,28 +42,24 @@ public abstract class NodeMethodParser<E extends TemplateMethod> extends Templat
     }
 
     protected ParameterSpec createValueParameterSpec(NodeExecutionData execution) {
-        ParameterSpec spec = new ParameterSpec(execution.getName(), getPossibleParameterTypes(execution));
+        NodeData childNode = execution.getChild().getNodeData();
+        ParameterSpec spec = new ParameterSpec(execution.getName(), nodeTypeMirrors(childNode), nodeTypeIdentifiers(childNode));
         spec.setExecution(execution);
         return spec;
     }
 
-    protected Collection<TypeMirror> getPossibleParameterTypes(NodeExecutionData execution) {
-        return getNode().getGenericTypes(execution);
+    protected List<TypeMirror> nodeTypeMirrors(NodeData nodeData) {
+        return nodeData.getTypeSystem().getPrimitiveTypeMirrors();
+    }
+
+    protected Set<String> nodeTypeIdentifiers(NodeData nodeData) {
+        return nodeData.getTypeSystem().getTypeIdentifiers();
     }
 
     protected ParameterSpec createReturnParameterSpec() {
-        ParameterSpec returnValue = new ParameterSpec("returnValue", getPossibleReturnTypes());
+        ParameterSpec returnValue = new ParameterSpec("returnValue", nodeTypeMirrors(getNode()), nodeTypeIdentifiers(getNode()));
         returnValue.setExecution(getNode().getThisExecution());
         return returnValue;
-    }
-
-    protected Collection<TypeMirror> getPossibleReturnTypes() {
-        List<TypeMirror> possibleTypes = getNode().getGenericTypes(getNode().getThisExecution());
-        if (possibleTypes.size() > 1) {
-            return Arrays.asList(ElementUtils.getCommonSuperType(getContext(), possibleTypes.toArray(new TypeMirror[0])));
-        } else {
-            return possibleTypes;
-        }
     }
 
     @Override
