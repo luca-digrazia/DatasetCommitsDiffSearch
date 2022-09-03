@@ -525,50 +525,24 @@ public class Graph {
     /**
      * Client interested in one or more node related events.
      */
-    public abstract static class NodeEventListener {
+    public interface NodeEventListener {
 
         /**
-         * A method called when a change event occurs.
-         *
-         * This method dispatches the event to user-defined triggers. The methods that change the
-         * graph (typically in Graph and Node) must call this method to dispatch the event.
+         * Default handler for events.
          *
          * @param e an event
          * @param node the node related to {@code e}
          */
-        final void event(NodeEvent e, Node node) {
-            switch (e) {
-                case INPUT_CHANGED:
-                    inputChanged(node);
-                    break;
-                case ZERO_USAGES:
-                    usagesDroppedToZero(node);
-                    break;
-                case NODE_ADDED:
-                    nodeAdded(node);
-                    break;
-                case NODE_REMOVED:
-                    nodeRemoved(node);
-                    break;
-            }
-            changed(e, node);
+        default void event(NodeEvent e, Node node) {
         }
 
         /**
-         * Notifies this listener about any change event in the graph.
-         *
-         * @param e an event
-         * @param node the node related to {@code e}
-         */
-        public void changed(NodeEvent e, Node node) {
-        }
-
-        /**
-         * Notifies this listener about a change in a node's inputs.
+         * Notifies this listener of a change in a node's inputs.
          *
          * @param node a node who has had one of its inputs changed
          */
-        public void inputChanged(Node node) {
+        default void inputChanged(Node node) {
+            event(NodeEvent.INPUT_CHANGED, node);
         }
 
         /**
@@ -576,7 +550,8 @@ public class Graph {
          *
          * @param node a node whose {@link Node#usages()} just became empty
          */
-        public void usagesDroppedToZero(Node node) {
+        default void usagesDroppedToZero(Node node) {
+            event(NodeEvent.ZERO_USAGES, node);
         }
 
         /**
@@ -584,7 +559,8 @@ public class Graph {
          *
          * @param node a node that was just added to the graph
          */
-        public void nodeAdded(Node node) {
+        default void nodeAdded(Node node) {
+            event(NodeEvent.NODE_ADDED, node);
         }
 
         /**
@@ -592,7 +568,8 @@ public class Graph {
          *
          * @param node
          */
-        public void nodeRemoved(Node node) {
+        default void nodeRemoved(Node node) {
+            event(NodeEvent.NODE_REMOVED, node);
         }
     }
 
@@ -620,7 +597,7 @@ public class Graph {
         }
     }
 
-    private static class ChainedNodeEventListener extends NodeEventListener {
+    private static class ChainedNodeEventListener implements NodeEventListener {
 
         NodeEventListener head;
         NodeEventListener next;
@@ -632,32 +609,20 @@ public class Graph {
 
         @Override
         public void nodeAdded(Node node) {
-            head.event(NodeEvent.NODE_ADDED, node);
-            next.event(NodeEvent.NODE_ADDED, node);
+            head.nodeAdded(node);
+            next.nodeAdded(node);
         }
 
         @Override
         public void inputChanged(Node node) {
-            head.event(NodeEvent.INPUT_CHANGED, node);
-            next.event(NodeEvent.INPUT_CHANGED, node);
+            head.inputChanged(node);
+            next.inputChanged(node);
         }
 
         @Override
         public void usagesDroppedToZero(Node node) {
-            head.event(NodeEvent.ZERO_USAGES, node);
-            next.event(NodeEvent.ZERO_USAGES, node);
-        }
-
-        @Override
-        public void nodeRemoved(Node node) {
-            head.event(NodeEvent.NODE_REMOVED, node);
-            next.event(NodeEvent.NODE_REMOVED, node);
-        }
-
-        @Override
-        public void changed(NodeEvent e, Node node) {
-            head.event(e, node);
-            next.event(e, node);
+            head.usagesDroppedToZero(node);
+            next.usagesDroppedToZero(node);
         }
     }
 
@@ -1072,7 +1037,7 @@ public class Graph {
         updateNodeCaches(node);
 
         if (nodeEventListener != null) {
-            nodeEventListener.event(NodeEvent.NODE_ADDED, node);
+            nodeEventListener.nodeAdded(node);
         }
         afterRegister(node);
     }
@@ -1135,7 +1100,7 @@ public class Graph {
         nodesDeletedSinceLastCompression++;
 
         if (nodeEventListener != null) {
-            nodeEventListener.event(NodeEvent.NODE_ADDED, node);
+            nodeEventListener.nodeRemoved(node);
         }
 
         // nodes aren't removed from the type cache here - they will be removed during iteration
