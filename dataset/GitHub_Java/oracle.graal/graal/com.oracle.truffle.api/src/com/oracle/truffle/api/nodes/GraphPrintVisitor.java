@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -211,15 +209,13 @@ public class GraphPrintVisitor {
 
             setNodeProperty(node, "name", node.getClass().getSimpleName().replaceFirst("Node$", ""));
             NodeInfo nodeInfo = node.getClass().getAnnotation(NodeInfo.class);
-            if (nodeInfo != null) {
-                setNodeProperty(node, "kind", nodeInfo.kind());
-                if (!nodeInfo.shortName().isEmpty()) {
-                    setNodeProperty(node, "shortName", nodeInfo.shortName());
-                }
+            if (nodeInfo != null && !nodeInfo.shortName().isEmpty()) {
+                setNodeProperty(node, "shortName", nodeInfo.shortName());
             }
-            setNodeProperty(node, "class", node.getClass().getSimpleName());
+            setNodeProperty(node, "nodeType", (Node.class.isAssignableFrom(node.getClass()) ? Node.class.getSimpleName() : "other"));
+            setNodeProperty(node, "nodeClass", node.getClass().getSimpleName());
+            copyDebugProperties(node); // TODO: may overwrite property "name"? (currently allowed)
             readNodeProperties((Node) node);
-            copyDebugProperties(node);
         }
     }
 
