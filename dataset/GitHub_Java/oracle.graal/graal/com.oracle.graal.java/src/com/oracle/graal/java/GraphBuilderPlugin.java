@@ -22,13 +22,8 @@
  */
 package com.oracle.graal.java;
 
-import java.lang.reflect.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.java.GraphBuilderPhase.Instance.BytecodeParser;
-import com.oracle.graal.java.GraphBuilderPlugin.InlineInvokePlugin.InlineInfo;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 
@@ -39,7 +34,7 @@ public interface GraphBuilderPlugin {
 
     public interface LoadFieldPlugin extends GraphBuilderPlugin {
         @SuppressWarnings("unused")
-        default boolean apply(GraphBuilderContext b, ValueNode receiver, ResolvedJavaField field) {
+        default boolean apply(GraphBuilderContext builder, ValueNode receiver, ResolvedJavaField field) {
             return false;
         }
 
@@ -48,77 +43,38 @@ public interface GraphBuilderPlugin {
             return false;
         }
 
-        default boolean tryConstantFold(GraphBuilderContext b, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ResolvedJavaField field, JavaConstant receiver) {
-            JavaConstant result = constantReflection.readConstantFieldValue(field, receiver);
+        default boolean tryConstantFold(GraphBuilderContext builder, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ResolvedJavaField field, JavaConstant asJavaConstant) {
+            JavaConstant result = constantReflection.readConstantFieldValue(field, asJavaConstant);
             if (result != null) {
-                ConstantNode constantNode = b.append(ConstantNode.forConstant(result, metaAccess));
-                b.push(constantNode.getKind().getStackKind(), constantNode);
+                ConstantNode constantNode = builder.append(ConstantNode.forConstant(result, metaAccess));
+                builder.push(constantNode.getKind().getStackKind(), constantNode);
                 return true;
             }
             return false;
         }
     }
 
-    public interface LoadIndexedPlugin extends GraphBuilderPlugin {
-        @SuppressWarnings("unused")
-        default boolean apply(GraphBuilderContext b, ValueNode array, ValueNode index, Kind elementKind) {
-            return false;
-        }
-    }
-
     /**
-     * Plugin for specifying what is inlined during graph parsing or for post-processing non-inlined
-     * invocations that result in {@link Invoke} nodes.
+     * Plugin for specifying what is inlined during graph parsing.
      */
     public interface InlineInvokePlugin extends GraphBuilderPlugin {
 
-        public static class InlineInfo {
-
-            /**
-             * The method to be inlined. If this is not equal to the {@code method} argument passed
-             * to {@link InlineInvokePlugin#getClass()}, the graph builder context interprets it as
-             * a {@linkplain GraphBuilderContext.Replacement replacement}.
-             */
-            public final ResolvedJavaMethod methodToInline;
-
-            /**
-             * Specifies if {@link #methodToInline} is an intrinsic for the original method. If so,
-             * any {@link StateSplit} node created in the (recursive) inlining scope will be given a
-             * frame state that restarts the interpreter just before the intrinsified invocation.
-             */
-            public final boolean adoptBeforeCallFrameState;
-
-            public InlineInfo(ResolvedJavaMethod methodToInline, boolean adoptBeforeCallFrameState) {
-                this.methodToInline = methodToInline;
-                this.adoptBeforeCallFrameState = adoptBeforeCallFrameState;
-            }
-        }
-
         /**
-         * Determines whether a call to a given method is to be inlined.
+         * Gets the method to be inlined for a call to a given method. A non-null return value other
+         * than {@code method} is interpreted as a
+         * {@linkplain GraphBuilderContext#parsingReplacement() replacement} by the graph builder
+         * context used for inlining it.
          *
          * @param method the target method of an invoke
          * @param args the arguments to the invoke
          * @param returnType the return type derived from {@code method}'s signature
+         * @return the method to inline for a call to {@code method} or null if the call should not
+         *         be inlined
          */
-        default InlineInfo getInlineInfo(@SuppressWarnings("unused") GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args, JavaType returnType) {
-            return null;
-        }
+        ResolvedJavaMethod getInlinedMethod(GraphBuilderContext builder, ResolvedJavaMethod method, ValueNode[] args, JavaType returnType);
 
-        /**
-         * @param inlinedTargetMethod
-         */
-        default void postInline(ResolvedJavaMethod inlinedTargetMethod) {
-        }
+        default void postInline(@SuppressWarnings("unused") ResolvedJavaMethod inlinedTargetMethod) {
 
-        /**
-         * Notifies this plugin of the {@link Invoke} node created for a method that was not inlined
-         * per {@link #getInlineInfo}.
-         *
-         * @param method the method that was not inlined
-         * @param invoke the invoke node created for the call to {@code method}
-         */
-        default void notifyOfNoninlinedInvoke(@SuppressWarnings("unused") GraphBuilderContext b, ResolvedJavaMethod method, Invoke invoke) {
         }
     }
 
@@ -129,7 +85,7 @@ public interface GraphBuilderPlugin {
     }
 
     public interface ParameterPlugin extends GraphBuilderPlugin {
-        FloatingNode interceptParameter(GraphBuilderContext b, int index, Stamp stamp);
+        FloatingNode interceptParameter(int index);
     }
 
     /**
@@ -142,7 +98,7 @@ public interface GraphBuilderPlugin {
          *
          * @return {@code true} if this plugin handled the invocation, {@code false} if not
          */
-        boolean apply(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args);
+        boolean apply(GraphBuilderContext builder, ResolvedJavaMethod method, ValueNode[] args);
     }
 
     /**
@@ -150,99 +106,67 @@ public interface GraphBuilderPlugin {
      */
     public interface InvocationPlugin extends GraphBuilderPlugin {
         /**
-         * @see #execute
+         * @see #execute(GraphBuilderContext, InvocationPlugin, ValueNode[])
          */
-        default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod) {
-            throw invalidHandler(b, targetMethod);
+        default boolean apply(GraphBuilderContext builder) {
+            throw invalidHandler(builder);
         }
 
         /**
-         * @see #execute
+         * @see #execute(GraphBuilderContext, InvocationPlugin, ValueNode[])
          */
-        default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, ValueNode arg) {
-            throw invalidHandler(b, targetMethod, arg);
+        default boolean apply(GraphBuilderContext builder, ValueNode arg) {
+            throw invalidHandler(builder, arg);
         }
 
         /**
-         * @see #execute
+         * @see #execute(GraphBuilderContext, InvocationPlugin, ValueNode[])
          */
-        default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, ValueNode arg1, ValueNode arg2) {
-            throw invalidHandler(b, targetMethod, arg1, arg2);
+        default boolean apply(GraphBuilderContext builder, ValueNode arg1, ValueNode arg2) {
+            throw invalidHandler(builder, arg1, arg2);
         }
 
         /**
-         * @see #execute
+         * @see #execute(GraphBuilderContext, InvocationPlugin, ValueNode[])
          */
-        default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, ValueNode arg1, ValueNode arg2, ValueNode arg3) {
-            throw invalidHandler(b, targetMethod, arg1, arg2, arg3);
+        default boolean apply(GraphBuilderContext builder, ValueNode arg1, ValueNode arg2, ValueNode arg3) {
+            throw invalidHandler(builder, arg1, arg2, arg3);
         }
 
         /**
-         * @see #execute
+         * @see #execute(GraphBuilderContext, InvocationPlugin, ValueNode[])
          */
-        default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, ValueNode arg1, ValueNode arg2, ValueNode arg3, ValueNode arg4) {
-            throw invalidHandler(b, targetMethod, arg1, arg2, arg3, arg4);
+        default boolean apply(GraphBuilderContext builder, ValueNode arg1, ValueNode arg2, ValueNode arg3, ValueNode arg4) {
+            throw invalidHandler(builder, arg1, arg2, arg3, arg4);
         }
-
-        /**
-         * @see #execute
-         */
-        default boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, ValueNode arg1, ValueNode arg2, ValueNode arg3, ValueNode arg4, ValueNode arg5) {
-            throw invalidHandler(b, targetMethod, arg1, arg2, arg3, arg4, arg5);
-        }
-
-        default ResolvedJavaMethod getSubstitute() {
-            return null;
-        }
-
-        boolean ALLOW_INVOCATION_PLUGIN_TO_DO_INLINING = false;
 
         /**
          * Executes a given plugin against a set of invocation arguments by dispatching to the
-         * {@code apply(...)} method that matches the number of arguments.
+         * plugin's {@code apply(...)} method that matches the number of arguments.
          *
-         * @param targetMethod the method for which plugin is being applied
-         * @return {@code true} if the plugin handled the invocation of {@code targetMethod}
-         *         {@code false} if the graph builder should process the invoke further (e.g., by
-         *         inlining it or creating an {@link Invoke} node). A plugin that does not handle an
-         *         invocation must not modify the graph being constructed.
+         * @return {@code true} if the plugin handled the invocation, {@code false} if the graph
+         *         builder should process the invoke further (e.g., by inlining it or creating an
+         *         {@link Invoke} node). A plugin that does not handle an invocation must not modify
+         *         the graph being constructed.
          */
-        static boolean execute(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin plugin, ValueNode[] args) {
-            if (ALLOW_INVOCATION_PLUGIN_TO_DO_INLINING) {
-                ResolvedJavaMethod subst = plugin.getSubstitute();
-                if (subst != null) {
-                    return ((BytecodeParser) b).inline(null, targetMethod, new InlineInfo(subst, false), args);
-                }
-            }
+        static boolean execute(GraphBuilderContext builder, InvocationPlugin plugin, ValueNode[] args) {
             if (args.length == 0) {
-                return plugin.apply(b, targetMethod);
+                return plugin.apply(builder);
             } else if (args.length == 1) {
-                return plugin.apply(b, targetMethod, args[0]);
+                return plugin.apply(builder, args[0]);
             } else if (args.length == 2) {
-                return plugin.apply(b, targetMethod, args[0], args[1]);
+                return plugin.apply(builder, args[0], args[1]);
             } else if (args.length == 3) {
-                return plugin.apply(b, targetMethod, args[0], args[1], args[2]);
+                return plugin.apply(builder, args[0], args[1], args[2]);
             } else if (args.length == 4) {
-                return plugin.apply(b, targetMethod, args[0], args[1], args[2], args[3]);
-            } else if (args.length == 5) {
-                return plugin.apply(b, targetMethod, args[0], args[1], args[2], args[3], args[4]);
+                return plugin.apply(builder, args[0], args[1], args[2], args[3]);
             } else {
-                throw plugin.invalidHandler(b, targetMethod, args);
+                throw plugin.invalidHandler(builder, args);
             }
         }
 
-        default Error invalidHandler(@SuppressWarnings("unused") GraphBuilderContext b, ResolvedJavaMethod targetMethod, ValueNode... args) {
-            return new GraalInternalError("Invocation plugin for %s does not handle invocations with %d arguments", targetMethod.format("%H.%n(%p)"), args.length);
-        }
-
-        default StackTraceElement getApplySourceLocation(MetaAccessProvider metaAccess) {
-            Class<?> c = getClass();
-            for (Method m : c.getDeclaredMethods()) {
-                if (m.getName().equals("apply")) {
-                    return metaAccess.lookupJavaMethod(m).asStackTraceElement(0);
-                }
-            }
-            throw new GraalInternalError("could not find method named \"apply\" in " + c.getName());
+        default Error invalidHandler(@SuppressWarnings("unused") GraphBuilderContext builder, ValueNode... args) {
+            return new GraalInternalError("Invocation plugin %s does not handle invocations with %d arguments", getClass().getSimpleName(), args.length);
         }
     }
 }

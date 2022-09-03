@@ -26,145 +26,28 @@ package com.oracle.graal.java;
 import static com.oracle.graal.api.code.TypeCheckHints.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.bytecode.Bytecodes.*;
-import static com.oracle.graal.java.AbstractBytecodeParser.Options.*;
 
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
-import com.oracle.graal.java.GraphBuilderPhase.Instance.BytecodeParser;
 import com.oracle.graal.java.GraphBuilderPlugin.LoadFieldPlugin;
-import com.oracle.graal.java.GraphBuilderPlugin.LoadIndexedPlugin;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 
 public abstract class AbstractBytecodeParser {
 
-    public static class Options {
+    static class Options {
         // @formatter:off
         @Option(help = "The trace level for the bytecode parser used when building a graph from bytecode", type = OptionType.Debug)
         public static final OptionValue<Integer> TraceBytecodeParserLevel = new OptionValue<>(0);
-
-        @Option(help = "Inlines trivial methods during bytecode parsing.", type = OptionType.Expert)
-        public static final StableOptionValue<Boolean> InlineDuringParsing = new StableOptionValue<>(false);
-
-        @Option(help = "Traces inlining performed during bytecode parsing.", type = OptionType.Debug)
-        public static final StableOptionValue<Boolean> TraceInlineDuringParsing = new StableOptionValue<>(false);
-
-        @Option(help = "Traces use of plugins during bytecode parsing.", type = OptionType.Debug)
-        public static final StableOptionValue<Boolean> TraceParserPlugins = new StableOptionValue<>(false);
-
-        @Option(help = "Maximum depth when inlining during bytecode parsing.", type = OptionType.Debug)
-        public static final StableOptionValue<Integer> InlineDuringParsingMaxDepth = new StableOptionValue<>(10);
-
-        @Option(help = "Dump graphs after non-trivial changes during bytecode parsing.", type = OptionType.Debug)
-        public static final StableOptionValue<Boolean> DumpDuringGraphBuilding = new StableOptionValue<>(false);
-
-        @Option(help = "Max number of loop explosions per method.", type = OptionType.Debug)
-        public static final OptionValue<Integer> MaximumLoopExplosionCount = new OptionValue<>(10000);
-
-        @Option(help = "Do not bail out but throw an exception on failed loop explosion.", type = OptionType.Debug)
-        public static final OptionValue<Boolean> FailedLoopExplosionIsFatal = new OptionValue<>(false);
-
         // @formatter:on
-    }
-
-    /**
-     * Information about a substitute method being parsed in lieu of an original method. This can
-     * happen when a call to a {@link MethodSubstitution} is encountered or the root of compilation
-     * is a {@link MethodSubstitution} or a snippet.
-     */
-    static class ReplacementContext {
-        /**
-         * The method being replaced.
-         */
-        final ResolvedJavaMethod method;
-
-        /**
-         * The replacement method.
-         */
-        final ResolvedJavaMethod replacement;
-
-        public ReplacementContext(ResolvedJavaMethod method, ResolvedJavaMethod substitute) {
-            this.method = method;
-            this.replacement = substitute;
-        }
-
-        /**
-         * Determines if a call within the compilation scope of a replacement represents a call to
-         * the original method.
-         */
-        public boolean isCallToOriginal(ResolvedJavaMethod targetMethod) {
-            return method.equals(targetMethod) || replacement.equals(targetMethod);
-        }
-
-        IntrinsicContext asIntrinsic() {
-            return null;
-        }
-    }
-
-    /**
-     * Context for a replacement being inlined as a compiler intrinsic. Deoptimization within a
-     * compiler intrinic must replay the intrinsified call. This context object retains the
-     * information required to build a frame state denoting the JVM state just before the
-     * intrinsified call.
-     */
-    static class IntrinsicContext extends ReplacementContext {
-
-        /**
-         * The arguments to the intrinsified invocation.
-         */
-        private final ValueNode[] invokeArgs;
-
-        /**
-         * The BCI of the intrinsified invocation.
-         */
-        private final int invokeBci;
-
-        private FrameState invokeStateBefore;
-        private FrameState invokeStateDuring;
-
-        public IntrinsicContext(ResolvedJavaMethod method, ResolvedJavaMethod substitute, ValueNode[] invokeArgs, int invokeBci) {
-            super(method, substitute);
-            this.invokeArgs = invokeArgs;
-            this.invokeBci = invokeBci;
-        }
-
-        /**
-         * Gets the frame state that will restart the interpreter just before the intrinsified
-         * invocation.
-         */
-        public FrameState getInvokeStateBefore(BytecodeParser parent) {
-            assert !parent.parsingReplacement() || parent.replacementContext instanceof IntrinsicContext;
-            if (invokeStateDuring == null) {
-                assert invokeStateBefore == null;
-                // Find the ancestor calling the replaced method
-                BytecodeParser ancestor = parent;
-                while (ancestor.parsingReplacement()) {
-                    ancestor = ancestor.getParent();
-                }
-                invokeStateDuring = ancestor.getFrameState().create(ancestor.bci(), ancestor.getParent(), true);
-                invokeStateBefore = invokeStateDuring.duplicateModifiedBeforeCall(invokeBci, Kind.Void, invokeArgs);
-            }
-            return invokeStateBefore;
-        }
-
-        public FrameState getInvokeStateDuring() {
-            assert invokeStateDuring != null : "must only be called after getInvokeStateBefore()";
-            return invokeStateDuring;
-        }
-
-        @Override
-        IntrinsicContext asIntrinsic() {
-            return this;
-        }
     }
 
     /**
@@ -190,15 +73,18 @@ public abstract class AbstractBytecodeParser {
     protected final ConstantPool constantPool;
     protected final MetaAccessProvider metaAccess;
 
-    protected final ReplacementContext replacementContext;
+    /**
+     * Specifies if the {@linkplain #getMethod() method} being parsed implements the semantics of
+     * another method (i.e., an intrinsic) or bytecode instruction (i.e., a snippet). substitution.
+     */
+    protected final boolean parsingReplacement;
 
     /**
      * Meters the number of actual bytecodes parsed.
      */
     public static final DebugMetric BytecodesParsed = Debug.metric("BytecodesParsed");
 
-    public AbstractBytecodeParser(MetaAccessProvider metaAccess, ResolvedJavaMethod method, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts,
-                    ReplacementContext replacementContext) {
+    public AbstractBytecodeParser(MetaAccessProvider metaAccess, ResolvedJavaMethod method, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, boolean isReplacement) {
         this.graphBuilderConfig = graphBuilderConfig;
         this.optimisticOpts = optimisticOpts;
         this.metaAccess = metaAccess;
@@ -206,7 +92,7 @@ public abstract class AbstractBytecodeParser {
         this.profilingInfo = (graphBuilderConfig.getUseProfiling() ? method.getProfilingInfo() : null);
         this.constantPool = method.getConstantPool();
         this.method = method;
-        this.replacementContext = replacementContext;
+        this.parsingReplacement = isReplacement;
         assert metaAccess != null;
     }
 
@@ -218,7 +104,7 @@ public abstract class AbstractBytecodeParser {
         return stream;
     }
 
-    public int bci() {
+    protected int bci() {
         return stream.currentBCI();
     }
 
@@ -231,11 +117,11 @@ public abstract class AbstractBytecodeParser {
         if (kind == Kind.Object) {
             value = frameState.xpop();
             // astore and astore_<n> may be used to store a returnAddress (jsr)
-            assert parsingReplacement() || (value.getKind() == Kind.Object || value.getKind() == Kind.Int) : value + ":" + value.getKind();
+            assert parsingReplacement || (value.getKind() == Kind.Object || value.getKind() == Kind.Int) : value + ":" + value.getKind();
         } else {
             value = frameState.pop(kind);
         }
-        frameState.storeLocal(index, value, kind);
+        frameState.storeLocal(index, value);
     }
 
     /**
@@ -316,28 +202,11 @@ public abstract class AbstractBytecodeParser {
     protected abstract ValueNode genLoadIndexed(ValueNode index, ValueNode array, Kind kind);
 
     private void genLoadIndexed(Kind kind) {
-
         emitExplicitExceptions(frameState.peek(1), frameState.peek(0));
 
         ValueNode index = frameState.ipop();
         ValueNode array = frameState.apop();
-        if (!tryLoadIndexedPlugin(kind, index, array)) {
-            frameState.push(kind.getStackKind(), append(genLoadIndexed(array, index, kind)));
-        }
-    }
-
-    protected abstract void traceWithContext(String format, Object... args);
-
-    protected boolean tryLoadIndexedPlugin(Kind kind, ValueNode index, ValueNode array) {
-        LoadIndexedPlugin loadIndexedPlugin = graphBuilderConfig.getPlugins().getLoadIndexedPlugin();
-        if (loadIndexedPlugin != null && loadIndexedPlugin.apply((GraphBuilderContext) this, array, index, kind)) {
-            if (TraceParserPlugins.getValue()) {
-                traceWithContext("used load indexed plugin");
-            }
-            return true;
-        } else {
-            return false;
-        }
+        frameState.push(kind.getStackKind(), append(genLoadIndexed(array, index, kind)));
     }
 
     protected abstract ValueNode genStoreIndexed(ValueNode array, ValueNode index, Kind kind, ValueNode value);
@@ -646,14 +515,14 @@ public abstract class AbstractBytecodeParser {
     protected abstract void genThrow();
 
     protected JavaType lookupType(int cpi, int bytecode) {
-        maybeEagerlyResolve(cpi, bytecode);
+        eagerResolvingForSnippets(cpi, bytecode);
         JavaType result = constantPool.lookupType(cpi, bytecode);
         assert !graphBuilderConfig.unresolvedIsError() || result instanceof ResolvedJavaType;
         return result;
     }
 
     private JavaMethod lookupMethod(int cpi, int opcode) {
-        maybeEagerlyResolve(cpi, opcode);
+        eagerResolvingForSnippets(cpi, opcode);
         JavaMethod result = constantPool.lookupMethod(cpi, opcode);
         /*
          * In general, one cannot assume that the declaring class being initialized is useful, since
@@ -666,27 +535,27 @@ public abstract class AbstractBytecodeParser {
     }
 
     private JavaField lookupField(int cpi, int opcode) {
-        maybeEagerlyResolve(cpi, opcode);
+        eagerResolvingForSnippets(cpi, opcode);
         JavaField result = constantPool.lookupField(cpi, opcode);
         assert !graphBuilderConfig.unresolvedIsError() || (result instanceof ResolvedJavaField && ((ResolvedJavaField) result).getDeclaringClass().isInitialized()) : result;
         return result;
     }
 
     private Object lookupConstant(int cpi, int opcode) {
-        maybeEagerlyResolve(cpi, opcode);
+        eagerResolvingForSnippets(cpi, opcode);
         Object result = constantPool.lookupConstant(cpi);
         assert !graphBuilderConfig.eagerResolving() || !(result instanceof JavaType) || (result instanceof ResolvedJavaType) : result;
         return result;
     }
 
-    private void maybeEagerlyResolve(int cpi, int bytecode) {
-        if (graphBuilderConfig.eagerResolving() || parsingReplacement()) {
+    private void eagerResolvingForSnippets(int cpi, int bytecode) {
+        if (graphBuilderConfig.eagerResolving()) {
             constantPool.loadReferencedType(cpi, bytecode);
         }
     }
 
     private JavaTypeProfile getProfileForTypeCheck(ResolvedJavaType type) {
-        if (parsingReplacement() || profilingInfo == null || !optimisticOpts.useTypeCheckHints() || !canHaveSubtype(type)) {
+        if (parsingReplacement || profilingInfo == null || !optimisticOpts.useTypeCheckHints() || !canHaveSubtype(type)) {
             return null;
         } else {
             return profilingInfo.getTypeProfile(bci());
@@ -878,10 +747,6 @@ public abstract class AbstractBytecodeParser {
         }
     }
 
-    public boolean tryLoadFieldPlugin(JavaField field, LoadFieldPlugin loadFieldPlugin) {
-        return loadFieldPlugin.apply((GraphBuilderContext) this, (ResolvedJavaField) field);
-    }
-
     private void genPutStatic(JavaField field) {
         ValueNode value = frameState.pop(field.getKind().getStackKind());
         if (field instanceof ResolvedJavaField && ((ResolvedJavaType) field.getDeclaringClass()).isInitialized()) {
@@ -911,7 +776,7 @@ public abstract class AbstractBytecodeParser {
 
     protected abstract void genInvokeSpecial(JavaMethod target);
 
-    protected abstract void genReturn(ValueNode x, Kind kind);
+    protected abstract void genReturn(ValueNode x);
 
     protected abstract ValueNode genMonitorEnter(ValueNode x);
 
@@ -1253,12 +1118,12 @@ public abstract class AbstractBytecodeParser {
         case RET            : genRet(stream.readLocalIndex()); break;
         case TABLESWITCH    : genSwitch(new BytecodeTableSwitch(getStream(), bci())); break;
         case LOOKUPSWITCH   : genSwitch(new BytecodeLookupSwitch(getStream(), bci())); break;
-        case IRETURN        : genReturn(frameState.ipop(), Kind.Int); break;
-        case LRETURN        : genReturn(frameState.lpop(), Kind.Long); break;
-        case FRETURN        : genReturn(frameState.fpop(), Kind.Float); break;
-        case DRETURN        : genReturn(frameState.dpop(), Kind.Double); break;
-        case ARETURN        : genReturn(frameState.apop(), Kind.Object); break;
-        case RETURN         : genReturn(null, Kind.Void); break;
+        case IRETURN        : genReturn(frameState.ipop()); break;
+        case LRETURN        : genReturn(frameState.lpop()); break;
+        case FRETURN        : genReturn(frameState.fpop()); break;
+        case DRETURN        : genReturn(frameState.dpop()); break;
+        case ARETURN        : genReturn(frameState.apop()); break;
+        case RETURN         : genReturn(null); break;
         case GETSTATIC      : cpi = stream.readCPI(); genGetStatic(lookupField(cpi, opcode)); break;
         case PUTSTATIC      : cpi = stream.readCPI(); genPutStatic(lookupField(cpi, opcode)); break;
         case GETFIELD       : cpi = stream.readCPI(); genGetField(lookupField(cpi, opcode)); break;
@@ -1326,9 +1191,5 @@ public abstract class AbstractBytecodeParser {
             sb.append(' ').append(currentBlock.getJsrScope());
         }
         Debug.log("%s", sb);
-    }
-
-    public boolean parsingReplacement() {
-        return replacementContext != null;
     }
 }

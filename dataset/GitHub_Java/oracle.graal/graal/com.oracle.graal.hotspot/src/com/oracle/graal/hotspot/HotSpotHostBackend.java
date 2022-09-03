@@ -31,9 +31,9 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
-import com.oracle.graal.java.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.replacements.*;
 
 /**
  * Common functionality of HotSpot host backends.
@@ -70,14 +70,11 @@ public abstract class HotSpotHostBackend extends HotSpotBackend {
         HotSpotVMConfig config = getRuntime().getConfig();
         HotSpotHostForeignCallsProvider foreignCalls = (HotSpotHostForeignCallsProvider) providers.getForeignCalls();
         final HotSpotLoweringProvider lowerer = (HotSpotLoweringProvider) providers.getLowerer();
-        HotSpotReplacementsImpl replacements = (HotSpotReplacementsImpl) providers.getReplacements();
 
         try (InitTimer st = timer("graphBuilderPlugins.initialize")) {
-            Plugins plugins = HotSpotGraphBuilderPlugins.create(config, providers);
-            providers.setGraphBuilderPlugins(plugins);
             GraphBuilderPhase phase = (GraphBuilderPhase) providers.getSuites().getDefaultGraphBuilderSuite().findPhase(GraphBuilderPhase.class).previous();
-            phase.getGraphBuilderConfig().setPlugins(plugins);
-            replacements.completeInitialization(plugins);
+            InvocationPlugins plugins = phase.getGraphBuilderConfig().getPlugins().getInvocationPlugins();
+            registerInvocationPlugins(providers, plugins);
         }
 
         try (InitTimer st = timer("foreignCalls.initialize")) {
@@ -86,6 +83,7 @@ public abstract class HotSpotHostBackend extends HotSpotBackend {
         try (InitTimer st = timer("lowerer.initialize")) {
             lowerer.initialize(providers, config);
         }
+        HotSpotReplacementsImpl replacements = (HotSpotReplacementsImpl) providers.getReplacements();
 
         // Install intrinsics.
         if (Intrinsify.getValue()) {
@@ -106,5 +104,10 @@ public abstract class HotSpotHostBackend extends HotSpotBackend {
                 throw Debug.handle(e);
             }
         }
+    }
+
+    protected void registerInvocationPlugins(HotSpotProviders providers, InvocationPlugins plugins) {
+        StandardGraphBuilderPlugins.registerInvocationPlugins(providers.getMetaAccess(), plugins);
+        HotSpotGraphBuilderPlugins.registerInvocationPlugins(providers, plugins);
     }
 }

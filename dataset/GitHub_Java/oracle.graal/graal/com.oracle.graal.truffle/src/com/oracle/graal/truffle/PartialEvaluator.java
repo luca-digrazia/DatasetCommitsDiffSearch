@@ -31,7 +31,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.internal.*;
@@ -177,7 +176,7 @@ public class PartialEvaluator {
             this.receiver = receiver;
         }
 
-        public FloatingNode interceptParameter(GraphBuilderContext b, int index, Stamp stamp) {
+        public FloatingNode interceptParameter(int index) {
             if (index == 0) {
                 return ConstantNode.forConstant(snippetReflection.forObject(receiver), providers.getMetaAccess());
             }
@@ -197,14 +196,13 @@ public class PartialEvaluator {
             this.replacements = replacements;
         }
 
-        public InlineInfo getInlineInfo(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments, JavaType returnType) {
+        public ResolvedJavaMethod getInlinedMethod(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments, JavaType returnType) {
             if (original.getAnnotation(TruffleBoundary.class) != null) {
                 return null;
             }
             if (replacements != null && (replacements.getMethodSubstitutionMethod(original) != null || replacements.getMacroSubstitution(original) != null)) {
                 return null;
             }
-            assert !builder.parsingReplacement();
             if (original.equals(callSiteProxyMethod)) {
                 ValueNode arg1 = arguments[0];
                 if (!arg1.isConstant()) {
@@ -222,10 +220,10 @@ public class PartialEvaluator {
                 if (decision != null && decision.isInline()) {
                     inlining.push(decision);
                     builder.getAssumptions().record(new AssumptionValidAssumption((OptimizedAssumption) decision.getTarget().getNodeRewritingAssumption()));
-                    return new InlineInfo(callInlinedMethod, false, false);
+                    return callInlinedMethod;
                 }
             }
-            return new InlineInfo(original, false, false);
+            return original;
         }
 
         public void postInline(ResolvedJavaMethod inlinedTargetMethod) {
@@ -263,7 +261,7 @@ public class PartialEvaluator {
         plugins.setLoopExplosionPlugin(new LoopExplosionPlugin());
         TruffleGraphBuilderPlugins.registerInvocationPlugins(providers.getMetaAccess(), newConfig.getPlugins().getInvocationPlugins());
         new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), this.snippetReflection, providers.getConstantReflection(), newConfig,
-                        TruffleCompilerImpl.Optimizations, null).apply(graph);
+                        TruffleCompilerImpl.Optimizations, false).apply(graph);
         Debug.dump(graph, "After FastPE");
 
         // Perform deoptimize to guard conversion.
@@ -337,13 +335,13 @@ public class PartialEvaluator {
     }
 
     public StructuredGraph createRootGraph(StructuredGraph graph) {
-        new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), providers.getConstantReflection(), configForRoot, TruffleCompilerImpl.Optimizations, null).apply(graph);
+        new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), providers.getConstantReflection(), configForRoot, TruffleCompilerImpl.Optimizations, false).apply(graph);
         return graph;
     }
 
     public StructuredGraph createInlineGraph(String name, StructuredGraph caller) {
         StructuredGraph graph = new StructuredGraph(name, callInlinedMethod, AllowAssumptions.from(caller.getAssumptions() != null));
-        new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), providers.getConstantReflection(), configForRoot, TruffleCompilerImpl.Optimizations, null).apply(graph);
+        new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), providers.getConstantReflection(), configForRoot, TruffleCompilerImpl.Optimizations, false).apply(graph);
         return graph;
     }
 

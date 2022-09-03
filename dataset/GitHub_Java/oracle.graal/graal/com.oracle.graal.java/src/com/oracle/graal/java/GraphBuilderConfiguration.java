@@ -29,7 +29,6 @@ import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.java.GraphBuilderPlugin.GenericInvocationPlugin;
 import com.oracle.graal.java.GraphBuilderPlugin.InlineInvokePlugin;
 import com.oracle.graal.java.GraphBuilderPlugin.LoadFieldPlugin;
-import com.oracle.graal.java.GraphBuilderPlugin.LoadIndexedPlugin;
 import com.oracle.graal.java.GraphBuilderPlugin.LoopExplosionPlugin;
 import com.oracle.graal.java.GraphBuilderPlugin.ParameterPlugin;
 import com.oracle.graal.nodes.*;
@@ -39,14 +38,13 @@ public class GraphBuilderConfiguration {
     public static class Plugins {
         private InvocationPlugins invocationPlugins;
         private LoadFieldPlugin loadFieldPlugin;
-        private LoadIndexedPlugin loadIndexedPlugin;
         private ParameterPlugin parameterPlugin;
         private InlineInvokePlugin inlineInvokePlugin;
         private GenericInvocationPlugin genericInvocationPlugin;
         private LoopExplosionPlugin loopExplosionPlugin;
 
-        public Plugins(MetaAccessProvider metaAccess) {
-            invocationPlugins = new InvocationPlugins(metaAccess);
+        public Plugins() {
+            invocationPlugins = new InvocationPlugins();
         }
 
         public Plugins(InvocationPlugins invocationPlugins) {
@@ -71,14 +69,6 @@ public class GraphBuilderConfiguration {
 
         public void setLoadFieldPlugin(LoadFieldPlugin plugin) {
             this.loadFieldPlugin = plugin;
-        }
-
-        public LoadIndexedPlugin getLoadIndexedPlugin() {
-            return loadIndexedPlugin;
-        }
-
-        public void setLoadIndexedPlugin(LoadIndexedPlugin plugin) {
-            this.loadIndexedPlugin = plugin;
         }
 
         public ParameterPlugin getParameterPlugin() {
@@ -111,7 +101,6 @@ public class GraphBuilderConfiguration {
             }
             this.parameterPlugin = other.parameterPlugin;
             this.loadFieldPlugin = other.loadFieldPlugin;
-            this.loadIndexedPlugin = other.loadIndexedPlugin;
             this.inlineInvokePlugin = other.inlineInvokePlugin;
             this.loopExplosionPlugin = other.loopExplosionPlugin;
             this.genericInvocationPlugin = other.genericInvocationPlugin;
@@ -127,7 +116,7 @@ public class GraphBuilderConfiguration {
     private final DebugInfoMode debugInfoMode;
     private final boolean doLivenessAnalysis;
     private boolean useProfiling;
-    private Plugins plugins;
+    private Plugins plugins = new Plugins();
 
     public static enum DebugInfoMode {
         SafePointsOnly,
@@ -252,12 +241,7 @@ public class GraphBuilderConfiguration {
     }
 
     public GraphBuilderConfiguration copyPluginsFrom(GraphBuilderConfiguration other) {
-        if (other.plugins != null) {
-            if (this.plugins == null) {
-                this.plugins = new Plugins(other.plugins.getInvocationPlugins().getMetaAccess());
-            }
-            this.plugins.updateFrom(other.plugins, true);
-        }
+        this.plugins.updateFrom(other.plugins, true);
         return this;
     }
 }

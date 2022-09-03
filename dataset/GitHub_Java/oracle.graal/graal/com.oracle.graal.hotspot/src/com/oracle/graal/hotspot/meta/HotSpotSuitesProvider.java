@@ -24,17 +24,19 @@ package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 
-import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.java.*;
+import com.oracle.graal.java.GraphBuilderConfiguration.DebugInfoMode;
 import com.oracle.graal.lir.phases.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.options.DerivedOptionValue.OptionSupplier;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.replacements.*;
 
 /**
  * HotSpot implementation of {@link SuitesProvider}.
@@ -66,9 +68,9 @@ public class HotSpotSuitesProvider implements SuitesProvider {
 
     }
 
-    public HotSpotSuitesProvider(HotSpotGraalRuntimeProvider runtime, Plugins plugins) {
+    public HotSpotSuitesProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, Replacements replacements) {
         this.runtime = runtime;
-        this.defaultGraphBuilderSuite = createGraphBuilderSuite(plugins);
+        this.defaultGraphBuilderSuite = createGraphBuilderSuite(metaAccess, constantReflection, replacements);
         this.defaultSuites = new DerivedOptionValue<>(new SuitesSupplier());
         this.defaultLIRSuites = new DerivedOptionValue<>(new LIRSuitesSupplier());
     }
@@ -100,9 +102,26 @@ public class HotSpotSuitesProvider implements SuitesProvider {
         return ret;
     }
 
-    protected PhaseSuite<HighTierContext> createGraphBuilderSuite(Plugins plugins) {
+    NodeIntrinsificationPhase intrinsifier;
+
+    NodeIntrinsificationPhase getNodeIntrinsification() {
+        if (intrinsifier == null) {
+            HotSpotProviders providers = runtime.getHostProviders();
+            intrinsifier = new NodeIntrinsificationPhase(providers, providers.getSnippetReflection());
+        }
+        return intrinsifier;
+    }
+
+    MetaAccessProvider getMetaAccess() {
+        return runtime.getHostProviders().getMetaAccess();
+    }
+
+    protected PhaseSuite<HighTierContext> createGraphBuilderSuite(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, Replacements replacements) {
         PhaseSuite<HighTierContext> suite = new PhaseSuite<>();
-        GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault(plugins);
+        GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault();
+        config.getPlugins().setLoadFieldPlugin(new HotSpotLoadFieldPlugin(metaAccess, constantReflection));
+        config.getPlugins().setInlineInvokePlugin(new HotSpotInlineInvokePlugin(this, replacements));
+        config.getPlugins().setGenericInvocationPlugin(new HotSpotAnnotatedInvocationPlugin(this));
         suite.appendPhase(new GraphBuilderPhase(config));
         return suite;
     }
@@ -132,11 +151,7 @@ public class HotSpotSuitesProvider implements SuitesProvider {
     }
 
     public LIRSuites createLIRSuites() {
-        LIRSuites suites = Suites.createDefaultLIRSuites();
-        String profileInstructions = HotSpotBackend.Options.ASMInstructionProfiling.getValue();
-        if (profileInstructions != null) {
-            suites.getPostAllocationOptimizationStage().appendPhase(new HotSpotInstructionProfiling(profileInstructions));
-        }
-        return suites;
+        return Suites.createDefaultLIRSuites();
     }
+
 }
