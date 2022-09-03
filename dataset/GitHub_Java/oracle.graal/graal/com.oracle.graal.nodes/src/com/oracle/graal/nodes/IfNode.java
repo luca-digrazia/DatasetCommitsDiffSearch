@@ -140,15 +140,16 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
     @Override
     public void simplify(SimplifierTool tool) {
         if (condition() instanceof LogicNegationNode) {
+            LogicNegationNode negation = (LogicNegationNode) condition();
+            setCondition(negation.getInput());
+
             AbstractBeginNode trueSucc = trueSuccessor();
             AbstractBeginNode falseSucc = falseSuccessor();
             setTrueSuccessor(null);
             setFalseSuccessor(null);
-            LogicNegationNode negation = (LogicNegationNode) condition();
-            IfNode newIfNode = graph().add(new IfNode(negation.getInput(), falseSucc, trueSucc, 1 - trueSuccessorProbability));
-            predecessor().replaceFirstSuccessor(this, newIfNode);
-            this.safeDelete();
-            return;
+            setTrueSuccessor(falseSucc);
+            setFalseSuccessor(trueSucc);
+            setTrueSuccessorProbability(1 - trueSuccessorProbability);
         }
 
         if (condition() instanceof LogicConstantNode) {
