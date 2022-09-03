@@ -39,7 +39,6 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.jni.Mangle;
-import com.oracle.truffle.espresso.jni.NativeLibrary;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.ExceptionHandler;
 import com.oracle.truffle.espresso.meta.JavaKind;
@@ -181,25 +180,26 @@ public final class MethodInfo implements ModifiersProvider {
         }
     }
 
-    private static String buildJniNativeSignature(Meta.Method method) {
-        // Prepend JNIEnv*.
-        StringBuilder sb = new StringBuilder("(").append(NativeSimpleType.POINTER);
-        SignatureDescriptor signature = method.rawMethod().getSignature();
-
-        // Receiver for instance methods, class for static methods.
-        sb.append(", ").append(NativeSimpleType.OBJECT);
+    private static TruffleObject bind(TruffleObject library, Meta.Method m, String mangledName) {
+        StringBuilder sb = new StringBuilder("(").append(NativeSimpleType.POINTER); // Prepend
+                                                                                    // JNIEnv.
+        SignatureDescriptor signature = m.rawMethod().getSignature();
+        if (!m.isStatic()) {
+            sb.append(", ").append(NativeSimpleType.OBJECT); // this
+        } else {
+            sb.append(", ").append(NativeSimpleType.OBJECT); // clazz
+        }
         int argCount = signature.getParameterCount(false);
         for (int i = 0; i < argCount; ++i) {
             sb.append(", ").append(kindToType(signature.getParameterKind(i)));
         }
-        sb.append("): ").append(kindToType(signature.resultKind()));
-
-        return sb.toString();
-    }
-
-    private static TruffleObject bind(TruffleObject library, Meta.Method m, String mangledName) {
-        String signature = buildJniNativeSignature(m);
-        return NativeLibrary.lookupAndBind(library, mangledName, signature);
+        sb.append("):").append(kindToType(signature.resultKind()));
+        try {
+            TruffleObject fn = (TruffleObject) ForeignAccess.sendRead(Message.READ.createNode(), library, mangledName);
+            return (TruffleObject) ForeignAccess.sendInvoke(Message.INVOKE.createNode(), fn, "bind", sb.toString());
+        } catch (UnsupportedTypeException | UnsupportedMessageException | UnknownIdentifierException | ArityException e) {
+            throw EspressoError.shouldNotReachHere();
+        }
     }
 
     @CompilerDirectives.TruffleBoundary
@@ -207,24 +207,27 @@ public final class MethodInfo implements ModifiersProvider {
         // TODO(peterssen): Make lazy call target thread-safe.
         if (callTarget == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-
-            // TODO(peterssen): Rethink method substitution logic.
             CallTarget redirectedMethod = getContext().getVm().getIntrinsic(this);
             if (redirectedMethod != null) {
                 callTarget = redirectedMethod;
             } else {
                 if (this.isNative()) {
-                    // Bind native method.
                     System.err.println("Linking native method: " + meta(this).getDeclaringClass().getName() + "#" + getName() + " " + getSignature());
                     Meta meta = getContext().getMeta();
-
                     Meta.Method.WithInstance findNative = meta.knownKlass(ClassLoader.class)
                             .staticMethod("findNative", long.class, ClassLoader.class, String.class);
 
                     // Lookup the short name first, otherwise lookup the long name (with signature).
-                    callTarget = lookupJniCallTarget(findNative, false);
-                    if (callTarget == null) {
-                        callTarget = lookupJniCallTarget(findNative,true);
+                    for (boolean withSignature: new boolean[]{false, true}) {
+                        String mangledName = Mangle.mangleMethod(meta(this), withSignature);
+                        long handle = (long) findNative.invoke(getDeclaringClass().getClassLoader(), mangledName);
+                        if (handle == 0) { // not found
+                            continue ;
+                        }
+                        TruffleObject library = getContext().getNativeLibraries().get(handle);
+                        TruffleObject nativeMethod = bind(library, meta(this), mangledName);
+                        callTarget = Truffle.getRuntime().createCallTarget(new JniNativeNode(getContext().getLanguage(), nativeMethod));
+                        break;
                     }
 
                     if (callTarget == null) {
@@ -237,17 +240,6 @@ public final class MethodInfo implements ModifiersProvider {
         }
 
         return callTarget;
-    }
-
-    private CallTarget lookupJniCallTarget(Meta.Method.WithInstance findNative, boolean fullSignature) {
-        String mangledName = Mangle.mangleMethod(meta(this), fullSignature);
-        long handle = (long) findNative.invoke(getDeclaringClass().getClassLoader(), mangledName);
-        if (handle == 0) { // not found
-            return null;
-        }
-        TruffleObject library = getContext().getNativeLibraries().get(handle);
-        TruffleObject nativeMethod = bind(library, meta(this), mangledName);
-        return Truffle.getRuntime().createCallTarget(new JniNativeNode(getContext().getLanguage(), nativeMethod, meta(this)));
     }
 
     public int getModifiers() {
