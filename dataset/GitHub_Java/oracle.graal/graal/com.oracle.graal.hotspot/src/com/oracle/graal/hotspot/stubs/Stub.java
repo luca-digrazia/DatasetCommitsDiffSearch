@@ -29,6 +29,20 @@ import static com.oracle.graal.hotspot.HotSpotHostBackend.UNCOMMON_TRAP_HANDLER;
 import java.util.ListIterator;
 import java.util.Set;
 
+import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.site.Call;
+import jdk.vm.ci.code.site.ConstantReference;
+import jdk.vm.ci.code.site.DataPatch;
+import jdk.vm.ci.code.site.Infopoint;
+import jdk.vm.ci.hotspot.HotSpotCompiledCode;
+import jdk.vm.ci.hotspot.HotSpotMetaspaceConstant;
+import jdk.vm.ci.meta.DefaultProfilingInfo;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.TriState;
+
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.target.Backend;
 import com.oracle.graal.debug.Debug;
@@ -47,20 +61,6 @@ import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.PhaseSuite;
 import com.oracle.graal.phases.tiers.Suites;
-
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.site.Call;
-import jdk.vm.ci.code.site.ConstantReference;
-import jdk.vm.ci.code.site.DataPatch;
-import jdk.vm.ci.code.site.Infopoint;
-import jdk.vm.ci.hotspot.HotSpotCompiledCode;
-import jdk.vm.ci.hotspot.HotSpotMetaspaceConstant;
-import jdk.vm.ci.meta.DefaultProfilingInfo;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.TriState;
 
 //JaCoCo Exclude
 
@@ -179,7 +179,8 @@ public abstract class Stub {
 
                 compResult = new CompilationResult(toString());
                 try (Scope s0 = Debug.scope("StubCompilation", graph, providers.getCodeCache())) {
-                    Suites suites = createSuites();
+                    Suites defaultSuites = providers.getSuites().getDefaultSuites();
+                    Suites suites = new Suites(new PhaseSuite<>(), defaultSuites.getMidTier(), defaultSuites.getLowTier());
                     emitFrontEnd(providers, backend, graph, providers.getSuites().getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, DefaultProfilingInfo.get(TriState.UNKNOWN), suites);
                     LIRSuites lirSuites = createLIRSuites();
                     emitBackEnd(graph, Stub.this, getInstalledCodeOwner(), backend, compResult, CompilationResultBuilderFactory.Default, getRegisterConfig(), lirSuites);
@@ -219,6 +220,9 @@ public abstract class Stub {
                 ConstantReference ref = (ConstantReference) data.reference;
                 if (ref.getConstant() instanceof HotSpotMetaspaceConstant) {
                     HotSpotMetaspaceConstant c = (HotSpotMetaspaceConstant) ref.getConstant();
+                    if (c.asSymbol() != null) {
+                        continue;
+                    }
                     if (c.asResolvedJavaType() != null && c.asResolvedJavaType().getName().equals("[I")) {
                         // special handling for NewArrayStub
                         // embedding the type '[I' is safe, since it is never unloaded
@@ -239,12 +243,7 @@ public abstract class Stub {
         return true;
     }
 
-    protected Suites createSuites() {
-        Suites defaultSuites = providers.getSuites().getDefaultSuites();
-        return new Suites(new PhaseSuite<>(), defaultSuites.getMidTier(), defaultSuites.getLowTier());
-    }
-
-    protected LIRSuites createLIRSuites() {
+    private LIRSuites createLIRSuites() {
         LIRSuites lirSuites = new LIRSuites(providers.getSuites().getDefaultLIRSuites());
         ListIterator<LIRPhase<PostAllocationOptimizationContext>> moveProfiling = lirSuites.getPostAllocationOptimizationStage().findPhase(MoveProfilingPhase.class);
         if (moveProfiling != null) {

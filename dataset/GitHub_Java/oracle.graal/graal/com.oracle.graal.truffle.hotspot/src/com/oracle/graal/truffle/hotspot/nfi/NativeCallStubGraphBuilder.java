@@ -23,6 +23,13 @@
 package com.oracle.graal.truffle.hotspot.nfi;
 
 import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayBaseOffset;
+import jdk.vm.ci.hotspot.HotSpotCompiledCode;
+import jdk.vm.ci.meta.DefaultProfilingInfo;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.TriState;
 
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.GraalCompiler;
@@ -54,14 +61,6 @@ import com.oracle.graal.phases.PhaseSuite;
 import com.oracle.graal.phases.tiers.HighTierContext;
 import com.oracle.graal.phases.tiers.Suites;
 import com.oracle.graal.replacements.ConstantBindingParameterPlugin;
-
-import jdk.vm.ci.hotspot.HotSpotCompiledCode;
-import jdk.vm.ci.meta.DefaultProfilingInfo;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.TriState;
 
 /**
  * Utility creating a graph for a stub used to call a native function.
@@ -125,7 +124,7 @@ public class NativeCallStubGraphBuilder {
         Suites suites = providers.getSuites().getDefaultSuites();
         LIRSuites lirSuites = providers.getSuites().getDefaultLIRSuites();
 
-        StructuredGraph g = new StructuredGraph(callStubMethod, AllowAssumptions.NO, backend.getCompilationIdentifier(callStubMethod));
+        StructuredGraph g = new StructuredGraph(callStubMethod, AllowAssumptions.NO);
         CompilationResult compResult = GraalCompiler.compileGraph(g, callStubMethod, providers, backend, graphBuilder, OptimisticOptimizations.ALL, DefaultProfilingInfo.get(TriState.UNKNOWN), suites,
                         lirSuites, new CompilationResult(), CompilationResultBuilderFactory.Default);
 

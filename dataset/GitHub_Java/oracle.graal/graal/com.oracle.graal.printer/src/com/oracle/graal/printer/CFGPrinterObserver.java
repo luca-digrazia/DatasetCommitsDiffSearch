@@ -35,7 +35,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.oracle.graal.bytecode.BytecodeDisassembler;
+import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.JavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.services.Services;
+
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.code.DisassemblerProvider;
 import com.oracle.graal.compiler.common.alloc.Trace;
@@ -45,22 +51,16 @@ import com.oracle.graal.compiler.gen.NodeLIRBuilder;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.DebugDumpHandler;
 import com.oracle.graal.debug.DebugDumpScope;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.GraalDebugConfig.Options;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.graph.Graph;
 import com.oracle.graal.java.BciBlockMapping;
+import com.oracle.graal.java.BytecodeDisassembler;
 import com.oracle.graal.lir.LIR;
 import com.oracle.graal.lir.debug.IntervalDumper;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
 import com.oracle.graal.nodes.cfg.ControlFlowGraph;
-import com.oracle.graal.serviceprovider.GraalServices;
-
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.meta.JavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Observes compilation events and uses {@link CFGPrinter} to produce a control flow graph for the
@@ -146,7 +146,7 @@ public class CFGPrinterObserver implements DebugDumpHandler {
                 OutputStream out = new BufferedOutputStream(new FileOutputStream(cfgFile));
                 cfgPrinter = new CFGPrinter(out);
             } catch (FileNotFoundException e) {
-                throw new GraalError("Could not open " + cfgFile.getAbsolutePath());
+                throw new JVMCIError("Could not open " + cfgFile.getAbsolutePath());
             }
             TTY.println("CFGPrinter: Output to file %s", cfgFile.getAbsolutePath());
         }
@@ -205,9 +205,8 @@ public class CFGPrinterObserver implements DebugDumpHandler {
             cfgPrinter.printMachineCode(disassemble(codeCache, compResult, null), message);
         } else if (object instanceof InstalledCode) {
             CompilationResult compResult = Debug.contextLookup(CompilationResult.class);
-            if (compResult != null) {
-                cfgPrinter.printMachineCode(disassemble(codeCache, compResult, (InstalledCode) object), message);
-            }
+            assert compResult != null : "missing " + CompilationResult.class.getName() + " from debug context";
+            cfgPrinter.printMachineCode(disassemble(codeCache, compResult, (InstalledCode) object), message);
         } else if (object instanceof IntervalDumper) {
             if (lastLIR == cfgPrinter.lir) {
                 cfgPrinter.printIntervals(message, (IntervalDumper) object);
@@ -258,7 +257,7 @@ public class CFGPrinterObserver implements DebugDumpHandler {
 
         static {
             DisassemblerProvider selected = null;
-            for (DisassemblerProvider d : GraalServices.load(DisassemblerProvider.class)) {
+            for (DisassemblerProvider d : Services.load(DisassemblerProvider.class)) {
                 String name = d.getName().toLowerCase();
                 if (name.contains("hcf") || name.contains("hexcodefile")) {
                     selected = d;
