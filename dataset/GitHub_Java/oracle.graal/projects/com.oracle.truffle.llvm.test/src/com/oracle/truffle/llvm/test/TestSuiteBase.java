@@ -146,7 +146,7 @@ public abstract class TestSuiteBase {
         }
     }
 
-    public interface TestCaseGenerator {
+    protected interface TestCaseGenerator {
 
         ProgrammingLanguage[] getSupportedLanguages();
 
@@ -155,7 +155,7 @@ public abstract class TestSuiteBase {
         List<TestCaseFiles> getCompiledTestCaseFiles(SpecificationEntry toBeCompiled);
     }
 
-    public static class TestCaseGeneratorAdapter implements TestCaseGenerator {
+    protected static class TestCaseGeneratorAdapter implements TestCaseGenerator {
 
         @Override
         public ProgrammingLanguage[] getSupportedLanguages() {
