@@ -62,8 +62,6 @@ public class LayoutParser {
     private boolean hasObjectGuard;
     private boolean hasDynamicObjectGuard;
     private boolean hasShapeProperties;
-    private boolean hasCreate;
-    private boolean hasBuilder;
     private final List<String> constructorProperties = new ArrayList<>();
     private final Map<String, PropertyBuilder> properties = new HashMap<>();
     private List<ImplicitCast> implicitCasts = new ArrayList<>();
@@ -136,8 +134,6 @@ public class LayoutParser {
                     // Handled above
                 } else if (simpleName.equals("create" + name)) {
                     parseConstructor((ExecutableElement) element);
-                } else if (simpleName.equals("build")) {
-                    parseBuilder((ExecutableElement) element);
                 } else if (simpleName.equals("is" + name)) {
                     parseGuard((ExecutableElement) element);
                 } else if (simpleName.startsWith("getAndSet")) {
@@ -187,9 +183,6 @@ public class LayoutParser {
 
     private void parseShapeConstructor(ExecutableElement methodElement) {
         List<? extends VariableElement> parameters = methodElement.getParameters();
-        if (!parameters.isEmpty()) {
-            hasShapeProperties = true;
-        }
 
         if (superLayout != null) {
             final List<PropertyModel> superShapeProperties = superLayout.getAllShapeProperties();
@@ -204,16 +197,14 @@ public class LayoutParser {
             setPropertyType(element, property, element.asType());
             parseConstructorParameterAnnotations(property, element);
             property.setIsShapeProperty(true);
+            hasShapeProperties = true;
         }
     }
 
     private void parseConstructor(ExecutableElement methodElement) {
-        hasCreate = true;
-        checkCreateAndBuilder(methodElement);
-
         List<? extends VariableElement> parameters = methodElement.getParameters();
 
-        if (hasShapeProperties) {
+        if (hasShapeProperties || (superLayout != null && superLayout.hasShapeProperties())) {
             if (parameters.isEmpty()) {
                 processor.reportError(methodElement, "If an @Layout has shape properties the constructor must have parameters");
             }
@@ -239,35 +230,6 @@ public class LayoutParser {
             checkSharedParameters(methodElement, parameters, superProperties);
         }
 
-        addConstructorProperties(methodElement, parameters);
-    }
-
-    private void parseBuilder(ExecutableElement methodElement) {
-        hasBuilder = true;
-        checkCreateAndBuilder(methodElement);
-
-        List<? extends VariableElement> parameters = methodElement.getParameters();
-
-        if (!isSameType(methodElement.getReturnType(), Object[].class)) {
-            processor.reportError(methodElement, "build() must have Object[] for return type");
-        }
-
-        if (superLayout != null) {
-            final List<PropertyModel> superProperties = superLayout.getAllInstanceProperties();
-            checkSharedParameters(methodElement, parameters, superProperties);
-        }
-
-        addConstructorProperties(methodElement, parameters);
-    }
-
-    private void checkCreateAndBuilder(ExecutableElement methodElement) {
-        if (hasCreate && hasBuilder) {
-            processor.reportError(methodElement, "Only one of create<Layout>() or build() may be specified.");
-            return;
-        }
-    }
-
-    private void addConstructorProperties(ExecutableElement methodElement, List<? extends VariableElement> parameters) {
         for (VariableElement element : parameters) {
             final String parameterName = element.getSimpleName().toString();
 
@@ -275,14 +237,10 @@ public class LayoutParser {
                 processor.reportError(methodElement, "Factory is a confusing name for a property");
             }
 
-            if (constructorProperties.contains(parameterName)) {
-                processor.reportError(methodElement, "The property %s is duplicated");
-            } else {
-                constructorProperties.add(parameterName);
-                final PropertyBuilder property = getProperty(parameterName);
-                setPropertyType(element, property, element.asType());
-                parseConstructorParameterAnnotations(property, element);
-            }
+            constructorProperties.add(parameterName);
+            final PropertyBuilder property = getProperty(parameterName);
+            setPropertyType(element, property, element.asType());
+            parseConstructorParameterAnnotations(property, element);
         }
     }
 
@@ -592,7 +550,7 @@ public class LayoutParser {
 
     public LayoutModel build() {
         return new LayoutModel(objectTypeSuperclass, superLayout, name, packageName, hasObjectTypeGuard, hasObjectGuard,
-                        hasDynamicObjectGuard, hasBuilder, buildProperties(), interfaceFullName, implicitCasts);
+                        hasDynamicObjectGuard, buildProperties(), interfaceFullName, implicitCasts);
     }
 
     private List<PropertyModel> buildProperties() {
