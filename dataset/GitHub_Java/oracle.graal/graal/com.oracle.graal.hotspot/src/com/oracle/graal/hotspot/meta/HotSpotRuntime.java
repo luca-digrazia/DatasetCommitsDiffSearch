@@ -526,7 +526,11 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                         if (hsMethod.isInVirtualMethodTable()) {
                             int vtableEntryOffset = hsMethod.vtableEntryOffset();
                             assert vtableEntryOffset > 0;
-                            FloatingReadNode hub = createReadHub(graph, wordKind, receiver, receiverNullCheck);
+                            ReadNode hub = createReadHub(graph, wordKind, receiver);
+
+                            if (receiverNullCheck != null) {
+                                hub.setGuard(receiverNullCheck);
+                            }
 
                             ReadNode metaspaceMethod = createReadVirtualMethod(graph, wordKind, hub, hsMethod);
                             // We use LocationNode.ANY_LOCATION for the reads that access the
@@ -538,7 +542,8 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                             loweredCallTarget = graph.add(new HotSpotIndirectCallTargetNode(metaspaceMethod, compiledEntry, parameters, invoke.asNode().stamp(), signature, callTarget.targetMethod(),
                                             CallingConvention.Type.JavaCall));
 
-                            graph.addBeforeFixed(invoke.asNode(), metaspaceMethod);
+                            graph.addBeforeFixed(invoke.asNode(), hub);
+                            graph.addAfterFixed(hub, metaspaceMethod);
                             graph.addAfterFixed(metaspaceMethod, compiledEntry);
                         }
                     }
@@ -619,7 +624,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                         value = checkcast;
                     }
                 } else {
-                    LoadHubNode arrayClass = graph.add(new LoadHubNode(array, wordKind, boundsCheck.asNode()));
+                    LoadHubNode arrayClass = graph.add(new LoadHubNode(array, wordKind));
                     LocationNode location = ConstantLocationNode.create(FINAL_LOCATION, wordKind, config.arrayClassElementOffset, graph);
                     /*
                      * Anchor the read of the element klass to the cfg, because it is only valid
@@ -629,6 +634,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                     FloatingReadNode arrayElementKlass = graph.unique(new FloatingReadNode(arrayClass, location, BeginNode.prevBegin(storeIndexed), StampFactory.forKind(wordKind())));
                     CheckCastDynamicNode checkcast = graph.add(new CheckCastDynamicNode(arrayElementKlass, value, true));
                     graph.addBeforeFixed(storeIndexed, checkcast);
+                    graph.addBeforeFixed(checkcast, arrayClass);
                     value = checkcast;
                 }
             }
@@ -666,14 +672,11 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             LoadHubNode loadHub = (LoadHubNode) n;
             assert loadHub.kind() == wordKind;
             ValueNode object = loadHub.object();
-            GuardingNode guard = loadHub.getGuard();
+            ReadNode hub = createReadHub(graph, wordKind, object);
             // A hub read must not float outside its block otherwise
             // it may float above an explicit null check on its object.
-            if (guard == null) {
-                guard = AbstractBeginNode.prevBegin(tool.lastFixedNode());
-            }
-            FloatingReadNode hub = createReadHub(graph, wordKind, object, guard);
-            graph.replaceFloating(loadHub, hub);
+            hub.setGuard(AbstractBeginNode.prevBegin(loadHub));
+            graph.replaceFixed(loadHub, hub);
         } else if (n instanceof LoadMethodNode) {
             LoadMethodNode loadMethodNode = (LoadMethodNode) n;
             ResolvedJavaMethod method = loadMethodNode.getMethod();
@@ -871,10 +874,10 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         return metaspaceMethod;
     }
 
-    private FloatingReadNode createReadHub(StructuredGraph graph, Kind wordKind, ValueNode object, GuardingNode guard) {
+    private ReadNode createReadHub(StructuredGraph graph, Kind wordKind, ValueNode object) {
         LocationNode location = ConstantLocationNode.create(FINAL_LOCATION, wordKind, config.hubOffset, graph);
         assert !object.isConstant() || object.asConstant().isNull();
-        return graph.add(new FloatingReadNode(object, location, null, StampFactory.forKind(wordKind()), guard, BarrierType.NONE, config.useCompressedKlassPointers));
+        return graph.add(new ReadNode(object, location, StampFactory.forKind(wordKind()), BarrierType.NONE, config.useCompressedKlassPointers));
     }
 
     private WriteNode createWriteHub(StructuredGraph graph, Kind wordKind, ValueNode object, ValueNode value) {
