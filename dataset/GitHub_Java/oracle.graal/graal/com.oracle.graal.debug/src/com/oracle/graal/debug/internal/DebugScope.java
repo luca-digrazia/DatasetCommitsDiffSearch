@@ -144,7 +144,9 @@ public final class DebugScope implements Debug.Scope {
             logScopeName = true;
         }
 
-        this.output = TTY.out;
+        // Be pragmatic: provide a default log stream to prevent a crash if the stream is not
+        // set while logging
+        this.output = TTY.cachedOut;
         assert context != null;
     }
 
@@ -356,7 +358,7 @@ public final class DebugScope implements Debug.Scope {
 
             // Be pragmatic: provide a default log stream to prevent a crash if the stream is not
             // set while logging
-            output = TTY.out;
+            output = TTY.cachedOut;
         } else {
             meterEnabled = config.isMeterEnabled();
             memUseTrackingEnabled = config.isMemUseTrackingEnabled();
@@ -368,7 +370,6 @@ public final class DebugScope implements Debug.Scope {
         }
     }
 
-    @SuppressWarnings("try")
     private RuntimeException interceptException(final Throwable e) {
         final DebugConfig config = getConfig();
         if (config != null) {
