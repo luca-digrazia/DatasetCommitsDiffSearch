@@ -76,6 +76,7 @@ import com.oracle.graal.truffle.InterpreterOnlyCompilationPolicy;
 import com.oracle.graal.truffle.OptimizedCallTarget;
 import com.oracle.graal.truffle.TruffleCallBoundary;
 import com.oracle.graal.truffle.TruffleCompiler;
+import com.oracle.graal.truffle.TruffleTreeDumpHandler;
 import com.oracle.graal.truffle.hotspot.nfi.HotSpotNativeFunctionInterface;
 import com.oracle.graal.truffle.hotspot.nfi.RawNativeCallNodeFactory;
 import com.oracle.nfi.api.NativeFunctionInterface;
@@ -114,7 +115,9 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         @Override
         public GraalDebugConfig getDebugConfig() {
             if (Debug.isEnabled()) {
-                return DebugEnvironment.initialize(TTY.out().out());
+                GraalDebugConfig debugConfig = DebugEnvironment.initialize(TTY.out().out());
+                debugConfig.dumpHandlers().add(new TruffleTreeDumpHandler());
+                return debugConfig;
             } else {
                 return null;
             }

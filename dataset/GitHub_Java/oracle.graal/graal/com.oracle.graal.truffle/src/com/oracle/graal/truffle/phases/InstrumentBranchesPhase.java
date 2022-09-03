@@ -42,9 +42,6 @@ import com.oracle.graal.nodes.AbstractBeginNode;
 import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.IfNode;
 import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.AddNode;
-import com.oracle.graal.nodes.java.LoadIndexedNode;
 import com.oracle.graal.nodes.java.StoreIndexedNode;
 import com.oracle.graal.phases.BasePhase;
 import com.oracle.graal.phases.tiers.HighTierContext;
@@ -61,7 +58,7 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
     private static final MethodFilter[] METHOD_FILTER;
     private static final Field ACCESS_TABLE_JAVA_FIELD;
     static final int ACCESS_TABLE_SIZE = TruffleInstrumentBranchesCount.getValue();
-    public static final long[] ACCESS_TABLE = new long[ACCESS_TABLE_SIZE];
+    public static final boolean[] ACCESS_TABLE = new boolean[ACCESS_TABLE_SIZE];
     public static BranchInstrumentation instrumentation = new BranchInstrumentation();
 
     static {
@@ -105,13 +102,10 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
         TypeReference typeRef = TypeReference.createExactTrusted((ResolvedJavaType) tableField.getType());
         ConstantNode table = graph.unique(new ConstantNode(tableConstant, StampFactory.object(typeRef, true)));
         ConstantNode rawIndex = graph.unique(ConstantNode.forInt(p.getRawIndex(isTrue)));
-        LoadIndexedNode load = graph.add(new LoadIndexedNode(null, table, rawIndex, JavaKind.Long));
-        ConstantNode one = graph.unique(ConstantNode.forLong(1L));
-        ValueNode add = graph.unique(new AddNode(load, one));
-        StoreIndexedNode store = graph.add(new StoreIndexedNode(table, rawIndex, JavaKind.Long, add));
+        ConstantNode v = graph.unique(ConstantNode.forBoolean(true));
+        StoreIndexedNode store = graph.add(new StoreIndexedNode(table, rawIndex, JavaKind.Boolean, v));
 
-        graph.addAfterFixed(beginNode, load);
-        graph.addAfterFixed(load, store);
+        graph.addAfterFixed(beginNode, store);
     }
 
     public static class BranchInstrumentation {
@@ -214,16 +208,9 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
 
             public BranchState getBranchState() {
                 int rawIndex = index * 2;
-                long ifVisits = ACCESS_TABLE[rawIndex];
-                long elseVisits = ACCESS_TABLE[rawIndex + 1];
-                return BranchState.from(ifVisits > 0, elseVisits > 0);
-            }
-
-            public String getCounts() {
-                int rawIndex = index * 2;
-                long ifVisits = ACCESS_TABLE[rawIndex];
-                long elseVisits = ACCESS_TABLE[rawIndex + 1];
-                return "if=" + ifVisits + "#, else=" + elseVisits + "#";
+                boolean ifVisited = ACCESS_TABLE[rawIndex];
+                boolean elseVisited = ACCESS_TABLE[rawIndex + 1];
+                return BranchState.from(ifVisited, elseVisited);
             }
 
             public int getRawIndex(boolean isTrue) {
@@ -236,7 +223,7 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
 
             @Override
             public String toString() {
-                return "[" + index + "] state = " + getBranchState() + "(" + getCounts() + ")";
+                return "[" + index + "] state = " + getBranchState();
             }
         }
 

@@ -28,7 +28,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.oracle.graal.truffle.GraalTruffleRuntime;
@@ -70,7 +69,6 @@ public class InstrumentBranchesPhaseTest extends PartialEvaluationTest {
         assertTrue(target.isValid());
     }
 
-    @Ignore
     @Test
     public void simpleIfTest() {
         FrameDescriptor descriptor = new FrameDescriptor();
