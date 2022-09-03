@@ -66,19 +66,6 @@ public class GraalDebugConfig implements DebugConfig {
             return enabled;
         }
     };
-    /**
-     * @see MethodFilter
-     */
-    @Option(help = "Pattern for method(s) to which intrinsification (if available) will be applied. " +
-                   "By default, all available intrinsifications are applied except for methods matched " +
-                   "by IntrinsificationsDisabled. See MethodFilter class for pattern syntax.")
-    public static final OptionValue<String> IntrinsificationsEnabled = new OptionValue<>(null);
-    /**
-     * @see MethodFilter
-     */
-    @Option(help = "Pattern for method(s) to which intrinsification will not be applied. " +
-                   "See MethodFilter class for pattern syntax.")
-    public static final OptionValue<String> IntrinsificationsDisabled = new OptionValue<>("Object.clone");
     // @formatter:on
 
     private final DebugFilter logFilter;
@@ -98,7 +85,11 @@ public class GraalDebugConfig implements DebugConfig {
         if (methodFilter == null || methodFilter.isEmpty()) {
             this.methodFilter = null;
         } else {
-            this.methodFilter = com.oracle.graal.compiler.MethodFilter.parse(methodFilter);
+            String[] filters = methodFilter.split(",");
+            this.methodFilter = new MethodFilter[filters.length];
+            for (int i = 0; i < filters.length; i++) {
+                this.methodFilter[i] = new MethodFilter(filters[i]);
+            }
         }
 
         // Report the filters that have been configured so the user can verify it's what they expect
@@ -165,8 +156,10 @@ public class GraalDebugConfig implements DebugConfig {
                 } else if (methodFilter != null) {
                     JavaMethod method = asJavaMethod(o);
                     if (method != null) {
-                        if (com.oracle.graal.compiler.MethodFilter.matches(methodFilter, method)) {
-                            return true;
+                        for (MethodFilter filter : methodFilter) {
+                            if (filter.matches(method)) {
+                                return true;
+                            }
                         }
                     }
                 }
