@@ -61,7 +61,6 @@ import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-import java.util.WeakHashMap;
 import java.util.logging.Level;
 
 /**
@@ -423,7 +422,7 @@ public class PolyglotEngine {
         try (Closeable d = SPI.executionStart(this, -1, debugger, s)) {
             TruffleLanguage<?> langImpl = l.getImpl(true);
             fillLang[0] = langImpl;
-            return SPI.eval(langImpl, s, l.cache);
+            return SPI.eval(langImpl, s);
         }
     }
 
@@ -725,12 +724,10 @@ public class PolyglotEngine {
      * {@link PolyglotEngine#eval(com.oracle.truffle.api.source.Source) a code is evaluated} in it.
      */
     public class Language {
-        private final Map<Source, CallTarget> cache;
         private final LanguageCache info;
         private TruffleLanguage.Env env;
 
         Language(LanguageCache info) {
-            this.cache = new WeakHashMap<>();
             this.info = info;
         }
 
@@ -821,15 +818,7 @@ public class PolyglotEngine {
                 return impl;
             }
         }
-        return null;
-    }
-
-    TruffleLanguage<?> findLanguage(String mimeType) {
-        Language languageDescription = this.langs.get(mimeType);
-        if (languageDescription != null) {
-            return languageDescription.getImpl(true);
-        }
-        return null;
+        throw new IllegalStateException("Cannot find language " + languageClazz + " among " + langs);
     }
 
     TruffleLanguage<?> findLanguage(Probe probe) {
@@ -888,8 +877,8 @@ public class PolyglotEngine {
         }
 
         @Override
-        protected Object eval(TruffleLanguage<?> l, Source s, Map<Source, CallTarget> cache) throws IOException {
-            return super.eval(l, s, cache);
+        public Object eval(TruffleLanguage<?> l, Source s) throws IOException {
+            return super.eval(l, s);
         }
 
         @Override
@@ -930,19 +919,9 @@ public class PolyglotEngine {
         }
 
         @Override
-        protected TruffleLanguage<?> findLanguageImpl(Object obj, Class<? extends TruffleLanguage> languageClazz, String mimeType) {
+        protected TruffleLanguage<?> findLanguageImpl(Object obj, Class<? extends TruffleLanguage> languageClazz) {
             final PolyglotEngine vm = (PolyglotEngine) obj;
-            TruffleLanguage<?> language = null;
-            if (languageClazz != null) {
-                language = vm.findLanguage(languageClazz);
-            }
-            if (language == null && mimeType != null) {
-                language = vm.findLanguage(mimeType);
-            }
-            if (language == null) {
-                throw new IllegalStateException("Cannot find language " + languageClazz + " with mimeType" + mimeType + " among " + vm.langs);
-            }
-            return language;
+            return vm.findLanguage(languageClazz);
         }
 
         @Override
