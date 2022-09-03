@@ -34,39 +34,57 @@ import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
+import javax.tools.JavaFileObject;
 
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
 
-abstract class MessageGenerator extends InteropNodeGenerator {
+/**
+ * THIS IS NOT PUBLIC API.
+ */
+public abstract class MessageGenerator {
     protected static final String ACCESS_METHOD_NAME = "access";
 
+    protected final TypeElement element;
+    protected final String packageName;
+    protected final String clazzName;
     protected final String messageName;
+    protected final String userClassName;
     protected final String receiverClassName;
+    protected final ProcessingEnvironment processingEnv;
+    protected final ForeignAccessFactoryGenerator containingForeignAccessFactory;
 
     MessageGenerator(ProcessingEnvironment processingEnv, Resolve resolveAnnotation, MessageResolution messageResolutionAnnotation, TypeElement element,
                     ForeignAccessFactoryGenerator containingForeignAccessFactory) {
-        super(processingEnv, element, containingForeignAccessFactory);
+        this.processingEnv = processingEnv;
+        this.element = element;
         this.receiverClassName = Utils.getReceiverTypeFullClassName(messageResolutionAnnotation);
+        this.packageName = ElementUtils.getPackageName(element);
         this.messageName = resolveAnnotation.message();
+        this.userClassName = ElementUtils.getQualifiedName(element);
+        this.clazzName = Utils.getSimpleResolveClassName(element);
+        this.containingForeignAccessFactory = containingForeignAccessFactory;
     }
 
-    @Override
-    public void appendNode(Writer w) throws IOException {
-        Utils.appendMessagesGeneratedByInformation(w, indent, ElementUtils.getQualifiedName(element), null);
-        w.append(indent);
-        Utils.appendVisibilityModifier(w, element);
-        w.append("abstract static class ").append(clazzName).append(" extends ").append(userClassName).append(" {\n");
+    public final void generate() throws IOException {
+        JavaFileObject file = processingEnv.getFiler().createSourceFile(Utils.getFullResolveClassName(element), element);
+        Writer w = file.openWriter();
+        w.append("package ").append(packageName).append(";\n");
+        appendImports(w);
 
+        Utils.appendMessagesGeneratedByInformation(w, "", containingForeignAccessFactory.getFullClassName(), ElementUtils.getQualifiedName(element));
+        Utils.appendVisibilityModifier(w, element);
+        w.append("abstract class ").append(clazzName).append(" extends ").append(userClassName).append(" {\n");
         appendExecuteWithTarget(w);
         appendSpecializations(w);
 
         appendRootNode(w);
         appendRootNodeFactory(w);
 
-        w.append(indent).append("}\n");
+        w.append("}\n");
+        w.close();
     }
 
     public final List<ExecutableElement> getAccessMethods() {
@@ -84,6 +102,16 @@ abstract class MessageGenerator extends InteropNodeGenerator {
         return methods;
     }
 
+    void appendImports(Writer w) throws IOException {
+        w.append("import com.oracle.truffle.api.frame.VirtualFrame;").append("\n");
+        w.append("import com.oracle.truffle.api.dsl.Specialization;").append("\n");
+        w.append("import com.oracle.truffle.api.nodes.RootNode;").append("\n");
+        w.append("import com.oracle.truffle.api.TruffleLanguage;").append("\n");
+        w.append("import com.oracle.truffle.api.interop.ForeignAccess;").append("\n");
+        w.append("import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;").append("\n");
+        w.append("import com.oracle.truffle.api.interop.UnsupportedTypeException;").append("\n");
+    }
+
     abstract int getParameterCount();
 
     public String checkSignature(ExecutableElement method) {
@@ -96,7 +124,7 @@ abstract class MessageGenerator extends InteropNodeGenerator {
     abstract String getTargetableNodeName();
 
     void appendExecuteWithTarget(Writer w) throws IOException {
-        w.append(indent).append("    public abstract Object executeWithTarget(VirtualFrame frame");
+        w.append("    public abstract Object executeWithTarget(VirtualFrame frame");
         for (int i = 0; i < Math.max(1, getParameterCount()); i++) {
             w.append(", ").append("Object ").append("o").append(String.valueOf(i));
         }
@@ -108,8 +136,8 @@ abstract class MessageGenerator extends InteropNodeGenerator {
         for (ExecutableElement method : getAccessMethods()) {
             final List<? extends VariableElement> params = method.getParameters();
 
-            w.append(indent).append("    @Specialization\n");
-            w.append(indent).append("    protected Object ").append(ACCESS_METHOD_NAME).append("WithTarget");
+            w.append("    @Specialization\n");
+            w.append("    protected Object ").append(ACCESS_METHOD_NAME).append("WithTarget");
             w.append("(");
 
             sep = "";
@@ -118,14 +146,14 @@ abstract class MessageGenerator extends InteropNodeGenerator {
                 sep = ", ";
             }
             w.append(") {\n");
-            w.append(indent).append("        return ").append(ACCESS_METHOD_NAME).append("(");
+            w.append("        return ").append(ACCESS_METHOD_NAME).append("(");
             sep = "";
             for (VariableElement p : params) {
                 w.append(sep).append(p.getSimpleName());
                 sep = ", ";
             }
             w.append(");\n");
-            w.append(indent).append("    }\n");
+            w.append("    }\n");
         }
     }
 
@@ -134,15 +162,19 @@ abstract class MessageGenerator extends InteropNodeGenerator {
     abstract String getRootNodeName();
 
     void appendRootNodeFactory(Writer w) throws IOException {
-        w.append(indent).append("    @Deprecated\n");
-        w.append(indent).append("    @SuppressWarnings(\"unused\")\n");
-        w.append(indent).append("    public static RootNode createRoot(Class<? extends TruffleLanguage<?>> language) {\n");
-        w.append(indent).append("        return createRoot();\n");
-        w.append(indent).append("    }\n");
-        w.append(indent).append("    public static RootNode createRoot() {\n");
-        w.append(indent).append("        return new ").append(getRootNodeName()).append("();\n");
-        w.append(indent).append("    }\n");
+        w.append("    @Deprecated\n");
+        w.append("    @SuppressWarnings(\"unused\")\n");
+        w.append("    public static RootNode createRoot(Class<? extends TruffleLanguage<?>> language) {\n");
+        w.append("        return createRoot();\n");
+        w.append("    }\n");
+        w.append("    public static RootNode createRoot() {\n");
+        w.append("        return new ").append(getRootNodeName()).append("();\n");
+        w.append("    }\n");
 
+    }
+
+    public String getRootNodeFactoryInvokation() {
+        return packageName + "." + clazzName + ".createRoot()";
     }
 
     @Override
@@ -180,11 +212,11 @@ abstract class MessageGenerator extends InteropNodeGenerator {
     }
 
     protected void appendHandleUnsupportedTypeException(Writer w) throws IOException {
-        w.append(indent).append("                if (e.getNode() instanceof ").append(clazzName).append(") {\n");
-        w.append(indent).append("                  throw UnsupportedTypeException.raise(e, e.getSuppliedValues());\n");
-        w.append(indent).append("                } else {\n");
-        w.append(indent).append("                  throw e;\n");
-        w.append(indent).append("                }\n");
+        w.append("                if (e.getNode() instanceof ").append(clazzName).append(") {\n");
+        w.append("                  throw UnsupportedTypeException.raise(e, e.getSuppliedValues());\n");
+        w.append("                } else {\n");
+        w.append("                  throw e;\n");
+        w.append("                }\n");
     }
 
 }

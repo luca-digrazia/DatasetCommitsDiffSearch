@@ -38,7 +38,7 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.RootNode;
 
-public class BoxedStringTest implements TruffleObject, ForeignAccess.FactoryModel {
+public class BoxedStringTest implements TruffleObject, ForeignAccess.Factory26 {
     public interface ExactMatchInterop {
         String stringValue();
 
@@ -77,11 +77,6 @@ public class BoxedStringTest implements TruffleObject, ForeignAccess.FactoryMode
 
     @Override
     public CallTarget accessIsExecutable() {
-        return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(false));
-    }
-
-    @Override
-    public CallTarget accessIsInstantiable() {
         return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(false));
     }
 
@@ -154,16 +149,6 @@ public class BoxedStringTest implements TruffleObject, ForeignAccess.FactoryMode
 
     @Override
     public CallTarget accessKeys() {
-        return null;
-    }
-
-    @Override
-    public CallTarget accessHasKeys() {
-        return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(false));
-    }
-
-    @Override
-    public CallTarget accessKeyDeclaredLocation() {
         return null;
     }
 

@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -20,29 +22,14 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.api.dsl.test.interop;
+package com.oracle.truffle.api.interop;
 
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.TruffleObject;
+final class AsPointer extends UnaryMessage {
+    public static final int HASH = 423532;
+    static final Message INSTANCE = new AsPointer();
 
-public class NativeTestObject implements TruffleObject {
-
-    private final ManagedTestObject object;
-
-    public NativeTestObject(ManagedTestObject object) {
-        this.object = object;
+    @Override
+    public int hashCode() {
+        return HASH;
     }
-
-    public ForeignAccess getForeignAccess() {
-        return NativeTestObjectMRForeign.ACCESS;
-    }
-
-    public static boolean isInstance(TruffleObject obj) {
-        return obj instanceof ManagedTestObject;
-    }
-
-    public ManagedTestObject getObject() {
-        return object;
-    }
-
 }
