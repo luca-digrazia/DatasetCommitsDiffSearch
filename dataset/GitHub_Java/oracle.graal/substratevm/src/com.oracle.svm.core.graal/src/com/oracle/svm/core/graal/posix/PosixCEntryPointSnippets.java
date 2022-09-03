@@ -147,7 +147,7 @@ public final class PosixCEntryPointSnippets extends SubstrateTemplates implement
     }
 
     @Uninterruptible(reason = "Called by an uninterruptible method.")
-    public static void setHeapBase(PointerBase heapBase) {
+    private static void setHeapBase(PointerBase heapBase) {
         assert UseHeapBaseRegister.getValue();
         writeCurrentVMHeapBase(hasHeapBase() ? heapBase : WordFactory.nullPointer());
     }
