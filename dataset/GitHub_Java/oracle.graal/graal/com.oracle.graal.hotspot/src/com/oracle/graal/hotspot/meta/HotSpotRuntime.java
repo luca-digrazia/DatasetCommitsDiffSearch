@@ -490,13 +490,11 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         } else if (n instanceof Invoke) {
             Invoke invoke = (Invoke) n;
             if (invoke.callTarget() instanceof MethodCallTargetNode) {
-
                 MethodCallTargetNode callTarget = (MethodCallTargetNode) invoke.callTarget();
                 NodeInputList<ValueNode> parameters = callTarget.arguments();
                 ValueNode receiver = parameters.size() <= 0 ? null : parameters.get(0);
-                GuardingNode receiverNullCheck = null;
                 if (!callTarget.isStatic() && receiver.kind() == Kind.Object && !receiver.objectStamp().nonNull()) {
-                    receiverNullCheck = tool.createNullCheckGuard(invoke, receiver);
+                    tool.createNullCheckGuard(invoke, receiver);
                 }
                 JavaType[] signature = MetaUtil.signatureToTypes(callTarget.targetMethod().getSignature(), callTarget.isStatic() ? null : callTarget.targetMethod().getDeclaringClass());
 
@@ -508,12 +506,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                         if (hsMethod.isInVirtualMethodTable()) {
                             int vtableEntryOffset = hsMethod.vtableEntryOffset();
                             assert vtableEntryOffset > 0;
-                            ReadNode hub = createReadHub(graph, wordKind, receiver);
-
-                            if (receiverNullCheck != null) {
-                                hub.setGuard(receiverNullCheck);
-                            }
-
+                            ReadNode hub = this.createReadHub(tool, graph, wordKind, receiver);
                             ReadNode metaspaceMethod = createReadVirtualMethod(graph, wordKind, hub, hsMethod);
                             // We use LocationNode.ANY_LOCATION for the reads that access the
                             // compiled code entry as HotSpot does not guarantee they are final
@@ -638,10 +631,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             LoadHubNode loadHub = (LoadHubNode) n;
             assert loadHub.kind() == wordKind;
             ValueNode object = loadHub.object();
-            ReadNode hub = createReadHub(graph, wordKind, object);
-            // A hub read must not float outside its block otherwise
-            // it may float above an explicit null check on its object.
-            hub.setGuard(AbstractBeginNode.prevBegin(loadHub));
+            ReadNode hub = createReadHub(tool, graph, wordKind, object);
             graph.replaceFixed(loadHub, hub);
         } else if (n instanceof LoadMethodNode) {
             LoadMethodNode loadMethodNode = (LoadMethodNode) n;
@@ -680,15 +670,15 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
 
                     ValueNode newObject = allocations[objIndex];
                     if (virtual instanceof VirtualInstanceNode) {
-                        VirtualInstanceNode virtualInstance = (VirtualInstanceNode) virtual;
+                        VirtualInstanceNode instance = (VirtualInstanceNode) virtual;
                         for (int i = 0; i < entryCount; i++) {
                             ValueNode value = commit.getValues().get(valuePos++);
                             if (value instanceof VirtualObjectNode) {
                                 value = allocations[commit.getVirtualObjects().indexOf(value)];
                             }
                             if (!(value.isConstant() && value.asConstant().isDefaultForKind())) {
-                                WriteNode write = new WriteNode(newObject, value, createFieldLocation(graph, (HotSpotResolvedJavaField) virtualInstance.field(i)), WriteBarrierType.NONE,
-                                                virtualInstance.field(i).getKind() == Kind.Object);
+                                WriteNode write = new WriteNode(newObject, value, createFieldLocation(graph, (HotSpotResolvedJavaField) instance.field(i)), WriteBarrierType.NONE,
+                                                instance.field(i).getKind() == Kind.Object);
 
                                 graph.addBeforeFixed(commit, graph.add(write));
                             }
@@ -832,10 +822,12 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         return metaspaceMethod;
     }
 
-    private ReadNode createReadHub(StructuredGraph graph, Kind wordKind, ValueNode object) {
+    private ReadNode createReadHub(LoweringTool tool, StructuredGraph graph, Kind wordKind, ValueNode object) {
         LocationNode location = ConstantLocationNode.create(FINAL_LOCATION, wordKind, config.hubOffset, graph);
         assert !object.isConstant() || object.asConstant().isNull();
-        return graph.add(new ReadNode(object, location, StampFactory.forKind(wordKind()), WriteBarrierType.NONE, false));
+        ReadNode hub = graph.add(new ReadNode(object, location, StampFactory.forKind(wordKind()), WriteBarrierType.NONE, false));
+        tool.createNullCheckGuard(hub, object);
+        return hub;
     }
 
     public static long referentOffset() {
@@ -922,11 +914,11 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             ifNodeOffset.replaceAtUsages(phiNode);
         } else {
             IndexedLocationNode location = IndexedLocationNode.create(ANY_LOCATION, load.accessKind(), load.displacement(), load.offset(), graph, 1);
-            // Unsafe access to a metaspace or to any
+            // Unsafe Accesses to the metaspace or to any
             // absolute address do not perform uncompression.
             ReadNode memoryRead = graph.add(new ReadNode(load.object(), location, load.stamp(), WriteBarrierType.NONE, compress));
-            // An unsafe read must not float outside its block otherwise
-            // it may float above an explicit null check on its object.
+            // An unsafe read must not floating outside its block as may float above an explicit
+            // null check on its object.
             memoryRead.setGuard(AbstractBeginNode.prevBegin(load));
             graph.replaceFixedWithFixed(load, memoryRead);
         }
