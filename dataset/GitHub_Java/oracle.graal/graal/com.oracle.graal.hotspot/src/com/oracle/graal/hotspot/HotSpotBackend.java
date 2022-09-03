@@ -29,6 +29,17 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import jdk.vm.ci.code.CompiledCode;
+import jdk.vm.ci.code.DebugInfo;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterSaveLayout;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.code.ValueUtil;
+import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
@@ -54,6 +65,7 @@ import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.lir.ValueConsumer;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
 import com.oracle.graal.lir.framemap.FrameMap;
+import com.oracle.graal.lir.framemap.ReferenceMapBuilder;
 import com.oracle.graal.nodes.UnwindNode;
 import com.oracle.graal.options.Option;
 import com.oracle.graal.options.OptionType;
@@ -61,16 +73,6 @@ import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.phases.tiers.SuitesProvider;
 import com.oracle.graal.word.Pointer;
 import com.oracle.graal.word.Word;
-
-import jdk.vm.ci.code.CompiledCode;
-import jdk.vm.ci.code.DebugInfo;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterSaveLayout;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.ValueUtil;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.Value;
 
 /**
  * HotSpot specific backend.
@@ -81,8 +83,6 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
         // @formatter:off
         @Option(help = "Use Graal stubs instead of HotSpot stubs where possible")
         public static final OptionValue<Boolean> PreferGraalStubs = new OptionValue<>(false);
-        @Option(help = "Use Graal arithmetic stubs instead of HotSpot stubs where possible")
-        public static final OptionValue<Boolean> GraalArithmeticStubs = new OptionValue<>(true);
         @Option(help = "Enables instruction profiling on assembler level. Valid values are a comma separated list of supported instructions." +
                         " Compare with subclasses of Assembler.InstructionCounter.", type = OptionType.Debug)
         public static final OptionValue<String> ASMInstructionProfiling = new OptionValue<>(null);
@@ -91,8 +91,8 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
 
     /**
      * Descriptor for {@link ExceptionHandlerStub}. This stub is called by the
-     * {@linkplain GraalHotSpotVMConfig#MARKID_EXCEPTION_HANDLER_ENTRY exception handler} in a
-     * compiled method.
+     * {@linkplain HotSpotVMConfig#MARKID_EXCEPTION_HANDLER_ENTRY exception handler} in a compiled
+     * method.
      */
     public static final ForeignCallDescriptor EXCEPTION_HANDLER = new ForeignCallDescriptor("exceptionHandler", void.class, Object.class, Word.class);
 
@@ -275,6 +275,11 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
         if (HotSpotBackend.Options.ASMInstructionProfiling.getValue() != null) {
             HotSpotInstructionProfiling.countInstructions(lir, crb.asm);
         }
+    }
+
+    @Override
+    public ReferenceMapBuilder newReferenceMapBuilder(int totalFrameSize) {
+        return new HotSpotReferenceMapBuilder(totalFrameSize);
     }
 
     @Override

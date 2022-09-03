@@ -29,6 +29,7 @@ import static jdk.vm.ci.aarch64.AArch64.r10;
 import static jdk.vm.ci.aarch64.AArch64.sp;
 import static jdk.vm.ci.aarch64.AArch64.zr;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
+import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
 import static jdk.vm.ci.hotspot.aarch64.AArch64HotSpotRegisterConfig.fp;
 
 import java.util.Set;
@@ -47,7 +48,6 @@ import com.oracle.graal.hotspot.HotSpotDataBuilder;
 import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
 import com.oracle.graal.hotspot.HotSpotHostBackend;
 import com.oracle.graal.hotspot.HotSpotLIRGenerationResult;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.hotspot.meta.HotSpotForeignCallsProvider;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.hotspot.stubs.Stub;
@@ -71,6 +71,7 @@ import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
 import jdk.vm.ci.hotspot.aarch64.AArch64HotSpotRegisterConfig;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -80,7 +81,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
  */
 public class AArch64HotSpotBackend extends HotSpotHostBackend {
 
-    public AArch64HotSpotBackend(GraalHotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, HotSpotProviders providers) {
+    public AArch64HotSpotBackend(HotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, HotSpotProviders providers) {
         super(config, runtime, providers);
     }
 
@@ -97,7 +98,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
 
     @Override
     public LIRGeneratorTool newLIRGenerator(LIRGenerationResult lirGenRes) {
-        return new AArch64HotSpotLIRGenerator(getProviders(), config, lirGenRes);
+        return new AArch64HotSpotLIRGenerator(getProviders(), config(), lirGenRes);
     }
 
     @Override
@@ -237,18 +238,19 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
         AArch64MacroAssembler masm = (AArch64MacroAssembler) crb.asm;
         FrameMap frameMap = crb.frameMap;
         RegisterConfig regConfig = frameMap.getRegisterConfig();
+        HotSpotVMConfig config = config();
         Label verifiedStub = new Label();
 
-        emitCodePrefix(crb, installedCodeOwner, masm, regConfig, verifiedStub);
+        emitCodePrefix(crb, installedCodeOwner, masm, regConfig, config, verifiedStub);
         emitCodeBody(crb, lir, masm);
-        emitCodeSuffix(crb, masm, frameMap);
+        emitCodeSuffix(crb, masm, config, frameMap);
     }
 
-    private void emitCodePrefix(CompilationResultBuilder crb, ResolvedJavaMethod installedCodeOwner, AArch64MacroAssembler masm, RegisterConfig regConfig, Label verifiedStub) {
+    private void emitCodePrefix(CompilationResultBuilder crb, ResolvedJavaMethod installedCodeOwner, AArch64MacroAssembler masm, RegisterConfig regConfig, HotSpotVMConfig config, Label verifiedStub) {
         HotSpotProviders providers = getProviders();
         if (installedCodeOwner != null && !isStatic(installedCodeOwner.getModifiers())) {
             crb.recordMark(config.MARKID_UNVERIFIED_ENTRY);
-            CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, new JavaType[]{providers.getMetaAccess().lookupJavaType(Object.class)}, this);
+            CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, new JavaType[]{providers.getMetaAccess().lookupJavaType(Object.class)}, getTarget());
             // See definition of IC_Klass in c1_LIRAssembler_aarch64.cpp
             // equal to scratch(1) careful!
             Register inlineCacheKlass = AArch64HotSpotRegisterConfig.inlineCacheRegister;
@@ -289,7 +291,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
         crb.emit(lir);
     }
 
-    private void emitCodeSuffix(CompilationResultBuilder crb, AArch64MacroAssembler masm, FrameMap frameMap) {
+    private void emitCodeSuffix(CompilationResultBuilder crb, AArch64MacroAssembler masm, HotSpotVMConfig config, FrameMap frameMap) {
         HotSpotProviders providers = getProviders();
         HotSpotFrameContext frameContext = (HotSpotFrameContext) crb.frameContext;
         if (!frameContext.isStub) {
