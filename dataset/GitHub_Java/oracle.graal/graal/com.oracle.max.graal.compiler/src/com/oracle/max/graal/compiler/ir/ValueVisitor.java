@@ -43,6 +43,7 @@ public abstract class ValueVisitor {
     public abstract void visitFrameState(FrameState i);
     public abstract void visitAnchor(Anchor i);
     public abstract void visitIf(If i);
+    public abstract void visitIfOp(Conditional i);
     public abstract void visitInvoke(Invoke i);
     public abstract void visitLoadField(LoadField i);
     public abstract void visitLoadIndexed(LoadIndexed i);
@@ -68,6 +69,7 @@ public abstract class ValueVisitor {
     public abstract void visitStoreIndexed(StoreIndexed i);
     public abstract void visitTableSwitch(TableSwitch i);
     public abstract void visitDeoptimize(Deoptimize deoptimize);
+    public abstract void visitExceptionDispatch(ExceptionDispatch exceptionDispatch);
     public abstract void visitUnwind(Unwind unwind);
     public abstract void visitLoopBegin(LoopBegin loopBegin);
     public abstract void visitLoopEnd(LoopEnd loopEnd);

@@ -66,11 +66,6 @@ public final class InstanceOf extends TypeCheck {
     }
 
     @Override
-    public BooleanNode negate() {
-        return new NotInstanceOf(targetClassInstruction(), object(), graph());
-    }
-
-    @Override
     public Node copy(Graph into) {
         return new InstanceOf(null, null, into);
     }
