@@ -22,10 +22,14 @@
  */
 package com.oracle.graal.phases.common.util;
 
-import java.util.*;
+import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.Set;
 
-import com.oracle.graal.graph.Graph.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.Graph.NodeEvent;
+import com.oracle.graal.graph.Graph.NodeEventListener;
+import com.oracle.graal.graph.Node.IndirectCanonicalization;
+import com.oracle.graal.graph.Node;
 
 /**
  * A simple {@link NodeEventListener} implementation that accumulates event nodes in a
@@ -40,7 +44,7 @@ public class HashSetNodeEventListener implements NodeEventListener {
      * Creates a {@link NodeEventListener} that collects nodes from all events.
      */
     public HashSetNodeEventListener() {
-        this.nodes = new HashSet<>();
+        this.nodes = Node.newSet();
         this.filter = EnumSet.allOf(NodeEvent.class);
     }
 
@@ -49,7 +53,7 @@ public class HashSetNodeEventListener implements NodeEventListener {
      * filter.
      */
     public HashSetNodeEventListener(Set<NodeEvent> filter) {
-        this.nodes = new HashSet<>();
+        this.nodes = Node.newSet();
         this.filter = filter;
     }
 
@@ -64,11 +68,16 @@ public class HashSetNodeEventListener implements NodeEventListener {
     public void event(NodeEvent e, Node node) {
         if (filter.contains(e)) {
             nodes.add(node);
+            if (node instanceof IndirectCanonicalization) {
+                for (Node usage : node.usages()) {
+                    nodes.add(usage);
+                }
+            }
         }
     }
 
     /**
-     * Gets the set of nodes that were communicated to this listener.
+     * Gets the set being used to accumulate the nodes communicated to this listener.
      */
     public Set<Node> getNodes() {
         return nodes;

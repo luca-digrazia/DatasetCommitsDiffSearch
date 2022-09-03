@@ -253,10 +253,9 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
         }
 
         /**
-         * Ensures that leaf nodes have already been GVN'ed. This is handled automatically by the
-         * various {@code add} methods in {@link Graph} but uses of
-         * {@link Graph#addWithoutUnique(Node)} and {@link Graph#addWithoutUniqueWithInputs(Node)}
-         * will leave non-unique copies floating around which defeats GVN of users of those nodes.
+         * Ensure that leaf nodes have already been GVN'ed. This is normally handled automatically
+         * but it's possible to add nodes to the graph with looking for duplicates and it's the
+         * responsibility of code that does that to clean it up.
          */
         private boolean assertLeafGVN(Node node, NodeClass<?> nodeClass) {
             if (node.isAlive() && nodeClass.valueNumberable() && nodeClass.isLeafNode()) {
