@@ -1131,7 +1131,7 @@ public class BytecodeParser implements GraphBuilderContext {
         return InstanceOfNode.create(type, object);
     }
 
-    protected AnchoringNode createAnchor(JavaTypeProfile profile) {
+    private AnchoringNode createAnchor(JavaTypeProfile profile) {
         if (profile == null || profile.getNotRecordedProbability() > 0.0) {
             return null;
         } else {
