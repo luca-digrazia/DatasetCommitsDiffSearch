@@ -30,8 +30,6 @@ import java.util.*;
 import java.util.concurrent.*;
 
 import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.source.*;
-import com.oracle.truffle.api.utilities.*;
 
 /**
  * Abstract base class for all Truffle nodes.
@@ -59,15 +57,12 @@ public abstract class Node implements Cloneable {
     }
 
     protected Node() {
-        this(null);
+        CompilerAsserts.neverPartOfCompilation();
     }
 
     protected Node(SourceSection sourceSection) {
         CompilerAsserts.neverPartOfCompilation();
         this.sourceSection = sourceSection;
-        if (TruffleOptions.TraceASTJSON) {
-            JSONHelper.dumpNewNode(this);
-        }
     }
 
     /**
@@ -139,6 +134,31 @@ public abstract class Node implements Cloneable {
      * @param newChildren the array of new children whose parent should be updated
      * @return the array of new children
      */
+    @SuppressWarnings("static-method")
+    @Deprecated
+    protected final <T extends Node> T[] adoptChildren(final T[] newChildren) {
+        return newChildren;
+    }
+
+    /**
+     * Method that updates the link to the parent in the specified new child node to this node.
+     *
+     * @param newChild the new child whose parent should be updated
+     * @return the new child
+     */
+    @SuppressWarnings("static-method")
+    @Deprecated
+    protected final <T extends Node> T adoptChild(final T newChild) {
+        return newChild;
+    }
+
+    /**
+     * Method that updates the link to the parent in the array of specified new child nodes to this
+     * node.
+     *
+     * @param newChildren the array of new children whose parent should be updated
+     * @return the array of new children
+     */
     protected final <T extends Node> T[] insert(final T[] newChildren) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
         assert newChildren != null;
@@ -173,9 +193,6 @@ public abstract class Node implements Cloneable {
         }
         boolean isInserted = newChild.parent == null;
         newChild.parent = this;
-        if (TruffleOptions.TraceASTJSON) {
-            JSONHelper.dumpNewChild(this, newChild);
-        }
         newChild.adoptHelper();
         if (isInserted) {
             newChild.onAdopt();
@@ -280,9 +297,6 @@ public abstract class Node implements Cloneable {
             this.parent.adoptUnadoptedHelper(newNode);
         }
         reportReplace(this, newNode, reason);
-        if (TruffleOptions.TraceASTJSON) {
-            JSONHelper.dumpReplaceChild(this, newNode, reason);
-        }
         onReplace(newNode, reason);
     }
 
@@ -516,32 +530,5 @@ public abstract class Node implements Cloneable {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-    }
-
-    /**
-     * Returns a user-readable description of the purpose of the Node, or "" if no description is
-     * available.
-     */
-    public String getDescription() {
-        NodeInfo info = getClass().getAnnotation(NodeInfo.class);
-        if (info != null) {
-            return info.description();
-        }
-        return "";
-    }
-
-    /**
-     * Returns a string representing the language this node has been implemented for. If the
-     * language is unknown, returns "".
-     */
-    public String getLanguage() {
-        NodeInfo info = getClass().getAnnotation(NodeInfo.class);
-        if (info != null && info.language() != null && info.language().length() > 0) {
-            return info.language();
-        }
-        if (parent != null) {
-            return parent.getLanguage();
-        }
-        return "";
     }
 }
