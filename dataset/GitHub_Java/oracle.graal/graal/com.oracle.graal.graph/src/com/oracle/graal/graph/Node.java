@@ -76,7 +76,6 @@ import com.oracle.graal.nodeinfo.*;
 @NodeInfo
 public abstract class Node implements Cloneable, Formattable {
 
-    public static final NodeClass<?> TYPE = null;
     public static final boolean USE_UNSAFE_TO_CLONE = Boolean.parseBoolean(System.getProperty("graal.node.useUnsafeToClone", "true"));
 
     static final int DELETED_ID_START = -1000000000;
@@ -202,15 +201,14 @@ public abstract class Node implements Cloneable, Formattable {
     int extraUsagesCount;
 
     private Node predecessor;
-    private NodeClass<?> nodeClass;
+    private NodeClass nodeClass;
 
     public static final int NODE_LIST = -2;
     public static final int NOT_ITERABLE = -1;
 
-    public Node(NodeClass<?> c) {
+    public Node() {
         init();
-        assert c.getJavaClass() == this.getClass();
-        this.nodeClass = c;
+        this.nodeClass = NodeClass.get(this.getClass());
     }
 
     final void init() {
@@ -405,7 +403,6 @@ public abstract class Node implements Cloneable, Formattable {
 
     private void clearUsages() {
         incUsageModCount();
-        maybeNotifyZeroUsages(this);
         usage0 = null;
         usage1 = null;
         extraUsages = NO_NODES;
@@ -508,7 +505,7 @@ public abstract class Node implements Cloneable, Formattable {
         }
     }
 
-    public final NodeClass<?> getNodeClass() {
+    public final NodeClass getNodeClass() {
         return nodeClass;
     }
 
@@ -750,7 +747,7 @@ public abstract class Node implements Cloneable, Formattable {
      * @return the copy of this node
      */
     final Node clone(Graph into, EnumSet<Edges.Type> edgesToCopy) {
-        final NodeClass<?> nodeClassTmp = getNodeClass();
+        final NodeClass nodeClassTmp = getNodeClass();
         boolean useIntoLeafNodeCache = false;
         if (into != null) {
             if (nodeClassTmp.valueNumberable() && nodeClassTmp.isLeafNode()) {
