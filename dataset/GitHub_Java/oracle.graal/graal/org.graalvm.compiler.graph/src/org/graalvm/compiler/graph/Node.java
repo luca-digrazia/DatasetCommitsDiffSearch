@@ -26,6 +26,7 @@ import static org.graalvm.compiler.graph.Edges.Type.Inputs;
 import static org.graalvm.compiler.graph.Edges.Type.Successors;
 import static org.graalvm.compiler.graph.Graph.isModificationCountsEnabled;
 import static org.graalvm.compiler.graph.UnsafeAccess.UNSAFE;
+import static org.graalvm.compiler.options.OptionValues.GLOBAL;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.RetentionPolicy;
@@ -81,7 +82,7 @@ import sun.misc.Unsafe;
 public abstract class Node implements Cloneable, Formattable, NodeInterface {
 
     public static final NodeClass<?> TYPE = null;
-    public static final boolean USE_UNSAFE_TO_CLONE = true;
+    public static final boolean USE_UNSAFE_TO_CLONE = Graph.Options.CloneNodesWithUnsafe.getValue(GLOBAL);
 
     static final int DELETED_ID_START = -1000000000;
     static final int INITIAL_ID = -1;
@@ -251,7 +252,7 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
      * Gets the option values associated with this node's graph.
      */
     public final OptionValues getOptions() {
-        return graph == null ? null : graph.getOptions();
+        return graph.getOptions();
     }
 
     /**
@@ -798,8 +799,12 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
         if (edgesToCopy.contains(type)) {
             getNodeClass().getEdges(type).copy(this, newNode);
         } else {
-            // The direct edges are already null
-            getNodeClass().getEdges(type).initializeLists(newNode, this);
+            if (USE_UNSAFE_TO_CLONE) {
+                // The direct edges are already null
+                getNodeClass().getEdges(type).initializeLists(newNode, this);
+            } else {
+                getNodeClass().getEdges(type).clear(newNode);
+            }
         }
     }
 
@@ -833,11 +838,22 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
 
         Node newNode = null;
         try {
-            newNode = (Node) UNSAFE.allocateInstance(getClass());
-            newNode.nodeClass = nodeClassTmp;
-            nodeClassTmp.getData().copy(this, newNode);
-            copyOrClearEdgesForClone(newNode, Inputs, edgesToCopy);
-            copyOrClearEdgesForClone(newNode, Successors, edgesToCopy);
+            if (USE_UNSAFE_TO_CLONE) {
+                newNode = (Node) UNSAFE.allocateInstance(getClass());
+                newNode.nodeClass = nodeClassTmp;
+                nodeClassTmp.getData().copy(this, newNode);
+                copyOrClearEdgesForClone(newNode, Inputs, edgesToCopy);
+                copyOrClearEdgesForClone(newNode, Successors, edgesToCopy);
+            } else {
+                newNode = (Node) this.clone();
+                newNode.typeCacheNext = null;
+                newNode.usage0 = null;
+                newNode.usage1 = null;
+                newNode.predecessor = null;
+                newNode.extraUsagesCount = 0;
+                copyOrClearEdgesForClone(newNode, Inputs, edgesToCopy);
+                copyOrClearEdgesForClone(newNode, Successors, edgesToCopy);
+            }
         } catch (Exception e) {
             throw new GraalGraphError(e).addContext(this);
         }
