@@ -37,9 +37,9 @@ public class MethodCallTargetNode extends CallTargetNode implements Node.Iterabl
         Virtual
     }
 
-    private final RiType returnType;
-    private RiResolvedMethod targetMethod;
-    private InvokeKind invokeKind;
+    @Data private final RiType returnType;
+    @Data private RiResolvedMethod targetMethod;
+    @Data private InvokeKind invokeKind;
 
     /**
      * @param arguments
