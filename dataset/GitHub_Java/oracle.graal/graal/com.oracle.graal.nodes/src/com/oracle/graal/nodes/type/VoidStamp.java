@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,21 +27,11 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
- * This stamp represents the illegal type. Values with this type can not exist at run time.
+ * Singleton stamp representing the value of type {@code void}.
  */
-public final class IllegalStamp extends Stamp {
+public final class VoidStamp extends Stamp {
 
-    private IllegalStamp() {
-    }
-
-    @Override
-    public Kind getStackKind() {
-        return Kind.Illegal;
-    }
-
-    @Override
-    public PlatformKind getPlatformKind(LIRTypeTool tool) {
-        throw GraalInternalError.shouldNotReachHere("illegal stamp should not reach backend");
+    private VoidStamp() {
     }
 
     @Override
@@ -50,43 +40,71 @@ public final class IllegalStamp extends Stamp {
     }
 
     @Override
-    public Stamp illegal() {
-        return this;
+    public Kind getStackKind() {
+        return Kind.Void;
+    }
+
+    @Override
+    public PlatformKind getPlatformKind(LIRTypeTool tool) {
+        throw GraalInternalError.shouldNotReachHere("void stamp has no value");
     }
 
     @Override
     public ResolvedJavaType javaType(MetaAccessProvider metaAccess) {
-        throw GraalInternalError.shouldNotReachHere("illegal stamp has no Java type");
-    }
-
-    @Override
-    public Stamp meet(Stamp other) {
-        return this;
-    }
-
-    @Override
-    public Stamp join(Stamp other) {
-        return this;
-    }
-
-    @Override
-    public boolean isCompatible(Stamp stamp) {
-        return false;
+        return metaAccess.lookupJavaType(Void.TYPE);
     }
 
     @Override
     public String toString() {
-        return "ILLEGAL";
+        return "void";
+    }
+
+    @Override
+    public boolean alwaysDistinct(Stamp other) {
+        return this != other;
+    }
+
+    @Override
+    public Stamp meet(Stamp other) {
+        if (other instanceof IllegalStamp) {
+            return other.join(this);
+        }
+        if (this == other) {
+            return this;
+        }
+        return StampFactory.illegal(Kind.Illegal);
+    }
+
+    @Override
+    public Stamp join(Stamp other) {
+        if (other instanceof IllegalStamp) {
+            return other.join(this);
+        }
+        if (this == other) {
+            return this;
+        }
+        return StampFactory.illegal(Kind.Illegal);
+    }
+
+    @Override
+    public boolean isCompatible(Stamp stamp) {
+        return this == stamp;
+    }
+
+    @Override
+    public Stamp illegal() {
+        // there is no illegal void stamp
+        return this;
     }
 
     @Override
     public boolean isLegal() {
-        return false;
+        return true;
     }
 
-    private static IllegalStamp instance = new IllegalStamp();
+    private static VoidStamp instance = new VoidStamp();
 
-    static IllegalStamp getInstance() {
+    static VoidStamp getInstance() {
         return instance;
     }
 }

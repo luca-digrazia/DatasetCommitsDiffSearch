@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,22 +23,45 @@
 package com.oracle.graal.nodes.type;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.spi.*;
 
 public final class GenericStamp extends Stamp {
 
     public enum GenericStampType {
-        Dependency, Extension, Virtual, Condition, Void
+        Dependency,
+        Extension,
+        Condition
     }
 
     private final GenericStampType type;
 
     protected GenericStamp(GenericStampType type) {
-        super(Kind.Void);
         this.type = type;
     }
 
     public GenericStampType type() {
         return type;
+    }
+
+    @Override
+    public Stamp unrestricted() {
+        return this;
+    }
+
+    @Override
+    public Kind getStackKind() {
+        return Kind.Illegal;
+    }
+
+    @Override
+    public PlatformKind getPlatformKind(LIRTypeTool tool) {
+        throw GraalInternalError.shouldNotReachHere(type + " stamp has no value");
+    }
+
+    @Override
+    public ResolvedJavaType javaType(MetaAccessProvider metaAccess) {
+        throw GraalInternalError.shouldNotReachHere(type + " stamp has no Java type");
     }
 
     @Override
@@ -53,8 +76,30 @@ public final class GenericStamp extends Stamp {
 
     @Override
     public Stamp meet(Stamp other) {
-        assert ((GenericStamp) other).type == type;
+        if (!(other instanceof GenericStamp) || ((GenericStamp) other).type != type) {
+            return illegal();
+        }
         return this;
+    }
+
+    @Override
+    public Stamp join(Stamp other) {
+        if (!(other instanceof GenericStamp) || ((GenericStamp) other).type != type) {
+            return illegal();
+        }
+        return this;
+    }
+
+    @Override
+    public boolean isCompatible(Stamp stamp) {
+        if (this == stamp) {
+            return true;
+        }
+        if (stamp instanceof GenericStamp) {
+            GenericStamp other = (GenericStamp) stamp;
+            return type == other.type;
+        }
+        return false;
     }
 
     @Override
@@ -73,6 +118,16 @@ public final class GenericStamp extends Stamp {
         if (type != ((GenericStamp) obj).type) {
             return false;
         }
+        return true;
+    }
+
+    @Override
+    public Stamp illegal() {
+        return IllegalStamp.getInstance();
+    }
+
+    @Override
+    public boolean isLegal() {
         return true;
     }
 }
