@@ -97,7 +97,6 @@ final class InstrumentationHandler {
     private final Collection<EventBinding.Source<?>> executionBindings = new EventBindingList<>(8);
     private final Collection<EventBinding.Source<?>> sourceSectionBindings = new EventBindingList<>(8);
     private final Collection<EventBinding.Source<?>> sourceBindings = new EventBindingList<>(8);
-    private final FindSourcesVisitor findSourcesVisitor = new FindSourcesVisitor();
     private final Collection<EventBinding<? extends OutputStream>> outputStdBindings = new EventBindingList<>(1);
     private final Collection<EventBinding<? extends OutputStream>> outputErrBindings = new EventBindingList<>(1);
     private final Collection<EventBinding.Allocation<? extends AllocationListener>> allocationBindings = new EventBindingList<>(2);
@@ -133,7 +132,7 @@ final class InstrumentationHandler {
             return;
         }
         assert root.getLanguageInfo() != null;
-        final Source[] rootSources;
+        Source source = null;
         synchronized (sources) {
             if (!sourceBindings.isEmpty()) {
                 // we'll add to the sourcesList, so it needs to be initialized
@@ -141,63 +140,28 @@ final class InstrumentationHandler {
 
                 SourceSection sourceSection = root.getSourceSection();
                 if (sourceSection != null) {
-                    findSourcesVisitor.adoptSource(sourceSection.getSource());
+                    // notify sources
+                    source = sourceSection.getSource();
+                    if (!sources.containsKey(source)) {
+                        sources.put(source, null);
+                        sourcesList.add(source);
+                    } else {
+                        // The source is not new
+                        source = null;
+                    }
                 }
-                visitRoot(root, root, findSourcesVisitor, false);
-                rootSources = findSourcesVisitor.getSources();
-            } else {
-                rootSources = null;
             }
             loadedRoots.add(root);
         }
         // we don't want to invoke foreign code while we are holding a lock to avoid
         // deadlocks.
-        if (rootSources != null) {
-            for (Source src : rootSources) {
-                notifySourceBindingsLoaded(sourceBindings, src);
-            }
+        if (source != null) {
+            notifySourceBindingsLoaded(sourceBindings, source);
         }
 
         // fast path no bindings attached
         if (!sourceSectionBindings.isEmpty()) {
             visitRoot(root, root, new NotifyLoadedListenerVisitor(sourceSectionBindings), false);
-        }
-
-    }
-
-    private class FindSourcesVisitor extends AbstractNodeVisitor {
-
-        private final List<Source> rootSources = new ArrayList<>(5);
-
-        FindSourcesVisitor() {
-        }
-
-        @Override
-        boolean shouldVisit() {
-            return true;
-        }
-
-        @Override
-        protected void visitInstrumentable(Node parentInstrumentable, SourceSection parentSourceSection, Node instrumentableNode, SourceSection sourceSection) {
-            adoptSource(sourceSection.getSource());
-        }
-
-        void adoptSource(Source source) {
-            assert Thread.holdsLock(sources);
-            if (!sources.containsKey(source)) {
-                sources.put(source, null);
-                sourcesList.add(source);
-                rootSources.add(source);
-            }
-        }
-
-        Source[] getSources() {
-            if (rootSources.isEmpty()) {
-                return null;
-            }
-            Source[] sourcesArray = rootSources.toArray(new Source[rootSources.size()]);
-            rootSources.clear();
-            return sourcesArray;
         }
 
     }
