@@ -25,7 +25,6 @@ package com.oracle.graal.hotspot.bridge;
 
 import java.lang.reflect.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
@@ -153,7 +152,7 @@ public interface CompilerToVM {
      *            not null
      * @return the outcome of the installation as a {@link CodeInstallResult}.
      */
-    CodeInstallResult installCode(HotSpotCompilationResult compResult, HotSpotInstalledCode code, HotSpotCodeInfo info, SpeculationLog cache);
+    CodeInstallResult installCode(HotSpotCompilationResult compResult, HotSpotInstalledCode code, HotSpotCodeInfo info, boolean[] triggeredDeoptimizations);
 
     void initializeConfiguration(HotSpotVMConfig config);
 
