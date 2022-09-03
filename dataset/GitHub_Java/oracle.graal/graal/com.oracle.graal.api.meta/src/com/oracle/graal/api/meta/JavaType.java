@@ -72,12 +72,11 @@ public interface JavaType {
     Kind getKind();
 
     /**
-     * Resolves this type to a {@link ResolvedJavaType}.
+     * Resolved this type and returns a {@link ResolvedJavaType}. If this type is already a
+     * {@link ResolvedJavaType}, it returns this type.
      *
-     * @param accessingClass the context of resolution (must not be null)
+     * @param accessingClass the class that requests resolving this type
      * @return the resolved Java type
-     * @throws LinkageError if the resolution failed
-     * @throws NullPointerException if {@code accessingClass} is {@code null}
      */
     ResolvedJavaType resolve(ResolvedJavaType accessingClass);
 
