@@ -30,8 +30,7 @@ import org.junit.Test;
 import com.oracle.graal.api.directives.GraalDirectives;
 import com.oracle.graal.compiler.common.GraalOptions;
 import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.options.OptionValue;
-import com.oracle.graal.options.OptionValue.OverrideScope;
+import com.oracle.graal.options.OptionValues.OverrideScope;
 
 import jdk.internal.org.objectweb.asm.Opcodes;
 import jdk.vm.ci.code.InstalledCode;
@@ -85,20 +84,30 @@ public class LockInstrumentationTest extends GraalCompilerTest {
         }
     }
 
+    /**
+     * Tests that the effect of instrumenting {@link #lockSnippet()} is as shown below.
+     *
+     * <pre>
+     *     synchronized (lock) {
+     *         lockAfterCheckPoint = checkpoint;  <--- instrumentation
+     *         checkpoint = true;
+     *         ClassA a = new ClassA();
+     *         a.notInlinedMethod();
+     *     }
+     * </pre>
+     */
     @Test
     public void testLock() {
-        try (OverrideScope s = OptionValue.override(GraalOptions.UseGraalInstrumentation, true)) {
+        try (OverrideScope s = overrideOptions(GraalOptions.UseGraalInstrumentation, true)) {
             Class<?> clazz = instrumentor.instrument(LockInstrumentationTest.class, "lockSnippet", Opcodes.MONITORENTER);
             ResolvedJavaMethod method = getResolvedJavaMethod(clazz, "lockSnippet");
             executeExpected(method, null); // ensure the method is fully resolved
             resetFlags();
-            // The monitorenter anchors. We expect the instrumentation set the flag before passing
-            // the checkpoint.
             InstalledCode code = getCode(method);
             code.executeVarargs();
             Assert.assertFalse("expected lock was performed before checkpoint", lockAfterCheckPoint);
         } catch (Throwable e) {
-            throw new AssertionError(e);
+            Assert.fail("Unexpected exception: " + e);
         }
     }
 
@@ -109,12 +118,23 @@ public class LockInstrumentationTest extends GraalCompilerTest {
             checkpoint = true;
             a.notInlinedMethod();
         }
-
     }
 
+    /**
+     * Tests that the effect of instrumenting of {@link #postponeLockSnippet()} is as shown below.
+     *
+     * <pre>
+     *     ClassA a = new ClassA();
+     *     synchronized (lock) {
+     *         checkpoint = true;
+     *         lockAfterCheckPoint = checkpoint;  <--- instrumentation
+     *         a.notInlinedMethod();
+     *     }
+     * </pre>
+     */
     @Test
     public void testNonEscapeLock() {
-        try (OverrideScope s = OptionValue.override(GraalOptions.UseGraalInstrumentation, true)) {
+        try (OverrideScope s = overrideOptions(GraalOptions.UseGraalInstrumentation, true)) {
             Class<?> clazz = instrumentor.instrument(LockInstrumentationTest.class, "postponeLockSnippet", Opcodes.MONITORENTER);
             ResolvedJavaMethod method = getResolvedJavaMethod(clazz, "postponeLockSnippet");
             executeExpected(method, null); // ensure the method is fully resolved
@@ -129,5 +149,4 @@ public class LockInstrumentationTest extends GraalCompilerTest {
             throw new AssertionError(e);
         }
     }
-
 }

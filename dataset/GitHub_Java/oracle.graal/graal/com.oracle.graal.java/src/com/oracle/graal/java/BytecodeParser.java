@@ -226,14 +226,17 @@ import static com.oracle.graal.bytecode.Bytecodes.SWAP;
 import static com.oracle.graal.bytecode.Bytecodes.TABLESWITCH;
 import static com.oracle.graal.bytecode.Bytecodes.nameOf;
 import static com.oracle.graal.compiler.common.GraalOptions.DeoptALot;
+import static com.oracle.graal.compiler.common.GraalOptions.HotSpotPrintInlining;
 import static com.oracle.graal.compiler.common.GraalOptions.PrintProfilingInformation;
 import static com.oracle.graal.compiler.common.GraalOptions.ResolveClassBeforeStaticInvoke;
+import static com.oracle.graal.compiler.common.GraalOptions.StressExplicitExceptionCode;
 import static com.oracle.graal.compiler.common.GraalOptions.StressInvokeWithExceptionNode;
 import static com.oracle.graal.compiler.common.GraalOptions.UseGraalInstrumentation;
 import static com.oracle.graal.compiler.common.type.StampFactory.objectNonNull;
 import static com.oracle.graal.debug.GraalError.guarantee;
 import static com.oracle.graal.debug.GraalError.shouldNotReachHere;
 import static com.oracle.graal.java.BytecodeParserOptions.DumpDuringGraphBuilding;
+import static com.oracle.graal.java.BytecodeParserOptions.TraceBytecodeParserLevel;
 import static com.oracle.graal.java.BytecodeParserOptions.TraceInlineDuringParsing;
 import static com.oracle.graal.java.BytecodeParserOptions.TraceParserPlugins;
 import static com.oracle.graal.java.BytecodeParserOptions.UseGuardedIntrinsics;
@@ -269,7 +272,6 @@ import com.oracle.graal.bytecode.BytecodeTableSwitch;
 import com.oracle.graal.bytecode.Bytecodes;
 import com.oracle.graal.bytecode.ResolvedJavaMethodBytecode;
 import com.oracle.graal.bytecode.ResolvedJavaMethodBytecodeProvider;
-import com.oracle.graal.compiler.common.GraalOptions;
 import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.common.calc.FloatConvert;
@@ -381,7 +383,6 @@ import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.InvocationPlugi
 import com.oracle.graal.nodes.graphbuilderconf.NodePlugin;
 import com.oracle.graal.nodes.java.ArrayLengthNode;
 import com.oracle.graal.nodes.java.ExceptionObjectNode;
-import com.oracle.graal.nodes.java.FinalFieldBarrierNode;
 import com.oracle.graal.nodes.java.InstanceOfNode;
 import com.oracle.graal.nodes.java.LoadFieldNode;
 import com.oracle.graal.nodes.java.LoadIndexedNode;
@@ -398,6 +399,7 @@ import com.oracle.graal.nodes.java.StoreIndexedNode;
 import com.oracle.graal.nodes.spi.StampProvider;
 import com.oracle.graal.nodes.type.StampTool;
 import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.options.OptionValues;
 import com.oracle.graal.phases.OptimisticOptimizations;
 
 import jdk.vm.ci.code.BailoutException;
@@ -572,6 +574,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
     private final GraphBuilderPhase.Instance graphBuilderInstance;
     protected final StructuredGraph graph;
+    protected final OptionValues options;
 
     private BciBlockMapping blockMap;
     private LocalLiveness liveness;
@@ -598,9 +601,6 @@ public class BytecodeParser implements GraphBuilderContext {
 
     private int lastBCI; // BCI of lastInstr. This field is for resolving instrumentation target.
 
-    private boolean finalBarrierRequired;
-    private ValueNode originalReceiver;
-
     protected BytecodeParser(GraphBuilderPhase.Instance graphBuilderInstance, StructuredGraph graph, BytecodeParser parent, ResolvedJavaMethod method,
                     int entryBCI, IntrinsicContext intrinsicContext) {
         this.bytecodeProvider = intrinsicContext == null ? new ResolvedJavaMethodBytecodeProvider() : intrinsicContext.getBytecodeProvider();
@@ -608,6 +608,7 @@ public class BytecodeParser implements GraphBuilderContext {
         this.method = code.getMethod();
         this.graphBuilderInstance = graphBuilderInstance;
         this.graph = graph;
+        this.options = graph.getOptions();
         this.graphBuilderConfig = graphBuilderInstance.graphBuilderConfig;
         this.optimisticOpts = graphBuilderInstance.optimisticOpts;
         this.metaAccess = graphBuilderInstance.metaAccess;
@@ -665,7 +666,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
     @SuppressWarnings("try")
     protected void build(FixedWithNextNode startInstruction, FrameStateBuilder startFrameState) {
-        if (PrintProfilingInformation.getValue() && profilingInfo != null) {
+        if (PrintProfilingInformation.getValue(options) && profilingInfo != null) {
             TTY.println("Profiling info for " + method.format("%H.%n(%p)"));
             TTY.println(Util.indent(profilingInfo.toString(method, CodeUtil.NEW_LINE), "  "));
         }
@@ -682,9 +683,6 @@ public class BytecodeParser implements GraphBuilderContext {
             this.blockMap = newMapping;
             this.firstInstructionArray = new FixedWithNextNode[blockMap.getBlockCount()];
             this.entryStateArray = new FrameStateBuilder[blockMap.getBlockCount()];
-            if (!method.isStatic()) {
-                originalReceiver = startFrameState.loadLocal(0, JavaKind.Object);
-            }
 
             /*
              * Configure the assertion checking behavior of the FrameStateBuilder. This needs to be
@@ -755,7 +753,7 @@ public class BytecodeParser implements GraphBuilderContext {
                 processBlock(block);
             }
 
-            if (Debug.isDumpEnabled(Debug.INFO_LOG_LEVEL) && DumpDuringGraphBuilding.getValue() && this.beforeReturnNode != startInstruction) {
+            if (Debug.isDumpEnabled(Debug.INFO_LOG_LEVEL) && DumpDuringGraphBuilding.getValue(options) && this.beforeReturnNode != startInstruction) {
                 Debug.dump(Debug.INFO_LOG_LEVEL, graph, "Bytecodes parsed: %s.%s", method.getDeclaringClass().getUnqualifiedName(), method.getName());
             }
         }
@@ -1261,7 +1259,7 @@ public class BytecodeParser implements GraphBuilderContext {
         if (callTargetIsResolved(target)) {
             ResolvedJavaMethod resolvedTarget = (ResolvedJavaMethod) target;
             ResolvedJavaType holder = resolvedTarget.getDeclaringClass();
-            if (!holder.isInitialized() && ResolveClassBeforeStaticInvoke.getValue()) {
+            if (!holder.isInitialized() && ResolveClassBeforeStaticInvoke.getValue(options)) {
                 handleUnresolvedInvoke(target, InvokeKind.Static);
             } else {
                 ValueNode[] args = frameState.popArguments(resolvedTarget.getSignature().getParameterCount(false));
@@ -1383,7 +1381,7 @@ public class BytecodeParser implements GraphBuilderContext {
         }
 
         JavaKind resultType = targetMethod.getSignature().getReturnKind();
-        if (DeoptALot.getValue()) {
+        if (!parsingIntrinsic() && DeoptALot.getValue(options)) {
             append(new DeoptimizeNode(DeoptimizationAction.None, RuntimeConstraint));
             frameState.pushReturn(resultType, ConstantNode.defaultForKind(resultType, graph));
             return;
@@ -1407,15 +1405,15 @@ public class BytecodeParser implements GraphBuilderContext {
             currentInvokeReturnType = returnType;
             currentInvokeKind = invokeKind;
             if (tryNodePluginForInvocation(args, targetMethod)) {
-                if (TraceParserPlugins.getValue()) {
+                if (TraceParserPlugins.getValue(options)) {
                     traceWithContext("used node plugin for %s", targetMethod.format("%h.%n(%p)"));
                 }
                 return;
             }
 
-            if (!invokeKind.isIndirect() || UseGuardedIntrinsics.getValue()) {
+            if (!invokeKind.isIndirect() || UseGuardedIntrinsics.getValue(options)) {
                 if (tryInvocationPlugin(invokeKind, args, targetMethod, resultType, returnType)) {
-                    if (TraceParserPlugins.getValue()) {
+                    if (TraceParserPlugins.getValue(options)) {
                         traceWithContext("used invocation plugin for %s", targetMethod.format("%h.%n(%p)"));
                     }
                     return;
@@ -1484,7 +1482,8 @@ public class BytecodeParser implements GraphBuilderContext {
             assert graphBuilderConfig.getBytecodeExceptionMode() == BytecodeExceptionMode.Profile;
             // be conservative if information was not recorded (could result in endless
             // recompiles otherwise)
-            return (!StressInvokeWithExceptionNode.getValue() && optimisticOpts.useExceptionProbability() && profilingInfo != null && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE);
+            return (!StressInvokeWithExceptionNode.getValue(options) && optimisticOpts.useExceptionProbability() && profilingInfo != null &&
+                            profilingInfo.getExceptionSeen(bci()) == TriState.FALSE);
         }
     }
 
@@ -1581,8 +1580,8 @@ public class BytecodeParser implements GraphBuilderContext {
      *         {@link #afterInvocationPluginExecution} to weave code for the non-intrinsic branch
      */
     protected IntrinsicGuard guardIntrinsic(ValueNode[] args, ResolvedJavaMethod targetMethod, InvocationPluginReceiver pluginReceiver) {
-        ValueNode intrinsicReceiver = args[0];
-        ResolvedJavaType receiverType = StampTool.typeOrNull(intrinsicReceiver);
+        ValueNode originalReceiver = args[0];
+        ResolvedJavaType receiverType = StampTool.typeOrNull(originalReceiver);
         if (receiverType == null) {
             // The verifier guarantees it to be at least type declaring targetMethod
             receiverType = targetMethod.getDeclaringClass();
@@ -1609,7 +1608,7 @@ public class BytecodeParser implements GraphBuilderContext {
                             // All profiled types select the intrinsic so
                             // emit a fixed guard instead of a if-then-else.
                             lastInstr = append(new FixedGuardNode(compare, TypeCheckedInliningViolated, InvalidateReprofile, false));
-                            return new IntrinsicGuard(currentLastInstr, intrinsicReceiver, mark, null, null);
+                            return new IntrinsicGuard(currentLastInstr, originalReceiver, mark, null, null);
                         }
                     } else {
                         // No profiled types select the intrinsic so emit a virtual call
@@ -1623,7 +1622,7 @@ public class BytecodeParser implements GraphBuilderContext {
             AbstractBeginNode nonIntrinsicBranch = graph.add(new BeginNode());
             append(new IfNode(compare, intrinsicBranch, nonIntrinsicBranch, 0.01));
             lastInstr = intrinsicBranch;
-            return new IntrinsicGuard(currentLastInstr, intrinsicReceiver, mark, nonIntrinsicBranch, profile);
+            return new IntrinsicGuard(currentLastInstr, originalReceiver, mark, nonIntrinsicBranch, profile);
         } else {
             // Receiver selects an overriding method so emit a virtual call
             return null;
@@ -1803,7 +1802,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private boolean inline(ResolvedJavaMethod targetMethod, ResolvedJavaMethod inlinedMethod, BytecodeProvider intrinsicBytecodeProvider, ValueNode[] args) {
-        if (TraceInlineDuringParsing.getValue() || TraceParserPlugins.getValue()) {
+        if (TraceInlineDuringParsing.getValue(options) || TraceParserPlugins.getValue(options)) {
             if (targetMethod.equals(inlinedMethod)) {
                 traceWithContext("inlining call to %s", inlinedMethod.format("%h.%n(%p)"));
             } else {
@@ -1856,7 +1855,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private void printInlining(ResolvedJavaMethod targetMethod, ResolvedJavaMethod inlinedMethod, boolean success, String msg) {
-        if (GraalOptions.HotSpotPrintInlining.getValue()) {
+        if (HotSpotPrintInlining.getValue(options)) {
             if (targetMethod.equals(inlinedMethod)) {
                 Util.printInlining(inlinedMethod, bci(), getDepth(), success, "%s", msg);
             } else {
@@ -2016,10 +2015,7 @@ public class BytecodeParser implements GraphBuilderContext {
             }
         }
         genInfoPointNode(InfopointReason.METHOD_END, x);
-        if (finalBarrierRequired) {
-            assert originalReceiver != null;
-            append(new FinalFieldBarrierNode(originalReceiver));
-        }
+
         synchronizedEpilogue(BytecodeFrame.AFTER_BCI, x, kind);
     }
 
@@ -2149,7 +2145,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private <T extends ValueNode> void updateLastInstruction(T v) {
-        if (UseGraalInstrumentation.getValue()) {
+        if (UseGraalInstrumentation.getValue(options)) {
             // resolve instrumentation target
             if (v instanceof InstrumentationBeginNode) {
                 InstrumentationBeginNode begin = (InstrumentationBeginNode) v;
@@ -2682,7 +2678,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private boolean traceState() {
-        if (Debug.isEnabled() && BytecodeParserOptions.TraceBytecodeParserLevel.getValue() >= TRACELEVEL_STATE && Debug.isLogEnabled()) {
+        if (Debug.isEnabled() && TraceBytecodeParserLevel.getValue(options) >= TRACELEVEL_STATE && Debug.isLogEnabled()) {
             frameState.traceState();
         }
         return true;
@@ -3501,9 +3497,15 @@ public class BytecodeParser implements GraphBuilderContext {
         if (graphBuilderConfig.getBytecodeExceptionMode() == BytecodeExceptionMode.OmitAll) {
             return receiver;
         }
-        if (graphBuilderConfig.getBytecodeExceptionMode() == BytecodeExceptionMode.Profile && (profilingInfo == null ||
-                        (optimisticOpts.useExceptionProbabilityForOperations() && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE && !GraalOptions.StressExplicitExceptionCode.getValue()))) {
-            return receiver;
+        if (graphBuilderConfig.getBytecodeExceptionMode() == BytecodeExceptionMode.Profile) {
+            if (profilingInfo == null) {
+                return receiver;
+            }
+            if (optimisticOpts.useExceptionProbabilityForOperations() &&
+                            profilingInfo.getExceptionSeen(bci()) == TriState.FALSE &&
+                            !StressExplicitExceptionCode.getValue(options)) {
+                return receiver;
+            }
         }
 
         ValueNode nonNullReceiver = emitExplicitNullCheck(receiver);
@@ -3531,9 +3533,6 @@ public class BytecodeParser implements GraphBuilderContext {
             }
         }
 
-        if (resolvedField.isFinal() && method.isConstructor()) {
-            finalBarrierRequired = true;
-        }
         genStoreField(receiver, resolvedField, value);
     }
 
@@ -3945,7 +3944,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected boolean traceInstruction(int bci, int opcode, boolean blockStart) {
-        if (Debug.isEnabled() && BytecodeParserOptions.TraceBytecodeParserLevel.getValue() >= TRACELEVEL_INSTRUCTIONS && Debug.isLogEnabled()) {
+        if (Debug.isEnabled() && TraceBytecodeParserLevel.getValue(options) >= TRACELEVEL_INSTRUCTIONS && Debug.isLogEnabled()) {
             traceInstructionHelper(bci, opcode, blockStart);
         }
         return true;

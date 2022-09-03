@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.phases.common.inlining.info.elem;
 
-import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
 import static com.oracle.graal.compiler.common.GraalOptions.UseGraalInstrumentation;
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.Optional;
 
@@ -196,7 +195,7 @@ public class InlineableGraph implements Inlineable {
      */
     @SuppressWarnings("try")
     private static StructuredGraph parseBytecodes(ResolvedJavaMethod method, HighTierContext context, CanonicalizerPhase canonicalizer, StructuredGraph caller) {
-        StructuredGraph newGraph = new StructuredGraph(method, AllowAssumptions.from(caller.getAssumptions() != null), INVALID_COMPILATION_ID);
+        StructuredGraph newGraph = new StructuredGraph(method, AllowAssumptions.from(caller.getAssumptions() != null));
         try (Debug.Scope s = Debug.scope("InlineGraph", newGraph)) {
             if (!caller.isUnsafeAccessTrackingEnabled()) {
                 newGraph.disableUnsafeAccessTracking();
@@ -206,7 +205,7 @@ public class InlineableGraph implements Inlineable {
             }
             assert newGraph.start().next() != null : "graph needs to be populated by the GraphBuilderSuite " + method + ", " + method.canBeInlined();
 
-            if (UseGraalInstrumentation.getValue()) {
+            if (UseGraalInstrumentation.getValue(caller.getOptions())) {
                 new ExtractInstrumentationPhase().apply(newGraph, context);
             }
             new DeadCodeEliminationPhase(Optional).apply(newGraph);

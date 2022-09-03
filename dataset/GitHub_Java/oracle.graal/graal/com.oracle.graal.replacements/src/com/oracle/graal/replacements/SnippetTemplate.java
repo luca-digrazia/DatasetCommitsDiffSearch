@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
 import static com.oracle.graal.compiler.common.GraalOptions.UseGraalInstrumentation;
 import static com.oracle.graal.compiler.common.LocationIdentity.ANY_LOCATION;
 import static com.oracle.graal.compiler.common.LocationIdentity.any;
@@ -112,7 +111,7 @@ import com.oracle.graal.nodes.spi.LoweringTool;
 import com.oracle.graal.nodes.spi.MemoryProxy;
 import com.oracle.graal.nodes.util.GraphUtil;
 import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionValue;
+import com.oracle.graal.options.OptionKey;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
 import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
 import com.oracle.graal.phases.common.FloatingReadPhase;
@@ -547,10 +546,10 @@ public class SnippetTemplate {
 
     static class Options {
         @Option(help = "Use a LRU cache for snippet templates.")//
-        static final OptionValue<Boolean> UseSnippetTemplateCache = new OptionValue<>(true);
+        static final OptionKey<Boolean> UseSnippetTemplateCache = new OptionKey<>(true);
 
         @Option(help = "")//
-        static final OptionValue<Integer> MaxTemplatesPerSnippet = new OptionValue<>(50);
+        static final OptionKey<Integer> MaxTemplatesPerSnippet = new OptionKey<>(50);
     }
 
     /**
@@ -677,7 +676,7 @@ public class SnippetTemplate {
         PhaseContext phaseContext = new PhaseContext(providers);
 
         // Copy snippet graph, replacing constant parameters with given arguments
-        final StructuredGraph snippetCopy = new StructuredGraph(snippetGraph.name, snippetGraph.method(), AllowAssumptions.NO, INVALID_COMPILATION_ID);
+        final StructuredGraph snippetCopy = new StructuredGraph(snippetGraph.name, snippetGraph.method(), AllowAssumptions.NO);
 
         try (Debug.Scope scope = Debug.scope("SpecializeSnippet", snippetCopy)) {
             if (!snippetGraph.isUnsafeAccessTrackingEnabled()) {
@@ -1394,7 +1393,7 @@ public class SnippetTemplate {
 
             updateStamps(replacee, duplicates);
 
-            if (UseGraalInstrumentation.getValue()) {
+            if (UseGraalInstrumentation.getValue(replaceeGraph.getOptions())) {
                 for (InstrumentationNode instrumentation : replaceeGraph.getNodes().filter(InstrumentationNode.class)) {
                     if (instrumentation.getTarget() == replacee) {
                         instrumentation.replaceFirstInput(replacee, firstCFGNodeDuplicate);
