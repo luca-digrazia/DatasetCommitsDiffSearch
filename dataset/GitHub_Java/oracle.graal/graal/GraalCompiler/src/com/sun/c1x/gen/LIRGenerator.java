@@ -892,7 +892,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     public void visitThrow(Throw x) {
         setNoResult(x);
         CiValue exceptionOpr = load(x.exception());
-        LIRDebugInfo info = stateFor(x, x.stateBefore());
+        LIRDebugInfo info = stateFor(x);
 
         // check if the instruction has an xhandler in any of the nested scopes
         boolean unwind = false;
