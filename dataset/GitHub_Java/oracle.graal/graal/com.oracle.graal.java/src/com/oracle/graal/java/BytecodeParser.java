@@ -1556,10 +1556,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     @Override
-    public boolean intrinsify(ResolvedJavaMethod targetMethod, ResolvedJavaMethod substitute, InvocationPlugin.Receiver receiver, ValueNode[] args) {
-        if (receiver != null) {
-            receiver.get();
-        }
+    public boolean intrinsify(ResolvedJavaMethod targetMethod, ResolvedJavaMethod substitute, ValueNode[] args) {
         boolean res = inline(targetMethod, substitute, true, args);
         assert res : "failed to inline " + substitute;
         return res;
