@@ -796,12 +796,10 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     public void updateFields(StructuredGraph other) {
         assert this != other;
         assert GraalOptions.GeneratePIC.getValue(getOptions());
-        if (other.fields != null) {
-            if (this.fields == null) {
-                this.fields = EconomicSet.create(Equivalence.IDENTITY);
-            }
-            this.fields.addAll(other.fields);
+        if (this.fields == null) {
+            this.fields = EconomicSet.create(Equivalence.IDENTITY);
         }
+        this.fields.addAll(other.fields);
     }
 
     /**
