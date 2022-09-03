@@ -187,8 +187,6 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
         assert HotSpotGraalCompilerFactory.class.getName().equals("org.graalvm.compiler.hotspot.HotSpotGraalCompilerFactory");
     }
 
-    static final ClassLoader GRAAL_LOADER = HotSpotGraalCompilerFactory.class.getClassLoader();
-
     /*
      * This method is static so it can be exercised during initialization.
      */
@@ -196,10 +194,11 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
         if (compileGraalWithC1Only) {
             if (level.ordinal() > CompilationLevel.Simple.ordinal()) {
                 if (JDK9Method.Java8OrEarlier) {
-                    if (GRAAL_LOADER != null) {
+                    ClassLoader jvmciLoader = HotSpotGraalRuntime.class.getClassLoader();
+                    if (jvmciLoader != null) {
                         // When running with +UseJVMCIClassLoader all classes in
                         // the JVMCI loader should be compiled with C1.
-                        if (declaringClass.getClassLoader() == GRAAL_LOADER) {
+                        if (declaringClass.getClassLoader() == jvmciLoader) {
                             return CompilationLevel.Simple;
                         }
                     } else {
