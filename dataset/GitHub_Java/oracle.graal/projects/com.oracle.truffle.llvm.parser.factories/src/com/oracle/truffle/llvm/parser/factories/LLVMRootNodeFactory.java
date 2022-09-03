@@ -35,10 +35,10 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.context.LLVMContext;
-import com.oracle.truffle.llvm.context.LLVMLanguage;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMGlobalRootNode;
-import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
+import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 import com.oracle.truffle.llvm.types.memory.LLVMHeap;
@@ -87,7 +87,7 @@ public class LLVMRootNodeFactory {
             return new Object[]{argsCount};
         } else {
             Object[] args = new Object[mainArgs.length + 1];
-            args[0] = sourceFile.getPath() == null ? "" : sourceFile.getPath();
+            args[0] = sourceFile.getPath();
             System.arraycopy(mainArgs, 0, args, 1, mainArgs.length);
             LLVMAddress allocatedArgsStartAddress = getArgsAsStringArray(args);
             // Checkstyle: stop magic number check
