@@ -492,9 +492,6 @@ public class CompilationResult implements Serializable {
      * @return the code annotations or {@code null} if there are none
      */
     public List<CodeAnnotation> getAnnotations() {
-        if (annotations == null) {
-            return Collections.emptyList();
-        }
         return annotations;
     }
 
@@ -510,16 +507,6 @@ public class CompilationResult implements Serializable {
         if (info != null) {
             appendRefMap(sb, "stackMap", info.getFrameRefMap());
             appendRefMap(sb, "registerMap", info.getRegisterRefMap());
-            RegisterSaveLayout calleeSaveInfo = info.getCalleeSaveInfo();
-            if (calleeSaveInfo != null) {
-                sb.append(" callee-save-info[");
-                String sep = "";
-                for (Map.Entry<Register, Integer> e : calleeSaveInfo.registersToSlots(true).entrySet()) {
-                    sb.append(sep).append(e.getKey()).append("->").append(e.getValue());
-                    sep = ", ";
-                }
-                sb.append(']');
-            }
             BytecodePosition codePos = info.getBytecodePosition();
             if (codePos != null) {
                 MetaUtil.appendLocation(sb.append(" "), codePos.getMethod(), codePos.getBCI());
