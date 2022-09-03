@@ -22,12 +22,15 @@
  */
 package com.oracle.graal.replacements;
 
+import static com.oracle.graal.compiler.common.GraalInternalError.*;
 import static com.oracle.graal.java.GraphBuilderPhase.Options.*;
-import static com.oracle.jvmci.common.JVMCIError.*;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.graphbuilderconf.*;
@@ -41,9 +44,6 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.common.inlining.*;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * A graph decoder that performs partial evaluation, i.e., that performs method inlining and
@@ -390,7 +390,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             if (graphBuilderContext.lastInstr != null) {
                 registerNode(loopScope, invokeData.invokeOrderId, graphBuilderContext.pushedNode, true, true);
                 invoke.asNode().replaceAtUsages(graphBuilderContext.pushedNode);
-                graphBuilderContext.lastInstr.setNext(nodeAfterInvoke(methodScope, loopScope, invokeData, AbstractBeginNode.prevBegin(graphBuilderContext.lastInstr)));
+                graphBuilderContext.lastInstr.setNext(nodeAfterInvoke(methodScope, loopScope, invokeData));
             } else {
                 assert graphBuilderContext.pushedNode == null : "Why push a node when the invoke does not return anyway?";
                 invoke.asNode().replaceAtUsages(null);
@@ -469,16 +469,16 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         ValueNode returnValue;
         List<ReturnNode> returnNodes = inlineScope.returnNodes;
         if (!returnNodes.isEmpty()) {
+            FixedNode n;
+            n = nodeAfterInvoke(methodScope, loopScope, invokeData);
             if (returnNodes.size() == 1) {
                 ReturnNode returnNode = returnNodes.get(0);
                 returnValue = returnNode.result();
-                FixedNode n = nodeAfterInvoke(methodScope, loopScope, invokeData, AbstractBeginNode.prevBegin(returnNode));
                 returnNode.replaceAndDelete(n);
             } else {
                 AbstractMergeNode merge = methodScope.graph.add(new MergeNode());
                 merge.setStateAfter((FrameState) ensureNodeCreated(methodScope, loopScope, invokeData.stateAfterOrderId));
                 returnValue = InliningUtil.mergeReturns(merge, returnNodes, null);
-                FixedNode n = nodeAfterInvoke(methodScope, loopScope, invokeData, merge);
                 merge.setNext(n);
             }
         } else {
@@ -508,11 +508,9 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         return true;
     }
 
-    public FixedNode nodeAfterInvoke(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, AbstractBeginNode lastBlock) {
-        assert lastBlock.isAlive();
+    public FixedNode nodeAfterInvoke(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData) {
         FixedNode n;
         if (invokeData.invoke instanceof InvokeWithExceptionNode) {
-            registerNode(loopScope, invokeData.nextOrderId, lastBlock, false, false);
             n = makeStubNode(methodScope, loopScope, invokeData.nextNextOrderId);
         } else {
             n = makeStubNode(methodScope, loopScope, invokeData.nextOrderId);
@@ -575,7 +573,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             }
 
             Kind invokeReturnKind = methodScope.invokeData.invoke.asNode().getKind();
-            FrameState outerState = stateAtReturn.duplicateModified(methodScope.graph, methodScope.invokeData.invoke.bci(), stateAtReturn.rethrowException(), true, invokeReturnKind, null, null);
+            FrameState outerState = stateAtReturn.duplicateModified(methodScope.graph, methodScope.invokeData.invoke.bci(), stateAtReturn.rethrowException(), true, invokeReturnKind);
 
             /*
              * When the encoded graph has methods inlining, we can already have a proper caller
