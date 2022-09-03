@@ -22,122 +22,128 @@
  */
 package com.oracle.graal.loop;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.util.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 
+import java.util.*;
+
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.graph.Graph.Mark;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 public abstract class LoopTransformations {
-    private static final int UNROLL_LIMIT = GraalOptions.FullUnrollMaxNodes * 2;
-    private static final SimplifierTool simplifier = new SimplifierTool() {
-        @Override
-        public TargetDescription target() {
-            return null;
-        }
-        @Override
-        public CodeCacheProvider runtime() {
-            return null;
-        }
-        @Override
-        public boolean isImmutable(Constant objectConstant) {
-            return false;
-        }
-        @Override
-        public Assumptions assumptions() {
-            return null;
-        }
-        @Override
-        public void deleteBranch(FixedNode branch) {
-            branch.predecessor().replaceFirstSuccessor(branch, null);
-            GraphUtil.killCFG(branch);
-        }
-        @Override
-        public void addToWorkList(Node node) {
-        }
-    };
 
     private LoopTransformations() {
         // does not need to be instantiated
     }
 
-    public static void invert(LoopEx loop, FixedNode point) {
-        LoopFragmentInsideBefore head = loop.insideBefore(point);
-        LoopFragmentInsideBefore duplicate = head.duplicate();
-        head.disconnect();
-        head.insertBefore(loop);
-        duplicate.appendInside(loop);
-    }
-
     public static void peel(LoopEx loop) {
         loop.inside().duplicate().insertBefore(loop);
+        loop.loopBegin().setLoopFrequency(Math.max(0.0, loop.loopBegin().loopFrequency() - 1));
     }
 
-    public static void fullUnroll(LoopEx loop, MetaAccessProvider runtime) {
-        //assert loop.isCounted(); //TODO (gd) strenghten : counted with known trip count
+    public static void fullUnroll(LoopEx loop, PhaseContext context, CanonicalizerPhase canonicalizer) {
+        // assert loop.isCounted(); //TODO (gd) strenghten : counted with known trip count
         int iterations = 0;
         LoopBeginNode loopBegin = loop.loopBegin();
-        StructuredGraph graph = (StructuredGraph) loopBegin.graph();
+        StructuredGraph graph = loopBegin.graph();
         while (!loopBegin.isDeleted()) {
-            int mark = graph.getMark();
+            Mark mark = graph.getMark();
             peel(loop);
-            new CanonicalizerPhase(null, runtime, null, mark, null).apply(graph);
-            if (iterations++ > UNROLL_LIMIT || graph.getNodeCount() > GraalOptions.MaximumDesiredSize * 3) {
+            canonicalizer.applyIncremental(graph, context, mark);
+            loopBegin.removeDeadPhis();
+            loop.invalidateFragments();
+            if (iterations++ > LoopPolicies.FullUnrollMaxIterations.getValue() || graph.getNodeCount() > MaximumDesiredSize.getValue() * 3) {
                 throw new BailoutException("FullUnroll : Graph seems to grow out of proportion");
             }
         }
     }
 
-    public static void unswitch(LoopEx loop, IfNode ifNode) {
-        // duplicate will be true case, original will be false case
-        loop.loopBegin().incUnswitches();
+    public static void unswitch(LoopEx loop, List<ControlSplitNode> controlSplitNodeSet) {
+        ControlSplitNode firstNode = controlSplitNodeSet.iterator().next();
         LoopFragmentWhole originalLoop = loop.whole();
-        LoopFragmentWhole duplicateLoop = originalLoop.duplicate();
-        StructuredGraph graph = (StructuredGraph) ifNode.graph();
-        BeginNode tempBegin = graph.add(new BeginNode());
-        originalLoop.entryPoint().replaceAtPredecessor(tempBegin);
-        double takenProbability = ifNode.probability(ifNode.blockSuccessorIndex(ifNode.trueSuccessor()));
-        IfNode newIf = graph.add(new IfNode(ifNode.compare(), duplicateLoop.entryPoint(), originalLoop.entryPoint(), takenProbability, ifNode.leafGraphId()));
-        tempBegin.setNext(newIf);
-        ifNode.setCompare(graph.unique(ConstantNode.forBoolean(false, graph)));
-        IfNode duplicateIf = duplicateLoop.getDuplicatedNode(ifNode);
-        duplicateIf.setCompare(graph.unique(ConstantNode.forBoolean(true, graph)));
-        ifNode.simplify(simplifier);
-        duplicateIf.simplify(simplifier);
+        StructuredGraph graph = firstNode.graph();
+
+        loop.loopBegin().incrementUnswitches();
+
+        // create new control split out of loop
+        ControlSplitNode newControlSplit = (ControlSplitNode) firstNode.copyWithInputs();
+        originalLoop.entryPoint().replaceAtPredecessor(newControlSplit);
+
+        /*
+         * The code below assumes that all of the control split nodes have the same successor
+         * structure, which should have been enforced by findUnswitchable.
+         */
+        NodePosIterator successors = firstNode.successors().iterator();
+        assert successors.hasNext();
+        // original loop is used as first successor
+        Position firstPosition = successors.nextPosition();
+        AbstractBeginNode originalLoopBegin = BeginNode.begin(originalLoop.entryPoint());
+        firstPosition.set(newControlSplit, originalLoopBegin);
+
+        while (successors.hasNext()) {
+            Position position = successors.nextPosition();
+            // create a new loop duplicate and connect it.
+            LoopFragmentWhole duplicateLoop = originalLoop.duplicate();
+            AbstractBeginNode newBegin = BeginNode.begin(duplicateLoop.entryPoint());
+            position.set(newControlSplit, newBegin);
+
+            // For each cloned ControlSplitNode, simplify the proper path
+            for (ControlSplitNode controlSplitNode : controlSplitNodeSet) {
+                ControlSplitNode duplicatedControlSplit = duplicateLoop.getDuplicatedNode(controlSplitNode);
+                if (duplicatedControlSplit.isAlive()) {
+                    AbstractBeginNode survivingSuccessor = (AbstractBeginNode) position.get(duplicatedControlSplit);
+                    survivingSuccessor.replaceAtUsages(InputType.Guard, newBegin);
+                    graph.removeSplitPropagate(duplicatedControlSplit, survivingSuccessor);
+                }
+            }
+        }
+        // original loop is simplified last to avoid deleting controlSplitNode too early
+        for (ControlSplitNode controlSplitNode : controlSplitNodeSet) {
+            if (controlSplitNode.isAlive()) {
+                AbstractBeginNode survivingSuccessor = (AbstractBeginNode) firstPosition.get(controlSplitNode);
+                survivingSuccessor.replaceAtUsages(InputType.Guard, originalLoopBegin);
+                graph.removeSplitPropagate(controlSplitNode, survivingSuccessor);
+            }
+        }
+
         // TODO (gd) probabilities need some amount of fixup.. (probably also in other transforms)
     }
 
-    public static void unroll(LoopEx loop, int factor) {
-        assert loop.isCounted();
-        if (factor > 0) {
-            throw new UnsupportedOperationException();
-        }
-        // TODO (gd) implement counted loop
-        LoopFragmentWhole main = loop.whole();
-        LoopFragmentWhole prologue = main.duplicate();
-        prologue.insertBefore(loop);
-        //CountedLoopBeginNode counted = prologue.countedLoop();
-        //StructuredGraph graph = (StructuredGraph) counted.graph();
-        //ValueNode tripCountPrologue = counted.tripCount();
-        //ValueNode tripCountMain = counted.tripCount();
-        //graph.replaceFloating(tripCountPrologue, "tripCountPrologue % factor");
-        //graph.replaceFloating(tripCountMain, "tripCountMain - (tripCountPrologue % factor)");
-        LoopFragmentInside inside = loop.inside();
-        for (int i = 0; i < factor; i++) {
-            inside.duplicate().appendInside(loop);
-        }
-    }
-
-    public static IfNode findUnswitchableIf(LoopEx loop) {
+    public static List<ControlSplitNode> findUnswitchable(LoopEx loop) {
+        List<ControlSplitNode> controls = null;
+        ValueNode invariantValue = null;
         for (IfNode ifNode : loop.whole().nodes().filter(IfNode.class)) {
-            if (loop.isOutsideLoop(ifNode.compare())) {
-                return ifNode;
+            if (loop.isOutsideLoop(ifNode.condition())) {
+                if (controls == null) {
+                    invariantValue = ifNode.condition();
+                    controls = new ArrayList<>();
+                    controls.add(ifNode);
+                } else if (ifNode.condition() == invariantValue) {
+                    controls.add(ifNode);
+                }
             }
         }
-        return null;
+        if (controls == null) {
+            SwitchNode firstSwitch = null;
+            for (SwitchNode switchNode : loop.whole().nodes().filter(SwitchNode.class)) {
+                if (switchNode.successors().count() > 1 && loop.isOutsideLoop(switchNode.value())) {
+                    if (controls == null) {
+                        firstSwitch = switchNode;
+                        invariantValue = switchNode.value();
+                        controls = new ArrayList<>();
+                        controls.add(switchNode);
+                    } else if (switchNode.value() == invariantValue && firstSwitch.structureEquals(switchNode)) {
+                        // Only collect switches which test the same values in the same order
+                        controls.add(switchNode);
+                    }
+                }
+            }
+        }
+        return controls;
     }
 }
