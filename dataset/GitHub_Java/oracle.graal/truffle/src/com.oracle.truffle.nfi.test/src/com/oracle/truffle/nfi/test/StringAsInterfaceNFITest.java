@@ -24,18 +24,10 @@
  */
 package com.oracle.truffle.nfi.test;
 
-import com.oracle.truffle.api.TruffleOptions;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine;
 import org.junit.AfterClass;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import org.junit.Assume;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -45,11 +37,6 @@ public class StringAsInterfaceNFITest {
 
     @BeforeClass
     public static void loadLibraries() {
-        if (TruffleOptions.AOT) {
-            // skip these tests on AOT, since JavaInterop is not yet supported
-            return;
-        }
-
         engine = PolyglotEngine.newBuilder().build();
         stdlib = engine.eval(Source.newBuilder("default {\n" + //
                         "  strdup(string):string;\n" + //
@@ -61,9 +48,7 @@ public class StringAsInterfaceNFITest {
 
     @AfterClass
     public static void cleanUp() {
-        if (engine != null) {
-            engine.dispose();
-        }
+        engine.dispose();
     }
 
     interface StdLib {
@@ -80,32 +65,18 @@ public class StringAsInterfaceNFITest {
 
     @Test
     public void testDuplicateAString() {
-        Assume.assumeFalse("disable test on AOT", TruffleOptions.AOT);
         String copy = stdlib.strdup("Ahoj");
         assertEquals("Ahoj", copy);
     }
 
     @Test
     public void testAllocAndRelease() {
-        Assume.assumeFalse("disable test on AOT", TruffleOptions.AOT);
         long mem = stdlib.malloc(512);
         stdlib.free(mem);
     }
 
     @Test
-    public void testAllocAndReleaseWithInvoke() throws Exception {
-        Assume.assumeFalse("disable test on AOT", TruffleOptions.AOT);
-        TruffleObject rawStdLib = JavaInterop.asTruffleObject(stdlib);
-        Object mem = ForeignAccess.sendInvoke(Message.createInvoke(1).createNode(), rawStdLib, "malloc", 512);
-        assertNotNull("some memory allocated", mem);
-        Object res = ForeignAccess.sendInvoke(Message.createInvoke(1).createNode(), rawStdLib, "free", mem);
-        assertTrue("It is number", res instanceof Number);
-        assertEquals("Zero return code", 0, ((Number) res).intValue());
-    }
-
-    @Test
     public void canViewDefaultLibraryAsAnotherInterface() {
-        Assume.assumeFalse("disable test on AOT", TruffleOptions.AOT);
         Strndup second = engine.eval(Source.newBuilder("default {\n" + //
                         "  strndup(string, UINT32):string;\n" + //
                         "}" //
