@@ -23,22 +23,22 @@
 package com.oracle.graal.lir.alloc.trace;
 
 import static com.oracle.graal.compiler.common.GraalOptions.DetailedAsserts;
-import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
 import static com.oracle.graal.lir.LIRValueUtil.isVariable;
-import static com.oracle.graal.lir.LIRValueUtil.isVirtualStackSlot;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.code.ValueUtil.isIllegal;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
 import static jdk.vm.ci.code.ValueUtil.isStackSlot;
+import static jdk.vm.ci.code.ValueUtil.isStackSlotValue;
+import static jdk.vm.ci.code.ValueUtil.isVirtualStackSlot;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.List;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.code.StackSlotValue;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.JavaConstant;
@@ -291,9 +291,7 @@ final class TraceInterval extends IntervalHint {
          * The interval has more than one definition (e.g. resulting from phi moves), so stores to
          * memory are not optimized.
          */
-        NoOptimization;
-
-        public static final EnumSet<SpillState> ALWAYS_IN_MEMORY = EnumSet.of(SpillInDominator, StoreAtDefinition, StartInMemory);
+        NoOptimization
     }
 
     /**
@@ -317,7 +315,7 @@ final class TraceInterval extends IntervalHint {
     /**
      * The stack slot to which all splits of this interval are spilled if necessary.
      */
-    private AllocatableValue spillSlot;
+    private StackSlotValue spillSlot;
 
     /**
      * The kind of this interval.
@@ -485,12 +483,11 @@ final class TraceInterval extends IntervalHint {
     /**
      * Gets the canonical spill slot for this interval.
      */
-    public AllocatableValue spillSlot() {
+    public StackSlotValue spillSlot() {
         return splitParent().spillSlot;
     }
 
-    public void setSpillSlot(AllocatableValue slot) {
-        assert isStackSlotValue(slot);
+    public void setSpillSlot(StackSlotValue slot) {
         assert splitParent().spillSlot == null || (isVirtualStackSlot(splitParent().spillSlot) && isStackSlot(slot)) : "connot overwrite existing spill slot";
         splitParent().spillSlot = slot;
     }
@@ -532,7 +529,8 @@ final class TraceInterval extends IntervalHint {
 
     // returns true if this interval has a shadow copy on the stack that is always correct
     public boolean alwaysInMemory() {
-        return SpillState.ALWAYS_IN_MEMORY.contains(spillState()) && !canMaterialize();
+        return (splitParent().spillState == SpillState.SpillInDominator || splitParent().spillState == SpillState.StoreAtDefinition || splitParent().spillState == SpillState.StartInMemory) &&
+                        !canMaterialize();
     }
 
     void removeFirstUsePos() {
