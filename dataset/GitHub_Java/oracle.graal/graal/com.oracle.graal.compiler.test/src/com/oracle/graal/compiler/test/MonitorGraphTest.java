@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.compiler.test;
 
+import static com.oracle.graal.graph.iterators.NodePredicates.isNotA;
+
 import java.util.HashMap;
 import java.util.Map;
 
