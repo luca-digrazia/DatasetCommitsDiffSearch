@@ -23,11 +23,19 @@
 package org.graalvm.util;
 
 /**
- * Immutable memory efficient map data structure.
+ * Unmodifiable memory efficient map data structure.
  */
 public interface UnmodifiableEconomicMap<K, V> {
 
     V get(K key);
+
+    default V get(K key, V defaultValue) {
+        V v = get(key);
+        if (v == null) {
+            return defaultValue;
+        }
+        return v;
+    }
 
     boolean containsKey(K key);
 
@@ -39,5 +47,5 @@ public interface UnmodifiableEconomicMap<K, V> {
 
     Iterable<K> getKeys();
 
-    ImmutableMapCursor<K, V> getEntries();
+    UnmodifiableMapCursor<K, V> getEntries();
 }

@@ -600,7 +600,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
 
     protected void removeThroughFalseBranch(SimplifierTool tool) {
         AbstractBeginNode trueBegin = trueSuccessor();
-        graph().removeSplitPropagate(this, trueBegin);
+        graph().removeSplitPropagate(this, trueBegin, tool);
         tool.addToWorkList(trueBegin);
         if (condition() != null) {
             GraphUtil.tryKillUnused(condition());
@@ -772,9 +772,9 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         transferProxies(trueSuccessor(), trueMerge);
         transferProxies(falseSuccessor(), falseMerge);
 
-        cleanupMerge(merge);
-        cleanupMerge(trueMerge);
-        cleanupMerge(falseMerge);
+        cleanupMerge(tool, merge);
+        cleanupMerge(tool, trueMerge);
+        cleanupMerge(tool, falseMerge);
 
         return true;
     }
@@ -869,10 +869,10 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         }
     }
 
-    private void cleanupMerge(MergeNode merge) {
+    private void cleanupMerge(SimplifierTool tool, MergeNode merge) {
         if (merge != null && merge.isAlive()) {
             if (merge.forwardEndCount() == 0) {
-                GraphUtil.killCFG(merge);
+                GraphUtil.killCFG(merge, tool);
             } else if (merge.forwardEndCount() == 1) {
                 graph().reduceTrivialMerge(merge);
             }
