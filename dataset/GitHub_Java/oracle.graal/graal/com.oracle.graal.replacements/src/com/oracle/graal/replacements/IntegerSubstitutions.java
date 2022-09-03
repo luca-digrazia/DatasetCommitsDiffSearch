@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,21 @@
  */
 package com.oracle.graal.replacements;
 
-import com.oracle.graal.replacements.ClassSubstitution.*;
 import com.oracle.graal.replacements.nodes.*;
 
-@ClassSubstitution(Integer.class)
 public class IntegerSubstitutions {
 
-    @MethodSubstitution
-    public static int reverseBytes(int i) {
-        return ReverseBytesNode.reverse(i);
-    }
-
-    @MethodSubstitution
     public static int numberOfLeadingZeros(int i) {
         if (i == 0) {
             return 32;
         }
-        return 31 - BitScanReverseNode.scan(i);
+        return 31 - BitScanReverseNode.unsafeScan(i);
     }
 
-    @MethodSubstitution
     public static int numberOfTrailingZeros(int i) {
         if (i == 0) {
             return 32;
         }
-        return BitScanForwardNode.scan(i);
-    }
-
-    @MethodSubstitution
-    public static int bitCount(int i) {
-        return BitCountNode.bitCount(i);
+        return BitScanForwardNode.unsafeScan(i);
     }
 }
