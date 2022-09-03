@@ -27,6 +27,7 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * Implements a type check against a compile-time known type.
@@ -58,10 +59,11 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
 
     @Override
     public boolean inferStamp() {
-        if (object().objectStamp().alwaysNull() && objectStamp().nonNull()) {
-            return false;
+        if (object().stamp().nonNull() && !stamp().nonNull()) {
+            setStamp(StampFactory.declaredNonNull(type));
+            return true;
         }
-        return updateStamp(stamp().join(object().stamp()));
+        return super.inferStamp();
     }
 
     @Override
@@ -99,9 +101,9 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        State state = tool.getObjectState(object);
-        if (state != null && state.getState() == EscapeState.Virtual) {
-            tool.replaceWithVirtual(state.getVirtualObject());
+        VirtualObjectNode virtual = tool.getVirtualState(object());
+        if (virtual != null && type().isAssignableFrom(virtual.type())) {
+            tool.replaceWithVirtual(virtual);
         }
     }
 }

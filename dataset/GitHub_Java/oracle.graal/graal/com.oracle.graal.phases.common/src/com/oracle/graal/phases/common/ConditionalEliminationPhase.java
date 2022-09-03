@@ -214,7 +214,7 @@ public class ConditionalEliminationPhase extends Phase {
         }
 
         @Override
-        public void afterSplit(BeginNode node) {
+        public void afterSplit(FixedNode node) {
         }
 
         @Override

@@ -560,7 +560,7 @@ public class InliningUtil {
             result.setProbability(probability);
 
             Kind kind = invoke.node().kind();
-            if (kind != Kind.Void) {
+            if (!kind.isVoid()) {
                 FrameState stateAfter = invoke.stateAfter();
                 stateAfter = stateAfter.duplicate(stateAfter.bci);
                 stateAfter.replaceFirstInput(invoke.node(), result.node());
