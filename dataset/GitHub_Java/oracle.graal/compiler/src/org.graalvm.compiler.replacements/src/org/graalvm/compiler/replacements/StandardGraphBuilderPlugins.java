@@ -153,7 +153,6 @@ public class StandardGraphBuilderPlugins {
         registerObjectPlugins(plugins);
         registerClassPlugins(plugins);
         registerMathPlugins(plugins, allowDeoptimization);
-        registerStrictMathPlugins(plugins);
         registerUnsignedMathPlugins(plugins);
         registerStringPlugins(plugins, bytecodeProvider, snippetReflection);
         registerCharacterPlugins(plugins);
@@ -270,19 +269,6 @@ public class StandardGraphBuilderPlugins {
             }
         });
         r.registerMethodSubstitution(ArraySubstitutions.class, "getLength", Object.class);
-    }
-
-    /**
-     * The intrinsic for {@link Math#sqrt(double)} is shared with {@link StrictMath#sqrt(double)}.
-     *
-     * @see "http://hg.openjdk.java.net/jdk/jdk/file/621efe32eb0b/src/hotspot/share/oops/method.cpp#l1504"
-     */
-    static final class MathSqrtPlugin implements InvocationPlugin {
-        @Override
-        public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
-            b.push(JavaKind.Double, b.append(SqrtNode.create(value, NodeView.DEFAULT)));
-            return true;
-        }
     }
 
     private abstract static class UnsafeCompareAndUpdatePluginsRegistrar {
@@ -646,12 +632,13 @@ public class StandardGraphBuilderPlugins {
                 return true;
             }
         });
-        r.register1("sqrt", Double.TYPE, new MathSqrtPlugin());
-    }
-
-    private static void registerStrictMathPlugins(InvocationPlugins plugins) {
-        Registration r = new Registration(plugins, StrictMath.class);
-        r.register1("sqrt", Double.TYPE, new MathSqrtPlugin());
+        r.register1("sqrt", Double.TYPE, new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
+                b.push(JavaKind.Double, b.append(SqrtNode.create(value, NodeView.DEFAULT)));
+                return true;
+            }
+        });
     }
 
     public static final class StringIndexOfConstantPlugin implements InvocationPlugin {
