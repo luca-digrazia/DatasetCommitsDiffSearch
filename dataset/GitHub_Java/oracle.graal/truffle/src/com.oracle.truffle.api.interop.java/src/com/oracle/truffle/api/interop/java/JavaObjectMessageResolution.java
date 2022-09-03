@@ -25,7 +25,8 @@
 package com.oracle.truffle.api.interop.java;
 
 import java.lang.reflect.Array;
-import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -49,15 +50,15 @@ class JavaObjectMessageResolution {
 
         public Object access(JavaObject receiver) {
             Object obj = receiver.obj;
-            if (obj != null) {
-                if (obj.getClass().isArray()) {
-                    return Array.getLength(obj);
-                } else if (obj instanceof List<?>) {
-                    return ((List<?>) obj).size();
-                }
+            if (obj == null) {
+                return 0;
             }
-            CompilerDirectives.transferToInterpreter();
-            throw UnsupportedMessageException.raise(Message.GET_SIZE);
+            try {
+                return Array.getLength(obj);
+            } catch (IllegalArgumentException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw UnsupportedMessageException.raise(Message.GET_SIZE);
+            }
         }
 
     }
@@ -70,7 +71,7 @@ class JavaObjectMessageResolution {
             if (obj == null) {
                 return false;
             }
-            return obj.getClass().isArray() || obj instanceof List<?>;
+            return obj.getClass().isArray();
         }
 
     }
@@ -266,6 +267,9 @@ class JavaObjectMessageResolution {
         }
 
         public Object access(JavaObject object, String name) {
+            if (object.obj instanceof Map) {
+                return accessMap(object, name);
+            }
             if (TruffleOptions.AOT) {
                 return JavaObject.NULL;
             }
@@ -282,6 +286,12 @@ class JavaObjectMessageResolution {
                 return JavaObject.forClass(innerclass, object.languageContext);
             }
             throw UnknownIdentifierException.raise(name);
+        }
+
+        @TruffleBoundary
+        private static Object accessMap(JavaObject object, String name) {
+            Map<?, ?> map = (Map<?, ?>) object.obj;
+            return JavaInterop.asTruffleValue(map.get(name));
         }
 
         private Object readField(JavaFieldDesc field, JavaObject object) {
@@ -333,6 +343,10 @@ class JavaObjectMessageResolution {
         }
 
         public Object access(JavaObject receiver, String name, Object value) {
+            Object obj = receiver.obj;
+            if (obj instanceof Map) {
+                return accessMap(receiver, name, value);
+            }
             if (TruffleOptions.AOT) {
                 throw UnsupportedMessageException.raise(Message.WRITE);
             }
@@ -342,6 +356,14 @@ class JavaObjectMessageResolution {
             }
             writeField(f, receiver, value);
             return JavaObject.NULL;
+        }
+
+        @TruffleBoundary
+        @SuppressWarnings("unchecked")
+        private Object accessMap(JavaObject receiver, String name, Object value) {
+            Map<Object, Object> map = (Map<Object, Object>) receiver.obj;
+            Object convertedValue = toJava.execute(value, Object.class, null, receiver.languageContext);
+            return map.put(name, convertedValue);
         }
 
         private JavaFieldDesc lookupField(JavaObject object, String name) {
@@ -365,7 +387,11 @@ class JavaObjectMessageResolution {
     abstract static class HasKeysNode extends Node {
 
         public Object access(JavaObject receiver) {
-            return receiver != JavaObject.NULL;
+            if (receiver.obj instanceof Map) {
+                return true;
+            } else {
+                return !TruffleOptions.AOT && receiver.obj != null || receiver.isClass();
+            }
         }
     }
 
@@ -373,8 +399,24 @@ class JavaObjectMessageResolution {
     abstract static class PropertiesNode extends Node {
         @TruffleBoundary
         public Object access(JavaObject receiver, boolean includeInternal) {
-            String[] fields = TruffleOptions.AOT ? new String[0] : JavaInteropReflect.findUniquePublicMemberNames(receiver.clazz, !receiver.isClass(), includeInternal);
+            String[] fields;
+            if (receiver.obj instanceof Map) {
+                fields = accessMap(receiver);
+            } else {
+                fields = TruffleOptions.AOT ? new String[0] : JavaInteropReflect.findUniquePublicMemberNames(receiver.clazz, !receiver.isClass(), includeInternal);
+            }
             return JavaInterop.asTruffleObject(fields);
+        }
+
+        @TruffleBoundary
+        private static String[] accessMap(JavaObject receiver) {
+            Map<?, ?> map = (Map<?, ?>) receiver.obj;
+            String[] fields = new String[map.size()];
+            int i = 0;
+            for (Object key : map.keySet()) {
+                fields[i++] = Objects.toString(key, null);
+            }
+            return fields;
         }
     }
 
@@ -402,6 +444,14 @@ class JavaObjectMessageResolution {
 
         @TruffleBoundary
         public int access(JavaObject receiver, String name) {
+            if (receiver.obj instanceof Map) {
+                Map<?, ?> map = (Map<?, ?>) receiver.obj;
+                if (map.containsKey(name)) {
+                    return 0b111;
+                } else {
+                    return 0;
+                }
+            }
             if (TruffleOptions.AOT) {
                 return 0;
             }
