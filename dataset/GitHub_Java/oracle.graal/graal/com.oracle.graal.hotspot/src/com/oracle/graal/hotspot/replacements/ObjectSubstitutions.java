@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,37 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import com.oracle.graal.api.replacements.ClassSubstitution;
-import com.oracle.graal.api.replacements.MethodSubstitution;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.nodes.PiNode.*;
 
-// JaCoCo Exclude
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.word.*;
 
 /**
  * Substitutions for {@link java.lang.Object} methods.
  */
-@ClassSubstitution(Object.class)
+@ClassSubstitution(java.lang.Object.class)
 public class ObjectSubstitutions {
+
+    @MacroSubstitution(macro = ObjectGetClassNode.class, isStatic = false, forced = true)
+    @MethodSubstitution(isStatic = false, forced = true)
+    public static Class<?> getClass(final Object thisObj) {
+        Word hub = loadHub(thisObj);
+        return piCastExactNonNull(hub.readObject(Word.signed(classMirrorOffset()), CLASS_MIRROR_LOCATION), Class.class);
+    }
 
     @MethodSubstitution(isStatic = false)
     public static int hashCode(final Object thisObj) {
-        return System.identityHashCode(thisObj);
+        return computeHashCode(thisObj);
     }
+
+    @MethodSubstitution(value = "<init>", isStatic = false, forced = true)
+    public static void init(Object thisObj) {
+        RegisterFinalizerNode.register(thisObj);
+    }
+
+    @MacroSubstitution(macro = ObjectCloneNode.class, isStatic = false, forced = true)
+    public static native Object clone(Object obj);
 }
