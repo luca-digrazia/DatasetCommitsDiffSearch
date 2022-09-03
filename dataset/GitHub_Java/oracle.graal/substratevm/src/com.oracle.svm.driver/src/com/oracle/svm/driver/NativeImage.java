@@ -453,7 +453,7 @@ public class NativeImage {
         addImageBuilderJavaArgs("-Dcom.oracle.graalvm.isaot=true");
 
         // Generate images into the current directory
-        addPlainImageBuilderArg(oHPath + config.getWorkingDirectory());
+        addImageBuilderArg(oHPath + config.getWorkingDirectory());
 
         /* Discover supported MacroOptions */
         optionRegistry = new MacroOption.Registry();
@@ -507,9 +507,9 @@ public class NativeImage {
                         .stream()
                         .map(path -> canonicalize(path.resolve(platform)).toString())
                         .collect(Collectors.joining(",", oHCLibraryPath, ""));
-        addPlainImageBuilderArg(clibrariesBuilderArg);
+        addImageBuilderArg(clibrariesBuilderArg);
         if (config.getBuilderInspectServerPath() != null) {
-            addPlainImageBuilderArg(oHInspectServerContentPath + config.getBuilderInspectServerPath());
+            addImageBuilderArg(oHInspectServerContentPath + config.getBuilderInspectServerPath());
         }
 
         config.getBuilderJVMCIClasspath().forEach((Consumer<? super Path>) this::addImageBuilderClasspath);
@@ -691,7 +691,7 @@ public class NativeImage {
             Map<String, String> properties = loadProperties(jarFile.getInputStream(nativeImagePropertiesEntry));
             String imageName = properties.get("ImageName");
             if (imageName != null) {
-                addPlainImageBuilderArg(NativeImage.oHName + resolver.apply(imageName));
+                addImageBuilderArg(NativeImage.oHName + resolver.apply(imageName));
             }
             forEachPropertyValue(properties.get("JavaArgs"), this::addImageBuilderJavaArgs, resolver);
             forEachPropertyValue(properties.get("Args"), this::addImageBuilderArg, resolver);
@@ -704,8 +704,8 @@ public class NativeImage {
         completeOptionArgs();
 
         if (queryOption != null) {
-            addPlainImageBuilderArg(NativeImage.oH + NativeImage.enablePrintFlags + queryOption);
-            addPlainImageBuilderArg(NativeImage.oR + NativeImage.enablePrintFlags + queryOption);
+            addImageBuilderArg(NativeImage.oH + NativeImage.enablePrintFlags + queryOption);
+            addImageBuilderArg(NativeImage.oR + NativeImage.enablePrintFlags + queryOption);
         }
 
         /* If no customImageClasspath was specified put "." on classpath */
@@ -948,15 +948,8 @@ public class NativeImage {
     }
 
     void addImageBuilderArg(String arg) {
-        String translatedArg = apiOptionHandler.translateOption(arg);
-        String plainArg = translatedArg != null ? translatedArg : arg;
-        addPlainImageBuilderArg(plainArg);
-    }
-
-    void addPlainImageBuilderArg(String plainArg) {
-        assert plainArg.startsWith(NativeImage.oH) || plainArg.startsWith(NativeImage.oR);
-        imageBuilderArgs.remove(plainArg);
-        imageBuilderArgs.add(plainArg);
+        imageBuilderArgs.remove(arg);
+        imageBuilderArgs.add(arg);
     }
 
     void addImageClasspath(Path classpath) {
@@ -983,9 +976,9 @@ public class NativeImage {
         customJavaArgs.add(javaArg);
     }
 
-    void addCustomImageBuilderArgs(String plainArg) {
-        addPlainImageBuilderArg(plainArg);
-        customImageBuilderArgs.add(plainArg);
+    void addCustomImageBuilderArgs(String arg) {
+        addImageBuilderArg(arg);
+        customImageBuilderArgs.add(arg);
     }
 
     void setVerbose(boolean val) {
