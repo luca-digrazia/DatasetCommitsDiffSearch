@@ -277,14 +277,7 @@ final class MDTypeExtractor implements MetadataVisitor {
 
                     final LLVMSourceType baseType = resolve(mdType.getBaseType());
                     type.setBaseType(baseType);
-                    type.setName(() -> {
-                        final String baseName = baseType.getName();
-                        if (!baseType.isPointer() && baseName.contains(" ")) {
-                            return String.format("(%s)*", baseName);
-                        } else {
-                            return String.format("%s*", baseName);
-                        }
-                    });
+                    type.setName(() -> String.format("*%s", baseType.getName()));
                     break;
                 }
 
