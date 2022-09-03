@@ -29,23 +29,21 @@
  */
 package uk.ac.man.cs.llvm.ir.model.metadata;
 
-import uk.ac.man.cs.llvm.ir.types.MetadataConstantPointerType;
-
 public class MetadataFnNode implements MetadataBaseNode {
 
-    private final MetadataConstantPointerType pointer;
+    private final int value;
 
-    public MetadataFnNode(MetadataConstantPointerType pointer) {
-        this.pointer = pointer;
+    public MetadataFnNode(int value) {
+        this.value = value;
     }
 
-    public MetadataConstantPointerType getPointer() {
-        return pointer;
+    public int getValue() {
+        return value;
     }
 
     @Override
     public String toString() {
-        return "MetadataFnNode [" + pointer + "]";
+        return "MetadataFnNode [" + value + "]";
     }
 
 }
