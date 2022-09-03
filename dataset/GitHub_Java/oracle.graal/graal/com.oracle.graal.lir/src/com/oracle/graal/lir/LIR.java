@@ -58,7 +58,14 @@ public class LIR {
 
     private int numVariables;
 
+    public SpillMoveFactory spillMoveFactory;
+
     public final BlockMap<List<LIRInstruction>> lirInstructions;
+
+    public interface SpillMoveFactory {
+
+        LIRInstruction createMove(AllocatableValue result, Value input);
+    }
 
     private boolean hasArgInCallerFrame;
 
