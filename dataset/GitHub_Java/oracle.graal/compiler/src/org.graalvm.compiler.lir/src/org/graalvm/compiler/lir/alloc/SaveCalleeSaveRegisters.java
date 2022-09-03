@@ -31,6 +31,7 @@ import org.graalvm.compiler.lir.LIRInsertionBuffer;
 import org.graalvm.compiler.lir.LIRInstruction;
 import org.graalvm.compiler.lir.StandardOp;
 import org.graalvm.compiler.lir.Variable;
+import org.graalvm.compiler.lir.framemap.FrameMapBuilder;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool;
 import org.graalvm.compiler.lir.phases.PreAllocationOptimizationPhase;
@@ -47,7 +48,8 @@ public class SaveCalleeSaveRegisters extends PreAllocationOptimizationPhase {
 
     @Override
     protected void run(TargetDescription target, LIRGenerationResult lirGenRes, PreAllocationOptimizationContext context) {
-        RegisterArray calleeSaveRegisters = lirGenRes.getRegisterConfig().getCalleeSaveRegisters();
+        FrameMapBuilder frameMapBuilder = lirGenRes.getFrameMapBuilder();
+        RegisterArray calleeSaveRegisters = frameMapBuilder.getCodeCache().getRegisterConfig().getCalleeSaveRegisters();
         if (calleeSaveRegisters == null || calleeSaveRegisters.size() == 0) {
             return;
         }
