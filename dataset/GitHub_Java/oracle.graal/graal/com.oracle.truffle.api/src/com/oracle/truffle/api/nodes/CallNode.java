@@ -26,205 +26,131 @@ package com.oracle.truffle.api.nodes;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.impl.*;
 
 /**
- * This node represents a call to a constant {@link CallTarget} in the Truffle AST. This node should
- * be used whenever a {@link CallTarget} is considered constant at a certain location. This enables
- * the Truffle runtime to perform inlining or other optimizations for this call-site.
- * 
- * @see #create(CallTarget) to create a CallNode instance.
+ * Represents a call to a {@link CallTarget} in the Truffle AST. In addition to calling the
+ * {@link CallTarget}, this {@link Node} enables the runtime system to implement further
+ * optimizations. Optimizations that can possibly be applied to a {@link CallNode} are inlining and
+ * splitting. Inlining inlines this call site into the call graph of the parent {@link CallTarget}.
+ * Splitting duplicates the {@link CallTarget} using {@link RootNode#split()} to collect call site
+ * sensitive profiling information.
+ *
+ * Please note: This class is not intended to be subclassed by guest language implementations.
+ *
+ * @see TruffleRuntime#createCallNode(CallTarget)
+ * @see #inline()
+ * @see #split()
  */
 public abstract class CallNode extends Node {
 
     protected final CallTarget callTarget;
 
-    private CallNode(CallTarget callTarget) {
+    protected CallNode(CallTarget callTarget) {
         this.callTarget = callTarget;
     }
 
     /**
-     * Returns the constant {@link CallTarget} that is associated with this {@link CallNode}.
+     * Calls the inner {@link CallTarget} returned by {@link #getCurrentCallTarget()}.
+     *
+     * @param arguments the arguments that should be passed to the callee
+     * @return the return result of the call
+     */
+    public abstract Object call(VirtualFrame frame, Object[] arguments);
+
+    /**
+     * Returns the originally supplied {@link CallTarget} when this call node was created. Please
+     * note that the returned {@link CallTarget} is not necessarily the {@link CallTarget} that is
+     * called. For that use {@link #getCurrentCallTarget()} instead.
+     *
+     * @return the {@link CallTarget} provided.
      */
     public CallTarget getCallTarget() {
         return callTarget;
     }
 
     /**
-     * Calls this constant target passing a caller frame and arguments.
-     * 
-     * @param caller the caller frame
-     * @param arguments the arguments that should be passed to the callee
-     * @return the return result of the call
+     * Returns <code>true</code> if the underlying runtime system supports inlining for the
+     * {@link CallTarget} in this {@link CallNode}.
+     *
+     * @return true if inlining is supported.
      */
-    public abstract Object call(PackedFrame caller, Arguments arguments);
+    public abstract boolean isInlinable();
 
     /**
-     * Returns <code>true</code> if this {@link CallNode} can be inlined. A {@link CallTarget} is
-     * considered inlinable if it was created using
-     * {@link TruffleRuntime#createCallTarget(RootNode)} and if the enclosed {@link RootNode}
-     * returns <code>true</code> for {@link RootNode#isInlinable()}.
+     * Returns <code>true</code> if the {@link CallTarget} in this {@link CallNode} is inlined. A
+     * {@link CallNode} can either be inlined manually by invoking {@link #inline()} or by the
+     * runtime system which may at any point decide to inline.
+     *
+     * @return true if this method was inlined else false.
      */
-    public boolean isInlinable() {
-        return false;
+    public abstract boolean isInlined();
+
+    /**
+     * Enforces the runtime system to inline the {@link CallTarget} at this call site. If the
+     * runtime system does not support inlining or it is already inlined this method has no effect.
+     */
+    public abstract void inline();
+
+    /**
+     * Returns <code>true</code> if this {@link CallNode} can be split. A {@link CallNode} can only
+     * be split if the runtime system supports splitting and if the {@link RootNode} contained the
+     * {@link CallTarget} returns <code>true</code> for {@link RootNode#isSplittable()}.
+     *
+     * @return <code>true</code> if the target can be split
+     */
+    public abstract boolean isSplittable();
+
+    /**
+     * Enforces the runtime system to split the {@link CallTarget}. If the {@link CallNode} is not
+     * splittable this methods has no effect.
+     */
+    public abstract boolean split();
+
+    /**
+     * Returns <code>true</code> if the target of the {@link CallNode} was split.
+     *
+     * @return if the target was split
+     */
+    public final boolean isSplit() {
+        return getSplitCallTarget() != null;
     }
 
     /**
-     * Returns true if this {@link CallNode} was already inlined.
+     * Returns the split {@link CallTarget} if this method is split.
+     *
+     * @return the split {@link CallTarget}
      */
-    public boolean isInlined() {
-        return false;
-    }
+    public abstract CallTarget getSplitCallTarget();
 
     /**
-     * Enforces an inlining optimization on this {@link CallNode} instance. If not performed
-     * manually the Truffle runtime may perform inlining using an heuristic to optimize the
-     * performance of the execution. It is recommended to implement an optimized version of
-     * {@link RootNode#inline()}.
-     * 
-     * @return true if the inlining operation was successful.
-     * @throws IllegalStateException if {@link #isInlinable()} is false.
+     * Returns the used call target when {@link #call(VirtualFrame, Object[])} is invoked. If the
+     * {@link CallTarget} was split this method returns the {@link CallTarget} returned by
+     * {@link #getSplitCallTarget()}.
+     *
+     * @return the used {@link CallTarget} when node is called
      */
-    public boolean inline() {
-        CompilerDirectives.transferToInterpreter();
-        if (!isInlinable()) {
-            throw new IllegalStateException("Invoked inline on a non inlinable CallNode.");
-        }
-        assert !isInlined();
-        return false;
-    }
-
-    /**
-     * Creates a new {@link CallNode} using a constant {@link CallTarget}.
-     * 
-     * @param target the {@link CallTarget} the {@link CallNode} should call
-     * @return a call node that calls the provided target
-     */
-    public static CallNode create(CallTarget target) {
-        if (isInlinable(target)) {
-            return new InlinableCallNode(target);
+    public CallTarget getCurrentCallTarget() {
+        CallTarget split = getSplitCallTarget();
+        if (split != null) {
+            return split;
         } else {
-            return new DefaultCallNode(target);
+            return getCallTarget();
         }
     }
 
     /**
-     * Warning: this is internal API and may change without notice.
+     * Returns the {@link RootNode} associated with {@link CallTarget} returned by
+     * {@link #getCurrentCallTarget()}. If the stored {@link CallTarget} does not contain a
+     * {@link RootNode} this method returns <code>null</code>.
+     *
+     * @see #getCurrentCallTarget()
+     * @return the root node of the used call target
      */
-    public static int internalGetCallCount(CallNode callNode) {
-        if (callNode.isInlinable()) {
-            return ((InlinableCallNode) callNode).getCallCount();
+    public final RootNode getCurrentRootNode() {
+        CallTarget target = getCurrentCallTarget();
+        if (target instanceof RootCallTarget) {
+            return ((RootCallTarget) target).getRootNode();
         }
-        throw new UnsupportedOperationException();
+        return null;
     }
-
-    /**
-     * Warning: this is internal API and may change without notice.
-     */
-    public static void internalResetCallCount(CallNode callNode) {
-        if (callNode.isInlinable()) {
-            ((InlinableCallNode) callNode).resetCallCount();
-            return;
-        }
-        throw new UnsupportedOperationException();
-    }
-
-    private static boolean isInlinable(CallTarget callTarget) {
-        if (callTarget instanceof DefaultCallTarget) {
-            return (((DefaultCallTarget) callTarget).getRootNode()).isInlinable();
-        }
-        return false;
-    }
-
-    static final class DefaultCallNode extends CallNode {
-
-        public DefaultCallNode(CallTarget target) {
-            super(target);
-        }
-
-        @Override
-        public Object call(PackedFrame caller, Arguments arguments) {
-            return callTarget.call(caller, arguments);
-        }
-
-    }
-
-    static final class InlinableCallNode extends CallNode {
-
-        private int callCount;
-
-        public InlinableCallNode(CallTarget target) {
-            super(target);
-        }
-
-        @Override
-        public Object call(PackedFrame parentFrame, Arguments arguments) {
-            if (CompilerDirectives.inInterpreter()) {
-                callCount++;
-            }
-            return callTarget.call(parentFrame, arguments);
-        }
-
-        @Override
-        public boolean inline() {
-            super.inline();
-            DefaultCallTarget defaultTarget = (DefaultCallTarget) getCallTarget();
-            RootNode originalRootNode = defaultTarget.getRootNode();
-            boolean inlined = false;
-            if (originalRootNode.isInlinable()) {
-                RootNode inlinedRootNode = defaultTarget.getRootNode().inline();
-                replace(new InlinedCallNode(defaultTarget, inlinedRootNode));
-                inlined = true;
-            }
-            return inlined;
-        }
-
-        @Override
-        public boolean isInlinable() {
-            return true;
-        }
-
-        /* Truffle internal API. */
-        int getCallCount() {
-            return callCount;
-        }
-
-        /* Truffle internal API. */
-        void resetCallCount() {
-            callCount = 0;
-        }
-
-    }
-
-    static final class InlinedCallNode extends CallNode {
-
-        private final RootNode inlinedRoot;
-
-        public InlinedCallNode(DefaultCallTarget callTarget, RootNode inlinedRoot) {
-            super(callTarget);
-            this.inlinedRoot = inlinedRoot;
-        }
-
-        @Override
-        public Object call(PackedFrame caller, Arguments arguments) {
-            return inlinedRoot.execute(Truffle.getRuntime().createVirtualFrame(caller, arguments, inlinedRoot.getFrameDescriptor()));
-        }
-
-        @Override
-        public InlinedCallNode copy() {
-            return new InlinedCallNode((DefaultCallTarget) getCallTarget(), NodeUtil.cloneNode(inlinedRoot));
-        }
-
-        @Override
-        public boolean isInlinable() {
-            return false;
-        }
-
-        @Override
-        public boolean isInlined() {
-            return true;
-        }
-
-    }
-
 }
