@@ -71,7 +71,6 @@ public class PartialEvaluator {
     private final TruffleCache truffleCache;
     private final SnippetReflectionProvider snippetReflection;
     private final ResolvedJavaMethod callDirectMethod;
-    private final ResolvedJavaMethod callInlinedMethod;
     private final ResolvedJavaMethod callSiteProxyMethod;
     protected final ResolvedJavaMethod callRootMethod;
     private final GraphBuilderConfiguration configForRoot;
@@ -82,7 +81,6 @@ public class PartialEvaluator {
         this.snippetReflection = snippetReflection;
         this.truffleCache = truffleCache;
         this.callDirectMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.getCallDirectMethod());
-        this.callInlinedMethod = providers.getMetaAccess().lookupJavaMethod(OptimizedCallTarget.getCallInlinedMethod());
         this.callSiteProxyMethod = providers.getMetaAccess().lookupJavaMethod(GraalFrameInstance.CallNodeFrame.METHOD);
         this.configForRoot = configForRoot;
 
@@ -173,12 +171,6 @@ public class PartialEvaluator {
 
     public StructuredGraph createRootGraph(String name) {
         StructuredGraph graph = new StructuredGraph(name, callRootMethod);
-        new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), new Assumptions(false), configForRoot, TruffleCompilerImpl.Optimizations).apply(graph);
-        return graph;
-    }
-
-    public StructuredGraph createInlineGraph(String name) {
-        StructuredGraph graph = new StructuredGraph(name, callInlinedMethod);
         new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), new Assumptions(false), configForRoot, TruffleCompilerImpl.Optimizations).apply(graph);
         return graph;
     }
@@ -488,7 +480,7 @@ public class PartialEvaluator {
     private StructuredGraph createInlineGraph(PhaseContext phaseContext, Assumptions assumptions, TruffleInliningCache cache, TruffleInliningDecision decision) {
         try (Scope s = Debug.scope("GuestLanguageInlinedGraph", new DebugDumpScope(decision.getTarget().toString()))) {
             OptimizedCallTarget target = decision.getTarget();
-            StructuredGraph inlineGraph = createInlineGraph(target.toString());
+            StructuredGraph inlineGraph = truffleCache.createInlineGraph(target.toString());
             injectConstantCallTarget(inlineGraph, decision.getTarget(), phaseContext);
             TruffleExpansionLogger expansionLogger = null;
             if (TraceTruffleExpansion.getValue()) {
