@@ -51,6 +51,7 @@ public class CompilerAsserts {
      * @param message text associated with the bailout exception
      */
     public static void neverPartOfCompilation(String message) {
+        CompilerDirectives.bailout(message);
     }
 
     /**
