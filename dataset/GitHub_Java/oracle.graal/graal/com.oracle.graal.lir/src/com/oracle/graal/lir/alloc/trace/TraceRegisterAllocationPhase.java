@@ -110,7 +110,8 @@ public final class TraceRegisterAllocationPhase extends AllocationPhase {
                     } else {
                         TraceLinearScan allocator = new TraceLinearScan(target, lirGenRes, spillMoveFactory, registerAllocationConfig, trace, resultTraces, false,
                                         cachedStackSlots);
-                        IntervalData intervalData = getAndDelete(intervalMap, trace);
+                        IntervalData intervalData = intervalMap == null ? null : intervalMap.get(trace);
+
                         allocator.allocate(target, lirGenRes, codeEmittingOrder, linearScanOrder, spillMoveFactory, registerAllocationConfig, intervalData);
                     }
                     Debug.dump(TRACE_DUMP_LEVEL, trace, "After  Trace%s: %s", trace.getId(), trace);
@@ -126,21 +127,11 @@ public final class TraceRegisterAllocationPhase extends AllocationPhase {
         deconstructSSIForm(lir);
     }
 
-    private static <B extends AbstractBlockBase<B>> IntervalData getAndDelete(TraceIntervalMap intervalMap, Trace<B> trace) {
-        if (intervalMap == null) {
-            return null;
-        }
-        IntervalData intervalData = intervalMap.get(trace);
-        // remove entry
-        intervalMap.put(trace, null);
-        return intervalData;
-    }
-
     private static TraceIntervalMap getIntervalMap(AllocationContext context) {
         if (!AllocationStage.Options.TraceRACombinedSSIConstruction.getValue()) {
             return null;
         }
-        return context.contextRemove(TraceIntervalMap.class);
+        return context.contextLookup(TraceIntervalMap.class);
     }
 
     @SuppressWarnings("unchecked")
