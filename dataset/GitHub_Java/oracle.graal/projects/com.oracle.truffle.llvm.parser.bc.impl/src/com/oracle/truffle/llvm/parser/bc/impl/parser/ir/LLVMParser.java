@@ -29,12 +29,12 @@
  */
 package com.oracle.truffle.llvm.parser.bc.impl.parser.ir;
 
-import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.parser.base.model.generators.ApplicationGenerator;
 import com.oracle.truffle.llvm.parser.bc.impl.parser.bc.Bitstream;
 import com.oracle.truffle.llvm.parser.bc.impl.parser.bc.Operation;
 import com.oracle.truffle.llvm.parser.bc.impl.parser.bc.Parser;
 import com.oracle.truffle.llvm.parser.bc.impl.parser.bc.ParserResult;
+import com.oracle.truffle.llvm.parser.bc.impl.parser.bc.blocks.Block;
 import com.oracle.truffle.llvm.parser.bc.impl.parser.listeners.module.Module;
 import com.oracle.truffle.llvm.parser.bc.impl.parser.listeners.ModuleVersion;
 
@@ -49,15 +49,19 @@ public final class LLVMParser {
         this.generator = generator;
     }
 
-    public void parse(ModuleVersion version, Source source) {
-        Bitstream stream = Bitstream.create(source);
+    public void parse(String bitcode) {
+        parse(ModuleVersion.DEFAULT, bitcode);
+    }
+
+    public void parse(ModuleVersion version, String bitcode) {
+        Bitstream stream = Bitstream.create(bitcode);
 
         Module module = version.createModule(generator.createModule());
 
-        Parser parser = new Parser(stream, module);
+        Parser parser = new Parser(stream, Block.ROOT, module);
 
         BitcodeStreamInformation bcStreamInfo = getStreamInformation(stream, parser);
-        parser = new Parser(stream, module, bcStreamInfo.offset);
+        parser = new Parser(stream, Block.ROOT, module, bcStreamInfo.offset);
 
         ParserResult result = parser.read(Integer.SIZE);
         if (result.getValue() != MAGIC_WORD) {
@@ -100,7 +104,8 @@ public final class LLVMParser {
         long size = value32Bit.getValue() * Byte.SIZE;
         p = value32Bit.getParser();
         // CPUType32
-        p.read(Integer.SIZE);
+        value32Bit = p.read(Integer.SIZE);
+        p = value32Bit.getParser();
         // End of Wrapper Prefix
 
         return new BitcodeStreamInformation(offset, size);
