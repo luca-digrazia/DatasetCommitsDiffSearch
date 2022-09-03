@@ -48,7 +48,6 @@ import com.google.inject.Injector;
 import com.intel.llvm.ireditor.LLVM_IRStandaloneSetup;
 import com.intel.llvm.ireditor.lLVM_IR.Model;
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
@@ -83,11 +82,8 @@ public class LLVM {
 
                 if (code.getMimeType() == LLVMLanguage.LLVM_MIME_TYPE) {
                     ParserResult parserResult = parseFile(code.getPath(), llvmContext);
-                    RootCallTarget mainFunction = parserResult.getMainFunction();
                     llvmContext.getFunctionRegistry().register(parserResult.getParsedFunctions());
-                    llvmContext.getStack().allocate();
-                    parserResult.getStaticInits().call();
-                    return mainFunction;
+                    return parserResult.getMainFunction();
                 } else if (code.getMimeType() == LLVMLanguage.SULONG_LIBRARY_MIME_TYPE) {
                     final List<CallTarget> mainFunctions = new ArrayList<>();
 

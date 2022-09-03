@@ -46,7 +46,7 @@ import com.oracle.truffle.llvm.types.LLVMAddress;
 /*
  * http://llvm.org/docs/LangRef.html#constant-expressions
  */
-public final class LLVMConstantEvaluator {
+public class LLVMConstantEvaluator {
 
     private static LLVMParserRuntime runtime;
 

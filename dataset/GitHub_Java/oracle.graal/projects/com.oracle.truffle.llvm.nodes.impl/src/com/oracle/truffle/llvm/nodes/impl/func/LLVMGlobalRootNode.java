@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.nodes.impl.func;
 import java.util.Map;
 
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
@@ -55,6 +56,7 @@ import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
  */
 public class LLVMGlobalRootNode extends RootNode {
 
+    @Children private final LLVMNode[] staticInits;
     @Children private final LLVMNode[] staticDestructors;
     private final DirectCallNode main;
     @CompilationFinal private final Object[] arguments;
@@ -63,10 +65,11 @@ public class LLVMGlobalRootNode extends RootNode {
     private final boolean printNativeStats = LLVMOptions.printNativeCallStats();
     private final FrameSlot stackPointerSlot;
 
-    public LLVMGlobalRootNode(FrameSlot stackSlot, FrameDescriptor descriptor, LLVMContext context, CallTarget main, LLVMNode[] staticDestructors, Object... arguments) {
+    public LLVMGlobalRootNode(FrameSlot stackSlot, FrameDescriptor descriptor, LLVMContext context, LLVMNode[] staticInits, CallTarget main, LLVMNode[] staticDestructors, Object... arguments) {
         super(LLVMLanguage.class, null, descriptor);
         this.stackPointerSlot = stackSlot;
         this.context = context;
+        this.staticInits = staticInits;
         this.main = Truffle.getRuntime().createDirectCallNode(main);
         this.staticDestructors = staticDestructors;
         this.arguments = arguments;
@@ -74,7 +77,8 @@ public class LLVMGlobalRootNode extends RootNode {
 
     @Override
     public Object execute(VirtualFrame frame) {
-        LLVMAddress stackPointer = LLVMAddress.fromLong(context.getStack().getUpperBounds());
+        CompilerAsserts.compilationConstant(staticInits);
+        LLVMAddress stackPointer = context.getStack().allocate();
         try {
             return executeProgram(frame, stackPointer);
         } catch (LLVMExitException e) {
@@ -90,6 +94,9 @@ public class LLVMGlobalRootNode extends RootNode {
             Object result = null;
             for (int i = 0; i < LLVMOptions.getExecutionCount(); i++) {
                 frame.setObject(stackPointerSlot, stackPointer);
+                for (LLVMNode init : staticInits) {
+                    init.executeVoid(frame);
+                }
                 Object[] realArgs = new Object[arguments.length + LLVMCallNode.ARG_START_INDEX];
                 realArgs[0] = LLVMFrameUtil.getAddress(frame, stackPointerSlot);
                 System.arraycopy(arguments, 0, realArgs, LLVMCallNode.ARG_START_INDEX, arguments.length);
@@ -97,7 +104,7 @@ public class LLVMGlobalRootNode extends RootNode {
             }
             return result;
         } finally {
-            for (LLVMNode node : staticDestructors) {
+            for (LLVMNode node : staticInits) {
                 node.executeVoid(frame);
             }
             if (printNativeStats) {
