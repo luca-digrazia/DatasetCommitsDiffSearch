@@ -133,12 +133,12 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
     }
 
     Object enter() {
-        enterThread();
         engine.checkState();
         if (closed) {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException("Language context is already closed.");
         }
+        enterThread();
         enteredCount.incrementAndGet();
         return CURRENT_CONTEXT.enter(this);
     }
@@ -397,48 +397,52 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
         }
     }
 
-    synchronized void closeImpl(boolean cancelIfExecuting) {
+    void closeImpl(boolean cancelIfExecuting) {
         if (!closed) {
-            Thread thread = boundThread.get();
-            if (cancelIfExecuting) {
-                if (thread != null && Thread.currentThread() != thread) {
-                    if (closingLatch == null) {
-                        closingLatch = new CountDownLatch(1);
+            synchronized (this) {
+                if (!closed) {
+                    Thread thread = boundThread.get();
+                    if (cancelIfExecuting) {
+                        if (thread != null && Thread.currentThread() != thread) {
+                            if (closingLatch == null) {
+                                closingLatch = new CountDownLatch(1);
 
-                        // account for race condition when we already left the execution in
-                        // the meantime. in such a case #leave(Object) will never be called.
-                        if (enteredCount.get() <= 0) {
-                            closeImpl(false);
+                                // account for race condition when we already left the execution in
+                                // the meantime. in such a case #leave(Object) will never be called.
+                                if (enteredCount.get() <= 0) {
+                                    closeImpl(false);
+                                }
+                            }
+                            return;
                         }
                     }
-                    return;
-                }
-            }
 
-            Object prev = enter();
-            try {
-                for (PolyglotLanguageContextImpl context : contexts) {
+                    Object prev = enter();
                     try {
-                        context.dispose();
-                    } catch (Exception | Error ex) {
-                        try {
-                            err.write(String.format("Error closing language %s: %n", context.language.cache.getId()).getBytes());
-                        } catch (IOException e) {
-                            ex.addSuppressed(e);
+                        for (PolyglotLanguageContextImpl context : contexts) {
+                            try {
+                                context.dispose();
+                            } catch (Exception | Error ex) {
+                                try {
+                                    err.write(String.format("Error closing language %s: %n", context.language.cache.getId()).getBytes());
+                                } catch (IOException e) {
+                                    ex.addSuppressed(e);
+                                }
+                                ex.printStackTrace(new PrintStream(err));
+                            }
                         }
-                        ex.printStackTrace(new PrintStream(err));
+                        closed = true;
+                        engine.removeContext(this);
+
+                        if (closingLatch != null) {
+                            closingLatch.countDown();
+                            closingLatch = null;
+                        }
+
+                    } finally {
+                        leave(prev);
                     }
                 }
-                engine.removeContext(this);
-                closed = true;
-
-                if (closingLatch != null) {
-                    closingLatch.countDown();
-                    closingLatch = null;
-                }
-
-            } finally {
-                leave(prev);
             }
         }
     }
