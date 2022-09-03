@@ -61,16 +61,9 @@ public class LoweringPhase extends Phase {
                         firstNode.graph().start().setStart(a);
                         firstNodeValue[0] = a;
                         return a;
-                    } else if (firstNode instanceof Merge) {
-                        Merge merge = (Merge) firstNode;
+                    } else if (!(firstNode instanceof Anchor) && !(firstNode instanceof Merge)) {
                         Anchor a = new Anchor(graph);
-                        a.setNext(merge.next());
-                        merge.setNext(a);
-                        firstNodeValue[0] = a;
-                        return a;
-                    } else if (!(firstNode instanceof Anchor)) {
-                        Anchor a = new Anchor(graph);
-                        assert firstNode.predecessors().size() == 1 : firstNode;
+                        assert firstNode.predecessors().size() == 1;
                         Node pred = firstNode.predecessors().get(0);
                         int predIndex = pred.successors().indexOf(firstNode);
                         pred.successors().set(predIndex, a);
@@ -88,17 +81,10 @@ public class LoweringPhase extends Phase {
 
                 @Override
                 public Node createGuard(Node condition) {
-                    Anchor anchor = (Anchor) getGuardAnchor();
-                    for (GuardNode guard : anchor.happensAfterGuards()) {
-                        if (guard.node().valueEqual(condition)) {
-                            condition.delete();
-                            return guard;
-                        }
-                    }
-                    GuardNode newGuard = new GuardNode(graph);
-                    newGuard.setAnchor(anchor);
-                    newGuard.setNode((BooleanNode) condition);
-                    return newGuard;
+                    GuardNode guard = new GuardNode(graph);
+                    guard.setAnchor((FixedNode) getGuardAnchor());
+                    guard.setNode((BooleanNode) condition);
+                    return guard;
                 }
             };
 

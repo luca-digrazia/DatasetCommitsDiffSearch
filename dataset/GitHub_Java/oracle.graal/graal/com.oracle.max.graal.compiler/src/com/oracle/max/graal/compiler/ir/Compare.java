@@ -144,9 +144,4 @@ public final class Compare extends BooleanNode {
         x.unorderedIsTrue = unorderedIsTrue;
         return x;
     }
-
-    @Override
-    public BooleanNode negate() {
-        return new Compare(x(), condition.negate(), y(), graph());
-    }
 }
