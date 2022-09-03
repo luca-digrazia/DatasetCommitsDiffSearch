@@ -1384,9 +1384,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected void genThrow() {
-        if (graphBuilderConfig.insertNonSafepointDebugInfo() && !parsingIntrinsic()) {
-            genInfoPointNode(InfopointReason.LINE_NUMBER, null);
-        }
+        genInfoPointNode(InfopointReason.LINE_NUMBER, null);
 
         ValueNode exception = frameState.pop(JavaKind.Object);
         FixedGuardNode nullCheck = append(new FixedGuardNode(graph.unique(new IsNullNode(exception)), NullCheckException, InvalidateReprofile, true));
