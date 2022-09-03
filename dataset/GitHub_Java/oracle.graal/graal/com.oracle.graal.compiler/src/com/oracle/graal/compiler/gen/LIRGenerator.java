@@ -228,26 +228,26 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         if (!deopt.canDeoptimize()) {
             return null;
         }
-        return stateFor(deopt.getDeoptimizationState());
+        return stateFor(deopt.getDeoptimizationState(), deopt.getDeoptimizationReason());
     }
 
     public LIRFrameState stateWithExceptionEdge(DeoptimizingNode deopt, LabelRef exceptionEdge) {
         if (!deopt.canDeoptimize()) {
             return null;
         }
-        return stateForWithExceptionEdge(deopt.getDeoptimizationState(), exceptionEdge);
+        return stateForWithExceptionEdge(deopt.getDeoptimizationState(), deopt.getDeoptimizationReason(), exceptionEdge);
     }
 
-    public LIRFrameState stateFor(FrameState state) {
-        return stateForWithExceptionEdge(state, null);
+    public LIRFrameState stateFor(FrameState state, DeoptimizationReason reason) {
+        return stateForWithExceptionEdge(state, reason, null);
     }
 
-    public LIRFrameState stateForWithExceptionEdge(FrameState state, LabelRef exceptionEdge) {
+    public LIRFrameState stateForWithExceptionEdge(FrameState state, DeoptimizationReason reason, LabelRef exceptionEdge) {
         if (needOnlyOopMaps()) {
-            return new LIRFrameState(null, null, null);
+            return new LIRFrameState(null, null, null, (short) -1);
         }
         assert state != null;
-        return debugInfoBuilder.build(state, exceptionEdge);
+        return debugInfoBuilder.build(state, lir.getDeoptimizationReasons().addSpeculation(reason), exceptionEdge);
     }
 
     /**
@@ -616,15 +616,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     @Override
     public Variable emitForeignCall(ForeignCallLinkage linkage, DeoptimizingNode info, Value... args) {
-        LIRFrameState state = null;
-        if (linkage.canDeoptimize()) {
-            if (info != null) {
-                state = stateFor(info.getDeoptimizationState());
-            } else {
-                assert needOnlyOopMaps();
-                state = new LIRFrameState(null, null, null);
-            }
-        }
+        LIRFrameState state = !linkage.canDeoptimize() ? null : stateFor(info.getDeoptimizationState(), info.getDeoptimizationReason());
 
         // move the arguments into the correct location
         CallingConvention linkageCc = linkage.getOutgoingCallingConvention();
