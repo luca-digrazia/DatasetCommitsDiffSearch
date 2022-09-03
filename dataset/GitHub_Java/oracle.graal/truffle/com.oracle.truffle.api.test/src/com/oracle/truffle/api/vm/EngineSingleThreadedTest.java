@@ -30,14 +30,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.source.Source;
-import java.util.concurrent.CountDownLatch;
-import org.junit.After;
 
 public class EngineSingleThreadedTest {
     PolyglotEngine tvm;
-    CountDownLatch readyForUse = new CountDownLatch(1);
-    CountDownLatch waitBeforeDispose = new CountDownLatch(1);
-    CountDownLatch disposeOK = new CountDownLatch(1);
 
     @Before
     public void initInDifferentThread() throws InterruptedException {
@@ -46,24 +41,10 @@ public class EngineSingleThreadedTest {
             @Override
             public void run() {
                 tvm = b.build();
-                readyForUse.countDown();
-                try {
-                    waitBeforeDispose.await();
-                } catch (InterruptedException ex) {
-                    throw new IllegalStateException(ex);
-                }
-                tvm.dispose();
-                disposeOK.countDown();
             }
         };
         t.start();
-        readyForUse.await();
-    }
-
-    @After
-    public void orderDispose() throws InterruptedException {
-        waitBeforeDispose.countDown();
-        disposeOK.await();
+        t.join();
     }
 
     @Test(expected = IllegalStateException.class)
@@ -91,10 +72,5 @@ public class EngineSingleThreadedTest {
     @Test(expected = IllegalStateException.class)
     public void findGlobalSymbol() {
         tvm.findGlobalSymbol("doesNotExists");
-    }
-
-    @Test(expected = IllegalStateException.class)
-    public void dispose() {
-        tvm.dispose();
     }
 }

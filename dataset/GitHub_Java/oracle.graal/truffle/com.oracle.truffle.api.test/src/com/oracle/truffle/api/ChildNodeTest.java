@@ -89,7 +89,7 @@ public class ChildNodeTest {
         @Child private TestChildNode left;
         @Child private TestChildNode right;
 
-        TestRootNode(TestChildNode left, TestChildNode right) {
+        public TestRootNode(TestChildNode left, TestChildNode right) {
             super(TestingLanguage.class, null, null);
             this.left = left;
             this.right = right;
@@ -103,7 +103,7 @@ public class ChildNodeTest {
 
     class TestChildNode extends Node {
 
-        TestChildNode() {
+        public TestChildNode() {
             super(null);
         }
 

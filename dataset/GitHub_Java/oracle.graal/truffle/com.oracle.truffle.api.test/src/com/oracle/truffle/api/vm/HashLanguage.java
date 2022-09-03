@@ -92,7 +92,7 @@ public class HashLanguage extends TruffleLanguage<Env> {
         private final Source code;
         private final int id;
 
-        HashNode(HashLanguage hash, Source code) {
+        public HashNode(HashLanguage hash, Source code) {
             super(hash.getClass(), null, null);
             this.code = code;
             id = ++counter;

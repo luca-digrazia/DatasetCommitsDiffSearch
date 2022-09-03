@@ -37,22 +37,13 @@ import java.util.concurrent.Executor;
 import org.junit.Test;
 
 import com.oracle.truffle.api.source.Source;
-import org.junit.After;
 
 public class ValueTest implements Executor {
-    private final List<Runnable> pending = new LinkedList<>();
-    private PolyglotEngine engine;
-
-    @After
-    public void dispose() {
-        if (engine != null) {
-            engine.dispose();
-        }
-    }
+    private List<Runnable> pending = new LinkedList<>();
 
     @Test
     public void valueToStringValue() throws Exception {
-        engine = PolyglotEngine.newBuilder().build();
+        PolyglotEngine engine = PolyglotEngine.newBuilder().build();
         PolyglotEngine.Language language1 = engine.getLanguages().get("application/x-test-import-export-1");
         PolyglotEngine.Language language2 = engine.getLanguages().get("application/x-test-import-export-2");
         language2.eval(Source.fromText("explicit.value=42", "define 42"));
@@ -67,7 +58,7 @@ public class ValueTest implements Executor {
 
     @Test
     public void valueToStringException() throws Exception {
-        engine = PolyglotEngine.newBuilder().build();
+        PolyglotEngine engine = PolyglotEngine.newBuilder().build();
         PolyglotEngine.Language language1 = engine.getLanguages().get("application/x-test-import-export-1");
         PolyglotEngine.Value value = null;
         try {
@@ -83,7 +74,7 @@ public class ValueTest implements Executor {
 
     @Test
     public void valueToStringValueAsync() throws Exception {
-        engine = PolyglotEngine.newBuilder().executor(this).build();
+        PolyglotEngine engine = PolyglotEngine.newBuilder().executor(this).build();
         PolyglotEngine.Language language1 = engine.getLanguages().get("application/x-test-import-export-1");
         PolyglotEngine.Language language2 = engine.getLanguages().get("application/x-test-import-export-2");
         language2.eval(Source.fromText("explicit.value=42", "define 42"));
@@ -107,7 +98,7 @@ public class ValueTest implements Executor {
 
     @Test
     public void valueToStringExceptionAsync() throws Exception {
-        engine = PolyglotEngine.newBuilder().executor(this).build();
+        PolyglotEngine engine = PolyglotEngine.newBuilder().executor(this).build();
         PolyglotEngine.Language language1 = engine.getLanguages().get("application/x-test-import-export-1");
         PolyglotEngine.Value value = language1.eval(Source.fromText("parse=does not work", "error.value"));
         assertNotNull("Value returned", value);

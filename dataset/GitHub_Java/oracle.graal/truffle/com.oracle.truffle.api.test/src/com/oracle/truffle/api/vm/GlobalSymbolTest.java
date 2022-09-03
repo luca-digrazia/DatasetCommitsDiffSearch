@@ -41,8 +41,6 @@ import com.oracle.truffle.api.utilities.InstrumentationTestMode;
 
 public class GlobalSymbolTest {
 
-    private PolyglotEngine vm;
-
     @Before
     public void before() {
         InstrumentationTestMode.set(true);
@@ -51,14 +49,11 @@ public class GlobalSymbolTest {
     @After
     public void after() {
         InstrumentationTestMode.set(false);
-        if (vm != null) {
-            vm.dispose();
-        }
     }
 
     @Test
     public void globalSymbolFoundByLanguage() throws IOException {
-        vm = createEngineBuilder().globalSymbol("ahoj", "42").build();
+        PolyglotEngine vm = createEngineBuilder().globalSymbol("ahoj", "42").build();
         // @formatter:off
         Object ret = vm.eval(
             Source.fromText("return=ahoj", "Return").withMimeType(L3)
@@ -69,7 +64,7 @@ public class GlobalSymbolTest {
 
     @Test
     public void globalSymbolFoundByVMUser() throws IOException {
-        vm = createEngineBuilder().globalSymbol("ahoj", "42").build();
+        PolyglotEngine vm = createEngineBuilder().globalSymbol("ahoj", "42").build();
         PolyglotEngine.Value ret = vm.findGlobalSymbol("ahoj");
         assertNotNull("Symbol found", ret);
         assertEquals("42", ret.get());
@@ -81,7 +76,7 @@ public class GlobalSymbolTest {
 
     @Test
     public void passingArray() throws IOException {
-        vm = createEngineBuilder().globalSymbol("arguments", new Object[]{"one", "two", "three"}).build();
+        PolyglotEngine vm = createEngineBuilder().globalSymbol("arguments", new Object[]{"one", "two", "three"}).build();
         PolyglotEngine.Value value = vm.findGlobalSymbol("arguments");
         assertFalse("Not instance of array", value.get() instanceof Object[]);
         assertTrue("Instance of TruffleObject", value.get() instanceof TruffleObject);

@@ -49,7 +49,8 @@ import com.oracle.truffle.api.utilities.InstrumentationTestMode;
  * </p>
  *
  * <p>
- * The next part of the Truffle API introduction is at {@link com.oracle.truffle.api.FrameTest} .
+ * The next part of the Truffle API introduction is at {@link com.oracle.truffle.api.FrameTest}
+ * .
  * </p>
  */
 public class ArgumentsTest {

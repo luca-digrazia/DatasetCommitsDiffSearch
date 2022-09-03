@@ -44,7 +44,7 @@ class InstrumentationTestNodes {
         @Child private TestLanguageNode child;
         @Child private EventHandlerNode eventHandlerNode;
 
-        TestLanguageWrapperNode(TestLanguageNode child) {
+        public TestLanguageWrapperNode(TestLanguageNode child) {
             assert !(child instanceof TestLanguageWrapperNode);
             this.child = child;
         }
@@ -90,7 +90,7 @@ class InstrumentationTestNodes {
     static class TestValueNode extends TestLanguageNode {
         private final int value;
 
-        TestValueNode(int value) {
+        public TestValueNode(int value) {
             this.value = value;
         }
 
@@ -107,7 +107,7 @@ class InstrumentationTestNodes {
         @Child private TestLanguageNode leftChild;
         @Child private TestLanguageNode rightChild;
 
-        TestAdditionNode(TestValueNode leftChild, TestValueNode rightChild) {
+        public TestAdditionNode(TestValueNode leftChild, TestValueNode rightChild) {
             this.leftChild = insert(leftChild);
             this.rightChild = insert(rightChild);
         }
@@ -131,7 +131,7 @@ class InstrumentationTestNodes {
          * newly created AST. Global registry is not used, since that would interfere with other
          * tests run in the same environment.
          */
-        InstrumentationTestRootNode(TestLanguageNode body) {
+        public InstrumentationTestRootNode(TestLanguageNode body) {
             super(InstrumentationTestingLanguage.class, null, null);
             this.body = body;
         }
@@ -162,7 +162,7 @@ class InstrumentationTestNodes {
          * newly created AST. Global registry is not used, since that would interfere with other
          * tests run in the same environment.
          */
-        TestRootNode(TestLanguageNode body, Instrumenter instrumenter) {
+        public TestRootNode(TestLanguageNode body, Instrumenter instrumenter) {
             super(InstrumentationTestingLanguage.class, null, null);
             this.instrumenter = instrumenter;
             this.body = body;

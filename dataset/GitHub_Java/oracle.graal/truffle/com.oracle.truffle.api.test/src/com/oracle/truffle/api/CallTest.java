@@ -41,7 +41,8 @@ import com.oracle.truffle.api.utilities.InstrumentationTestMode;
  * </p>
  *
  * <p>
- * The next part of the Truffle API introduction is at {@link com.oracle.truffle.api.ArgumentsTest}.
+ * The next part of the Truffle API introduction is at
+ * {@link com.oracle.truffle.api.ArgumentsTest}.
  * </p>
  */
 public class CallTest {

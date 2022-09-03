@@ -205,7 +205,7 @@ public class InstrumentationTest {
         public Instrumenter instrumenter;
         private ProbeInstrument instrument;
 
-        TestSimpleInstrumentCounter(Instrumenter instrumenter) {
+        public TestSimpleInstrumentCounter(Instrumenter instrumenter) {
             this.instrumenter = instrumenter;
         }
 
@@ -257,7 +257,7 @@ public class InstrumentationTest {
         public final Instrumenter instrumenter;
         public ProbeInstrument instrument;
 
-        TestStandardInstrumentCounter(Instrumenter instrumenter) {
+        public TestStandardInstrumentCounter(Instrumenter instrumenter) {
             this.instrumenter = instrumenter;
         }
 

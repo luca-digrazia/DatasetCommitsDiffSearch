@@ -48,8 +48,6 @@ import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.instrument.Visualizer;
 import com.oracle.truffle.api.instrument.WrapperNode;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
@@ -127,10 +125,10 @@ public class ImplicitExplicitExportTest {
         ).get();
         // @formatter:on
         assertEquals("Explicit import from L2 is used", "43", ret);
-        assertEquals("Global symbol is also 43", "43", vm.findGlobalSymbol("ahoj").execute().get());
+        assertEquals("Global symbol is also 43", "43", vm.findGlobalSymbol("ahoj").invoke(null).get());
     }
 
-    static final class Ctx implements TruffleObject {
+    static final class Ctx {
         static final Set<Ctx> disposed = new HashSet<>();
 
         final Map<String, String> explicit = new HashMap<>();
@@ -143,11 +141,6 @@ public class ImplicitExplicitExportTest {
 
         void dispose() {
             disposed.add(this);
-        }
-
-        @Override
-        public ForeignAccess getForeignAccess() {
-            throw new UnsupportedOperationException();
         }
     }
 
@@ -187,7 +180,7 @@ public class ImplicitExplicitExportTest {
 
         @Override
         protected Object getLanguageGlobal(Ctx context) {
-            return context;
+            return null;
         }
 
         @Override
@@ -265,7 +258,7 @@ public class ImplicitExplicitExportTest {
         }
     }
 
-    public static final String L1 = "application/x-test-import-export-1";
+    static final String L1 = "application/x-test-import-export-1";
     static final String L2 = "application/x-test-import-export-2";
     static final String L3 = "application/x-test-import-export-3";
 
