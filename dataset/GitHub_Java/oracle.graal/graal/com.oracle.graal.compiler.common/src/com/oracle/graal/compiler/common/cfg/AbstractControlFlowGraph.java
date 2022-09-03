@@ -24,6 +24,8 @@ package com.oracle.graal.compiler.common.cfg;
 
 import java.util.*;
 
+import com.oracle.graal.compiler.common.*;
+
 public interface AbstractControlFlowGraph<T extends AbstractBlockBase<T>> {
 
     int BLOCK_ID_INITIAL = -1;
@@ -71,22 +73,26 @@ public interface AbstractControlFlowGraph<T extends AbstractBlockBase<T>> {
      * True if block {@code a} is dominated by block {@code b}.
      */
     static boolean isDominatedBy(AbstractBlockBase<?> a, AbstractBlockBase<?> b) {
-        assert a != null && b != null;
-        if (a == b) {
-            return true;
+        assert a != null;
+        AbstractBlockBase<?> dominator = a;
+        int i = 0;
+        while (dominator != null) {
+            if (i++ == Integer.MAX_VALUE) { // For safety
+                throw GraalInternalError.shouldNotReachHere();
+            }
+            if (dominator == b) {
+                return true;
+            }
+            dominator = dominator.getDominator();
         }
-        if (a.getDominatorDepth() < b.getDominatorDepth()) {
-            return false;
-        }
-
-        return b == (AbstractBlockBase<?>) a.getDominator(a.getDominatorDepth() - b.getDominatorDepth());
+        return false;
     }
 
     /**
      * True if block {@code a} dominates block {@code b}.
      */
     static boolean dominates(AbstractBlockBase<?> a, AbstractBlockBase<?> b) {
-        assert a != null && b != null;
+        assert a != null;
         return isDominatedBy(b, a);
     }
 
