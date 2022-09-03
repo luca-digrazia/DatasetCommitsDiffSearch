@@ -97,7 +97,7 @@ public class LinearScanEliminateSpillMovePhase extends AllocationPhase {
              * by Interval.spillDefinitionPos.
              */
             Interval interval;
-            interval = allocator.createUnhandledLists(mustStoreAtDefinition, null).getLeft();
+            interval = allocator.createUnhandledLists(mustStoreAtDefinition, null).first;
             if (DetailedAsserts.getValue()) {
                 checkIntervals(interval);
             }

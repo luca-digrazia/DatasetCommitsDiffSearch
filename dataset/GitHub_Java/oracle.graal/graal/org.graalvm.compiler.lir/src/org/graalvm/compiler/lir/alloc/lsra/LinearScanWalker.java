@@ -22,11 +22,11 @@
  */
 package org.graalvm.compiler.lir.alloc.lsra;
 
+import static org.graalvm.compiler.lir.LIRValueUtil.isStackSlotValue;
+import static org.graalvm.compiler.lir.LIRValueUtil.isVariable;
 import static jdk.vm.ci.code.CodeUtil.isOdd;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
-import static org.graalvm.compiler.lir.LIRValueUtil.isStackSlotValue;
-import static org.graalvm.compiler.lir.LIRValueUtil.isVariable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -603,7 +603,7 @@ class LinearScanWalker extends IntervalWalker {
                      * The loop depth of the spilling position is higher then the loop depth at the
                      * definition of the interval. Move write to memory out of loop.
                      */
-                    if (LinearScan.Options.LIROptLSRAOptimizeSpillPosition.getValue(allocator.getOptions())) {
+                    if (LinearScan.Options.LIROptLSRAOptimizeSpillPosition.getValue()) {
                         // find best spill position in dominator the tree
                         interval.setSpillState(SpillState.SpillInDominator);
                     } else {
@@ -625,7 +625,7 @@ class LinearScanWalker extends IntervalWalker {
                 int spillLoopDepth = allocator.blockForId(spillPos).getLoopDepth();
 
                 if (defLoopDepth <= spillLoopDepth) {
-                    if (LinearScan.Options.LIROptLSRAOptimizeSpillPosition.getValue(allocator.getOptions())) {
+                    if (LinearScan.Options.LIROptLSRAOptimizeSpillPosition.getValue()) {
                         // the interval is spilled more then once
                         interval.setSpillState(SpillState.SpillInDominator);
                     } else {
@@ -861,7 +861,7 @@ class LinearScanWalker extends IntervalWalker {
                          * errors
                          */
                         allocator.assignSpillSlot(interval);
-                        Debug.dump(Debug.INFO_LEVEL, allocator.getLIR(), description);
+                        Debug.dump(Debug.INFO_LOG_LEVEL, allocator.getLIR(), description);
                         allocator.printIntervals(description);
                         throw new OutOfRegistersException("LinearScan: no register found", description);
                     }

@@ -56,6 +56,20 @@ import jdk.vm.ci.meta.ValueKind;
 public final class Interval {
 
     /**
+     * A pair of intervals.
+     */
+    static final class Pair {
+
+        public final Interval first;
+        public final Interval second;
+
+        Pair(Interval first, Interval second) {
+            this.first = first;
+            this.second = second;
+        }
+    }
+
+    /**
      * A set of interval lists, one per {@linkplain RegisterBinding binding} type.
      */
     static final class RegisterBindingLists {
