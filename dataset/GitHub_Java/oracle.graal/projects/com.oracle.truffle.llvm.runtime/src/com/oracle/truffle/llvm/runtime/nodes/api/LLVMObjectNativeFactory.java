@@ -33,6 +33,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
@@ -70,9 +71,9 @@ abstract class LLVMObjectNativeFactory {
 
     private static class FallbackLibrary extends LLVMObjectNativeLibrary {
 
-        @Child private Node isPointer;
-        @Child private Node asPointer;
-        @Child private Node toNative;
+        @Child Node isPointer;
+        @Child Node asPointer;
+        @Child Node toNative;
 
         @Override
         public boolean guard(Object obj) {
@@ -87,7 +88,7 @@ abstract class LLVMObjectNativeFactory {
         }
 
         @Override
-        public boolean isPointer(Object obj) {
+        public boolean isPointer(VirtualFrame frame, Object obj) {
             if (isPointer == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 isPointer = insert(Message.IS_POINTER.createNode());
@@ -96,7 +97,7 @@ abstract class LLVMObjectNativeFactory {
         }
 
         @Override
-        public long asPointer(Object obj) throws InteropException {
+        public long asPointer(VirtualFrame frame, Object obj) throws InteropException {
             if (asPointer == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 asPointer = insert(Message.AS_POINTER.createNode());
@@ -105,7 +106,7 @@ abstract class LLVMObjectNativeFactory {
         }
 
         @Override
-        public Object toNative(Object obj) throws InteropException {
+        public Object toNative(VirtualFrame frame, Object obj) throws InteropException {
             if (toNative == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 toNative = insert(Message.TO_NATIVE.createNode());
@@ -122,26 +123,26 @@ abstract class LLVMObjectNativeFactory {
         }
 
         @Override
-        public boolean isPointer(Object obj) {
+        public boolean isPointer(VirtualFrame frame, Object obj) {
             return false;
         }
 
         @Override
-        public long asPointer(Object obj) throws InteropException {
+        public long asPointer(VirtualFrame frame, Object obj) throws InteropException {
             throw UnsupportedMessageException.raise(Message.AS_POINTER);
         }
 
         @Override
-        public Object toNative(Object obj) throws InteropException {
+        public Object toNative(VirtualFrame frame, Object obj) throws InteropException {
             throw UnsupportedMessageException.raise(Message.TO_NATIVE);
         }
     }
 
     private static class CachingLibrary extends LLVMObjectNativeLibrary {
 
-        @Child private CachedIsPointerNode isPointer;
-        @Child private CachedAsPointerNode asPointer;
-        @Child private CachedToNativeNode toNative;
+        @Child CachedIsPointerNode isPointer;
+        @Child CachedAsPointerNode asPointer;
+        @Child CachedToNativeNode toNative;
 
         @Override
         public boolean guard(Object obj) {
@@ -149,30 +150,30 @@ abstract class LLVMObjectNativeFactory {
         }
 
         @Override
-        public boolean isPointer(Object obj) {
+        public boolean isPointer(VirtualFrame frame, Object obj) {
             if (isPointer == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 isPointer = insert(CachedIsPointerNodeGen.create());
             }
-            return isPointer.execute(obj);
+            return isPointer.execute(frame, obj);
         }
 
         @Override
-        public long asPointer(Object obj) throws InteropException {
+        public long asPointer(VirtualFrame frame, Object obj) throws InteropException {
             if (asPointer == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 asPointer = insert(CachedAsPointerNodeGen.create());
             }
-            return asPointer.execute(obj);
+            return asPointer.execute(frame, obj);
         }
 
         @Override
-        public Object toNative(Object obj) throws InteropException {
+        public Object toNative(VirtualFrame frame, Object obj) throws InteropException {
             if (toNative == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 toNative = insert(CachedToNativeNodeGen.create());
             }
-            return toNative.execute(obj);
+            return toNative.execute(frame, obj);
         }
     }
 
@@ -180,18 +181,18 @@ abstract class LLVMObjectNativeFactory {
 
         static final int TYPE_LIMIT = 8;
 
-        abstract boolean execute(Object obj);
+        abstract boolean execute(VirtualFrame frame, Object obj);
 
         @Specialization(limit = "TYPE_LIMIT", guards = "lib.guard(obj)")
-        protected boolean isPointer(Object obj,
+        boolean isPointer(VirtualFrame frame, Object obj,
                         @Cached("createCached(obj)") LLVMObjectNativeLibrary lib) {
-            return lib.isPointer(obj);
+            return lib.isPointer(frame, obj);
         }
 
         @Specialization(replaces = "isPointer")
-        protected boolean slowpath(Object obj) {
+        boolean slowpath(VirtualFrame frame, Object obj) {
             LLVMObjectNativeLibrary lib = createCached(obj);
-            return isPointer(obj, lib);
+            return isPointer(frame, obj, lib);
         }
     }
 
@@ -199,13 +200,13 @@ abstract class LLVMObjectNativeFactory {
 
         static final int TYPE_LIMIT = 8;
 
-        abstract long execute(Object obj) throws InteropException;
+        abstract long execute(VirtualFrame frame, Object obj) throws InteropException;
 
         @Specialization(limit = "TYPE_LIMIT", guards = "lib.guard(obj)")
-        protected long asPointer(Object obj,
+        long asPointer(VirtualFrame frame, Object obj,
                         @Cached("createCached(obj)") LLVMObjectNativeLibrary lib) {
             try {
-                return lib.asPointer(obj);
+                return lib.asPointer(frame, obj);
             } catch (InteropException ex) {
                 CompilerDirectives.transferToInterpreter();
                 throw ex.raise();
@@ -213,9 +214,9 @@ abstract class LLVMObjectNativeFactory {
         }
 
         @Specialization(replaces = "asPointer")
-        protected long slowpath(Object obj) {
+        long slowpath(VirtualFrame frame, Object obj) {
             LLVMObjectNativeLibrary lib = createCached(obj);
-            return asPointer(obj, lib);
+            return asPointer(frame, obj, lib);
         }
     }
 
@@ -223,13 +224,13 @@ abstract class LLVMObjectNativeFactory {
 
         static final int TYPE_LIMIT = 8;
 
-        abstract Object execute(Object obj) throws InteropException;
+        abstract Object execute(VirtualFrame frame, Object obj) throws InteropException;
 
         @Specialization(limit = "TYPE_LIMIT", guards = "lib.guard(obj)")
-        protected Object toNative(Object obj,
+        Object toNative(VirtualFrame frame, Object obj,
                         @Cached("createCached(obj)") LLVMObjectNativeLibrary lib) {
             try {
-                return lib.toNative(obj);
+                return lib.toNative(frame, obj);
             } catch (InteropException ex) {
                 CompilerDirectives.transferToInterpreter();
                 throw ex.raise();
@@ -237,9 +238,9 @@ abstract class LLVMObjectNativeFactory {
         }
 
         @Specialization(replaces = "toNative")
-        protected Object slowpath(Object obj) {
+        Object slowpath(VirtualFrame frame, Object obj) {
             LLVMObjectNativeLibrary lib = createCached(obj);
-            return toNative(obj, lib);
+            return toNative(frame, obj, lib);
         }
     }
 }
