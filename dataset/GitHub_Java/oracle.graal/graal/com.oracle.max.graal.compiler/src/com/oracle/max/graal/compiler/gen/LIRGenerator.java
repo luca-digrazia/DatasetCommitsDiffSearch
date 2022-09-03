@@ -681,14 +681,10 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     @Override
-    public void visitFixedGuard(FixedGuard fixedGuard) {
-        Node comp = fixedGuard.node();
-        if (comp instanceof IsNonNull) {
-            IsNonNull x = (IsNonNull) comp;
-            CiValue value = load(x.object());
-            LIRDebugInfo info = stateFor(x);
-            lir.nullCheck(value, info);
-        }
+    public void visitNullCheck(FixedNullCheck x) {
+        CiValue value = load(x.object());
+        LIRDebugInfo info = stateFor(x);
+        lir.nullCheck(value, info);
     }
 
     @Override
