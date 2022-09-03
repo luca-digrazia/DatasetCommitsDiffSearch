@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2010, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,22 +38,22 @@ public final class StackSlot extends AllocatableValue {
     /**
      * Gets a {@link StackSlot} instance representing a stack slot at a given index holding a value
      * of a given kind.
-     *
+     * 
      * @param kind The kind of the value stored in the stack slot.
      * @param offset The offset of the stack slot (in bytes)
      * @param addFrameSize Specifies if the offset is relative to the stack pointer, or the
      *            beginning of the frame (stack pointer + total frame size).
      */
-    public static StackSlot get(LIRKind kind, int offset, boolean addFrameSize) {
+    public static StackSlot get(PlatformKind kind, int offset, boolean addFrameSize) {
         assert addFrameSize || offset >= 0;
         return new StackSlot(kind, offset, addFrameSize);
     }
 
     /**
-     * Private constructor to enforce use of {@link #get(LIRKind, int, boolean)} so that a cache can
-     * be used.
+     * Private constructor to enforce use of {@link #get(PlatformKind, int, boolean)} so that a
+     * cache can be used.
      */
-    private StackSlot(LIRKind kind, int offset, boolean addFrameSize) {
+    private StackSlot(PlatformKind kind, int offset, boolean addFrameSize) {
         super(kind);
         this.offset = offset;
         this.addFrameSize = addFrameSize;
@@ -61,7 +61,7 @@ public final class StackSlot extends AllocatableValue {
 
     /**
      * Gets the offset of this stack slot, relative to the stack pointer.
-     *
+     * 
      * @return The offset of this slot (in bytes).
      */
     public int getOffset(int totalFrameSize) {
@@ -84,6 +84,23 @@ public final class StackSlot extends AllocatableValue {
     }
 
     @Override
+    public int hashCode() {
+        return getPlatformKind().hashCode() ^ (offset << 4) ^ (addFrameSize ? 15 : 0);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == this) {
+            return true;
+        }
+        if (o instanceof StackSlot) {
+            StackSlot l = (StackSlot) o;
+            return l.getPlatformKind().equals(getPlatformKind()) && l.offset == offset && l.addFrameSize == addFrameSize;
+        }
+        return false;
+    }
+
+    @Override
     public String toString() {
         if (!addFrameSize) {
             return "out:" + offset + getKindSuffix();
@@ -100,7 +117,7 @@ public final class StackSlot extends AllocatableValue {
     public StackSlot asOutArg() {
         assert offset >= 0;
         if (addFrameSize) {
-            return get(getLIRKind(), offset, false);
+            return get(getPlatformKind(), offset, false);
         }
         return this;
     }
@@ -111,26 +128,8 @@ public final class StackSlot extends AllocatableValue {
     public StackSlot asInArg() {
         assert offset >= 0;
         if (!addFrameSize) {
-            return get(getLIRKind(), offset, true);
+            return get(getPlatformKind(), offset, true);
         }
         return this;
-    }
-
-    @Override
-    public int hashCode() {
-        final int prime = 37;
-        int result = super.hashCode();
-        result = prime * result + (addFrameSize ? 1231 : 1237);
-        result = prime * result + offset;
-        return result;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof StackSlot) {
-            StackSlot other = (StackSlot) obj;
-            return super.equals(obj) && addFrameSize == other.addFrameSize && offset == other.offset;
-        }
-        return false;
     }
 }

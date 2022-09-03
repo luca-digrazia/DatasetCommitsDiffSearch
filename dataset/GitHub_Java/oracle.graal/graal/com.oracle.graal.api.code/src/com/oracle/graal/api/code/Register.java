@@ -22,12 +22,16 @@
  */
 package com.oracle.graal.api.code;
 
+import java.io.*;
+
 import com.oracle.graal.api.meta.*;
 
 /**
  * Represents a target machine register.
  */
-public final class Register implements Comparable<Register> {
+public final class Register implements Comparable<Register>, Serializable {
+
+    private static final long serialVersionUID = -7213269157816016300L;
 
     public static final RegisterCategory SPECIAL = new RegisterCategory("SPECIAL");
 
@@ -89,20 +93,6 @@ public final class Register implements Comparable<Register> {
         public String toString() {
             return name;
         }
-
-        @Override
-        public int hashCode() {
-            return 23 + name.hashCode();
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (obj instanceof RegisterCategory) {
-                RegisterCategory other = (RegisterCategory) obj;
-                return name.equals(other.name);
-            }
-            return false;
-        }
     }
 
     /**
@@ -153,6 +143,16 @@ public final class Register implements Comparable<Register> {
     }
 
     /**
+     * Gets a hash code for this register.
+     * 
+     * @return the value of {@link #number}
+     */
+    @Override
+    public int hashCode() {
+        return number;
+    }
+
+    /**
      * Gets the maximum register {@linkplain #number number} in a given set of registers.
      * 
      * @param registers the set of registers to process
@@ -200,22 +200,4 @@ public final class Register implements Comparable<Register> {
         return 0;
     }
 
-    @Override
-    public int hashCode() {
-        return 17 + name.hashCode();
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof Register) {
-            Register other = (Register) obj;
-            if (number == other.number) {
-                assert name.equals(other.name);
-                assert encoding == other.encoding;
-                assert registerCategory == other.registerCategory;
-                return true;
-            }
-        }
-        return false;
-    }
 }
