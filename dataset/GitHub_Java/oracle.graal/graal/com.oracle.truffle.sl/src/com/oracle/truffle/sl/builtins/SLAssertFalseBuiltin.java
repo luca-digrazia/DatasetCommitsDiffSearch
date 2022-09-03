@@ -26,7 +26,6 @@ import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.source.*;
-import com.oracle.truffle.sl.*;
 import com.oracle.truffle.sl.runtime.*;
 
 /**
@@ -44,7 +43,11 @@ public abstract class SLAssertFalseBuiltin extends SLBuiltinNode {
     public boolean doAssert(boolean value, String message) {
         if (value) {
             CompilerDirectives.transferToInterpreter();
-            throw new SLAssertionError(message == null ? "" : message);
+            if (message == null) {
+                throw new AssertionError();
+            } else {
+                throw new AssertionError(message);
+            }
         }
         return value;
     }

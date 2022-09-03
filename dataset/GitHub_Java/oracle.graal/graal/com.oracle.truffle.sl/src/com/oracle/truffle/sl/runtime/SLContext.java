@@ -23,16 +23,18 @@
 package com.oracle.truffle.sl.runtime;
 
 import java.io.*;
+import java.util.*;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.object.*;
 import com.oracle.truffle.api.source.*;
 import com.oracle.truffle.sl.*;
 import com.oracle.truffle.sl.builtins.*;
 import com.oracle.truffle.sl.nodes.*;
+import com.oracle.truffle.sl.nodes.instrument.*;
 import com.oracle.truffle.sl.nodes.local.*;
 import com.oracle.truffle.sl.parser.*;
 
@@ -47,25 +49,26 @@ import com.oracle.truffle.sl.parser.*;
  * context. Therefore, the context is not a singleton.
  */
 public final class SLContext extends ExecutionContext {
-    private static final Layout LAYOUT = Layout.createLayout();
-
     private final BufferedReader input;
     private final PrintStream output;
     private final SLFunctionRegistry functionRegistry;
-    private final Shape emptyShape;
+    private SourceCallback sourceCallback = null;
 
     public SLContext(BufferedReader input, PrintStream output) {
         this.input = input;
         this.output = output;
         this.functionRegistry = new SLFunctionRegistry();
         installBuiltins();
-
-        this.emptyShape = LAYOUT.createShape(new ObjectType());
     }
 
     @Override
     public String getLanguageShortName() {
         return "Simple";
+    }
+
+    @Override
+    public void setSourceCallback(SourceCallback sourceCallback) {
+        this.sourceCallback = sourceCallback;
     }
 
     /**
@@ -91,6 +94,10 @@ public final class SLContext extends ExecutionContext {
         return functionRegistry;
     }
 
+    public SourceCallback getSourceCallback() {
+        return sourceCallback;
+    }
+
     /**
      * Adds all builtin functions to the {@link SLFunctionRegistry}. This method lists all
      * {@link SLBuiltinNode builtin implementation classes}.
@@ -104,7 +111,6 @@ public final class SLContext extends ExecutionContext {
         installBuiltin(SLHelloEqualsWorldBuiltinFactory.getInstance());
         installBuiltin(SLAssertTrueBuiltinFactory.getInstance());
         installBuiltin(SLAssertFalseBuiltinFactory.getInstance());
-        installBuiltin(SLNewObjectBuiltinFactory.getInstance());
     }
 
     public void installBuiltin(NodeFactory<? extends SLBuiltinNode> factory) {
@@ -126,24 +132,12 @@ public final class SLContext extends ExecutionContext {
         /* Instantiate the builtin node. This node performs the actual functionality. */
         SLBuiltinNode builtinBodyNode = factory.createNode(argumentNodes, this);
         /* The name of the builtin function is specified via an annotation on the node class. */
-        String name = lookupNodeInfo(builtinBodyNode.getClass()).shortName();
+        String name = builtinBodyNode.getClass().getAnnotation(NodeInfo.class).shortName();
         /* Wrap the builtin in a RootNode. Truffle requires all AST to start with a RootNode. */
         SLRootNode rootNode = new SLRootNode(this, new FrameDescriptor(), builtinBodyNode, name);
 
         /* Register the builtin function in our function registry. */
         getFunctionRegistry().register(name, rootNode);
-    }
-
-    public static NodeInfo lookupNodeInfo(Class<?> clazz) {
-        if (clazz == null) {
-            return null;
-        }
-        NodeInfo info = clazz.getAnnotation(NodeInfo.class);
-        if (info != null) {
-            return info;
-        } else {
-            return lookupNodeInfo(clazz.getSuperclass());
-        }
     }
 
     /**
@@ -157,23 +151,32 @@ public final class SLContext extends ExecutionContext {
      * @param source The {@link Source} to execute.
      */
     public void executeMain(Source source) {
+
+        if (sourceCallback != null) {
+            sourceCallback.startLoading(source);
+        }
+
         Parser.parseSL(this, source);
+
+        List<SLFunction> functionList = getFunctionRegistry().getFunctions();
+
+        // Since only functions can be global in SL, this guarantees that we instrument
+        // everything of interest. Parsing must occur before accepting the visitors since
+        // the visitor which creates our instrumentation points expects a complete AST.
+
+        for (SLFunction function : functionList) {
+            RootCallTarget rootCallTarget = function.getCallTarget();
+            rootCallTarget.getRootNode().accept(new SLInstrumenter());
+        }
+
+        if (sourceCallback != null) {
+            sourceCallback.endLoading(source);
+        }
+
         SLFunction main = getFunctionRegistry().lookup("main");
         if (main.getCallTarget() == null) {
             throw new SLException("No function main() defined in SL source file.");
         }
         main.getCallTarget().call();
-    }
-
-    public DynamicObject createObject() {
-        return LAYOUT.newInstance(emptyShape);
-    }
-
-    public static boolean isSLObject(Object value) {
-        return LAYOUT.getType().isInstance(value);
-    }
-
-    public static DynamicObject castSLObject(Object value) {
-        return LAYOUT.getType().cast(value);
     }
 }
