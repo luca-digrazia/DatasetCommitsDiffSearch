@@ -53,9 +53,8 @@ import com.oracle.graal.replacements.SnippetTemplate.UsageReplacer;
  */
 public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
 
-    public InstanceOfSnippetsTemplates(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, CodeCacheProvider codeCache, LoweringProvider lowerer, Replacements replacements,
-                    TargetDescription target) {
-        super(metaAccess, constantReflection, codeCache, lowerer, replacements, target);
+    public InstanceOfSnippetsTemplates(MetaAccessProvider runtime, Replacements replacements, TargetDescription target) {
+        super(runtime, replacements, target);
     }
 
     /**
@@ -78,7 +77,7 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
                 replacer.replaceUsingInstantiation();
             } else {
                 Arguments args = makeArguments(replacer, tool);
-                template(args).instantiate(metaAccess, instanceOf, replacer, tool, args);
+                template(args).instantiate(runtime, instanceOf, replacer, tool, args);
             }
         }
 
@@ -94,7 +93,7 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
      */
     protected InstanceOfUsageReplacer createReplacer(FloatingNode instanceOf, Instantiation instantiation, Node usage, final StructuredGraph graph) {
         InstanceOfUsageReplacer replacer;
-        if (usage instanceof IfNode || usage instanceof FixedGuardNode || usage instanceof ShortCircuitOrNode || usage instanceof GuardingPiNode) {
+        if (usage instanceof IfNode || usage instanceof FixedGuardNode || usage instanceof LogicBinaryNode || usage instanceof GuardingPiNode) {
             replacer = new NonMaterializationUsageReplacer(instantiation, ConstantNode.forInt(1, graph), ConstantNode.forInt(0, graph), instanceOf, usage);
         } else {
             assert usage instanceof ConditionalNode : "unexpected usage of " + instanceOf + ": " + usage;
@@ -207,7 +206,7 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
         }
 
         @Override
-        public void replace(ValueNode oldNode, ValueNode newNode, MemoryMapNode mmap) {
+        public void replace(ValueNode oldNode, ValueNode newNode) {
             assert newNode instanceof PhiNode;
             assert oldNode == instanceOf;
             newNode.inferStamp();
@@ -239,7 +238,7 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
         }
 
         @Override
-        public void replace(ValueNode oldNode, ValueNode newNode, MemoryMapNode mmap) {
+        public void replace(ValueNode oldNode, ValueNode newNode) {
             assert newNode instanceof PhiNode;
             assert oldNode == instanceOf;
             newNode.inferStamp();
