@@ -30,10 +30,10 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import org.graalvm.polyglot.Value;
 
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleOptions;
@@ -94,16 +94,18 @@ abstract class ToJavaNode extends Node {
         } else if (value == JavaObject.NULL) {
             return null;
         } else if (value instanceof TruffleObject) {
-            if (targetType == Object.class) {
-                convertedValue = convertToObject((TruffleObject) value, languageContext);
+            if (languageContext != null && targetType == Object.class) {
+                convertedValue = JavaInterop.toHostValue(value, languageContext);
             } else {
-                convertedValue = asJavaObject((TruffleObject) value, targetType, genericType, languageContext);
+                boolean hasKeys = primitive.hasKeys((TruffleObject) value);
+                boolean hasSize = primitive.hasSize((TruffleObject) value);
+                boolean isNull = primitive.isNull((TruffleObject) value);
+                convertedValue = asJavaObject(targetType, genericType, (TruffleObject) value, hasKeys, hasSize, isNull, languageContext);
             }
         } else if (targetType.isAssignableFrom(value.getClass())) {
-            assert !(value instanceof TruffleObject);
             convertedValue = value;
         } else {
-            throw newClassCastException(value, targetType, null);
+            throw newClassCastException(value, targetType);
         }
         return convertedValue;
     }
@@ -131,20 +133,30 @@ abstract class ToJavaNode extends Node {
             }
             if (targetType == Object.class) {
                 return true;
-            } else if (primitive.isNull((TruffleObject) value)) {
-                return true;
-            } else if (targetType == List.class) {
-                return primitive.hasSize((TruffleObject) value);
-            } else if (targetType == Map.class) {
-                return primitive.hasKeys((TruffleObject) value);
-            } else if (targetType.isArray()) {
-                return primitive.hasKeys((TruffleObject) value);
             } else {
-                // Proxy
-                return !TruffleOptions.AOT && targetType.isInterface();
+                if (targetType.isInstance(value)) {
+                    return true;
+                } else {
+                    boolean isNull = primitive.isNull((TruffleObject) value);
+                    if (isNull) {
+                        return true;
+                    } else {
+                        if (!targetType.isInterface()) {
+                            return false;
+                        }
+                        boolean hasSize = primitive.hasSize((TruffleObject) value);
+                        if (targetType == List.class && hasSize) {
+                            return true;
+                        } else if (targetType == Map.class) {
+                            return true;
+                        } else {
+                            // Proxy
+                            return !TruffleOptions.AOT;
+                        }
+                    }
+                }
             }
         } else {
-            assert !(value instanceof TruffleObject);
             return targetType.isInstance(value);
         }
     }
@@ -172,79 +184,44 @@ abstract class ToJavaNode extends Node {
         return ForeignAccess.sendIsExecutable(isExecutable, object);
     }
 
-    private Object convertToObject(TruffleObject truffleObject, Object languageContext) {
-        Object primitiveValue = primitive.toPrimitive(truffleObject, null); // unbox
-        if (primitiveValue != null) {
-            return primitiveValue;
-        } else if (primitive.hasKeys(truffleObject)) {
-            return asJavaObject(truffleObject, Map.class, null, languageContext);
-        } else if (isExecutable(truffleObject)) {
-            return JavaInteropReflect.asDefaultJavaFunction(truffleObject, languageContext);
-        } else if (languageContext != null) {
-            return JavaInterop.toHostValue(truffleObject, languageContext);
-        } else {
-            return truffleObject; // legacy
-        }
-    }
-
     @TruffleBoundary
-    private <T> T asJavaObject(TruffleObject truffleObject, Class<T> targetType, Type genericType, Object languageContext) {
-        Objects.requireNonNull(truffleObject);
+    private static <T> T asJavaObject(Class<T> clazz, Type genericType, TruffleObject foreignObject, boolean hasKeys, boolean hasSize, boolean isNull, Object languageContext) {
         Object obj;
-        if (primitive.isNull(truffleObject)) {
+        if (foreignObject == null) {
             return null;
-        } else if (targetType == List.class) {
-            if (primitive.hasSize(truffleObject)) {
+        }
+        if (isNull) {
+            return null;
+        }
+        if (clazz.isInstance(foreignObject)) {
+            obj = foreignObject;
+        } else {
+            if (clazz == List.class && hasSize) {
                 TypeAndClass<?> elementType = getGenericParameterType(genericType, 0);
-                obj = TruffleList.create(elementType, truffleObject, languageContext);
-            } else {
-                throw newClassCastException(truffleObject, targetType, "has no size");
-            }
-        } else if (targetType == Map.class) {
-            if (primitive.hasKeys(truffleObject)) {
+                obj = TruffleList.create(elementType, foreignObject, languageContext);
+            } else if (clazz == Map.class && hasKeys) {
                 TypeAndClass<?> keyType = getGenericParameterType(genericType, 0);
                 TypeAndClass<?> valueType = getGenericParameterType(genericType, 1);
-                if (!isSupportedMapKeyType(keyType.clazz)) {
-                    throw newInvalidKeyTypeException(keyType.clazz);
+                obj = TruffleMap.create(keyType, valueType, foreignObject, languageContext);
+            } else if (clazz.isArray() && hasSize) {
+                obj = truffleObjectToArray(foreignObject, clazz, genericType, languageContext);
+            } else {
+                if (!clazz.isInterface()) {
+                    throw newClassCastException(foreignObject, clazz);
                 }
-                obj = TruffleMap.create(keyType, valueType, truffleObject, languageContext);
-            } else {
-                throw newClassCastException(truffleObject, targetType, "has no keys");
-            }
-        } else if (targetType.isArray()) {
-            if (primitive.hasSize(truffleObject)) {
-                obj = truffleObjectToArray(truffleObject, targetType, genericType, languageContext);
-            } else {
-                throw newClassCastException(truffleObject, targetType, "has no size");
-            }
-        } else {
-            if (!TruffleOptions.AOT && targetType.isInterface()) {
-                obj = JavaInteropReflect.newProxyInstance(targetType, truffleObject);
-            } else {
-                throw newClassCastException(truffleObject, targetType, null);
+                if (!TruffleOptions.AOT) {
+                    obj = JavaInteropReflect.newProxyInstance(clazz, foreignObject);
+                } else {
+                    obj = foreignObject;
+                }
             }
         }
-        return targetType.cast(obj);
-    }
-
-    private static boolean isSupportedMapKeyType(Class<?> keyType) {
-        return keyType == Object.class || keyType == String.class || keyType == Long.class || keyType == Integer.class || keyType == Number.class;
+        return clazz.cast(obj);
     }
 
     @TruffleBoundary
-    private static ClassCastException newClassCastException(Object value, Type targetType, String reason) {
-        String message = "Cannot convert " + (value == null ? "null" : value.getClass().getName()) + " to " + targetType.getTypeName() + (reason == null ? "" : ": " + reason);
-        return newClassCastException(message);
-    }
-
-    @TruffleBoundary
-    private static ClassCastException newInvalidKeyTypeException(Type targetType) {
-        String message = "Unsupported Map key type: " + targetType;
-        return newClassCastException(message);
-    }
-
-    @TruffleBoundary
-    private static ClassCastException newClassCastException(String message) {
+    private static ClassCastException newClassCastException(Object value, Type targetType) {
+        String message = (value == null ? "null" : value.getClass().getName()) + " is not assignable to " + targetType;
         EngineSupport engine = JavaInterop.ACCESSOR.engine();
         return engine != null ? engine.newClassCastException(message, null) : new ClassCastException(message);
     }
@@ -320,6 +297,34 @@ abstract class ToJavaNode extends Node {
             Object real = JavaInterop.findOriginalObject(raw);
             return toJava.execute(real, type, genericType, languageContext);
         }
+    }
+
+    @TruffleBoundary
+    static Object toJava(Object ret, Class<?> retType, Type genericType, Object languageContext) {
+        CompilerAsserts.neverPartOfCompilation();
+        final ToPrimitiveNode primitiveNode = ToPrimitiveNode.temporary();
+        Object primitiveRet = primitiveNode.toPrimitive(ret, retType);
+        if (primitiveRet != null) {
+            return primitiveRet;
+        }
+        if (ret instanceof TruffleObject) {
+            if (primitiveNode.isNull((TruffleObject) ret)) {
+                return null;
+            }
+        }
+        if (retType.isInstance(ret)) {
+            return ret;
+        }
+        if (ret instanceof TruffleObject) {
+            final TruffleObject truffleObject = (TruffleObject) ret;
+            if (retType.isInterface()) {
+                boolean hasKeys = primitiveNode.hasKeys(truffleObject);
+                boolean hasSize = primitiveNode.hasSize(truffleObject);
+                boolean isNull = primitiveNode.isNull(truffleObject);
+                return asJavaObject(retType, genericType, truffleObject, hasKeys, hasSize, isNull, languageContext);
+            }
+        }
+        return ret;
     }
 
     public static ToJavaNode create() {

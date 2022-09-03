@@ -1889,11 +1889,6 @@ public class PolyglotEngine {
         }
 
         @Override
-        public Object getCurrentHostContext() {
-            return null;
-        }
-
-        @Override
         public Object legacyTckEnter(Object vm) {
             return ((PolyglotEngine) vm).enter();
         }
