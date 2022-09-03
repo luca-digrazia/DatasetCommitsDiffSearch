@@ -58,7 +58,7 @@ import com.oracle.graal.options.*;
  * >"Optimized Interval Splitting in a Linear Scan Register Allocator"</a> by Christian Wimmer and
  * Hanspeter Moessenboeck.
  */
-class LinearScan {
+final class LinearScan {
 
     final TargetDescription target;
     final LIRGenerationResult res;
@@ -202,9 +202,7 @@ class LinearScan {
     }
 
     protected MoveResolver createMoveResolver() {
-        MoveResolver moveResolver = new MoveResolver(this);
-        assert moveResolver.checkEmpty();
-        return moveResolver;
+        return new MoveResolver(this);
     }
 
     public static boolean isVariableOrRegister(Value value) {
