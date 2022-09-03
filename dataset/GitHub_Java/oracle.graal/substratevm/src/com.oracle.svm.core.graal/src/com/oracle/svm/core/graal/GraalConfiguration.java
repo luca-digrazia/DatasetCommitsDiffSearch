@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -50,7 +48,7 @@ import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 
 import com.oracle.svm.core.config.ConfigurationValues;
-import com.oracle.svm.core.graal.code.SubstrateBackendFactory;
+import com.oracle.svm.core.graal.code.amd64.SubstrateAMD64Backend;
 import com.oracle.svm.core.graal.meta.SubstrateBasicLoweringProvider;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -86,7 +84,7 @@ public class GraalConfiguration {
     }
 
     public Backend createBackend(Providers newProviders) {
-        return SubstrateBackendFactory.get().newBackend(newProviders);
+        return new SubstrateAMD64Backend(newProviders);
     }
 
     public void runAdditionalCompilerPhases(@SuppressWarnings("unused") StructuredGraph graph, @SuppressWarnings("unused") Feature graalFeature) {
