@@ -73,29 +73,18 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
     private static final int KLASS = 0x00;
     private static final int ENUM_KLASS = 0x01;
 
-    private static final byte[] MAGIC_BYTES = {'B', 'I', 'G', 'V'};
+    static final int CURRENT_MAJOR_VERSION = 4;
+    static final int CURRENT_MINOR_VERSION = 0;
+
+    static final byte[] MAGIC_BYTES = {'B', 'I', 'G', 'V'};
 
     private final ConstantPool constantPool;
     private final ByteBuffer buffer;
     private final WritableByteChannel channel;
-    private final int versionMajor;
-    private final int versionMinor;
 
     AbstractGraphPrinter(WritableByteChannel channel) throws IOException {
-        this(channel, 4, 0);
-    }
-
-    private AbstractGraphPrinter(WritableByteChannel channel, int major, int minor) throws IOException {
-        if (major > 4) {
-            throw new IllegalArgumentException();
-        }
-        if (major == 4 && minor > 0) {
-            throw new IllegalArgumentException();
-        }
-        this.versionMajor = major;
-        this.versionMinor = minor;
-        this.constantPool = new ConstantPool();
-        this.buffer = ByteBuffer.allocateDirect(256 * 1024);
+        constantPool = new ConstantPool();
+        buffer = ByteBuffer.allocateDirect(256 * 1024);
         this.channel = channel;
         writeVersion();
     }
@@ -103,7 +92,7 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
     @SuppressWarnings("all")
     public void print(Graph graph, Map<Object, Object> properties, int id, String format, Object... args) throws IOException {
         writeByte(BEGIN_GRAPH);
-        if (versionMajor >= 3) {
+        if (CURRENT_MAJOR_VERSION >= 3) {
             writeInt(id);
             writeString(format);
             writeInt(args.length);
@@ -183,8 +172,8 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
 
     private void writeVersion() throws IOException {
         writeBytesRaw(MAGIC_BYTES);
-        writeByte(versionMajor);
-        writeByte(versionMinor);
+        writeByte(CURRENT_MAJOR_VERSION);
+        writeByte(CURRENT_MINOR_VERSION);
     }
 
     private void flush() throws IOException {
@@ -308,7 +297,7 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
                 writeByte(POOL_FIELD);
             } else if (object instanceof Signature) {
                 writeByte(POOL_SIGNATURE);
-            } else if (versionMajor >= 4 && object instanceof NodeSourcePosition) {
+            } else if (CURRENT_MAJOR_VERSION >= 4 && object instanceof NodeSourcePosition) {
                 writeByte(POOL_NODE_SOURCE_POSITION);
             } else {
                 if (findMethod(object) != null) {
@@ -461,7 +450,7 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
         } else if (object instanceof NodeClass) {
             NodeClass<?> nodeClass = (NodeClass<?>) object;
             writeByte(POOL_NODE_CLASS);
-            if (versionMajor >= 3) {
+            if (CURRENT_MAJOR_VERSION >= 3) {
                 writePoolObject(nodeClass.getJavaClass());
                 writeString(nodeClass.getNameTemplate());
             } else {
@@ -487,7 +476,7 @@ abstract class AbstractGraphPrinter<Graph, Node, Edges, Block> {
                 writePoolObject(signature.getParameterType(i, null).getName());
             }
             writePoolObject(signature.getReturnType(null).getName());
-        } else if (versionMajor >= 4 && object instanceof NodeSourcePosition) {
+        } else if (CURRENT_MAJOR_VERSION >= 4 && object instanceof NodeSourcePosition) {
             writeByte(POOL_NODE_SOURCE_POSITION);
             NodeSourcePosition pos = (NodeSourcePosition) object;
             ResolvedJavaMethod method = pos.getMethod();
