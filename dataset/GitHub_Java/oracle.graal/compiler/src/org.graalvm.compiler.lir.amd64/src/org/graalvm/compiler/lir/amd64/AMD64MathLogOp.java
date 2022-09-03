@@ -39,8 +39,6 @@ import static jdk.vm.ci.amd64.AMD64.xmm4;
 import static jdk.vm.ci.amd64.AMD64.xmm5;
 import static jdk.vm.ci.amd64.AMD64.xmm6;
 import static jdk.vm.ci.amd64.AMD64.xmm7;
-import static org.graalvm.compiler.lir.amd64.AMD64HotSpotHelper.pointerConstant;
-import static org.graalvm.compiler.lir.amd64.AMD64HotSpotHelper.recordExternalAddress;
 
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.asm.amd64.AMD64Address;
@@ -67,7 +65,7 @@ import jdk.vm.ci.amd64.AMD64;
  *    Result:  k*log(2) - log(B) + p(r) if |x-1| >= small value (2^-6)  and
  *             p(r) is a degree 7 polynomial
  *             -log(B) read from data table (high, low parts)
- *             Result is formed from high and low parts.
+ *             Result is formed from high and low parts
  *
  * Special cases:
  *  log(NaN) = quiet NaN, and raise invalid exception

@@ -1,7 +1,6 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2016, Intel Corporation. All rights reserved.
- * Intel Math Library (LIBM) Source Code
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Intel Corporation. Intel Math Library (LIBM) Source Code
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,15 +38,12 @@ import static jdk.vm.ci.amd64.AMD64.xmm4;
 import static jdk.vm.ci.amd64.AMD64.xmm5;
 import static jdk.vm.ci.amd64.AMD64.xmm6;
 import static jdk.vm.ci.amd64.AMD64.xmm7;
-import static org.graalvm.compiler.lir.amd64.AMD64HotSpotHelper.pointerConstant;
-import static org.graalvm.compiler.lir.amd64.AMD64HotSpotHelper.recordExternalAddress;
 
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.asm.amd64.AMD64Address;
 import org.graalvm.compiler.asm.amd64.AMD64Assembler.ConditionFlag;
 import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
 import org.graalvm.compiler.lir.LIRInstructionClass;
-import org.graalvm.compiler.lir.StubPort;
 import org.graalvm.compiler.lir.asm.ArrayDataPointerConstant;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
 
@@ -85,13 +81,6 @@ import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
  *    if x < -745.133219101941108420 then exp(x) underflow
  * </pre>
  */
-// @formatter:off
-@StubPort(path      = "src/hotspot/cpu/x86/macroAssembler_x86_exp.cpp",
-          lineStart = 0,
-          lineEnd   = 406,
-          commit    = "51b218842f001f1c4fd5ca7a02a2ba21e9e8a82c",
-          sha1      = "d21d2a3439932fdbdcf20274798d8488ae1153a9")
-// @formatter:on
 public final class AMD64MathExpOp extends AMD64MathIntrinsicUnaryOp {
 
     public static final LIRInstructionClass<AMD64MathExpOp> TYPE = LIRInstructionClass.create(AMD64MathExpOp.class);
@@ -279,7 +268,8 @@ public final class AMD64MathExpOp extends AMD64MathIntrinsicUnaryOp {
         masm.subl(rdx, rax);
         masm.subl(rax, 15504);
         masm.orl(rdx, rax);
-        masm.cmplAndJcc(rdx, Integer.MIN_VALUE, ConditionFlag.AboveEqual, block0, false);
+        masm.cmpl(rdx, Integer.MIN_VALUE);
+        masm.jcc(ConditionFlag.AboveEqual, block0);
         masm.mulpd(xmm1, xmm0);
         masm.addpd(xmm1, xmm6);
         masm.movapd(xmm7, xmm1);
@@ -325,7 +315,8 @@ public final class AMD64MathExpOp extends AMD64MathIntrinsicUnaryOp {
         masm.addsd(xmm0, xmm1);
         masm.addsd(xmm0, xmm6);
         masm.addl(rdx, 894);
-        masm.cmplAndJcc(rdx, 1916, ConditionFlag.Above, block1, false);
+        masm.cmpl(rdx, 1916);
+        masm.jcc(ConditionFlag.Above, block1);
         masm.mulsd(xmm0, xmm2);
         masm.addsd(xmm0, xmm2);
         masm.jmp(block13);
@@ -346,22 +337,26 @@ public final class AMD64MathExpOp extends AMD64MathIntrinsicUnaryOp {
         masm.psllq(xmm3, 4);
         masm.psubd(xmm2, xmm3);
         masm.mulsd(xmm0, xmm2);
-        masm.cmplAndJcc(rdx, 52, ConditionFlag.Greater, block2, false);
+        masm.cmpl(rdx, 52);
+        masm.jcc(ConditionFlag.Greater, block2);
         masm.pand(xmm4, xmm2);
         masm.paddd(xmm3, xmm6);
         masm.subsd(xmm2, xmm4);
         masm.addsd(xmm0, xmm2);
-        masm.cmplAndJcc(rcx, 1023, ConditionFlag.GreaterEqual, block3, false);
+        masm.cmpl(rcx, 1023);
+        masm.jcc(ConditionFlag.GreaterEqual, block3);
         masm.pextrw(rcx, xmm0, 3);
         masm.andl(rcx, 32768);
         masm.orl(rdx, rcx);
-        masm.cmplAndJcc(rdx, 0, ConditionFlag.Equal, block4, false);
+        masm.cmpl(rdx, 0);
+        masm.jcc(ConditionFlag.Equal, block4);
         masm.movapd(xmm6, xmm0);
         masm.addsd(xmm0, xmm4);
         masm.mulsd(xmm0, xmm3);
         masm.pextrw(rcx, xmm0, 3);
         masm.andl(rcx, 32752);
-        masm.cmplAndJcc(rcx, 0, ConditionFlag.Equal, block5, false);
+        masm.cmpl(rcx, 0);
+        masm.jcc(ConditionFlag.Equal, block5);
         masm.jmp(block13);
 
         masm.bind(block5);
@@ -390,7 +385,8 @@ public final class AMD64MathExpOp extends AMD64MathIntrinsicUnaryOp {
         masm.mulsd(xmm0, xmm3);
         masm.pextrw(rcx, xmm0, 3);
         masm.andl(rcx, 32752);
-        masm.cmplAndJcc(rcx, 32752, ConditionFlag.AboveEqual, block7, false);
+        masm.cmpl(rcx, 32752);
+        masm.jcc(ConditionFlag.AboveEqual, block7);
         masm.jmp(block13);
 
         masm.bind(block2);
@@ -401,9 +397,11 @@ public final class AMD64MathExpOp extends AMD64MathIntrinsicUnaryOp {
         masm.jmp(block6);
 
         masm.bind(block8);
-        masm.cmplAndJcc(rax, 2146435072, ConditionFlag.AboveEqual, block9, false);
+        masm.cmpl(rax, 2146435072);
+        masm.jcc(ConditionFlag.AboveEqual, block9);
         masm.movl(rax, new AMD64Address(rsp, 12));
-        masm.cmplAndJcc(rax, Integer.MIN_VALUE, ConditionFlag.AboveEqual, block10, false);
+        masm.cmpl(rax, Integer.MIN_VALUE);
+        masm.jcc(ConditionFlag.AboveEqual, block10);
         masm.movsd(xmm0, recordExternalAddress(crb, xmax));            // 0xffffffff, 0x7fefffff
         masm.mulsd(xmm0, xmm0);
 
@@ -419,11 +417,13 @@ public final class AMD64MathExpOp extends AMD64MathIntrinsicUnaryOp {
 
         masm.bind(block9);
         masm.movl(rdx, new AMD64Address(rsp, 8));
-        masm.cmplAndJcc(rax, 2146435072, ConditionFlag.Above, block11, false);
-        masm.cmplAndJcc(rdx, 0, ConditionFlag.NotEqual, block11, false);
-
+        masm.cmpl(rax, 2146435072);
+        masm.jcc(ConditionFlag.Above, block11);
+        masm.cmpl(rdx, 0);
+        masm.jcc(ConditionFlag.NotEqual, block11);
         masm.movl(rax, new AMD64Address(rsp, 12));
-        masm.cmplAndJcc(rax, 2146435072, ConditionFlag.NotEqual, block12, false);
+        masm.cmpl(rax, 2146435072);
+        masm.jcc(ConditionFlag.NotEqual, block12);
         masm.movsd(xmm0, recordExternalAddress(crb, inf));             // 0x00000000, 0x7ff00000
         masm.jmp(block13);
 
@@ -439,7 +439,8 @@ public final class AMD64MathExpOp extends AMD64MathIntrinsicUnaryOp {
         masm.bind(block0);
         masm.movl(rax, new AMD64Address(rsp, 12));
         masm.andl(rax, 2147483647);
-        masm.cmplAndJcc(rax, 1083179008, ConditionFlag.AboveEqual, block8, false);
+        masm.cmpl(rax, 1083179008);
+        masm.jcc(ConditionFlag.AboveEqual, block8);
         masm.movsd(new AMD64Address(rsp, 8), xmm0);
         masm.addsd(xmm0, recordExternalAddress(crb, oneVal));          // 0x00000000, 0x3ff00000
         masm.jmp(block13);

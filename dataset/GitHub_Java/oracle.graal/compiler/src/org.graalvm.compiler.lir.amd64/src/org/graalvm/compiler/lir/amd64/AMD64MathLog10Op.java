@@ -39,8 +39,6 @@ import static jdk.vm.ci.amd64.AMD64.xmm4;
 import static jdk.vm.ci.amd64.AMD64.xmm5;
 import static jdk.vm.ci.amd64.AMD64.xmm6;
 import static jdk.vm.ci.amd64.AMD64.xmm7;
-import static org.graalvm.compiler.lir.amd64.AMD64HotSpotHelper.pointerConstant;
-import static org.graalvm.compiler.lir.amd64.AMD64HotSpotHelper.recordExternalAddress;
 
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.asm.amd64.AMD64Address;
@@ -66,7 +64,7 @@ import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
  *    Result:  k*log10(2) - log(B) + p(r)
  *             p(r) is a degree 7 polynomial
  *             -log(B) read from data table (high, low parts)
- *             Result is formed from high and low parts.
+ *             Result is formed from high and low parts
  *
  * Special cases:
  *  log10(0) = -INF with divide-by-zero exception raised
