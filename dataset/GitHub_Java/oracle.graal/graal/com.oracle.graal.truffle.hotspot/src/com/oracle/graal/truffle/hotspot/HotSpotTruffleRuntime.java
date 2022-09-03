@@ -40,8 +40,6 @@ import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
@@ -187,18 +185,14 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     }
 
     private static CompilationResult compileMethod(ResolvedJavaMethod javaMethod) {
-        HotSpotProviders providers = getGraalProviders();
-        SuitesProvider suitesProvider = providers.getSuites();
+        Providers providers = getGraalProviders();
+        MetaAccessProvider metaAccess = providers.getMetaAccess();
+        SuitesProvider suitesProvider = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getSuites();
         Suites suites = suitesProvider.createSuites();
         LIRSuites lirSuites = suitesProvider.createLIRSuites();
         removeInliningPhase(suites);
         StructuredGraph graph = new StructuredGraph(javaMethod, AllowAssumptions.NO);
-
-        MetaAccessProvider metaAccess = providers.getMetaAccess();
-        Plugins plugins = new Plugins(new InvocationPlugins(metaAccess));
-        GraphBuilderConfiguration config = GraphBuilderConfiguration.getEagerDefault(plugins);
-        new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(), providers.getConstantReflection(), config, OptimisticOptimizations.ALL, null).apply(graph);
-
+        new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(), providers.getConstantReflection(), GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.ALL, null).apply(graph);
         PhaseSuite<HighTierContext> graphBuilderSuite = getGraphBuilderSuite(suitesProvider);
         CallingConvention cc = getCallingConvention(providers.getCodeCache(), Type.JavaCallee, graph.method(), false);
         Backend backend = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend();
@@ -207,9 +201,9 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
                         suites, lirSuites, new CompilationResult(), factory);
     }
 
-    private static HotSpotProviders getGraalProviders() {
+    private static Providers getGraalProviders() {
         RuntimeProvider runtimeProvider = Graal.getRequiredCapability(RuntimeProvider.class);
-        return (HotSpotProviders) runtimeProvider.getHostBackend().getProviders();
+        return runtimeProvider.getHostBackend().getProviders();
     }
 
     private static PhaseSuite<HighTierContext> getGraphBuilderSuite(SuitesProvider suitesProvider) {
@@ -248,7 +242,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
             try {
                 future.get();
             } catch (ExecutionException e) {
-                if (TruffleCompilationExceptionsAreThrown.getValue() && !(e.getCause() instanceof BailoutException) && !((BailoutException) e.getCause()).isPermanent()) {
+                if (TruffleCompilationExceptionsAreThrown.getValue() && !(e.getCause() instanceof BailoutException && !((BailoutException) e.getCause()).isPermanent())) {
                     throw new RuntimeException(e.getCause());
                 } else {
                     // silently ignored
