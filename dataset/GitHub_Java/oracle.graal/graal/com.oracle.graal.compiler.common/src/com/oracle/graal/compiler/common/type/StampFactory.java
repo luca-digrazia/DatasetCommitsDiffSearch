@@ -243,7 +243,7 @@ public class StampFactory {
             }
             return type.getSuperclass().getArrayClass(); // arrayType.getSuperClass() == Object type
         }
-        if (type.isInterface() && !type.isTrustedInterfaceType()) {
+        if (type.isInterface()) {
             return null;
         }
         return type;

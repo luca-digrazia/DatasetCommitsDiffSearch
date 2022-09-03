@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,6 +21,8 @@
  * questions.
  */
 package com.oracle.graal.phases.common;
+
+import static com.oracle.graal.graph.util.CollectionsAccess.*;
 
 import java.util.*;
 
@@ -102,39 +104,39 @@ public class ConditionalEliminationPhase extends Phase {
     public static class State extends MergeableState<State> implements Cloneable {
 
         private Map<ValueNode, ResolvedJavaType> knownTypes;
-        private Set<ValueNode> knownNonNull;
-        private Set<ValueNode> knownNull;
+        private HashSet<ValueNode> knownNonNull;
+        private HashSet<ValueNode> knownNull;
         private Map<LogicNode, ValueNode> trueConditions;
         private Map<LogicNode, ValueNode> falseConditions;
         private Map<ValueNode, GuardedStamp> valueConstraints;
 
         public State() {
-            this.knownTypes = Node.newIdentityMap();
-            this.knownNonNull = Node.newSet();
-            this.knownNull = Node.newSet();
-            this.trueConditions = Node.newIdentityMap();
-            this.falseConditions = Node.newIdentityMap();
-            this.valueConstraints = Node.newIdentityMap();
+            this.knownTypes = newNodeIdentityMap();
+            this.knownNonNull = new HashSet<>();
+            this.knownNull = new HashSet<>();
+            this.trueConditions = newNodeIdentityMap();
+            this.falseConditions = newNodeIdentityMap();
+            this.valueConstraints = newNodeIdentityMap();
         }
 
         public State(State other) {
-            this.knownTypes = Node.newIdentityMap(other.knownTypes);
-            this.knownNonNull = Node.newSet(other.knownNonNull);
-            this.knownNull = Node.newSet(other.knownNull);
-            this.trueConditions = Node.newIdentityMap(other.trueConditions);
-            this.falseConditions = Node.newIdentityMap(other.falseConditions);
-            this.valueConstraints = Node.newIdentityMap(other.valueConstraints);
+            this.knownTypes = newNodeIdentityMap(other.knownTypes);
+            this.knownNonNull = new HashSet<>(other.knownNonNull);
+            this.knownNull = new HashSet<>(other.knownNull);
+            this.trueConditions = newNodeIdentityMap(other.trueConditions);
+            this.falseConditions = newNodeIdentityMap(other.falseConditions);
+            this.valueConstraints = newNodeIdentityMap(other.valueConstraints);
         }
 
         @Override
         public boolean merge(MergeNode merge, List<State> withStates) {
-            Map<ValueNode, ResolvedJavaType> newKnownTypes = Node.newIdentityMap();
-            Map<LogicNode, ValueNode> newTrueConditions = Node.newIdentityMap();
-            Map<LogicNode, ValueNode> newFalseConditions = Node.newIdentityMap();
-            Map<ValueNode, GuardedStamp> newValueConstraints = Node.newIdentityMap();
+            Map<ValueNode, ResolvedJavaType> newKnownTypes = newNodeIdentityMap();
+            Map<LogicNode, ValueNode> newTrueConditions = newNodeIdentityMap();
+            Map<LogicNode, ValueNode> newFalseConditions = newNodeIdentityMap();
+            Map<ValueNode, GuardedStamp> newValueConstraints = newNodeIdentityMap();
 
-            Set<ValueNode> newKnownNull = Node.newSet(knownNull);
-            Set<ValueNode> newKnownNonNull = Node.newSet(knownNonNull);
+            HashSet<ValueNode> newKnownNull = new HashSet<>(knownNull);
+            HashSet<ValueNode> newKnownNonNull = new HashSet<>(knownNonNull);
             for (State state : withStates) {
                 newKnownNull.retainAll(state.knownNull);
                 newKnownNonNull.retainAll(state.knownNonNull);
@@ -410,11 +412,7 @@ public class ConditionalEliminationPhase extends Phase {
 
         private void registerControlSplitInfo(Node pred, BeginNode begin) {
             assert pred != null && begin != null;
-            /*
-             * We does not create value proxies for values it may connect accross loop exit node so
-             * we have to clear the state at loop exits if the graph needs value proxies
-             */
-            if (begin instanceof LoopExitNode && begin.graph().hasValueProxies()) {
+            if (begin instanceof LoopExitNode) {
                 state.clear();
             }
 
@@ -557,7 +555,7 @@ public class ConditionalEliminationPhase extends Phase {
                 GuardedStamp cstamp = state.valueConstraints.get(equals.getY());
                 if (cstamp != null && equals.getX().isConstant()) {
                     IntegerStamp stamp = (IntegerStamp) cstamp.getStamp();
-                    if (!stamp.contains(equals.getX().asJavaConstant().asLong())) {
+                    if (!stamp.contains(equals.getX().asConstant().asLong())) {
                         // x != n is true if n is outside the range of the stamp
                         existingGuard = cstamp.getGuard();
                         Debug.log("existing guard %s %1s proves !%1s", existingGuard, existingGuard.condition(), guard.condition());
@@ -676,7 +674,7 @@ public class ConditionalEliminationPhase extends Phase {
                 }
 
                 // Collect the guards which have produced conditional stamps.
-                Set<GuardNode> provers = Node.newSet();
+                HashSet<GuardNode> provers = new HashSet<>();
                 for (Map.Entry<ValueNode, GuardedStamp> e : state.valueConstraints.entrySet()) {
                     provers.add(e.getValue().getGuard());
                 }
@@ -718,7 +716,7 @@ public class ConditionalEliminationPhase extends Phase {
                     PiNode piNode;
                     if (isNull) {
                         ConstantNode nullObject = ConstantNode.defaultForKind(Kind.Object, graph);
-                        piNode = graph.unique(PiNode.create(nullObject, StampFactory.forConstant(nullObject.asJavaConstant(), metaAccess), replacementAnchor.asNode()));
+                        piNode = graph.unique(PiNode.create(nullObject, StampFactory.forConstant(nullObject.getValue(), metaAccess), replacementAnchor.asNode()));
                     } else {
                         piNode = graph.unique(PiNode.create(object, StampFactory.declared(type, nonNull, true), replacementAnchor.asNode()));
                     }
@@ -819,7 +817,7 @@ public class ConditionalEliminationPhase extends Phase {
                     if (receiver != null && (callTarget.invokeKind() == InvokeKind.Interface || callTarget.invokeKind() == InvokeKind.Virtual)) {
                         ResolvedJavaType type = state.getNodeType(receiver);
                         if (!Objects.equals(type, StampTool.typeOrNull(receiver))) {
-                            ResolvedJavaMethod method = type.resolveConcreteMethod(callTarget.targetMethod(), invoke.getContextType());
+                            ResolvedJavaMethod method = type.resolveMethod(callTarget.targetMethod(), invoke.getContextType());
                             if (method != null) {
                                 if (method.canBeStaticallyBound() || type.isFinal()) {
                                     callTarget.setInvokeKind(InvokeKind.Special);

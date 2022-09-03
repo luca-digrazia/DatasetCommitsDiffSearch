@@ -46,7 +46,7 @@ public class UnsafeTypeCastMacroNode extends NeverPartOfCompilationNode implemen
     private static final int ARGUMENT_COUNT = 4;
 
     public static UnsafeTypeCastMacroNode create(Invoke invoke) {
-        return new UnsafeTypeCastMacroNode(invoke);
+        return USE_GENERATED_NODES ? new UnsafeTypeCastMacroNodeGen(invoke) : new UnsafeTypeCastMacroNode(invoke);
     }
 
     protected UnsafeTypeCastMacroNode(Invoke invoke) {
@@ -61,16 +61,16 @@ public class UnsafeTypeCastMacroNode extends NeverPartOfCompilationNode implemen
         if (classArgument.isConstant() && nonNullArgument.isConstant()) {
             ValueNode objectArgument = arguments.get(OBJECT_ARGUMENT_INDEX);
             ValueNode conditionArgument = arguments.get(CONDITION_ARGUMENT_INDEX);
-            ResolvedJavaType lookupJavaType = tool.getConstantReflection().asJavaType(classArgument.asJavaConstant());
+            ResolvedJavaType lookupJavaType = tool.getConstantReflection().asJavaType(classArgument.asConstant());
             tool.addToWorkList(usages());
             if (lookupJavaType == null) {
                 replaceAtUsages(objectArgument);
                 GraphUtil.removeFixedWithUnusedInputs(this);
             } else {
-                Stamp piStamp = StampFactory.declaredTrusted(lookupJavaType, nonNullArgument.asJavaConstant().asInt() != 0);
+                Stamp stamp = StampFactory.declared(lookupJavaType, nonNullArgument.asConstant().asInt() != 0, true);
                 ConditionAnchorNode valueAnchorNode = graph().add(
                                 ConditionAnchorNode.create(CompareNode.createCompareNode(graph(), Condition.EQ, conditionArgument, ConstantNode.forBoolean(true, graph()))));
-                PiNode piCast = graph().unique(PiNode.create(objectArgument, piStamp, valueAnchorNode));
+                PiNode piCast = graph().unique(PiNode.create(objectArgument, stamp, valueAnchorNode));
                 replaceAtUsages(piCast);
                 graph().replaceFixedWithFixed(this, valueAnchorNode);
             }

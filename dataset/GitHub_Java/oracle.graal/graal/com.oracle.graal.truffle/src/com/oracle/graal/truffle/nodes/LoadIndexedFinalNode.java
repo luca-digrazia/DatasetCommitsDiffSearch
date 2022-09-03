@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.truffle.nodes;
 
-import java.lang.reflect.*;
-
-import sun.misc.*;
-
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
@@ -35,38 +35,39 @@ import com.oracle.graal.nodes.type.*;
 /**
  * @see LoadIndexedNode
  */
-public final class LoadIndexedFinalNode extends AccessIndexedNode implements Canonicalizable {
+@NodeInfo
+public class LoadIndexedFinalNode extends AccessIndexedNode implements Canonicalizable {
 
     /**
      * Creates a new {@link LoadIndexedFinalNode}.
-     * 
+     *
      * @param array the instruction producing the array
      * @param index the instruction producing the index
      * @param elementKind the element type
      */
-    public LoadIndexedFinalNode(ValueNode array, ValueNode index, Kind elementKind) {
+    public static LoadIndexedFinalNode create(ValueNode array, ValueNode index, Kind elementKind) {
+        return USE_GENERATED_NODES ? new LoadIndexedFinalNodeGen(array, index, elementKind) : new LoadIndexedFinalNode(array, index, elementKind);
+    }
+
+    protected LoadIndexedFinalNode(ValueNode array, ValueNode index, Kind elementKind) {
         super(createStamp(array, elementKind), array, index, elementKind);
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (array().isConstant() && !array().isNullConstant() && index().isConstant()) {
-            Object array = array().asConstant().asObject();
-            long index = index().asConstant().asLong();
-            if (index >= 0 && index < Array.getLength(array)) {
-                int arrayBaseOffset = Unsafe.getUnsafe().arrayBaseOffset(array.getClass());
-                int arrayIndexScale = Unsafe.getUnsafe().arrayIndexScale(array.getClass());
-                Constant constant = tool.runtime().readUnsafeConstant(elementKind(), array, arrayBaseOffset + index * arrayIndexScale, elementKind() == Kind.Object);
-                return ConstantNode.forConstant(constant, tool.runtime(), graph());
+    public Node canonical(CanonicalizerTool tool) {
+        if (array().isConstant() && index().isConstant()) {
+            Constant constant = tool.getConstantReflection().readArrayElement(array().asConstant(), index().asConstant().asInt());
+            if (constant != null) {
+                return ConstantNode.forConstant(constant, tool.getMetaAccess());
             }
         }
         return this;
     }
 
     private static Stamp createStamp(ValueNode array, Kind kind) {
-        ResolvedJavaType type = ObjectStamp.typeOrNull(array);
+        ResolvedJavaType type = StampTool.typeOrNull(array);
         if (kind == Kind.Object && type != null) {
-            return StampFactory.declared(type.getComponentType());
+            return StampFactory.declared(type.getComponentType(), false, true);
         } else {
             return StampFactory.forKind(kind);
         }
@@ -79,7 +80,7 @@ public final class LoadIndexedFinalNode extends AccessIndexedNode implements Can
 
     @Override
     public void lower(LoweringTool tool) {
-        LoadIndexedNode loadIndexedNode = graph().add(new LoadIndexedNode(array(), index(), elementKind()));
+        LoadIndexedNode loadIndexedNode = graph().add(LoadIndexedNode.create(array(), index(), elementKind()));
         graph().replaceFixedWithFixed(this, loadIndexedNode);
         loadIndexedNode.lower(tool);
     }
