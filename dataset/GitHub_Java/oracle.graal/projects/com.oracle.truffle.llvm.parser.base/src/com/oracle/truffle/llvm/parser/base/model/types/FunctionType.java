@@ -122,19 +122,7 @@ public class FunctionType implements Type, ValueSymbol {
     public boolean equals(Object obj) {
         if (obj instanceof FunctionType) {
             FunctionType other = (FunctionType) obj;
-            if (!Objects.equals(type, other.type)) {
-                return false;
-            }
-            if (!Arrays.equals(args, other.args)) {
-                return false;
-            }
-            if (isVarArg != other.isVarArg) {
-                return false;
-            }
-            if (!Objects.equals(name, other.name)) {
-                return false;
-            }
-            return true;
+            return Arrays.equals(args, other.args) && isVarArg == other.isVarArg && Objects.equals(type, other.type);
         }
         return false;
     }
