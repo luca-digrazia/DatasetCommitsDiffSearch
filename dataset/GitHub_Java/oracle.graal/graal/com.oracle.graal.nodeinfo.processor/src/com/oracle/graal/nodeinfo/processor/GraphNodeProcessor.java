@@ -22,21 +22,19 @@
  */
 package com.oracle.graal.nodeinfo.processor;
 
+import static java.util.Collections.*;
+
 import java.io.*;
 import java.util.*;
+import java.util.stream.*;
 
 import javax.annotation.processing.*;
 import javax.lang.model.*;
 import javax.lang.model.element.*;
-import javax.lang.model.type.*;
 import javax.lang.model.util.*;
 import javax.tools.Diagnostic.Kind;
 
 import com.oracle.graal.nodeinfo.*;
-import com.oracle.truffle.dsl.processor.*;
-import com.oracle.truffle.dsl.processor.java.*;
-import com.oracle.truffle.dsl.processor.java.model.*;
-import com.oracle.truffle.dsl.processor.java.transform.*;
 
 @SupportedSourceVersion(SourceVersion.RELEASE_8)
 @SupportedAnnotationTypes({"com.oracle.graal.nodeinfo.NodeInfo"})
@@ -46,19 +44,56 @@ public class GraphNodeProcessor extends AbstractProcessor {
         return SourceVersion.latest();
     }
 
+    /**
+     * Node class currently being processed.
+     */
+    private Element scope;
+
+    public static boolean isEnclosedIn(Element e, Element scopeElement) {
+        List<Element> elementHierarchy = getElementHierarchy(e);
+        return elementHierarchy.contains(scopeElement);
+    }
+
     void errorMessage(Element element, String format, Object... args) {
-        processingEnv.getMessager().printMessage(Kind.ERROR, String.format(format, args), element);
+        message(Kind.ERROR, element, format, args);
+    }
+
+    void message(Kind kind, Element element, String format, Object... args) {
+        if (scope != null && !isEnclosedIn(element, scope)) {
+            // See https://bugs.eclipse.org/bugs/show_bug.cgi?id=428357#c1
+            List<Element> elementHierarchy = getElementHierarchy(element);
+            reverse(elementHierarchy);
+            String loc = elementHierarchy.stream().filter(e -> e.getKind() != ElementKind.PACKAGE).map(Object::toString).collect(Collectors.joining("."));
+            processingEnv.getMessager().printMessage(kind, String.format(loc + ": " + format, args), scope);
+        } else {
+            processingEnv.getMessager().printMessage(kind, String.format(format, args), element);
+        }
+    }
+
+    private static List<Element> getElementHierarchy(Element e) {
+        List<Element> elements = new ArrayList<>();
+        elements.add(e);
+
+        Element enclosing = e.getEnclosingElement();
+        while (enclosing != null && enclosing.getKind() != ElementKind.PACKAGE) {
+            elements.add(enclosing);
+            enclosing = enclosing.getEnclosingElement();
+        }
+        if (enclosing != null) {
+            elements.add(enclosing);
+        }
+        return elements;
     }
 
     /**
      * Bugs in an annotation processor can cause silent failure so try to report any exception
      * throws as errors.
      */
-    private void reportException(Element element, Throwable t) {
+    private void reportException(Kind kind, Element element, Throwable t) {
         StringWriter buf = new StringWriter();
         t.printStackTrace(new PrintWriter(buf));
         buf.toString();
-        errorMessage(element, "Exception thrown during processing: %s", buf.toString());
+        message(kind, element, "Exception thrown during processing: %s", buf.toString());
     }
 
     ProcessingEnvironment getProcessingEnv() {
@@ -87,9 +122,10 @@ public class GraphNodeProcessor extends AbstractProcessor {
             return false;
         }
 
-        GraphNodeGenerator gen = new GraphNodeGenerator(this);
+        GraphNodeVerifier verifier = new GraphNodeVerifier(this);
 
         for (Element element : roundEnv.getElementsAnnotatedWith(NodeInfo.class)) {
+            scope = element;
             try {
                 if (!isNodeType(element)) {
                     errorMessage(element, "%s can only be applied to Node subclasses", NodeInfo.class.getSimpleName());
@@ -104,27 +140,35 @@ public class GraphNodeProcessor extends AbstractProcessor {
 
                 TypeElement typeElement = (TypeElement) element;
 
-                if (typeElement.getModifiers().contains(Modifier.FINAL)) {
-                    errorMessage(element, "%s annotated class must not be final", NodeInfo.class.getSimpleName());
-                    continue;
+                Set<Modifier> modifiers = typeElement.getModifiers();
+                if (!modifiers.contains(Modifier.FINAL) && !modifiers.contains(Modifier.ABSTRACT)) {
+                    // TODO(thomaswue): Reenable this check.
+                    // errorMessage(element, "%s annotated class must be either final or abstract",
+                    // NodeInfo.class.getSimpleName());
+                    // continue;
+                }
+                boolean found = false;
+                for (Element e : typeElement.getEnclosedElements()) {
+                    if (e.getKind() == ElementKind.FIELD) {
+                        if (e.getSimpleName().toString().equals("TYPE")) {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if (!found) {
+                    errorMessage(element, "%s annotated class must have a field named TYPE", NodeInfo.class.getSimpleName());
                 }
 
-                if (!typeElement.equals(gen.Node) && !typeElement.getModifiers().contains(Modifier.ABSTRACT)) {
-                    CodeCompilationUnit unit = gen.process(typeElement);
-                    unit.setGeneratorElement(typeElement);
-
-                    DeclaredType overrideType = (DeclaredType) ElementUtils.getType(processingEnv, Override.class);
-                    DeclaredType unusedType = (DeclaredType) ElementUtils.getType(processingEnv, SuppressWarnings.class);
-                    unit.accept(new GenerateOverrideVisitor(overrideType), null);
-                    unit.accept(new FixWarningsVisitor(processingEnv, unusedType, overrideType), null);
-                    unit.accept(new CodeWriter(processingEnv, typeElement), null);
+                if (!typeElement.equals(verifier.Node) && !modifiers.contains(Modifier.ABSTRACT)) {
+                    verifier.verify(typeElement);
                 }
             } catch (ElementException ee) {
                 errorMessage(ee.element, ee.getMessage());
             } catch (Throwable t) {
-                if (!isBug367599(t)) {
-                    reportException(element, t);
-                }
+                reportException(isBug367599(t) ? Kind.NOTE : Kind.ERROR, element, t);
+            } finally {
+                scope = null;
             }
         }
         return false;
@@ -135,10 +179,12 @@ public class GraphNodeProcessor extends AbstractProcessor {
      * href="https://bugs.eclipse.org/bugs/show_bug.cgi?id=367599">Bug 367599</a>.
      */
     public static boolean isBug367599(Throwable t) {
-        for (StackTraceElement ste : t.getStackTrace()) {
-            if (ste.toString().contains("org.eclipse.jdt.internal.apt.pluggable.core.filer.IdeFilerImpl.create")) {
-                // See: https://bugs.eclipse.org/bugs/show_bug.cgi?id=367599
-                return true;
+        if (t instanceof FilerException) {
+            for (StackTraceElement ste : t.getStackTrace()) {
+                if (ste.toString().contains("org.eclipse.jdt.internal.apt.pluggable.core.filer.IdeFilerImpl.create")) {
+                    // See: https://bugs.eclipse.org/bugs/show_bug.cgi?id=367599
+                    return true;
+                }
             }
         }
         if (t.getCause() != null) {
