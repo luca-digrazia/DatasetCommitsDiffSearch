@@ -62,34 +62,46 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
     public static final int TRACELEVEL_STATE = 2;
 
     protected F frameState;
+    protected BytecodeStream stream;
+    protected GraphBuilderConfiguration graphBuilderConfig;
+    protected ResolvedJavaMethod method;
     protected BciBlock currentBlock;
-
-    protected final BytecodeStream stream;
-    protected final GraphBuilderConfiguration graphBuilderConfig;
-    protected final ResolvedJavaMethod method;
-    protected final ProfilingInfo profilingInfo;
-    protected final OptimisticOptimizations optimisticOpts;
-    protected final ConstantPool constantPool;
-    protected final MetaAccessProvider metaAccess;
+    protected ProfilingInfo profilingInfo;
+    protected OptimisticOptimizations optimisticOpts;
+    protected ConstantPool constantPool;
+    private final MetaAccessProvider metaAccess;
+    protected int entryBCI;
 
     /**
      * Meters the number of actual bytecodes parsed.
      */
     public static final DebugMetric BytecodesParsed = Debug.metric("BytecodesParsed");
 
-    public AbstractBytecodeParser(MetaAccessProvider metaAccess, ResolvedJavaMethod method, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts) {
+    public AbstractBytecodeParser(MetaAccessProvider metaAccess, ResolvedJavaMethod method, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, F frameState,
+                    BytecodeStream stream, ProfilingInfo profilingInfo, ConstantPool constantPool, int entryBCI) {
+        this.frameState = frameState;
         this.graphBuilderConfig = graphBuilderConfig;
         this.optimisticOpts = optimisticOpts;
         this.metaAccess = metaAccess;
-        this.stream = new BytecodeStream(method.getCode());
-        this.profilingInfo = method.getProfilingInfo();
-        this.constantPool = method.getConstantPool();
+        this.stream = stream;
+        this.profilingInfo = profilingInfo;
+        this.constantPool = constantPool;
+        this.entryBCI = entryBCI;
         this.method = method;
         assert metaAccess != null;
     }
 
+    /**
+     * Start the bytecode parser.
+     */
+    protected abstract void build();
+
     public void setCurrentFrameState(F frameState) {
         this.frameState = frameState;
+    }
+
+    public final void setStream(BytecodeStream stream) {
+        this.stream = stream;
     }
 
     protected final BytecodeStream getStream() {
@@ -688,10 +700,7 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
         Kind kind = field.getKind();
         T receiver = frameState.apop();
         if ((field instanceof ResolvedJavaField) && ((ResolvedJavaField) field).getDeclaringClass().isInitialized()) {
-            GraphBuilderPlugins.LoadFieldPlugin loadFieldPlugin = this.graphBuilderConfig.getLoadFieldPlugin();
-            if (loadFieldPlugin == null || !loadFieldPlugin.apply((GraphBuilderContext) this, (ValueNode) receiver, (ResolvedJavaField) field)) {
-                appendOptimizedLoadField(kind, genLoadField(receiver, (ResolvedJavaField) field));
-            }
+            appendOptimizedLoadField(kind, genLoadField(receiver, (ResolvedJavaField) field));
         } else {
             handleUnresolvedLoadField(field, receiver);
         }
@@ -883,7 +892,7 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
     protected abstract T append(T v);
 
     protected boolean isNeverExecutedCode(double probability) {
-        return probability == 0 && optimisticOpts.removeNeverExecutedCode();
+        return probability == 0 && optimisticOpts.removeNeverExecutedCode() && entryBCI == StructuredGraph.INVOCATION_ENTRY_BCI;
     }
 
     protected double branchProbability() {
@@ -894,7 +903,7 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
             probability = 0.5;
         }
 
-        if (!optimisticOpts.removeNeverExecutedCode()) {
+        if (!removeNeverExecutedCode()) {
             if (probability == 0) {
                 probability = 0.0000001;
             } else if (probability == 1) {
@@ -903,6 +912,12 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
         }
         return probability;
     }
+
+    protected boolean removeNeverExecutedCode() {
+        return optimisticOpts.removeNeverExecutedCode() && entryBCI == StructuredGraph.INVOCATION_ENTRY_BCI;
+    }
+
+    protected abstract void processBlock(BciBlock block);
 
     protected abstract void iterateBytecodesForBlock(BciBlock block);
 
@@ -1157,4 +1172,5 @@ public abstract class AbstractBytecodeParser<T extends KindProvider, F extends A
         }
         Debug.log("%s", sb);
     }
+
 }
