@@ -151,12 +151,16 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
         long timePartialEvaluationFinished = System.nanoTime();
         int nodeCountPartialEval = graph.getNodeCount();
-        InstalledCode compiledMethod = compileMethodHelper(graph, assumptions, compilable.toString(), compilable.getSpeculationLog(), compilable.installedCode);
+        InstalledCode compiledMethod = compileMethodHelper(graph, assumptions, compilable.toString(), compilable.getSpeculationLog());
         long timeCompilationFinished = System.nanoTime();
         int nodeCountLowered = graph.getNodeCount();
 
-        if (!compiledMethod.isValid()) {
+        if (compiledMethod == null) {
             throw new BailoutException("Could not install method, code cache is full!");
+        }
+
+        if (!compiledMethod.isValid()) {
+            return null;
         }
 
         if (TraceTruffleCompilation.getValue()) {
@@ -184,7 +188,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
         return sourceSection != null ? sourceSection.toString() : "n/a";
     }
 
-    public InstalledCode compileMethodHelper(StructuredGraph graph, Assumptions assumptions, String name, SpeculationLog speculationLog, InstalledCode predefinedInstalledCode) {
+    public InstalledCode compileMethodHelper(StructuredGraph graph, Assumptions assumptions, String name, SpeculationLog speculationLog) {
         try (Scope s = Debug.scope("TruffleFinal")) {
             Debug.dump(graph, "After TruffleTier");
         } catch (Throwable e) {
@@ -220,7 +224,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
         InstalledCode installedCode;
         try (Scope s = Debug.scope("CodeInstall", providers.getCodeCache()); TimerCloseable a = CodeInstallationTime.start()) {
-            installedCode = providers.getCodeCache().addMethod(graph.method(), result, speculationLog, predefinedInstalledCode);
+            installedCode = providers.getCodeCache().addMethod(graph.method(), result, speculationLog);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }

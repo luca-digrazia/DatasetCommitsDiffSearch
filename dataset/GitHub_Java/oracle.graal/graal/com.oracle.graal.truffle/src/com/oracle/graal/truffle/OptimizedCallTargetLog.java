@@ -64,24 +64,24 @@ public final class OptimizedCallTargetLog {
     }
 
     private static void logInliningDecisionRecursive(TruffleInliningResult result, int depth) {
-        List<OptimizedDirectCallNode> callNodes = searchCallNodes(result.getCallTarget());
-        for (OptimizedDirectCallNode callNode : callNodes) {
+        List<OptimizedCallNode> callNodes = searchCallNodes(result.getCallTarget());
+        for (OptimizedCallNode callNode : callNodes) {
             TruffleInliningProfile profile = result.getProfiles().get(callNode);
             boolean inlined = result.isInlined(callNode);
             String msg = inlined ? "inline success" : "inline failed";
-            logInlinedImpl(msg, callNode, profile, depth);
+            logInlinedImpl(msg, profile, depth);
             if (profile.getRecursiveResult() != null && inlined) {
                 logInliningDecisionRecursive(profile.getRecursiveResult(), depth + 1);
             }
         }
     }
 
-    private static List<OptimizedDirectCallNode> searchCallNodes(final OptimizedCallTarget target) {
-        final List<OptimizedDirectCallNode> callNodes = new ArrayList<>();
+    private static List<OptimizedCallNode> searchCallNodes(final OptimizedCallTarget target) {
+        final List<OptimizedCallNode> callNodes = new ArrayList<>();
         target.getRootNode().accept(new NodeVisitor() {
             public boolean visit(Node node) {
-                if (node instanceof OptimizedDirectCallNode) {
-                    callNodes.add((OptimizedDirectCallNode) node);
+                if (node instanceof OptimizedCallNode) {
+                    callNodes.add((OptimizedCallNode) node);
                 }
                 return true;
             }
@@ -89,13 +89,13 @@ public final class OptimizedCallTargetLog {
         return callNodes;
     }
 
-    private static void logInlinedImpl(String status, OptimizedDirectCallNode callNode, TruffleInliningProfile profile, int depth) {
+    private static void logInlinedImpl(String status, TruffleInliningProfile profile, int depth) {
         Map<String, Object> properties = new LinkedHashMap<>();
-        addASTSizeProperty(callNode.getCurrentCallTarget(), properties);
+        addASTSizeProperty(profile.getCallNode().getCurrentCallTarget(), properties);
         if (profile != null) {
             properties.putAll(profile.getDebugProperties());
         }
-        log((depth * 2), status, callNode.getCurrentCallTarget().toString(), properties);
+        log((depth * 2), status, profile.getCallNode().getCurrentCallTarget().toString(), properties);
     }
 
     private static void logInliningStart(OptimizedCallTarget target) {
@@ -169,8 +169,8 @@ public final class OptimizedCallTargetLog {
                         String msg = kind == NodeCost.MEGAMORPHIC ? "megamorphic" : "polymorphic";
                         log(0, msg, node.toString(), props);
                     }
-                    if (node instanceof DirectCallNode) {
-                        DirectCallNode callNode = (DirectCallNode) node;
+                    if (node instanceof CallNode) {
+                        CallNode callNode = (CallNode) node;
                         if (callNode.isInliningForced()) {
                             callNode.getCurrentRootNode().accept(this);
                         }
@@ -184,7 +184,7 @@ public final class OptimizedCallTargetLog {
 
     private static int splitCount = 0;
 
-    static void logSplit(OptimizedDirectCallNode callNode, OptimizedCallTarget target, OptimizedCallTarget newTarget) {
+    static void logSplit(OptimizedCallNode callNode, OptimizedCallTarget target, OptimizedCallTarget newTarget) {
         if (TraceTruffleSplitting.getValue()) {
             Map<String, Object> properties = new LinkedHashMap<>();
             addASTSizeProperty(target, properties);
