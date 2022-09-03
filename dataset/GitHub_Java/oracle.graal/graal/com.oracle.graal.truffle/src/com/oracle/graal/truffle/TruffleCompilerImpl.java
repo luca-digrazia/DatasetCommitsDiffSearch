@@ -46,7 +46,6 @@ import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.printer.*;
 import com.oracle.graal.truffle.nodes.*;
-import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.nodes.*;
 
 /**
@@ -56,13 +55,12 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
     private final GraalCodeCacheProvider runtime;
     private final Suites suites;
-    private final PartialEvaluator partialEvaluator;
+    private final PartialEvaluator nodeCompiler;
     private final MetaAccessProvider metaAccessProvider;
     private final Replacements replacements;
     private final Backend backend;
     private final ResolvedJavaType[] skippedExceptionTypes;
     private final HotSpotGraalRuntime graalRuntime;
-    private final TruffleCache truffleCache;
 
     private static final Class[] SKIPPED_EXCEPTION_CLASSES = new Class[]{SlowPathException.class, UnexpectedResultException.class, ArithmeticException.class};
 
@@ -74,15 +72,11 @@ public class TruffleCompilerImpl implements TruffleCompiler {
         this.suites = Graal.getRequiredCapability(SuitesProvider.class).createSuites();
         this.metaAccessProvider = Graal.getRequiredCapability(MetaAccessProvider.class);
         this.backend = Graal.getRequiredCapability(Backend.class);
-        this.replacements = ((GraalTruffleRuntime) Truffle.getRuntime()).getReplacements();
+        this.replacements = Graal.getRequiredCapability(Replacements.class);
         this.graalRuntime = HotSpotGraalRuntime.graalRuntime();
+
+        this.nodeCompiler = new PartialEvaluator(runtime, metaAccessProvider);
         this.skippedExceptionTypes = getSkippedExceptionTypes(metaAccessProvider);
-
-        final GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault();
-        config.setSkippedExceptionTypes(skippedExceptionTypes);
-        this.truffleCache = new TruffleCache(this.runtime, config, TruffleCompilerImpl.Optimizations, this.replacements);
-
-        this.partialEvaluator = new PartialEvaluator(metaAccessProvider, replacements, truffleCache);
 
         if (DebugEnabled.getValue()) {
             DebugEnvironment.initialize(System.out);
@@ -116,7 +110,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
         compilable.timeCompilationStarted = System.nanoTime();
         Assumptions assumptions = new Assumptions(true);
-        graph = partialEvaluator.createGraph(compilable, assumptions);
+        graph = nodeCompiler.createGraph(compilable, assumptions);
         compilable.timePartialEvaluationFinished = System.nanoTime();
         compilable.nodeCountPartialEval = graph.getNodeCount();
         InstalledCode compiledMethod = compileMethodHelper(graph, config, compilable, assumptions);
@@ -147,8 +141,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
             @Override
             public CompilationResult call() {
                 CallingConvention cc = getCallingConvention(runtime, Type.JavaCallee, graph.method(), false);
-                return GraalCompiler.compileGraph(graph, cc, graph.method(), runtime, replacements, backend, runtime.getTarget(), null, plan, OptimisticOptimizations.ALL, new SpeculationLog(),
-                                suites, new CompilationResult());
+                return GraalCompiler.compileGraph(graph, cc, graph.method(), runtime, replacements, backend, runtime.getTarget(), null, plan, OptimisticOptimizations.ALL, new SpeculationLog(), suites);
             }
         });
 
