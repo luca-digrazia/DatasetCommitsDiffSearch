@@ -43,6 +43,7 @@ public final class GraalOptions {
            static boolean InlineMonomorphicCalls             = true;
            static boolean InlinePolymorphicCalls             = true;
            static boolean InlineMegamorphicCalls             = ____;
+    public static int     MaximumInlineLevel                 = 30;
     public static int     MaximumDesiredSize                 = 5000;
     public static int     MaximumRecursiveInlining           = 1;
     public static boolean LimitInlinedProbability            = ____;
