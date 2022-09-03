@@ -211,8 +211,6 @@ public final class CPUSampler implements Closeable {
 
     private volatile boolean nonInternalLanguageContextInitialized = false;
 
-    private boolean delaySamplingUntilNonInternalLangInit = true;
-
     CPUSampler(Env env) {
         this.env = env;
         env.getInstrumenter().attachContextsListener(new ContextsListener() {
@@ -360,18 +358,6 @@ public final class CPUSampler implements Closeable {
     public synchronized void setFilter(SourceSectionFilter filter) {
         verifyConfigAllowed();
         this.filter = filter;
-    }
-
-    /**
-     * Sets the option to delay sampling until a non-internal language is initialized. Useful to
-     * avoid internal language initialisation code in the samples.
-     *
-     * @param delaySamplingUntilNonInternalLangInit Enable or disable this option.
-     * @since 0.31
-     */
-    public void setDelaySamplingUntilNonInternalLangInit(boolean delaySamplingUntilNonInternalLangInit) {
-        verifyConfigAllowed();
-        this.delaySamplingUntilNonInternalLangInit = delaySamplingUntilNonInternalLangInit;
     }
 
     /**
@@ -537,7 +523,7 @@ public final class CPUSampler implements Closeable {
             if (runcount < delay / period) {
                 return;
             }
-            if (delaySamplingUntilNonInternalLangInit && !nonInternalLanguageContextInitialized) {
+            if (!nonInternalLanguageContextInitialized) {
                 return;
             }
             long timestamp = System.currentTimeMillis();
