@@ -56,11 +56,8 @@ public class LowTier extends PhaseSuite<LowTierContext> {
 
     public LowTier(OptionValues options) {
         CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
-        CanonicalizerPhase canonicalizerWithoutGVN = new CanonicalizerPhase();
-        canonicalizerWithoutGVN.disableGVN();
         if (ImmutableCode.getValue(options)) {
             canonicalizer.disableReadCanonicalization();
-            canonicalizerWithoutGVN.disableReadCanonicalization();
         }
 
         if (Options.ProfileCompiledMethods.getValue(options)) {
@@ -72,8 +69,6 @@ public class LowTier extends PhaseSuite<LowTierContext> {
         appendPhase(new ExpandLogicPhase());
 
         appendPhase(new FixReadsPhase(true, new SchedulePhase(GraalOptions.StressTestEarlyReads.getValue(options) ? SchedulingStrategy.EARLIEST : SchedulingStrategy.LATEST_OUT_OF_LOOPS)));
-
-        appendPhase(canonicalizerWithoutGVN);
 
         appendPhase(new UseTrappingNullChecksPhase());
 
