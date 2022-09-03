@@ -104,21 +104,22 @@ final class SymbolInvokerImpl {
         @Override
         public Object execute(VirtualFrame frame) {
             final Object[] args = frame.getArguments();
-            try {
-                if (foreignAccess == null) {
+            for (int i = 0; i < 2; i++) {
+                try {
+                    if (foreignAccess == null) {
+                        CompilerDirectives.transferToInterpreterAndInvalidate();
+                        foreignAccess = insert(Message.createExecute(args.length).createNode());
+                    }
+                    Object tmp = ForeignAccess.send(foreignAccess, frame, function, args);
+                    return convert.convert(frame, tmp);
+                } catch (ArityException e) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
                     foreignAccess = insert(Message.createExecute(args.length).createNode());
+                } catch (InteropException e) {
+                    throw new AssertionError(e);
                 }
-                Object tmp = ForeignAccess.send(foreignAccess, frame, function, args);
-                return convert.convert(frame, tmp);
-            } catch (ArityException e) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                foreignAccess = insert(Message.createExecute(args.length).createNode());
-                return execute(frame);
-            } catch (InteropException e) {
-                CompilerDirectives.transferToInterpreter();
-                throw new AssertionError(e);
             }
+            throw new IllegalStateException();
         }
     }
 
