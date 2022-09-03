@@ -22,36 +22,33 @@
  */
 package com.oracle.graal.truffle.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.replacements.nodes.*;
 
 @NodeInfo
-public final class IsCompilationConstantNode extends FloatingNode implements Lowerable, Canonicalizable {
+public final class IsCompilationConstantNode extends MacroStateSplitNode implements Canonicalizable {
 
-    public static final NodeClass<IsCompilationConstantNode> TYPE = NodeClass.get(IsCompilationConstantNode.class);
+    public static final NodeClass TYPE = NodeClass.get(IsCompilationConstantNode.class);
 
-    @Input ValueNode value;
-
-    public IsCompilationConstantNode(ValueNode value) {
-        super(TYPE, StampFactory.forKind(Kind.Boolean));
-        this.value = value;
+    public IsCompilationConstantNode(Invoke invoke) {
+        super(TYPE, invoke);
+        assert arguments.size() == 1;
     }
 
     @Override
     public void lower(LoweringTool tool) {
-        graph().replaceFloating(this, ConstantNode.forBoolean(false, graph()));
+        /* Invoke will return false. */
+        replaceWithInvoke().lower(tool);
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        ValueNode arg0 = value;
+        ValueNode arg0 = arguments.get(0);
         if (arg0 instanceof BoxNode) {
             arg0 = ((BoxNode) arg0).getValue();
         }
@@ -60,7 +57,4 @@ public final class IsCompilationConstantNode extends FloatingNode implements Low
         }
         return this;
     }
-
-    @NodeIntrinsic
-    public static native boolean check(Object value);
 }

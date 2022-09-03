@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -36,11 +35,11 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class BitCountNode extends UnaryNode implements LIRLowerable {
 
-    public static final NodeClass<BitCountNode> TYPE = NodeClass.create(BitCountNode.class);
+    public static final NodeClass TYPE = NodeClass.get(BitCountNode.class);
 
     public BitCountNode(ValueNode value) {
         super(TYPE, StampFactory.forInteger(Kind.Int, 0, ((PrimitiveStamp) value.stamp()).getBits()), value);
-        assert value.getStackKind() == Kind.Int || value.getStackKind() == Kind.Long;
+        assert value.getKind() == Kind.Int || value.getKind() == Kind.Long;
     }
 
     @Override
@@ -48,16 +47,26 @@ public final class BitCountNode extends UnaryNode implements LIRLowerable {
         IntegerStamp valueStamp = (IntegerStamp) getValue().stamp();
         assert (valueStamp.downMask() & CodeUtil.mask(valueStamp.getBits())) == valueStamp.downMask();
         assert (valueStamp.upMask() & CodeUtil.mask(valueStamp.getBits())) == valueStamp.upMask();
-        return updateStamp(StampFactory.forInteger(Kind.Int, Long.bitCount(valueStamp.downMask()), Long.bitCount(valueStamp.upMask())));
+        return updateStamp(StampFactory.forInteger(Kind.Int, bitCount(valueStamp.downMask()), bitCount(valueStamp.upMask())));
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
         if (forValue.isConstant()) {
             JavaConstant c = forValue.asJavaConstant();
-            return ConstantNode.forInt(forValue.getStackKind() == Kind.Int ? Integer.bitCount(c.asInt()) : Long.bitCount(c.asLong()));
+            return ConstantNode.forInt(forValue.getKind() == Kind.Int ? bitCount(c.asInt()) : bitCount(c.asLong()));
         }
         return this;
+    }
+
+    @NodeIntrinsic
+    public static int bitCount(int v) {
+        return Integer.bitCount(v);
+    }
+
+    @NodeIntrinsic
+    public static int bitCount(long v) {
+        return Long.bitCount(v);
     }
 
     @Override

@@ -37,7 +37,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class NegateNode extends UnaryArithmeticNode<Neg> implements NarrowableArithmeticNode {
 
-    public static final NodeClass<NegateNode> TYPE = NodeClass.create(NegateNode.class);
+    public static final NodeClass TYPE = NodeClass.get(NegateNode.class);
 
     public NegateNode(ValueNode value) {
         super(TYPE, ArithmeticOpTable::getNeg, value);
@@ -60,7 +60,7 @@ public final class NegateNode extends UnaryArithmeticNode<Neg> implements Narrow
     }
 
     @Override
-    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
-        nodeValueMap.setResult(this, gen.emitNegate(nodeValueMap.operand(getValue())));
+    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
+        builder.setResult(this, gen.emitNegate(builder.operand(getValue())));
     }
 }

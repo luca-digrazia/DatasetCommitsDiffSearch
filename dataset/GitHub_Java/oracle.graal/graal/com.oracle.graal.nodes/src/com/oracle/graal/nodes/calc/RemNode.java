@@ -33,7 +33,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = "%")
 public final class RemNode extends BinaryArithmeticNode<Rem> implements Lowerable {
 
-    public static final NodeClass<RemNode> TYPE = NodeClass.create(RemNode.class);
+    public static final NodeClass TYPE = NodeClass.get(RemNode.class);
 
     public RemNode(ValueNode x, ValueNode y) {
         super(TYPE, ArithmeticOpTable::getRem, x, y);
@@ -45,7 +45,7 @@ public final class RemNode extends BinaryArithmeticNode<Rem> implements Lowerabl
     }
 
     @Override
-    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
-        nodeValueMap.setResult(this, gen.emitRem(nodeValueMap.operand(getX()), nodeValueMap.operand(getY()), null));
+    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
+        builder.setResult(this, gen.emitRem(builder.operand(getX()), builder.operand(getY()), null));
     }
 }

@@ -26,7 +26,6 @@ import java.lang.invoke.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.Assumptions.AssumptionResult;
 import com.oracle.graal.api.meta.MethodHandleAccessProvider.IntrinsicMethod;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
@@ -45,7 +44,7 @@ import com.oracle.graal.replacements.nodes.*;
  */
 @NodeInfo
 public final class MethodHandleNode extends MacroStateSplitNode implements Simplifiable {
-    public static final NodeClass<MethodHandleNode> TYPE = NodeClass.create(MethodHandleNode.class);
+    public static final NodeClass TYPE = NodeClass.get(MethodHandleNode.class);
 
     // Replacement method data
     protected ResolvedJavaMethod replacementTargetMethod;
@@ -180,26 +179,24 @@ public final class MethodHandleNode extends MacroStateSplitNode implements Simpl
             maybeCastArgument(receiverSkip + index, parameterType);
         }
 
-        if (target.canBeStaticallyBound()) {
-            return createTargetInvokeNode(target, intrinsicMethod);
-        }
-
         // Try to get the most accurate receiver type
         if (intrinsicMethod == IntrinsicMethod.LINK_TO_VIRTUAL || intrinsicMethod == IntrinsicMethod.LINK_TO_INTERFACE) {
             ResolvedJavaType receiverType = StampTool.typeOrNull(getReceiver().stamp());
             if (receiverType != null) {
-                AssumptionResult<ResolvedJavaMethod> concreteMethod = receiverType.findUniqueConcreteMethod(target);
+                ResolvedJavaMethod concreteMethod = receiverType.findUniqueConcreteMethod(target);
                 if (concreteMethod != null) {
-                    graph().getAssumptions().record(concreteMethod);
-                    return createTargetInvokeNode(concreteMethod.getResult(), intrinsicMethod);
+                    return createTargetInvokeNode(concreteMethod, intrinsicMethod);
                 }
             }
-        } else {
-            AssumptionResult<ResolvedJavaMethod> concreteMethod = target.getDeclaringClass().findUniqueConcreteMethod(target);
-            if (concreteMethod != null) {
-                graph().getAssumptions().record(concreteMethod);
-                return createTargetInvokeNode(concreteMethod.getResult(), intrinsicMethod);
-            }
+        }
+
+        if (target.canBeStaticallyBound()) {
+            return createTargetInvokeNode(target, intrinsicMethod);
+        }
+
+        ResolvedJavaMethod concreteMethod = target.getDeclaringClass().findUniqueConcreteMethod(target);
+        if (concreteMethod != null) {
+            return createTargetInvokeNode(concreteMethod, intrinsicMethod);
         }
 
         return null;

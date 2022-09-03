@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,7 +36,7 @@ import com.oracle.graal.nodes.spi.*;
  */
 @NodeInfo
 public final class FloatingReadNode extends FloatingAccessNode implements LIRLowerable, Canonicalizable {
-    public static final NodeClass<FloatingReadNode> TYPE = NodeClass.create(FloatingReadNode.class);
+    public static final NodeClass TYPE = NodeClass.get(FloatingReadNode.class);
 
     @OptionalInput(InputType.Memory) MemoryNode lastLocationAccess;
 
@@ -85,7 +85,8 @@ public final class FloatingReadNode extends FloatingAccessNode implements LIRLow
     @Override
     public boolean verify() {
         MemoryNode lla = getLastLocationAccess();
-        assert lla != null || getLocationIdentity().isImmutable() : "lastLocationAccess of " + this + " shouldn't be null for mutable location identity " + getLocationIdentity();
+        assert lla == null || lla instanceof MemoryCheckpoint || lla instanceof MemoryProxy || lla instanceof MemoryPhiNode : "lastLocationAccess of " + this +
+                        " should be a MemoryCheckpoint, but is " + lla;
         return super.verify();
     }
 }

@@ -22,20 +22,16 @@
  */
 package com.oracle.graal.nodes.java;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_10;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_8;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.AbstractStateSplit;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-
-@NodeInfo(cycles = CYCLES_10, size = SIZE_8)
+@NodeInfo
 public final class LoadExceptionObjectNode extends AbstractStateSplit implements Lowerable {
 
-    public static final NodeClass<LoadExceptionObjectNode> TYPE = NodeClass.create(LoadExceptionObjectNode.class);
+    public static final NodeClass TYPE = NodeClass.get(LoadExceptionObjectNode.class);
 
     public LoadExceptionObjectNode(Stamp stamp) {
         super(TYPE, stamp);

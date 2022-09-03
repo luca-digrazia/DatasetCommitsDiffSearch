@@ -452,17 +452,18 @@ public class Graph {
         return uniqueHelper(node, true);
     }
 
+    @SuppressWarnings("unchecked")
     <T extends Node> T uniqueHelper(T node, boolean addIfMissing) {
         assert node.getNodeClass().valueNumberable();
-        T other = this.findDuplicate(node);
+        Node other = this.findDuplicate(node);
         if (other != null) {
-            return other;
+            return (T) other;
         } else {
-            T result = addIfMissing ? addHelper(node) : node;
+            Node result = addIfMissing ? addHelper(node) : node;
             if (node.getNodeClass().isLeafNode()) {
                 putNodeIntoCache(result);
             }
-            return result;
+            return (T) result;
         }
     }
 
@@ -483,15 +484,14 @@ public class Graph {
         return result;
     }
 
-    @SuppressWarnings("unchecked")
-    public <T extends Node> T findDuplicate(T node) {
-        NodeClass<?> nodeClass = node.getNodeClass();
+    public Node findDuplicate(Node node) {
+        NodeClass nodeClass = node.getNodeClass();
         assert nodeClass.valueNumberable();
         if (nodeClass.isLeafNode()) {
             // Leaf node: look up in cache
             Node cachedNode = findNodeInCache(node);
             if (cachedNode != null) {
-                return (T) cachedNode;
+                return cachedNode;
             } else {
                 return null;
             }
@@ -518,7 +518,7 @@ public class Graph {
                 for (Node usage : minCountNode.usages()) {
                     if (usage != node && nodeClass == usage.getNodeClass() && node.valueEquals(usage) && nodeClass.getEdges(Inputs).areEqualIn(node, usage) &&
                                     nodeClass.getEdges(Successors).areEqualIn(node, usage)) {
-                        return (T) usage;
+                        return usage;
                     }
                 }
                 return null;
@@ -626,7 +626,7 @@ public class Graph {
     @com.oracle.graal.nodeinfo.NodeInfo
     static final class PlaceHolderNode extends Node {
 
-        public static final NodeClass<PlaceHolderNode> TYPE = NodeClass.get(PlaceHolderNode.class);
+        public static final NodeClass TYPE = NodeClass.get(PlaceHolderNode.class);
 
         public PlaceHolderNode() {
             super(TYPE);
@@ -689,10 +689,11 @@ public class Graph {
      * Returns an {@link Iterable} providing all the live nodes whose type is compatible with
      * {@code type}.
      *
-     * @param nodeClass the type of node to return
+     * @param type the type of node to return
      * @return an {@link Iterable} providing all the matching nodes
      */
-    public <T extends Node & IterableNodeType> NodeIterable<T> getNodes(final NodeClass<T> nodeClass) {
+    public <T extends Node & IterableNodeType> NodeIterable<T> getNodes(final Class<T> type) {
+        final NodeClass nodeClass = NodeClass.get(type);
         return new NodeIterable<T>() {
 
             @Override
@@ -708,7 +709,7 @@ public class Graph {
      * @param type the type of node that is checked for occurrence
      * @return whether there is at least one such node
      */
-    public <T extends Node & IterableNodeType> boolean hasNode(final NodeClass<T> type) {
+    public <T extends Node & IterableNodeType> boolean hasNode(final Class<T> type) {
         return getNodes(type).iterator().hasNext();
     }
 
@@ -764,9 +765,8 @@ public class Graph {
     }
 
     /**
-     * Rebuilds the lists used to support {@link #getNodes(NodeClass)}. This is useful for
-     * serialization where the underlying {@linkplain NodeClass#iterableId() iterable ids} may have
-     * changed.
+     * Rebuilds the lists used to support {@link #getNodes(Class)}. This is useful for serialization
+     * where the underlying {@linkplain NodeClass#iterableId() iterable ids} may have changed.
      */
     private void recomputeIterableNodeLists() {
         iterableNodesFirst.clear();

@@ -22,30 +22,20 @@
  */
 package com.oracle.graal.nodes.java;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_50;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_50;
-
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.graph.NodeList;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.DeoptimizingFixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.ArrayLengthProvider;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-
-import jdk.vm.ci.meta.ResolvedJavaType;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * The {@code NewMultiArrayNode} represents an allocation of a multi-dimensional object array.
  */
-@NodeInfo(cycles = CYCLES_50, size = SIZE_50)
-public class NewMultiArrayNode extends DeoptimizingFixedWithNextNode implements Lowerable, ArrayLengthProvider {
+@NodeInfo
+public final class NewMultiArrayNode extends DeoptimizingFixedWithNextNode implements Lowerable, ArrayLengthProvider {
 
-    public static final NodeClass<NewMultiArrayNode> TYPE = NodeClass.create(NewMultiArrayNode.class);
+    public static final NodeClass TYPE = NodeClass.get(NewMultiArrayNode.class);
     @Input protected NodeInputList<ValueNode> dimensions;
     protected final ResolvedJavaType type;
 
@@ -62,11 +52,7 @@ public class NewMultiArrayNode extends DeoptimizingFixedWithNextNode implements 
     }
 
     public NewMultiArrayNode(ResolvedJavaType type, ValueNode[] dimensions) {
-        this(TYPE, type, dimensions);
-    }
-
-    protected NewMultiArrayNode(NodeClass<? extends NewMultiArrayNode> c, ResolvedJavaType type, ValueNode[] dimensions) {
-        super(c, StampFactory.objectNonNull(TypeReference.createExactTrusted(type)));
+        super(TYPE, StampFactory.exactNonNull(type));
         this.type = type;
         this.dimensions = new NodeInputList<>(this, dimensions);
         assert dimensions.length > 0 && type.isArray();
@@ -86,7 +72,6 @@ public class NewMultiArrayNode extends DeoptimizingFixedWithNextNode implements 
         return true;
     }
 
-    @Override
     public ValueNode length() {
         return dimension(0);
     }

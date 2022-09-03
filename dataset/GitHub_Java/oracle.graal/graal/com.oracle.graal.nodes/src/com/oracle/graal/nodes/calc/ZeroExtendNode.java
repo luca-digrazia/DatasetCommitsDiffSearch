@@ -22,13 +22,11 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.internal.jvmci.code.*;
-
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp.Narrow;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp.ZeroExtend;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.*;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
@@ -42,7 +40,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class ZeroExtendNode extends IntegerConvertNode<ZeroExtend, Narrow> {
 
-    public static final NodeClass<ZeroExtendNode> TYPE = NodeClass.create(ZeroExtendNode.class);
+    public static final NodeClass TYPE = NodeClass.get(ZeroExtendNode.class);
 
     public ZeroExtendNode(ValueNode input, int resultBits) {
         this(input, PrimitiveStamp.getBits(input.stamp()), resultBits);
@@ -116,7 +114,7 @@ public final class ZeroExtendNode extends IntegerConvertNode<ZeroExtend, Narrow>
     }
 
     @Override
-    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
-        nodeValueMap.setResult(this, gen.emitZeroExtend(nodeValueMap.operand(getValue()), getInputBits(), getResultBits()));
+    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
+        builder.setResult(this, gen.emitZeroExtend(builder.operand(getValue()), getInputBits(), getResultBits()));
     }
 }

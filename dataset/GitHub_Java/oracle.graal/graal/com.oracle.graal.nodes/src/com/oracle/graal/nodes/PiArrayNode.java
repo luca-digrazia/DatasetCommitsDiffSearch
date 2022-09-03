@@ -22,14 +22,13 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.java.ArrayLengthNode;
-import com.oracle.graal.nodes.spi.ArrayLengthProvider;
-import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
 
 /**
  * A {@link PiNode} that also provides an array length in addition to a more refined stamp. A usage
@@ -39,7 +38,7 @@ import com.oracle.graal.nodes.util.GraphUtil;
 @NodeInfo
 public final class PiArrayNode extends PiNode implements ArrayLengthProvider {
 
-    public static final NodeClass<PiArrayNode> TYPE = NodeClass.create(PiArrayNode.class);
+    public static final NodeClass TYPE = NodeClass.get(PiArrayNode.class);
     @Input ValueNode length;
 
     public ValueNode length() {
@@ -47,7 +46,7 @@ public final class PiArrayNode extends PiNode implements ArrayLengthProvider {
     }
 
     public PiArrayNode(ValueNode object, ValueNode length, Stamp stamp) {
-        super(TYPE, object, stamp, null);
+        super(TYPE, object, stamp);
         this.length = length;
     }
 
@@ -60,5 +59,5 @@ public final class PiArrayNode extends PiNode implements ArrayLengthProvider {
     }
 
     @NodeIntrinsic
-    public static native Object piArrayCast(Object object, int length, @ConstantNodeParameter Stamp stamp);
+    public static native <T> T piArrayCast(Object object, int length, @ConstantNodeParameter Stamp stamp);
 }

@@ -39,12 +39,10 @@ import com.oracle.graal.nodes.util.*;
 @NodeInfo
 public final class LoopBeginNode extends AbstractMergeNode implements IterableNodeType, LIRLowerable {
 
-    public static final NodeClass<LoopBeginNode> TYPE = NodeClass.get(LoopBeginNode.class);
+    public static final NodeClass TYPE = NodeClass.get(LoopBeginNode.class);
     protected double loopFrequency;
     protected int nextEndIndex;
     protected int unswitches;
-    protected int inversionCount;
-
     @OptionalInput(InputType.Guard) GuardingNode overflowGuard;
 
     public LoopBeginNode() {
@@ -189,14 +187,6 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
 
     public void incUnswitches() {
         unswitches++;
-    }
-
-    public int getInversionCount() {
-        return inversionCount;
-    }
-
-    public void setInversionCount(int count) {
-        inversionCount = count;
     }
 
     @Override

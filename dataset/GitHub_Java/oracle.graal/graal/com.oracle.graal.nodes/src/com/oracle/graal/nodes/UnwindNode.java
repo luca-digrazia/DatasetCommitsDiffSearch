@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.nodes;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
@@ -35,7 +34,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class UnwindNode extends ControlSinkNode implements Lowerable, LIRLowerable {
 
-    public static final NodeClass<UnwindNode> TYPE = NodeClass.create(UnwindNode.class);
+    public static final NodeClass TYPE = NodeClass.get(UnwindNode.class);
     @Input ValueNode exception;
 
     public ValueNode exception() {
@@ -44,7 +43,7 @@ public final class UnwindNode extends ControlSinkNode implements Lowerable, LIRL
 
     public UnwindNode(ValueNode exception) {
         super(TYPE, StampFactory.forVoid());
-        assert exception.getKind() == Kind.Object;
+        assert exception == null || exception.getKind() == Kind.Object;
         this.exception = exception;
     }
 

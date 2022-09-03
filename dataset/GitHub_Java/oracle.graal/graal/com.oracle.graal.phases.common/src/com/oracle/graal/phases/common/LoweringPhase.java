@@ -48,7 +48,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
 
     @NodeInfo
     static final class DummyGuardHandle extends ValueNode implements GuardedNode {
-        public static final NodeClass<DummyGuardHandle> TYPE = NodeClass.create(DummyGuardHandle.class);
+        public static final NodeClass TYPE = NodeClass.get(DummyGuardHandle.class);
         @Input(InputType.Guard) GuardingNode guard;
 
         public DummyGuardHandle(GuardingNode guard) {
@@ -289,7 +289,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
             final LoweringToolImpl loweringTool = new LoweringToolImpl(context, startAnchor, activeGuards, b.getBeginNode());
 
             // Lower the instructions of this block.
-            List<Node> nodes = schedule.nodesFor(b);
+            List<ValueNode> nodes = schedule.nodesFor(b);
             for (Node node : nodes) {
 
                 if (node.isDeleted()) {

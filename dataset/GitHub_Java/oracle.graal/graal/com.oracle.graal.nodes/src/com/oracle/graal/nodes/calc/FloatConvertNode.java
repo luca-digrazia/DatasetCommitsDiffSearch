@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import java.util.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
@@ -41,20 +39,12 @@ import com.oracle.graal.nodes.spi.*;
  */
 @NodeInfo
 public final class FloatConvertNode extends UnaryArithmeticNode<FloatConvertOp> implements ConvertNode, Lowerable, ArithmeticLIRLowerable {
-    public static final NodeClass<FloatConvertNode> TYPE = NodeClass.create(FloatConvertNode.class);
+    public static final NodeClass TYPE = NodeClass.get(FloatConvertNode.class);
 
     protected final FloatConvert op;
 
-    private static final EnumMap<FloatConvert, SerializableUnaryFunction<FloatConvertOp>> getOps;
-    static {
-        getOps = new EnumMap<>(FloatConvert.class);
-        for (FloatConvert op : FloatConvert.values()) {
-            getOps.put(op, table -> table.getFloatConvert(op));
-        }
-    }
-
     public FloatConvertNode(FloatConvert op, ValueNode input) {
-        super(TYPE, getOps.get(op), input);
+        super(TYPE, table -> table.getFloatConvert(op), input);
         this.op = op;
     }
 

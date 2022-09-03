@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -37,7 +36,7 @@ import com.oracle.graal.nodes.type.*;
 @NodeInfo
 public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable, Virtualizable, PiPushable {
 
-    public static final NodeClass<IsNullNode> TYPE = NodeClass.create(IsNullNode.class);
+    public static final NodeClass TYPE = NodeClass.get(IsNullNode.class);
 
     public IsNullNode(ValueNode object) {
         super(TYPE, object);
@@ -87,22 +86,4 @@ public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable, 
 
     @NodeIntrinsic
     public static native IsNullNode isNull(Object object);
-
-    @Override
-    public Stamp getSucceedingStampForValue(boolean negated) {
-        return negated ? StampFactory.objectNonNull() : StampFactory.alwaysNull();
-    }
-
-    @Override
-    public TriState tryFold(Stamp valueStamp) {
-        if (valueStamp instanceof ObjectStamp) {
-            ObjectStamp objectStamp = (ObjectStamp) valueStamp;
-            if (objectStamp.alwaysNull()) {
-                return TriState.TRUE;
-            } else if (objectStamp.nonNull()) {
-                return TriState.FALSE;
-            }
-        }
-        return TriState.UNKNOWN;
-    }
 }

@@ -22,14 +22,11 @@
  */
 package com.oracle.graal.nodes.debug;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * This node prevents control flow optimizations. It is never duplicated or merged with other
@@ -38,7 +35,7 @@ import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 @NodeInfo
 public final class ControlFlowAnchorNode extends FixedWithNextNode implements LIRLowerable {
 
-    public static final NodeClass<ControlFlowAnchorNode> TYPE = NodeClass.create(ControlFlowAnchorNode.class);
+    public static final NodeClass TYPE = NodeClass.get(ControlFlowAnchorNode.class);
 
     private static class Unique {
     }
@@ -57,13 +54,12 @@ public final class ControlFlowAnchorNode extends FixedWithNextNode implements LI
         this();
     }
 
-    @Override
     public void generate(NodeLIRBuilderTool generator) {
         // do nothing
     }
 
     @Override
     protected void afterClone(Node other) {
-        assert other.graph() != null && other.graph() != graph() : this + " should never be cloned in the same graph";
+        assert false : this + " should never be cloned";
     }
 }

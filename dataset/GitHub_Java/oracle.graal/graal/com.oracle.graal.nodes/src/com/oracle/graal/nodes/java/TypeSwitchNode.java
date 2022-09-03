@@ -24,6 +24,7 @@ package com.oracle.graal.nodes.java;
 
 import java.util.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -32,7 +33,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * The {@code TypeSwitchNode} performs a lookup based on the type of the input value. The type
@@ -41,7 +41,7 @@ import com.oracle.jvmci.meta.*;
 @NodeInfo
 public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Simplifiable {
 
-    public static final NodeClass<TypeSwitchNode> TYPE = NodeClass.create(TypeSwitchNode.class);
+    public static final NodeClass TYPE = NodeClass.get(TypeSwitchNode.class);
     protected final ResolvedJavaType[] keys;
 
     public TypeSwitchNode(ValueNode value, AbstractBeginNode[] successors, ResolvedJavaType[] keys, double[] keyProbabilities, int[] keySuccessors) {
@@ -131,7 +131,13 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
                     survivingEdge = keySuccessorIndex(i);
                 }
             }
-            killOtherSuccessors(tool, survivingEdge);
+            for (int i = 0; i < blockSuccessorCount(); i++) {
+                if (i != survivingEdge) {
+                    tool.deleteBranch(blockSuccessor(i));
+                }
+            }
+            tool.addToWorkList(blockSuccessor(survivingEdge));
+            graph().removeSplit(this, blockSuccessor(survivingEdge));
         }
         if (value() instanceof LoadHubNode && ((LoadHubNode) value()).getValue().stamp() instanceof ObjectStamp) {
             ObjectStamp objectStamp = (ObjectStamp) ((LoadHubNode) value()).getValue().stamp();

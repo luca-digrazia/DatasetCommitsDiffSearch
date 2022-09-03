@@ -25,13 +25,12 @@ package com.oracle.graal.nodes;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo
 public final class ReturnNode extends ControlSinkNode implements LIRLowerable, IterableNodeType {
 
-    public static final NodeClass<ReturnNode> TYPE = NodeClass.create(ReturnNode.class);
+    public static final NodeClass TYPE = NodeClass.get(ReturnNode.class);
     @OptionalInput ValueNode result;
     @OptionalInput(InputType.Extension) MemoryMapNode memoryMap;
 

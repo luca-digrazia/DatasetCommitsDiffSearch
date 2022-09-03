@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,34 +22,32 @@
  */
 package com.oracle.graal.nodes.java;
 
-import java.lang.reflect.Modifier;
-
-import com.oracle.graal.api.meta.JavaType;
-import com.oracle.graal.api.meta.ResolvedJavaMethod;
-import com.oracle.graal.graph.GraalInternalError;
-import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.LIRGeneratorTool;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * A SelfReplacingMethodCallTargetNode replaces itself in the graph when being lowered with a
  * {@link MethodCallTargetNode} that calls the stored replacement target method.
- * 
+ *
  * This node is used for method handle call nodes which have a constant call target but are not
  * inlined.
  */
-public class SelfReplacingMethodCallTargetNode extends MethodCallTargetNode implements Lowerable {
+@NodeInfo
+public final class SelfReplacingMethodCallTargetNode extends MethodCallTargetNode implements Lowerable {
 
+    public static final NodeClass TYPE = NodeClass.get(SelfReplacingMethodCallTargetNode.class);
     // Replacement method data
-    private final ResolvedJavaMethod replacementTargetMethod;
-    private final JavaType replacementReturnType;
-    @Input private final NodeInputList<ValueNode> replacementArguments;
+    protected final ResolvedJavaMethod replacementTargetMethod;
+    protected final JavaType replacementReturnType;
+    @Input NodeInputList<ValueNode> replacementArguments;
 
     public SelfReplacingMethodCallTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, JavaType returnType, ResolvedJavaMethod replacementTargetMethod,
                     ValueNode[] replacementArguments, JavaType replacementReturnType) {
-        super(invokeKind, targetMethod, arguments, returnType);
+        super(TYPE, invokeKind, targetMethod, arguments, returnType);
         this.replacementTargetMethod = replacementTargetMethod;
         this.replacementReturnType = replacementReturnType;
         this.replacementArguments = new NodeInputList<>(this, replacementArguments);
@@ -68,17 +66,17 @@ public class SelfReplacingMethodCallTargetNode extends MethodCallTargetNode impl
     }
 
     @Override
-    public void lower(LoweringTool tool, LoweringType loweringType) {
-        InvokeKind invokeKind = Modifier.isStatic(replacementTargetMethod.getModifiers()) ? InvokeKind.Static : InvokeKind.Special;
+    public void lower(LoweringTool tool) {
+        InvokeKind replacementInvokeKind = replacementTargetMethod.isStatic() ? InvokeKind.Static : InvokeKind.Special;
         MethodCallTargetNode replacement = graph().add(
-                        new MethodCallTargetNode(invokeKind, replacementTargetMethod, replacementArguments.toArray(new ValueNode[replacementArguments.size()]), replacementReturnType));
+                        new MethodCallTargetNode(replacementInvokeKind, replacementTargetMethod, replacementArguments.toArray(new ValueNode[replacementArguments.size()]), replacementReturnType));
 
         // Replace myself...
         this.replaceAndDelete(replacement);
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
+    public void generate(NodeLIRBuilderTool gen) {
         throw GraalInternalError.shouldNotReachHere("should have replaced itself");
     }
 }

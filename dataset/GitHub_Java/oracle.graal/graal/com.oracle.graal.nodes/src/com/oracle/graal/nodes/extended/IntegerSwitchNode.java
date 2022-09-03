@@ -24,6 +24,7 @@ package com.oracle.graal.nodes.extended;
 
 import java.util.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -31,7 +32,6 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * The {@code IntegerSwitchNode} represents a switch on integer keys, with a sorted array of key
@@ -39,7 +39,7 @@ import com.oracle.jvmci.meta.*;
  */
 @NodeInfo
 public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable, Simplifiable {
-    public static final NodeClass<IntegerSwitchNode> TYPE = NodeClass.create(IntegerSwitchNode.class);
+    public static final NodeClass TYPE = NodeClass.get(IntegerSwitchNode.class);
 
     protected final int[] keys;
 
@@ -98,15 +98,6 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
         gen.emitSwitch(this);
     }
 
-    public AbstractBeginNode successorAtKey(int key) {
-        for (int i = 0; i < keyCount(); i++) {
-            if (keys[i] == key) {
-                return blockSuccessor(keySuccessorIndex(i));
-            }
-        }
-        return blockSuccessor(keySuccessorIndex(keyCount()));
-    }
-
     @Override
     public void simplify(SimplifierTool tool) {
         if (blockSuccessorCount() == 1) {
@@ -114,17 +105,20 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
             graph().removeSplitPropagate(this, defaultSuccessor());
         } else if (value() instanceof ConstantNode) {
             int constant = value().asJavaConstant().asInt();
-            AbstractBeginNode survivingSuccessor = successorAtKey(constant);
-            for (Node successor : successors()) {
-                if (successor != survivingSuccessor) {
-                    tool.deleteBranch(successor);
-                    // deleteBranch can change the successors so reload it
-                    survivingSuccessor = successorAtKey(constant);
+
+            int survivingEdge = keySuccessorIndex(keyCount());
+            for (int i = 0; i < keyCount(); i++) {
+                if (keys[i] == constant) {
+                    survivingEdge = keySuccessorIndex(i);
                 }
             }
-            tool.addToWorkList(survivingSuccessor);
-            graph().removeSplit(this, survivingSuccessor);
-
+            for (int i = 0; i < blockSuccessorCount(); i++) {
+                if (i != survivingEdge) {
+                    tool.deleteBranch(blockSuccessor(i));
+                }
+            }
+            tool.addToWorkList(blockSuccessor(survivingEdge));
+            graph().removeSplit(this, blockSuccessor(survivingEdge));
         } else if (value().stamp() instanceof IntegerStamp) {
             IntegerStamp integerStamp = (IntegerStamp) value().stamp();
             if (!integerStamp.isUnrestricted()) {

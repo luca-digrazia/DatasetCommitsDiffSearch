@@ -22,28 +22,24 @@
  */
 package com.oracle.graal.nodes.virtual;
 
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.extended.BoxNode;
-
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
 
 @NodeInfo
 public final class VirtualBoxingNode extends VirtualInstanceNode {
 
-    public static final NodeClass<VirtualBoxingNode> TYPE = NodeClass.create(VirtualBoxingNode.class);
-    protected final JavaKind boxingKind;
+    public static final NodeClass TYPE = NodeClass.get(VirtualBoxingNode.class);
+    protected final Kind boxingKind;
 
-    public VirtualBoxingNode(ResolvedJavaType type, JavaKind boxingKind) {
+    public VirtualBoxingNode(ResolvedJavaType type, Kind boxingKind) {
         super(TYPE, type, false);
         this.boxingKind = boxingKind;
     }
 
-    public JavaKind getBoxingKind() {
+    public Kind getBoxingKind() {
         return boxingKind;
     }
 
@@ -57,9 +53,5 @@ public final class VirtualBoxingNode extends VirtualInstanceNode {
         assert entries.length == 1;
         assert locks == null;
         return new BoxNode(entries[0], type(), boxingKind);
-    }
-
-    public ValueNode getBoxedValue(VirtualizerTool tool) {
-        return tool.getEntry(this, 0);
     }
 }

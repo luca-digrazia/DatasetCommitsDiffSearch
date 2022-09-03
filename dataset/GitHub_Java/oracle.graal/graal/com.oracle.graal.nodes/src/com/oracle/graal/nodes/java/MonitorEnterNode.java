@@ -35,7 +35,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class MonitorEnterNode extends AccessMonitorNode implements Virtualizable, Lowerable, IterableNodeType, MonitorEnter, MemoryCheckpoint.Single {
 
-    public static final NodeClass<MonitorEnterNode> TYPE = NodeClass.create(MonitorEnterNode.class);
+    public static final NodeClass TYPE = NodeClass.get(MonitorEnterNode.class);
 
     public MonitorEnterNode(ValueNode object, MonitorIdNode monitorId) {
         super(TYPE, object, monitorId);
@@ -43,7 +43,7 @@ public final class MonitorEnterNode extends AccessMonitorNode implements Virtual
 
     @Override
     public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.any();
+        return LocationIdentity.ANY_LOCATION;
     }
 
     @Override

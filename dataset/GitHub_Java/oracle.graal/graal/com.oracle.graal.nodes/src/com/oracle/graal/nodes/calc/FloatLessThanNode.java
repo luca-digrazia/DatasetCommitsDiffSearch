@@ -32,11 +32,9 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.util.*;
 
-import edu.umd.cs.findbugs.annotations.*;
-
 @NodeInfo(shortName = "<")
 public final class FloatLessThanNode extends CompareNode {
-    public static final NodeClass<FloatLessThanNode> TYPE = NodeClass.create(FloatLessThanNode.class);
+    public static final NodeClass TYPE = NodeClass.get(FloatLessThanNode.class);
 
     public FloatLessThanNode(ValueNode x, ValueNode y, boolean unorderedIsTrue) {
         super(TYPE, Condition.LT, unorderedIsTrue, x, y);
@@ -73,21 +71,5 @@ public final class FloatLessThanNode extends CompareNode {
             return new IntegerLessThanNode(newX, newY);
         }
         throw GraalInternalError.shouldNotReachHere();
-    }
-
-    @Override
-    public Stamp getSucceedingStampForX(boolean negated) {
-        return null;
-    }
-
-    @Override
-    public Stamp getSucceedingStampForY(boolean negated) {
-        return null;
-    }
-
-    @Override
-    @SuppressFBWarnings(value = "NP_BOOLEAN_RETURN_NULL", justification = "null indicates no folding possible")
-    public TriState tryFold(Stamp xStampGeneric, Stamp yStampGeneric) {
-        return null;
     }
 }

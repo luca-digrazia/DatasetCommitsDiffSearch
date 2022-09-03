@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,14 @@
  */
 package com.oracle.graal.nodes.java;
 
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
@@ -37,7 +39,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
 public final class CompareAndSwapNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single {
 
-    public static final NodeClass<CompareAndSwapNode> TYPE = NodeClass.create(CompareAndSwapNode.class);
+    public static final NodeClass TYPE = NodeClass.get(CompareAndSwapNode.class);
     @Input ValueNode object;
     @Input ValueNode offset;
     @Input ValueNode expected;
@@ -85,5 +87,24 @@ public final class CompareAndSwapNode extends AbstractMemoryCheckpoint implement
     @Override
     public void lower(LoweringTool tool) {
         tool.getLowerer().lower(this, tool);
+    }
+
+    // specialized on value type until boxing/unboxing is sorted out in intrinsification
+    @NodeIntrinsic
+    public static boolean compareAndSwap(Object object, long offset, Object expected, Object newValue, @SuppressWarnings("unused") @ConstantNodeParameter Kind valueKind,
+                    @SuppressWarnings("unused") @ConstantNodeParameter LocationIdentity locationIdentity) {
+        return unsafe.compareAndSwapObject(object, offset, expected, newValue);
+    }
+
+    @NodeIntrinsic
+    public static boolean compareAndSwap(Object object, long offset, long expected, long newValue, @SuppressWarnings("unused") @ConstantNodeParameter Kind valueKind,
+                    @SuppressWarnings("unused") @ConstantNodeParameter LocationIdentity locationIdentity) {
+        return unsafe.compareAndSwapLong(object, offset, expected, newValue);
+    }
+
+    @NodeIntrinsic
+    public static boolean compareAndSwap(Object object, long offset, int expected, int newValue, @SuppressWarnings("unused") @ConstantNodeParameter Kind valueKind,
+                    @SuppressWarnings("unused") @ConstantNodeParameter LocationIdentity locationIdentity) {
+        return unsafe.compareAndSwapInt(object, offset, expected, newValue);
     }
 }

@@ -38,7 +38,7 @@ import com.oracle.graal.nodes.util.*;
 @NodeInfo(shortName = "&")
 public final class AndNode extends BinaryArithmeticNode<And> implements NarrowableArithmeticNode {
 
-    public static final NodeClass<AndNode> TYPE = NodeClass.get(AndNode.class);
+    public static final NodeClass TYPE = NodeClass.get(AndNode.class);
 
     public AndNode(ValueNode x, ValueNode y) {
         super(TYPE, ArithmeticOpTable::getAnd, x, y);
@@ -51,7 +51,7 @@ public final class AndNode extends BinaryArithmeticNode<And> implements Narrowab
         if (tryConstantFold != null) {
             return tryConstantFold;
         } else {
-            return new AndNode(x, y).maybeCommuteInputs();
+            return new AndNode(x, y);
         }
     }
 
@@ -95,7 +95,7 @@ public final class AndNode extends BinaryArithmeticNode<And> implements Narrowab
 
             return reassociate(this, ValueNode.isConstantPredicate(), forX, forY);
         }
-        return this.maybeCommuteInputs();
+        return this;
     }
 
     @Override

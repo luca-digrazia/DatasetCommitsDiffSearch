@@ -22,26 +22,20 @@
  */
 package com.oracle.graal.nodes.debug;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_30;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_50;
-
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * A node for platform dependent verification of the Java heap. Intended to be used for debugging
  * heap corruption issues.
  */
-@NodeInfo(cycles = CYCLES_30, size = SIZE_50)
+@NodeInfo
 public final class VerifyHeapNode extends FixedWithNextNode implements Lowerable {
 
-    public static final NodeClass<VerifyHeapNode> TYPE = NodeClass.create(VerifyHeapNode.class);
+    public static final NodeClass TYPE = NodeClass.get(VerifyHeapNode.class);
 
     public VerifyHeapNode() {
         super(TYPE, StampFactory.forVoid());

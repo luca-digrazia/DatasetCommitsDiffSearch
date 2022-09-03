@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.internal.jvmci.code.*;
-
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -32,29 +31,24 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "|/|")
-public class UnsignedDivNode extends FixedBinaryNode implements Lowerable, LIRLowerable {
+public final class UnsignedDivNode extends FixedBinaryNode implements Lowerable, LIRLowerable {
 
-    public static final NodeClass<UnsignedDivNode> TYPE = NodeClass.create(UnsignedDivNode.class);
+    public static final NodeClass TYPE = NodeClass.get(UnsignedDivNode.class);
 
     public UnsignedDivNode(ValueNode x, ValueNode y) {
-        this(TYPE, x, y);
-    }
-
-    protected UnsignedDivNode(NodeClass<? extends UnsignedDivNode> c, ValueNode x, ValueNode y) {
-        super(c, x.stamp().unrestricted(), x, y);
+        super(TYPE, x.stamp().unrestricted(), x, y);
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        int bits = ((IntegerStamp) stamp()).getBits();
         if (forX.isConstant() && forY.isConstant()) {
-            long yConst = CodeUtil.zeroExtend(forY.asJavaConstant().asLong(), bits);
+            long yConst = forY.asJavaConstant().asLong();
             if (yConst == 0) {
                 return this; // this will trap, cannot canonicalize
             }
-            return ConstantNode.forIntegerStamp(stamp(), UnsignedMath.divide(CodeUtil.zeroExtend(forX.asJavaConstant().asLong(), bits), yConst));
+            return ConstantNode.forIntegerStamp(stamp(), UnsignedMath.divide(forX.asJavaConstant().asLong(), yConst));
         } else if (forY.isConstant()) {
-            long c = CodeUtil.zeroExtend(forY.asJavaConstant().asLong(), bits);
+            long c = forY.asJavaConstant().asLong();
             if (c == 1) {
                 return forX;
             }

@@ -29,10 +29,10 @@ import com.oracle.graal.nodes.*;
 @NodeInfo
 public final class SerialArrayRangeWriteBarrier extends ArrayRangeWriteBarrier {
 
-    public static final NodeClass<SerialArrayRangeWriteBarrier> TYPE = NodeClass.create(SerialArrayRangeWriteBarrier.class);
+    public static final NodeClass TYPE = NodeClass.get(SerialArrayRangeWriteBarrier.class);
 
     public SerialArrayRangeWriteBarrier(ValueNode object, ValueNode startIndex, ValueNode length) {
-        super(TYPE, object, startIndex, length);
+        super(object, startIndex, length);
     }
 
 }

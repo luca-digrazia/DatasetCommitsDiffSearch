@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,15 +24,25 @@ package com.oracle.graal.truffle.nodes;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.truffle.*;
 
-public class AssumptionNode extends MacroNode implements com.oracle.graal.graph.IterableNodeType, Simplifiable {
+@NodeInfo
+public final class AssumptionNode extends MacroNode implements Simplifiable {
+
+    public static final NodeClass TYPE = NodeClass.get(AssumptionNode.class);
 
     public AssumptionNode(Invoke invoke) {
-        super(invoke);
+        super(TYPE, invoke);
         assert super.arguments.size() == 1;
     }
 
@@ -40,16 +50,31 @@ public class AssumptionNode extends MacroNode implements com.oracle.graal.graph.
         return arguments.first();
     }
 
+    private static SnippetReflectionProvider getSnippetReflection() {
+        /*
+         * This class requires access to the objects encapsulated in Constants, and therefore breaks
+         * the compiler-VM separation of object constants.
+         */
+        return Graal.getRequiredCapability(SnippetReflectionProvider.class);
+    }
+
+    @Override
+    public void lower(LoweringTool tool) {
+        throw new GraalInternalError(GraphUtil.approxSourceException(this, new RuntimeException("assumption could not be evaluated to a constant")));
+    }
+
+    @Override
     public void simplify(SimplifierTool tool) {
         ValueNode assumption = getAssumption();
-        if (tool.assumptions() != null && assumption.isConstant()) {
-            Constant c = assumption.asConstant();
+        Assumptions assumptions = graph().getAssumptions();
+        if (assumption.isConstant()) {
+            JavaConstant c = assumption.asJavaConstant();
             assert c.getKind() == Kind.Object;
-            Object object = c.asObject();
+            Object object = getSnippetReflection().asObject(Object.class, c);
             OptimizedAssumption assumptionObject = (OptimizedAssumption) object;
             StructuredGraph graph = graph();
             if (assumptionObject.isValid()) {
-                tool.assumptions().record(new AssumptionValidAssumption(assumptionObject));
+                assumptions.record(new AssumptionValidAssumption(assumptionObject));
                 if (super.getReturnType().getKind() == Kind.Boolean) {
                     graph.replaceFixedWithFloating(this, ConstantNode.forBoolean(true, graph()));
                 } else {

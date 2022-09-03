@@ -22,18 +22,16 @@
  */
 package com.oracle.graal.nodes.java;
 
-import java.lang.reflect.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.jvmci.meta.*;
 
 @NodeInfo
 public final class DynamicNewInstanceNode extends AbstractNewObjectNode implements Canonicalizable {
-    public static final NodeClass<DynamicNewInstanceNode> TYPE = NodeClass.create(DynamicNewInstanceNode.class);
+    public static final NodeClass TYPE = NodeClass.get(DynamicNewInstanceNode.class);
 
     @Input ValueNode clazz;
 
@@ -42,34 +40,21 @@ public final class DynamicNewInstanceNode extends AbstractNewObjectNode implemen
         this.clazz = clazz;
     }
 
-    public ValueNode getInstanceType() {
-        return clazz;
-    }
-
-    @Override
-    public void simplify(SimplifierTool tool) {
-        /*
-         * Do not call the super implementation: we must not eliminate unused allocations because
-         * throwing an InstantiationException is a possible side effect of an unused allocation.
-         */
-    }
-
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (clazz.isConstant()) {
             ResolvedJavaType type = tool.getConstantReflection().asJavaType(clazz.asConstant());
-            if (type != null && type.isInitialized() && !throwsInstantiationException(type, tool.getMetaAccess())) {
+            if (type != null && type.isInitialized() && !type.isArray() && !type.isInterface() && !type.isPrimitive()) {
                 return new NewInstanceNode(type, fillContents());
             }
         }
         return this;
     }
 
-    public static boolean throwsInstantiationException(Class<?> type) {
-        return type.isPrimitive() || type.isArray() || type.isInterface() || Modifier.isAbstract(type.getModifiers()) || type == Class.class;
+    public ValueNode getInstanceType() {
+        return clazz;
     }
 
-    public static boolean throwsInstantiationException(ResolvedJavaType type, MetaAccessProvider metaAccess) {
-        return type.isPrimitive() || type.isArray() || type.isInterface() || Modifier.isAbstract(type.getModifiers()) || type.equals(metaAccess.lookupJavaType(Class.class));
-    }
+    @NodeIntrinsic
+    public static native Object allocateInstance(Class<?> clazz, @ConstantNodeParameter boolean fillContents);
 }

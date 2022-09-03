@@ -24,11 +24,10 @@ package com.oracle.graal.truffle.nodes.frame;
 
 import java.util.*;
 
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -49,7 +48,7 @@ import com.oracle.truffle.api.frame.*;
 @NodeInfo
 public final class NewFrameNode extends FixedWithNextNode implements IterableNodeType, VirtualizableAllocation, Canonicalizable {
 
-    public static final NodeClass<NewFrameNode> TYPE = NodeClass.create(NewFrameNode.class);
+    public static final NodeClass TYPE = NodeClass.get(NewFrameNode.class);
     @Input ValueNode descriptor;
     @Input ValueNode arguments;
 
@@ -100,7 +99,7 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
     @NodeInfo
     public static final class VirtualOnlyInstanceNode extends VirtualInstanceNode {
 
-        public static final NodeClass<VirtualOnlyInstanceNode> TYPE = NodeClass.create(VirtualOnlyInstanceNode.class);
+        public static final NodeClass TYPE = NodeClass.get(VirtualOnlyInstanceNode.class);
         protected boolean allowMaterialization;
 
         public VirtualOnlyInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields) {
@@ -135,7 +134,7 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
             escapeReason = "Must not let virtual frame object escape at node " + fixed + ".";
         }
 
-        Throwable exception = new JVMCIError(escapeReason +
+        Throwable exception = new GraalInternalError(escapeReason +
                         " Insert a call to VirtualFrame.materialize() to convert the instance to a materialized frame object (source position of following stack trace is approximate)");
         throw GraphUtil.approxSourceException(fixed, exception);
     }
@@ -182,12 +181,12 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
             graph().getAssumptions().record(new AssumptionValidAssumption((OptimizedAssumption) frameDescriptor.getVersion()));
         }
 
-        tool.createVirtualObject(virtualFrameObjectArray, objectArrayEntryState, Collections.<MonitorIdNode> emptyList(), false);
+        tool.createVirtualObject(virtualFrameObjectArray, objectArrayEntryState, Collections.<MonitorIdNode> emptyList());
         if (virtualFramePrimitiveArray != null) {
-            tool.createVirtualObject(virtualFramePrimitiveArray, primitiveArrayEntryState, Collections.<MonitorIdNode> emptyList(), false);
+            tool.createVirtualObject(virtualFramePrimitiveArray, primitiveArrayEntryState, Collections.<MonitorIdNode> emptyList());
         }
         if (virtualFrameTagArray != null) {
-            tool.createVirtualObject(virtualFrameTagArray, tagArrayEntryState, Collections.<MonitorIdNode> emptyList(), false);
+            tool.createVirtualObject(virtualFrameTagArray, tagArrayEntryState, Collections.<MonitorIdNode> emptyList());
         }
 
         assert frameFields.length == 5 || frameFields.length == 3;
@@ -202,7 +201,7 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
         if (tagsField != null) {
             frameEntryState[frameFieldList.indexOf(tagsField)] = virtualFrameTagArray;
         }
-        tool.createVirtualObject(virtualFrame, frameEntryState, Collections.<MonitorIdNode> emptyList(), false);
+        tool.createVirtualObject(virtualFrame, frameEntryState, Collections.<MonitorIdNode> emptyList());
         tool.replaceWithVirtual(virtualFrame);
     }
 
@@ -237,7 +236,7 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (tool.allUsagesAvailable() && hasNoUsages()) {
+        if (hasNoUsages()) {
             return null;
         } else {
             return this;
@@ -245,5 +244,5 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
     }
 
     @NodeIntrinsic
-    public static native VirtualFrame allocate(@ConstantNodeParameter Class<? extends VirtualFrame> frameType, FrameDescriptor descriptor, Object[] args);
+    public static native FrameWithoutBoxing allocate(@ConstantNodeParameter Class<? extends VirtualFrame> frameType, FrameDescriptor descriptor, Object[] args);
 }

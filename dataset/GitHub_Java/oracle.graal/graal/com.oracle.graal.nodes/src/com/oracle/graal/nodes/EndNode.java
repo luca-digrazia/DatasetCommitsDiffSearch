@@ -25,9 +25,9 @@ package com.oracle.graal.nodes;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 
-@NodeInfo(allowedUsageTypes = {InputType.Association}, nameTemplate = "End")
+@NodeInfo(allowedUsageTypes = {InputType.Association})
 public final class EndNode extends AbstractEndNode {
-    public static final NodeClass<EndNode> TYPE = NodeClass.create(EndNode.class);
+    public static final NodeClass TYPE = NodeClass.get(EndNode.class);
 
     public EndNode() {
         super(TYPE);

@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.replacements.amd64;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -34,20 +33,20 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
- * Count the number of leading zeros using the {@code lzcntq} or {@code lzcntl} instructions.
+ * Count the number of leading zeros.
  */
 @NodeInfo
 public final class AMD64CountLeadingZerosNode extends UnaryNode implements LIRLowerable {
-    public static final NodeClass<AMD64CountLeadingZerosNode> TYPE = NodeClass.create(AMD64CountLeadingZerosNode.class);
+    public static final NodeClass TYPE = NodeClass.get(AMD64CountLeadingZerosNode.class);
 
     public AMD64CountLeadingZerosNode(ValueNode value) {
         super(TYPE, StampFactory.forInteger(Kind.Int, 0, ((PrimitiveStamp) value.stamp()).getBits()), value);
-        assert value.getStackKind() == Kind.Int || value.getStackKind() == Kind.Long;
+        assert value.getKind() == Kind.Int || value.getKind() == Kind.Long;
     }
 
     @Override
     public boolean inferStamp() {
-        assert value.getStackKind() == Kind.Int || value.getStackKind() == Kind.Long;
+        assert value.getKind() == Kind.Int || value.getKind() == Kind.Long;
         IntegerStamp valueStamp = (IntegerStamp) getValue().stamp();
         long mask = CodeUtil.mask(valueStamp.getBits());
         // Don't count zeros from the mask in the result.
@@ -58,23 +57,36 @@ public final class AMD64CountLeadingZerosNode extends UnaryNode implements LIRLo
         return updateStamp(StampFactory.forInteger(Kind.Int, min, max));
     }
 
-    public static ValueNode tryFold(ValueNode value) {
-        if (value.isConstant()) {
-            JavaConstant c = value.asJavaConstant();
-            if (value.getStackKind() == Kind.Int) {
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        if (forValue.isConstant()) {
+            JavaConstant c = forValue.asJavaConstant();
+            if (forValue.getKind() == Kind.Int) {
                 return ConstantNode.forInt(Integer.numberOfLeadingZeros(c.asInt()));
             } else {
                 return ConstantNode.forInt(Long.numberOfLeadingZeros(c.asLong()));
             }
         }
-        return null;
+        return this;
     }
 
-    @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        ValueNode folded = tryFold(forValue);
-        return folded != null ? folded : this;
-    }
+    /**
+     * Raw intrinsic for lzcntq instruction.
+     *
+     * @param v
+     * @return number of trailing zeros
+     */
+    @NodeIntrinsic
+    public static native int count(long v);
+
+    /**
+     * Raw intrinsic for lzcntl instruction.
+     *
+     * @param v
+     * @return number of trailing zeros
+     */
+    @NodeIntrinsic
+    public static native int count(int v);
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {

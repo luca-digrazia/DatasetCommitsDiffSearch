@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.replacements.amd64;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -34,15 +33,15 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
- * Count the number of trailing zeros using the {@code tzcntq} or {@code tzcntl} instructions.
+ * Count the number of trailing zeros.
  */
 @NodeInfo
 public final class AMD64CountTrailingZerosNode extends UnaryNode implements LIRLowerable {
-    public static final NodeClass<AMD64CountTrailingZerosNode> TYPE = NodeClass.create(AMD64CountTrailingZerosNode.class);
+    public static final NodeClass TYPE = NodeClass.get(AMD64CountTrailingZerosNode.class);
 
     public AMD64CountTrailingZerosNode(ValueNode value) {
         super(TYPE, StampFactory.forInteger(Kind.Int, 0, ((PrimitiveStamp) value.stamp()).getBits()), value);
-        assert value.getStackKind() == Kind.Int || value.getStackKind() == Kind.Long;
+        assert value.getKind() == Kind.Int || value.getKind() == Kind.Long;
     }
 
     @Override
@@ -54,23 +53,36 @@ public final class AMD64CountTrailingZerosNode extends UnaryNode implements LIRL
         return updateStamp(StampFactory.forInteger(Kind.Int, min, max));
     }
 
-    public static ValueNode tryFold(ValueNode value) {
-        if (value.isConstant()) {
-            JavaConstant c = value.asJavaConstant();
-            if (value.getStackKind() == Kind.Int) {
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        if (forValue.isConstant()) {
+            JavaConstant c = forValue.asJavaConstant();
+            if (forValue.getKind() == Kind.Int) {
                 return ConstantNode.forInt(Integer.numberOfTrailingZeros(c.asInt()));
             } else {
                 return ConstantNode.forInt(Long.numberOfTrailingZeros(c.asLong()));
             }
         }
-        return null;
+        return this;
     }
 
-    @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        ValueNode folded = tryFold(forValue);
-        return folded != null ? folded : this;
-    }
+    /**
+     * Raw intrinsic for tzcntq instruction.
+     *
+     * @param v
+     * @return number of trailing zeros
+     */
+    @NodeIntrinsic
+    public static native int count(long v);
+
+    /**
+     * Raw intrinsic for tzcntl instruction.
+     *
+     * @param v
+     * @return number of trailing zeros
+     */
+    @NodeIntrinsic
+    public static native int count(int v);
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {

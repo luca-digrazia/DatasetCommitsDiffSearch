@@ -39,7 +39,8 @@ import com.oracle.graal.replacements.*;
  * is replaced by a {@link PiNode} once the type becomes constant (which <b>must</b> happen).
  */
 @NodeInfo
-public class DeferredPiNode extends FloatingNode implements Canonicalizable {
+public final class DeferredPiNode extends FloatingNode implements Canonicalizable {
+    public static final NodeClass TYPE = NodeClass.get(DeferredPiNode.class);
 
     @Input ValueNode object;
     @Input ValueNode type;
@@ -48,12 +49,8 @@ public class DeferredPiNode extends FloatingNode implements Canonicalizable {
         return object;
     }
 
-    public static DeferredPiNode create(ValueNode type, ValueNode object) {
-        return new DeferredPiNode(type, object);
-    }
-
-    protected DeferredPiNode(ValueNode type, ValueNode object) {
-        super(StampFactory.object());
+    public DeferredPiNode(ValueNode type, ValueNode object) {
+        super(TYPE, StampFactory.object());
         this.type = type;
         this.object = object;
     }
@@ -63,7 +60,7 @@ public class DeferredPiNode extends FloatingNode implements Canonicalizable {
         if (type.isConstant()) {
             ResolvedJavaType javaType = tool.getConstantReflection().asJavaType(type.asConstant());
             ObjectStamp objectStamp = (ObjectStamp) stamp();
-            return PiNode.create(object, javaType, objectStamp.isExactType(), objectStamp.nonNull());
+            return new PiNode(object, javaType, objectStamp.isExactType(), objectStamp.nonNull());
         }
         return this;
     }

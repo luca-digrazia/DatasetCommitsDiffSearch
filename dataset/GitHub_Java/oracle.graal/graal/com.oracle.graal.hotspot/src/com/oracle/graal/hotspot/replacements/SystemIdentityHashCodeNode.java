@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,30 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.phases.GraalOptions.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.replacements.nodes.*;
 
-public class SystemIdentityHashCodeNode extends PureFunctionMacroNode {
+@NodeInfo
+public final class SystemIdentityHashCodeNode extends PureFunctionMacroNode {
+
+    public static final NodeClass TYPE = NodeClass.get(SystemIdentityHashCodeNode.class);
 
     public SystemIdentityHashCodeNode(Invoke invoke) {
-        super(invoke);
+        super(TYPE, invoke);
     }
 
     @Override
-    protected Constant evaluate(Constant param, MetaAccessProvider metaAccess) {
-        return ImmutableCode.getValue() || param.isNull() ? null : Constant.forInt(System.identityHashCode(HotSpotObjectConstant.asObject(param)));
+    protected JavaConstant evaluate(JavaConstant param, MetaAccessProvider metaAccess) {
+        if (ImmutableCode.getValue() || param.isNull()) {
+            return null;
+        }
+        HotSpotObjectConstant c = (HotSpotObjectConstant) param;
+        return JavaConstant.forInt(c.getIdentityHashCode());
     }
 }

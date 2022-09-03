@@ -24,8 +24,7 @@ package com.oracle.graal.nodes.calc;
 
 import java.nio.*;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -42,7 +41,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class ReinterpretNode extends UnaryNode implements ArithmeticLIRLowerable {
 
-    public static final NodeClass<ReinterpretNode> TYPE = NodeClass.create(ReinterpretNode.class);
+    public static final NodeClass TYPE = NodeClass.get(ReinterpretNode.class);
 
     public ReinterpretNode(Kind to, ValueNode value) {
         this(StampFactory.forKind(to), value);
@@ -83,9 +82,9 @@ public final class ReinterpretNode extends UnaryNode implements ArithmeticLIRLow
     }
 
     @Override
-    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
+    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
         LIRKind kind = gen.getLIRKind(stamp());
-        nodeValueMap.setResult(this, gen.emitReinterpret(kind, nodeValueMap.operand(getValue())));
+        builder.setResult(this, gen.emitReinterpret(kind, builder.operand(getValue())));
     }
 
     public static ValueNode reinterpret(Kind toKind, ValueNode value) {

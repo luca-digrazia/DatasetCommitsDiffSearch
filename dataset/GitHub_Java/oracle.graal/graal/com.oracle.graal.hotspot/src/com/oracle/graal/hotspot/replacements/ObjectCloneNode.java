@@ -22,14 +22,16 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
+import static com.oracle.graal.compiler.GraalCompiler.*;
+
 import java.lang.reflect.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.java.*;
@@ -40,14 +42,18 @@ import com.oracle.graal.replacements.nodes.*;
 @NodeInfo
 public final class ObjectCloneNode extends BasicObjectCloneNode implements VirtualizableAllocation, ArrayLengthProvider {
 
-    public static final NodeClass<ObjectCloneNode> TYPE = NodeClass.create(ObjectCloneNode.class);
+    public static final NodeClass TYPE = NodeClass.get(ObjectCloneNode.class);
 
-    public ObjectCloneNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, JavaType returnType, ValueNode receiver) {
-        super(TYPE, invokeKind, targetMethod, bci, returnType, receiver);
+    public ObjectCloneNode(Invoke invoke) {
+        super(TYPE, invoke);
     }
 
     @Override
     protected StructuredGraph getLoweredSnippetGraph(LoweringTool tool) {
+        if (!shouldIntrinsify(getTargetMethod())) {
+            return null;
+        }
+
         ResolvedJavaType type = StampTool.typeOrNull(getObject());
         if (type != null) {
             if (type.isArray()) {
@@ -57,7 +63,7 @@ public final class ObjectCloneNode extends BasicObjectCloneNode implements Virtu
                     final Replacements replacements = tool.getReplacements();
                     StructuredGraph snippetGraph = null;
                     try (Scope s = Debug.scope("ArrayCopySnippet", snippetMethod)) {
-                        snippetGraph = replacements.getSnippet(snippetMethod, null);
+                        snippetGraph = replacements.getSnippet(snippetMethod);
                     } catch (Throwable e) {
                         throw Debug.handle(e);
                     }

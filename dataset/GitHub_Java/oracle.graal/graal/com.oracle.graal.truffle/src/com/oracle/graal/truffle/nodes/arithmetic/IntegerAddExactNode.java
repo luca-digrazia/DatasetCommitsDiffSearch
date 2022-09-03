@@ -38,7 +38,7 @@ import com.oracle.truffle.api.*;
  */
 @NodeInfo
 public final class IntegerAddExactNode extends AddNode implements IntegerExactArithmeticNode {
-    public static final NodeClass<IntegerAddExactNode> TYPE = NodeClass.create(IntegerAddExactNode.class);
+    public static final NodeClass TYPE = NodeClass.get(IntegerAddExactNode.class);
 
     public IntegerAddExactNode(ValueNode x, ValueNode y) {
         super(TYPE, x, y);
@@ -53,49 +53,35 @@ public final class IntegerAddExactNode extends AddNode implements IntegerExactAr
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        ValueNode result = findSynonym(forX, forY);
-        if (result == null) {
-            return this;
-        } else {
-            return result;
-        }
-    }
-
-    private static ValueNode findSynonym(ValueNode forX, ValueNode forY) {
         if (forX.isConstant() && !forY.isConstant()) {
             return new IntegerAddExactNode(forY, forX);
         }
         if (forX.isConstant()) {
-            ConstantNode constantNode = canonicalXconstant(forX, forY);
-            if (constantNode != null) {
-                return constantNode;
-            }
+            return canonicalXconstant(forX, forY);
         } else if (forY.isConstant()) {
             long c = forY.asJavaConstant().asLong();
             if (c == 0) {
                 return forX;
             }
         }
-        return null;
+        return this;
     }
 
-    private static ConstantNode canonicalXconstant(ValueNode forX, ValueNode forY) {
+    private ValueNode canonicalXconstant(ValueNode forX, ValueNode forY) {
         JavaConstant xConst = forX.asJavaConstant();
         JavaConstant yConst = forY.asJavaConstant();
-        if (xConst != null && yConst != null) {
-            assert xConst.getKind() == yConst.getKind();
-            try {
-                if (xConst.getKind() == Kind.Int) {
-                    return ConstantNode.forInt(ExactMath.addExact(xConst.asInt(), yConst.asInt()));
-                } else {
-                    assert xConst.getKind() == Kind.Long;
-                    return ConstantNode.forLong(ExactMath.addExact(xConst.asLong(), yConst.asLong()));
-                }
-            } catch (ArithmeticException ex) {
-                // The operation will result in an overflow exception, so do not canonicalize.
+        assert xConst.getKind() == yConst.getKind();
+        try {
+            if (xConst.getKind() == Kind.Int) {
+                return ConstantNode.forInt(ExactMath.addExact(xConst.asInt(), yConst.asInt()));
+            } else {
+                assert xConst.getKind() == Kind.Long;
+                return ConstantNode.forLong(ExactMath.addExact(xConst.asLong(), yConst.asLong()));
             }
+        } catch (ArithmeticException ex) {
+            // The operation will result in an overflow exception, so do not canonicalize.
         }
-        return null;
+        return this;
     }
 
     @Override

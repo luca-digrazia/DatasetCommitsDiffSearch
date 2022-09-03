@@ -28,7 +28,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
@@ -38,7 +37,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class JavaReadNode extends FixedAccessNode implements Lowerable, GuardingNode, Canonicalizable {
 
-    public static final NodeClass<JavaReadNode> TYPE = NodeClass.create(JavaReadNode.class);
+    public static final NodeClass TYPE = NodeClass.get(JavaReadNode.class);
     protected final Kind readKind;
     protected final boolean compressible;
 

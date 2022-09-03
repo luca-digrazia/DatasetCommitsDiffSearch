@@ -22,22 +22,14 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import jdk.vm.ci.common.JVMCIError;
-
-import com.oracle.graal.compiler.common.calc.Condition;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Simplifiable;
-import com.oracle.graal.graph.spi.SimplifierTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedGuardNode;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.ConditionalNode;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.calc.IntegerEqualsNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Instances of this node class will look for a preceding if node and put the given probability into
@@ -47,7 +39,7 @@ import com.oracle.graal.nodes.spi.LoweringTool;
 @NodeInfo
 public final class BranchProbabilityNode extends FloatingNode implements Simplifiable, Lowerable {
 
-    public static final NodeClass<BranchProbabilityNode> TYPE = NodeClass.create(BranchProbabilityNode.class);
+    public static final NodeClass TYPE = NodeClass.get(BranchProbabilityNode.class);
     public static final double LIKELY_PROBABILITY = 0.6;
     public static final double NOT_LIKELY_PROBABILITY = 1 - LIKELY_PROBABILITY;
 
@@ -82,9 +74,9 @@ public final class BranchProbabilityNode extends FloatingNode implements Simplif
         if (probability.isConstant()) {
             double probabilityValue = probability.asJavaConstant().asDouble();
             if (probabilityValue < 0.0) {
-                throw new JVMCIError("A negative probability of " + probabilityValue + " is not allowed!");
+                throw new GraalInternalError("A negative probability of " + probabilityValue + " is not allowed!");
             } else if (probabilityValue > 1.0) {
-                throw new JVMCIError("A probability of more than 1.0 (" + probabilityValue + ") is not allowed!");
+                throw new GraalInternalError("A probability of more than 1.0 (" + probabilityValue + ") is not allowed!");
             } else if (Double.isNaN(probabilityValue)) {
                 /*
                  * We allow NaN if the node is in unreachable code that will eventually fall away,
@@ -93,7 +85,6 @@ public final class BranchProbabilityNode extends FloatingNode implements Simplif
                 return;
             }
             boolean couldSet = false;
-            boolean isExcused = false;
             for (IntegerEqualsNode node : this.usages().filter(IntegerEqualsNode.class)) {
                 if (node.condition() == Condition.EQ) {
                     ValueNode other = node.getX();
@@ -109,21 +100,15 @@ public final class BranchProbabilityNode extends FloatingNode implements Simplif
                             couldSet = true;
                             ifNodeUsages.setTrueSuccessorProbability(probabilityToSet);
                         }
-                        if (!couldSet) {
-                            isExcused = node.usages().filter(ConditionalNode.class).isNotEmpty() || node.usages().filter(FixedGuardNode.class).isNotEmpty();
-                        }
                     }
                 }
             }
-            if (couldSet || isExcused) {
-                ValueNode currentCondition = condition;
-                replaceAndDelete(currentCondition);
-                if (tool != null) {
-                    tool.addToWorkList(currentCondition.usages());
-                }
+            if (couldSet) {
+                replaceAndDelete(condition);
+                tool.addToWorkList(condition.usages());
             } else {
                 if (!isSubstitutionGraph()) {
-                    throw new JVMCIError("Wrong usage of branch probability injection!");
+                    throw new GraalInternalError("Wrong usage of branch probability injection!");
                 }
             }
         }
@@ -145,10 +130,13 @@ public final class BranchProbabilityNode extends FloatingNode implements Simplif
      * @return the condition
      */
     @NodeIntrinsic
-    public static native boolean probability(double probability, boolean condition);
+    public static boolean probability(double probability, boolean condition) {
+        assert probability >= 0.0 && probability <= 1.0;
+        return condition;
+    }
 
     @Override
     public void lower(LoweringTool tool) {
-        throw new JVMCIError("Branch probability could not be injected, because the probability value did not reduce to a constant value.");
+        throw new GraalInternalError("Branch probability could not be injected, because the probability value did not reduce to a constant value.");
     }
 }

@@ -22,6 +22,10 @@
  */
 package com.oracle.graal.nodes;
 
+import static com.oracle.graal.api.meta.DeoptimizationAction.*;
+import static com.oracle.graal.api.meta.DeoptimizationReason.*;
+import static com.oracle.graal.compiler.common.type.StampFactory.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
@@ -38,7 +42,7 @@ import com.oracle.graal.nodes.type.*;
 @NodeInfo(nameTemplate = "GuardingPi(!={p#negated}) {p#reason/s}")
 public final class GuardingPiNode extends FixedWithNextNode implements Lowerable, Virtualizable, Canonicalizable, ValueProxy {
 
-    public static final NodeClass<GuardingPiNode> TYPE = NodeClass.create(GuardingPiNode.class);
+    public static final NodeClass TYPE = NodeClass.get(GuardingPiNode.class);
     @Input ValueNode object;
     @Input(InputType.Condition) LogicNode condition;
     protected final DeoptimizationReason reason;
@@ -64,6 +68,21 @@ public final class GuardingPiNode extends FixedWithNextNode implements Lowerable
 
     public DeoptimizationAction getAction() {
         return action;
+    }
+
+    /**
+     * Returns a node whose stamp is guaranteed to be {@linkplain StampTool#isPointerNonNull(Stamp)
+     * non-null}. If {@code value} already has such a stamp, then it is returned. Otherwise a fixed
+     * node guarding {@code value} is returned where the guard performs a null check.
+     */
+    public static ValueNode nullCheckedValue(ValueNode value) {
+        ObjectStamp receiverStamp = (ObjectStamp) value.stamp();
+        if (!StampTool.isPointerNonNull(receiverStamp)) {
+            IsNullNode condition = value.graph().unique(new IsNullNode(value));
+            Stamp stamp = receiverStamp.join(objectNonNull());
+            return new GuardingPiNode(value, condition, true, NullCheckException, InvalidateReprofile, stamp);
+        }
+        return value;
     }
 
     public GuardingPiNode(ValueNode object) {
@@ -107,7 +126,7 @@ public final class GuardingPiNode extends FixedWithNextNode implements Lowerable
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (stamp().isIllegal()) {
+        if (stamp() == StampFactory.illegal(object.getKind())) {
             // The guard always fails
             return new DeoptimizeNode(action, reason);
         }
@@ -128,17 +147,19 @@ public final class GuardingPiNode extends FixedWithNextNode implements Lowerable
     }
 
     @NodeIntrinsic
-    public static native Object guardingNonNull(Object object);
+    public static <T> T guardingNonNull(T object) {
+        if (object == null) {
+            throw new NullPointerException();
+        }
+        return object;
+    }
+
+    @NodeIntrinsic
+    public static native Object guardingPi(Object object, LogicNode condition, @ConstantNodeParameter boolean negateCondition, @ConstantNodeParameter DeoptimizationReason reason,
+                    @ConstantNodeParameter DeoptimizationAction action, @ConstantNodeParameter Stamp stamp);
 
     @Override
     public ValueNode getOriginalNode() {
         return object;
     }
-
-    /**
-     * Casts a value to have an exact, non-null stamp representing {@link Class} that is guarded by
-     * a null check.
-     */
-    @NodeIntrinsic(GuardingPiNode.class)
-    public static native Class<?> asNonNullClass(Class<?> c);
 }

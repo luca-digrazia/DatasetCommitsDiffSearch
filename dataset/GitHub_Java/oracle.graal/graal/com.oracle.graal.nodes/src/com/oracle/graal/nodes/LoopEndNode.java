@@ -22,13 +22,11 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.Collections;
+import java.util.*;
 
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * LoopEnd nodes represent a loop back-edge. When a LoopEnd is reached, execution continues at the
@@ -37,9 +35,9 @@ import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 @NodeInfo
 public final class LoopEndNode extends AbstractEndNode {
 
-    public static final NodeClass<LoopEndNode> TYPE = NodeClass.create(LoopEndNode.class);
+    public static final NodeClass TYPE = NodeClass.get(LoopEndNode.class);
     @Input(InputType.Association) LoopBeginNode loopBegin;
-    private boolean canSafepoint;
+    protected boolean canSafepoint;
     protected int endIndex;
 
     public LoopEndNode(LoopBeginNode begin) {
@@ -65,16 +63,12 @@ public final class LoopEndNode extends AbstractEndNode {
         this.loopBegin = x;
     }
 
-    /**
-     * Disables safepoints for only this loop end (in contrast to disabling it for
-     * {@link LoopBeginNode#disableSafepoint() the whole loop}.
-     */
     public void disableSafepoint() {
         this.canSafepoint = false;
     }
 
     public boolean canSafepoint() {
-        return canSafepoint && loopBegin.canSafepoint;
+        return canSafepoint;
     }
 
     @Override

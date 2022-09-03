@@ -22,15 +22,15 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
  * Load of a value from a location specified as an offset relative to an object. No null check is
@@ -38,7 +38,7 @@ import com.oracle.graal.nodes.virtual.*;
  */
 @NodeInfo
 public final class UnsafeLoadNode extends UnsafeAccessNode implements Lowerable, Virtualizable {
-    public static final NodeClass<UnsafeLoadNode> TYPE = NodeClass.create(UnsafeLoadNode.class);
+    public static final NodeClass TYPE = NodeClass.get(UnsafeLoadNode.class);
     @OptionalInput(InputType.Condition) LogicNode guardingCondition;
 
     public UnsafeLoadNode(ValueNode object, ValueNode offset, Kind accessKind, LocationIdentity locationIdentity) {
@@ -61,17 +61,16 @@ public final class UnsafeLoadNode extends UnsafeAccessNode implements Lowerable,
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode alias = tool.getAlias(object());
-        if (alias instanceof VirtualObjectNode) {
-            VirtualObjectNode virtual = (VirtualObjectNode) alias;
-            ValueNode offsetValue = tool.getAlias(offset());
+        State state = tool.getObjectState(object());
+        if (state != null && state.getState() == EscapeState.Virtual) {
+            ValueNode offsetValue = tool.getReplacedValue(offset());
             if (offsetValue.isConstant()) {
                 long off = offsetValue.asJavaConstant().asLong();
-                int entryIndex = virtual.entryIndexForOffset(off, accessKind());
+                int entryIndex = state.getVirtualObject().entryIndexForOffset(off, accessKind());
 
                 if (entryIndex != -1) {
-                    ValueNode entry = tool.getEntry(virtual, entryIndex);
-                    Kind entryKind = virtual.entryKind(entryIndex);
+                    ValueNode entry = state.getEntry(entryIndex);
+                    Kind entryKind = state.getVirtualObject().entryKind(entryIndex);
                     if (entry.getKind() == getKind() || entryKind == accessKind()) {
                         tool.replaceWith(entry);
                     }
@@ -90,6 +89,34 @@ public final class UnsafeLoadNode extends UnsafeAccessNode implements Lowerable,
         return new UnsafeLoadNode(object(), location, accessKind(), identity, guardingCondition);
     }
 
+    @SuppressWarnings({"unchecked", "unused"})
     @NodeIntrinsic
-    public static native Object load(Object object, long offset, @ConstantNodeParameter Kind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
+    public static <T> T load(Object object, long offset, @ConstantNodeParameter Kind kind, @ConstantNodeParameter LocationIdentity locationIdentity) {
+        if (kind == Kind.Boolean) {
+            return (T) (Boolean) unsafe.getBoolean(object, offset);
+        }
+        if (kind == Kind.Byte) {
+            return (T) (Byte) unsafe.getByte(object, offset);
+        }
+        if (kind == Kind.Short) {
+            return (T) (Short) unsafe.getShort(object, offset);
+        }
+        if (kind == Kind.Char) {
+            return (T) (Character) unsafe.getChar(object, offset);
+        }
+        if (kind == Kind.Int) {
+            return (T) (Integer) unsafe.getInt(object, offset);
+        }
+        if (kind == Kind.Float) {
+            return (T) (Float) unsafe.getFloat(object, offset);
+        }
+        if (kind == Kind.Long) {
+            return (T) (Long) unsafe.getLong(object, offset);
+        }
+        if (kind == Kind.Double) {
+            return (T) (Double) unsafe.getDouble(object, offset);
+        }
+        assert kind == Kind.Object;
+        return (T) unsafe.getObject(object, offset);
+    }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,44 +23,58 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "%")
-public final class IntegerRemNode extends IntegerArithmeticNode implements Canonicalizable, LIRLowerable {
+public final class IntegerRemNode extends FixedBinaryNode implements Lowerable, LIRLowerable {
+    public static final NodeClass TYPE = NodeClass.get(IntegerRemNode.class);
 
-    public IntegerRemNode(Kind kind, ValueNode x, ValueNode y) {
-        super(kind, x, y);
+    public IntegerRemNode(ValueNode x, ValueNode y) {
+        super(TYPE, IntegerStamp.OPS.getRem().foldStamp(x.stamp(), y.stamp()), x, y);
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (x().isConstant() && y().isConstant()) {
-            long yConst = y().asConstant().asLong();
-            if (yConst == 0) {
+    public boolean inferStamp() {
+        return updateStamp(IntegerStamp.OPS.getRem().foldStamp(getX().stamp(), getY().stamp()));
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        if (forX.isConstant() && forY.isConstant()) {
+            @SuppressWarnings("hiding")
+            long y = forY.asJavaConstant().asLong();
+            if (y == 0) {
                 return this; // this will trap, can not canonicalize
             }
-            if (kind() == Kind.Int) {
-                return ConstantNode.forInt(x().asConstant().asInt() % (int) yConst, graph());
-            } else {
-                assert kind() == Kind.Long;
-                return ConstantNode.forLong(x().asConstant().asLong() % yConst, graph());
-            }
-        } else if (y().isConstant()) {
-            long c = y().asConstant().asLong();
+            return ConstantNode.forIntegerStamp(stamp(), forX.asJavaConstant().asLong() % y);
+        } else if (forY.isConstant()) {
+            long c = forY.asJavaConstant().asLong();
             if (c == 1 || c == -1) {
-                return ConstantNode.forIntegerKind(kind(), 0, graph());
-            } else if (c > 0 && CodeUtil.isPowerOf2(c) && x().integerStamp().lowerBound() >= 0) {
-                return graph().unique(new AndNode(kind(), x(), ConstantNode.forIntegerKind(kind(), c - 1, graph())));
+                return ConstantNode.forIntegerStamp(stamp(), 0);
+            } else if (c > 0 && CodeUtil.isPowerOf2(c) && forX.stamp() instanceof IntegerStamp && ((IntegerStamp) forX.stamp()).isPositive()) {
+                return new AndNode(forX, ConstantNode.forIntegerStamp(stamp(), c - 1));
             }
         }
         return this;
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.setResult(this, gen.emitRem(gen.operand(x()), gen.operand(y())));
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
+    }
+
+    @Override
+    public void generate(NodeLIRBuilderTool gen) {
+        gen.setResult(this, gen.getLIRGeneratorTool().emitRem(gen.operand(getX()), gen.operand(getY()), gen.state(this)));
+    }
+
+    @Override
+    public boolean canDeoptimize() {
+        return !(getY().stamp() instanceof IntegerStamp) || ((IntegerStamp) getY().stamp()).contains(0);
     }
 }

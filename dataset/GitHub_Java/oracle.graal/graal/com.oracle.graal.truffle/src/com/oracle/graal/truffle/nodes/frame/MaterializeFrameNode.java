@@ -25,6 +25,7 @@ package com.oracle.graal.truffle.nodes.frame;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.truffle.*;
 
 /**
  * Intrinsic node for materializing a Truffle frame.
@@ -32,7 +33,7 @@ import com.oracle.graal.nodes.*;
 @NodeInfo(nameTemplate = "MaterializeFrame{p#frame/s}")
 public final class MaterializeFrameNode extends FixedWithNextNode implements IterableNodeType {
 
-    public static final NodeClass<MaterializeFrameNode> TYPE = NodeClass.create(MaterializeFrameNode.class);
+    public static final NodeClass TYPE = NodeClass.get(MaterializeFrameNode.class);
     @Input ValueNode frame;
 
     public MaterializeFrameNode(ValueNode frame) {
@@ -43,4 +44,7 @@ public final class MaterializeFrameNode extends FixedWithNextNode implements Ite
     public ValueNode getFrame() {
         return frame;
     }
+
+    @NodeIntrinsic
+    public static native <T> T materialize(FrameWithoutBoxing frame);
 }

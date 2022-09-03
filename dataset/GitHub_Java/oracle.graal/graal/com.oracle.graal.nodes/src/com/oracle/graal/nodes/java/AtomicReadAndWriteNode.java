@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.nodes.java;
 
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 import sun.misc.*;
 
 import com.oracle.graal.api.meta.*;
@@ -29,7 +30,7 @@ import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
@@ -39,7 +40,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class AtomicReadAndWriteNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single {
 
-    public static final NodeClass<AtomicReadAndWriteNode> TYPE = NodeClass.create(AtomicReadAndWriteNode.class);
+    public static final NodeClass TYPE = NodeClass.get(AtomicReadAndWriteNode.class);
     @Input ValueNode object;
     @Input ValueNode offset;
     @Input ValueNode newValue;
@@ -79,4 +80,23 @@ public final class AtomicReadAndWriteNode extends AbstractMemoryCheckpoint imple
     public void lower(LoweringTool tool) {
         tool.getLowerer().lower(this, tool);
     }
+
+    @NodeIntrinsic
+    public static int getAndSetInt(Object object, long offset, int newValue, @SuppressWarnings("unused") @ConstantNodeParameter Kind valueKind,
+                    @ConstantNodeParameter @SuppressWarnings("unused") LocationIdentity locationIdentity) {
+        return unsafe.getAndSetInt(object, offset, newValue);
+    }
+
+    @NodeIntrinsic
+    public static long getAndSetLong(Object object, long offset, long newValue, @SuppressWarnings("unused") @ConstantNodeParameter Kind valueKind,
+                    @ConstantNodeParameter @SuppressWarnings("unused") LocationIdentity locationIdentity) {
+        return unsafe.getAndSetLong(object, offset, newValue);
+    }
+
+    @NodeIntrinsic
+    public static Object getAndSetObject(Object object, long offset, Object newValue, @SuppressWarnings("unused") @ConstantNodeParameter Kind valueKind,
+                    @ConstantNodeParameter @SuppressWarnings("unused") LocationIdentity locationIdentity) {
+        return unsafe.getAndSetObject(object, offset, newValue);
+    }
+
 }

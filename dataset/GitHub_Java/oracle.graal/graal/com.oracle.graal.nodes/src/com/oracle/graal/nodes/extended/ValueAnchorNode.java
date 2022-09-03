@@ -28,7 +28,6 @@ import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 
@@ -38,7 +37,7 @@ import com.oracle.graal.nodes.util.*;
 @NodeInfo(allowedUsageTypes = {InputType.Anchor, InputType.Guard})
 public final class ValueAnchorNode extends FixedWithNextNode implements LIRLowerable, Simplifiable, Virtualizable, AnchoringNode, GuardingNode {
 
-    public static final NodeClass<ValueAnchorNode> TYPE = NodeClass.create(ValueAnchorNode.class);
+    public static final NodeClass TYPE = NodeClass.get(ValueAnchorNode.class);
     @OptionalInput(InputType.Guard) ValueNode anchored;
 
     public ValueAnchorNode(ValueNode value) {
@@ -68,7 +67,7 @@ public final class ValueAnchorNode extends FixedWithNextNode implements LIRLower
                 break;
             }
         }
-        if (tool.allUsagesAvailable() && hasNoUsages() && next() instanceof FixedAccessNode) {
+        if (hasNoUsages() && next() instanceof FixedAccessNode) {
             FixedAccessNode currentNext = (FixedAccessNode) next();
             if (currentNext.getGuard() == anchored) {
                 GraphUtil.removeFixedWithUnusedInputs(this);

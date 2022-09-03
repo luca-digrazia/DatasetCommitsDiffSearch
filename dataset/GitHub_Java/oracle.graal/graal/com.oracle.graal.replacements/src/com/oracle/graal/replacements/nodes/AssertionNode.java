@@ -38,7 +38,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class AssertionNode extends FixedWithNextNode implements Lowerable, Canonicalizable, LIRLowerable {
 
-    public static final NodeClass<AssertionNode> TYPE = NodeClass.create(AssertionNode.class);
+    public static final NodeClass TYPE = NodeClass.get(AssertionNode.class);
     @Input ValueNode value;
 
     protected final boolean compileTimeAssertion;
@@ -79,15 +79,16 @@ public final class AssertionNode extends FixedWithNextNode implements Lowerable,
 
     public void generate(NodeLIRBuilderTool generator) {
         assert compileTimeAssertion;
-        if (value.isConstant()) {
-            if (value.asJavaConstant().asInt() == 0) {
-                throw new GraalInternalError("%s: failed compile-time assertion: %s", this, message);
-            }
+        if (value.isConstant() && value.asJavaConstant().asInt() == 0) {
+            throw new GraalInternalError("%s: failed compile-time assertion: %s", this, message);
         } else {
             throw new GraalInternalError("%s: failed compile-time assertion (value %s): %s", this, value, message);
         }
     }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native void assertion(@ConstantNodeParameter boolean compileTimeAssertion, boolean value, @ConstantNodeParameter String message);
+    public static void assertion(@ConstantNodeParameter boolean compileTimeAssertion, boolean value, @ConstantNodeParameter String message) {
+        assert value : message;
+    }
 }

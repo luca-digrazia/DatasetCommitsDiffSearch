@@ -22,30 +22,22 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.vm.ci.code.CodeUtil;
+import static com.oracle.graal.graph.Edges.Type.*;
 
-import com.oracle.graal.compiler.common.type.IntegerStamp;
-import com.oracle.graal.compiler.common.type.PrimitiveStamp;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "/")
-public class IntegerDivNode extends FixedBinaryNode implements Lowerable, LIRLowerable {
-    public static final NodeClass<IntegerDivNode> TYPE = NodeClass.create(IntegerDivNode.class);
+public final class IntegerDivNode extends FixedBinaryNode implements Lowerable, LIRLowerable {
+    public static final NodeClass TYPE = NodeClass.get(IntegerDivNode.class);
 
     public IntegerDivNode(ValueNode x, ValueNode y) {
-        this(TYPE, x, y);
-    }
-
-    protected IntegerDivNode(NodeClass<? extends IntegerDivNode> c, ValueNode x, ValueNode y) {
-        super(c, IntegerStamp.OPS.getDiv().foldStamp(x.stamp(), y.stamp()), x, y);
+        super(TYPE, IntegerStamp.OPS.getDiv().foldStamp(x.stamp(), y.stamp()), x, y);
     }
 
     @Override
@@ -103,8 +95,8 @@ public class IntegerDivNode extends FixedBinaryNode implements Lowerable, LIRLow
         }
 
         if (next() instanceof IntegerDivNode) {
-            NodeClass<?> nodeClass = getNodeClass();
-            if (next().getClass() == this.getClass() && nodeClass.equalInputs(this, next()) && valueEquals(next())) {
+            NodeClass nodeClass = getNodeClass();
+            if (next().getClass() == this.getClass() && nodeClass.getEdges(Inputs).areEqualIn(this, next()) && valueEquals(next())) {
                 return next();
             }
         }
@@ -119,7 +111,7 @@ public class IntegerDivNode extends FixedBinaryNode implements Lowerable, LIRLow
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        gen.setResult(this, gen.getLIRGeneratorTool().getArithmetic().emitDiv(gen.operand(getX()), gen.operand(getY()), gen.state(this)));
+        gen.setResult(this, gen.getLIRGeneratorTool().emitDiv(gen.operand(getX()), gen.operand(getY()), gen.state(this)));
     }
 
     @Override

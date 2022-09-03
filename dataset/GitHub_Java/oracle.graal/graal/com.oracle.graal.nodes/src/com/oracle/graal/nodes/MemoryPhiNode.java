@@ -31,10 +31,10 @@ import com.oracle.graal.nodes.extended.*;
 /**
  * Memory {@code PhiNode}s merge memory dependencies at control flow merges.
  */
-@NodeInfo(nameTemplate = "Φ({i#values}) {p#locationIdentity/s}", allowedUsageTypes = {InputType.Memory})
+@NodeInfo(nameTemplate = "MemoryPhi({i#values}) {p#locationIdentity/s}", allowedUsageTypes = {InputType.Memory})
 public final class MemoryPhiNode extends PhiNode implements MemoryNode {
 
-    public static final NodeClass<MemoryPhiNode> TYPE = NodeClass.create(MemoryPhiNode.class);
+    public static final NodeClass TYPE = NodeClass.get(MemoryPhiNode.class);
     @Input(InputType.Memory) NodeInputList<ValueNode> values;
     protected final LocationIdentity locationIdentity;
 

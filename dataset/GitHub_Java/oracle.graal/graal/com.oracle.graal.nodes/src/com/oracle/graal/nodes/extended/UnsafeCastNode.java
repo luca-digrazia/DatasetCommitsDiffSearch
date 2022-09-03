@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -31,7 +30,6 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The {@code UnsafeCastNode} produces the same value as its input, but with a different type. It
@@ -42,7 +40,7 @@ import com.oracle.graal.nodes.virtual.*;
 @NodeInfo
 public final class UnsafeCastNode extends FloatingGuardedNode implements LIRLowerable, Virtualizable, GuardingNode, IterableNodeType, Canonicalizable, ValueProxy {
 
-    public static final NodeClass<UnsafeCastNode> TYPE = NodeClass.create(UnsafeCastNode.class);
+    public static final NodeClass TYPE = NodeClass.get(UnsafeCastNode.class);
     @Input ValueNode object;
 
     public UnsafeCastNode(ValueNode object, Stamp stamp) {
@@ -93,12 +91,9 @@ public final class UnsafeCastNode extends FloatingGuardedNode implements LIRLowe
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode alias = tool.getAlias(object);
-        if (alias instanceof VirtualObjectNode) {
-            VirtualObjectNode virtual = (VirtualObjectNode) alias;
-            if (StampTool.typeOrNull(this) != null && StampTool.typeOrNull(this).isAssignableFrom(virtual.type())) {
-                tool.replaceWithVirtual(virtual);
-            }
+        State state = tool.getObjectState(object);
+        if (state != null && state.getState() == EscapeState.Virtual && StampTool.typeOrNull(this) != null && StampTool.typeOrNull(this).isAssignableFrom(state.getVirtualObject().type())) {
+            tool.replaceWithVirtual(state.getVirtualObject());
         }
     }
 

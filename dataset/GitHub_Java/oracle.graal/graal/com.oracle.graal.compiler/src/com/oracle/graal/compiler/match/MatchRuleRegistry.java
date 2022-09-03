@@ -23,6 +23,8 @@
 package com.oracle.graal.compiler.match;
 
 import static com.oracle.graal.compiler.GraalDebugConfig.*;
+import static com.oracle.graal.graph.Edges.Type.*;
+
 import java.util.*;
 import java.util.Map.Entry;
 
@@ -32,6 +34,7 @@ import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 
 public class MatchRuleRegistry {
 
@@ -44,10 +47,10 @@ public class MatchRuleRegistry {
      * @param names
      * @return an array of Position objects corresponding to the named fields.
      */
-    public static Position[] findPositions(NodeClass<? extends Node> nodeClass, String[] names) {
+    public static Position[] findPositions(NodeClass<? extends ValueNode> nodeClass, String[] names) {
         Position[] result = new Position[names.length];
         for (int i = 0; i < names.length; i++) {
-            Edges edges = nodeClass.getInputEdges();
+            Edges edges = nodeClass.getEdges(Inputs);
             for (int e = 0; e < edges.getDirectCount(); e++) {
                 if (names[i].equals(edges.getName(e))) {
                     result[i] = new Position(edges, e, Node.NOT_ITERABLE);
@@ -60,7 +63,7 @@ public class MatchRuleRegistry {
         return result;
     }
 
-    private static final HashMap<Class<? extends NodeLIRBuilder>, Map<Class<? extends Node>, List<MatchStatement>>> registry = new HashMap<>();
+    private static final HashMap<Class<? extends NodeLIRBuilder>, Map<Class<? extends ValueNode>, List<MatchStatement>>> registry = new HashMap<>();
 
     /**
      * Collect all the {@link MatchStatement}s defined by the superclass chain of theClass.
@@ -68,11 +71,11 @@ public class MatchRuleRegistry {
      * @param theClass
      * @return the set of {@link MatchStatement}s applicable to theClass.
      */
-    public static synchronized Map<Class<? extends Node>, List<MatchStatement>> lookup(Class<? extends NodeLIRBuilder> theClass) {
-        Map<Class<? extends Node>, List<MatchStatement>> result = registry.get(theClass);
+    public static synchronized Map<Class<? extends ValueNode>, List<MatchStatement>> lookup(Class<? extends NodeLIRBuilder> theClass) {
+        Map<Class<? extends ValueNode>, List<MatchStatement>> result = registry.get(theClass);
 
         if (result == null) {
-            Map<Class<? extends Node>, List<MatchStatement>> rules = createRules(theClass);
+            Map<Class<? extends ValueNode>, List<MatchStatement>> rules = createRules(theClass);
             registry.put(theClass, rules);
             assert registry.get(theClass) == rules;
             result = rules;
@@ -80,7 +83,7 @@ public class MatchRuleRegistry {
             if (LogVerbose.getValue()) {
                 try (Scope s = Debug.scope("MatchComplexExpressions")) {
                     Debug.log("Match rules for %s", theClass.getSimpleName());
-                    for (Entry<Class<? extends Node>, List<MatchStatement>> entry : result.entrySet()) {
+                    for (Entry<Class<? extends ValueNode>, List<MatchStatement>> entry : result.entrySet()) {
                         Debug.log("  For node class: %s", entry.getKey());
                         for (MatchStatement statement : entry.getValue()) {
                             Debug.log("    %s", statement.getPattern());
@@ -100,7 +103,7 @@ public class MatchRuleRegistry {
      * This is a separate, public method so that external clients can create rules with a custom
      * lookup and without the default caching behavior.
      */
-    public static Map<Class<? extends Node>, List<MatchStatement>> createRules(Class<? extends NodeLIRBuilder> theClass) {
+    public static Map<Class<? extends ValueNode>, List<MatchStatement>> createRules(Class<? extends NodeLIRBuilder> theClass) {
         HashMap<Class<? extends NodeLIRBuilder>, MatchStatementSet> matchSets = new HashMap<>();
         Iterable<MatchStatementSet> sl = Services.load(MatchStatementSet.class);
         for (MatchStatementSet rules : sl) {
@@ -109,14 +112,14 @@ public class MatchRuleRegistry {
 
         // Walk the class hierarchy collecting lists and merge them together. The subclass
         // rules are first which gives them preference over earlier rules.
-        Map<Class<? extends Node>, List<MatchStatement>> rules = new HashMap<>();
+        Map<Class<? extends ValueNode>, List<MatchStatement>> rules = new HashMap<>();
         Class<?> currentClass = theClass;
         do {
             MatchStatementSet matchSet = matchSets.get(currentClass);
             if (matchSet != null) {
                 List<MatchStatement> statements = matchSet.statements();
                 for (MatchStatement statement : statements) {
-                    Class<? extends Node> nodeClass = statement.getPattern().nodeClass();
+                    Class<? extends ValueNode> nodeClass = statement.getPattern().nodeClass();
                     List<MatchStatement> current = rules.get(nodeClass);
                     if (current == null) {
                         current = new ArrayList<>();

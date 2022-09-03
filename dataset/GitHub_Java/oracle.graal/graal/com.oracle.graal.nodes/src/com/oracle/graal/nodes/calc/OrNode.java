@@ -38,7 +38,7 @@ import com.oracle.graal.nodes.util.*;
 @NodeInfo(shortName = "|")
 public final class OrNode extends BinaryArithmeticNode<Or> {
 
-    public static final NodeClass<OrNode> TYPE = NodeClass.get(OrNode.class);
+    public static final NodeClass TYPE = NodeClass.get(OrNode.class);
 
     public OrNode(ValueNode x, ValueNode y) {
         super(TYPE, ArithmeticOpTable::getOr, x, y);
@@ -51,7 +51,7 @@ public final class OrNode extends BinaryArithmeticNode<Or> {
         if (tryConstantFold != null) {
             return tryConstantFold;
         } else {
-            return new OrNode(x, y).maybeCommuteInputs();
+            return new OrNode(x, y);
         }
     }
 
@@ -83,7 +83,7 @@ public final class OrNode extends BinaryArithmeticNode<Or> {
             }
             return reassociate(this, ValueNode.isConstantPredicate(), forX, forY);
         }
-        return this.maybeCommuteInputs();
+        return this;
     }
 
     @Override

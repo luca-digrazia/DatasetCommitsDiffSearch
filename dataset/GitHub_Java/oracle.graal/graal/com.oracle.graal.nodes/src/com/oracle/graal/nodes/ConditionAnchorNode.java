@@ -22,23 +22,17 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.extended.ValueAnchorNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(nameTemplate = "ConditionAnchor(!={p#negated})", allowedUsageTypes = {InputType.Guard})
 public final class ConditionAnchorNode extends FixedWithNextNode implements Canonicalizable.Unary<Node>, Lowerable, GuardingNode {
 
-    public static final NodeClass<ConditionAnchorNode> TYPE = NodeClass.create(ConditionAnchorNode.class);
+    public static final NodeClass TYPE = NodeClass.get(ConditionAnchorNode.class);
     @Input(InputType.Condition) LogicNode condition;
     protected boolean negated;
 
@@ -70,20 +64,17 @@ public final class ConditionAnchorNode extends FixedWithNextNode implements Cano
     }
 
     public Node canonical(CanonicalizerTool tool, Node forValue) {
-        if (forValue instanceof LogicNegationNode) {
-            LogicNegationNode negation = (LogicNegationNode) forValue;
+        if (condition instanceof LogicNegationNode) {
+            LogicNegationNode negation = (LogicNegationNode) condition;
             return new ConditionAnchorNode(negation.getValue(), !negated);
         }
-        if (forValue instanceof LogicConstantNode) {
-            LogicConstantNode c = (LogicConstantNode) forValue;
+        if (condition instanceof LogicConstantNode) {
+            LogicConstantNode c = (LogicConstantNode) condition;
             if (c.getValue() != negated) {
                 return null;
             } else {
                 return new ValueAnchorNode(null);
             }
-        }
-        if (tool.allUsagesAvailable() && this.hasNoUsages()) {
-            return null;
         }
         return this;
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,13 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.phases.GraalOptions.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.nodes.*;
@@ -43,18 +44,21 @@ public class HotSpotNodeClassSubstitutions {
      * about node classes to replace itself with a constant value for a constant {@link Class}
      * parameter.
      */
-    public static class NodeClassGetNode extends PureFunctionMacroNode {
+    @NodeInfo
+    public static final class NodeClassGetNode extends PureFunctionMacroNode {
+        public static final NodeClass TYPE = NodeClass.get(NodeClassGetNode.class);
 
         public NodeClassGetNode(Invoke invoke) {
-            super(invoke);
+            super(TYPE, invoke);
         }
 
         @Override
-        protected Constant evaluate(Constant param, MetaAccessProvider metaAccess) {
+        protected JavaConstant evaluate(JavaConstant param, MetaAccessProvider metaAccess) {
             if (param.isNull() || ImmutableCode.getValue()) {
                 return null;
             }
-            return HotSpotObjectConstant.forObject(NodeClass.get((Class<?>) HotSpotObjectConstant.asObject(param)));
+            HotSpotObjectConstant c = (HotSpotObjectConstant) param;
+            return c.getNodeClass();
         }
     }
 

@@ -45,7 +45,7 @@ import com.oracle.graal.nodes.spi.*;
  */
 @NodeInfo
 public final class SnippetLocationNode extends LocationNode implements Canonicalizable {
-    public static final NodeClass<SnippetLocationNode> TYPE = NodeClass.create(SnippetLocationNode.class);
+    public static final NodeClass TYPE = NodeClass.get(SnippetLocationNode.class);
 
     protected final SnippetReflectionProvider snippetReflection;
 
@@ -74,7 +74,7 @@ public final class SnippetLocationNode extends LocationNode implements Canonical
             return identity;
         }
         // We do not know our actual location identity yet, so be conservative.
-        return any();
+        return ANY_LOCATION;
     }
 
     @Override

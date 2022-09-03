@@ -30,7 +30,7 @@ import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo
 public final class SimpleInfopointNode extends InfopointNode implements LIRLowerable, IterableNodeType, Simplifiable {
-    public static final NodeClass<SimpleInfopointNode> TYPE = NodeClass.create(SimpleInfopointNode.class);
+    public static final NodeClass TYPE = NodeClass.get(SimpleInfopointNode.class);
     protected BytecodePosition position;
 
     public SimpleInfopointNode(InfopointReason reason, BytecodePosition position) {
@@ -48,7 +48,15 @@ public final class SimpleInfopointNode extends InfopointNode implements LIRLower
     }
 
     public void addCaller(BytecodePosition caller) {
-        this.position = position.addCaller(caller);
+        this.position = relink(this.position, caller);
+    }
+
+    private static BytecodePosition relink(BytecodePosition position, BytecodePosition link) {
+        if (position.getCaller() == null) {
+            return new BytecodePosition(link, position.getMethod(), position.getBCI());
+        } else {
+            return new BytecodePosition(relink(position.getCaller(), link), position.getMethod(), position.getBCI());
+        }
     }
 
     @Override
@@ -56,22 +64,5 @@ public final class SimpleInfopointNode extends InfopointNode implements LIRLower
         if (next() instanceof SimpleInfopointNode) {
             graph().removeFixed(this);
         }
-    }
-
-    public void setPosition(BytecodePosition position) {
-        this.position = position;
-    }
-
-    @Override
-    public boolean verify() {
-        BytecodePosition pos = position;
-        if (pos != null) {
-            // Verify that the outermost position belongs to this graph.
-            while (pos.getCaller() != null) {
-                pos = pos.getCaller();
-            }
-            assert pos.getMethod().equals(graph().method());
-        }
-        return super.verify();
     }
 }

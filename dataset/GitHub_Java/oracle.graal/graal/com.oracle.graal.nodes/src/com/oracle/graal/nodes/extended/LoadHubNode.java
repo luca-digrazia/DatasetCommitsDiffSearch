@@ -23,7 +23,6 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.Assumptions.AssumptionResult;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -37,7 +36,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class LoadHubNode extends FloatingGuardedNode implements Lowerable, Canonicalizable, Virtualizable {
 
-    public static final NodeClass<LoadHubNode> TYPE = NodeClass.create(LoadHubNode.class);
+    public static final NodeClass TYPE = NodeClass.get(LoadHubNode.class);
     @Input ValueNode value;
 
     public ValueNode getValue() {
@@ -54,11 +53,7 @@ public final class LoadHubNode extends FloatingGuardedNode implements Lowerable,
     }
 
     public LoadHubNode(@InjectedNodeParameter StampProvider stampProvider, ValueNode value, ValueNode guard) {
-        this(hubStamp(stampProvider, value), value, guard);
-    }
-
-    public LoadHubNode(Stamp stamp, ValueNode value, ValueNode guard) {
-        super(TYPE, stamp, (GuardingNode) guard);
+        super(TYPE, hubStamp(stampProvider, value), (GuardingNode) guard);
         assert value != guard;
         this.value = value;
     }
@@ -77,15 +72,16 @@ public final class LoadHubNode extends FloatingGuardedNode implements Lowerable,
         if (metaAccess != null && getValue().stamp() instanceof ObjectStamp) {
             ObjectStamp objectStamp = (ObjectStamp) getValue().stamp();
 
-            ResolvedJavaType exactType = null;
+            ResolvedJavaType exactType;
             if (objectStamp.isExactType()) {
                 exactType = objectStamp.type();
             } else if (objectStamp.type() != null && graph().getAssumptions() != null) {
-                AssumptionResult<ResolvedJavaType> leafConcreteSubtype = objectStamp.type().findLeafConcreteSubtype();
-                if (leafConcreteSubtype != null) {
-                    exactType = leafConcreteSubtype.getResult();
-                    graph().getAssumptions().record(leafConcreteSubtype);
+                exactType = objectStamp.type().findUniqueConcreteSubtype();
+                if (exactType != null) {
+                    graph().getAssumptions().recordConcreteSubtype(objectStamp.type(), exactType);
                 }
+            } else {
+                exactType = null;
             }
 
             if (exactType != null) {

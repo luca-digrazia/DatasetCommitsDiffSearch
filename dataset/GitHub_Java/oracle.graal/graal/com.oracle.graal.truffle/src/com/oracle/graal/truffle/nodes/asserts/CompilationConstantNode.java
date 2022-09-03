@@ -22,18 +22,23 @@
  */
 package com.oracle.graal.truffle.nodes.asserts;
 
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
 
-public class CompilationConstantNode extends NeverPartOfCompilationNode implements Canonicalizable {
+@NodeInfo
+public final class CompilationConstantNode extends NeverPartOfCompilationNode implements Canonicalizable {
+
+    public static final NodeClass TYPE = NodeClass.get(CompilationConstantNode.class);
 
     public CompilationConstantNode(Invoke invoke) {
-        super(invoke, "The value could not be reduced to a compile time constant.");
+        super(TYPE, invoke, "The value could not be reduced to a compile time constant.");
         assert arguments.size() == 1;
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
+    public Node canonical(CanonicalizerTool tool) {
         if (arguments.get(0).isConstant()) {
             return arguments.get(0);
         }

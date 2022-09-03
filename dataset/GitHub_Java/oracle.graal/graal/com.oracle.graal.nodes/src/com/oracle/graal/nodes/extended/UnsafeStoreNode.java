@@ -22,13 +22,14 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
@@ -38,7 +39,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Lowerable, Virtualizable, MemoryCheckpoint.Single {
 
-    public static final NodeClass<UnsafeStoreNode> TYPE = NodeClass.create(UnsafeStoreNode.class);
+    public static final NodeClass TYPE = NodeClass.get(UnsafeStoreNode.class);
     @Input ValueNode value;
     @OptionalInput(InputType.State) FrameState stateAfter;
 
@@ -120,5 +121,61 @@ public final class UnsafeStoreNode extends UnsafeAccessNode implements StateSpli
 
     public FrameState getState() {
         return stateAfter;
+    }
+
+    // specialized on value type until boxing/unboxing is sorted out in intrinsification
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static void store(Object object, long offset, Object value, @ConstantNodeParameter Kind kind, @ConstantNodeParameter LocationIdentity locationIdentity) {
+        unsafe.putObject(object, offset, value);
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static void store(Object object, long offset, boolean value, @ConstantNodeParameter Kind kind, @ConstantNodeParameter LocationIdentity locationIdentity) {
+        unsafe.putBoolean(object, offset, value);
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static void store(Object object, long offset, byte value, @ConstantNodeParameter Kind kind, @ConstantNodeParameter LocationIdentity locationIdentity) {
+        unsafe.putByte(object, offset, value);
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static void store(Object object, long offset, char value, @ConstantNodeParameter Kind kind, @ConstantNodeParameter LocationIdentity locationIdentity) {
+        unsafe.putChar(object, offset, value);
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static void store(Object object, long offset, double value, @ConstantNodeParameter Kind kind, @ConstantNodeParameter LocationIdentity locationIdentity) {
+        unsafe.putDouble(object, offset, value);
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static void store(Object object, long offset, float value, @ConstantNodeParameter Kind kind, @ConstantNodeParameter LocationIdentity locationIdentity) {
+        unsafe.putFloat(object, offset, value);
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static void store(Object object, long offset, int value, @ConstantNodeParameter Kind kind, @ConstantNodeParameter LocationIdentity locationIdentity) {
+        unsafe.putInt(object, offset, value);
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static void store(Object object, long offset, long value, @ConstantNodeParameter Kind kind, @ConstantNodeParameter LocationIdentity locationIdentity) {
+        unsafe.putLong(object, offset, value);
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static void store(Object object, long offset, short value, @ConstantNodeParameter Kind kind, @ConstantNodeParameter LocationIdentity locationIdentity) {
+        unsafe.putShort(object, offset, value);
     }
 }

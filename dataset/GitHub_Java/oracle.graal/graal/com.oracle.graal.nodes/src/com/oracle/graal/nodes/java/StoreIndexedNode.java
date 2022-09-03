@@ -22,15 +22,13 @@
  */
 package com.oracle.graal.nodes.java;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The {@code StoreIndexedNode} represents a write to an array element.
@@ -38,7 +36,7 @@ import com.oracle.graal.nodes.virtual.*;
 @NodeInfo
 public final class StoreIndexedNode extends AccessIndexedNode implements StateSplit, Lowerable, Virtualizable {
 
-    public static final NodeClass<StoreIndexedNode> TYPE = NodeClass.create(StoreIndexedNode.class);
+    public static final NodeClass TYPE = NodeClass.get(StoreIndexedNode.class);
     @Input ValueNode value;
     @OptionalInput(InputType.State) FrameState stateAfter;
 
@@ -67,16 +65,15 @@ public final class StoreIndexedNode extends AccessIndexedNode implements StateSp
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode alias = tool.getAlias(array());
-        if (alias instanceof VirtualObjectNode) {
-            ValueNode indexValue = tool.getAlias(index());
+        State arrayState = tool.getObjectState(array());
+        if (arrayState != null && arrayState.getState() == EscapeState.Virtual) {
+            ValueNode indexValue = tool.getReplacedValue(index());
             int idx = indexValue.isConstant() ? indexValue.asJavaConstant().asInt() : -1;
-            VirtualArrayNode virtual = (VirtualArrayNode) alias;
-            if (idx >= 0 && idx < virtual.entryCount()) {
-                ResolvedJavaType componentType = virtual.type().getComponentType();
+            if (idx >= 0 && idx < arrayState.getVirtualObject().entryCount()) {
+                ResolvedJavaType componentType = arrayState.getVirtualObject().type().getComponentType();
                 if (componentType.isPrimitive() || StampTool.isPointerAlwaysNull(value) || componentType.getSuperclass() == null ||
                                 (StampTool.typeOrNull(value) != null && componentType.isAssignableFrom(StampTool.typeOrNull(value)))) {
-                    tool.setVirtualEntry(virtual, idx, value(), false);
+                    tool.setVirtualEntry(arrayState, idx, value(), false);
                     tool.delete();
                 }
             }

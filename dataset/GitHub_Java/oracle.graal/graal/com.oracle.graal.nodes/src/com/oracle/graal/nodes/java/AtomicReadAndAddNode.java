@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.nodes.java;
 
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 import sun.misc.*;
 
 import com.oracle.graal.api.meta.*;
@@ -30,7 +31,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
@@ -39,7 +39,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
 public final class AtomicReadAndAddNode extends AbstractMemoryCheckpoint implements LIRLowerable, MemoryCheckpoint.Single {
 
-    public static final NodeClass<AtomicReadAndAddNode> TYPE = NodeClass.create(AtomicReadAndAddNode.class);
+    public static final NodeClass TYPE = NodeClass.get(AtomicReadAndAddNode.class);
     @Input ValueNode object;
     @Input ValueNode offset;
     @Input ValueNode delta;
@@ -75,5 +75,15 @@ public final class AtomicReadAndAddNode extends AbstractMemoryCheckpoint impleme
         Value address = location.generateAddress(gen, gen.getLIRGeneratorTool(), gen.operand(object()));
         Value result = gen.getLIRGeneratorTool().emitAtomicReadAndAdd(address, gen.operand(delta));
         gen.setResult(this, result);
+    }
+
+    @NodeIntrinsic
+    public static int getAndAddInt(Object object, long offset, int delta, @ConstantNodeParameter @SuppressWarnings("unused") LocationIdentity locationIdentity) {
+        return unsafe.getAndAddInt(object, offset, delta);
+    }
+
+    @NodeIntrinsic
+    public static long getAndAddLong(Object object, long offset, long delta, @ConstantNodeParameter @SuppressWarnings("unused") LocationIdentity locationIdentity) {
+        return unsafe.getAndAddLong(object, offset, delta);
     }
 }

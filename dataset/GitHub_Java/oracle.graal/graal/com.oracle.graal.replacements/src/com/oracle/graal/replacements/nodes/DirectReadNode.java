@@ -39,7 +39,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class DirectReadNode extends FixedWithNextNode implements LIRLowerable {
 
-    public static final NodeClass<DirectReadNode> TYPE = NodeClass.get(DirectReadNode.class);
+    public static final NodeClass TYPE = NodeClass.get(DirectReadNode.class);
     @Input protected ValueNode address;
     protected final Kind readKind;
 
@@ -54,9 +54,9 @@ public final class DirectReadNode extends FixedWithNextNode implements LIRLowera
     }
 
     /**
-     * If we are sub int sizes, we try to sign/zero extend the value to at least int as it is done
-     * in the {@link com.oracle.graal.replacements.DefaultJavaLoweringProvider#implicitLoadConvert}
-     * and {@link com.oracle.graal.replacements.DefaultJavaLoweringProvider#createUnsafeRead}.
+     * If we are sub it sizes, we try to sign/zero extend the value to at least int as it is done in
+     * the {@link com.oracle.graal.replacements.DefaultJavaLoweringProvider#implicitLoadConvert} and
+     * {@link com.oracle.graal.replacements.DefaultJavaLoweringProvider#createUnsafeRead}.
      *
      * @see com.oracle.graal.replacements.DefaultJavaLoweringProvider#implicitLoadConvert
      * @see com.oracle.graal.replacements.DefaultJavaLoweringProvider#createUnsafeRead

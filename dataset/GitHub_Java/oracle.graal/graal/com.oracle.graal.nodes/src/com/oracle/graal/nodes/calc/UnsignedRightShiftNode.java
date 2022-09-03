@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.ShiftOp.UShr;
 import com.oracle.graal.graph.*;
@@ -36,7 +35,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = ">>>")
 public final class UnsignedRightShiftNode extends ShiftNode<UShr> {
 
-    public static final NodeClass<UnsignedRightShiftNode> TYPE = NodeClass.create(UnsignedRightShiftNode.class);
+    public static final NodeClass TYPE = NodeClass.get(UnsignedRightShiftNode.class);
 
     public UnsignedRightShiftNode(ValueNode x, ValueNode y) {
         super(TYPE, ArithmeticOpTable::getUShr, x, y);
@@ -85,21 +84,7 @@ public final class UnsignedRightShiftNode extends ShiftNode<UShr> {
     }
 
     @Override
-    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
-        nodeValueMap.setResult(this, gen.emitUShr(nodeValueMap.operand(getX()), nodeValueMap.operand(getY())));
-    }
-
-    @Override
-    public boolean isNarrowable(int resultBits) {
-        if (super.isNarrowable(resultBits)) {
-            /*
-             * For unsigned right shifts, the narrow can be done before the shift if the cut off
-             * bits are all zero.
-             */
-            IntegerStamp inputStamp = (IntegerStamp) getX().stamp();
-            return (inputStamp.upMask() & ~(resultBits - 1)) == 0;
-        } else {
-            return false;
-        }
+    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
+        builder.setResult(this, gen.emitUShr(builder.operand(getX()), builder.operand(getY())));
     }
 }

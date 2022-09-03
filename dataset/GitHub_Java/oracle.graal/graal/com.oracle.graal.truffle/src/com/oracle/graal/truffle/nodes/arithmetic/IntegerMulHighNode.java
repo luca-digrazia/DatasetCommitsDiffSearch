@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,8 +25,8 @@ package com.oracle.graal.truffle.nodes.arithmetic;
 import java.util.function.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodeinfo.*;
@@ -36,27 +36,15 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.truffle.api.*;
 
 @NodeInfo(shortName = "*H")
-public class IntegerMulHighNode extends IntegerArithmeticNode {
+public final class IntegerMulHighNode extends BinaryNode implements ArithmeticLIRLowerable {
+    public static final NodeClass TYPE = NodeClass.get(IntegerMulHighNode.class);
 
     public IntegerMulHighNode(ValueNode x, ValueNode y) {
-        this(x.stamp().unrestricted(), x, y);
+        this((IntegerStamp) x.stamp().unrestricted(), x, y);
     }
 
-    public IntegerMulHighNode(Stamp stamp, ValueNode x, ValueNode y) {
-        super(stamp, x, y);
-    }
-
-    @Override
-    public Constant evalConst(Constant... inputs) {
-        assert inputs.length == 2 && inputs[0].getKind() == inputs[1].getKind();
-        switch (inputs[0].getKind()) {
-            case Int:
-                return Constant.forInt(ExactMath.multiplyHigh(inputs[0].asInt(), inputs[1].asInt()));
-            case Long:
-                return Constant.forLong(ExactMath.multiplyHigh(inputs[0].asLong(), inputs[1].asLong()));
-            default:
-                throw GraalInternalError.unimplemented();
-        }
+    public IntegerMulHighNode(IntegerStamp stamp, ValueNode x, ValueNode y) {
+        super(TYPE, stamp, x, y);
     }
 
     /**

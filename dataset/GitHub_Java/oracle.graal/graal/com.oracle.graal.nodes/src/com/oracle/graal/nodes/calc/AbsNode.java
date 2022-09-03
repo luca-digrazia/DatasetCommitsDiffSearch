@@ -36,7 +36,7 @@ import com.oracle.graal.nodes.spi.*;
  */
 @NodeInfo
 public final class AbsNode extends UnaryArithmeticNode<Abs> implements ArithmeticLIRLowerable, NarrowableArithmeticNode {
-    public static final NodeClass<AbsNode> TYPE = NodeClass.create(AbsNode.class);
+    public static final NodeClass TYPE = NodeClass.get(AbsNode.class);
 
     public AbsNode(ValueNode x) {
         super(TYPE, ArithmeticOpTable::getAbs, x);
@@ -55,7 +55,17 @@ public final class AbsNode extends UnaryArithmeticNode<Abs> implements Arithmeti
     }
 
     @Override
-    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
-        nodeValueMap.setResult(this, gen.emitMathAbs(nodeValueMap.operand(getValue())));
+    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
+        builder.setResult(this, gen.emitMathAbs(builder.operand(getValue())));
+    }
+
+    @NodeIntrinsic
+    public static float abs(float n) {
+        return Math.abs(n);
+    }
+
+    @NodeIntrinsic
+    public static double abs(double n) {
+        return Math.abs(n);
     }
 }

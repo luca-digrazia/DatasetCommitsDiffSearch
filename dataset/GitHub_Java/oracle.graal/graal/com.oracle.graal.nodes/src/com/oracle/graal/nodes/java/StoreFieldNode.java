@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.nodes.java;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
@@ -35,8 +34,8 @@ import com.oracle.graal.nodes.virtual.*;
  * The {@code StoreFieldNode} represents a write to a static or instance field.
  */
 @NodeInfo(nameTemplate = "StoreField#{p#field/s}")
-public final class StoreFieldNode extends AccessFieldNode implements StateSplit, Virtualizable {
-    public static final NodeClass<StoreFieldNode> TYPE = NodeClass.create(StoreFieldNode.class);
+public final class StoreFieldNode extends AccessFieldNode implements StateSplit, VirtualizableRoot {
+    public static final NodeClass TYPE = NodeClass.get(StoreFieldNode.class);
 
     @Input ValueNode value;
     @OptionalInput(InputType.State) FrameState stateAfter;
@@ -72,12 +71,11 @@ public final class StoreFieldNode extends AccessFieldNode implements StateSplit,
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode alias = tool.getAlias(object());
-        if (alias instanceof VirtualObjectNode) {
-            VirtualInstanceNode virtual = (VirtualInstanceNode) alias;
-            int fieldIndex = virtual.fieldIndex(field());
+        State state = tool.getObjectState(object());
+        if (state != null && state.getState() == EscapeState.Virtual) {
+            int fieldIndex = ((VirtualInstanceNode) state.getVirtualObject()).fieldIndex(field());
             if (fieldIndex != -1) {
-                tool.setVirtualEntry(virtual, fieldIndex, value(), false);
+                tool.setVirtualEntry(state, fieldIndex, value(), false);
                 tool.delete();
             }
         }

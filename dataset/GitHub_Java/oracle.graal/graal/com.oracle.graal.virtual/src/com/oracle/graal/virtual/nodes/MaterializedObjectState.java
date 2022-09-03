@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,38 +23,35 @@
 package com.oracle.graal.virtual.nodes;
 
 import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
 
 /**
  * This class encapsulated the materialized state of an escape analyzed object.
  */
-public final class MaterializedObjectState extends EscapeObjectState implements Node.IterableNodeType, LIRLowerable, Node.ValueNumberable {
+@NodeInfo
+public final class MaterializedObjectState extends EscapeObjectState implements Node.ValueNumberable {
 
-    @Input private ValueNode materializedValue;
+    public static final NodeClass TYPE = NodeClass.get(MaterializedObjectState.class);
+    @Input ValueNode materializedValue;
 
     public ValueNode materializedValue() {
         return materializedValue;
     }
 
     public MaterializedObjectState(VirtualObjectNode object, ValueNode materializedValue) {
-        super(object);
+        super(TYPE, object);
         this.materializedValue = materializedValue;
     }
 
     @Override
-    public void generate(LIRGeneratorTool generator) {
-        // Nothing to do, virtual object states are processed as part of the handling of StateSplit nodes.
-    }
-
-    @Override
     public MaterializedObjectState duplicateWithVirtualState() {
-        return graph().add(new MaterializedObjectState(object(), materializedValue));
+        return graph().addWithoutUnique(new MaterializedObjectState(object(), materializedValue));
     }
 
     @Override
-    public void applyToNonVirtual(NodeClosure< ? super ValueNode> closure) {
+    public void applyToNonVirtual(NodeClosure<? super ValueNode> closure) {
         closure.apply(this, materializedValue);
     }
 }

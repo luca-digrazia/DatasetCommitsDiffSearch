@@ -23,11 +23,9 @@
 package com.oracle.graal.nodes.java;
 
 import static com.oracle.graal.nodes.java.ForeignCallDescriptors.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.meta.Assumptions.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
@@ -41,7 +39,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class RegisterFinalizerNode extends AbstractStateSplit implements Canonicalizable.Unary<ValueNode>, LIRLowerable, Virtualizable, DeoptimizingNode.DeoptAfter {
 
-    public static final NodeClass<RegisterFinalizerNode> TYPE = NodeClass.create(RegisterFinalizerNode.class);
+    public static final NodeClass TYPE = NodeClass.get(RegisterFinalizerNode.class);
     @OptionalInput(InputType.State) FrameState deoptState;
     @Input ValueNode value;
 
@@ -68,13 +66,12 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements C
         ObjectStamp objectStamp = (ObjectStamp) object.stamp();
         if (objectStamp.isExactType()) {
             return objectStamp.type().hasFinalizer();
-        } else if (objectStamp.type() != null) {
-            AssumptionResult<Boolean> result = objectStamp.type().hasFinalizableSubclass();
-            if (result.isAssumptionFree()) {
-                return result.getResult();
-            } else if (assumptions != null) {
-                assumptions.record(result);
-                return result.getResult();
+        } else if (objectStamp.type() != null && !objectStamp.type().hasFinalizableSubclass()) {
+            // if either the declared type of receiver or the holder
+            // can be assumed to have no finalizers
+            if (assumptions != null) {
+                assumptions.recordNoFinalizableSubclassAssumption(objectStamp.type());
+                return false;
             }
         }
         return true;
@@ -105,6 +102,8 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements C
         return true;
     }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native void register(Object thisObj);
+    public static void register(Object thisObj) {
+    }
 }

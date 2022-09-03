@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,102 +23,82 @@
 package com.oracle.graal.replacements.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
-public class MathIntrinsicNode extends FloatingNode implements Canonicalizable, LIRGenLowerable {
+@NodeInfo
+public final class MathIntrinsicNode extends UnaryNode implements ArithmeticLIRLowerable {
 
-    @Input private ValueNode x;
-    private final Operation operation;
+    public static final NodeClass TYPE = NodeClass.get(MathIntrinsicNode.class);
+    protected final Operation operation;
 
     public enum Operation {
-        ABS, SQRT, LOG, LOG10, SIN, COS, TAN
-    }
-
-    public ValueNode x() {
-        return x;
+        LOG,
+        LOG10,
+        SIN,
+        COS,
+        TAN
     }
 
     public Operation operation() {
         return operation;
     }
 
-    public MathIntrinsicNode(ValueNode x, Operation op) {
-        super(StampFactory.forKind(x.kind()));
-        assert x.kind() == Kind.Double;
-        this.x = x;
+    public MathIntrinsicNode(ValueNode value, Operation op) {
+        super(TYPE, StampFactory.forKind(Kind.Double), value);
+        assert value.stamp() instanceof FloatStamp && PrimitiveStamp.getBits(value.stamp()) == 64;
         this.operation = op;
     }
 
     @Override
-    public void generate(LIRGenerator gen) {
-        Variable input = gen.load(gen.operand(x()));
-        Variable result = gen.newVariable(kind());
+    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
+        Value input = builder.operand(getValue());
+        Value result;
         switch (operation()) {
-            case ABS:
-                gen.emitMathAbs(result, input);
-                break;
-            case SQRT:
-                gen.emitMathSqrt(result, input);
-                break;
             case LOG:
-                gen.emitMathLog(result, input, false);
+                result = gen.emitMathLog(input, false);
                 break;
             case LOG10:
-                gen.emitMathLog(result, input, true);
+                result = gen.emitMathLog(input, true);
                 break;
             case SIN:
-                gen.emitMathSin(result, input);
+                result = gen.emitMathSin(input);
                 break;
             case COS:
-                gen.emitMathCos(result, input);
+                result = gen.emitMathCos(input);
                 break;
             case TAN:
-                gen.emitMathTan(result, input);
+                result = gen.emitMathTan(input);
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
-        gen.setResult(this, result);
+        builder.setResult(this, result);
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (x().isConstant()) {
-            double value = x().asConstant().asDouble();
-            switch (operation()) {
-                case ABS:
-                    return ConstantNode.forDouble(Math.abs(value), graph());
-                case SQRT:
-                    return ConstantNode.forDouble(Math.sqrt(value), graph());
-                case LOG:
-                    return ConstantNode.forDouble(Math.log(value), graph());
-                case LOG10:
-                    return ConstantNode.forDouble(Math.log10(value), graph());
-                case SIN:
-                    return ConstantNode.forDouble(Math.sin(value), graph());
-                case COS:
-                    return ConstantNode.forDouble(Math.cos(value), graph());
-                case TAN:
-                    return ConstantNode.forDouble(Math.tan(value), graph());
-            }
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        if (forValue.isConstant()) {
+            double ret = doCompute(forValue.asJavaConstant().asDouble(), operation());
+            return ConstantNode.forDouble(ret);
         }
         return this;
     }
 
     @NodeIntrinsic
     public static double compute(double value, @ConstantNodeParameter Operation op) {
+        return doCompute(value, op);
+    }
+
+    private static double doCompute(double value, Operation op) {
         switch (op) {
-            case ABS:
-                return Math.abs(value);
-            case SQRT:
-                return Math.sqrt(value);
             case LOG:
                 return Math.log(value);
             case LOG10:
@@ -129,7 +109,8 @@ public class MathIntrinsicNode extends FloatingNode implements Canonicalizable, 
                 return Math.cos(value);
             case TAN:
                 return Math.tan(value);
+            default:
+                throw new GraalInternalError("unknown op %s", op);
         }
-        throw new GraalInternalError("unknown op %s", op);
     }
 }

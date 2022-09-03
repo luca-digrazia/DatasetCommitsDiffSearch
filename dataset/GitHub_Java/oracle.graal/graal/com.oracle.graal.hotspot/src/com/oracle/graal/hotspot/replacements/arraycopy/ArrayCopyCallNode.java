@@ -42,7 +42,7 @@ import com.oracle.graal.runtime.*;
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
 public final class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single {
 
-    public static final NodeClass<ArrayCopyCallNode> TYPE = NodeClass.create(ArrayCopyCallNode.class);
+    public static final NodeClass TYPE = NodeClass.get(ArrayCopyCallNode.class);
     @Input ValueNode src;
     @Input ValueNode srcPos;
     @Input ValueNode dest;
@@ -141,7 +141,7 @@ public final class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements
         if (elementKind != null) {
             return NamedLocationIdentity.getArrayLocation(elementKind);
         }
-        return any();
+        return ANY_LOCATION;
     }
 
     @NodeIntrinsic

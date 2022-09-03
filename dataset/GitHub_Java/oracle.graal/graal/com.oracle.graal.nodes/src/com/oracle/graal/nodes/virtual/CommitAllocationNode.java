@@ -35,7 +35,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(nameTemplate = "Alloc {i#virtualObjects}", allowedUsageTypes = {InputType.Extension})
 public final class CommitAllocationNode extends FixedWithNextNode implements VirtualizableAllocation, Lowerable, Simplifiable {
 
-    public static final NodeClass<CommitAllocationNode> TYPE = NodeClass.create(CommitAllocationNode.class);
+    public static final NodeClass TYPE = NodeClass.get(CommitAllocationNode.class);
     @Input NodeInputList<VirtualObjectNode> virtualObjects = new NodeInputList<>(this);
     @Input NodeInputList<ValueNode> values = new NodeInputList<>(this);
     @Input(InputType.Association) NodeInputList<MonitorIdNode> locks = new NodeInputList<>(this);
@@ -102,11 +102,6 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
         int valuePos = 0;
         for (int objIndex = 0; objIndex < virtualObjects.size(); objIndex++) {
             VirtualObjectNode virtual = virtualObjects.get(objIndex);
-            if (virtual == null) {
-                // Could occur in invalid graphs
-                properties.put("object(" + objIndex + ")", "null");
-                continue;
-            }
             StringBuilder s = new StringBuilder();
             s.append(virtual.type().toJavaName(false)).append("[");
             for (int i = 0; i < virtual.entryCount(); i++) {

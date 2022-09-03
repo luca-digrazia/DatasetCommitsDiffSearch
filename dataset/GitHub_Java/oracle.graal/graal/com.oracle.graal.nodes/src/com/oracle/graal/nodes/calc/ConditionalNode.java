@@ -22,26 +22,17 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import static com.oracle.graal.nodes.calc.CompareNode.createCompareNode;
-import jdk.vm.ci.meta.JavaConstant;
+import static com.oracle.graal.nodes.calc.CompareNode.*;
 
-import com.oracle.graal.compiler.common.calc.Condition;
-import com.oracle.graal.compiler.common.type.IntegerStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.LogicConstantNode;
-import com.oracle.graal.nodes.LogicNegationNode;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * The {@code ConditionalNode} class represents a comparison that yields one of two values. Note
@@ -50,7 +41,7 @@ import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 @NodeInfo
 public final class ConditionalNode extends FloatingNode implements Canonicalizable, LIRLowerable {
 
-    public static final NodeClass<ConditionalNode> TYPE = NodeClass.create(ConditionalNode.class);
+    public static final NodeClass TYPE = NodeClass.get(ConditionalNode.class);
     @Input(InputType.Condition) LogicNode condition;
     @Input ValueNode trueValue;
     @Input ValueNode falseValue;
@@ -85,33 +76,7 @@ public final class ConditionalNode extends FloatingNode implements Canonicalizab
 
     @Override
     public boolean inferStamp() {
-        Stamp valueStamp = trueValue.stamp().meet(falseValue.stamp());
-        if (condition instanceof IntegerLessThanNode) {
-            IntegerLessThanNode lessThan = (IntegerLessThanNode) condition;
-            if (lessThan.getX() == trueValue && lessThan.getY() == falseValue) {
-                // this encodes a min operation
-                JavaConstant constant = lessThan.getX().asJavaConstant();
-                if (constant == null) {
-                    constant = lessThan.getY().asJavaConstant();
-                }
-                if (constant != null) {
-                    IntegerStamp bounds = StampFactory.forInteger(constant.getJavaKind(), constant.getJavaKind().getMinValue(), constant.asLong());
-                    valueStamp = valueStamp.join(bounds);
-                }
-            } else if (lessThan.getX() == falseValue && lessThan.getY() == trueValue) {
-                // this encodes a max operation
-                JavaConstant constant = lessThan.getX().asJavaConstant();
-                if (constant == null) {
-                    constant = lessThan.getY().asJavaConstant();
-                }
-                if (constant != null) {
-                    IntegerStamp bounds = StampFactory.forInteger(constant.getJavaKind(), constant.asLong(), constant.getJavaKind().getMaxValue());
-                    valueStamp = valueStamp.join(bounds);
-                }
-            }
-
-        }
-        return updateStamp(valueStamp);
+        return updateStamp(trueValue.stamp().meet(falseValue.stamp()));
     }
 
     public ValueNode trueValue() {
@@ -176,7 +141,42 @@ public final class ConditionalNode extends FloatingNode implements Canonicalizab
         generator.emitConditional(this);
     }
 
-    public ConditionalNode(StructuredGraph graph, Condition condition, ValueNode x, ValueNode y) {
+    public ConditionalNode(@InjectedNodeParameter StructuredGraph graph, Condition condition, ValueNode x, ValueNode y) {
         this(createCompareNode(graph, condition, x, y, null));
+    }
+
+    public ConditionalNode(ValueNode type, ValueNode object) {
+        this(type.graph().unique(new InstanceOfDynamicNode(type, object)));
+    }
+
+    @NodeIntrinsic
+    public static native boolean materializeCondition(@ConstantNodeParameter Condition condition, int x, int y);
+
+    @NodeIntrinsic
+    public static native boolean materializeCondition(@ConstantNodeParameter Condition condition, long x, long y);
+
+    @NodeIntrinsic
+    public static boolean materializeIsInstance(Class<?> mirror, Object object) {
+        return mirror.isInstance(object);
+    }
+
+    /**
+     * @param thisClass
+     * @param otherClass
+     * @param dummy a marker to make this constructor unique for the
+     *            {@link #materializeIsAssignableFrom(Class, Class, int)} NodeIntrinsic
+     */
+    public ConditionalNode(ValueNode thisClass, ValueNode otherClass, int dummy) {
+        this(thisClass.graph().unique(new ClassIsAssignableFromNode(thisClass, otherClass)));
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    private static boolean materializeIsAssignableFrom(Class<?> thisClass, Class<?> otherClass, @ConstantNodeParameter int dummy) {
+        return thisClass.isAssignableFrom(otherClass);
+    }
+
+    public static boolean materializeIsAssignableFrom(Class<?> thisClass, Class<?> otherClass) {
+        return materializeIsAssignableFrom(thisClass, otherClass, 0);
     }
 }

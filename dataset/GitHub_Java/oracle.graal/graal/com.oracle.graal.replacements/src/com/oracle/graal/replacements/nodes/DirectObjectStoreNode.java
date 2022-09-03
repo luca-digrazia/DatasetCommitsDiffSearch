@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,23 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.memory.HeapAccess.BarrierType;
-import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
  * A special purpose store node that differs from {@link UnsafeStoreNode} in that it is not a
- * {@link StateSplit} and does not include a write barrier. Note that contrary to the sound of the
- * name this node can be used for storing any kind.
+ * {@link StateSplit} and does not include a write barrier.
  */
 @NodeInfo
 public final class DirectObjectStoreNode extends FixedWithNextNode implements Lowerable {
 
-    public static final NodeClass<DirectObjectStoreNode> TYPE = NodeClass.create(DirectObjectStoreNode.class);
+    public static final NodeClass TYPE = NodeClass.get(DirectObjectStoreNode.class);
     @Input ValueNode object;
     @Input ValueNode value;
     @Input ValueNode offset;
@@ -65,42 +61,13 @@ public final class DirectObjectStoreNode extends FixedWithNextNode implements Lo
                     @ConstantNodeParameter Kind storeKind);
 
     @NodeIntrinsic
-    public static native void storeBoolean(Object obj, @ConstantNodeParameter int displacement, long offset, boolean value, @ConstantNodeParameter LocationIdentity locationIdenity,
-                    @ConstantNodeParameter Kind storeKind);
-
-    @NodeIntrinsic
-    public static native void storeByte(Object obj, @ConstantNodeParameter int displacement, long offset, byte value, @ConstantNodeParameter LocationIdentity locationIdenity,
-                    @ConstantNodeParameter Kind storeKind);
-
-    @NodeIntrinsic
-    public static native void storeChar(Object obj, @ConstantNodeParameter int displacement, long offset, char value, @ConstantNodeParameter LocationIdentity locationIdenity,
-                    @ConstantNodeParameter Kind storeKind);
-
-    @NodeIntrinsic
-    public static native void storeShort(Object obj, @ConstantNodeParameter int displacement, long offset, short value, @ConstantNodeParameter LocationIdentity locationIdenity,
-                    @ConstantNodeParameter Kind storeKind);
-
-    @NodeIntrinsic
-    public static native void storeInt(Object obj, @ConstantNodeParameter int displacement, long offset, int value, @ConstantNodeParameter LocationIdentity locationIdenity,
-                    @ConstantNodeParameter Kind storeKind);
-
-    @NodeIntrinsic
     public static native void storeLong(Object obj, @ConstantNodeParameter int displacement, long offset, long value, @ConstantNodeParameter LocationIdentity locationIdenity,
-                    @ConstantNodeParameter Kind storeKind);
-
-    @NodeIntrinsic
-    public static native void storeFloat(Object obj, @ConstantNodeParameter int displacement, long offset, float value, @ConstantNodeParameter LocationIdentity locationIdenity,
-                    @ConstantNodeParameter Kind storeKind);
-
-    @NodeIntrinsic
-    public static native void storeDouble(Object obj, @ConstantNodeParameter int displacement, long offset, double value, @ConstantNodeParameter LocationIdentity locationIdenity,
                     @ConstantNodeParameter Kind storeKind);
 
     @Override
     public void lower(LoweringTool tool) {
-        ValueNode off = graph().unique(new AddNode(offset, ConstantNode.forIntegerStamp(offset.stamp(), displacement, graph())));
-        AddressNode address = graph().unique(new OffsetAddressNode(object, off));
-        JavaWriteNode write = graph().add(new JavaWriteNode(storeKind, address, locationIdentity, value, BarrierType.NONE, storeKind == Kind.Object, false));
+        IndexedLocationNode location = graph().unique(new IndexedLocationNode(locationIdentity, displacement, offset, 1));
+        JavaWriteNode write = graph().add(new JavaWriteNode(storeKind, object, value, location, BarrierType.NONE, storeKind == Kind.Object, false));
         graph().replaceFixedWithFixed(this, write);
 
         tool.getLowerer().lower(write, tool);

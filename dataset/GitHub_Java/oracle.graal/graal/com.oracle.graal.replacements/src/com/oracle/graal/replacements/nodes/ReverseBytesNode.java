@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -36,22 +35,22 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class ReverseBytesNode extends UnaryNode implements LIRLowerable {
 
-    public static final NodeClass<ReverseBytesNode> TYPE = NodeClass.create(ReverseBytesNode.class);
+    public static final NodeClass TYPE = NodeClass.get(ReverseBytesNode.class);
 
     public ReverseBytesNode(ValueNode value) {
-        super(TYPE, StampFactory.forKind(value.getStackKind()), value);
-        assert getStackKind() == Kind.Int || getStackKind() == Kind.Long;
+        super(TYPE, StampFactory.forKind(value.getKind()), value);
+        assert getKind() == Kind.Int || getKind() == Kind.Long;
     }
 
     @Override
     public boolean inferStamp() {
         IntegerStamp valueStamp = (IntegerStamp) getValue().stamp();
         Stamp newStamp;
-        if (getStackKind() == Kind.Int) {
+        if (getKind() == Kind.Int) {
             long mask = CodeUtil.mask(Kind.Int.getBitCount());
-            newStamp = IntegerStamp.stampForMask(valueStamp.getBits(), Integer.reverse((int) valueStamp.downMask()) & mask, Integer.reverse((int) valueStamp.upMask()) & mask);
-        } else if (getStackKind() == Kind.Long) {
-            newStamp = IntegerStamp.stampForMask(valueStamp.getBits(), Long.reverse(valueStamp.downMask()), Long.reverse(valueStamp.upMask()));
+            newStamp = IntegerStamp.stampForMask(valueStamp.getBits(), reverse((int) valueStamp.downMask()) & mask, reverse((int) valueStamp.upMask()) & mask);
+        } else if (getKind() == Kind.Long) {
+            newStamp = IntegerStamp.stampForMask(valueStamp.getBits(), reverse(valueStamp.downMask()), reverse(valueStamp.upMask()));
         } else {
             return false;
         }
@@ -62,10 +61,19 @@ public final class ReverseBytesNode extends UnaryNode implements LIRLowerable {
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
         if (forValue.isConstant()) {
             JavaConstant c = forValue.asJavaConstant();
-            long reversed = getStackKind() == Kind.Int ? Integer.reverseBytes(c.asInt()) : Long.reverseBytes(c.asLong());
-            return ConstantNode.forIntegerKind(getStackKind(), reversed);
+            return ConstantNode.forIntegerKind(getKind(), getKind() == Kind.Int ? reverse(c.asInt()) : reverse(c.asLong()));
         }
         return this;
+    }
+
+    @NodeIntrinsic
+    public static int reverse(int v) {
+        return Integer.reverseBytes(v);
+    }
+
+    @NodeIntrinsic
+    public static long reverse(long v) {
+        return Long.reverseBytes(v);
     }
 
     @Override

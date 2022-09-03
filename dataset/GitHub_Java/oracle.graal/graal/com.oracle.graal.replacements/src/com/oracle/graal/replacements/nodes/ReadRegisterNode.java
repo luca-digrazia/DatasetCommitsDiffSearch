@@ -22,29 +22,21 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
-
-import com.oracle.graal.compiler.common.LIRKind;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.Value;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Access the value of a specific register.
  */
-@NodeInfo(nameTemplate = "ReadRegister %{p#register}", cycles = CYCLES_1, size = SIZE_1)
+@NodeInfo(nameTemplate = "ReadRegister %{p#register}")
 public final class ReadRegisterNode extends FixedWithNextNode implements LIRLowerable {
 
-    public static final NodeClass<ReadRegisterNode> TYPE = NodeClass.create(ReadRegisterNode.class);
+    public static final NodeClass TYPE = NodeClass.get(ReadRegisterNode.class);
     /**
      * The fixed register to access.
      */
@@ -63,7 +55,7 @@ public final class ReadRegisterNode extends FixedWithNextNode implements LIRLowe
      */
     protected final boolean incoming;
 
-    public ReadRegisterNode(Register register, JavaKind kind, boolean directUse, boolean incoming) {
+    public ReadRegisterNode(Register register, Kind kind, boolean directUse, boolean incoming) {
         super(TYPE, StampFactory.forKind(kind));
         assert register != null;
         this.register = register;

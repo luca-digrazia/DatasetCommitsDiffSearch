@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.nodes.java;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -38,7 +37,7 @@ import com.oracle.graal.nodes.util.*;
 @NodeInfo
 public final class ArrayLengthNode extends FixedWithNextNode implements Canonicalizable.Unary<ValueNode>, Lowerable, Virtualizable {
 
-    public static final NodeClass<ArrayLengthNode> TYPE = NodeClass.create(ArrayLengthNode.class);
+    public static final NodeClass TYPE = NodeClass.get(ArrayLengthNode.class);
     @Input ValueNode array;
 
     public ValueNode array() {
@@ -136,14 +135,10 @@ public final class ArrayLengthNode extends FixedWithNextNode implements Canonica
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode alias = tool.getAlias(array());
-        ValueNode length = GraphUtil.arrayLength(alias);
-        if (length != null) {
-            ValueNode lengthAlias = tool.getAlias(length);
-            if (!lengthAlias.isAlive()) {
-                lengthAlias = graph().addOrUnique(lengthAlias);
-            }
-            tool.replaceWithValue(lengthAlias);
+        State state = tool.getObjectState(array());
+        if (state != null) {
+            assert state.getVirtualObject().type().isArray();
+            tool.replaceWithValue(ConstantNode.forInt(state.getVirtualObject().entryCount(), graph()));
         }
     }
 }

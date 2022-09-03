@@ -22,20 +22,15 @@
  */
 package com.oracle.graal.truffle.nodes.frame;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-
-@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo
 public final class ForceMaterializeNode extends FixedWithNextNode implements LIRLowerable {
-    public static final NodeClass<ForceMaterializeNode> TYPE = NodeClass.create(ForceMaterializeNode.class);
+    public static final NodeClass TYPE = NodeClass.get(ForceMaterializeNode.class);
 
     @Input ValueNode object;
 
@@ -44,7 +39,6 @@ public final class ForceMaterializeNode extends FixedWithNextNode implements LIR
         this.object = object;
     }
 
-    @Override
     public void generate(NodeLIRBuilderTool generator) {
         // nothing to do
     }

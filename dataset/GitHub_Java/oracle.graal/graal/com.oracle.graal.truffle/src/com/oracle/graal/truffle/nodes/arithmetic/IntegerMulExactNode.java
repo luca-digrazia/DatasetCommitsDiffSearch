@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,6 +23,10 @@
 package com.oracle.graal.truffle.nodes.arithmetic;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
@@ -32,54 +36,68 @@ import com.oracle.truffle.api.*;
  * Node representing an exact integer multiplication that will throw an {@link ArithmeticException}
  * in case the addition would overflow the 32 bit range.
  */
-public class IntegerMulExactNode extends IntegerMulNode implements Canonicalizable, IntegerExactArithmeticNode {
+@NodeInfo
+public final class IntegerMulExactNode extends MulNode implements IntegerExactArithmeticNode {
+    public static final NodeClass TYPE = NodeClass.get(IntegerMulExactNode.class);
 
     public IntegerMulExactNode(ValueNode x, ValueNode y) {
-        super(x.kind(), x, y);
-        assert x.kind() == y.kind() && (x.kind() == Kind.Int || x.kind() == Kind.Long);
+        super(TYPE, x, y);
+        assert x.stamp().isCompatible(y.stamp()) && x.stamp() instanceof IntegerStamp;
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (x().isConstant() && !y().isConstant()) {
-            return graph().unique(new IntegerMulExactNode(y(), x()));
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        if (forX.isConstant() && !forY.isConstant()) {
+            return new IntegerMulExactNode(forY, forX);
         }
-        if (x().isConstant()) {
-            try {
-                if (kind() == Kind.Int) {
-                    return ConstantNode.forInt(ExactMath.multiplyExact(x().asConstant().asInt(), y().asConstant().asInt()), graph());
-                } else {
-                    assert kind() == Kind.Long;
-                    return ConstantNode.forLong(ExactMath.multiplyExact(x().asConstant().asLong(), y().asConstant().asLong()), graph());
-                }
-            } catch (ArithmeticException ex) {
-                // The operation will result in an overflow exception, so do not canonicalize.
-            }
-        } else if (y().isConstant()) {
-            long c = y().asConstant().asLong();
+        if (forX.isConstant()) {
+            return canonicalXconstant(forX, forY);
+        } else if (forY.isConstant()) {
+            long c = forY.asJavaConstant().asLong();
             if (c == 1) {
-                return x();
+                return forX;
             }
             if (c == 0) {
-                return ConstantNode.defaultForKind(kind(), graph());
+                return ConstantNode.forIntegerStamp(stamp(), 0);
             }
+        }
+        return this;
+    }
+
+    private ValueNode canonicalXconstant(ValueNode forX, ValueNode forY) {
+        JavaConstant xConst = forX.asJavaConstant();
+        JavaConstant yConst = forY.asJavaConstant();
+        assert xConst.getKind() == yConst.getKind();
+        try {
+            if (xConst.getKind() == Kind.Int) {
+                return ConstantNode.forInt(ExactMath.multiplyExact(xConst.asInt(), yConst.asInt()));
+            } else {
+                assert xConst.getKind() == Kind.Long;
+                return ConstantNode.forLong(ExactMath.multiplyExact(xConst.asLong(), yConst.asLong()));
+            }
+        } catch (ArithmeticException ex) {
+            // The operation will result in an overflow exception, so do not canonicalize.
         }
         return this;
     }
 
     @Override
     public IntegerExactArithmeticSplitNode createSplit(AbstractBeginNode next, AbstractBeginNode deopt) {
-        return graph().add(new IntegerMulExactSplitNode(stamp(), x(), y(), next, deopt));
+        return graph().add(new IntegerMulExactSplitNode(stamp(), getX(), getY(), next, deopt));
     }
 
     @Override
-    public void lower(LoweringTool tool, LoweringType loweringType) {
+    public void lower(LoweringTool tool) {
         IntegerExactArithmeticSplitNode.lower(tool, this);
     }
 
     @NodeIntrinsic
-    public static native int multiplyExact(int a, int b);
+    public static int multiplyExact(int a, int b) {
+        return ExactMath.multiplyExact(a, b);
+    }
 
     @NodeIntrinsic
-    public static native long multiplyExact(long a, long b);
+    public static long multiplyExact(long a, long b) {
+        return ExactMath.multiplyExact(a, b);
+    }
 }

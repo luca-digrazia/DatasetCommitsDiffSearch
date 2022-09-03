@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -40,11 +39,11 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class BitScanForwardNode extends UnaryNode implements LIRLowerable {
 
-    public static final NodeClass<BitScanForwardNode> TYPE = NodeClass.create(BitScanForwardNode.class);
+    public static final NodeClass TYPE = NodeClass.get(BitScanForwardNode.class);
 
     public BitScanForwardNode(ValueNode value) {
         super(TYPE, StampFactory.forInteger(Kind.Int, 0, ((PrimitiveStamp) value.stamp()).getBits()), value);
-        assert value.getStackKind() == Kind.Int || value.getStackKind() == Kind.Long;
+        assert value.getKind() == Kind.Int || value.getKind() == Kind.Long;
     }
 
     @Override
@@ -71,7 +70,7 @@ public final class BitScanForwardNode extends UnaryNode implements LIRLowerable 
         if (forValue.isConstant()) {
             JavaConstant c = forValue.asJavaConstant();
             if (c.asLong() != 0) {
-                return ConstantNode.forInt(forValue.getStackKind() == Kind.Int ? scan(c.asInt()) : scan(c.asLong()));
+                return ConstantNode.forInt(forValue.getKind() == Kind.Int ? scan(c.asInt()) : scan(c.asLong()));
             }
         }
         return this;

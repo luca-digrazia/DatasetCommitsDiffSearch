@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,21 @@
  */
 package com.oracle.graal.replacements.nodes;
 
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
-public class MemoryAnchorNode extends FixedWithNextNode implements LIRLowerable, MemoryNode, Canonicalizable {
+public final class MemoryAnchorNode extends FixedWithNextNode implements LIRLowerable, MemoryNode, Canonicalizable {
+
+    public static final NodeClass TYPE = NodeClass.get(MemoryAnchorNode.class);
 
     public MemoryAnchorNode() {
-        super(StampFactory.forVoid());
+        super(TYPE, StampFactory.forVoid());
     }
 
     public void generate(NodeLIRBuilderTool generator) {
@@ -42,14 +45,6 @@ public class MemoryAnchorNode extends FixedWithNextNode implements LIRLowerable,
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        return usages().isEmpty() ? null : this;
-    }
-
-    public MemoryCheckpoint asMemoryCheckpoint() {
-        return null;
-    }
-
-    public MemoryPhiNode asMemoryPhi() {
-        return null;
+        return hasNoUsages() ? null : this;
     }
 }

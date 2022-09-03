@@ -22,16 +22,11 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ParameterNode;
-import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.replacements.Snippet.VarargsParameter;
 
 /**
@@ -40,7 +35,7 @@ import com.oracle.graal.replacements.Snippet.VarargsParameter;
 @NodeInfo
 public final class LoadSnippetVarargParameterNode extends FixedWithNextNode implements Canonicalizable {
 
-    public static final NodeClass<LoadSnippetVarargParameterNode> TYPE = NodeClass.create(LoadSnippetVarargParameterNode.class);
+    public static final NodeClass TYPE = NodeClass.get(LoadSnippetVarargParameterNode.class);
     @Input ValueNode index;
 
     @Input NodeInputList<ParameterNode> parameters;
@@ -54,10 +49,7 @@ public final class LoadSnippetVarargParameterNode extends FixedWithNextNode impl
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (index.isConstant()) {
-            int indexValue = index.asJavaConstant().asInt();
-            if (indexValue < parameters.size()) {
-                return parameters.get(indexValue);
-            }
+            return parameters.get(index.asJavaConstant().asInt());
         }
         return this;
     }

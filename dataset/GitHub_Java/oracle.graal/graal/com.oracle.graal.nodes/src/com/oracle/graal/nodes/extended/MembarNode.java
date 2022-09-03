@@ -22,7 +22,14 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+
+import java.lang.reflect.*;
+
+import sun.misc.*;
+
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
@@ -35,7 +42,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
 public final class MembarNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Single {
 
-    public static final NodeClass<MembarNode> TYPE = NodeClass.create(MembarNode.class);
+    public static final NodeClass TYPE = NodeClass.get(MembarNode.class);
     protected final int barriers;
 
     public MembarNode(int barriers) {
@@ -45,7 +52,7 @@ public final class MembarNode extends FixedWithNextNode implements LIRLowerable,
 
     @Override
     public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.any();
+        return LocationIdentity.ANY_LOCATION;
     }
 
     @Override
@@ -53,6 +60,28 @@ public final class MembarNode extends FixedWithNextNode implements LIRLowerable,
         generator.getLIRGeneratorTool().emitMembar(barriers);
     }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native void memoryBarrier(@ConstantNodeParameter int barriers);
+    public static void memoryBarrier(@ConstantNodeParameter int barriers) {
+        // Overly conservative but it doesn't matter in the interpreter
+        unsafe.putIntVolatile(dummyBase, dummyOffset, 0);
+        unsafe.getIntVolatile(dummyBase, dummyOffset);
+    }
+
+    /**
+     * An unused field that it used to exercise barriers in the interpreter. This can be replaced
+     * with direct support for barriers in {@link Unsafe} if/when they become available.
+     */
+    @SuppressWarnings("unused") private static int dummy;
+    private static Object dummyBase;
+    private static long dummyOffset;
+    static {
+        try {
+            Field dummyField = MembarNode.class.getDeclaredField("dummy");
+            dummyBase = unsafe.staticFieldBase(dummyField);
+            dummyOffset = unsafe.staticFieldOffset(dummyField);
+        } catch (Exception e) {
+            throw new GraalInternalError(e);
+        }
+    }
 }

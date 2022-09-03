@@ -22,29 +22,21 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Marks a position in the graph where a safepoint should be emitted.
  */
 @NodeInfo
-public final class SafepointNode extends DeoptimizingFixedWithNextNode implements Lowerable, LIRLowerable {
+public final class SafepointNode extends DeoptimizingFixedWithNextNode implements LIRLowerable {
 
-    public static final NodeClass<SafepointNode> TYPE = NodeClass.create(SafepointNode.class);
+    public static final NodeClass TYPE = NodeClass.get(SafepointNode.class);
 
     public SafepointNode() {
         super(TYPE, StampFactory.forVoid());
-    }
-
-    @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
     }
 
     @Override

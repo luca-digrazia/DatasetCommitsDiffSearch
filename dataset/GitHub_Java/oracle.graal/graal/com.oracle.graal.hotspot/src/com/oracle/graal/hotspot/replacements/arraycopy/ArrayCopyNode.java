@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.hotspot.replacements.arraycopy;
 
+import static com.oracle.graal.compiler.GraalCompiler.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
@@ -29,7 +31,6 @@ import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.loop.phases.*;
 import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -40,10 +41,10 @@ import com.oracle.graal.replacements.nodes.*;
 @NodeInfo
 public final class ArrayCopyNode extends BasicArrayCopyNode implements Virtualizable, Lowerable {
 
-    public static final NodeClass<ArrayCopyNode> TYPE = NodeClass.create(ArrayCopyNode.class);
+    public static final NodeClass TYPE = NodeClass.get(ArrayCopyNode.class);
 
-    public ArrayCopyNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, JavaType returnType, ValueNode src, ValueNode srcPos, ValueNode dst, ValueNode dstPos, ValueNode length) {
-        super(TYPE, invokeKind, targetMethod, bci, returnType, src, srcPos, dst, dstPos, length);
+    public ArrayCopyNode(Invoke invoke) {
+        super(TYPE, invoke);
     }
 
     private StructuredGraph selectSnippet(LoweringTool tool, final Replacements replacements) {
@@ -62,7 +63,7 @@ public final class ArrayCopyNode extends BasicArrayCopyNode implements Virtualiz
         Kind componentKind = srcType.getComponentType().getKind();
         final ResolvedJavaMethod snippetMethod = tool.getMetaAccess().lookupJavaMethod(ArrayCopySnippets.getSnippetForKind(componentKind, shouldUnroll(), isExact()));
         try (Scope s = Debug.scope("ArrayCopySnippet", snippetMethod)) {
-            return replacements.getSnippet(snippetMethod, null, null);
+            return replacements.getSnippet(snippetMethod);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
@@ -76,13 +77,17 @@ public final class ArrayCopyNode extends BasicArrayCopyNode implements Virtualiz
         // the canonicalization before loop unrolling is needed to propagate the length into
         // additions, etc.
         PhaseContext context = new PhaseContext(tool.getMetaAccess(), tool.getConstantReflection(), tool.getLowerer(), tool.getReplacements(), tool.getStampProvider());
-        new CanonicalizerPhase().apply(snippetGraph, context);
-        new LoopFullUnrollPhase(new CanonicalizerPhase()).apply(snippetGraph, context);
-        new CanonicalizerPhase().apply(snippetGraph, context);
+        new CanonicalizerPhase(true).apply(snippetGraph, context);
+        new LoopFullUnrollPhase(new CanonicalizerPhase(true)).apply(snippetGraph, context);
+        new CanonicalizerPhase(true).apply(snippetGraph, context);
     }
 
     @Override
     protected StructuredGraph getLoweredSnippetGraph(final LoweringTool tool) {
+        if (!shouldIntrinsify(getTargetMethod())) {
+            return null;
+        }
+
         final Replacements replacements = tool.getReplacements();
         StructuredGraph snippetGraph = selectSnippet(tool, replacements);
         if (snippetGraph == null) {
@@ -98,7 +103,7 @@ public final class ArrayCopyNode extends BasicArrayCopyNode implements Virtualiz
             }
             snippetGraph = null;
             try (Scope s = Debug.scope("ArrayCopySnippet", snippetMethod)) {
-                snippetGraph = replacements.getSnippet(snippetMethod, getTargetMethod(), null).copy();
+                snippetGraph = replacements.getSnippet(snippetMethod, getTargetMethod()).copy();
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }

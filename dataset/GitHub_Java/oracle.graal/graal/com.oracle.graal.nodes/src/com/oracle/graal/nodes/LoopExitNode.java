@@ -22,18 +22,14 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.IterableNodeType;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Simplifiable;
-import com.oracle.graal.graph.spi.SimplifierTool;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 
 @NodeInfo(allowedUsageTypes = {InputType.Association})
-public final class LoopExitNode extends BeginStateSplitNode implements IterableNodeType, Simplifiable {
+public final class LoopExitNode extends BeginStateSplitNode implements IterableNodeType {
 
-    public static final NodeClass<LoopExitNode> TYPE = NodeClass.create(LoopExitNode.class);
+    public static final NodeClass TYPE = NodeClass.get(LoopExitNode.class);
     @Input(InputType.Association) LoopBeginNode loopBegin;
 
     public LoopExitNode(LoopBeginNode loop) {
@@ -49,7 +45,7 @@ public final class LoopExitNode extends BeginStateSplitNode implements IterableN
     @Override
     public void simplify(SimplifierTool tool) {
         Node prev = this.predecessor();
-        while (tool.allUsagesAvailable() && prev instanceof BeginNode && prev.hasNoUsages()) {
+        while (prev instanceof BeginNode && prev.hasNoUsages()) {
             AbstractBeginNode begin = (AbstractBeginNode) prev;
             prev = prev.predecessor();
             graph().removeFixed(begin);

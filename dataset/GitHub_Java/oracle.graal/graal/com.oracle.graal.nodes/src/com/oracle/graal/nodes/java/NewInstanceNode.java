@@ -25,33 +25,25 @@ package com.oracle.graal.nodes.java;
 import java.lang.ref.*;
 import java.util.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * The {@code NewInstanceNode} represents the allocation of an instance class object.
  */
 @NodeInfo(nameTemplate = "New {p#instanceClass/s}")
-public class NewInstanceNode extends AbstractNewObjectNode implements VirtualizableAllocation {
+public final class NewInstanceNode extends AbstractNewObjectNode implements VirtualizableAllocation {
 
-    public static final NodeClass<NewInstanceNode> TYPE = NodeClass.create(NewInstanceNode.class);
+    public static final NodeClass TYPE = NodeClass.get(NewInstanceNode.class);
     protected final ResolvedJavaType instanceClass;
 
     public NewInstanceNode(ResolvedJavaType type, boolean fillContents) {
-        this(TYPE, type, fillContents, null);
-    }
-
-    public NewInstanceNode(ResolvedJavaType type, boolean fillContents, FrameState stateBefore) {
-        this(TYPE, type, fillContents, stateBefore);
-    }
-
-    protected NewInstanceNode(NodeClass<? extends NewInstanceNode> c, ResolvedJavaType type, boolean fillContents, FrameState stateBefore) {
-        super(c, StampFactory.exactNonNull(type), fillContents, stateBefore);
+        super(TYPE, StampFactory.exactNonNull(type), fillContents);
         assert !type.isArray() && !type.isInterface() && !type.isPrimitive();
         this.instanceClass = type;
     }

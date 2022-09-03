@@ -76,6 +76,7 @@ import com.oracle.graal.nodeinfo.*;
 @NodeInfo
 public abstract class Node implements Cloneable, Formattable {
 
+    public static final NodeClass TYPE = null;
     public static final boolean USE_UNSAFE_TO_CLONE = Boolean.parseBoolean(System.getProperty("graal.node.useUnsafeToClone", "true"));
 
     static final int DELETED_ID_START = -1000000000;
@@ -160,14 +161,6 @@ public abstract class Node implements Cloneable, Formattable {
          * ignored and can therefore safely be {@code null}.
          */
         boolean setStampFromReturnType() default false;
-
-        /**
-         * Determines if this intrinsic can be compile-time executed. An attempt to execute a call
-         * (via reflection) to this intrinsic at compile-time will be made if all of its arguments
-         * are compile-time constant. If the execution succeeds without an exception, the result is
-         * inserted as a constant node in the graph.
-         */
-        boolean foldable() default false;
     }
 
     /**
@@ -206,9 +199,10 @@ public abstract class Node implements Cloneable, Formattable {
     public static final int NODE_LIST = -2;
     public static final int NOT_ITERABLE = -1;
 
-    public Node() {
+    public Node(NodeClass c) {
         init();
-        this.nodeClass = NodeClass.get(this.getClass());
+        assert c.getJavaClass() == this.getClass();
+        this.nodeClass = c;
     }
 
     final void init() {

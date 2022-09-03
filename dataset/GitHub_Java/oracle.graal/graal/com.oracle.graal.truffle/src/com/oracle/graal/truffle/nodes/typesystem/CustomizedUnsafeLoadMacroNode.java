@@ -30,15 +30,15 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.truffle.nodes.*;
+import com.oracle.graal.truffle.nodes.asserts.*;
 
 /**
  * Macro node for CompilerDirectives#unsafeGetInt*.
  */
 @NodeInfo
-public final class CustomizedUnsafeLoadMacroNode extends MacroStateSplitNode implements Canonicalizable {
-    public static final NodeClass<CustomizedUnsafeLoadMacroNode> TYPE = NodeClass.create(CustomizedUnsafeLoadMacroNode.class);
+public final class CustomizedUnsafeLoadMacroNode extends NeverPartOfCompilationNode implements Canonicalizable {
+    public static final NodeClass TYPE = NodeClass.get(CustomizedUnsafeLoadMacroNode.class);
 
     private static final int ARGUMENT_COUNT = 4;
     private static final int OBJECT_ARGUMENT_INDEX = 0;
@@ -47,7 +47,7 @@ public final class CustomizedUnsafeLoadMacroNode extends MacroStateSplitNode imp
     private static final int LOCATION_ARGUMENT_INDEX = 3;
 
     public CustomizedUnsafeLoadMacroNode(Invoke invoke) {
-        super(TYPE, invoke);
+        super(TYPE, invoke, "The location argument could not be resolved to a constant.");
         assert arguments.size() == ARGUMENT_COUNT;
     }
 
@@ -60,7 +60,7 @@ public final class CustomizedUnsafeLoadMacroNode extends MacroStateSplitNode imp
             ValueNode conditionArgument = arguments.get(CONDITION_ARGUMENT_INDEX);
             LocationIdentity locationIdentity;
             if (locationArgument.isNullConstant()) {
-                locationIdentity = LocationIdentity.any();
+                locationIdentity = LocationIdentity.ANY_LOCATION;
             } else {
                 locationIdentity = ObjectLocationIdentity.create(locationArgument.asJavaConstant());
             }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,46 +25,43 @@ package com.oracle.graal.virtual.nodes;
 import java.util.*;
 
 import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
 
 /**
  * This class encapsulated the virtual state of an escape analyzed object.
  */
-public final class VirtualObjectState extends EscapeObjectState implements Node.IterableNodeType, LIRLowerable, Node.ValueNumberable {
+@NodeInfo
+public final class VirtualObjectState extends EscapeObjectState implements Node.ValueNumberable {
 
-    @Input private final NodeInputList<ValueNode> fieldValues;
+    public static final NodeClass TYPE = NodeClass.get(VirtualObjectState.class);
+    @Input NodeInputList<ValueNode> values;
 
-    public NodeInputList<ValueNode> fieldValues() {
-        return fieldValues;
+    public NodeInputList<ValueNode> values() {
+        return values;
     }
 
-    public VirtualObjectState(VirtualObjectNode object, ValueNode[] fieldValues) {
-        super(object);
-        assert object.entryCount() == fieldValues.length;
-        this.fieldValues = new NodeInputList<>(this, fieldValues);
+    public VirtualObjectState(VirtualObjectNode object, ValueNode[] values) {
+        super(TYPE, object);
+        assert object.entryCount() == values.length;
+        this.values = new NodeInputList<>(this, values);
     }
 
-    private VirtualObjectState(VirtualObjectNode object, List<ValueNode> fieldValues) {
-        super(object);
-        assert object.entryCount() == fieldValues.size();
-        this.fieldValues = new NodeInputList<>(this, fieldValues);
-    }
-
-    @Override
-    public void generate(LIRGeneratorTool generator) {
-        // Nothing to do, virtual object states are processed as part of the handling of StateSplit nodes.
+    public VirtualObjectState(VirtualObjectNode object, List<ValueNode> values) {
+        super(TYPE, object);
+        assert object.entryCount() == values.size();
+        this.values = new NodeInputList<>(this, values);
     }
 
     @Override
     public VirtualObjectState duplicateWithVirtualState() {
-        return graph().add(new VirtualObjectState(object(), fieldValues));
+        return graph().addWithoutUnique(new VirtualObjectState(object(), values));
     }
 
     @Override
-    public void applyToNonVirtual(NodeClosure< ? super ValueNode> closure) {
-        for (ValueNode value : fieldValues) {
+    public void applyToNonVirtual(NodeClosure<? super ValueNode> closure) {
+        for (ValueNode value : values) {
             closure.apply(this, value);
         }
     }

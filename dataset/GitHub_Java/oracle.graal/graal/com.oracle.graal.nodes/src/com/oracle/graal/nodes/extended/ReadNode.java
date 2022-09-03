@@ -39,7 +39,7 @@ import com.oracle.graal.nodes.util.*;
 @NodeInfo
 public final class ReadNode extends FloatableAccessNode implements LIRLowerable, Canonicalizable, PiPushable, Virtualizable, GuardingNode {
 
-    public static final NodeClass<ReadNode> TYPE = NodeClass.create(ReadNode.class);
+    public static final NodeClass TYPE = NodeClass.get(ReadNode.class);
 
     public ReadNode(ValueNode object, ValueNode location, Stamp stamp, BarrierType barrierType) {
         super(TYPE, object, location, stamp, null, barrierType);
@@ -71,7 +71,7 @@ public final class ReadNode extends FloatableAccessNode implements LIRLowerable,
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (tool.allUsagesAvailable() && hasNoUsages()) {
+        if (hasNoUsages()) {
             if (getGuard() != null && !(getGuard() instanceof FixedNode)) {
                 // The guard is necessary even if the read goes away.
                 return new ValueAnchorNode((ValueNode) getGuard());
@@ -105,18 +105,13 @@ public final class ReadNode extends FloatableAccessNode implements LIRLowerable,
     public static ValueNode canonicalizeRead(ValueNode read, LocationNode location, ValueNode object, CanonicalizerTool tool) {
         MetaAccessProvider metaAccess = tool.getMetaAccess();
         if (tool.canonicalizeReads()) {
-            if (metaAccess != null && object != null && object.isConstant() && !object.isNullConstant() && location instanceof ConstantLocationNode) {
-                long displacement = ((ConstantLocationNode) location).getDisplacement();
-                if ((location.getLocationIdentity().isImmutable())) {
+            if (metaAccess != null && object != null && object.isConstant() && !object.isNullConstant()) {
+                if ((location.getLocationIdentity().isImmutable()) && location instanceof ConstantLocationNode) {
+                    long displacement = ((ConstantLocationNode) location).getDisplacement();
                     Constant constant = read.stamp().readConstant(tool.getConstantReflection().getMemoryAccessProvider(), object.asConstant(), displacement);
                     if (constant != null) {
                         return ConstantNode.forConstant(read.stamp(), constant, metaAccess);
                     }
-                }
-
-                Constant constant = tool.getConstantReflection().readConstantArrayElementForOffset(object.asJavaConstant(), displacement);
-                if (constant != null) {
-                    return ConstantNode.forConstant(read.stamp(), constant, metaAccess);
                 }
             }
             if (location.getLocationIdentity().equals(LocationIdentity.ARRAY_LENGTH_LOCATION)) {

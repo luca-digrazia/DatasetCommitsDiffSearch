@@ -22,12 +22,12 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
@@ -40,7 +40,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public final class KlassLayoutHelperNode extends FloatingGuardedNode implements Canonicalizable, Lowerable {
 
-    public static final NodeClass<KlassLayoutHelperNode> TYPE = NodeClass.create(KlassLayoutHelperNode.class);
+    public static final NodeClass TYPE = NodeClass.get(KlassLayoutHelperNode.class);
     @Input protected ValueNode klass;
     protected final HotSpotVMConfig config;
 
@@ -49,7 +49,7 @@ public final class KlassLayoutHelperNode extends FloatingGuardedNode implements 
     }
 
     public KlassLayoutHelperNode(@InjectedNodeParameter HotSpotVMConfig config, ValueNode klass, ValueNode guard) {
-        super(TYPE, StampFactory.forKind(JavaKind.Int), (GuardingNode) guard);
+        super(TYPE, StampFactory.forKind(Kind.Int), (GuardingNode) guard);
         this.klass = klass;
         this.config = config;
     }
@@ -67,10 +67,10 @@ public final class KlassLayoutHelperNode extends FloatingGuardedNode implements 
                         /*
                          * Definitely some form of instance type.
                          */
-                        return updateStamp(StampFactory.forInteger(JavaKind.Int, config.klassLayoutHelperNeutralValue, Integer.MAX_VALUE));
+                        return updateStamp(StampFactory.forInteger(Kind.Int, config.klassLayoutHelperNeutralValue, Integer.MAX_VALUE));
                     }
                     if (type.isArray()) {
-                        return updateStamp(StampFactory.forInteger(JavaKind.Int, Integer.MIN_VALUE, config.klassLayoutHelperNeutralValue - 1));
+                        return updateStamp(StampFactory.forInteger(Kind.Int, Integer.MIN_VALUE, config.klassLayoutHelperNeutralValue - 1));
                     }
                 }
             }
@@ -80,12 +80,12 @@ public final class KlassLayoutHelperNode extends FloatingGuardedNode implements 
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (tool.allUsagesAvailable() && hasNoUsages()) {
+        if (hasNoUsages()) {
             return null;
         } else {
             if (klass.isConstant()) {
                 if (!klass.asConstant().isDefaultForKind()) {
-                    Constant constant = stamp().readConstant(tool.getConstantReflection().getMemoryAccessProvider(), klass.asConstant(), config.klassLayoutHelperOffset);
+                    Constant constant = stamp().readConstant(tool.getConstantReflection().getMemoryAccessProvider(), klass.asJavaConstant(), config.klassLayoutHelperOffset);
                     return ConstantNode.forConstant(stamp(), constant, tool.getMetaAccess());
                 }
             }

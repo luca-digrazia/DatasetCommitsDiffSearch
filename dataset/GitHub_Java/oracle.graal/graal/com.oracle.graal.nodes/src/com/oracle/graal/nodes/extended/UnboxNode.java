@@ -28,22 +28,17 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo
-public final class UnboxNode extends FixedWithNextNode implements Virtualizable, Lowerable, Canonicalizable.Unary<ValueNode> {
+public final class UnboxNode extends UnaryNode implements Virtualizable, Lowerable {
 
-    public static final NodeClass<UnboxNode> TYPE = NodeClass.create(UnboxNode.class);
-    @Input protected ValueNode value;
+    public static final NodeClass TYPE = NodeClass.get(UnboxNode.class);
     protected final Kind boxingKind;
 
-    public ValueNode getValue() {
-        return value;
-    }
-
     protected UnboxNode(ValueNode value, Kind boxingKind) {
-        super(TYPE, StampFactory.forKind(boxingKind.getStackKind()));
-        this.value = value;
+        super(TYPE, StampFactory.forKind(boxingKind.getStackKind()), value);
         this.boxingKind = boxingKind;
     }
 
@@ -100,4 +95,28 @@ public final class UnboxNode extends FixedWithNextNode implements Virtualizable,
         }
         return null;
     }
+
+    @NodeIntrinsic
+    public static native boolean unbox(Boolean value, @ConstantNodeParameter Kind kind);
+
+    @NodeIntrinsic
+    public static native byte unbox(Byte value, @ConstantNodeParameter Kind kind);
+
+    @NodeIntrinsic
+    public static native char unbox(Character value, @ConstantNodeParameter Kind kind);
+
+    @NodeIntrinsic
+    public static native double unbox(Double value, @ConstantNodeParameter Kind kind);
+
+    @NodeIntrinsic
+    public static native float unbox(Float value, @ConstantNodeParameter Kind kind);
+
+    @NodeIntrinsic
+    public static native int unbox(Integer value, @ConstantNodeParameter Kind kind);
+
+    @NodeIntrinsic
+    public static native long unbox(Long value, @ConstantNodeParameter Kind kind);
+
+    @NodeIntrinsic
+    public static native short unbox(Short value, @ConstantNodeParameter Kind kind);
 }

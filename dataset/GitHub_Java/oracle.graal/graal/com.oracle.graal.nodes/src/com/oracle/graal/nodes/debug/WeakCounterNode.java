@@ -28,7 +28,6 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
  * This is a special version of the dynamic counter node that removes itself as soon as it's the
@@ -38,7 +37,7 @@ import com.oracle.graal.nodes.virtual.*;
 @NodeInfo
 public final class WeakCounterNode extends DynamicCounterNode implements Simplifiable, Virtualizable {
 
-    public static final NodeClass<WeakCounterNode> TYPE = NodeClass.create(WeakCounterNode.class);
+    public static final NodeClass TYPE = NodeClass.get(WeakCounterNode.class);
     @Input ValueNode checkedValue;
 
     public WeakCounterNode(String group, String name, ValueNode increment, boolean addContext, ValueNode checkedValue) {
@@ -56,8 +55,8 @@ public final class WeakCounterNode extends DynamicCounterNode implements Simplif
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode alias = tool.getAlias(checkedValue);
-        if (alias instanceof VirtualObjectNode) {
+        State state = tool.getObjectState(checkedValue);
+        if (state != null && state.getState() == EscapeState.Virtual) {
             tool.delete();
         }
     }

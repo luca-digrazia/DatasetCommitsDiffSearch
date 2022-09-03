@@ -23,15 +23,19 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
-public class ComputeAddressNode extends FloatingNode implements LIRLowerable {
+@NodeInfo
+public final class ComputeAddressNode extends FloatingNode implements LIRLowerable {
 
-    @Input private ValueNode object;
-    @Input private ValueNode location;
+    public static final NodeClass TYPE = NodeClass.get(ComputeAddressNode.class);
+    @Input ValueNode object;
+    @Input(InputType.Association) ValueNode location;
 
     public ValueNode getObject() {
         return object;
@@ -42,14 +46,14 @@ public class ComputeAddressNode extends FloatingNode implements LIRLowerable {
     }
 
     public ComputeAddressNode(ValueNode object, ValueNode location, Stamp stamp) {
-        super(stamp);
+        super(TYPE, stamp);
         this.object = object;
         this.location = location;
     }
 
     @Override
-    public void generate(NodeLIRGeneratorTool gen) {
-        Value addr = getLocation().generateAddress(gen, gen.operand(getObject()));
-        gen.setResult(this, addr);
+    public void generate(NodeLIRBuilderTool gen) {
+        Value addr = getLocation().generateAddress(gen, gen.getLIRGeneratorTool(), gen.operand(getObject()));
+        gen.setResult(this, gen.getLIRGeneratorTool().asAllocatable(addr));
     }
 }

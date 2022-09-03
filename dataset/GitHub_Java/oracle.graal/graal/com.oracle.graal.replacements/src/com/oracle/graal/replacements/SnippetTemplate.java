@@ -43,6 +43,7 @@ import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node;
@@ -394,7 +395,7 @@ public class SnippetTemplate {
     @NodeInfo
     static final class VarargsPlaceholderNode extends FloatingNode implements ArrayLengthProvider {
 
-        public static final NodeClass<VarargsPlaceholderNode> TYPE = NodeClass.create(VarargsPlaceholderNode.class);
+        public static final NodeClass TYPE = NodeClass.get(VarargsPlaceholderNode.class);
         protected final Varargs varargs;
 
         public VarargsPlaceholderNode(Varargs varargs, MetaAccessProvider metaAccess) {
@@ -483,7 +484,7 @@ public class SnippetTemplate {
             }
         }
 
-        public static Method findMethod(Class<? extends Snippets> declaringClass, String methodName, Method except) {
+        private static Method findMethod(Class<? extends Snippets> declaringClass, String methodName, Method except) {
             for (Method m : declaringClass.getDeclaredMethods()) {
                 if (m.getName().equals(methodName) && !m.equals(except)) {
                     return m;
@@ -519,7 +520,7 @@ public class SnippetTemplate {
             SnippetTemplate template = UseSnippetTemplateCache ? templates.get(args.cacheKey) : null;
             if (template == null) {
                 SnippetTemplates.increment();
-                try (DebugCloseable a = SnippetTemplateCreationTime.start(); Scope s = Debug.scope("SnippetSpecialization", args.info.method)) {
+                try (TimerCloseable a = SnippetTemplateCreationTime.start(); Scope s = Debug.scope("SnippetSpecialization", args.info.method)) {
                     template = new SnippetTemplate(providers, snippetReflection, args);
                     if (UseSnippetTemplateCache) {
                         templates.put(args.cacheKey, template);
@@ -555,8 +556,8 @@ public class SnippetTemplate {
      */
     protected SnippetTemplate(final Providers providers, SnippetReflectionProvider snippetReflection, Arguments args) {
         this.snippetReflection = snippetReflection;
-        Object[] constantArgs = getConstantArgs(args);
-        StructuredGraph snippetGraph = providers.getReplacements().getSnippet(args.info.method, constantArgs);
+
+        StructuredGraph snippetGraph = providers.getReplacements().getSnippet(args.info.method);
         instantiationTimer = Debug.timer("SnippetTemplateInstantiationTime[%#s]", args);
         instantiationCounter = Debug.metric("SnippetTemplateInstantiationCount[%#s]", args);
 
@@ -670,8 +671,8 @@ public class SnippetTemplate {
                 if (loopBegin != null) {
                     LoopEx loop = new LoopsData(snippetCopy).loop(loopBegin);
                     Mark mark = snippetCopy.getMark();
-                    LoopTransformations.fullUnroll(loop, phaseContext, new CanonicalizerPhase());
-                    new CanonicalizerPhase().applyIncremental(snippetCopy, phaseContext, mark);
+                    LoopTransformations.fullUnroll(loop, phaseContext, new CanonicalizerPhase(true));
+                    new CanonicalizerPhase(true).applyIncremental(snippetCopy, phaseContext, mark);
                     loop.deleteUnusedNodes();
                 }
                 GraphUtil.removeFixedWithUnusedInputs(explodeLoop);
@@ -686,11 +687,13 @@ public class SnippetTemplate {
         }
         snippetCopy.setGuardsStage(guardsStage);
         try (Scope s = Debug.scope("LoweringSnippetTemplate", snippetCopy)) {
-            new LoweringPhase(new CanonicalizerPhase(), args.cacheKey.loweringStage).apply(snippetCopy, phaseContext);
+            new LoweringPhase(new CanonicalizerPhase(true), args.cacheKey.loweringStage).apply(snippetCopy, phaseContext);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
 
+        // Remove all frame states from snippet graph. Snippets must be atomic (i.e. free
+        // of side-effects that prevent deoptimizing to a point before the snippet).
         ArrayList<StateSplit> curSideEffectNodes = new ArrayList<>();
         ArrayList<DeoptimizingNode> curDeoptNodes = new ArrayList<>();
         ArrayList<ValueNode> curStampNodes = new ArrayList<>();
@@ -720,7 +723,7 @@ public class SnippetTemplate {
 
         assert checkAllVarargPlaceholdersAreDeleted(parameterCount, placeholders);
 
-        new FloatingReadPhase(false, true).apply(snippetCopy);
+        new FloatingReadPhase(false, true, false).apply(snippetCopy);
 
         MemoryAnchorNode memoryAnchor = snippetCopy.add(new MemoryAnchorNode());
         snippetCopy.start().replaceAtUsages(InputType.Memory, memoryAnchor);
@@ -735,7 +738,7 @@ public class SnippetTemplate {
         } else {
             snippetCopy.addAfterFixed(snippetCopy.start(), memoryAnchor);
         }
-        List<ReturnNode> returnNodes = snippet.getNodes(ReturnNode.TYPE).snapshot();
+        List<ReturnNode> returnNodes = snippet.getNodes(ReturnNode.class).snapshot();
         if (returnNodes.isEmpty()) {
             this.returnNode = null;
         } else if (returnNodes.size() == 1) {
@@ -745,7 +748,7 @@ public class SnippetTemplate {
             List<MemoryMapNode> memMaps = returnNodes.stream().map(n -> n.getMemoryMap()).collect(Collectors.toList());
             ValueNode returnValue = InliningUtil.mergeReturns(merge, returnNodes, null);
             this.returnNode = snippet.add(new ReturnNode(returnValue));
-            MemoryMapImpl mmap = FloatingReadPhase.mergeMemoryMaps(merge, memMaps);
+            MemoryMapImpl mmap = FloatingReadPhase.mergeMemoryMaps(merge, memMaps, false);
             MemoryMapNode memoryMap = snippet.unique(new MemoryMapNode(mmap.getMap()));
             this.returnNode.setMemoryMap(memoryMap);
             for (MemoryMapNode mm : memMaps) {
@@ -771,16 +774,6 @@ public class SnippetTemplate {
         Debug.metric("SnippetTemplateNodeCount[%#s]", args).add(nodes.size());
         args.info.notifyNewTemplate();
         Debug.dump(snippet, "SnippetTemplate final state");
-    }
-
-    protected Object[] getConstantArgs(Arguments args) {
-        Object[] constantArgs = args.values.clone();
-        for (int i = 0; i < args.info.getParameterCount(); i++) {
-            if (!args.info.isConstantParameter(i)) {
-                constantArgs[i] = null;
-            }
-        }
-        return constantArgs;
     }
 
     private static boolean checkAllVarargPlaceholdersAreDeleted(int parameterCount, VarargsPlaceholderNode[] placeholders) {
@@ -1027,8 +1020,8 @@ public class SnippetTemplate {
         if (replacee instanceof MemoryCheckpoint.Single) {
             // check if some node in snippet graph also kills the same location
             LocationIdentity locationIdentity = ((MemoryCheckpoint.Single) replacee).getLocationIdentity();
-            if (locationIdentity.isAny()) {
-                assert !(memoryMap.getLastLocationAccess(any()) instanceof MemoryAnchorNode) : replacee + " kills ANY_LOCATION, but snippet does not";
+            if (locationIdentity.equals(ANY_LOCATION)) {
+                assert !(memoryMap.getLastLocationAccess(ANY_LOCATION) instanceof MemoryAnchorNode) : replacee + " kills ANY_LOCATION, but snippet does not";
             }
             assert kills.contains(locationIdentity) : replacee + " kills " + locationIdentity + ", but snippet doesn't contain a kill to this location";
             return true;
@@ -1038,12 +1031,12 @@ public class SnippetTemplate {
         Debug.log("WARNING: %s is not a MemoryCheckpoint, but the snippet graph contains kills (%s). You might want %s to be a MemoryCheckpoint", replacee, kills, replacee);
 
         // remove ANY_LOCATION if it's just a kill by the start node
-        if (memoryMap.getLastLocationAccess(any()) instanceof MemoryAnchorNode) {
-            kills.remove(any());
+        if (memoryMap.getLastLocationAccess(ANY_LOCATION) instanceof MemoryAnchorNode) {
+            kills.remove(ANY_LOCATION);
         }
 
         // node can only lower to a ANY_LOCATION kill if the replacee also kills ANY_LOCATION
-        assert !kills.contains(any()) : "snippet graph contains a kill to ANY_LOCATION, but replacee (" + replacee + ") doesn't kill ANY_LOCATION.  kills: " + kills;
+        assert !kills.contains(ANY_LOCATION) : "snippet graph contains a kill to ANY_LOCATION, but replacee (" + replacee + ") doesn't kill ANY_LOCATION.  kills: " + kills;
 
         /*
          * kills to other locations than ANY_LOCATION can be still inserted if there aren't any
@@ -1106,7 +1099,7 @@ public class SnippetTemplate {
      */
     public Map<Node, Node> instantiate(MetaAccessProvider metaAccess, FixedNode replacee, UsageReplacer replacer, Arguments args) {
         assert assertSnippetKills(replacee);
-        try (DebugCloseable a = args.info.instantiationTimer.start(); DebugCloseable b = instantiationTimer.start()) {
+        try (TimerCloseable a = args.info.instantiationTimer.start(); TimerCloseable b = instantiationTimer.start()) {
             args.info.instantiationCounter.increment();
             instantiationCounter.increment();
             // Inline the snippet nodes, replacing parameters with the given args in the process
@@ -1228,7 +1221,7 @@ public class SnippetTemplate {
             Node stampDup = duplicates.get(stampNode);
             ((ValueNode) stampDup).setStamp(replacee.stamp());
         }
-        for (ParameterNode paramNode : snippet.getNodes(ParameterNode.TYPE)) {
+        for (ParameterNode paramNode : snippet.getNodes(ParameterNode.class)) {
             for (Node usage : paramNode.usages()) {
                 Node usageDup = duplicates.get(usage);
                 propagateStamp(usageDup);
@@ -1253,7 +1246,7 @@ public class SnippetTemplate {
      */
     public void instantiate(MetaAccessProvider metaAccess, FloatingNode replacee, UsageReplacer replacer, LoweringTool tool, Arguments args) {
         assert assertSnippetKills(replacee);
-        try (DebugCloseable a = args.info.instantiationTimer.start()) {
+        try (TimerCloseable a = args.info.instantiationTimer.start()) {
             args.info.instantiationCounter.increment();
             instantiationCounter.increment();
 

@@ -37,19 +37,10 @@ import com.oracle.graal.nodes.type.*;
  */
 @NodeInfo
 public class InstanceOfDynamicNode extends LogicNode implements Canonicalizable.Binary<ValueNode>, Lowerable {
-    public static final NodeClass<InstanceOfDynamicNode> TYPE = NodeClass.create(InstanceOfDynamicNode.class);
+    public static final NodeClass TYPE = NodeClass.get(InstanceOfDynamicNode.class);
 
     @Input ValueNode object;
     @Input ValueNode mirror;
-
-    public static LogicNode create(ConstantReflectionProvider constantReflection, ValueNode mirror, ValueNode object) {
-        LogicNode synonym = findSynonym(constantReflection, object, mirror);
-        if (synonym != null) {
-            return synonym;
-        }
-        return new InstanceOfDynamicNode(mirror, object);
-
-    }
 
     public InstanceOfDynamicNode(ValueNode mirror, ValueNode object) {
         super(TYPE);
@@ -65,9 +56,9 @@ public class InstanceOfDynamicNode extends LogicNode implements Canonicalizable.
         tool.getLowerer().lower(this, tool);
     }
 
-    private static LogicNode findSynonym(ConstantReflectionProvider constantReflection, ValueNode forObject, ValueNode forMirror) {
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forObject, ValueNode forMirror) {
         if (forMirror.isConstant()) {
-            ResolvedJavaType t = constantReflection.asJavaType(forMirror.asConstant());
+            ResolvedJavaType t = tool.getConstantReflection().asJavaType(forMirror.asConstant());
             if (t != null) {
                 if (t.isPrimitive()) {
                     return LogicConstantNode.contradiction();
@@ -76,15 +67,7 @@ public class InstanceOfDynamicNode extends LogicNode implements Canonicalizable.
                 }
             }
         }
-        return null;
-    }
-
-    public LogicNode canonical(CanonicalizerTool tool, ValueNode forObject, ValueNode forMirror) {
-        LogicNode res = findSynonym(tool.getConstantReflection(), forObject, forMirror);
-        if (res == null) {
-            res = this;
-        }
-        return res;
+        return this;
     }
 
     public ValueNode object() {

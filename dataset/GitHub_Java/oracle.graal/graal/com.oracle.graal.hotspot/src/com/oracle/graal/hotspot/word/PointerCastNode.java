@@ -22,26 +22,22 @@
  */
 package com.oracle.graal.hotspot.word;
 
-import jdk.vm.ci.meta.Value;
-
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
- * Cast between Word and metaspace pointers exposed by the {@link HotspotOpcode#FROM_POINTER} and
- * {@link HotspotOpcode#TO_KLASS_POINTER} operations.
+ * Cast between Word and metaspace pointers that is introduced by the
+ * {@link HotSpotWordTypeRewriterPhase}.
  */
 @NodeInfo
-public final class PointerCastNode extends FloatingNode implements LIRLowerable, Node.ValueNumberable {
+public final class PointerCastNode extends FloatingNode implements LIRLowerable {
 
-    public static final NodeClass<PointerCastNode> TYPE = NodeClass.create(PointerCastNode.class);
+    public static final NodeClass TYPE = NodeClass.get(PointerCastNode.class);
     @Input ValueNode input;
 
     public PointerCastNode(Stamp stamp, ValueNode input) {

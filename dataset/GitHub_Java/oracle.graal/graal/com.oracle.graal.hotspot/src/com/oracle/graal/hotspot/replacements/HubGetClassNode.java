@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -40,7 +39,7 @@ import com.oracle.graal.nodes.spi.*;
  */
 @NodeInfo
 public final class HubGetClassNode extends FloatingGuardedNode implements Lowerable, Canonicalizable, ConvertNode {
-    public static final NodeClass<HubGetClassNode> TYPE = NodeClass.create(HubGetClassNode.class);
+    public static final NodeClass TYPE = NodeClass.get(HubGetClassNode.class);
     @Input protected ValueNode hub;
 
     public HubGetClassNode(@InjectedNodeParameter MetaAccessProvider metaAccess, ValueNode hub) {
@@ -54,13 +53,13 @@ public final class HubGetClassNode extends FloatingGuardedNode implements Lowera
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (tool.allUsagesAvailable() && hasNoUsages()) {
+        if (hasNoUsages()) {
             return null;
         } else {
             MetaAccessProvider metaAccess = tool.getMetaAccess();
-            if (metaAccess != null && hub.isConstant()) {
-                ResolvedJavaType exactType = tool.getConstantReflection().asJavaType(hub.asJavaConstant());
-                if (exactType != null) {
+            if (metaAccess != null) {
+                if (hub.isConstant()) {
+                    ResolvedJavaType exactType = tool.getConstantReflection().asJavaType(hub.asJavaConstant());
                     return ConstantNode.forConstant(exactType.getJavaClass(), metaAccess);
                 }
             }

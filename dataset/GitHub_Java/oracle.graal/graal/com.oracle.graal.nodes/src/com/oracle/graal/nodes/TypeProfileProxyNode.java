@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,28 +22,32 @@
  */
 package com.oracle.graal.nodes;
 
+import java.util.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * A node that attached a type profile to a proxied input node.
+ * A node that attaches a type profile to a proxied input node.
  */
-public final class TypeProfileProxyNode extends FloatingNode implements Canonicalizable, Node.IterableNodeType {
+@NodeInfo
+public final class TypeProfileProxyNode extends UnaryNode implements IterableNodeType, ValueProxy {
 
-    @Input private ValueNode object;
-    private final JavaTypeProfile profile;
-    private transient ResolvedJavaType lastCheckedType;
-    private transient JavaTypeProfile lastCheckedProfile;
+    public static final NodeClass TYPE = NodeClass.get(TypeProfileProxyNode.class);
+    protected final JavaTypeProfile profile;
+    protected transient ResolvedJavaType lastCheckedType;
+    protected transient JavaTypeProfile lastCheckedProfile;
 
-    public ValueNode getObject() {
-        return object;
-    }
-
-    public static ValueNode create(ValueNode object, JavaTypeProfile profile) {
+    public static ValueNode proxify(ValueNode object, JavaTypeProfile profile) {
+        if (StampTool.isExactType(object)) {
+            return object;
+        }
         if (profile == null) {
             // No profile, so create no node.
             return object;
@@ -52,12 +56,11 @@ public final class TypeProfileProxyNode extends FloatingNode implements Canonica
             // Only null profiling is not beneficial enough to keep the node around.
             return object;
         }
-        return object.graph().add(new TypeProfileProxyNode(object, profile));
+        return object.graph().addWithoutUnique(new TypeProfileProxyNode(object, profile));
     }
 
-    private TypeProfileProxyNode(ValueNode object, JavaTypeProfile profile) {
-        super(object.stamp());
-        this.object = object;
+    protected TypeProfileProxyNode(ValueNode value, JavaTypeProfile profile) {
+        super(TYPE, value.stamp(), value);
         this.profile = profile;
     }
 
@@ -67,21 +70,16 @@ public final class TypeProfileProxyNode extends FloatingNode implements Canonica
 
     @Override
     public boolean inferStamp() {
-        return object.inferStamp();
+        return updateStamp(getValue().stamp());
     }
 
     @Override
-    public Stamp stamp() {
-        return object.stamp();
-    }
-
-    @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (object.objectStamp().isExactType()) {
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        if (StampTool.isExactType(forValue)) {
             // The profile is useless - we know the type!
-            return object;
-        } else if (object instanceof TypeProfileProxyNode) {
-            TypeProfileProxyNode other = (TypeProfileProxyNode) object;
+            return forValue;
+        } else if (forValue instanceof TypeProfileProxyNode) {
+            TypeProfileProxyNode other = (TypeProfileProxyNode) forValue;
             JavaTypeProfile otherProfile = other.getProfile();
             if (otherProfile == lastCheckedProfile) {
                 // We have already incorporated the knowledge about this profile => abort.
@@ -92,42 +90,40 @@ public final class TypeProfileProxyNode extends FloatingNode implements Canonica
             if (newProfile.equals(otherProfile)) {
                 // We are useless - just use the other proxy node.
                 Debug.log("Canonicalize with other proxy node.");
-                return object;
+                return forValue;
             }
             if (newProfile != this.profile) {
                 Debug.log("Improved profile via other profile.");
-                return TypeProfileProxyNode.create(object, newProfile);
+                return new TypeProfileProxyNode(forValue, newProfile);
             }
-        } else if (object.objectStamp().type() != null) {
-            ResolvedJavaType type = object.objectStamp().type();
+        } else if (StampTool.typeOrNull(forValue) != null) {
+            ResolvedJavaType type = StampTool.typeOrNull(forValue);
             ResolvedJavaType uniqueConcrete = type.findUniqueConcreteSubtype();
             if (uniqueConcrete != null) {
                 // Profile is useless => remove.
                 Debug.log("Profile useless, there is enough static type information available.");
-                return object;
+                return forValue;
             }
-            if (type == lastCheckedType) {
+            if (Objects.equals(type, lastCheckedType)) {
                 // We have already incorporate the knowledge about this type => abort.
                 return this;
             }
             lastCheckedType = type;
-            JavaTypeProfile newProfile = this.profile.restrict(type, object.objectStamp().nonNull());
+            JavaTypeProfile newProfile = this.profile.restrict(type, StampTool.isPointerNonNull(forValue));
             if (newProfile != this.profile) {
                 Debug.log("Improved profile via static type information.");
                 if (newProfile.getTypes().length == 0) {
                     // Only null profiling is not beneficial enough to keep the node around.
-                    return object;
+                    return forValue;
                 }
-                return TypeProfileProxyNode.create(object, newProfile);
+                return new TypeProfileProxyNode(forValue, newProfile);
             }
         }
         return this;
     }
 
-    public static void cleanFromGraph(StructuredGraph graph) {
-        for (TypeProfileProxyNode proxy : graph.getNodes(TypeProfileProxyNode.class)) {
-            graph.replaceFloating(proxy, proxy.getObject());
-        }
-        assert graph.getNodes(TypeProfileProxyNode.class).count() == 0;
+    @Override
+    public ValueNode getOriginalNode() {
+        return getValue();
     }
 }

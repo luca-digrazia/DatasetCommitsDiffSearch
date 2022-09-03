@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Div;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.*;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
@@ -38,7 +37,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = "/")
 public final class DivNode extends BinaryArithmeticNode<Div> {
 
-    public static final NodeClass<DivNode> TYPE = NodeClass.create(DivNode.class);
+    public static final NodeClass TYPE = NodeClass.get(DivNode.class);
 
     public DivNode(ValueNode x, ValueNode y) {
         super(TYPE, ArithmeticOpTable::getDiv, x, y);
@@ -91,7 +90,7 @@ public final class DivNode extends BinaryArithmeticNode<Div> {
     }
 
     @Override
-    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
-        nodeValueMap.setResult(this, gen.emitDiv(nodeValueMap.operand(getX()), nodeValueMap.operand(getY()), null));
+    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
+        builder.setResult(this, gen.emitDiv(builder.operand(getX()), builder.operand(getY()), null));
     }
 }

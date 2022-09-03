@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,41 +22,58 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.LocationNode.Location;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ci.*;
 
+/**
+ * Writes a given {@linkplain #value() value} a {@linkplain FixedAccessNode memory location}.
+ */
+@NodeInfo
+public final class WriteNode extends AbstractWriteNode implements LIRLowerable, Simplifiable, Virtualizable {
 
-public final class WriteNode extends AccessNode implements StateSplit, LIRLowerable {
-    @Input private ValueNode value;
-    @Input(notDataflow = true) private FrameState stateAfter;
+    public static final NodeClass TYPE = NodeClass.get(WriteNode.class);
 
-    public FrameState stateAfter() {
-        return stateAfter;
+    public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType) {
+        super(TYPE, object, value, location, barrierType);
     }
 
-    public void setStateAfter(FrameState x) {
-        assert x == null || x.isAlive() : "frame state must be in a graph";
-        updateUsages(stateAfter, x);
-        stateAfter = x;
+    public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean initialization) {
+        super(TYPE, object, value, location, barrierType, initialization);
     }
 
-    public boolean hasSideEffect() {
-        return true;
-    }
-
-    public ValueNode value() {
-        return value;
-    }
-
-    public WriteNode(ValueNode object, ValueNode value, LocationNode location) {
-        super(object, location, StampFactory.forKind(CiKind.Void));
-        this.value = value;
+    public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, GuardingNode guard, boolean initialization) {
+        super(TYPE, object, value, location, barrierType, guard, initialization);
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.emitStore(gen.makeAddress(location(), object()), gen.operand(value()), getNullCheck());
+    public void generate(NodeLIRBuilderTool gen) {
+        Value address = location().generateAddress(gen, gen.getLIRGeneratorTool(), gen.operand(object()));
+        LIRKind writeKind = gen.getLIRGeneratorTool().getLIRKind(value().stamp());
+        gen.getLIRGeneratorTool().emitStore(writeKind, address, gen.operand(value()), gen.state(this));
+    }
+
+    @Override
+    public void simplify(SimplifierTool tool) {
+        if (object() instanceof PiNode && ((PiNode) object()).getGuard() == getGuard()) {
+            setObject(((PiNode) object()).getOriginalNode());
+        }
+    }
+
+    @NodeIntrinsic
+    public static native void writeMemory(Object object, Object value, Location location, @ConstantNodeParameter BarrierType barrierType);
+
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        throw GraalInternalError.shouldNotReachHere("unexpected WriteNode before PEA");
+    }
+
+    public boolean canNullCheck() {
+        return true;
     }
 }

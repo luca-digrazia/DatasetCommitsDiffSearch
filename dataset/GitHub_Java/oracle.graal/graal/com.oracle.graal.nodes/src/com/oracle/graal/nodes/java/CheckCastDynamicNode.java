@@ -22,18 +22,13 @@
  */
 package com.oracle.graal.nodes.java;
 
-import jdk.vm.ci.meta.ResolvedJavaType;
-
-import com.oracle.graal.compiler.common.type.CheckedJavaType;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * Implements a type check where the type being checked is loaded at runtime. This is used, for
@@ -42,7 +37,7 @@ import com.oracle.graal.nodes.type.StampTool;
 @NodeInfo
 public final class CheckCastDynamicNode extends FixedWithNextNode implements Canonicalizable.Binary<ValueNode>, Lowerable {
 
-    public static final NodeClass<CheckCastDynamicNode> TYPE = NodeClass.create(CheckCastDynamicNode.class);
+    public static final NodeClass TYPE = NodeClass.get(CheckCastDynamicNode.class);
     @Input ValueNode object;
     @Input ValueNode hub;
 
@@ -100,9 +95,12 @@ public final class CheckCastDynamicNode extends FixedWithNextNode implements Can
         if (forHub.isConstant()) {
             ResolvedJavaType t = tool.getConstantReflection().asJavaType(forHub.asConstant());
             if (t != null) {
-                return new CheckCastNode(CheckedJavaType.create(graph().getAssumptions(), t), forObject, null, forStoreCheck);
+                return new CheckCastNode(t, forObject, null, forStoreCheck);
             }
         }
         return this;
     }
+
+    @NodeIntrinsic
+    public static native <T> T checkCastDynamic(Class<T> type, Object object, @ConstantNodeParameter boolean forStoreCheck);
 }

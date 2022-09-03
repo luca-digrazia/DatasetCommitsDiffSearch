@@ -22,23 +22,18 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.nodeinfo.InputType.Condition;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
-
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 
 /**
  * Logic node that negates its argument.
  */
-@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo
 public final class LogicNegationNode extends LogicNode implements Canonicalizable.Unary<LogicNode> {
 
-    public static final NodeClass<LogicNegationNode> TYPE = NodeClass.create(LogicNegationNode.class);
-    @Input(Condition) LogicNode value;
+    public static final NodeClass TYPE = NodeClass.get(LogicNegationNode.class);
+    @Input(InputType.Condition) LogicNode value;
 
     public LogicNegationNode(LogicNode value) {
         super(TYPE);
@@ -63,7 +58,6 @@ public final class LogicNegationNode extends LogicNode implements Canonicalizabl
         return null;
     }
 
-    @Override
     public LogicNode getValue() {
         return value;
     }
