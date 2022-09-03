@@ -191,11 +191,4 @@ public final class If extends BlockEnd {
             out.print(" (safepoint)");
         }
     }
-
-    @Override
-    public String shortName() {
-        return "If " + condition.operator;
-    }
-
-
 }
