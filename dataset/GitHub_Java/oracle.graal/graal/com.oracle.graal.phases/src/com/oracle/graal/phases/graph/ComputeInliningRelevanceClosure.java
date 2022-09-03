@@ -55,14 +55,14 @@ public class ComputeInliningRelevanceClosure {
 
         public ComputeInliningRelevanceIterator(StructuredGraph graph) {
             super(graph);
-            this.scopes = computeScopesAndProbabilities();
+            this.scopes = computeLowestPathProbabilities();
         }
 
         @Override
         protected void initializeScope() {
             Scope scope = scopes.get(currentScopeStart);
             parentRelevance = getParentScopeRelevance(scope);
-            currentProbability = scope.probability;
+            currentProbability = scope.minPathProbability;
         }
 
         private double getParentScopeRelevance(Scope scope) {
@@ -72,7 +72,7 @@ public class ComputeInliningRelevanceClosure {
                 for (AbstractEndNode end : ((LoopBeginNode) scope.start).forwardEnds()) {
                     parentProbability += nodeProbabilities.get(end);
                 }
-                return parentProbability / scope.parent.probability;
+                return parentProbability / scope.parent.minPathProbability;
             } else {
                 assert scope.parent == null;
                 return 1.0;
@@ -89,11 +89,11 @@ public class ComputeInliningRelevanceClosure {
             assert !Double.isNaN(relevance);
         }
 
-        private HashMap<FixedNode, Scope> computeScopesAndProbabilities() {
+        private HashMap<FixedNode, Scope> computeLowestPathProbabilities() {
             HashMap<FixedNode, Scope> result = new HashMap<>();
 
             for (Scope scope : computeScopes()) {
-                scope.probability = Math.max(EPSILON, nodeProbabilities.get(scope.start));
+                scope.minPathProbability = Math.max(EPSILON, nodeProbabilities.get(scope.start));
                 result.put(scope.start, scope);
             }
 
@@ -132,7 +132,7 @@ public class ComputeInliningRelevanceClosure {
 
         public final FixedNode start;
         public final Scope parent;
-        public double probability;
+        public double minPathProbability;
 
         public Scope(FixedNode start, Scope parent) {
             this.start = start;
