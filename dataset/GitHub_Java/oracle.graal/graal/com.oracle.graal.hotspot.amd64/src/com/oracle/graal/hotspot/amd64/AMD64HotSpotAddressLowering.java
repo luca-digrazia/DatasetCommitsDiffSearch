@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,23 +23,20 @@
 
 package com.oracle.graal.hotspot.amd64;
 
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.hotspot.HotSpotVMConfig.CompressEncoding;
-import jdk.vm.ci.meta.LIRKind;
-
-import com.oracle.graal.asm.NumUtil;
+import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.AMD64Address.Scale;
-import com.oracle.graal.compiler.amd64.AMD64AddressLowering;
-import com.oracle.graal.compiler.amd64.AMD64AddressNode;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.hotspot.nodes.CompressionNode;
+import com.oracle.graal.compiler.amd64.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.nodes.CompressionNode.CompressionOp;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.hotspot.HotSpotVMConfig.CompressEncoding;
+import com.oracle.jvmci.meta.*;
 
 public class AMD64HotSpotAddressLowering extends AMD64AddressLowering {
 
@@ -64,7 +61,8 @@ public class AMD64HotSpotAddressLowering extends AMD64AddressLowering {
         }
     }
 
-    public AMD64HotSpotAddressLowering(long heapBase, Register heapBaseRegister) {
+    public AMD64HotSpotAddressLowering(CodeCacheProvider codeCache, long heapBase, Register heapBaseRegister) {
+        super(codeCache);
         this.heapBase = heapBase;
         if (heapBase == 0) {
             this.heapBaseRegister = null;
