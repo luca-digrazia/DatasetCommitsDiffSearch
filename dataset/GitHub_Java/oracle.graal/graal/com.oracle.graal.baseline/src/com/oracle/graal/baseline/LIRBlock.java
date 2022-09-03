@@ -24,90 +24,39 @@ package com.oracle.graal.baseline;
 
 import java.util.*;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.cfg.*;
 
-public class LIRBlock implements com.oracle.graal.nodes.cfg.AbstractBlock<LIRBlock> {
+public class LIRBlock extends AbstractBlockBase<LIRBlock> {
 
-    public int getId() {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
+    public LIRBlock(int id) {
+        this.id = id;
+        predecessors = Collections.emptyList();
+        successors = Collections.emptyList();
     }
 
-    public AbstractBeginNode getBeginNode() {
+    public Loop<LIRBlock> getLoop() {
         // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
-    }
-
-    public Loop getLoop() {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
+        return null;
     }
 
     public int getLoopDepth() {
         // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
-    }
-
-    public boolean isLoopHeader() {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
+        return 0;
     }
 
     public boolean isLoopEnd() {
         // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
+        return false;
+    }
+
+    public boolean isLoopHeader() {
+        // TODO Auto-generated method stub
+        return false;
     }
 
     public boolean isExceptionEntry() {
         // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
-    }
-
-    public List<LIRBlock> getPredecessors() {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
-    }
-
-    public int getPredecessorCount() {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
-    }
-
-    public List<LIRBlock> getSuccessors() {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
-    }
-
-    public int getSuccessorCount() {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
-    }
-
-    public int getLinearScanNumber() {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
-    }
-
-    public void setLinearScanNumber(int linearScanNumber) {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
-    }
-
-    public boolean isAligned() {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
-    }
-
-    public void setAlign(boolean align) {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
-    }
-
-    public LIRBlock getDominator() {
-        // TODO Auto-generated method stub
-        throw GraalInternalError.unimplemented("Auto-generated method stub");
+        return false;
     }
 
 }
