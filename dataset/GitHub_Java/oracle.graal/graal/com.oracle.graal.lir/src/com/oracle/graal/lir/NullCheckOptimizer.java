@@ -31,15 +31,15 @@ import com.oracle.graal.nodes.cfg.*;
 public final class NullCheckOptimizer {
 
     public static void optimize(LIR ir, int implicitNullCheckLimit) {
-        List<? extends AbstractBlock<?>> blocks = ir.codeEmittingOrder();
+        List<Block> blocks = ir.codeEmittingOrder();
         NullCheckOptimizer.foldNullChecks(ir, blocks, implicitNullCheckLimit);
     }
 
     private NullCheckOptimizer() {
     }
 
-    private static void foldNullChecks(LIR ir, List<? extends AbstractBlock<?>> blocks, int implicitNullCheckLimit) {
-        for (AbstractBlock<?> block : blocks) {
+    private static void foldNullChecks(LIR ir, List<Block> blocks, int implicitNullCheckLimit) {
+        for (Block block : blocks) {
             List<LIRInstruction> list = ir.lir(block);
 
             if (!list.isEmpty()) {
