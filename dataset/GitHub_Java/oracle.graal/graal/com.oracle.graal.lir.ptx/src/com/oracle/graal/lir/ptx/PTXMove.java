@@ -24,16 +24,13 @@ package com.oracle.graal.lir.ptx;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static com.oracle.graal.lir.LIRValueUtil.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.ptx.*;
-import com.oracle.graal.asm.ptx.PTXMacroAssembler.Mov;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.MoveOp;
-import com.oracle.graal.lir.StandardOp.NullCheck;
 import com.oracle.graal.lir.asm.*;
 
 public class PTXMove {
@@ -50,8 +47,8 @@ public class PTXMove {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
-            move(crb, masm, getResult(), getInput());
+        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
+            move(tasm, masm, getResult(), getInput());
         }
 
         @Override
@@ -77,8 +74,8 @@ public class PTXMove {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
-            move(crb, masm, getResult(), getInput());
+        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
+            move(tasm, masm, getResult(), getInput());
         }
 
         @Override
@@ -104,8 +101,8 @@ public class PTXMove {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
-            move(crb, masm, getResult(), getInput());
+        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
+            move(tasm, masm, getResult(), getInput());
         }
 
         @Override
@@ -130,7 +127,7 @@ public class PTXMove {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
             throw new InternalError("NYI");
         }
     }
@@ -146,7 +143,7 @@ public class PTXMove {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
             throw new InternalError("NYI");
         }
     }
@@ -167,21 +164,21 @@ public class PTXMove {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
-            compareAndSwap(crb, masm, result, address, cmpValue, newValue);
+        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
+            compareAndSwap(tasm, masm, result, address, cmpValue, newValue);
         }
     }
 
-    public static void move(CompilationResultBuilder crb, PTXMacroAssembler masm, Value result, Value input) {
-        if (isVariable(input)) {
-            if (isVariable(result)) {
+    public static void move(TargetMethodAssembler tasm, PTXAssembler masm, Value result, Value input) {
+        if (isRegister(input)) {
+            if (isRegister(result)) {
                 reg2reg(masm, result, input);
             } else {
                 throw GraalInternalError.shouldNotReachHere();
             }
         } else if (isConstant(input)) {
-            if (isVariable(result)) {
-                const2reg(crb, masm, result, (Constant) input);
+            if (isRegister(result)) {
+                const2reg(tasm, masm, result, (Constant) input);
             } else {
                 throw GraalInternalError.shouldNotReachHere();
             }
@@ -190,45 +187,53 @@ public class PTXMove {
         }
     }
 
-    private static void reg2reg(PTXMacroAssembler masm, Value result, Value input) {
-        Variable dest = (Variable) result;
-        Variable source = (Variable) input;
-
-        if (dest.index == source.index) {
+    private static void reg2reg(PTXAssembler masm, Value result, Value input) {
+        if (asRegister(input).equals(asRegister(result))) {
             return;
         }
         switch (input.getKind()) {
             case Int:
+                masm.mov_s32(asRegister(result), asRegister(input));
+                break;
             case Long:
+                masm.mov_s64(asRegister(result), asRegister(input));
+                break;
             case Float:
+                masm.mov_f32(asRegister(result), asRegister(input));
+                break;
             case Double:
+                masm.mov_f64(asRegister(result), asRegister(input));
+                break;
             case Object:
-                new Mov(dest, source).emit(masm);
+                masm.mov_u64(asRegister(result), asRegister(input));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere("missing: " + input.getKind());
         }
     }
 
-    private static void const2reg(CompilationResultBuilder crb, PTXMacroAssembler masm, Value result, Constant input) {
-        Variable dest = (Variable) result;
-
+    private static void const2reg(TargetMethodAssembler tasm, PTXAssembler masm, Value result, Constant input) {
         switch (input.getKind().getStackKind()) {
             case Int:
-            case Long:
-                if (crb.codeCache.needsDataPatch(input)) {
-                    crb.recordInlineDataInCode(input);
+                if (tasm.runtime.needsDataPatch(input)) {
+                    tasm.recordDataReferenceInCode(input, 0, true);
                 }
-                new Mov(dest, input).emit(masm);
+                masm.mov_s32(asRegister(result), input.asInt());
+                break;
+            case Long:
+                if (tasm.runtime.needsDataPatch(input)) {
+                    tasm.recordDataReferenceInCode(input, 0, true);
+                }
+                masm.mov_s64(asRegister(result), input.asLong());
                 break;
             case Object:
                 if (input.isNull()) {
-                    new Mov(dest, Constant.forLong(0x0L)).emit(masm);
-                } else if (crb.target.inlineObjects) {
-                    crb.recordInlineDataInCode(input);
-                    new Mov(dest, Constant.forLong(0xDEADDEADDEADDEADL)).emit(masm);
+                    masm.mov_u64(asRegister(result), 0x0L);
+                } else if (tasm.target.inlineObjects) {
+                    tasm.recordDataReferenceInCode(input, 0, true);
+                    masm.mov_u64(asRegister(result), 0xDEADDEADDEADDEADL);
                 } else {
-                    // new Mov(dest, crb.recordDataReferenceInCode(input, 0, false));
+                    masm.mov_u64(asRegister(result), tasm.recordDataReferenceInCode(input, 0, false));
                 }
                 break;
             default:
@@ -237,32 +242,7 @@ public class PTXMove {
     }
 
     @SuppressWarnings("unused")
-    protected static void compareAndSwap(CompilationResultBuilder crb, PTXAssembler masm, AllocatableValue result, PTXAddressValue address, AllocatableValue cmpValue, AllocatableValue newValue) {
+    protected static void compareAndSwap(TargetMethodAssembler tasm, PTXAssembler masm, AllocatableValue result, PTXAddressValue address, AllocatableValue cmpValue, AllocatableValue newValue) {
         throw new InternalError("NYI");
-    }
-
-    public static class NullCheckOp extends PTXLIRInstruction implements NullCheck {
-
-        @Use({REG}) protected AllocatableValue input;
-        @State protected LIRFrameState state;
-
-        public NullCheckOp(Variable input, LIRFrameState state) {
-            this.input = input;
-            this.state = state;
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
-            crb.recordImplicitException(masm.position(), state);
-            masm.nullCheck(asRegister(input));
-        }
-
-        public Value getCheckedValue() {
-            return input;
-        }
-
-        public LIRFrameState getState() {
-            return state;
-        }
     }
 }

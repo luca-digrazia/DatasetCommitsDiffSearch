@@ -158,7 +158,7 @@ public class PTXMemOp {
                     masm.ld_from_state_space(".param.s16", asRegister(result), addr.getBase(), addr.getDisplacement());
                     break;
                 case Char:
-                    masm.ld_from_state_space(".param.u16", asRegister(result), addr.getBase(), addr.getDisplacement());
+                    masm.ld_from_state_space(".param.s16", asRegister(result), addr.getBase(), addr.getDisplacement());
                     break;
                 case Int:
                     masm.ld_from_state_space(".param.s32", asRegister(result), addr.getBase(), addr.getDisplacement());
@@ -207,12 +207,6 @@ public class PTXMemOp {
                     break;
                 case Long:
                     masm.ld_return_address("u64", asRegister(result), addr.getBase(), addr.getDisplacement());
-                    break;
-                case Float:
-                    masm.ld_return_address("f32", asRegister(result), addr.getBase(), addr.getDisplacement());
-                    break;
-                case Double:
-                    masm.ld_return_address("f64", asRegister(result), addr.getBase(), addr.getDisplacement());
                     break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();
