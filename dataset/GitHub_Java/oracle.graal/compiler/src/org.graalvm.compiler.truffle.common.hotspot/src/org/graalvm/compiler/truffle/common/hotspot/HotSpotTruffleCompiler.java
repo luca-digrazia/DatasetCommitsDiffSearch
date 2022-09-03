@@ -27,6 +27,8 @@ package org.graalvm.compiler.truffle.common.hotspot;
 import org.graalvm.compiler.truffle.common.TruffleCompiler;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 
+import jdk.vm.ci.code.InstalledCode;
+
 public interface HotSpotTruffleCompiler extends TruffleCompiler {
 
     /**
@@ -38,4 +40,6 @@ public interface HotSpotTruffleCompiler extends TruffleCompiler {
     abstract class Factory {
         public abstract HotSpotTruffleCompiler create(TruffleCompilerRuntime runtime);
     }
+
+    InstalledCode INVALID_CODE = new InstalledCode(null);
 }
