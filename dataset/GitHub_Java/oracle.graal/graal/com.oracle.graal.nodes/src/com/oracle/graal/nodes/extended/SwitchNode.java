@@ -24,13 +24,12 @@ package com.oracle.graal.nodes.extended;
 
 import java.util.*;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * The {@code SwitchNode} class is the base of both lookup and table switches.
@@ -156,7 +155,7 @@ public abstract class SwitchNode extends ControlSplitNode {
      */
     public AbstractBeginNode defaultSuccessor() {
         if (defaultSuccessorIndex() == -1) {
-            throw new JVMCIError("unexpected");
+            throw new GraalInternalError("unexpected");
         }
         return successors.get(defaultSuccessorIndex());
     }
@@ -164,24 +163,5 @@ public abstract class SwitchNode extends ControlSplitNode {
     @Override
     public AbstractBeginNode getPrimarySuccessor() {
         return this.defaultSuccessor();
-    }
-
-    /**
-     * Delete all other successors except for the one reached by {@code survivingEdge}. Deleting a
-     * branch can change the successors and the same successor might appear multiple times in the
-     * {@link #successors} list, so use node identity for the comparision and don't cache the
-     * surviving AbstractBeginNode.
-     *
-     * @param tool
-     * @param survivingEdge index of the edge in the {@link SwitchNode#successors} list
-     */
-    protected void killOtherSuccessors(SimplifierTool tool, int survivingEdge) {
-        for (Node successor : successors()) {
-            if (successor != blockSuccessor(survivingEdge)) {
-                tool.deleteBranch(successor);
-            }
-        }
-        tool.addToWorkList(blockSuccessor(survivingEdge));
-        graph().removeSplit(this, blockSuccessor(survivingEdge));
     }
 }

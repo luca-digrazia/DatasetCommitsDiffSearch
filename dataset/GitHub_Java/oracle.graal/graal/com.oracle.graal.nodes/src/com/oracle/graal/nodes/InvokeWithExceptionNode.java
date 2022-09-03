@@ -154,7 +154,7 @@ public final class InvokeWithExceptionNode extends ControlSplitNode implements I
 
     @Override
     public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.any();
+        return LocationIdentity.ANY_LOCATION;
     }
 
     @Override

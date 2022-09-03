@@ -26,6 +26,7 @@ import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
+import com.oracle.graal.api.meta.ProfilingInfo.TriState;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
@@ -1131,9 +1132,5 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
     @Override
     public AbstractBeginNode getPrimarySuccessor() {
         return this.trueSuccessor();
-    }
-
-    public AbstractBeginNode getSuccessor(boolean result) {
-        return result ? this.trueSuccessor() : this.falseSuccessor();
     }
 }

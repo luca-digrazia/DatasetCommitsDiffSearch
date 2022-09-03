@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,25 @@
  */
 package com.oracle.graal.truffle.nodes.arithmetic;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.spi.Lowerable.*;
-import com.oracle.graal.nodes.type.*;
 
-public abstract class IntegerExactArithmeticSplitNode extends ControlSplitNode implements LIRGenLowerable {
+@NodeInfo
+public abstract class IntegerExactArithmeticSplitNode extends ControlSplitNode implements LIRLowerable {
+    public static final NodeClass<IntegerExactArithmeticSplitNode> TYPE = NodeClass.create(IntegerExactArithmeticSplitNode.class);
 
-    @Successor private AbstractBeginNode overflowSuccessor;
-    @Successor private AbstractBeginNode next;
-    @Input private ValueNode x;
-    @Input private ValueNode y;
+    @Successor AbstractBeginNode next;
+    @Successor AbstractBeginNode overflowSuccessor;
+    @Input ValueNode x;
+    @Input ValueNode y;
 
-    public IntegerExactArithmeticSplitNode(Stamp stamp, ValueNode x, ValueNode y, AbstractBeginNode next, AbstractBeginNode overflowSuccessor) {
-        super(stamp);
+    protected IntegerExactArithmeticSplitNode(NodeClass<? extends IntegerExactArithmeticSplitNode> c, Stamp stamp, ValueNode x, ValueNode y, AbstractBeginNode next, AbstractBeginNode overflowSuccessor) {
+        super(c, stamp);
         this.x = x;
         this.y = y;
         this.overflowSuccessor = overflowSuccessor;
@@ -48,13 +48,13 @@ public abstract class IntegerExactArithmeticSplitNode extends ControlSplitNode i
     }
 
     @Override
-    public double probability(AbstractBeginNode successor) {
-        return successor == next ? 1 : 0;
+    public AbstractBeginNode getPrimarySuccessor() {
+        return next;
     }
 
     @Override
-    public void setProbability(AbstractBeginNode successor, double value) {
-        assert probability(successor) == value;
+    public double probability(AbstractBeginNode successor) {
+        return successor == next ? 1 : 0;
     }
 
     public AbstractBeginNode getNext() {
@@ -74,21 +74,21 @@ public abstract class IntegerExactArithmeticSplitNode extends ControlSplitNode i
     }
 
     @Override
-    public void generate(LIRGenerator generator) {
+    public void generate(NodeLIRBuilderTool generator) {
         generator.setResult(this, generateArithmetic(generator));
-        generator.emitOverflowCheckBranch(generator.getLIRBlock(getNext()), generator.getLIRBlock(getOverflowSuccessor()));
+        generator.emitOverflowCheckBranch(getOverflowSuccessor(), getNext(), stamp, probability(getOverflowSuccessor()));
     }
 
-    protected abstract Value generateArithmetic(LIRGeneratorTool generator);
+    protected abstract Value generateArithmetic(NodeLIRBuilderTool generator);
 
     static void lower(LoweringTool tool, IntegerExactArithmeticNode node) {
-        if (tool.getLoweringType() == LoweringType.AFTER_GUARDS) {
+        if (node.asNode().graph().getGuardsStage() == StructuredGraph.GuardsStage.FIXED_DEOPTS) {
             FloatingNode floatingNode = (FloatingNode) node;
             FixedWithNextNode previous = tool.lastFixedNode();
             FixedNode next = previous.next();
             previous.setNext(null);
             DeoptimizeNode deopt = floatingNode.graph().add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.ArithmeticException));
-            BeginNode normalBegin = floatingNode.graph().add(new BeginNode());
+            AbstractBeginNode normalBegin = floatingNode.graph().add(new BeginNode());
             normalBegin.setNext(next);
             IntegerExactArithmeticSplitNode split = node.createSplit(normalBegin, BeginNode.begin(deopt));
             previous.setNext(split);

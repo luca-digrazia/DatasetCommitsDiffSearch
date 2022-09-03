@@ -40,7 +40,7 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
 
     public final StructuredGraph graph;
 
-    private NodeMap<Block> nodeToBlock;
+    private final NodeMap<Block> nodeToBlock;
     private List<Block> reversePostOrder;
     private List<Loop<Block>> loops;
 
@@ -318,7 +318,7 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
         }
     }
 
-    public void computePostdominators() {
+    private void computePostdominators() {
         outer: for (Block block : postOrder()) {
             if (block.isLoopEnd()) {
                 // We do not want the loop header registered as the postdominator of the loop end.
@@ -364,9 +364,5 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
             }
         }
         return iterA;
-    }
-
-    public void setNodeToBlock(NodeMap<Block> nodeMap) {
-        this.nodeToBlock = nodeMap;
     }
 }

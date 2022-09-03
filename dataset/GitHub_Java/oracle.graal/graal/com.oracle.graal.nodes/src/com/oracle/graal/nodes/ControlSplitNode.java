@@ -22,87 +22,29 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.*;
-
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodeinfo.*;
 
 /**
- * The {@code ControlSplitNode} is a base class for all instructions that split the control flow (ie. have more than one successor).
+ * The {@code ControlSplitNode} is a base class for all instructions that split the control flow
+ * (ie. have more than one successor).
  */
-public abstract class ControlSplitNode extends FixedNode {
+@NodeInfo
+public abstract class ControlSplitNode extends FixedNode implements IterableNodeType {
+    public static final NodeClass<ControlSplitNode> TYPE = NodeClass.create(ControlSplitNode.class);
 
-    @Successor private final NodeSuccessorList<BeginNode> blockSuccessors;
-
-    public BeginNode blockSuccessor(int index) {
-        return blockSuccessors.get(index);
+    protected ControlSplitNode(NodeClass<? extends ControlSplitNode> c, Stamp stamp) {
+        super(c, stamp);
     }
 
-    public void setBlockSuccessor(int index, BeginNode x) {
-        blockSuccessors.set(index, x);
-    }
-
-    public int blockSuccessorCount() {
-        return blockSuccessors.size();
-    }
-
-    protected final double[] branchProbability;
-
-    public ControlSplitNode(Stamp stamp, BeginNode[] blockSuccessors, double[] branchProbability) {
-        super(stamp);
-        assert branchProbability.length == blockSuccessors.length;
-        this.blockSuccessors = new NodeSuccessorList<>(this, blockSuccessors);
-        this.branchProbability = branchProbability;
-    }
-
-    public double probability(int successorIndex) {
-        return branchProbability[successorIndex];
-    }
-
-    public void setProbability(int successorIndex, double x) {
-        branchProbability[successorIndex] = x;
-    }
+    public abstract double probability(AbstractBeginNode successor);
 
     /**
-     * Gets the successor corresponding to the default (fall through) case.
-     * @return the default successor
+     * Primary successor of the control split. Data dependencies on the node have to be scheduled in
+     * the primary successor.
+     *
+     * @return the primary successor
      */
-    public FixedNode defaultSuccessor() {
-        return blockSuccessor(blockSuccessorCount() - 1);
-    }
-
-    public Iterable<BeginNode> blockSuccessors() {
-        return new Iterable<BeginNode>() {
-            @Override
-            public Iterator<BeginNode> iterator() {
-                return new Iterator<BeginNode>() {
-                    int i = 0;
-                    @Override
-                    public void remove() {
-                        throw new UnsupportedOperationException();
-                    }
-                    @Override
-                    public BeginNode next() {
-                        return ControlSplitNode.this.blockSuccessor(i++);
-                    }
-
-                    @Override
-                    public boolean hasNext() {
-                        return i < ControlSplitNode.this.blockSuccessorCount();
-                    }
-                };
-            }
-        };
-    }
-
-    @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> properties = super.getDebugProperties();
-        StringBuilder str = new StringBuilder();
-        for (int i = 0; i < branchProbability.length; i++) {
-            str.append(i == 0 ? "" : ", ").append(String.format(Locale.ENGLISH, "%7.5f", branchProbability[i]));
-        }
-        properties.put("branchProbability", str.toString());
-        return properties;
-    }
+    public abstract AbstractBeginNode getPrimarySuccessor();
 }
