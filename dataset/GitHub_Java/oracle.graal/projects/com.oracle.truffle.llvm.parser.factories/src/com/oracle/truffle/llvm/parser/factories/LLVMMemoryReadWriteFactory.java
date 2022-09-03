@@ -29,7 +29,7 @@
  */
 package com.oracle.truffle.llvm.parser.factories;
 
-import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.memory.LLVMLoadVectorNodeFactory.LLVMLoadDoubleVectorNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.LLVMLoadVectorNodeFactory.LLVMLoadFloatVectorNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.LLVMLoadVectorNodeFactory.LLVMLoadI16VectorNodeGen;
@@ -66,7 +66,6 @@ import com.oracle.truffle.llvm.nodes.memory.load.LLVMI64LoadNodeGen;
 import com.oracle.truffle.llvm.nodes.memory.load.LLVMI8LoadNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMAccessGlobalVariableStorageNode;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
@@ -151,46 +150,46 @@ final class LLVMMemoryReadWriteFactory {
         }
     }
 
-    static LLVMExpressionNode createStore(LLVMParserRuntime runtime, LLVMExpressionNode pointerNode, LLVMExpressionNode valueNode, Type type, SourceSection source) {
-        return createStore(runtime, pointerNode, valueNode, type, runtime.getByteSize(type), source);
+    static LLVMExpressionNode createStore(LLVMParserRuntime runtime, LLVMExpressionNode pointerNode, LLVMExpressionNode valueNode, Type type) {
+        return createStore(runtime, pointerNode, valueNode, type, runtime.getByteSize(type));
     }
 
-    private static LLVMExpressionNode createStore(LLVMParserRuntime runtime, LLVMExpressionNode pointerNode, LLVMExpressionNode valueNode, Type type, int size, SourceSection source) {
+    private static LLVMExpressionNode createStore(LLVMParserRuntime runtime, LLVMExpressionNode pointerNode, LLVMExpressionNode valueNode, Type type, int size) {
         if (type instanceof PrimitiveType) {
             switch (((PrimitiveType) type).getPrimitiveKind()) {
                 case I1:
-                    return LLVMI1StoreNodeGen.create(source, pointerNode, valueNode);
+                    return LLVMI1StoreNodeGen.create(pointerNode, valueNode);
                 case I8:
-                    return LLVMI8StoreNodeGen.create(source, pointerNode, valueNode);
+                    return LLVMI8StoreNodeGen.create(pointerNode, valueNode);
                 case I16:
-                    return LLVMI16StoreNodeGen.create(source, pointerNode, valueNode);
+                    return LLVMI16StoreNodeGen.create(pointerNode, valueNode);
                 case I32:
-                    return LLVMI32StoreNodeGen.create(source, pointerNode, valueNode);
+                    return LLVMI32StoreNodeGen.create(pointerNode, valueNode);
                 case I64:
-                    return LLVMI64StoreNodeGen.create(source, pointerNode, valueNode);
+                    return LLVMI64StoreNodeGen.create(pointerNode, valueNode);
                 case FLOAT:
-                    return LLVMFloatStoreNodeGen.create(source, pointerNode, valueNode);
+                    return LLVMFloatStoreNodeGen.create(pointerNode, valueNode);
                 case DOUBLE:
-                    return LLVMDoubleStoreNodeGen.create(source, pointerNode, valueNode);
+                    return LLVMDoubleStoreNodeGen.create(pointerNode, valueNode);
                 case X86_FP80:
-                    return LLVM80BitFloatStoreNodeGen.create(source, pointerNode, valueNode);
+                    return LLVM80BitFloatStoreNodeGen.create(pointerNode, valueNode);
                 default:
                     throw new AssertionError(type);
             }
         } else if (type instanceof VariableBitWidthType) {
-            return LLVMIVarBitStoreNodeGen.create((VariableBitWidthType) type, source, pointerNode, valueNode);
+            return LLVMIVarBitStoreNodeGen.create((VariableBitWidthType) type, pointerNode, valueNode);
         } else if (Type.isFunctionOrFunctionPointer(type)) {
-            return LLVMFunctionStoreNodeGen.create(type, source, pointerNode, valueNode);
+            return LLVMFunctionStoreNodeGen.create(type, pointerNode, valueNode);
         } else if (type instanceof StructureType || type instanceof ArrayType) {
-            return LLVMStructStoreNodeGen.create(runtime.getNativeFunctions(), type, source, pointerNode, valueNode, size);
+            return LLVMStructStoreNodeGen.create(runtime.getNativeFunctions(), type, pointerNode, valueNode, size);
         } else if (type instanceof PointerType) {
             if (pointerNode instanceof LLVMAccessGlobalVariableStorageNode) {
-                return LLVMGlobalVariableStoreNodeGen.create(((LLVMAccessGlobalVariableStorageNode) pointerNode).getDescriptor(), source, valueNode);
+                return LLVMGlobalVariableStoreNodeGen.create(((LLVMAccessGlobalVariableStorageNode) pointerNode).getDescriptor(), valueNode);
             } else {
-                return LLVMAddressStoreNodeGen.create(type, source, pointerNode, valueNode);
+                return LLVMAddressStoreNodeGen.create(type, pointerNode, valueNode);
             }
         } else if (type instanceof VectorType) {
-            return LLVMStoreVectorNodeGen.create(type, source, pointerNode, valueNode);
+            return LLVMStoreVectorNodeGen.create(type, pointerNode, valueNode);
         } else {
             throw new AssertionError(type);
         }

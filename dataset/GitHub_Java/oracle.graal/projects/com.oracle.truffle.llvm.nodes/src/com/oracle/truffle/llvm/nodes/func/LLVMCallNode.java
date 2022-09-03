@@ -31,12 +31,12 @@ package com.oracle.truffle.llvm.nodes.func;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 
 public final class LLVMCallNode extends LLVMExpressionNode {
 
-    public static final int USER_ARGUMENT_OFFSET = 1;
+    public static final int ARG_START_INDEX = 1;
 
     @Child private LLVMExpressionNode functionNode;
     @Children private final LLVMExpressionNode[] argumentNodes;

@@ -31,11 +31,10 @@ package com.oracle.truffle.llvm.nodes.memory;
 
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.LLVMGlobalVariableDescriptor;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
@@ -48,8 +47,8 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 @NodeChild(type = LLVMExpressionNode.class, value = "valueNode")
 public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
 
-    public LLVMStoreVectorNode(Type type, SourceSection source) {
-        super(type, source);
+    public LLVMStoreVectorNode(Type type) {
+        super(type);
     }
 
     @Specialization
@@ -59,8 +58,8 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
     }
 
     @Specialization
-    protected Object writeVector(LLVMGlobalVariable address, LLVMDoubleVector value) {
-        LLVMMemory.putVector(address.getNativeLocation(), value);
+    protected Object writeVector(LLVMGlobalVariableDescriptor address, LLVMDoubleVector value) {
+        LLVMMemory.putVector(address.getNativeAddress(), value);
         return null;
     }
 
@@ -71,8 +70,8 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
     }
 
     @Specialization
-    protected Object writeVector(LLVMGlobalVariable address, LLVMFloatVector value) {
-        LLVMMemory.putVector(address.getNativeLocation(), value);
+    protected Object writeVector(LLVMGlobalVariableDescriptor address, LLVMFloatVector value) {
+        LLVMMemory.putVector(address.getNativeAddress(), value);
         return null;
     }
 
@@ -83,8 +82,8 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
     }
 
     @Specialization
-    protected Object writeVector(LLVMGlobalVariable address, LLVMI16Vector value) {
-        LLVMMemory.putVector(address.getNativeLocation(), value);
+    protected Object writeVector(LLVMGlobalVariableDescriptor address, LLVMI16Vector value) {
+        LLVMMemory.putVector(address.getNativeAddress(), value);
         return null;
     }
 
@@ -95,8 +94,8 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
     }
 
     @Specialization
-    protected Object writeVector(LLVMGlobalVariable address, LLVMI1Vector value) {
-        LLVMMemory.putVector(address.getNativeLocation(), value);
+    protected Object writeVector(LLVMGlobalVariableDescriptor address, LLVMI1Vector value) {
+        LLVMMemory.putVector(address.getNativeAddress(), value);
         return null;
     }
 
@@ -107,8 +106,8 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
     }
 
     @Specialization
-    protected Object writeVector(LLVMGlobalVariable address, LLVMI32Vector value) {
-        LLVMMemory.putVector(address.getNativeLocation(), value);
+    protected Object writeVector(LLVMGlobalVariableDescriptor address, LLVMI32Vector value) {
+        LLVMMemory.putVector(address.getNativeAddress(), value);
         return null;
     }
 
@@ -119,8 +118,8 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
     }
 
     @Specialization
-    protected Object writeVector(LLVMGlobalVariable address, LLVMI64Vector value) {
-        LLVMMemory.putVector(address.getNativeLocation(), value);
+    protected Object writeVector(LLVMGlobalVariableDescriptor address, LLVMI64Vector value) {
+        LLVMMemory.putVector(address.getNativeAddress(), value);
         return null;
     }
 
@@ -131,8 +130,8 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
     }
 
     @Specialization
-    protected Object writeVector(LLVMGlobalVariable address, LLVMI8Vector value) {
-        LLVMMemory.putVector(address.getNativeLocation(), value);
+    protected Object writeVector(LLVMGlobalVariableDescriptor address, LLVMI8Vector value) {
+        LLVMMemory.putVector(address.getNativeAddress(), value);
         return null;
     }
 }

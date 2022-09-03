@@ -35,11 +35,11 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
 import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.Type;
@@ -47,6 +47,7 @@ import com.oracle.truffle.llvm.runtime.types.VoidType;
 
 public final class LLVMEndCatchNode extends LLVMExpressionNode {
 
+    @Child private LLVMExpressionNode stackPointer;
     @Child private LLVMLookupDispatchNode dispatch;
     @Child private LLVMNativeFunctions.SulongDecrementHandlerCountNode decHandlerCount;
     @Child private LLVMNativeFunctions.SulongGetHandlerCountNode getHandlerCount;
@@ -64,7 +65,8 @@ public final class LLVMEndCatchNode extends LLVMExpressionNode {
         return cachedContext;
     }
 
-    public LLVMEndCatchNode() {
+    public LLVMEndCatchNode(LLVMExpressionNode stackPointer) {
+        this.stackPointer = stackPointer;
         this.dispatch = LLVMLookupDispatchNodeGen.create(new FunctionType(VoidType.INSTANCE, new Type[]{new PointerType(null)}, false));
     }
 
@@ -129,8 +131,8 @@ public final class LLVMEndCatchNode extends LLVMExpressionNode {
             getDecHandlerCount().dec(ptr);
             LLVMAddress destructorAddress = getGetDestructor().get(ptr);
             if (getGetHandlerCount().get(ptr) <= 0 && destructorAddress.getVal() != 0) {
-                LLVMFunctionHandle destructor = LLVMFunctionHandle.createHandle(destructorAddress.getVal());
-                dispatch.executeDispatch(frame, destructor, new Object[]{getGetThrownObject().getThrownObject(ptr)});
+                LLVMFunctionHandle destructor = new LLVMFunctionHandle((int) destructorAddress.getVal());
+                dispatch.executeDispatch(frame, destructor, new Object[]{stackPointer.executeLLVMAddress(frame), getGetThrownObject().getThrownObject(ptr)});
             }
             return null;
         } catch (Throwable e) {

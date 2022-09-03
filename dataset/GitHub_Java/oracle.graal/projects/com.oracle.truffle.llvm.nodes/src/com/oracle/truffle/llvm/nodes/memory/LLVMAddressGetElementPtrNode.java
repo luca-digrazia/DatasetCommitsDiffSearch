@@ -30,19 +30,17 @@
 package com.oracle.truffle.llvm.nodes.memory;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.NodeFields;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMGlobalVariableDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
@@ -61,9 +59,9 @@ public abstract class LLVMAddressGetElementPtrNode extends LLVMExpressionNode {
     }
 
     @Specialization
-    public LLVMAddress executePointee(LLVMGlobalVariable addr, int val, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+    public LLVMAddress executePointee(LLVMGlobalVariableDescriptor addr, int val) {
         int incr = getTypeWidth() * val;
-        return globalAccess.getNativeLocation(addr).increment(incr);
+        return addr.getNativeAddress().increment(incr);
     }
 
     @Specialization
@@ -119,9 +117,9 @@ public abstract class LLVMAddressGetElementPtrNode extends LLVMExpressionNode {
     }
 
     @Specialization
-    public LLVMAddress executePointee(LLVMGlobalVariable addr, long val, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+    public LLVMAddress executePointee(LLVMGlobalVariableDescriptor addr, long val) {
         long incr = getTypeWidth() * val;
-        return globalAccess.getNativeLocation(addr).increment(incr);
+        return addr.getNativeAddress().increment(incr);
     }
 
 }

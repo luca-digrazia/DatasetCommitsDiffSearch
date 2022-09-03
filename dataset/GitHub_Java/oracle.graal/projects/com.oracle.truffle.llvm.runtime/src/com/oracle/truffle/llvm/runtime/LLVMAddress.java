@@ -54,6 +54,10 @@ public final class LLVMAddress {
         return val;
     }
 
+    public LLVMAddress increment(int incr) {
+        return this.increment((long) incr);
+    }
+
     public LLVMAddress increment(long incr) {
         return new LLVMAddress(val + incr);
     }

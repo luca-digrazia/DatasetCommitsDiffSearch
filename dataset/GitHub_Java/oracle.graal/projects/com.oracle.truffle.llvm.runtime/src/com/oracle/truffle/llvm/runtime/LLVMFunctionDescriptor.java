@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.RootCallTarget;
@@ -53,7 +52,6 @@ public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject
     private final LLVMContext context;
 
     private LLVMFunctionDescriptor(LLVMContext context, String name, FunctionType type, int functionId) {
-        CompilerAsserts.neverPartOfCompilation();
         this.context = context;
         this.functionName = name;
         this.type = type;

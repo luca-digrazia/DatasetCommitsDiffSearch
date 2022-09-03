@@ -29,18 +29,18 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.llvm.runtime.interop.LLVMAddressMessageResolutionForeign;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
 public final class LLVMTruffleAddress implements TruffleObject {
-    private final long address;
+    private final LLVMAddress address;
     private final Type type;
     private final LLVMContext context;
 
     public LLVMTruffleAddress(LLVMAddress address, Type type, LLVMContext context) {
-        this.address = address.getVal();
+        this.address = address;
         this.type = type;
         this.context = context;
     }
@@ -50,7 +50,7 @@ public final class LLVMTruffleAddress implements TruffleObject {
     }
 
     public LLVMAddress getAddress() {
-        return LLVMAddress.fromLong(address);
+        return address;
     }
 
     public Type getType() {
@@ -61,14 +61,29 @@ public final class LLVMTruffleAddress implements TruffleObject {
         return object instanceof LLVMTruffleAddress;
     }
 
+    @CompilationFinal private static ForeignAccess ACCESS;
+
     @Override
     public ForeignAccess getForeignAccess() {
-        return LLVMAddressMessageResolutionForeign.ACCESS;
+        if (ACCESS == null) {
+            try {
+                Class<?> accessor = getLLVMAddressMessageResolutionAccessorClass();
+                ACCESS = (ForeignAccess) accessor.getField("ACCESS").get(null);
+            } catch (Exception e) {
+                throw new AssertionError(e);
+            }
+        }
+        return ACCESS;
+    }
+
+    // needed by SVM
+    private static Class<?> getLLVMAddressMessageResolutionAccessorClass() throws ClassNotFoundException {
+        return Class.forName("com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMAddressMessageResolutionAccessor");
     }
 
     @Override
     public String toString() {
-        return Long.toString(address);
+        return address.toString();
     }
 
 }

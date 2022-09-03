@@ -41,18 +41,18 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleManagedMalloc.ManagedMallocObject;
+import com.oracle.truffle.llvm.nodes.intrinsics.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
+import com.oracle.truffle.llvm.runtime.LLVMGlobalVariableDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMHeap;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 public abstract class LLVMDirectLoadNode {
 
@@ -68,8 +68,8 @@ public abstract class LLVMDirectLoadNode {
         }
 
         @Specialization
-        public LLVMIVarBit executeI64(LLVMGlobalVariable addr) {
-            return LLVMMemory.getIVarBit(addr.getNativeLocation(), getBitWidth());
+        public LLVMIVarBit executeI64(LLVMGlobalVariableDescriptor addr) {
+            return LLVMMemory.getIVarBit(addr.getNativeAddress(), getBitWidth());
         }
     }
 
@@ -82,8 +82,8 @@ public abstract class LLVMDirectLoadNode {
         }
 
         @Specialization
-        public LLVM80BitFloat executeDouble(LLVMGlobalVariable addr) {
-            return LLVMMemory.get80BitFloat(addr.getNativeLocation());
+        public LLVM80BitFloat executeDouble(LLVMGlobalVariableDescriptor addr) {
+            return LLVMMemory.get80BitFloat(addr.getNativeAddress());
         }
     }
 
@@ -96,8 +96,8 @@ public abstract class LLVMDirectLoadNode {
         }
 
         @Specialization
-        public LLVMFunctionHandle executeAddress(LLVMGlobalVariable addr) {
-            return new LLVMFunctionHandle(LLVMHeap.getFunctionIndex(addr.getNativeLocation()));
+        public LLVMFunctionHandle executeAddress(LLVMGlobalVariableDescriptor addr) {
+            return new LLVMFunctionHandle(LLVMHeap.getFunctionIndex(addr.getNativeAddress()));
         }
     }
 
@@ -112,8 +112,8 @@ public abstract class LLVMDirectLoadNode {
         }
 
         @Specialization
-        public Object executeAddress(LLVMGlobalVariable addr) {
-            return addr.get();
+        public Object executeAddress(LLVMGlobalVariableDescriptor addr) {
+            return addr.load();
         }
 
         @Specialization
@@ -124,7 +124,7 @@ public abstract class LLVMDirectLoadNode {
         @Specialization
         public Object executeLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
             if (addr.getValue() instanceof Long) {
-                return LLVMMemory.getAddress((long) addr.getValue());
+                return LLVMMemory.getAddress(LLVMAddress.fromLong((long) addr.getValue()));
             } else {
                 CompilerDirectives.transferToInterpreter();
                 throw new IllegalAccessError("Cannot access memory with address: " + addr.getValue());
@@ -169,15 +169,15 @@ public abstract class LLVMDirectLoadNode {
 
     public static final class LLVMGlobalVariableDirectLoadNode extends LLVMExpressionNode {
 
-        protected final LLVMGlobalVariable descriptor;
+        protected final LLVMGlobalVariableDescriptor descriptor;
 
-        public LLVMGlobalVariableDirectLoadNode(LLVMGlobalVariable descriptor) {
+        public LLVMGlobalVariableDirectLoadNode(LLVMGlobalVariableDescriptor descriptor) {
             this.descriptor = descriptor;
         }
 
         @Override
         public Object executeGeneric(VirtualFrame frame) {
-            return descriptor.get();
+            return descriptor.load();
         }
 
     }

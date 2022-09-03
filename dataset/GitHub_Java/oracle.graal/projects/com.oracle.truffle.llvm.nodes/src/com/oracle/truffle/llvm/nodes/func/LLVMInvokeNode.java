@@ -33,9 +33,9 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.llvm.nodes.api.LLVMControlFlowNode;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.LLVMException;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.Type;
@@ -45,8 +45,6 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
     public static final int ARG_START_INDEX = 1;
     @Children protected final LLVMExpressionNode[] normalPhiWriteNodes;
     @Children protected final LLVMExpressionNode[] unwindPhiWriteNodes;
-    private final int normalSuccessor;
-    private final int unwindSuccessor;
 
     protected final FrameSlot returnValueSlot;
     protected final FrameSlot exceptionValueSlot;
@@ -60,9 +58,8 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
                     FrameSlot exceptionValueSlot,
                     int normalSuccessor, int unwindSuccessor,
                     LLVMExpressionNode[] normalPhiWriteNodes, LLVMExpressionNode[] unwindPhiWriteNodes) {
+        super(normalSuccessor, unwindSuccessor);
         assert (type.getReturnType() instanceof VoidType) || returnValueSlot != null;
-        this.normalSuccessor = normalSuccessor;
-        this.unwindSuccessor = unwindSuccessor;
         this.type = type;
         this.normalPhiWriteNodes = normalPhiWriteNodes;
         this.unwindPhiWriteNodes = unwindPhiWriteNodes;
@@ -70,43 +67,89 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
         this.exceptionValueSlot = exceptionValueSlot;
     }
 
-    @Override
-    public int getSuccessorCount() {
-        return 2;
-    }
+    public static final class LLVMSubstitutionInvokeNode extends LLVMInvokeNode {
 
-    public int getNormalSuccessor() {
-        return normalSuccessor;
-    }
+        @Child private LLVMExpressionNode substitution;
 
-    public int getUnwindSuccessor() {
-        return unwindSuccessor;
-    }
+        public LLVMSubstitutionInvokeNode(FunctionType type, LLVMExpressionNode substitution, FrameSlot returnValueSlot,
+                        FrameSlot exceptionValueSlot,
+                        int normalSuccessor, int unwindSuccessor,
+                        LLVMExpressionNode[] normalPhiWriteNodes, LLVMExpressionNode[] unwindPhiWriteNodes) {
+            super(type, returnValueSlot, exceptionValueSlot, normalSuccessor, unwindSuccessor, normalPhiWriteNodes, unwindPhiWriteNodes);
+            this.substitution = substitution;
+        }
 
-    public void handleException(VirtualFrame frame, LLVMException e) {
-        frame.setObject(exceptionValueSlot, e);
-    }
-
-    @Override
-    public boolean needsBranchProfiling() {
-        // we can't use branch profiling because the control flow happens via exception handling
-        return false;
-    }
-
-    public abstract void execute(VirtualFrame frame);
-
-    @ExplodeLoop
-    public void writePhis(VirtualFrame frame, int successorIndex) {
-        if (successorIndex == NORMAL_SUCCESSOR) {
-            for (int i = 0; i < normalPhiWriteNodes.length; i++) {
-                normalPhiWriteNodes[i].executeGeneric(frame);
-            }
-        } else {
-            assert successorIndex == UNWIND_SUCCESSOR;
-            for (int i = 0; i < unwindPhiWriteNodes.length; i++) {
-                unwindPhiWriteNodes[i].executeGeneric(frame);
+        @Override
+        public int executeGetSuccessorIndex(VirtualFrame frame) {
+            try {
+                Object returnValue = substitution.executeGeneric(frame);
+                writeResult(frame, returnValue);
+                return returnNormal(frame);
+            } catch (LLVMException e) {
+                frame.setObject(exceptionValueSlot, e);
+                return returnAndUnwind(frame);
             }
         }
+
+    }
+
+    public static final class LLVMFunctionInvokeNode extends LLVMInvokeNode {
+
+        @Child private LLVMExpressionNode functionNode;
+        @Children private final LLVMExpressionNode[] argumentNodes;
+        @Child private LLVMLookupDispatchNode dispatchNode;
+
+        public LLVMFunctionInvokeNode(FunctionType type, LLVMExpressionNode functionNode, LLVMExpressionNode[] argumentNodes, FrameSlot returnValueSlot,
+                        FrameSlot exceptionValueSlot,
+                        int normalSuccessor, int unwindSuccessor,
+                        LLVMExpressionNode[] normalPhiWriteNodes, LLVMExpressionNode[] unwindPhiWriteNodes) {
+            super(type, returnValueSlot, exceptionValueSlot, normalSuccessor, unwindSuccessor, normalPhiWriteNodes, unwindPhiWriteNodes);
+            this.functionNode = functionNode;
+            this.argumentNodes = argumentNodes;
+            this.dispatchNode = LLVMLookupDispatchNodeGen.create(type);
+        }
+
+        @Override
+        public int executeGetSuccessorIndex(VirtualFrame frame) {
+            Object function = functionNode.executeGeneric(frame);
+
+            Object[] argValues = prepareArguments(frame);
+
+            try {
+                Object returnValue = dispatchNode.executeDispatch(frame, function, argValues);
+                writeResult(frame, returnValue);
+                return returnNormal(frame);
+            } catch (LLVMException e) {
+                frame.setObject(exceptionValueSlot, e);
+                return returnAndUnwind(frame);
+            }
+        }
+
+        @ExplodeLoop
+        private Object[] prepareArguments(VirtualFrame frame) {
+            Object[] argValues = new Object[argumentNodes.length];
+            for (int i = 0; i < argumentNodes.length; i++) {
+                argValues[i] = argumentNodes[i].executeGeneric(frame);
+            }
+            return argValues;
+        }
+
+    }
+
+    @ExplodeLoop
+    protected int returnAndUnwind(VirtualFrame frame) {
+        for (int i = 0; i < unwindPhiWriteNodes.length; i++) {
+            unwindPhiWriteNodes[i].executeGeneric(frame);
+        }
+        return UNWIND_SUCCESSOR;
+    }
+
+    @ExplodeLoop
+    protected int returnNormal(VirtualFrame frame) {
+        for (int i = 0; i < normalPhiWriteNodes.length; i++) {
+            normalPhiWriteNodes[i].executeGeneric(frame);
+        }
+        return NORMAL_SUCCESSOR;
     }
 
     protected void writeResult(VirtualFrame frame, Object value) {
@@ -145,59 +188,5 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
         } else {
             frame.setObject(returnValueSlot, value);
         }
-    }
-
-    public static final class LLVMSubstitutionInvokeNode extends LLVMInvokeNode {
-
-        @Child private LLVMExpressionNode substitution;
-
-        public LLVMSubstitutionInvokeNode(FunctionType type, LLVMExpressionNode substitution, FrameSlot returnValueSlot,
-                        FrameSlot exceptionValueSlot,
-                        int normalSuccessor, int unwindSuccessor,
-                        LLVMExpressionNode[] normalPhiWriteNodes, LLVMExpressionNode[] unwindPhiWriteNodes) {
-            super(type, returnValueSlot, exceptionValueSlot, normalSuccessor, unwindSuccessor, normalPhiWriteNodes, unwindPhiWriteNodes);
-            this.substitution = substitution;
-        }
-
-        @Override
-        public void execute(VirtualFrame frame) {
-            Object returnValue = substitution.executeGeneric(frame);
-            writeResult(frame, returnValue);
-        }
-    }
-
-    public static final class LLVMFunctionInvokeNode extends LLVMInvokeNode {
-
-        @Child private LLVMExpressionNode functionNode;
-        @Children private final LLVMExpressionNode[] argumentNodes;
-        @Child private LLVMLookupDispatchNode dispatchNode;
-
-        public LLVMFunctionInvokeNode(FunctionType type, LLVMExpressionNode functionNode, LLVMExpressionNode[] argumentNodes, FrameSlot returnValueSlot,
-                        FrameSlot exceptionValueSlot,
-                        int normalSuccessor, int unwindSuccessor,
-                        LLVMExpressionNode[] normalPhiWriteNodes, LLVMExpressionNode[] unwindPhiWriteNodes) {
-            super(type, returnValueSlot, exceptionValueSlot, normalSuccessor, unwindSuccessor, normalPhiWriteNodes, unwindPhiWriteNodes);
-            this.functionNode = functionNode;
-            this.argumentNodes = argumentNodes;
-            this.dispatchNode = LLVMLookupDispatchNodeGen.create(type);
-        }
-
-        @Override
-        public void execute(VirtualFrame frame) {
-            Object function = functionNode.executeGeneric(frame);
-            Object[] argValues = prepareArguments(frame);
-            Object returnValue = dispatchNode.executeDispatch(frame, function, argValues);
-            writeResult(frame, returnValue);
-        }
-
-        @ExplodeLoop
-        private Object[] prepareArguments(VirtualFrame frame) {
-            Object[] argValues = new Object[argumentNodes.length];
-            for (int i = 0; i < argumentNodes.length; i++) {
-                argValues[i] = argumentNodes[i].executeGeneric(frame);
-            }
-            return argValues;
-        }
-
     }
 }
