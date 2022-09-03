@@ -249,7 +249,7 @@ public final class CoverageTracker extends InstrumentationTool {
         }
 
         @Override
-        public void enter(Node node, VirtualFrame vFrame) {
+        public void enter(Node node, VirtualFrame frame) {
             if (isEnabled()) {
                 count.getAndIncrement();
             }
