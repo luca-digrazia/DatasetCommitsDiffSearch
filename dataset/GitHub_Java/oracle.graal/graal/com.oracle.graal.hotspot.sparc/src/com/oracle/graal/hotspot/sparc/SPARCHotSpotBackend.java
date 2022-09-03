@@ -172,8 +172,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
     public CompilationResultBuilder newCompilationResultBuilder(LIRGenerationResult lirGenRes, CompilationResult compilationResult, CompilationResultBuilderFactory factory) {
         SPARCHotSpotLIRGenerationResult gen = (SPARCHotSpotLIRGenerationResult) lirGenRes;
         FrameMap frameMap = gen.getFrameMap();
-        LIR lir = gen.getLIR();
-        assert gen.getDeoptimizationRescueSlot() == null || frameMap.frameNeedsAllocating() : "method that can deoptimize must have a frame";
+        assert gen.getDeoptimizationRescueSlot() != null || frameMap.frameNeedsAllocating() : "method that can deoptimize must have a frame";
 
         Stub stub = gen.getStub();
         Assembler masm = createAssembler(frameMap);
@@ -187,10 +186,10 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         }
 
         if (stub != null) {
-            // Even on sparc we need to save floating point registers
-            Set<Register> definedRegisters = gatherDefinedRegisters(lir);
-            Map<LIRFrameState, SaveRegistersOp> calleeSaveInfo = gen.getCalleeSaveInfo();
-            updateStub(stub, definedRegisters, calleeSaveInfo, frameMap);
+            // SPARC stubs always enter a frame which saves the registers.
+            Set<Register> destroyedRegisters = Collections.emptySet();
+            Map<LIRFrameState, SaveRegistersOp> calleeSaveInfo = Collections.emptyMap();
+            updateStub(stub, destroyedRegisters, calleeSaveInfo, frameMap);
         }
 
         return crb;
