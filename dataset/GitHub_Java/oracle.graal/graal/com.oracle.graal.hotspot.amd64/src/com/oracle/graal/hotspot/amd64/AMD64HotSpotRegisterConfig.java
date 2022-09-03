@@ -128,7 +128,7 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
         }
 
         csl = null;
-        allocatable = initAllocatable(config.useCompressedOops);
+        allocatable = initAllocatable(config.useCompressedOops && (config.narrowOopBase != 0));
         attributesMap = RegisterAttributes.createMap(this, AMD64.allRegisters);
     }
 
