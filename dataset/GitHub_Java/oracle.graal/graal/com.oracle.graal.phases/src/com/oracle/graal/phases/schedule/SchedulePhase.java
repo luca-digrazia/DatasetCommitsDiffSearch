@@ -115,12 +115,10 @@ public final class SchedulePhase extends Phase {
                 BlockMap<ArrayList<FloatingReadNode>> watchListMap = calcLatestBlocks(isOutOfLoops, currentNodeMap, earliestBlockToNodesMap, visited, latestBlockToNodesMap);
                 sortNodesLatestWithinBlock(cfg, earliestBlockToNodesMap, latestBlockToNodesMap, currentNodeMap, watchListMap, visited);
 
-                assert verifySchedule(cfg, latestBlockToNodesMap, currentNodeMap);
-                assert MemoryScheduleVerification.check(cfg.getStartBlock(), latestBlockToNodesMap);
-
                 this.blockToNodesMap = latestBlockToNodesMap;
                 this.nodeToBlockMap = currentNodeMap;
 
+                assert verifySchedule(cfg, latestBlockToNodesMap, currentNodeMap);
                 cfg.setNodeToBlock(currentNodeMap);
             }
         }
@@ -167,7 +165,7 @@ public final class SchedulePhase extends Phase {
                                     // We are not constraint within currentBlock. Check if
                                     // we are contraint while walking down the dominator
                                     // line.
-                                    Block newLatestBlock = adjustLatestForRead(floatingReadNode, currentBlock, latestBlock, location);
+                                    Block newLatestBlock = adjustLatestForRead(currentBlock, latestBlock, location);
                                     assert dominates(newLatestBlock, latestBlock);
                                     assert dominates(currentBlock, newLatestBlock);
                                     latestBlock = newLatestBlock;
@@ -205,7 +203,7 @@ public final class SchedulePhase extends Phase {
         return true;
     }
 
-    private static Block adjustLatestForRead(FloatingReadNode floatingReadNode, Block earliestBlock, Block latestBlock, LocationIdentity location) {
+    private static Block adjustLatestForRead(Block earliestBlock, Block latestBlock, LocationIdentity location) {
         assert strictlyDominates(earliestBlock, latestBlock);
         Block current = latestBlock.getDominator();
 
@@ -220,7 +218,6 @@ public final class SchedulePhase extends Phase {
             }
             dominatorChain.add(current);
             current = current.getDominator();
-            assert current != null : floatingReadNode;
         }
 
         // The first element of dominatorChain now contains the latest possible block.
@@ -294,7 +291,7 @@ public final class SchedulePhase extends Phase {
             for (ProxyNode proxy : loopExitNode.proxies()) {
                 unprocessed.clear(proxy);
                 ValueNode value = proxy.value();
-                if (nodeMap.get(value) == b) {
+                if (value != null && nodeMap.get(value) == b) {
                     sortIntoList(value, b, result, nodeMap, unprocessed, null);
                 }
             }
@@ -540,8 +537,6 @@ public final class SchedulePhase extends Phase {
                 }
             }
         }
-
-        assert MemoryScheduleVerification.check(cfg.getStartBlock(), blockToNodes);
     }
 
     private static void resortEarliestWithinBlock(Block b, BlockMap<List<Node>> blockToNodes, NodeMap<Block> nodeToBlock, NodeBitMap unprocessed) {
@@ -555,7 +550,7 @@ public final class SchedulePhase extends Phase {
                 MemoryNode lastLocationAccess = floatingReadNode.getLastLocationAccess();
                 if (locationIdentity.isMutable() && lastLocationAccess != null) {
                     ValueNode lastAccessLocation = lastLocationAccess.asNode();
-                    if (nodeToBlock.get(lastAccessLocation) == b && lastAccessLocation != beginNode && !(lastAccessLocation instanceof MemoryPhiNode)) {
+                    if (nodeToBlock.get(lastAccessLocation) == b && lastAccessLocation != beginNode) {
                         // This node's last access location is within this block. Add to watch list
                         // when processing the last access location.
                     } else {
@@ -655,22 +650,16 @@ public final class SchedulePhase extends Phase {
                         assert current.predecessor() == null && !(current instanceof FixedNode) : "The assignment of blocks to fixed nodes is already done when constructing the cfg.";
                         Block earliest = startBlock;
                         for (Node input : current.inputs()) {
-                            Block inputEarliest = nodeToBlock.get(input);
+                            Block inputEarliest;
+                            if (input instanceof ControlSplitNode) {
+                                inputEarliest = nodeToBlock.get(((ControlSplitNode) input).getPrimarySuccessor());
+                            } else {
+                                inputEarliest = nodeToBlock.get(input);
+                            }
                             if (inputEarliest == null) {
                                 assert current instanceof FrameState && input instanceof StateSplit && ((StateSplit) input).stateAfter() == current;
                             } else {
                                 assert inputEarliest != null;
-                                if (inputEarliest.getEndNode() == input) {
-                                    // This is the last node of the block.
-                                    if (current instanceof FrameState && input instanceof StateSplit && ((StateSplit) input).stateAfter() == current) {
-                                        // Keep regular inputEarliest.
-                                    } else if (input instanceof ControlSplitNode) {
-                                        inputEarliest = nodeToBlock.get(((ControlSplitNode) input).getPrimarySuccessor());
-                                    } else {
-                                        assert inputEarliest.getSuccessorCount() == 1;
-                                        inputEarliest = inputEarliest.getSuccessors().get(0);
-                                    }
-                                }
                                 if (earliest.getDominatorDepth() < inputEarliest.getDominatorDepth()) {
                                     earliest = inputEarliest;
                                 }
