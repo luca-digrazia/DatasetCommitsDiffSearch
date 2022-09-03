@@ -116,26 +116,21 @@ public class HotSpotGraphBuilderPlugins {
             plugins.appendInlineInvokePlugin(new InlineDuringParsingPlugin());
         }
 
-        invocationPlugins.defer(new Runnable() {
+        registerObjectPlugins(invocationPlugins);
+        registerClassPlugins(plugins);
+        registerSystemPlugins(invocationPlugins, foreignCalls);
+        registerThreadPlugins(invocationPlugins, metaAccess, wordTypes, config);
+        registerCallSitePlugins(invocationPlugins);
+        registerReflectionPlugins(invocationPlugins);
+        registerStableOptionPlugins(invocationPlugins, snippetReflection);
+        registerAESPlugins(invocationPlugins, config);
+        registerCRC32Plugins(invocationPlugins, config);
+        StandardGraphBuilderPlugins.registerInvocationPlugins(metaAccess, invocationPlugins, true);
 
-            public void run() {
-                registerObjectPlugins(invocationPlugins);
-                registerClassPlugins(plugins);
-                registerSystemPlugins(invocationPlugins, foreignCalls);
-                registerThreadPlugins(invocationPlugins, metaAccess, wordTypes, config);
-                registerCallSitePlugins(invocationPlugins);
-                registerReflectionPlugins(invocationPlugins);
-                registerStableOptionPlugins(invocationPlugins, snippetReflection);
-                registerAESPlugins(invocationPlugins, config);
-                registerCRC32Plugins(invocationPlugins, config);
-                StandardGraphBuilderPlugins.registerInvocationPlugins(metaAccess, invocationPlugins, true);
+        for (NodeIntrinsicPluginFactory factory : Services.load(NodeIntrinsicPluginFactory.class)) {
+            factory.registerPlugin(invocationPlugins, nodeIntrinsificationProvider);
+        }
 
-                for (NodeIntrinsicPluginFactory factory : Services.load(NodeIntrinsicPluginFactory.class)) {
-                    factory.registerPlugins(invocationPlugins, nodeIntrinsificationProvider);
-                }
-
-            }
-        });
         return plugins;
     }
 
