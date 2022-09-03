@@ -30,18 +30,18 @@ import static com.oracle.graal.hotspot.HotSpotHostBackend.UNCOMMON_TRAP_HANDLER;
 import java.util.ListIterator;
 import java.util.Set;
 
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.CompilationResult;
-import jdk.vm.ci.code.CompilationResult.Call;
-import jdk.vm.ci.code.CompilationResult.ConstantReference;
-import jdk.vm.ci.code.CompilationResult.DataPatch;
-import jdk.vm.ci.code.CompilationResult.Infopoint;
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.hotspot.HotSpotMetaspaceConstant;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.code.CallingConvention;
+import jdk.internal.jvmci.code.CodeCacheProvider;
+import jdk.internal.jvmci.code.CompilationResult;
+import jdk.internal.jvmci.code.CompilationResult.Call;
+import jdk.internal.jvmci.code.CompilationResult.ConstantReference;
+import jdk.internal.jvmci.code.CompilationResult.DataPatch;
+import jdk.internal.jvmci.code.CompilationResult.Infopoint;
+import jdk.internal.jvmci.code.InstalledCode;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.code.RegisterConfig;
+import jdk.internal.jvmci.hotspot.HotSpotMetaspaceConstant;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
 
 import com.oracle.graal.compiler.target.Backend;
 import com.oracle.graal.debug.Debug;
@@ -58,6 +58,7 @@ import com.oracle.graal.lir.profiling.MoveProfiling;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.PhaseSuite;
+import com.oracle.graal.phases.schedule.SchedulePhase;
 import com.oracle.graal.phases.tiers.Suites;
 
 //JaCoCo Exclude
@@ -164,8 +165,10 @@ public abstract class Stub {
             try (Scope d = Debug.sandbox("CompilingStub", DebugScope.getConfig(), providers.getCodeCache(), debugScopeContext())) {
                 final StructuredGraph graph = getGraph();
 
-                // Stubs cannot be recompiled so they cannot be compiled with assumptions
+                // Stubs cannot be recompiled so they cannot be compiled with
+                // assumptions and there is no point in recording evol_method dependencies
                 assert graph.getAssumptions() == null;
+                assert !graph.isInlinedMethodRecordingEnabled() : graph;
 
                 if (!(graph.start() instanceof StubStartNode)) {
                     StubStartNode newStart = graph.add(new StubStartNode(Stub.this));
@@ -181,9 +184,9 @@ public abstract class Stub {
                 try (Scope s0 = Debug.scope("StubCompilation", graph, providers.getCodeCache())) {
                     Suites defaultSuites = providers.getSuites().getDefaultSuites();
                     Suites suites = new Suites(new PhaseSuite<>(), defaultSuites.getMidTier(), defaultSuites.getLowTier());
-                    emitFrontEnd(providers, backend, graph, providers.getSuites().getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graph), suites);
+                    SchedulePhase schedule = emitFrontEnd(providers, backend, graph, providers.getSuites().getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graph), suites);
                     LIRSuites lirSuites = createLIRSuites();
-                    emitBackEnd(graph, Stub.this, incomingCc, getInstalledCodeOwner(), backend, compResult, CompilationResultBuilderFactory.Default, getRegisterConfig(), lirSuites);
+                    emitBackEnd(graph, Stub.this, incomingCc, getInstalledCodeOwner(), backend, compResult, CompilationResultBuilderFactory.Default, schedule, getRegisterConfig(), lirSuites);
                     assert checkStubInvariants();
                 } catch (Throwable e) {
                     throw Debug.handle(e);
@@ -213,6 +216,7 @@ public abstract class Stub {
         // Stubs cannot be recompiled so they cannot be compiled with
         // assumptions and there is no point in recording evol_method dependencies
         assert compResult.getAssumptions() == null : "stubs should not use assumptions: " + this;
+        assert compResult.getMethods() == null : "stubs should not record evol_method dependencies: " + this;
 
         for (DataPatch data : compResult.getDataPatches()) {
             if (data.reference instanceof ConstantReference) {
