@@ -121,7 +121,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     @Override
     public void invalidate() {
         this.runtime.invalidateInstalledCode(this);
-        invalidateInlining();
     }
 
     protected void invalidate(Node oldNode, Node newNode, CharSequence reason) {
@@ -132,23 +131,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             logOptimizedInvalidated(this, oldNode, newNode, reason);
         }
         cancelInstalledTask(oldNode, newNode, reason);
-    }
-
-    public void invalidateInlining() {
-        if (inliningPerformed) {
-            inliningPerformed = false;
-            getRootNode().accept(new NodeVisitor() {
-                public boolean visit(Node node) {
-                    if (node instanceof OptimizedDirectCallNode) {
-                        OptimizedDirectCallNode callNode = (OptimizedDirectCallNode) node;
-                        if (callNode.isInlined()) {
-                            callNode.resetInlining();
-                        }
-                    }
-                    return true;
-                }
-            });
-        }
     }
 
     private void cancelInstalledTask(Node oldNode, Node newNode, CharSequence reason) {
@@ -260,19 +242,19 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             return;
         }
         TruffleInliningHandler handler = new TruffleInliningHandler(new DefaultInliningPolicy());
-        TruffleInliningDecision result = handler.decideInlining(this, 0);
+        TruffleInliningResult result = handler.decideInlining(this, 0);
         performInlining(result);
         logInliningDecision(result);
     }
 
-    private static void performInlining(TruffleInliningDecision result) {
+    private static void performInlining(TruffleInliningResult result) {
         if (result.getCallTarget().inliningPerformed) {
             return;
         }
         result.getCallTarget().inliningPerformed = true;
         for (TruffleInliningProfile profile : result) {
             profile.getCallNode().inline();
-            TruffleInliningDecision recursiveResult = profile.getRecursiveResult();
+            TruffleInliningResult recursiveResult = profile.getRecursiveResult();
             if (recursiveResult != null) {
                 performInlining(recursiveResult);
             }
@@ -293,7 +275,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         if (profiledReturnTypeAssumption == null) {
             if (TruffleReturnTypeSpeculation.getValue()) {
                 CompilerDirectives.transferToInterpreter();
-                profiledReturnType = (result == null ? null : result.getClass());
+                profiledReturnType = result.getClass();
                 profiledReturnTypeAssumption = Truffle.getRuntime().createAssumption("Profiled Return Type");
             }
         } else if (profiledReturnType != null) {
