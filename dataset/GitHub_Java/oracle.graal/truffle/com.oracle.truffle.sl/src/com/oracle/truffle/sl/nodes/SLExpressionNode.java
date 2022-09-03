@@ -40,13 +40,11 @@
  */
 package com.oracle.truffle.sl.nodes;
 
-import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.source.*;
-import com.oracle.truffle.sl.nodes.instrument.*;
-import com.oracle.truffle.sl.runtime.*;
+import com.oracle.truffle.api.dsl.TypeSystemReference;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrumentation.Instrumentable;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 /**
  * Base class for all SL nodes that produce a value and therefore benefit from type specialization.
@@ -55,11 +53,8 @@ import com.oracle.truffle.sl.runtime.*;
  */
 @TypeSystemReference(SLTypes.class)
 @NodeInfo(description = "The abstract base node for all expressions")
+@Instrumentable(factory = SLExpressionNodeWrapper.class)
 public abstract class SLExpressionNode extends SLStatementNode {
-
-    public SLExpressionNode(SourceSection src) {
-        super(src);
-    }
 
     /**
      * The execute method when no specialization is possible. This is the most general case,
@@ -86,22 +81,7 @@ public abstract class SLExpressionNode extends SLStatementNode {
         return SLTypesGen.expectLong(executeGeneric(frame));
     }
 
-    public SLFunction executeFunction(VirtualFrame frame) throws UnexpectedResultException {
-        return SLTypesGen.expectSLFunction(executeGeneric(frame));
-    }
-
     public boolean executeBoolean(VirtualFrame frame) throws UnexpectedResultException {
         return SLTypesGen.expectBoolean(executeGeneric(frame));
     }
-
-    @Override
-    public boolean isInstrumentable() {
-        return true;
-    }
-
-    @Override
-    public WrapperNode createWrapperNode() {
-        return new SLExpressionWrapperNode(this);
-    }
-
 }

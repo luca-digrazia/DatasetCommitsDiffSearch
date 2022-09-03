@@ -40,11 +40,11 @@
  */
 package com.oracle.truffle.sl.nodes.expression;
 
-import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.source.*;
-import com.oracle.truffle.sl.nodes.*;
+import com.oracle.truffle.api.dsl.ShortCircuit;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.sl.nodes.SLBinaryNode;
 
 /**
  * This class is similar to the {@link SLLogicalAndNode}.
@@ -52,13 +52,6 @@ import com.oracle.truffle.sl.nodes.*;
 @NodeInfo(shortName = "||")
 @SuppressWarnings("unused")
 public abstract class SLLogicalOrNode extends SLBinaryNode {
-
-    public SLLogicalOrNode(SourceSection src) {
-        super(src);
-    }
-
-    @Override
-    public abstract boolean executeBoolean(VirtualFrame frame);
 
     @ShortCircuit("rightNode")
     protected boolean needsRightNode(boolean left) {
