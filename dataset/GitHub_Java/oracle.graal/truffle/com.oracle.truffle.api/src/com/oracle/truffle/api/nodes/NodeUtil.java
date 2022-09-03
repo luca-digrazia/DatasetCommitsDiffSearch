@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,39 +24,42 @@
  */
 package com.oracle.truffle.api.nodes;
 
-import java.io.*;
-import java.lang.annotation.*;
-import java.lang.reflect.*;
-import java.util.*;
+import java.io.OutputStream;
+import java.io.PrintStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Array;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Objects;
 
-import sun.misc.*;
-
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.instrument.*;
-import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
-import com.oracle.truffle.api.nodes.NodeFieldAccessor.NodeFieldKind;
-import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.TruffleOptions;
+import com.oracle.truffle.api.source.SourceSection;
 
 /**
  * Utility class that manages the special access methods for node instances.
+ *
+ * @since 0.8 or earlier
  */
 public final class NodeUtil {
-
     /**
-     * Interface that allows the customization of field offsets used for {@link Unsafe} field
-     * accesses.
+     * @deprecated accidentally public - don't use
+     * @since 0.8 or earlier
      */
-    public interface FieldOffsetProvider {
-
-        long objectFieldOffset(Field field);
-
-        int getTypeSize(Class<?> clazz);
+    @Deprecated
+    public NodeUtil() {
     }
 
     static Iterator<Node> makeIterator(Node node) {
         return node.getNodeClass().makeIterator(node);
     }
 
+    /** @since 0.8 or earlier */
     public static Iterator<Node> makeRecursiveIterator(Node node) {
         return new RecursiveNodeIterator(node);
     }
@@ -64,7 +67,7 @@ public final class NodeUtil {
     private static final class RecursiveNodeIterator implements Iterator<Node> {
         private final List<Iterator<Node>> iteratorStack = new ArrayList<>();
 
-        public RecursiveNodeIterator(final Node node) {
+        RecursiveNodeIterator(final Node node) {
             iteratorStack.add(new Iterator<Node>() {
 
                 private boolean visited;
@@ -125,148 +128,195 @@ public final class NodeUtil {
         }
     }
 
+    /** @since 0.8 or earlier */
     @SuppressWarnings("unchecked")
     public static <T extends Node> T cloneNode(T orig) {
         return (T) orig.deepCopy();
     }
 
     static Node deepCopyImpl(Node orig) {
+        CompilerAsserts.neverPartOfCompilation("do not call Node.deepCopyImpl from compiled code");
         final Node clone = orig.copy();
         NodeClass nodeClass = clone.getNodeClass();
 
-        nodeClass.getParentField().putObject(clone, null);
+        clone.setParent(null);
 
-        for (NodeFieldAccessor childField : nodeClass.getChildFields()) {
-            Node child = (Node) childField.getObject(orig);
-            if (child != null) {
-                Node clonedChild = child.deepCopy();
-                nodeClass.getParentField().putObject(clonedChild, clone);
-                childField.putObject(clone, clonedChild);
-            }
-        }
-        for (NodeFieldAccessor childrenField : nodeClass.getChildrenFields()) {
-            Object[] children = (Object[]) childrenField.getObject(orig);
-            if (children != null) {
-                Object[] clonedChildren = (Object[]) Array.newInstance(children.getClass().getComponentType(), children.length);
-                for (int i = 0; i < children.length; i++) {
-                    if (children[i] != null) {
-                        Node clonedChild = ((Node) children[i]).deepCopy();
-                        clonedChildren[i] = clonedChild;
-                        nodeClass.getParentField().putObject(clonedChild, clone);
-                    }
+        for (Object field : nodeClass.getNodeFields()) {
+            if (nodeClass.isChildField(field)) {
+                Node child = (Node) nodeClass.getFieldObject(field, orig);
+                if (child != null) {
+                    Node clonedChild = child.deepCopy();
+                    clonedChild.setParent(clone);
+                    nodeClass.putFieldObject(field, clone, clonedChild);
                 }
-                childrenField.putObject(clone, clonedChildren);
-            }
-        }
-        for (NodeFieldAccessor cloneableField : nodeClass.getCloneableFields()) {
-            Object cloneable = cloneableField.getObject(clone);
-            if (cloneable != null && cloneable == cloneableField.getObject(orig)) {
-                cloneableField.putObject(clone, ((NodeCloneable) cloneable).clone());
+            } else if (nodeClass.isChildrenField(field)) {
+                Object[] children = (Object[]) nodeClass.getFieldObject(field, orig);
+                if (children != null) {
+                    Object[] clonedChildren = (Object[]) Array.newInstance(children.getClass().getComponentType(), children.length);
+                    for (int i = 0; i < children.length; i++) {
+                        if (children[i] != null) {
+                            Node clonedChild = ((Node) children[i]).deepCopy();
+                            clonedChild.setParent(clone);
+                            clonedChildren[i] = clonedChild;
+                        }
+                    }
+                    nodeClass.putFieldObject(field, clone, clonedChildren);
+                }
+            } else if (nodeClass.isCloneableField(field)) {
+                Object cloneable = nodeClass.getFieldObject(field, clone);
+                if (cloneable != null && cloneable == nodeClass.getFieldObject(field, orig)) {
+                    nodeClass.putFieldObject(field, clone, ((NodeCloneable) cloneable).clone());
+                }
+            } else if (nodeClass.nodeFieldsOrderedByKind()) {
+                break;
             }
         }
         return clone;
     }
 
+    /** @since 0.8 or earlier */
     public static List<Node> findNodeChildren(Node node) {
+        CompilerAsserts.neverPartOfCompilation("do not call Node.findNodeChildren from compiled code");
         List<Node> nodes = new ArrayList<>();
         NodeClass nodeClass = node.getNodeClass();
 
-        for (NodeFieldAccessor nodeField : nodeClass.getChildFields()) {
-            Object child = nodeField.getObject(node);
-            if (child != null) {
-                nodes.add((Node) child);
-            }
-        }
-        for (NodeFieldAccessor nodeField : nodeClass.getChildrenFields()) {
-            Object[] children = (Object[]) nodeField.getObject(node);
-            if (children != null) {
-                for (Object child : children) {
-                    if (child != null) {
-                        nodes.add((Node) child);
+        for (Object nodeField : nodeClass.getNodeFields()) {
+            if (nodeClass.isChildField(nodeField)) {
+                Object child = nodeClass.getFieldObject(nodeField, node);
+                if (child != null) {
+                    nodes.add((Node) child);
+                }
+            } else if (nodeClass.isChildrenField(nodeField)) {
+                Object[] children = (Object[]) nodeClass.getFieldObject(nodeField, node);
+                if (children != null) {
+                    for (Object child : children) {
+                        if (child != null) {
+                            nodes.add((Node) child);
+                        }
                     }
                 }
+            } else if (nodeClass.nodeFieldsOrderedByKind()) {
+                break;
             }
         }
-
         return nodes;
     }
 
+    /** @since 0.8 or earlier */
     public static <T extends Node> T nonAtomicReplace(Node oldNode, T newNode, CharSequence reason) {
         oldNode.replaceHelper(newNode, reason);
         return newNode;
     }
 
+    /** @since 0.8 or earlier */
     public static boolean replaceChild(Node parent, Node oldChild, Node newChild) {
-        NodeClass nodeClass = parent.getNodeClass();
+        return replaceChild(parent, oldChild, newChild, false);
+    }
 
-        for (NodeFieldAccessor nodeField : nodeClass.getChildFields()) {
-            if (nodeField.getObject(parent) == oldChild) {
-                assert assertAssignable(nodeField, newChild);
-                nodeField.putObject(parent, newChild);
-                return true;
-            }
-        }
-
-        for (NodeFieldAccessor nodeField : nodeClass.getChildrenFields()) {
-            Object arrayObject = nodeField.getObject(parent);
-            if (arrayObject != null) {
-                Object[] array = (Object[]) arrayObject;
-                for (int i = 0; i < array.length; i++) {
-                    if (array[i] == oldChild) {
-                        assert assertAssignable(nodeField, newChild);
-                        array[i] = newChild;
-                        return true;
+    /*
+     * Fast version of child adoption.
+     */
+    static void adoptChildrenHelper(Node currentNode) {
+        NodeClass clazz = currentNode.getNodeClass();
+        for (Object field : clazz.getNodeFields()) {
+            if (clazz.isChildField(field)) {
+                Object child = clazz.getFieldObject(field, currentNode);
+                if (child != null) {
+                    Node node = (Node) child;
+                    if (node.getParent() != currentNode) {
+                        currentNode.adoptHelper(node);
                     }
                 }
+            } else if (clazz.isChildrenField(field)) {
+                Object arrayObject = clazz.getFieldObject(field, currentNode);
+                if (arrayObject == null) {
+                    continue;
+                }
+                Object[] array = (Object[]) arrayObject;
+                for (int i = 0; i < array.length; i++) {
+                    Object child = array[i];
+                    if (child != null) {
+                        Node node = (Node) child;
+                        if (node.getParent() != currentNode) {
+                            currentNode.adoptHelper(node);
+                        }
+                    }
+                }
+            } else if (clazz.nodeFieldsOrderedByKind()) {
+                break;
             }
         }
+
+    }
+
+    static boolean replaceChild(Node parent, Node oldChild, Node newChild, boolean adopt) {
+        CompilerAsserts.neverPartOfCompilation("do not replace Node child from compiled code");
+        NodeClass nodeClass = parent.getNodeClass();
+
+        for (Object nodeField : nodeClass.getNodeFields()) {
+            if (nodeClass.isChildField(nodeField)) {
+                if (nodeClass.getFieldObject(nodeField, parent) == oldChild) {
+                    if (adopt) {
+                        parent.adoptHelper(newChild);
+                    }
+                    nodeClass.putFieldObject(nodeField, parent, newChild);
+                    return true;
+                }
+            } else if (nodeClass.isChildrenField(nodeField)) {
+                Object arrayObject = nodeClass.getFieldObject(nodeField, parent);
+                if (arrayObject != null) {
+                    Object[] array = (Object[]) arrayObject;
+                    for (int i = 0; i < array.length; i++) {
+                        if (array[i] == oldChild) {
+                            if (adopt) {
+                                parent.adoptHelper(newChild);
+                            }
+                            try {
+                                array[i] = newChild;
+                            } catch (ArrayStoreException e) {
+                                throw replaceChildIllegalArgumentException(nodeField, array.getClass(), newChild);
+                            }
+                            return true;
+                        }
+                    }
+                }
+            } else if (nodeClass.nodeFieldsOrderedByKind()) {
+                break;
+            }
+        }
+
         return false;
     }
 
-    private static boolean assertAssignable(NodeFieldAccessor field, Object newValue) {
-        if (newValue == null) {
-            return true;
-        }
-        if (field.getKind() == NodeFieldKind.CHILD) {
-            if (field.getType().isAssignableFrom(newValue.getClass())) {
-                return true;
-            } else {
-                assert false : "Child class " + newValue.getClass().getName() + " is not assignable to field \"" + field.getName() + "\" of type " + field.getType().getName();
-                return false;
-            }
-        } else if (field.getKind() == NodeFieldKind.CHILDREN) {
-            if (field.getType().getComponentType().isAssignableFrom(newValue.getClass())) {
-                return true;
-            } else {
-                assert false : "Child class " + newValue.getClass().getName() + " is not assignable to field \"" + field.getName() + "\" of type " + field.getType().getName();
-                return false;
-            }
-        }
-        throw new IllegalArgumentException();
+    private static IllegalArgumentException replaceChildIllegalArgumentException(Object nodeField, Class<?> fieldType, Node newChild) {
+        return new IllegalArgumentException("Cannot set element of " + fieldType.getName() + " field " + nodeField + " to " + (newChild == null ? "null" : newChild.getClass().getName()));
     }
 
     /**
      * Finds the field in a parent node, if any, that holds a specified child node.
      *
      * @return the field (possibly an array) holding the child, {@code null} if not found.
+     * @since 0.8 or earlier
      */
+    @SuppressWarnings("deprecation")
+    @Deprecated
     public static NodeFieldAccessor findChildField(Node parent, Node child) {
         assert child != null;
         NodeClass parentNodeClass = parent.getNodeClass();
 
-        for (NodeFieldAccessor field : parentNodeClass.getChildFields()) {
-            if (field.getObject(parent) == child) {
-                return field;
-            }
-        }
-
-        for (NodeFieldAccessor field : parentNodeClass.getChildrenFields()) {
-            Object arrayObject = field.getObject(parent);
-            if (arrayObject != null) {
-                Object[] array = (Object[]) arrayObject;
-                for (int i = 0; i < array.length; i++) {
-                    if (array[i] == child) {
-                        return field;
+        for (NodeFieldAccessor field : parentNodeClass.getFields()) {
+            if (field.getKind() == NodeFieldAccessor.NodeFieldKind.CHILD) {
+                if (field.getObject(parent) == child) {
+                    return field;
+                }
+            } else if (field.getKind() == NodeFieldAccessor.NodeFieldKind.CHILDREN) {
+                Object arrayObject = field.getObject(parent);
+                if (arrayObject != null) {
+                    Object[] array = (Object[]) arrayObject;
+                    for (int i = 0; i < array.length; i++) {
+                        if (array[i] == child) {
+                            return field;
+                        }
                     }
                 }
             }
@@ -276,55 +326,71 @@ public final class NodeUtil {
 
     /**
      * Determines whether a proposed child replacement would be safe: structurally and type.
+     *
+     * @since 0.8 or earlier
      */
     public static boolean isReplacementSafe(Node parent, Node oldChild, Node newChild) {
-        assert newChild != null;
+        Objects.requireNonNull(oldChild);
         if (parent != null) {
-            final NodeFieldAccessor field = findChildField(parent, oldChild);
-            if (field != null) {
-                switch (field.getKind()) {
-                    case CHILD:
-                        return field.getType().isAssignableFrom(newChild.getClass());
-                    case CHILDREN:
-                        return field.getType().getComponentType().isAssignableFrom(newChild.getClass());
-                    default:
-                        throw new IllegalStateException();
+            NodeClass nodeClass = parent.getNodeClass();
+            for (Object field : nodeClass.getNodeFields()) {
+                if (nodeClass.isChildField(field)) {
+                    if (nodeClass.getFieldObject(field, parent) == oldChild) {
+                        return nodeClass.getFieldType(field).isAssignableFrom(newChild.getClass());
+                    }
+                } else if (nodeClass.isChildrenField(field)) {
+                    Object arrayObject = nodeClass.getFieldObject(field, parent);
+                    if (arrayObject != null) {
+                        Object[] array = (Object[]) arrayObject;
+                        for (int i = 0; i < array.length; i++) {
+                            if (array[i] == oldChild) {
+                                return nodeClass.getFieldType(field).getComponentType().isAssignableFrom(newChild.getClass());
+                            }
+                        }
+                    }
+                } else if (nodeClass.nodeFieldsOrderedByKind()) {
+                    break;
                 }
             }
         }
-        return false;
+        // if a child was not found the replacement can be considered safe.
+        return true;
     }
 
     /**
      * Executes a closure for every non-null child of the parent node.
      *
      * @return {@code true} if all children were visited, {@code false} otherwise
+     * @since 0.8 or earlier
      */
     public static boolean forEachChild(Node parent, NodeVisitor visitor) {
+        CompilerAsserts.neverPartOfCompilation("do not iterate over Node children from compiled code");
         Objects.requireNonNull(visitor);
-        NodeClass parentNodeClass = parent.getNodeClass();
+        NodeClass nodeClass = parent.getNodeClass();
 
-        for (NodeFieldAccessor field : parentNodeClass.getChildFields()) {
-            Object child = field.getObject(parent);
-            if (child != null) {
-                if (!visitor.visit((Node) child)) {
-                    return false;
+        for (Object field : nodeClass.getNodeFields()) {
+            if (nodeClass.isChildField(field)) {
+                Object child = nodeClass.getFieldObject(field, parent);
+                if (child != null) {
+                    if (!visitor.visit((Node) child)) {
+                        return false;
+                    }
                 }
-            }
-        }
-
-        for (NodeFieldAccessor field : parentNodeClass.getChildrenFields()) {
-            Object arrayObject = field.getObject(parent);
-            if (arrayObject != null) {
-                Object[] array = (Object[]) arrayObject;
-                for (int i = 0; i < array.length; i++) {
-                    Object child = array[i];
-                    if (child != null) {
-                        if (!visitor.visit((Node) child)) {
-                            return false;
+            } else if (nodeClass.isChildrenField(field)) {
+                Object arrayObject = nodeClass.getFieldObject(field, parent);
+                if (arrayObject != null) {
+                    Object[] array = (Object[]) arrayObject;
+                    for (int i = 0; i < array.length; i++) {
+                        Object child = array[i];
+                        if (child != null) {
+                            if (!visitor.visit((Node) child)) {
+                                return false;
+                            }
                         }
                     }
                 }
+            } else if (nodeClass.nodeFieldsOrderedByKind()) {
+                break;
             }
         }
 
@@ -332,24 +398,26 @@ public final class NodeUtil {
     }
 
     static boolean forEachChildRecursive(Node parent, NodeVisitor visitor) {
-        NodeClass parentNodeClass = parent.getNodeClass();
+        NodeClass nodeClass = parent.getNodeClass();
 
-        for (NodeFieldAccessor field : parentNodeClass.getChildFields()) {
-            if (!visitChild((Node) field.getObject(parent), visitor)) {
-                return false;
-            }
-        }
-
-        for (NodeFieldAccessor field : parentNodeClass.getChildrenFields()) {
-            Object arrayObject = field.getObject(parent);
-            if (arrayObject == null) {
-                continue;
-            }
-            Object[] array = (Object[]) arrayObject;
-            for (int i = 0; i < array.length; i++) {
-                if (!visitChild((Node) array[i], visitor)) {
+        for (Object field : nodeClass.getNodeFields()) {
+            if (nodeClass.isChildField(field)) {
+                if (!visitChild((Node) nodeClass.getFieldObject(field, parent), visitor)) {
                     return false;
                 }
+            } else if (nodeClass.isChildrenField(field)) {
+                Object arrayObject = nodeClass.getFieldObject(field, parent);
+                if (arrayObject == null) {
+                    continue;
+                }
+                Object[] array = (Object[]) arrayObject;
+                for (int i = 0; i < array.length; i++) {
+                    if (!visitChild((Node) array[i], visitor)) {
+                        return false;
+                    }
+                }
+            } else if (nodeClass.nodeFieldsOrderedByKind()) {
+                break;
             }
         }
 
@@ -369,15 +437,7 @@ public final class NodeUtil {
         return true;
     }
 
-    /** Returns all declared fields in the class hierarchy. */
-    static Field[] getAllFields(Class<? extends Object> clazz) {
-        Field[] declaredFields = clazz.getDeclaredFields();
-        if (clazz.getSuperclass() != null) {
-            return concat(getAllFields(clazz.getSuperclass()), declaredFields);
-        }
-        return declaredFields;
-    }
-
+    /** @since 0.8 or earlier */
     public static <T> T[] concat(T[] first, T[] second) {
         T[] result = Arrays.copyOf(first, first.length + second.length);
         System.arraycopy(second, 0, result, first.length, second.length);
@@ -387,6 +447,8 @@ public final class NodeUtil {
     /**
      * Get the nth parent of a node, where the 0th parent is the node itself. Returns null if there
      * are less than n ancestors.
+     *
+     * @since 0.8 or earlier
      */
     public static Node getNthParent(Node node, int n) {
         Node parent = node;
@@ -402,14 +464,20 @@ public final class NodeUtil {
         return parent;
     }
 
-    /** find annotation in class/interface hierarchy. */
+    /**
+     * Find annotation in class/interface hierarchy.
+     *
+     * @since 0.8 or earlier
+     */
     public static <T extends Annotation> T findAnnotation(Class<?> clazz, Class<T> annotationClass) {
         if (clazz.getAnnotation(annotationClass) != null) {
             return clazz.getAnnotation(annotationClass);
         } else {
-            for (Class<?> intf : clazz.getInterfaces()) {
-                if (intf.getAnnotation(annotationClass) != null) {
-                    return intf.getAnnotation(annotationClass);
+            if (!TruffleOptions.AOT) {
+                for (Class<?> intf : clazz.getInterfaces()) {
+                    if (intf.getAnnotation(annotationClass) != null) {
+                        return intf.getAnnotation(annotationClass);
+                    }
                 }
             }
             if (clazz.getSuperclass() != null) {
@@ -419,6 +487,7 @@ public final class NodeUtil {
         return null;
     }
 
+    /** @since 0.8 or earlier */
     public static <T> T findParent(Node start, Class<T> clazz) {
         Node parent = start.getParent();
         if (parent == null) {
@@ -430,6 +499,7 @@ public final class NodeUtil {
         }
     }
 
+    /** @since 0.8 or earlier */
     public static <T> List<T> findAllParents(Node start, Class<T> clazz) {
         List<T> parents = new ArrayList<>();
         T parent = findParent(start, clazz);
@@ -440,6 +510,7 @@ public final class NodeUtil {
         return parents;
     }
 
+    /** @since 0.8 or earlier */
     public static List<Node> collectNodes(Node parent, Node child) {
         List<Node> nodes = new ArrayList<>();
         Node current = child;
@@ -453,6 +524,7 @@ public final class NodeUtil {
         throw new IllegalArgumentException("Node " + parent + " is not a parent of " + child + ".");
     }
 
+    /** @since 0.8 or earlier */
     public static <T> T findFirstNodeInstance(Node root, Class<T> clazz) {
         if (clazz.isInstance(root)) {
             return clazz.cast(root);
@@ -466,6 +538,7 @@ public final class NodeUtil {
         return null;
     }
 
+    /** @since 0.8 or earlier */
     public static <T> List<T> findAllNodeInstances(final Node root, final Class<T> clazz) {
         final List<T> nodeList = new ArrayList<>();
         root.accept(new NodeVisitor() {
@@ -479,18 +552,21 @@ public final class NodeUtil {
         return nodeList;
     }
 
+    /** @since 0.8 or earlier */
     public static int countNodes(Node root) {
         return countNodes(root, NodeCountFilter.NO_FILTER);
     }
 
+    /** @since 0.8 or earlier */
     public static int countNodes(Node root, NodeCountFilter filter) {
         NodeCounter counter = new NodeCounter(filter);
         root.accept(counter);
         return counter.count;
     }
 
+    /** @since 0.8 or earlier */
     public interface NodeCountFilter {
-
+        /** @since 0.8 or earlier */
         NodeCountFilter NO_FILTER = new NodeCountFilter() {
 
             public boolean isCounted(Node node) {
@@ -498,16 +574,19 @@ public final class NodeUtil {
             }
         };
 
+        /** @since 0.8 or earlier */
         boolean isCounted(Node node);
 
     }
 
+    /** @since 0.8 or earlier */
     public static String printCompactTreeToString(Node node) {
         StringWriter out = new StringWriter();
         printCompactTree(new PrintWriter(out), null, node, 1);
         return out.toString();
     }
 
+    /** @since 0.8 or earlier */
     public static void printCompactTree(OutputStream out, Node node) {
         printCompactTree(new PrintWriter(out), null, node, 1);
     }
@@ -533,16 +612,19 @@ public final class NodeUtil {
         p.flush();
     }
 
+    /** @since 0.8 or earlier */
     public static String printSourceAttributionTree(Node node) {
         StringWriter out = new StringWriter();
         printSourceAttributionTree(new PrintWriter(out), null, node, 1);
         return out.toString();
     }
 
+    /** @since 0.8 or earlier */
     public static void printSourceAttributionTree(OutputStream out, Node node) {
         printSourceAttributionTree(new PrintWriter(out), null, node, 1);
     }
 
+    /** @since 0.8 or earlier */
     public static void printSourceAttributionTree(PrintWriter out, Node node) {
         printSourceAttributionTree(out, null, node, 1);
     }
@@ -583,48 +665,33 @@ public final class NodeUtil {
     }
 
     private static String getNodeFieldName(Node parent, Node node, String defaultName) {
-        NodeFieldAccessor[] fields = parent.getNodeClass().getFields();
-        for (NodeFieldAccessor field : fields) {
-            Object value = field.loadValue(parent);
-            if (field.getKind() == NodeFieldKind.CHILD && value == node) {
-                return field.getName();
-            } else if (field.getKind() == NodeFieldKind.CHILDREN) {
+        NodeClass nodeClass = parent.getNodeClass();
+        for (Object field : nodeClass.getNodeFields()) {
+            if (nodeClass.isChildField(field) && nodeClass.getFieldObject(field, parent) == node) {
+                return nodeClass.getFieldName(field);
+            } else if (nodeClass.isChildrenField(field)) {
                 int index = 0;
-                for (Object arrayNode : (Object[]) value) {
+                for (Object arrayNode : (Object[]) nodeClass.getFieldObject(field, parent)) {
                     if (arrayNode == node) {
-                        return field.getName() + "[" + index + "]";
+                        return nodeClass.getFieldName(field) + "[" + index + "]";
                     }
                     index++;
                 }
+            } else if (nodeClass.nodeFieldsOrderedByKind()) {
+                break;
             }
         }
         return defaultName;
     }
 
     /**
-     * Returns a string listing the {@linkplain SyntaxTag syntax tags}, if any, associated with a
-     * node:
-     * <ul>
-     * <li>"[{@linkplain StandardSyntaxTag#STATEMENT STATEMENT},
-     * {@linkplain StandardSyntaxTag#ASSIGNMENT ASSIGNMENT}]" if tags have been applied;</li>
-     * <li>"[]" if the node supports tags, but none are present; and</li>
-     * <li>"" if the node does not support tags.</li>
-     * </ul>
+     * Originally returned the <em>tags</em> if any, associated with a node; now unsupported.
+     *
+     * @since 0.8 or earlier
      */
     public static String printSyntaxTags(final Object node) {
-        if (node instanceof WrapperNode) {
-            final Probe probe = ((WrapperNode) node).getProbe();
-            final Collection<SyntaxTag> syntaxTags = probe.getSyntaxTags();
-            final StringBuilder sb = new StringBuilder();
-            String prefix = "";
-            sb.append("[");
-            for (SyntaxTag tag : syntaxTags) {
-                sb.append(prefix);
-                prefix = ",";
-                sb.append(tag.toString());
-            }
-            sb.append("]");
-            return sb.toString();
+        if ((node instanceof Node) && ((Node) node).getSourceSection() != null) {
+            return ((Node) node).getSourceSection().toString();
         }
         return "";
     }
@@ -635,17 +702,20 @@ public final class NodeUtil {
      *
      * @param out the stream to print to.
      * @param node the root node to write
+     * @since 0.8 or earlier
      */
     public static void printTree(OutputStream out, Node node) {
         printTree(new PrintWriter(out), node);
     }
 
+    /** @since 0.8 or earlier */
     public static String printTreeToString(Node node) {
         StringWriter out = new StringWriter();
         printTree(new PrintWriter(out), node);
         return out.toString();
     }
 
+    /** @since 0.8 or earlier */
     public static void printTree(PrintWriter p, Node node) {
         printTree(p, node, 1);
         p.println();
@@ -660,36 +730,37 @@ public final class NodeUtil {
 
         p.print(nodeName(node));
 
-        ArrayList<NodeFieldAccessor> childFields = new ArrayList<>();
+        ArrayList<Object> childFields = new ArrayList<>();
         String sep = "";
         p.print("(");
-        for (NodeFieldAccessor field : NodeClass.get(node).getFields()) {
-            if (field.getKind() == NodeFieldKind.CHILD || field.getKind() == NodeFieldKind.CHILDREN) {
+        NodeClass nodeClass = NodeClass.get(node);
+        for (Object field : nodeClass.getNodeFields()) {
+            if (nodeClass.isChildField(field) || nodeClass.isChildrenField(field)) {
                 childFields.add(field);
-            } else if (field.getKind() == NodeFieldKind.DATA) {
+            } else {
                 p.print(sep);
                 sep = ", ";
 
-                p.print(field.getName());
+                p.print(nodeClass.getFieldName(field));
                 p.print(" = ");
-                p.print(field.loadValue(node));
+                p.print(nodeClass.getFieldValue(field, node));
             }
         }
         p.print(")");
 
         if (childFields.size() != 0) {
             p.print(" {");
-            for (NodeFieldAccessor field : childFields) {
+            for (Object field : nodeClass.getNodeFields()) {
                 printNewLine(p, level);
-                p.print(field.getName());
+                p.print(nodeClass.getFieldName(field));
 
-                Object value = field.loadValue(node);
+                Object value = nodeClass.getFieldValue(field, node);
                 if (value == null) {
                     p.print(" = null ");
-                } else if (field.getKind() == NodeFieldKind.CHILD) {
+                } else if (nodeClass.isChildField(field)) {
                     p.print(" = ");
                     printTree(p, (Node) value, level + 1);
-                } else if (field.getKind() == NodeFieldKind.CHILDREN) {
+                } else if (nodeClass.isChildrenField(field)) {
                     printChildren(p, level, value);
                 }
             }
@@ -719,12 +790,17 @@ public final class NodeUtil {
     }
 
     private static String nodeName(Node node) {
-        return node.getClass().getSimpleName();
+        return className(node.getClass());
+    }
+
+    static String className(Class<?> clazz) {
+        String name = clazz.getName();
+        return name.substring(name.lastIndexOf('.') + 1);
     }
 
     private static String displaySourceAttribution(Node node) {
         final SourceSection section = node.getSourceSection();
-        if (section instanceof NullSourceSection) {
+        if (section != null && section.getSource() == null) {
             return "source: " + section.getShortDescription();
         }
         if (section != null) {
@@ -740,6 +816,7 @@ public final class NodeUtil {
         return "";
     }
 
+    /** @since 0.8 or earlier */
     public static boolean verify(Node root) {
         Iterable<Node> children = root.getChildren();
         for (Node child : children) {
@@ -803,7 +880,7 @@ public final class NodeUtil {
                 cost = "?";
                 break;
         }
-        return cost + " " + node.getClass().getSimpleName();
+        return cost + " " + nodeName(node);
     }
 
     private static boolean filterByKind(Node node, NodeCost cost) {
@@ -826,7 +903,7 @@ public final class NodeUtil {
         public int count;
         private final NodeCountFilter filter;
 
-        public NodeCounter(NodeCountFilter filter) {
+        NodeCounter(NodeCountFilter filter) {
             this.filter = filter;
         }
 
