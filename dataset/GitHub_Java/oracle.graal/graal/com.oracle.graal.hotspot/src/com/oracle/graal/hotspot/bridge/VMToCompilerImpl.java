@@ -153,8 +153,7 @@ public class VMToCompilerImpl implements VMToCompiler {
 
                 @Override
                 public void run() {
-                    ServiceLoader<ReplacementsProvider> serviceLoader = ServiceLoader.loadInstalled(ReplacementsProvider.class);
-                    for (ReplacementsProvider provider : serviceLoader) {
+                    for (ReplacementsProvider provider : ServiceLoader.loadInstalled(ReplacementsProvider.class)) {
                         provider.registerReplacements(replacements);
                     }
                     runtime.registerReplacements(replacements);
@@ -393,10 +392,6 @@ public class VMToCompilerImpl implements VMToCompiler {
         System.gc();
         phaseTransition("bootstrap2");
 
-        if (GraalOptions.CompileTheWorld != null) {
-            new CompileTheWorld().compile();
-            System.exit(0);
-        }
     }
 
     private MetricRateInPhase parsedBytecodesPerSecond;
