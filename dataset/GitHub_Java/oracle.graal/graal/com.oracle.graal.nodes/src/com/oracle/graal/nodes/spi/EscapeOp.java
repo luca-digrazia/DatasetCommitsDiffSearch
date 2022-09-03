@@ -29,29 +29,82 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.virtual.*;
 
 public abstract class EscapeOp {
 
-    /**
-     * Returns the type of object that is created by the associated node.
-     */
-    public abstract ResolvedJavaType type();
+    public abstract boolean canAnalyze(Node node);
 
-    /**
-     * Returns all the fields that the objects create by the associated node have.
-     */
-    public abstract EscapeField[] fields();
+    public boolean escape(Node node, Node usage) {
+        if (usage instanceof IsNullNode) {
+            assert ((IsNullNode) usage).object() == node;
+            return false;
+        } else if (usage instanceof IsTypeNode) {
+            assert ((IsTypeNode) usage).objectClass() == node;
+            return false;
+        } else if (usage instanceof VirtualState) {
+            assert usage.inputs().contains(node);
+            return true;
+        } else if (usage instanceof AccessMonitorNode) {
+            assert ((AccessMonitorNode) usage).object() == node;
+            return false;
+        } else if (usage instanceof LoadFieldNode) {
+            assert ((LoadFieldNode) usage).object() == node;
+            return false;
+        } else if (usage instanceof StoreFieldNode) {
+            StoreFieldNode x = (StoreFieldNode) usage;
+            // self-references do escape
+            return x.value() == node; // TODO (thomaswue) Check if we can add this condition? && x.object() != node;
+        } else if (usage instanceof LoadIndexedNode) {
+            LoadIndexedNode x = (LoadIndexedNode) usage;
+            if (x.index() == node) {
+                return true;
+            } else {
+                assert x.array() == node;
+                return !isValidConstantIndex(x);
+            }
+        } else if (usage instanceof StoreIndexedNode) {
+            StoreIndexedNode x = (StoreIndexedNode) usage;
+            if (x.index() == node) {
+                return true;
+            } else {
+                assert x.array() == node || x.value() == node;
+                // in order to not escape the access needs to have a valid constant index and either a store into node or self-referencing
+                return !isValidConstantIndex(x) || x.value() == node && x.array() != node;
+            }
+        } else if (usage instanceof RegisterFinalizerNode) {
+            assert ((RegisterFinalizerNode) usage).object() == node;
+            return false;
+        } else if (usage instanceof ArrayLengthNode) {
+            assert ((ArrayLengthNode) usage).array() == node;
+            return false;
+        } else if (usage instanceof ValueProxyNode) {
+            for (Node vpnUsage : usage.usages().snapshot()) {
+                if (escape(usage, vpnUsage)) {
+                    return true;
+                }
+            }
+            return false;
+        } else {
+            return true;
+        }
+    }
 
-    /**
-     * Returns the initial value of all fields, in the same order as {@link #fields()}.
-     */
-    public abstract ValueNode[] fieldState();
+    public static boolean isValidConstantIndex(AccessIndexedNode x) {
+        Constant index = x.index().asConstant();
+        if (x.array() instanceof NewArrayNode) {
+            Constant length = ((NewArrayNode) x.array()).dimension(0).asConstant();
+            return index != null && length != null && index.asInt() >= 0 && index.asInt() < length.asInt();
+        } else {
+            return false;
+        }
+    }
 
-    public abstract void beforeUpdate(Node usage);
+    public abstract EscapeField[] fields(Node node);
 
-    protected static void beforeUpdate(Node node, Node usage) {
-        // IsNullNode and IsTypeNode should have been eliminated by the CanonicalizerPhase, but we can't rely on this
+    public abstract ResolvedJavaType type(Node node);
+
+    public void beforeUpdate(Node node, Node usage) {
+        // IsNonNullNode and IsTypeNode should have been eliminated by the CanonicalizerPhase, but we can't rely on this
         if (usage instanceof IsNullNode) {
             IsNullNode x = (IsNullNode) usage;
             ((StructuredGraph) x.graph()).replaceFloating(x, ConstantNode.forBoolean(false, node.graph()));
@@ -64,6 +117,6 @@ public abstract class EscapeOp {
         }
     }
 
-    public abstract int updateState(VirtualObjectNode virtualObject, Node current, Map<Object, Integer> fieldIndex, ValueNode[] fieldState);
+    public abstract int updateState(Node node, Node current, Map<Object, Integer> fieldIndex, ValueNode[] fieldState);
 
 }

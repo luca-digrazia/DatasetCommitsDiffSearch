@@ -44,9 +44,9 @@ public final class FrameState extends VirtualState implements Node.IterableNodeT
      */
     public static final class InliningIdentifier {
         private final ResolvedJavaMethod method;
-        private final Object context;
+        private final String context;
 
-        public InliningIdentifier(ResolvedJavaMethod method, Object context) {
+        public InliningIdentifier(ResolvedJavaMethod method, String context) {
             this.method = method;
             this.context = context;
         }

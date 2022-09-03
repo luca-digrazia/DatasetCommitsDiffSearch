@@ -27,23 +27,22 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-
 @NodeInfo(nameTemplate = "VirtualObject {p#type}")
 public class VirtualObjectNode extends FloatingNode implements LIRLowerable {
 
     @SuppressWarnings("unused")
     private final int id;
     private final ResolvedJavaType type;
-    private final EscapeField[] fields;
+    private final int fieldsCount;
 
-    public VirtualObjectNode(int id, ResolvedJavaType type, EscapeField[] fields) {
+    public VirtualObjectNode(int id, ResolvedJavaType type, int fieldCount) {
         super(StampFactory.virtual());
         this.id = id;
         this.type = type;
-        this.fields = fields;
+        this.fieldsCount = fieldCount;
     }
 
-    public ResolvedJavaType type() {
+    public JavaType type() {
         return type;
     }
 
@@ -61,7 +60,7 @@ public class VirtualObjectNode extends FloatingNode implements LIRLowerable {
         }
     }
 
-    public EscapeField[] fields() {
-        return fields;
+    public int fieldsCount() {
+        return fieldsCount;
     }
 }

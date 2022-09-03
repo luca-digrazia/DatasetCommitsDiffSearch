@@ -26,8 +26,8 @@ import java.util.AbstractMap.SimpleEntry;
 import java.util.*;
 import java.util.Map.Entry;
 
-public final class NodeMap<T> {
 
+public final class NodeMap<T> {
     private final Graph graph;
     private Object[] values;
     private int size;
@@ -83,13 +83,10 @@ public final class NodeMap<T> {
 
     public Iterable<Entry<Node, T>> entries() {
         return new Iterable<Entry<Node, T>>() {
-
             @Override
             public Iterator<Entry<Node, T>> iterator() {
                 return new Iterator<Entry<Node, T>>() {
-
                     int i = 0;
-
                     @Override
                     public boolean hasNext() {
                         forward();
@@ -104,10 +101,8 @@ public final class NodeMap<T> {
                         T value = (T) NodeMap.this.values[pos];
                         i++;
                         forward();
-                        return new SimpleEntry<Node, T>(key, value) {
-
+                        return new SimpleEntry<Node, T>(key, value){
                             private static final long serialVersionUID = 7813842391085737738L;
-
                             @Override
                             public T setValue(T v) {
                                 T oldv = super.setValue(v);

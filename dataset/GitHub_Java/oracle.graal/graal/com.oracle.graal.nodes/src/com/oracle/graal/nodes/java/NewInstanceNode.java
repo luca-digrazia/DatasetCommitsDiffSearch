@@ -30,7 +30,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The {@code NewInstanceNode} represents the allocation of an instance class object.
@@ -39,16 +38,14 @@ import com.oracle.graal.nodes.virtual.*;
 public final class NewInstanceNode extends FixedWithNextNode implements EscapeAnalyzable, Lowerable, LIRLowerable, Node.IterableNodeType {
 
     private final ResolvedJavaType instanceClass;
-    private final boolean fillContents;
 
     /**
      * Constructs a NewInstanceNode.
      * @param type the class being allocated
      */
-    public NewInstanceNode(ResolvedJavaType type, boolean fillContents) {
+    public NewInstanceNode(ResolvedJavaType type) {
         super(StampFactory.exactNonNull(type));
         this.instanceClass = type;
-        this.fillContents = fillContents;
     }
 
     /**
@@ -57,10 +54,6 @@ public final class NewInstanceNode extends FixedWithNextNode implements EscapeAn
      */
     public ResolvedJavaType instanceClass() {
         return instanceClass;
-    }
-
-    public boolean fillContents() {
-        return fillContents;
     }
 
     @Override
@@ -73,16 +66,15 @@ public final class NewInstanceNode extends FixedWithNextNode implements EscapeAn
         gen.visitNewInstance(this);
     }
 
-    @Override
     public EscapeOp getEscapeOp() {
-        return instanceClass == null ? null : new EscapeOpImpl();
+        return instanceClass == null ? null : ESCAPE;
     }
 
-    private final class EscapeOpImpl extends EscapeOp {
+    private static final EscapeOp ESCAPE = new EscapeOp() {
 
         @Override
-        public ResolvedJavaType type() {
-            return instanceClass();
+        public boolean canAnalyze(Node node) {
+            return true;
         }
 
         private void fillEscapeFields(ResolvedJavaType type, List<EscapeField> escapeFields) {
@@ -97,35 +89,31 @@ public final class NewInstanceNode extends FixedWithNextNode implements EscapeAn
         }
 
         @Override
-        public EscapeField[] fields() {
-            assert !instanceClass().isArrayClass();
+        public ResolvedJavaType type(Node node) {
+            NewInstanceNode x = (NewInstanceNode) node;
+            return x.instanceClass();
+        }
+
+        @Override
+        public EscapeField[] fields(Node node) {
+            NewInstanceNode x = (NewInstanceNode) node;
             List<EscapeField> escapeFields = new ArrayList<>();
-            fillEscapeFields(instanceClass(), escapeFields);
+            fillEscapeFields(x.instanceClass(), escapeFields);
             return escapeFields.toArray(new EscapeField[escapeFields.size()]);
         }
 
         @Override
-        public ValueNode[] fieldState() {
-            EscapeField[] fields = fields();
-            ValueNode[] state = new ValueNode[fields.length];
-            for (int i = 0; i < state.length; i++) {
-                state[i] = ConstantNode.defaultForKind(fields[i].type().kind(), graph());
-            }
-            return state;
-        }
-
-        @Override
-        public void beforeUpdate(Node usage) {
+        public void beforeUpdate(Node node, Node usage) {
             if (usage instanceof RegisterFinalizerNode) {
                 RegisterFinalizerNode x = (RegisterFinalizerNode) usage;
                 ((StructuredGraph) x.graph()).removeFixed(x);
             } else {
-                super.beforeUpdate(NewInstanceNode.this, usage);
+                super.beforeUpdate(node, usage);
             }
         }
 
         @Override
-        public int updateState(VirtualObjectNode node, Node current, Map<Object, Integer> fieldIndex, ValueNode[] fieldState) {
+        public int updateState(Node node, Node current, Map<Object, Integer> fieldIndex, ValueNode[] fieldState) {
             if (current instanceof AccessFieldNode) {
                 AccessFieldNode x = (AccessFieldNode) current;
                 if (GraphUtil.unProxify(x.object()) == node) {
@@ -144,5 +132,5 @@ public final class NewInstanceNode extends FixedWithNextNode implements EscapeAn
             }
             return -1;
         }
-    }
+    };
 }

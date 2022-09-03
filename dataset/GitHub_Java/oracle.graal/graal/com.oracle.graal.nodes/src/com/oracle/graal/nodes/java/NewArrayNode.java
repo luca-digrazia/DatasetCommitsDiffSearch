@@ -30,7 +30,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The {@code NewArrayNode} class is the base of all instructions that allocate arrays.
@@ -39,7 +38,6 @@ public abstract class NewArrayNode extends FixedWithNextNode implements Lowerabl
 
     @Input private ValueNode length;
     private final ResolvedJavaType elementType;
-    private final boolean fillContents;
 
     public static final int MaximumEscapeAnalysisArrayLength = 32;
 
@@ -52,15 +50,10 @@ public abstract class NewArrayNode extends FixedWithNextNode implements Lowerabl
      * Constructs a new NewArrayNode.
      * @param length the node that produces the length for this allocation
      */
-    protected NewArrayNode(ResolvedJavaType elementType, ValueNode length, boolean fillContents) {
+    protected NewArrayNode(ResolvedJavaType elementType, ValueNode length) {
         super(StampFactory.exactNonNull(elementType.arrayOf()));
         this.length = length;
         this.elementType = elementType;
-        this.fillContents = fillContents;
-    }
-
-    public boolean fillContents() {
-        return fillContents;
     }
 
     /**
@@ -86,65 +79,64 @@ public abstract class NewArrayNode extends FixedWithNextNode implements Lowerabl
         return 1;
     }
 
-    @Override
-    public void lower(LoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
-    }
-
-    @Override
     public EscapeOp getEscapeOp() {
         Constant constantLength = length().asConstant();
         if (constantLength != null && constantLength.asInt() >= 0 && constantLength.asInt() < MaximumEscapeAnalysisArrayLength) {
-            return new EscapeOpImpl();
+            return ESCAPE;
         } else {
             return null;
         }
     }
 
-    private final class EscapeOpImpl extends EscapeOp {
+    @Override
+    public void lower(LoweringTool tool) {
+        tool.getRuntime().lower(this, tool);
+    }
+
+    private static final EscapeOp ESCAPE = new EscapeOp() {
 
         @Override
-        public ResolvedJavaType type() {
-            return elementType.arrayOf();
+        public boolean canAnalyze(Node node) {
+            NewArrayNode x = (NewArrayNode) node;
+            Constant length = x.dimension(0).asConstant();
+            return length != null && length.asInt() >= 0 && length.asInt() < MaximumEscapeAnalysisArrayLength;
         }
 
         @Override
-        public EscapeField[] fields() {
-            int constantLength = dimension(0).asConstant().asInt();
-            EscapeField[] fields = new EscapeField[constantLength];
-            for (int i = 0; i < constantLength; i++) {
+        public EscapeField[] fields(Node node) {
+            NewArrayNode x = (NewArrayNode) node;
+            int length = x.dimension(0).asConstant().asInt();
+            EscapeField[] fields = new EscapeField[length];
+            for (int i = 0; i < length; i++) {
                 Integer representation = i;
-                fields[i] = new EscapeField(Integer.toString(i), representation, elementType());
+                fields[i] = new EscapeField(Integer.toString(i), representation, ((NewArrayNode) node).elementType());
             }
             return fields;
         }
 
         @Override
-        public ValueNode[] fieldState() {
-            ValueNode[] state = new ValueNode[dimension(0).asConstant().asInt()];
-            for (int i = 0; i < state.length; i++) {
-                state[i] = ConstantNode.defaultForKind(elementType().kind(), graph());
-            }
-            return state;
+        public ResolvedJavaType type(Node node) {
+            NewArrayNode x = (NewArrayNode) node;
+            return x.elementType.arrayOf();
         }
 
         @Override
-        public void beforeUpdate(Node usage) {
+        public void beforeUpdate(Node node, Node usage) {
             if (usage instanceof ArrayLengthNode) {
                 ArrayLengthNode x = (ArrayLengthNode) usage;
-                StructuredGraph graph = (StructuredGraph) graph();
-                x.replaceAtUsages(dimension(0));
+                StructuredGraph graph = (StructuredGraph) node.graph();
+                x.replaceAtUsages(((NewArrayNode) node).dimension(0));
                 graph.removeFixed(x);
             } else {
-                beforeUpdate(NewArrayNode.this, usage);
+                super.beforeUpdate(node, usage);
             }
         }
 
         @Override
-        public int updateState(VirtualObjectNode virtualObject, Node current, Map<Object, Integer> fieldIndex, ValueNode[] fieldState) {
+        public int updateState(Node node, Node current, Map<Object, Integer> fieldIndex, ValueNode[] fieldState) {
             if (current instanceof AccessIndexedNode) {
                 AccessIndexedNode x = (AccessIndexedNode) current;
-                if (GraphUtil.unProxify(x.array()) == virtualObject) {
+                if (GraphUtil.unProxify(x.array()) == node) {
                     int index = ((AccessIndexedNode) current).index().asConstant().asInt();
                     StructuredGraph graph = (StructuredGraph) x.graph();
                     if (current instanceof LoadIndexedNode) {
@@ -159,6 +151,5 @@ public abstract class NewArrayNode extends FixedWithNextNode implements Lowerabl
             }
             return -1;
         }
-
-    }
+    };
 }
