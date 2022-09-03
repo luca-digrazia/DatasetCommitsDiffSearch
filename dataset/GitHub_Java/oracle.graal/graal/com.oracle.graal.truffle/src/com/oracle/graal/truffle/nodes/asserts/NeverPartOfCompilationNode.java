@@ -26,7 +26,7 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.replacements.nodes.*;
 
-public class NeverPartOfCompilationNode extends MacroStateSplitNode implements IterableNodeType {
+public class NeverPartOfCompilationNode extends MacroNode implements IterableNodeType {
 
     private final String message;
 
@@ -40,6 +40,6 @@ public class NeverPartOfCompilationNode extends MacroStateSplitNode implements I
     }
 
     public final String getMessage() {
-        return message + " " + arguments.toString();
+        return message;
     }
 }

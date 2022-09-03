@@ -25,15 +25,14 @@ package com.oracle.graal.replacements.nodes;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
 import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.inlining.*;
@@ -55,7 +54,6 @@ import com.oracle.graal.replacements.*;
  * possible if the macro node is a {@link MacroStateSplitNode}.</li>
  * </ul>
  */
-@NodeInfo
 public class MacroNode extends FixedWithNextNode implements Lowerable {
 
     @Input protected final NodeInputList<ValueNode> arguments;
@@ -129,9 +127,6 @@ public class MacroNode extends FixedWithNextNode implements Lowerable {
      */
     protected StructuredGraph lowerReplacement(final StructuredGraph replacementGraph, LoweringTool tool) {
         final PhaseContext c = new PhaseContext(tool.getMetaAccess(), tool.getConstantReflection(), tool.getLowerer(), tool.getReplacements(), tool.assumptions());
-        if (!graph().hasValueProxies()) {
-            new RemoveValueProxyPhase().apply(replacementGraph);
-        }
         GuardsStage guardsStage = graph().getGuardsStage();
         if (guardsStage.ordinal() >= GuardsStage.FIXED_DEOPTS.ordinal()) {
             new GuardLoweringPhase().apply(replacementGraph, null);
@@ -169,9 +164,7 @@ public class MacroNode extends FixedWithNextNode implements Lowerable {
             InliningUtil.inline(invoke, replacementGraph, false, null);
             Debug.dump(graph(), "After inlining replacement %s", replacementGraph);
         } else {
-            if (stateAfter() == null) {
-                throw new GraalInternalError("cannot lower to invoke without state: %s", this);
-            }
+            assert stateAfter() != null : "cannot lower to invoke without state: " + this;
             invoke.lower(tool);
         }
     }
