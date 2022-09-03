@@ -26,12 +26,11 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.spi.*;
 
-@NodeInfo
 public class ValueProxyNode extends ProxyNode implements Canonicalizable, Virtualizable, ValueAndStampProxy {
 
     @Input private ValueNode value;
 
-    public ValueProxyNode(ValueNode value, BeginNode proxyPoint) {
+    public ValueProxyNode(ValueNode value, AbstractBeginNode proxyPoint) {
         super(value.stamp(), proxyPoint);
         this.value = value;
     }

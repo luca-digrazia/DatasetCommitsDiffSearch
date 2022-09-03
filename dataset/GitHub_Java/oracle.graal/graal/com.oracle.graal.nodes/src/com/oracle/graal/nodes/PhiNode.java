@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.type.*;
 
 public abstract class PhiNode extends FloatingNode {
 
@@ -80,10 +80,6 @@ public abstract class PhiNode extends FloatingNode {
 
     public void setValueAt(int i, ValueNode x) {
         values().set(i, x);
-    }
-
-    public void setValueAt(AbstractEndNode end, ValueNode x) {
-        setValueAt(merge().phiPredecessorIndex(end), x);
     }
 
     public ValueNode valueAt(AbstractEndNode pred) {

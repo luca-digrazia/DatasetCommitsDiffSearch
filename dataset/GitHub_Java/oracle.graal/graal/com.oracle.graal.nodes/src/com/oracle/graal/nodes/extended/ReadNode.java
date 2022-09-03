@@ -90,22 +90,26 @@ public final class ReadNode extends FloatableAccessNode implements LIRLowerable,
             }
         }
         if (tool.canonicalizeReads()) {
-            if (metaAccess != null && object != null && object.isConstant() && !compressible) {
+            if (metaAccess != null && object != null && object.isConstant()) {
                 if ((location.getLocationIdentity() == LocationIdentity.FINAL_LOCATION || location.getLocationIdentity() == LocationIdentity.ARRAY_LENGTH_LOCATION) &&
                                 location instanceof ConstantLocationNode) {
                     long displacement = ((ConstantLocationNode) location).getDisplacement();
-                    Constant base = object.asConstant();
-                    if (base != null) {
-                        Constant constant;
-                        if (read.stamp() instanceof PrimitiveStamp) {
-                            PrimitiveStamp stamp = (PrimitiveStamp) read.stamp();
-                            constant = tool.getConstantReflection().readRawConstant(stamp.getStackKind(), base, displacement, stamp.getBits());
-                        } else {
-                            assert read.stamp() instanceof ObjectStamp;
-                            constant = tool.getConstantReflection().readUnsafeConstant(Kind.Object, base, displacement);
+                    Kind kind = location.getValueKind();
+                    if (object.getKind() == Kind.Object) {
+                        Object base = object.asConstant().asObject();
+                        if (base != null) {
+                            Constant constant = tool.getConstantReflection().readUnsafeConstant(kind, base, displacement, compressible);
+                            if (constant != null) {
+                                return ConstantNode.forConstant(constant, metaAccess, read.graph());
+                            }
                         }
-                        if (constant != null) {
-                            return ConstantNode.forConstant(read.stamp(), constant, metaAccess, read.graph());
+                    } else if (object.getKind().isNumericInteger()) {
+                        long base = object.asConstant().asLong();
+                        if (base != 0L) {
+                            Constant constant = tool.getConstantReflection().readUnsafeConstant(kind, null, base + displacement, compressible);
+                            if (constant != null) {
+                                return ConstantNode.forConstant(constant, metaAccess, read.graph());
+                            }
                         }
                     }
                 }

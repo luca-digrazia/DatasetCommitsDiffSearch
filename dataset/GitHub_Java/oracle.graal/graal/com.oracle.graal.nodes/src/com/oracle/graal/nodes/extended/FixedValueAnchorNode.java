@@ -22,13 +22,11 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
-@NodeInfo
-public class FixedValueAnchorNode extends FixedWithNextNode implements LIRLowerable, ValueProxy {
+public final class FixedValueAnchorNode extends FixedWithNextNode implements LIRLowerable, ValueProxy {
 
     @Input private ValueNode object;
 
