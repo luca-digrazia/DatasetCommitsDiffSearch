@@ -732,8 +732,12 @@ public final class GraphBuilderPhase extends Phase {
             AnchorNode anchor = currentGraph.add(new AnchorNode());
             append(anchor);
             CheckCastNode checkCast;
-            RiResolvedType[] hints = getTypeCheckHints((RiResolvedType) type, 2);
-            checkCast = currentGraph.unique(new CheckCastNode(anchor, typeInstruction, (RiResolvedType) type, object, hints, Util.isFinalClass((RiResolvedType) type)));
+            if (type instanceof RiResolvedType) {
+                RiResolvedType[] hints = getTypeCheckHints((RiResolvedType) type, 2);
+                checkCast = currentGraph.unique(new CheckCastNode(anchor, typeInstruction, (RiResolvedType) type, object, hints, Util.isFinalClass((RiResolvedType) type)));
+            } else {
+                checkCast = currentGraph.unique(new CheckCastNode(anchor, typeInstruction, (RiResolvedType) type, object));
+            }
             append(currentGraph.add(new ValueAnchorNode(checkCast)));
             frameState.apush(checkCast);
         } else {
@@ -1419,7 +1423,7 @@ public final class GraphBuilderPhase extends Phase {
             if (config.eagerResolving()) {
                 catchType = lookupType(block.handler.catchTypeCPI(), INSTANCEOF);
             }
-            boolean initialized = (catchType instanceof RiResolvedType);
+            boolean initialized = (catchType instanceof RiResolvedType) && ((RiResolvedType) catchType).isInitialized();
             if (initialized && config.getSkippedExceptionTypes() != null) {
                 RiResolvedType resolvedCatchType = (RiResolvedType) catchType;
                 for (RiResolvedType skippedType : config.getSkippedExceptionTypes()) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,19 @@
  */
 package com.oracle.max.graal.compiler.alloc;
 
+import static com.oracle.max.graal.alloc.util.LocationUtil.*;
+
 import java.util.*;
 
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.sun.cri.ci.*;
+import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.lir.*;
 
 /**
  * Represents an interval in the {@linkplain LinearScan linear scan register allocator}.
- *
- * @author Thomas Wuerthinger
- * @author Doug Simon
  */
 public final class Interval {
 
@@ -306,7 +306,6 @@ public final class Interval {
      * priority associated with the use position. The entries in the list are in descending
      * order of use position.
      *
-     * @author Doug Simon
      */
     public static final class UsePosList {
         private IntList list;
@@ -400,7 +399,7 @@ public final class Interval {
     }
 
     /**
-     * The {@linkplain CiRegisterValue register} or {@linkplain CiVariable variable} for this interval prior to register allocation.
+     * The {@linkplain CiRegisterValue register} or {@linkplain Variable variable} for this interval prior to register allocation.
      */
     public final CiValue operand;
 
@@ -421,7 +420,7 @@ public final class Interval {
 
     /**
      * The kind of this interval.
-     * Only valid if this is a {@linkplain #isVariable() variable}.
+     * Only valid if this is a {@linkplain #xxisVariable() variable}.
      */
     private CiKind kind;
 
@@ -487,19 +486,20 @@ public final class Interval {
      */
     private Interval locationHint;
 
-    void assignLocation(CiValue location) {
-        if (location.isRegister()) {
+    void assignLocation(CiValue newLocation) {
+        if (isRegister(newLocation)) {
             assert this.location == null : "cannot re-assign location for " + this;
-            if (location.kind == CiKind.Illegal && kind != CiKind.Illegal) {
-                location = location.asRegister().asValue(kind);
+            if (newLocation.kind == CiKind.Illegal && kind != CiKind.Illegal) {
+                this.location = asRegister(newLocation).asValue(kind);
+                return;
             }
         } else {
-            assert this.location == null || this.location.isRegister() : "cannot re-assign location for " + this;
-            assert location.isStackSlot();
-            assert location.kind != CiKind.Illegal;
-            assert location.kind == this.kind;
+            assert this.location == null || isRegister(this.location) : "cannot re-assign location for " + this;
+            assert isStackSlot(newLocation);
+            assert newLocation.kind != CiKind.Illegal;
+            assert newLocation.kind == this.kind;
         }
-        this.location = location;
+        this.location = newLocation;
     }
 
     /**
@@ -510,12 +510,12 @@ public final class Interval {
     }
 
     public CiKind kind() {
-        assert !operand.isRegister() : "cannot access type for fixed interval";
+        assert !isRegister(operand) : "cannot access type for fixed interval";
         return kind;
     }
 
     void setKind(CiKind kind) {
-        assert operand.isRegister() || this.kind == CiKind.Illegal || this.kind == kind : "overwriting existing type";
+        assert isRegister(operand) || this.kind() == CiKind.Illegal || this.kind() == kind : "overwriting existing type";
         assert kind == kind.stackKind() || kind == CiKind.Short : "these kinds should have int type registers";
         this.kind = kind;
     }
@@ -661,14 +661,13 @@ public final class Interval {
     static final Interval EndMarker = new Interval(CiValue.IllegalValue, -1);
 
     Interval(CiValue operand, int operandNumber) {
-        C1XMetrics.LSRAIntervalsCreated++;
         assert operand != null;
         this.operand = operand;
         this.operandNumber = operandNumber;
-        if (operand.isRegister()) {
+        if (isRegister(operand)) {
             location = operand;
         } else {
-            assert operand.isIllegal() || operand.isVariable();
+            assert isIllegal(operand) || isVariable(operand);
         }
         this.kind = CiKind.Illegal;
         this.first = Range.EndMarker;
@@ -701,7 +700,7 @@ public final class Interval {
                 Interval i1 = splitChildren.get(i);
 
                 assert i1.splitParent() == this : "not a split child of this interval";
-                assert i1.kind() == kind() : "must be equal for all split children";
+                assert i1.kind()  == kind() : "must be equal for all split children";
                 assert i1.spillSlot() == spillSlot() : "must be equal for all split children";
 
                 for (int j = i + 1; j < splitChildren.size(); j++) {
@@ -722,7 +721,7 @@ public final class Interval {
         return true;
     }
 
-    public Interval locationHint(boolean searchSplitChild, LinearScan allocator) {
+    public Interval locationHint(boolean searchSplitChild) {
         if (!searchSplitChild) {
             return locationHint;
         }
@@ -730,14 +729,14 @@ public final class Interval {
         if (locationHint != null) {
             assert locationHint.isSplitParent() : "ony split parents are valid hint registers";
 
-            if (locationHint.location != null && locationHint.location.isRegister()) {
+            if (locationHint.location != null && isRegister(locationHint.location)) {
                 return locationHint;
             } else if (!locationHint.splitChildren.isEmpty()) {
                 // search the first split child that has a register assigned
                 int len = locationHint.splitChildren.size();
                 for (int i = 0; i < len; i++) {
                     Interval interval = locationHint.splitChildren.get(i);
-                    if (interval.location != null && interval.location.isRegister()) {
+                    if (interval.location != null && isRegister(interval.location)) {
                         return interval;
                     }
                 }
@@ -788,11 +787,11 @@ public final class Interval {
             // this is an error
             StringBuilder msg = new StringBuilder(this.toString()).append(" has no child at ").append(opId);
             if (!splitChildren.isEmpty()) {
-                Interval first = splitChildren.get(0);
-                Interval last = splitChildren.get(splitChildren.size() - 1);
-                msg.append(" (first = ").append(first).append(", last = ").append(last).append(")");
+                Interval firstChild = splitChildren.get(0);
+                Interval lastChild = splitChildren.get(splitChildren.size() - 1);
+                msg.append(" (first = ").append(firstChild).append(", last = ").append(lastChild).append(")");
             }
-            throw new CiBailout("Linear Scan Error: " + msg);
+            throw new GraalInternalError("Linear Scan Error: %s", msg);
         }
 
         if (!splitChildren.isEmpty()) {
@@ -854,7 +853,7 @@ public final class Interval {
 
     // Note: use positions are sorted descending . first use has highest index
     int firstUsage(RegisterPriority minRegisterPriority) {
-        assert operand.isVariable() : "cannot access use positions for fixed intervals";
+        assert isVariable(operand) : "cannot access use positions for fixed intervals";
 
         for (int i = usePosList.size() - 1; i >= 0; --i) {
             RegisterPriority registerPriority = usePosList.registerPriority(i);
@@ -866,7 +865,7 @@ public final class Interval {
     }
 
     int nextUsage(RegisterPriority minRegisterPriority, int from) {
-        assert operand.isVariable() : "cannot access use positions for fixed intervals";
+        assert isVariable(operand) : "cannot access use positions for fixed intervals";
 
         for (int i = usePosList.size() - 1; i >= 0; --i) {
             int usePos = usePosList.usePos(i);
@@ -878,7 +877,7 @@ public final class Interval {
     }
 
     int nextUsageExact(RegisterPriority exactRegisterPriority, int from) {
-        assert operand.isVariable() : "cannot access use positions for fixed intervals";
+        assert isVariable(operand) : "cannot access use positions for fixed intervals";
 
         for (int i = usePosList.size() - 1; i >= 0; --i) {
             int usePos = usePosList.usePos(i);
@@ -890,7 +889,7 @@ public final class Interval {
     }
 
     int previousUsage(RegisterPriority minRegisterPriority, int from) {
-        assert operand.isVariable() : "cannot access use positions for fixed intervals";
+        assert isVariable(operand) : "cannot access use positions for fixed intervals";
 
         int prev = 0;
         for (int i = usePosList.size() - 1; i >= 0; --i) {
@@ -909,8 +908,8 @@ public final class Interval {
         assert covers(pos, LIRInstruction.OperandMode.Input) : "use position not covered by live range";
 
         // do not add use positions for precolored intervals because they are never used
-        if (registerPriority != RegisterPriority.None && operand.isVariable()) {
-            if (C1XOptions.DetailedAsserts) {
+        if (registerPriority != RegisterPriority.None && isVariable(operand)) {
+            if (GraalOptions.DetailedAsserts) {
                 for (int i = 0; i < usePosList.size(); i++) {
                     assert pos <= usePosList.usePos(i) : "already added a use-position with lower position";
                     if (i > 0) {
@@ -961,7 +960,7 @@ public final class Interval {
             assert isSplitParent() : "list must be initialized at first split";
 
             // Create new non-shared list
-            parent.splitChildren = new ArrayList<Interval>(4);
+            parent.splitChildren = new ArrayList<>(4);
             parent.splitChildren.add(this);
         }
         parent.splitChildren.add(result);
@@ -984,7 +983,7 @@ public final class Interval {
      * @return the child interval split off from this interval
      */
     Interval split(int splitPos, LinearScan allocator) {
-        assert operand.isVariable() : "cannot split fixed intervals";
+        assert isVariable(operand) : "cannot split fixed intervals";
 
         // allocate new interval
         Interval result = newSplitChild(allocator);
@@ -1014,7 +1013,7 @@ public final class Interval {
         // split list of use positions
         result.usePosList = usePosList.splitAt(splitPos);
 
-        if (C1XOptions.DetailedAsserts) {
+        if (GraalOptions.DetailedAsserts) {
             for (int i = 0; i < usePosList.size(); i++) {
                 assert usePosList.usePos(i) < splitPos;
             }
@@ -1032,7 +1031,7 @@ public final class Interval {
      * Currently, only the first range can be split, and the new interval must not have split positions
      */
     Interval splitFromStart(int splitPos, LinearScan allocator) {
-        assert operand.isVariable() : "cannot split fixed intervals";
+        assert isVariable(operand) : "cannot split fixed intervals";
         assert splitPos > from() && splitPos < to() : "can only split inside interval";
         assert splitPos > first.from && splitPos <= first.to : "can only split inside first range";
         assert firstUsage(RegisterPriority.None) > splitPos : "can not split when use positions are present";
@@ -1114,8 +1113,8 @@ public final class Interval {
             from = String.valueOf(from());
             to = String.valueOf(to());
         }
-        String location = this.location == null ? "" : "@" + this.location.name();
-        return operandNumber + ":" + operand + (operand.isRegister() ? "" : location) + "[" + from + "," + to + "]";
+        String locationString = this.location == null ? "" : "@" + this.location;
+        return operandNumber + ":" + operand + (isRegister(operand) ? "" : locationString) + "[" + from + "," + to + "]";
     }
 
     /**
@@ -1133,14 +1132,14 @@ public final class Interval {
     public String logString(LinearScan allocator) {
         StringBuilder buf = new StringBuilder(100);
         buf.append(operandNumber).append(':').append(operand).append(' ');
-        if (!operand.isRegister()) {
+        if (!isRegister(operand)) {
             if (location != null) {
                 buf.append("location{").append(location).append("} ");
             }
         }
 
         buf.append("hints{").append(splitParent.operandNumber);
-        Interval hint = locationHint(false, allocator);
+        Interval hint = locationHint(false);
         if (hint != null && hint.operandNumber != splitParent.operandNumber) {
             buf.append(", ").append(hint.operandNumber);
         }

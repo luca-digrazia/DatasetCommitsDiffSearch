@@ -24,6 +24,7 @@ package com.oracle.max.graal.compiler.schedule;
 
 import java.util.*;
 
+import com.oracle.max.cri.ci.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.phases.*;
@@ -101,7 +102,6 @@ public class SchedulePhase extends Phase {
         } else if (GraalOptions.ScheduleOutOfLoops && !(n instanceof VirtualObjectFieldNode) && !(n instanceof VirtualObjectNode)) {
             Block earliestBlock = earliestBlock(n);
             block = scheduleOutOfLoops(n, latestBlock, earliestBlock);
-            assert earliestBlock.dominates(block) : "Graph can not be scheduled : inconsisitant for " + n;
         } else {
             block = latestBlock;
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,48 +22,47 @@
  */
 package com.oracle.max.graal.compiler.alloc;
 
+import static com.oracle.max.cri.ci.CiValueUtil.*;
+
 import java.util.*;
 
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.sun.cri.ci.*;
+import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.lir.*;
+import com.oracle.max.graal.lir.LIRInstruction.*;
+import com.oracle.max.graal.lir.cfg.*;
 
 /**
- *
- * @author Thomas Wuerthinger
  */
 final class RegisterVerifier {
 
     LinearScan allocator;
-    List<LIRBlock> workList; // all blocks that must be processed
+    List<Block> workList; // all blocks that must be processed
     ArrayMap<Interval[]> savedStates; // saved information of previous check
 
     // simplified access to methods of LinearScan
-    C1XCompilation compilation() {
-        return allocator.compilation;
-    }
-
     Interval intervalAt(CiValue operand) {
         return allocator.intervalFor(operand);
     }
 
     // currently, only registers are processed
     int stateSize() {
-        return allocator.operands.maxRegisterNumber() + 1;
+        return allocator.maxRegisterNumber() + 1;
     }
 
     // accessors
-    Interval[] stateForBlock(LIRBlock block) {
-        return savedStates.get(block.blockID());
+    Interval[] stateForBlock(Block block) {
+        return savedStates.get(block.getId());
     }
 
-    void setStateForBlock(LIRBlock block, Interval[] savedState) {
-        savedStates.put(block.blockID(), savedState);
+    void setStateForBlock(Block block, Interval[] savedState) {
+        savedStates.put(block.getId(), savedState);
     }
 
-    void addToWorkList(LIRBlock block) {
+    void addToWorkList(Block block) {
         if (!workList.contains(block)) {
             workList.add(block);
         }
@@ -71,46 +70,36 @@ final class RegisterVerifier {
 
     RegisterVerifier(LinearScan allocator) {
         this.allocator = allocator;
-        workList = new ArrayList<LIRBlock>(16);
-        this.savedStates = new ArrayMap<Interval[]>();
+        workList = new ArrayList<>(16);
+        this.savedStates = new ArrayMap<>();
 
     }
 
-    void verify(LIRBlock start) {
+    void verify(Block start) {
         // setup input registers (method arguments) for first block
         Interval[] inputState = new Interval[stateSize()];
-        CiCallingConvention args = compilation().frameMap().incomingArguments();
-        for (int n = 0; n < args.locations.length; n++) {
-            CiValue operand = args.locations[n];
-            if (operand.isRegister()) {
-                CiValue reg = operand;
-                Interval interval = intervalAt(reg);
-                inputState[reg.asRegister().number] = interval;
-            }
-        }
-
         setStateForBlock(start, inputState);
         addToWorkList(start);
 
         // main loop for verification
         do {
-            LIRBlock block = workList.get(0);
+            Block block = workList.get(0);
             workList.remove(0);
 
             processBlock(block);
         } while (!workList.isEmpty());
     }
 
-    private void processBlock(LIRBlock block) {
-        if (C1XOptions.TraceLinearScanLevel >= 2) {
+    private void processBlock(Block block) {
+        if (GraalOptions.TraceLinearScanLevel >= 2) {
             TTY.println();
-            TTY.println("processBlock B%d", block.blockID());
+            TTY.println("processBlock B%d", block.getId());
         }
 
         // must copy state because it is modified
         Interval[] inputState = copy(stateForBlock(block));
 
-        if (C1XOptions.TraceLinearScanLevel >= 4) {
+        if (GraalOptions.TraceLinearScanLevel >= 4) {
             TTY.println("Input-State of intervals:");
             TTY.print("    ");
             for (int i = 0; i < stateSize(); i++) {
@@ -125,15 +114,16 @@ final class RegisterVerifier {
         }
 
         // process all operations of the block
-        processOperations(block.lir(), inputState);
+        processOperations(block.lir, inputState);
 
         // iterate all successors
-        for (LIRBlock succ : block.blockSuccessors()) {
+        for (int i = 0; i < block.numberOfSux(); i++) {
+            Block succ = block.suxAt(i);
             processSuccessor(succ, inputState);
         }
     }
 
-    private void processSuccessor(LIRBlock block, Interval[] inputState) {
+    private void processSuccessor(Block block, Interval[] inputState) {
         Interval[] savedState = stateForBlock(block);
 
         if (savedState != null) {
@@ -152,8 +142,8 @@ final class RegisterVerifier {
                         savedStateCorrect = false;
                         savedState[i] = null;
 
-                        if (C1XOptions.TraceLinearScanLevel >= 4) {
-                            TTY.println("processSuccessor B%d: invalidating slot %d", block.blockID(), i);
+                        if (GraalOptions.TraceLinearScanLevel >= 4) {
+                            TTY.println("processSuccessor B%d: invalidating slot %d", block.getId(), i);
                         }
                     }
                 }
@@ -161,21 +151,21 @@ final class RegisterVerifier {
 
             if (savedStateCorrect) {
                 // already processed block with correct inputState
-                if (C1XOptions.TraceLinearScanLevel >= 2) {
-                    TTY.println("processSuccessor B%d: previous visit already correct", block.blockID());
+                if (GraalOptions.TraceLinearScanLevel >= 2) {
+                    TTY.println("processSuccessor B%d: previous visit already correct", block.getId());
                 }
             } else {
                 // must re-visit this block
-                if (C1XOptions.TraceLinearScanLevel >= 2) {
-                    TTY.println("processSuccessor B%d: must re-visit because input state changed", block.blockID());
+                if (GraalOptions.TraceLinearScanLevel >= 2) {
+                    TTY.println("processSuccessor B%d: must re-visit because input state changed", block.getId());
                 }
                 addToWorkList(block);
             }
 
         } else {
             // block was not processed before, so set initial inputState
-            if (C1XOptions.TraceLinearScanLevel >= 2) {
-                TTY.println("processSuccessor B%d: initial visit", block.blockID());
+            if (GraalOptions.TraceLinearScanLevel >= 2) {
+                TTY.println("processSuccessor B%d: initial visit", block.getId());
             }
 
             setStateForBlock(block, copy(inputState));
@@ -183,20 +173,20 @@ final class RegisterVerifier {
         }
     }
 
-    Interval[] copy(Interval[] inputState) {
+    static Interval[] copy(Interval[] inputState) {
         return inputState.clone();
     }
 
-    void statePut(Interval[] inputState, CiValue location, Interval interval) {
-        if (location != null && location.isRegister()) {
-            CiRegister reg = location.asRegister();
+    static void statePut(Interval[] inputState, CiValue location, Interval interval) {
+        if (location != null && isRegister(location)) {
+            CiRegister reg = asRegister(location);
             int regNum = reg.number;
             if (interval != null) {
-                if (C1XOptions.TraceLinearScanLevel >= 4) {
+                if (GraalOptions.TraceLinearScanLevel >= 4) {
                     TTY.println("        %s = %s", reg, interval.operand);
                 }
             } else if (inputState[regNum] != null) {
-                if (C1XOptions.TraceLinearScanLevel >= 4) {
+                if (GraalOptions.TraceLinearScanLevel >= 4) {
                     TTY.println("        %s = null", reg);
                 }
             }
@@ -205,73 +195,67 @@ final class RegisterVerifier {
         }
     }
 
-    boolean checkState(Interval[] inputState, CiValue reg, Interval interval) {
-        if (reg != null && reg.isRegister()) {
-            if (inputState[reg.asRegister().number] != interval) {
-                throw new CiBailout("!! Error in register allocation: register " + reg + " does not contain interval " + interval.operand + " but interval " + inputState[reg.asRegister().number]);
+    static boolean checkState(Interval[] inputState, CiValue reg, Interval interval) {
+        if (reg != null && isRegister(reg)) {
+            if (inputState[asRegister(reg).number] != interval) {
+                throw new GraalInternalError("!! Error in register allocation: register %s does not contain interval %s but interval %s", reg, interval.operand, inputState[asRegister(reg).number]);
             }
         }
         return true;
     }
 
-    void processOperations(LIRList ops, Interval[] inputState) {
+    void processOperations(List<LIRInstruction> ops, final Interval[] inputState) {
         // visit all instructions of the block
-        for (int i = 0; i < ops.length(); i++) {
-            LIRInstruction op = ops.at(i);
+        for (int i = 0; i < ops.size(); i++) {
+            final LIRInstruction op = ops.get(i);
 
-            if (C1XOptions.TraceLinearScanLevel >= 4) {
+            if (GraalOptions.TraceLinearScanLevel >= 4) {
                 TTY.println(op.toStringWithIdPrefix());
             }
 
-            // check if input operands are correct
-            int n = op.operandCount(LIRInstruction.OperandMode.Input);
-            for (int j = 0; j < n; j++) {
-                CiValue operand = op.operandAt(LIRInstruction.OperandMode.Input, j);
-                if (allocator.isProcessed(operand)) {
-                    Interval interval = intervalAt(operand);
-                    if (op.id != -1) {
-                        interval = interval.getSplitChildAtOpId(op.id, LIRInstruction.OperandMode.Input, allocator);
+            ValueProcedure useProc = new ValueProcedure() {
+                @Override
+                public CiValue doValue(CiValue operand, OperandMode mode, EnumSet<OperandFlag> flags) {
+                    if (LinearScan.isVariableOrRegister(operand) && allocator.isProcessed(operand)) {
+                        Interval interval = intervalAt(operand);
+                        if (op.id() != -1) {
+                            interval = interval.getSplitChildAtOpId(op.id(), mode, allocator);
+                        }
+
+                        assert checkState(inputState, interval.location(), interval.splitParent());
                     }
-
-                    assert checkState(inputState, interval.location(), interval.splitParent());
+                    return operand;
                 }
-            }
+            };
 
+            ValueProcedure defProc = new ValueProcedure() {
+                @Override
+                public CiValue doValue(CiValue operand, OperandMode mode, EnumSet<OperandFlag> flags) {
+                    if (LinearScan.isVariableOrRegister(operand) && allocator.isProcessed(operand)) {
+                        Interval interval = intervalAt(operand);
+                        if (op.id() != -1) {
+                            interval = interval.getSplitChildAtOpId(op.id(), mode, allocator);
+                        }
+
+                        statePut(inputState, interval.location(), interval.splitParent());
+                    }
+                    return operand;
+                }
+            };
+
+            // check if input operands are correct
+            op.forEachInput(useProc);
             // invalidate all caller save registers at calls
-            if (op.hasCall) {
-                for (CiRegister r : allocator.compilation.registerConfig.getCallerSaveRegisters()) {
+            if (op.hasCall()) {
+                for (CiRegister r : allocator.frameMap.registerConfig.getCallerSaveRegisters()) {
                     statePut(inputState, r.asValue(), null);
                 }
             }
-
+            op.forEachAlive(useProc);
             // set temp operands (some operations use temp operands also as output operands, so can't set them null)
-            n = op.operandCount(LIRInstruction.OperandMode.Temp);
-            for (int j = 0; j < n; j++) {
-                CiValue operand = op.operandAt(LIRInstruction.OperandMode.Temp, j);
-                if (allocator.isProcessed(operand)) {
-                    Interval interval = intervalAt(operand);
-                    assert interval != null : "Could not find interval for operand " + operand;
-                    if (op.id != -1) {
-                        interval = interval.getSplitChildAtOpId(op.id, LIRInstruction.OperandMode.Temp, allocator);
-                    }
-
-                    statePut(inputState, interval.location(), interval.splitParent());
-                }
-            }
-
+            op.forEachTemp(defProc);
             // set output operands
-            n = op.operandCount(LIRInstruction.OperandMode.Output);
-            for (int j = 0; j < n; j++) {
-                CiValue operand = op.operandAt(LIRInstruction.OperandMode.Output, j);
-                if (allocator.isProcessed(operand)) {
-                    Interval interval = intervalAt(operand);
-                    if (op.id != -1) {
-                        interval = interval.getSplitChildAtOpId(op.id, LIRInstruction.OperandMode.Output, allocator);
-                    }
-
-                    statePut(inputState, interval.location(), interval.splitParent());
-                }
-            }
+            op.forEachOutput(defProc);
         }
     }
 }

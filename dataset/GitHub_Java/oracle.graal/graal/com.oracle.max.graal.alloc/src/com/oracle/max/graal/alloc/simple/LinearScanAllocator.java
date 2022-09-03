@@ -144,17 +144,10 @@ public class LinearScanAllocator {
     private CiValue[] curInRegisterState;
     private CiValue[] curOutRegisterState;
     private BitSet curLiveIn;
-    private LIRInstruction curOp;
+    private int curOpId;
+    private boolean curPhiDefs;
 
-    /**
-     * The spill slot for a variable, if the variable has ever been spilled.
-     */
     private LocationMap canonicalSpillLocations;
-
-    /**
-     * The register that a variable got assigned at its definition, and so it should get that register when reloading after spilling.
-     */
-    private LocationMap hintRegisterLocations;
 
     public void execute() {
         assert LIRVerifier.verify(true, lir, frameMap);
@@ -191,7 +184,6 @@ public class LinearScanAllocator {
 
         Debug.log("==== start linear scan allocation ====");
         canonicalSpillLocations = new LocationMap(lir.numVariables());
-        hintRegisterLocations = new LocationMap(lir.numVariables());
         curInRegisterState = new CiValue[maxRegisterNum()];
         curOutRegisterState = new CiValue[maxRegisterNum()];
         for (Block block : lir.linearScanOrder()) {
@@ -212,7 +204,8 @@ public class LinearScanAllocator {
 
             for (int opIdx = 0; opIdx < block.lir.size(); opIdx++) {
                 LIRInstruction op = block.lir.get(opIdx);
-                curOp = op;
+                curOpId = op.id();
+                curPhiDefs = opIdx == 0;
 
                 Debug.log("  op %d %s", op.id(), op);
 
@@ -237,13 +230,9 @@ public class LinearScanAllocator {
                 if (op.hasCall()) {
                     spillCallerSaveRegisters();
                 }
-                if (op instanceof StandardOp.PhiLabelOp) {
-                    assert opIdx == 0;
-                    phiRegisterHints(block);
-                }
 
-                op.forEachOutput(defProc);
                 op.forEachTemp(defProc);
+                op.forEachOutput(defProc);
 
                 // Fixed temp and output registers can evict variables from their assigned register, allocate new location for them.
                 fixupEvicted();
@@ -259,7 +248,7 @@ public class LinearScanAllocator {
                 dataFlow.forEachKilled(op, true, unblockProc);
                 dataFlow.forEachKilled(op, true, killProc);
 
-                curOp = null;
+                curOpId = -1;
             }
 
             assert endLocationsFor(block) == null;
@@ -334,8 +323,8 @@ public class LinearScanAllocator {
 
     private CiValue recordUse(CiValue value) {
         if (isVariable(value)) {
-            assert lastUseFor(asVariable(value)) <= curOp.id();
-            setLastUseFor(asVariable(value), curOp.id());
+            assert lastUseFor(asVariable(value)) <= curOpId;
+            setLastUseFor(asVariable(value), curOpId);
 
         }
         return value;
@@ -407,61 +396,30 @@ public class LinearScanAllocator {
     }
 
 
-    private void phiRegisterHints(Block block) {
-        Debug.log("    phi register hints for %s", block);
-        CiValue[] phiDefinitions = ((StandardOp.PhiLabelOp) block.lir.get(0)).getPhiDefinitions();
-        for (Block pred : block.getPredecessors()) {
-            CiValue[] phiInputs = ((StandardOp.PhiJumpOp) pred.lir.get(pred.lir.size() - 1)).getPhiInputs();
-
-            for (int i = 0; i < phiDefinitions.length; i++) {
-                CiValue phiDefinition = phiDefinitions[i];
-                CiValue phiInput = phiInputs[i];
-
-                if (isVariable(phiDefinition)) {
-                    Location hintResult = processRegisterHint(asVariable(phiDefinition), OperandMode.Output, phiInput);
-                    if (hintResult != null) {
-                        phiDefinitions[i] = hintResult;
-                    }
-                }
-            }
-        }
-    }
-
-    private Location processRegisterHint(Variable variable, OperandMode mode, CiValue registerHint) {
-        if (registerHint == null) {
-            return null;
-        }
-        Debug.log("      try registerHint for %s %s: %s", mode, variable, registerHint);
-        CiRegister hint = null;
-        if (isRegister(registerHint)) {
-            hint = asRegister(registerHint);
-        } else if (isLocation(registerHint) && isRegister(asLocation(registerHint).location)) {
-            hint = asRegister(asLocation(registerHint).location);
-        }
-        if (hint != null && hint.isSet(variable.flag) && isFree(hint, mode)) {
-            return selectRegister(hint, variable, mode);
-        }
-        return null;
-    }
-
-    private Location allocateRegister(final Variable variable, final OperandMode mode, EnumSet<OperandFlag> flags) {
-        if (flags.contains(OperandFlag.RegisterHint)) {
-            CiValue hintResult = curOp.forEachRegisterHint(variable, mode, new ValueProcedure() {
-                @Override
-                public CiValue doValue(CiValue registerHint) {
-                    return processRegisterHint(variable, mode, registerHint);
-                }
-            });
-            if (hintResult != null) {
-                return asLocation(hintResult);
-            }
-        }
-
-        CiValue hintResult = processRegisterHint(variable, mode, hintRegisterLocations.get(variable));
-        if (hintResult != null) {
-            return asLocation(hintResult);
-        }
-
+    private Location allocateRegister(final Variable variable, OperandMode mode, EnumSet<OperandFlag> flags) {
+//        if (flags.contains(OperandFlag.RegisterHint)) {
+//            CiValue result = curInstruction.forEachRegisterHint(variable, mode, new ValueProcedure() {
+//                @Override
+//                public CiValue doValue(CiValue registerHint) {
+//                    Debug.log("      registerHint %s", registerHint);
+//                    CiRegister hint = null;
+//                    if (isRegister(registerHint)) {
+//                        hint = asRegister(registerHint);
+//                    } else if (isLocation(registerHint) && isRegister(asLocation(registerHint).location)) {
+//                        hint = asRegister(asLocation(registerHint).location);
+//                    }
+//                    if (hint != null && hint.isSet(variable.flag) && isFree(hint, inRegisterState, outRegisterState)) {
+//                        return selectRegister(hint, variable, inRegisterState, outRegisterState);
+//                    }
+//                    return null;
+//                }
+//            });
+//
+//            if (result != null) {
+//                return asLocation(result);
+//            }
+//        }
+//
         EnumMap<RegisterFlag, CiRegister[]> categorizedRegs = frameMap.registerConfig.getCategorizedAllocatableRegisters();
         CiRegister[] availableRegs = categorizedRegs.get(variable.flag);
 
@@ -482,6 +440,10 @@ public class LinearScanAllocator {
         }
 
         if (bestSpillCandidate == null) {
+            if (curPhiDefs) {
+                return selectSpillSlot(variable);
+            }
+
             // This should not happen as long as all LIR instructions have fulfillable register constraints. But be safe in product mode and bail out.
             assert false;
             throw new GraalInternalError("No register available");
@@ -495,7 +457,7 @@ public class LinearScanAllocator {
     private void spill(Location value) {
         Location newLoc = spillLocation(value.variable);
         Debug.log("      spill %s to %s", value, newLoc);
-        if (!(curOp instanceof StandardOp.PhiLabelOp)) {
+        if (!curPhiDefs) {
             moveResolver.add(value, newLoc);
         }
         curLocations.put(newLoc);
@@ -521,7 +483,7 @@ public class LinearScanAllocator {
     private Location spillCandidate(CiRegister reg) {
         CiValue in = curInRegisterState[reg.number];
         CiValue out = curOutRegisterState[reg.number];
-        if (in == out && in != null && isLocation(in) && lastUseFor(asLocation(in).variable) < curOp.id()) {
+        if (in == out && in != null && isLocation(in) && lastUseFor(asLocation(in).variable) < curOpId) {
             return asLocation(in);
         }
         return null;
@@ -559,9 +521,6 @@ public class LinearScanAllocator {
         curOutRegisterState[reg.number] = loc;
         curLocations.put(loc);
         recordUse(variable);
-        if (hintRegisterLocations.get(variable) == null) {
-            hintRegisterLocations.put(loc);
-        }
 
         Debug.log("      selected register %s", loc);
         return loc;
