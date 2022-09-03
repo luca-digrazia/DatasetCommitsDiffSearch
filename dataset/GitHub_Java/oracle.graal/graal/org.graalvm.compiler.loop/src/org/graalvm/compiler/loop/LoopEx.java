@@ -69,6 +69,7 @@ import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 import org.graalvm.compiler.nodes.debug.ControlFlowAnchored;
 import org.graalvm.compiler.nodes.extended.ValueAnchorNode;
 import org.graalvm.compiler.nodes.util.GraphUtil;
+import org.graalvm.util.CollectionFactory;
 import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
 
@@ -307,12 +308,10 @@ public class LoopEx {
                 exits.add((LoopExitNode) b.getBeginNode());
             } else {
                 blocks.add(b.getBeginNode());
-                Block d = b.getDominatedSibling();
-                while (d != null) {
+                for (Block d : b.getDominated()) {
                     if (loop.getBlocks().contains(d)) {
                         work.add(d);
                     }
-                    d = d.getDominatedSibling();
                 }
             }
         }
@@ -334,7 +333,7 @@ public class LoopEx {
      * @return a map from node to induction variable
      */
     private static EconomicMap<Node, InductionVariable> findInductionVariables(LoopEx loop) {
-        EconomicMap<Node, InductionVariable> ivs = EconomicMap.create(Equivalence.IDENTITY);
+        EconomicMap<Node, InductionVariable> ivs = CollectionFactory.newMap(Equivalence.IDENTITY);
 
         Queue<InductionVariable> scanQueue = new LinkedList<>();
         LoopBeginNode loopBegin = loop.loopBegin();
