@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.nodes.memory.load;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeField;
@@ -45,7 +44,6 @@ import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleManagedMalloc.ManagedMallocObject;
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
 import com.oracle.truffle.llvm.runtime.LLVMGlobalVariableDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
@@ -66,11 +64,6 @@ public abstract class LLVMDirectLoadNode {
         public LLVMIVarBit executeI64(LLVMAddress addr) {
             return LLVMMemory.getIVarBit(addr, getBitWidth());
         }
-
-        @Specialization
-        public LLVMIVarBit executeI64(LLVMGlobalVariableDescriptor addr) {
-            return LLVMMemory.getIVarBit(addr.getNativeAddress(), getBitWidth());
-        }
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
@@ -80,11 +73,6 @@ public abstract class LLVMDirectLoadNode {
         public LLVM80BitFloat executeDouble(LLVMAddress addr) {
             return LLVMMemory.get80BitFloat(addr);
         }
-
-        @Specialization
-        public LLVM80BitFloat executeDouble(LLVMGlobalVariableDescriptor addr) {
-            return LLVMMemory.get80BitFloat(addr.getNativeAddress());
-        }
     }
 
     @NodeChild(type = LLVMExpressionNode.class)
@@ -93,11 +81,6 @@ public abstract class LLVMDirectLoadNode {
         @Specialization
         public LLVMFunctionHandle executeAddress(LLVMAddress addr) {
             return new LLVMFunctionHandle(LLVMHeap.getFunctionIndex(addr));
-        }
-
-        @Specialization
-        public LLVMFunctionHandle executeAddress(LLVMGlobalVariableDescriptor addr) {
-            return new LLVMFunctionHandle(LLVMHeap.getFunctionIndex(addr.getNativeAddress()));
         }
     }
 
@@ -112,23 +95,8 @@ public abstract class LLVMDirectLoadNode {
         }
 
         @Specialization
-        public Object executeAddress(LLVMGlobalVariableDescriptor addr) {
-            return addr.load();
-        }
-
-        @Specialization
         public Object executeManagedMalloc(ManagedMallocObject addr) {
             return addr.get(0);
-        }
-
-        @Specialization
-        public Object executeLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
-            if (addr.getValue() instanceof Long) {
-                return LLVMMemory.getAddress(LLVMAddress.fromLong((long) addr.getValue()));
-            } else {
-                CompilerDirectives.transferToInterpreter();
-                throw new IllegalAccessError("Cannot access memory with address: " + addr.getValue());
-            }
         }
 
         @Specialization(guards = "objectIsManagedMalloc(addr)")
@@ -139,13 +107,13 @@ public abstract class LLVMDirectLoadNode {
         @Specialization(guards = "!objectIsManagedMalloc(addr)")
         public Object executeIndirectedForeign(LLVMTruffleObject addr, @Cached("createForeignReadNode()") Node foreignRead) {
             try {
-                return toLLVM.executeWithTarget(ForeignAccess.sendRead(foreignRead, addr.getObject(), (int) (addr.getOffset() / LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES)));
+                return toLLVM.executeWithTarget(ForeignAccess.sendRead(foreignRead, addr.getObject(), addr.getOffset()));
             } catch (UnknownIdentifierException | UnsupportedMessageException e) {
                 throw new UnsupportedOperationException(e);
             }
         }
 
-        @Specialization(guards = {"!isManagedMalloc(addr)", "notLLVM(addr)"})
+        @Specialization(guards = "!isManagedMalloc(addr)")
         public Object executeForeign(TruffleObject addr, @Cached("createForeignReadNode()") Node foreignRead) {
             try {
                 return toLLVM.executeWithTarget(ForeignAccess.sendRead(foreignRead, addr, 0));
@@ -177,7 +145,7 @@ public abstract class LLVMDirectLoadNode {
 
         @Override
         public Object executeGeneric(VirtualFrame frame) {
-            return descriptor.load();
+            return LLVMGlobalVariableDescriptor.doLoad(descriptor);
         }
 
     }
