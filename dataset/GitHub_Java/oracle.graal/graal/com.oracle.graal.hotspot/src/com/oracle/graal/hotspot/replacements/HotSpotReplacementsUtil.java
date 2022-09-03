@@ -24,7 +24,7 @@ package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.hotspot.meta.HotSpotForeignCallsProviderImpl.*;
+import static com.oracle.graal.hotspot.meta.HotSpotHostForeignCallsProvider.*;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 import sun.misc.*;
 
@@ -46,9 +46,6 @@ import com.oracle.graal.word.*;
  */
 public class HotSpotReplacementsUtil {
 
-    // Must be @Fold as the security checks in HotSpotGraalRuntime.runtime()
-    // don't work well inside snippets
-    @Fold
     public static HotSpotVMConfig config() {
         return runtime().getConfig();
     }
@@ -214,11 +211,6 @@ public class HotSpotReplacementsUtil {
         return Unsafe.getUnsafe().pageSize();
     }
 
-    @Fold
-    public static int heapWordSize() {
-        return config().heapWordSize;
-    }
-
     public static final LocationIdentity PROTOTYPE_MARK_WORD_LOCATION = new NamedLocationIdentity("PrototypeMarkWord");
 
     @Fold
@@ -245,22 +237,9 @@ public class HotSpotReplacementsUtil {
         return hub.readInt(klassLayoutHelperOffset(), LocationIdentity.FINAL_LOCATION);
     }
 
-    /**
-     * Checks if class {@code klass} is an array.
-     * 
-     * See: Klass::layout_helper_is_array
-     * 
-     * @param klass the class to be checked
-     * @return true if klass is an array, false otherwise
-     */
-    public static boolean klassIsArray(Word klass) {
-        /*
-         * The less-than check only works if both values are ints. We use local variables to make
-         * sure these are still ints and haven't changed.
-         */
-        final int layoutHelper = readLayoutHelper(klass);
-        final int layoutHelperNeutralValue = config().klassLayoutHelperNeutralValue;
-        return (layoutHelper < layoutHelperNeutralValue);
+    @Fold
+    public static int arrayKlassLayoutHelperIdentifier() {
+        return config().arrayKlassLayoutHelperIdentifier;
     }
 
     @Fold
@@ -289,7 +268,7 @@ public class HotSpotReplacementsUtil {
 
     public static void initializeObjectHeader(Word memory, Word markWord, Word hub) {
         memory.writeWord(markOffset(), markWord, MARK_WORD_LOCATION);
-        StoreHubNode.write(memory, hub);
+        StoreHubNode.write(memory.toObject(), hub);
     }
 
     @Fold
@@ -525,14 +504,6 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static int klassStateFullyInitialized() {
         return config().klassStateFullyInitialized;
-    }
-
-    public static boolean isKlassFullyInitialized(Word hub) {
-        return readKlassState(hub) == klassStateFullyInitialized();
-    }
-
-    public static byte readKlassState(Word hub) {
-        return hub.readByte(klassStateOffset(), CLASS_STATE_LOCATION);
     }
 
     @Fold
