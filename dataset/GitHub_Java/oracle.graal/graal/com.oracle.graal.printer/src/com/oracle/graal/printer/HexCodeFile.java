@@ -88,7 +88,6 @@ public class HexCodeFile {
 
     public static final String NEW_LINE = CodeUtil.NEW_LINE;
     public static final String SECTION_DELIM = " <||@";
-    public static final String COLUMN_END = " <|@";
     public static final Pattern SECTION = Pattern.compile("(\\S+)\\s+(.*)", Pattern.DOTALL);
     public static final Pattern COMMENT = Pattern.compile("(\\d+)\\s+(.*)", Pattern.DOTALL);
     public static final Pattern OPERAND_COMMENT = COMMENT;
@@ -235,17 +234,13 @@ public class HexCodeFile {
     }
 
     /**
-     * Modifies a string to mangle any substrings matching {@link #SECTION_DELIM} and
-     * {@link #COLUMN_END}.
+     * Modifies a string to mangle any substrings matching {@link #SECTION_DELIM}.
      */
     public static String encodeString(String input) {
         int index;
         String s = input;
         while ((index = s.indexOf(SECTION_DELIM)) != -1) {
             s = s.substring(0, index) + " < |@" + s.substring(index + SECTION_DELIM.length());
-        }
-        while ((index = s.indexOf(COLUMN_END)) != -1) {
-            s = s.substring(0, index) + " < @" + s.substring(index + COLUMN_END.length());
         }
         return s;
     }
@@ -293,8 +288,7 @@ public class HexCodeFile {
         }
 
         void warning(int offset, String message) {
-            PrintStream err = System.err;
-            err.println("Warning: " + errorMessage(offset, message));
+            System.err.println("Warning: " + errorMessage(offset, message));
         }
 
         String errorMessage(int offset, String message) {
@@ -322,9 +316,8 @@ public class HexCodeFile {
             int lineStart = input.lastIndexOf(HexCodeFile.NEW_LINE, index) + 1;
 
             String l = input.substring(lineStart, lineStart + 10);
-            PrintStream out = System.out;
-            out.println("YYY" + input.substring(index, index + 10) + "...");
-            out.println("XXX" + l + "...");
+            System.out.println("YYY" + input.substring(index, index + 10) + "...");
+            System.out.println("XXX" + l + "...");
 
             int pos = input.indexOf(HexCodeFile.NEW_LINE, 0);
             int line = 1;

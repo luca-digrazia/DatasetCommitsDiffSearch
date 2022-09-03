@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -52,45 +52,42 @@ public class CompilationResult implements Serializable {
     }
 
     /**
-     * Represents an infopoint with associated debug info. Note that safepoints are also infopoints.
+     * Represents a safepoint with associated debug info.
      */
-    public static class Infopoint extends Site implements Comparable<Infopoint> {
+    public static class Safepoint extends Site implements Comparable<Safepoint> {
 
         private static final long serialVersionUID = 2479806696381720162L;
         public final DebugInfo debugInfo;
 
-        public final InfopointReason reason;
-
-        public Infopoint(int pcOffset, DebugInfo debugInfo, InfopointReason reason) {
+        public Safepoint(int pcOffset, DebugInfo debugInfo) {
             super(pcOffset);
             this.debugInfo = debugInfo;
-            this.reason = reason;
         }
 
         @Override
         public String toString() {
             StringBuilder sb = new StringBuilder();
             sb.append(pcOffset);
-            sb.append("[<infopoint>]");
+            sb.append("[<safepoint>]");
             appendDebugInfo(sb, debugInfo);
             return sb.toString();
         }
 
         @Override
-        public int compareTo(Infopoint o) {
+        public int compareTo(Safepoint o) {
             if (pcOffset < o.pcOffset) {
                 return -1;
             } else if (pcOffset > o.pcOffset) {
                 return 1;
             }
-            return this.reason.compareTo(o.reason);
+            return 0;
         }
     }
 
     /**
      * Represents a call in the code.
      */
-    public static final class Call extends Infopoint {
+    public static final class Call extends Safepoint {
 
         private static final long serialVersionUID = 1440741241631046954L;
 
@@ -112,7 +109,7 @@ public class CompilationResult implements Serializable {
         public final boolean direct;
 
         public Call(InvokeTarget target, int pcOffset, int size, boolean direct, DebugInfo debugInfo) {
-            super(pcOffset, debugInfo, InfopointReason.CALL);
+            super(pcOffset, debugInfo);
             this.size = size;
             this.target = target;
             this.direct = direct;
@@ -287,7 +284,7 @@ public class CompilationResult implements Serializable {
         }
     }
 
-    private final List<Infopoint> infopoints = new ArrayList<>();
+    private final List<Safepoint> safepoints = new ArrayList<>();
     private final List<DataPatch> dataReferences = new ArrayList<>();
     private final List<ExceptionHandler> exceptionHandlers = new ArrayList<>();
     private final List<Mark> marks = new ArrayList<>();
@@ -380,7 +377,7 @@ public class CompilationResult implements Serializable {
      */
     public void recordCall(int codePos, int size, InvokeTarget target, DebugInfo debugInfo, boolean direct) {
         final Call call = new Call(target, codePos, size, direct, debugInfo);
-        addInfopoint(call);
+        addSafepoint(call);
     }
 
     /**
@@ -394,22 +391,22 @@ public class CompilationResult implements Serializable {
     }
 
     /**
-     * Records an infopoint in the code array.
+     * Records a safepoint in the code array.
      * 
-     * @param codePos the position of the infopoint in the code array
-     * @param debugInfo the debug info for the infopoint
+     * @param codePos the position of the safepoint in the code array
+     * @param debugInfo the debug info for the safepoint
      */
-    public void recordInfopoint(int codePos, DebugInfo debugInfo, InfopointReason reason) {
-        addInfopoint(new Infopoint(codePos, debugInfo, reason));
+    public void recordSafepoint(int codePos, DebugInfo debugInfo) {
+        addSafepoint(new Safepoint(codePos, debugInfo));
     }
 
-    private void addInfopoint(Infopoint infopoint) {
-        // The infopoints list must always be sorted
-        if (!getInfopoints().isEmpty() && getInfopoints().get(getInfopoints().size() - 1).pcOffset >= infopoint.pcOffset) {
+    private void addSafepoint(Safepoint safepoint) {
+        // The safepoints list must always be sorted
+        if (!getSafepoints().isEmpty() && getSafepoints().get(getSafepoints().size() - 1).pcOffset >= safepoint.pcOffset) {
             // This re-sorting should be very rare
-            Collections.sort(getInfopoints());
+            Collections.sort(getSafepoints());
         }
-        getInfopoints().add(infopoint);
+        getSafepoints().add(safepoint);
     }
 
     /**
@@ -525,10 +522,10 @@ public class CompilationResult implements Serializable {
     }
 
     /**
-     * @return the list of infopoints, sorted by {@link Site#pcOffset}
+     * @return the list of safepoints, sorted by {@link Site#pcOffset}
      */
-    public List<Infopoint> getInfopoints() {
-        return infopoints;
+    public List<Safepoint> getSafepoints() {
+        return safepoints;
     }
 
     /**
