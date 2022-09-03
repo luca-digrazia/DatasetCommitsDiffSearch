@@ -28,35 +28,35 @@ import java.util.concurrent.*;
 
 import com.oracle.max.graal.debug.*;
 
-
 public final class DebugScope {
 
     private static ThreadLocal<DebugScope> instanceTL = new ThreadLocal<>();
     private static ThreadLocal<DebugConfig> configTL = new ThreadLocal<>();
-    private static ThreadLocal<RuntimeException> lastExceptionThrownTL = new ThreadLocal<>();
+    private static ThreadLocal<Throwable> lastExceptionThrownTL = new ThreadLocal<>();
+    private static DebugTimer scopeTime = Debug.timer("ScopeTime");
 
-    private final String name;
     private final DebugScope parent;
 
     private Object[] context;
 
-    private List<DebugScope> children;
     private DebugValueMap valueMap;
     private String qualifiedName;
+    private String name;
 
-    public static final DebugScope DEFAULT_CONTEXT = new DebugScope("DEFAULT", "DEFAULT", null);
     private static final char SCOPE_SEP = '.';
 
     private boolean logEnabled;
     private boolean meterEnabled;
-    private boolean timerEnabled;
+    private boolean timeEnabled;
     private boolean dumpEnabled;
 
     public static DebugScope getInstance() {
         DebugScope result = instanceTL.get();
         if (result == null) {
-            instanceTL.set(new DebugScope("DEFAULT", "DEFAULT", null));
-            return instanceTL.get();
+            DebugScope topLevelDebugScope = new DebugScope(Thread.currentThread().getName(), "", null);
+            instanceTL.set(topLevelDebugScope);
+            DebugValueMap.registerTopLevel(topLevelDebugScope.getValueMap());
+            return topLevelDebugScope;
         } else {
             return result;
         }
@@ -71,6 +71,7 @@ public final class DebugScope {
         this.parent = parent;
         this.context = context;
         this.qualifiedName = qualifiedName;
+        assert context != null;
     }
 
     public boolean isDumpEnabled() {
@@ -85,8 +86,8 @@ public final class DebugScope {
         return meterEnabled;
     }
 
-    public boolean isTimerEnabled() {
-        return timerEnabled;
+    public boolean isTimeEnabled() {
+        return timeEnabled;
     }
 
     public void log(String msg, Object... args) {
@@ -97,10 +98,10 @@ public final class DebugScope {
 
     public void dump(Object object, String formatString, Object[] args) {
         if (isDumpEnabled()) {
-            String message = String.format(formatString, args);
-            for (Object o : Debug.context()) {
-                if (o instanceof DebugDumpHandler) {
-                    DebugDumpHandler dumpHandler = (DebugDumpHandler) o;
+            DebugConfig config = getConfig();
+            if (config != null) {
+                String message = String.format(formatString, args);
+                for (DebugDumpHandler dumpHandler : config.dumpHandlers()) {
                     dumpHandler.dump(object, message);
                 }
             }
@@ -118,30 +119,42 @@ public final class DebugScope {
             newChild = oldContext.createChild(newName, newContext);
         }
         instanceTL.set(newChild);
-        T result = null;
-        updateFlags();
-        log("Starting scope %s", newChild.getQualifiedName());
+        newChild.updateFlags();
+        try (TimerCloseable a = scopeTime.start()) {
+            return executeScope(runnable, callable);
+        } finally {
+            if (!sandbox && newChild.hasValueMap()) {
+                getValueMap().addChild(newChild.getValueMap());
+            }
+            newChild.context = null;
+            instanceTL.set(oldContext);
+            setConfig(oldConfig);
+        }
+    }
+
+    private <T> T executeScope(Runnable runnable, Callable<T> callable) {
         try {
             if (runnable != null) {
                 runnable.run();
             }
             if (callable != null) {
-                result = call(callable);
+                return call(callable);
             }
-        } catch (RuntimeException e) {
+        } catch (Throwable e) {
             if (e == lastExceptionThrownTL.get()) {
                 throw e;
             } else {
                 RuntimeException newException = interceptException(e);
-                lastExceptionThrownTL.set(newException);
-                throw newException;
+                if (newException == null) {
+                    lastExceptionThrownTL.set(e);
+                    throw e;
+                } else {
+                    lastExceptionThrownTL.set(newException);
+                    throw newException;
+                }
             }
-        } finally {
-            newChild.deactivate();
-            instanceTL.set(oldContext);
-            setConfig(oldConfig);
         }
-        return result;
+        return null;
     }
 
     private void updateFlags() {
@@ -149,41 +162,43 @@ public final class DebugScope {
         if (config == null) {
             logEnabled = false;
             meterEnabled = false;
-            timerEnabled = false;
+            timeEnabled = false;
             dumpEnabled = false;
         } else {
             logEnabled = config.isLogEnabled();
             meterEnabled = config.isMeterEnabled();
-            timerEnabled = config.isTimerEnabled();
+            timeEnabled = config.isTimeEnabled();
             dumpEnabled = config.isDumpEnabled();
         }
     }
 
-    private void deactivate() {
-        context = null;
-    }
-
-    private RuntimeException interceptException(final RuntimeException e) {
+    private RuntimeException interceptException(final Throwable e) {
         final DebugConfig config = getConfig();
         if (config != null) {
-            return scope("InterceptException", null, new Callable<RuntimeException>(){
+            return scope("InterceptException", null, new Callable<RuntimeException>() {
+
                 @Override
                 public RuntimeException call() throws Exception {
                     try {
                         return config.interceptException(e);
                     } catch (Throwable t) {
-                        return e;
+                        return new RuntimeException("Exception while intercepting exception", t);
                     }
-                }}, false, new Object[]{e});
+                }
+            }, false, new Object[] {e});
         }
-        return e;
+        return null;
     }
 
     private DebugValueMap getValueMap() {
         if (valueMap == null) {
-            valueMap = new DebugValueMap();
+            valueMap = new DebugValueMap(name);
         }
         return valueMap;
+    }
+
+    private boolean hasValueMap() {
+        return valueMap != null;
     }
 
     long getCurrentValue(int index) {
@@ -195,12 +210,11 @@ public final class DebugScope {
     }
 
     private DebugScope createChild(String newName, Object[] newContext) {
-        String newQualifiedName = this.qualifiedName + SCOPE_SEP + newName;
-        DebugScope result = new DebugScope(newName, newQualifiedName, this, newContext);
-        if (children == null) {
-            children = new ArrayList<>(4);
+        String newQualifiedName = newName;
+        if (this.qualifiedName.length() > 0) {
+            newQualifiedName = this.qualifiedName + SCOPE_SEP + newName;
         }
-        children.add(result);
+        DebugScope result = new DebugScope(newName, newQualifiedName, this, newContext);
         return result;
     }
 
@@ -272,4 +286,3 @@ public final class DebugScope {
         cachedOut = System.out;
     }
 }
-
