@@ -22,31 +22,34 @@
  */
 package com.oracle.graal.hotspot;
 
+import java.io.*;
 import java.util.*;
-import java.util.regex.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.printer.*;
-
+import com.oracle.max.criutils.*;
 
 public class HotSpotDebugConfig implements DebugConfig {
 
-    private final String logFilter;
-    private final String meterFilter;
-    private final String timerFilter;
-    private final String dumpFilter;
+    private final DebugFilter logFilter;
+    private final DebugFilter meterFilter;
+    private final DebugFilter timerFilter;
+    private final DebugFilter dumpFilter;
     private final MethodFilter[] methodFilter;
     private final List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
+    private final PrintStream output;
+    private final Set<Object> extraFilters = new HashSet<>();
 
-    public HotSpotDebugConfig(String logFilter, String meterFilter, String timerFilter, String dumpFilter, String methodFilter) {
-        this.logFilter = logFilter;
-        this.meterFilter = meterFilter;
-        this.timerFilter = timerFilter;
-        this.dumpFilter = dumpFilter;
+    public HotSpotDebugConfig(String logFilter, String meterFilter, String timerFilter, String dumpFilter, String methodFilter, PrintStream output) {
+        this.logFilter = DebugFilter.parse(logFilter);
+        this.meterFilter = DebugFilter.parse(meterFilter);
+        this.timerFilter = DebugFilter.parse(timerFilter);
+        this.dumpFilter = DebugFilter.parse(dumpFilter);
         if (methodFilter == null || methodFilter.isEmpty()) {
             this.methodFilter = null;
         } else {
@@ -56,12 +59,20 @@ public class HotSpotDebugConfig implements DebugConfig {
                 this.methodFilter[i] = new MethodFilter(filters[i]);
             }
         }
-        if (GraalOptions.PrintIdealGraphFile) {
-            dumpHandlers.add(new IdealGraphPrinterDumpHandler());
-        } else {
-            dumpHandlers.add(new IdealGraphPrinterDumpHandler(GraalOptions.PrintIdealGraphAddress, GraalOptions.PrintIdealGraphPort));
+
+        // Report the filters that have been configured so the user can verify it's what they expect
+        if (logFilter != null || meterFilter != null || timerFilter != null || dumpFilter != null || methodFilter != null) {
+            TTY.println(Thread.currentThread().getName() + ": " + toString());
         }
-        dumpHandlers.add(new CFGPrinterObserver());
+        if (GraalOptions.PrintIdealGraphFile) {
+            dumpHandlers.add(new GraphPrinterDumpHandler());
+        } else {
+            dumpHandlers.add(new GraphPrinterDumpHandler(GraalOptions.PrintIdealGraphAddress, GraalOptions.PrintBinaryGraphPort));
+        }
+        if (GraalOptions.PrintCFG) {
+            dumpHandlers.add(new CFGPrinterObserver());
+        }
+        this.output = output;
     }
 
     public boolean isLogEnabled() {
@@ -80,30 +91,31 @@ public class HotSpotDebugConfig implements DebugConfig {
         return isEnabled(timerFilter);
     }
 
-    private boolean isEnabled(String filter) {
-        return filter != null && checkContains(Debug.currentScope(), filter) && checkMethodFilter();
+    public PrintStream output() {
+        return output;
     }
 
-    private static boolean checkContains(String currentScope, String filter) {
-        if (filter.contains("*")) {
-            /*filter = filter.replace("*", ".*");
-            filter = filter.replace("[", "\\[");
-            filter = filter.replace("]", "\\]");
-            filter = filter.replace(":", "\\:");*/
-            return Pattern.matches(filter, currentScope);
-        }
-        return currentScope.contains(filter);
+    private boolean isEnabled(DebugFilter filter) {
+        return checkDebugFilter(Debug.currentScope(), filter) && checkMethodFilter();
+    }
+
+    private static boolean checkDebugFilter(String currentScope, DebugFilter filter) {
+        return filter != null && filter.matches(currentScope);
     }
 
     private boolean checkMethodFilter() {
-        if (methodFilter == null) {
+        if (methodFilter == null && extraFilters.isEmpty()) {
             return true;
         } else {
             for (Object o : Debug.context()) {
-                if (o instanceof RiMethod) {
-                    for (MethodFilter filter : methodFilter) {
-                        if (filter.matches((RiMethod) o)) {
-                            return true;
+                if (extraFilters.contains(o)) {
+                    return true;
+                } else if (methodFilter != null) {
+                    if (o instanceof JavaMethod) {
+                        for (MethodFilter filter : methodFilter) {
+                            if (filter.matches((JavaMethod) o)) {
+                                return true;
+                            }
                         }
                     }
                 }
@@ -120,33 +132,47 @@ public class HotSpotDebugConfig implements DebugConfig {
         add(sb, "Meter", meterFilter);
         add(sb, "Time", timerFilter);
         add(sb, "Dump", dumpFilter);
-        add(sb, "MethodFilter", Arrays.toString(methodFilter));
+        add(sb, "MethodFilter", methodFilter);
         return sb.toString();
     }
 
-    private static void add(StringBuilder sb, String name, String filter) {
+    private static void add(StringBuilder sb, String name, Object filter) {
         if (filter != null) {
             sb.append(' ');
             sb.append(name);
             sb.append('=');
-            sb.append(filter);
+            if (filter instanceof Object[]) {
+                sb.append(Arrays.toString((Object[]) filter));
+            } else {
+                sb.append(String.valueOf(filter));
+            }
         }
     }
 
     @Override
     public RuntimeException interceptException(Throwable e) {
-        if (e instanceof CiBailout) {
+        if (e instanceof BailoutException) {
             return null;
         }
-        Debug.setConfig(Debug.fixedConfig(true, true, false, false, dumpHandlers));
-        // sync "Exception occured in scope: " with mx/sanitycheck.py::Test.__init__
-        Debug.log(String.format("Exception occured in scope: %s", Debug.currentScope()));
+        Debug.setConfig(Debug.fixedConfig(true, true, false, false, dumpHandlers, output));
+        Debug.log(String.format("Exception occurred in scope: %s", Debug.currentScope()));
         for (Object o : Debug.context()) {
-            Debug.log("Context obj %s", o);
             if (o instanceof Graph) {
-                Graph graph = (Graph) o;
-                Debug.log("Found graph in context: ", graph);
-                Debug.dump(o, "Exception graph");
+                Debug.log("Context obj %s", o);
+                if (GraalOptions.DumpOnError) {
+                    Debug.dump(o, "Exception graph");
+                } else {
+                    Debug.log("Use -G:+DumpOnError to enable dumping of graphs on this error");
+                }
+            } else if (o instanceof Node) {
+                String location = GraphUtil.approxSourceLocation((Node) o);
+                if (location != null) {
+                    Debug.log("Context obj %s (approx. location: %s)", o, location);
+                } else {
+                    Debug.log("Context obj %s", o);
+                }
+            } else {
+                Debug.log("Context obj %s", o);
             }
         }
         return null;
@@ -155,5 +181,15 @@ public class HotSpotDebugConfig implements DebugConfig {
     @Override
     public Collection<? extends DebugDumpHandler> dumpHandlers() {
         return dumpHandlers;
+    }
+
+    @Override
+    public void addToContext(Object o) {
+        extraFilters.add(o);
+    }
+
+    @Override
+    public void removeFromContext(Object o) {
+        extraFilters.remove(o);
     }
 }

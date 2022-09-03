@@ -179,7 +179,6 @@ public final class PhiNode extends FloatingNode implements Canonicalizable, Node
     }
 
     public void addInput(ValueNode x) {
-        assert !(x instanceof PhiNode) || ((PhiNode) x).merge() instanceof LoopBeginNode ||  ((PhiNode) x).merge() != this.merge();
         values.add(x);
     }
 

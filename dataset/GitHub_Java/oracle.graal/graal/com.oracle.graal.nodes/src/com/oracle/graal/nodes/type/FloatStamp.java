@@ -44,11 +44,6 @@ public class FloatStamp extends Stamp {
         this.nonNaN = nonNaN;
     }
 
-    @Override
-    public ResolvedJavaType javaType(MetaAccessProvider metaAccess) {
-        return metaAccess.lookupJavaType(kind().toJavaClass());
-    }
-
     /**
      * The (inclusive) lower bound on the value described by this stamp.
      */
@@ -78,7 +73,7 @@ public class FloatStamp extends Stamp {
     @Override
     public String toString() {
         StringBuilder str = new StringBuilder();
-        str.append(kind().getTypeChar());
+        str.append(kind().typeChar);
         str.append(nonNaN ? "!" : "");
         if (lowerBound == upperBound) {
             str.append(" [").append(lowerBound).append(']');
@@ -107,22 +102,6 @@ public class FloatStamp extends Stamp {
             return other;
         } else {
             return new FloatStamp(kind(), meetLowerBound, meetUpperBound, meetNonNaN);
-        }
-    }
-
-    @Override
-    public Stamp join(Stamp otherStamp) {
-        FloatStamp other = (FloatStamp) otherStamp;
-        assert kind() == other.kind();
-        double joinUpperBound = Math.min(upperBound, other.upperBound);
-        double joinLowerBound = Math.max(lowerBound, other.lowerBound);
-        boolean joinNonNaN = nonNaN || other.nonNaN;
-        if (joinLowerBound == lowerBound && joinUpperBound == upperBound && joinNonNaN == nonNaN) {
-            return this;
-        } else if (joinLowerBound == other.lowerBound && joinUpperBound == other.upperBound && joinNonNaN == other.nonNaN) {
-            return other;
-        } else {
-            return new FloatStamp(kind(), joinLowerBound, joinUpperBound, joinNonNaN);
         }
     }
 

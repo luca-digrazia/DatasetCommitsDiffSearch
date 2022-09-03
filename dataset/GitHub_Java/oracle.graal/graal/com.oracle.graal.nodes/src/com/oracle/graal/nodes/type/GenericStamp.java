@@ -42,11 +42,6 @@ public final class GenericStamp extends Stamp {
     }
 
     @Override
-    public ResolvedJavaType javaType(MetaAccessProvider metaAccess) {
-        return metaAccess.lookupJavaType(kind().toJavaClass());
-    }
-
-    @Override
     public String toString() {
         return type.toString();
     }
@@ -58,12 +53,6 @@ public final class GenericStamp extends Stamp {
 
     @Override
     public Stamp meet(Stamp other) {
-        assert ((GenericStamp) other).type == type;
-        return this;
-    }
-
-    @Override
-    public Stamp join(Stamp other) {
         assert ((GenericStamp) other).type == type;
         return this;
     }

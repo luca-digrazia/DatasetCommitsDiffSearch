@@ -29,9 +29,8 @@ import com.oracle.graal.nodes.type.GenericStamp.GenericStampType;
 
 public class StampFactory {
     private static final Stamp[] stampCache = new Stamp[Kind.values().length];
-    private static final Stamp objectStamp = new ObjectStamp(null, false, false, false);
-    private static final Stamp objectNonNullStamp = new ObjectStamp(null, false, true, false);
-    private static final Stamp objectAlwaysNullStamp = new ObjectStamp(null, false, false, true);
+    private static final Stamp objectStamp = new ObjectStamp(null, false, false);
+    private static final Stamp objectNonNullStamp = new ObjectStamp(null, false, true);
     private static final Stamp dependencyStamp = new GenericStamp(GenericStampType.Dependency);
     private static final Stamp extensionStamp = new GenericStamp(GenericStampType.Extension);
     private static final Stamp virtualStamp = new GenericStamp(GenericStampType.Virtual);
@@ -124,7 +123,7 @@ public class StampFactory {
         assert value.kind == Kind.Object;
         if (value.kind == Kind.Object) {
             ResolvedJavaType type = value.isNull() ? null : runtime.getTypeOf(value);
-            return new ObjectStamp(type, value.isNonNull(), value.isNonNull(), value.isNull());
+            return new ObjectStamp(type, value.isNonNull(), value.isNonNull());
         } else {
             throw new GraalInternalError(Kind.Object + " expected, actual kind: %s", value.kind);
         }
@@ -136,10 +135,6 @@ public class StampFactory {
 
     public static Stamp objectNonNull() {
         return objectNonNullStamp;
-    }
-
-    public static Stamp alwaysNull() {
-        return objectAlwaysNullStamp;
     }
 
     public static Stamp declared(ResolvedJavaType type) {
@@ -155,13 +150,13 @@ public class StampFactory {
         assert type.kind() == Kind.Object;
         ResolvedJavaType exact = type.exactType();
         if (exact != null) {
-            return new ObjectStamp(exact, true, nonNull, false);
+            return new ObjectStamp(exact, true, nonNull);
         } else {
-            return new ObjectStamp(type, false, nonNull, false);
+            return new ObjectStamp(type, false, nonNull);
         }
     }
 
     public static Stamp exactNonNull(ResolvedJavaType type) {
-        return new ObjectStamp(type, true, true, false);
+        return new ObjectStamp(type, true, true);
     }
 }

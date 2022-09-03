@@ -81,30 +81,6 @@ public class IntegerStamp extends Stamp {
         return value >= lowerBound && value <= upperBound && (value & mask) == (value & defaultMask(kind()));
     }
 
-    public boolean isPositive() {
-        return lowerBound() >= 0;
-    }
-
-    public boolean isNegative() {
-        return upperBound() <= 0;
-    }
-
-    public boolean isStrictlyPositive() {
-        return lowerBound() > 0;
-    }
-
-    public boolean isStrictlyNegative() {
-        return upperBound() < 0;
-    }
-
-    public boolean canBePositive() {
-        return upperBound() > 0;
-    }
-
-    public boolean canBeNegative() {
-        return lowerBound() < 0;
-    }
-
     @Override
     public String toString() {
         StringBuilder str = new StringBuilder();
@@ -139,22 +115,6 @@ public class IntegerStamp extends Stamp {
             return other;
         } else {
             return new IntegerStamp(kind(), meetLowerBound, meetUpperBound, meetMask);
-        }
-    }
-
-    @Override
-    public Stamp join(Stamp otherStamp) {
-        IntegerStamp other = (IntegerStamp) otherStamp;
-        assert kind() == other.kind();
-        long joinUpperBound = Math.min(upperBound, other.upperBound);
-        long joinLowerBound = Math.max(lowerBound, other.lowerBound);
-        long joinMask = mask & other.mask;
-        if (joinLowerBound == lowerBound && joinUpperBound == upperBound && joinMask == mask) {
-            return this;
-        } else if (joinLowerBound == other.lowerBound && joinUpperBound == other.upperBound && joinMask == other.mask) {
-            return other;
-        } else {
-            return new IntegerStamp(kind(), joinLowerBound, joinUpperBound, joinMask);
         }
     }
 
@@ -198,10 +158,6 @@ public class IntegerStamp extends Stamp {
         } else {
             return ((-1L) >>> Long.numberOfLeadingZeros(mask)) & defaultMask(kind);
         }
-    }
-
-    public static boolean sameSign(IntegerStamp s1, IntegerStamp s2) {
-        return s1.isPositive() && s2.isPositive() || s1.isNegative() && s2.isNegative();
     }
 
 }
