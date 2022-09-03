@@ -41,14 +41,14 @@ public class AMD64HotSpotLoweringProvider extends HotSpotLoweringProvider {
 
     @Override
     public void initialize(HotSpotProviders providers, HotSpotVMConfig config) {
-        convertSnippets = new AMD64ConvertSnippets.Templates(providers, providers.getSnippetReflection(), providers.getCodeCache().getTarget());
+        convertSnippets = new AMD64ConvertSnippets.Templates(providers, providers.getCodeCache().getTarget());
         super.initialize(providers, config);
     }
 
     @Override
     public void lower(Node n, LoweringTool tool) {
-        if (n instanceof FloatConvertNode) {
-            convertSnippets.lower((FloatConvertNode) n, tool);
+        if (n instanceof ConvertNode) {
+            convertSnippets.lower((ConvertNode) n, tool);
         } else {
             super.lower(n, tool);
         }

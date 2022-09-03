@@ -84,7 +84,7 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
     }
 
     protected Replacements createReplacements(HotSpotGraalRuntime runtime, Assumptions assumptions, Providers p) {
-        return new HotSpotReplacementsImpl(p, runtime.getConfig(), assumptions, p.getCodeCache().getTarget());
+        return new HotSpotReplacementsImpl(p, runtime.getConfig(), assumptions);
     }
 
     protected AMD64HotSpotForeignCallsProvider createForeignCalls(HotSpotGraalRuntime runtime, HotSpotMetaAccessProvider metaAccess, HotSpotCodeCacheProvider codeCache,
