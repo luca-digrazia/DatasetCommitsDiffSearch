@@ -29,17 +29,16 @@
  */
 package com.oracle.truffle.llvm.runtime.types;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
 public class VectorType extends AggregateType {
 
-    @CompilerDirectives.CompilationFinal private Type elementType;
+    private final Type elementType;
     private final int length;
 
     public VectorType(Type elementType, int length) {
-        if (elementType != null && !(elementType instanceof PrimitiveType || elementType instanceof PointerType)) {
+        if (!(elementType instanceof PrimitiveType || elementType instanceof PointerType)) {
             CompilerDirectives.transferToInterpreter();
             throw new AssertionError("Invalid ElementType of Vector: " + elementType);
         }
@@ -59,14 +58,6 @@ public class VectorType extends AggregateType {
     @Override
     public int getNumberOfElements() {
         return length;
-    }
-
-    public void setElementType(Type elementType) {
-        CompilerAsserts.neverPartOfCompilation();
-        if (elementType == null || !(elementType instanceof PrimitiveType || elementType instanceof PointerType)) {
-            throw new AssertionError("Invalid ElementType of Vector: " + elementType);
-        }
-        this.elementType = elementType;
     }
 
     @Override
