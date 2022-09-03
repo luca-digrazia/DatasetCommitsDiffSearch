@@ -126,12 +126,12 @@ public enum LLVMBaseOption implements LLVMOption {
     }
 
     @Override
-    public String getCategoryLabel() {
+    public String getCategory() {
         return category.toString();
     }
 
     @Override
-    public Object getValue() {
+    public Object parse() {
         return parser.parse(this);
     }
 
