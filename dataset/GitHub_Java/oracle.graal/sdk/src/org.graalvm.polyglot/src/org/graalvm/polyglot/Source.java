@@ -359,7 +359,7 @@ public final class Source {
      * @since 1.0
      */
     public static Builder newBuilder(String language, CharSequence source, String name) {
-        return EMPTY.new Builder(language, source).name(name);
+        return new Builder(language, source).name(name);
     }
 
     /**
@@ -368,7 +368,7 @@ public final class Source {
      * @since 1.0
      */
     public static Builder newBuilder(String language, File source) {
-        return EMPTY.new Builder(language, source);
+        return new Builder(language, source);
     }
 
     /**
@@ -377,7 +377,7 @@ public final class Source {
      * @since 1.0
      */
     public static Builder newBuilder(String language, URL source) {
-        return EMPTY.new Builder(language, source);
+        return new Builder(language, source);
     }
 
     /**
@@ -386,7 +386,7 @@ public final class Source {
      * @since 1.0
      */
     public static Builder newBuilder(String language, Reader source, String name) {
-        return EMPTY.new Builder(language, source).name(name);
+        return new Builder(language, source).name(name);
     }
 
     /**
@@ -420,14 +420,12 @@ public final class Source {
         return getImpl().findLanguage(mimeType);
     }
 
-    private static final Source EMPTY = new Source(null, null);
-
     /**
      *
      *
      * @since 1.0
      */
-    public class Builder {
+    public static class Builder {
 
         private final String language;
         private final Object origin;
@@ -441,6 +439,12 @@ public final class Source {
             Objects.requireNonNull(language);
             Objects.requireNonNull(origin);
             this.language = language;
+            this.origin = origin;
+        }
+
+        // legacy constructor
+        Builder(Object origin) {
+            this.language = null;
             this.origin = origin;
         }
 

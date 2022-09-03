@@ -299,8 +299,8 @@ public abstract class TruffleInstrument {
         }
 
         /**
-         * Returns a map {@link LanguageInfo#getId() language id} to {@link LanguageInfo language
-         * info} of all languages that are installed in the environment.
+         * Returns a map mime-type to language identifier of all languages that are installed in the
+         * environment.
          *
          * @since 0.26
          */
@@ -309,8 +309,8 @@ public abstract class TruffleInstrument {
         }
 
         /**
-         * Returns a map {@link InstrumentInfo#getId() instrument id} to {@link InstrumentInfo
-         * instrument info} of all instruments that are installed in the environment.
+         * Returns a map mime-type to instrument identifier of all instruments that are installed in
+         * the environment.
          *
          * @since 0.26
          */
@@ -532,22 +532,16 @@ public abstract class TruffleInstrument {
         /**
          * A custom machine identifier for this instrument. If not defined then the fully qualified
          * class name is used.
-         * 
-         * @since 0.12
          */
         String id() default "";
 
         /**
          * The name of the instrument in an arbitrary format for humans.
-         * 
-         * @since 0.12
          */
         String name() default "";
 
         /**
          * The version for instrument in an arbitrary format.
-         * 
-         * @since 0.12
          */
         String version() default "";
 
