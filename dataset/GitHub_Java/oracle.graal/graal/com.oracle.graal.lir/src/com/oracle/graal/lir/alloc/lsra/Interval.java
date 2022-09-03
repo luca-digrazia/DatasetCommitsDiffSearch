@@ -616,11 +616,11 @@ public final class Interval {
     /**
      * Gets the canonical spill slot for this interval.
      */
-    public StackSlotValue spillSlot() {
+    StackSlotValue spillSlot() {
         return splitParent().spillSlot;
     }
 
-    public void setSpillSlot(StackSlotValue slot) {
+    void setSpillSlot(StackSlotValue slot) {
         assert splitParent().spillSlot == null || (isVirtualStackSlot(splitParent().spillSlot) && isStackSlot(slot)) : "connot overwrite existing spill slot";
         splitParent().spillSlot = slot;
     }
