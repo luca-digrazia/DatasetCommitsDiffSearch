@@ -133,19 +133,20 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.oracle.graal.asm.Assembler;
-import com.oracle.graal.asm.Label;
-import com.oracle.graal.asm.NumUtil;
-import com.oracle.graal.common.PermanentBailoutException;
-import com.oracle.graal.debug.GraalError;
-
+import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.PlatformKind;
 import jdk.vm.ci.sparc.SPARC;
 import jdk.vm.ci.sparc.SPARC.CPUFeature;
 import jdk.vm.ci.sparc.SPARCKind;
+
+import com.oracle.graal.asm.Assembler;
+import com.oracle.graal.asm.Label;
+import com.oracle.graal.asm.NumUtil;
 
 /**
  * This class implements an assembler that can encode most SPARC instructions.
@@ -154,8 +155,13 @@ public abstract class SPARCAssembler extends Assembler {
 
     /**
      * Constructs an assembler for the SPARC architecture.
+     *
+     * @param registerConfig the register configuration used to bind {@link Register#Frame} and
+     *            {@link Register#CallerFrame} to physical registers. This value can be null if this
+     *            assembler instance will not be used to assemble instructions using these logical
+     *            registers.
      */
-    public SPARCAssembler(TargetDescription target) {
+    public SPARCAssembler(TargetDescription target, RegisterConfig registerConfig) {
         super(target);
     }
 
@@ -1279,7 +1285,7 @@ public abstract class SPARCAssembler extends Assembler {
         public int setDisp(int inst, int d) {
             assert this.match(inst);
             if (!isValidDisp(d)) {
-                throw new PermanentBailoutException("Too large displacement 0x%x in field %s in instruction %s", d, this.disp, this);
+                throw new BailoutException("Too large displacement 0x%x in field %s in instruction %s", d, this.disp, this);
             }
             return this.disp.setBits(inst, d);
         }
@@ -1481,7 +1487,7 @@ public abstract class SPARCAssembler extends Assembler {
 
         public static Register getRS1(int word) {
             int regNum = BitSpec.rs1.getBits(word);
-            return SPARC.cpuRegisters.get(regNum);
+            return SPARC.cpuRegisters[regNum];
         }
 
         public static int getImm22(int word) {
@@ -1565,14 +1571,12 @@ public abstract class SPARCAssembler extends Assembler {
             super(ArithOp);
         }
 
-        @Override
         public void emit(SPARCMacroAssembler masm, ConditionFlag condition, CC cc, Register rs2, Register rd) {
             int inst = setBits(0, condition, cc, rd);
             inst = BitSpec.rs2.setBits(inst, rs2.encoding());
             masm.emitInt(inst);
         }
 
-        @Override
         public void emit(SPARCMacroAssembler masm, ConditionFlag condition, CC cc, int simm11, Register rd) {
             int inst = setBits(0, condition, cc, rd);
             inst = BitSpec.i.setBits(inst, 1);
@@ -1605,7 +1609,6 @@ public abstract class SPARCAssembler extends Assembler {
             this.opfLow = opfLow;
         }
 
-        @Override
         public void emit(SPARCMacroAssembler masm, ConditionFlag condition, CC cc, Register rs2, Register rd) {
             int inst = setBits(0);
             inst = BitSpec.rd.setBits(inst, rd.encoding());
@@ -1617,7 +1620,6 @@ public abstract class SPARCAssembler extends Assembler {
             masm.emitInt(inst);
         }
 
-        @Override
         public void emit(SPARCMacroAssembler masm, ConditionFlag condition, CC cc, int simm11, Register rd) {
             throw new IllegalArgumentException("FMOVCC cannot be used with immediate value");
         }
@@ -2359,7 +2361,7 @@ public abstract class SPARCAssembler extends Assembler {
         // Maybe fmt10(rd=0b1_1011, op3=0b11_0000, rs1=0, i=1, simm13=1), or
         // maybe op3(Wr, g0, 1, %pause).
         // What should the count be?
-        GraalError.unimplemented("The SPARC pause instruction is not yet implemented.");
+        JVMCIError.unimplemented("The SPARC pause instruction is not yet implemented.");
     }
 
     public void tcc(CC cc, ConditionFlag flag, int trap) {
