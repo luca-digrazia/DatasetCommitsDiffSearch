@@ -23,7 +23,6 @@ import java.util.List;
 import org.litepal.parser.LitePalAttr;
 import org.litepal.tablemanager.model.AssociationsModel;
 import org.litepal.tablemanager.model.ColumnModel;
-import org.litepal.tablemanager.model.GenericModel;
 import org.litepal.tablemanager.model.TableModel;
 import org.litepal.util.Const;
 import org.litepal.util.DBUtility;
@@ -140,9 +139,9 @@ public abstract class AssociationUpdater extends Creator {
 	 */
 	protected void dropTables(List<String> dropTableNames, SQLiteDatabase db) {
 		if (dropTableNames != null && !dropTableNames.isEmpty()) {
-            List<String> dropTableSQLS = new ArrayList<String>();
-			for (int i = 0; i < dropTableNames.size(); i++) {
-                dropTableSQLS.add(generateDropTableSQL(dropTableNames.get(i)));
+			String[] dropTableSQLS = new String[dropTableNames.size()];
+			for (int i = 0; i < dropTableSQLS.length; i++) {
+				dropTableSQLS[i] = generateDropTableSQL(dropTableNames.get(i));
 			}
 			execute(dropTableSQLS, db);
 		}
@@ -185,8 +184,7 @@ public abstract class AssociationUpdater extends Creator {
 				deleteData.append("=").append(" lower('").append(tableName).append("')");
 			}
 			LogUtil.d(TAG, "clear table schema value sql is " + deleteData);
-            List<String> sqls = new ArrayList<String>();
-            sqls.add(deleteData.toString());
+			String[] sqls = { deleteData.toString() };
 			execute(sqls, mDb);
 		}
 	}
@@ -199,7 +197,6 @@ public abstract class AssociationUpdater extends Creator {
 	private void removeAssociations() {
 		removeForeignKeyColumns();
 		removeIntermediateTables();
-        removeGenericTables();
 	}
 
 	/**
@@ -222,16 +219,6 @@ public abstract class AssociationUpdater extends Creator {
 		dropTables(tableNamesToDrop, mDb);
 		clearCopyInTableSchema(tableNamesToDrop);
 	}
-
-    /**
-     * If there're generic tables for generic fields, when the fields are removed
-     * from class, the generic tables should be dropped.
-     */
-    private void removeGenericTables() {
-        List<String> tableNamesToDrop = findGenericTablesToDrop();
-        dropTables(tableNamesToDrop, mDb);
-        clearCopyInTableSchema(tableNamesToDrop);
-    }
 
 	/**
 	 * This method gives back the names of the foreign key columns that need to
@@ -289,33 +276,6 @@ public abstract class AssociationUpdater extends Creator {
 		LogUtil.d(TAG, "findIntermediateTablesToDrop >> " + intermediateTables);
 		return intermediateTables;
 	}
-
-    /**
-     * When generic fields are no longer exist in the class models, the generic tables should be
-     * dropped from database. This method helps find out those generic tables which should be dropped
-     * cause their generic fields in classes are removed.
-     *
-     * @return A list with all generic tables to drop.
-     */
-    private List<String> findGenericTablesToDrop() {
-        List<String> genericTablesToDrop = new ArrayList<String>();
-        for (String tableName : DBUtility.findAllTableNames(mDb)) {
-            if (DBUtility.isGenericTable(tableName, mDb)) {
-                boolean dropGenericTable = true;
-                for (GenericModel genericModel : getGenericModels()) {
-                    String genericTableName = genericModel.getTableName();
-                    if (tableName.equalsIgnoreCase(genericTableName)) {
-                        dropGenericTable = false;
-                    }
-                }
-                if (dropGenericTable) {
-                    // drop the generic table
-                    genericTablesToDrop.add(tableName);
-                }
-            }
-        }
-        return genericTablesToDrop;
-    }
 
 	/**
 	 * Generate a SQL for renaming the table into a temporary table.
@@ -416,10 +376,10 @@ public abstract class AssociationUpdater extends Creator {
 	 *            The column names need to remove.
 	 * @param tableName
 	 *            The table name to remove from.
-	 * @return A SQL list contains create temporary table, create new table,
+	 * @return A SQL array contains create temporary table, create new table,
 	 *         migrate data and drop temporary table.
 	 */
-	private List<String> getRemoveColumnSQLs(Collection<String> removeColumnNames, String tableName) {
+	private String[] getRemoveColumnSQLs(Collection<String> removeColumnNames, String tableName) {
         TableModel tableModelFromDB = getTableModelFromDB(tableName);
 		String alterToTempTableSQL = generateAlterToTempTableSQL(tableName);
 		LogUtil.d(TAG, "generateRemoveColumnSQL >> " + alterToTempTableSQL);
@@ -429,11 +389,8 @@ public abstract class AssociationUpdater extends Creator {
 		LogUtil.d(TAG, "generateRemoveColumnSQL >> " + dataMigrationSQL);
 		String dropTempTableSQL = generateDropTempTableSQL(tableName);
 		LogUtil.d(TAG, "generateRemoveColumnSQL >> " + dropTempTableSQL);
-        List<String> sqls = new ArrayList<String>();
-        sqls.add(alterToTempTableSQL);
-        sqls.add(createNewTableSQL);
-        sqls.add(dataMigrationSQL);
-        sqls.add(dropTempTableSQL);
+		String[] sqls = { alterToTempTableSQL, createNewTableSQL, dataMigrationSQL,
+				dropTempTableSQL };
 		return sqls;
 	}
 

@@ -20,9 +20,10 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-import org.litepal.crud.LitePalSupport;
+import org.litepal.annotation.Column;
+import org.litepal.crud.DataSupport;
 
-public class Album extends LitePalSupport {
+public class Album extends DataSupport {
 
 	private long id;
 

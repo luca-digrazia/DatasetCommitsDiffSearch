@@ -16,18 +16,7 @@
 
 package org.litepal.crud;
 
-import android.content.ContentValues;
-import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
-import android.util.SparseArray;
-
-import org.litepal.LitePalBase;
-import org.litepal.crud.model.AssociationsInfo;
-import org.litepal.exceptions.DataSupportException;
-import org.litepal.exceptions.DatabaseGenerateException;
-import org.litepal.util.BaseUtility;
-import org.litepal.util.Const;
-import org.litepal.util.DBUtility;
+import static org.litepal.util.BaseUtility.changeCase;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -38,7 +27,18 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 
-import static org.litepal.util.BaseUtility.changeCase;
+import org.litepal.LitePalBase;
+import org.litepal.crud.model.AssociationsInfo;
+import org.litepal.exceptions.DataSupportException;
+import org.litepal.exceptions.DatabaseGenerateException;
+import org.litepal.util.BaseUtility;
+import org.litepal.util.Const;
+import org.litepal.util.DBUtility;
+
+import android.content.ContentValues;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.util.SparseArray;
 
 /**
  * This is the base class for CRUD component. All the common actions which can
@@ -124,18 +124,16 @@ abstract class DataHandler extends LitePalBase {
 			cursor = mDatabase.query(tableName, customizedColumns, selection, selectionArgs,
 					groupBy, having, orderBy, limit);
 			if (cursor.moveToFirst()) {
-                SparseArray<QueryInfoCache> queryInfoCacheSparseArray = new SparseArray<QueryInfoCache>();
 				do {
 					T modelInstance = (T) createInstanceFromClass(modelClass);
 					giveBaseObjIdValue((DataSupport) modelInstance,
 							cursor.getLong(cursor.getColumnIndexOrThrow("id")));
-					setValueToModel(modelInstance, supportedFields, foreignKeyAssociations, cursor, queryInfoCacheSparseArray);
+					setValueToModel(modelInstance, supportedFields, foreignKeyAssociations, cursor);
 					if (foreignKeyAssociations != null) {
 						setAssociatedModel((DataSupport) modelInstance);
 					}
 					dataList.add(modelInstance);
 				} while (cursor.moveToNext());
-                queryInfoCacheSparseArray.clear();
 			}
 			return dataList;
 		} catch (Exception e) {
@@ -671,9 +669,6 @@ abstract class DataHandler extends LitePalBase {
 	 *            model's table.
 	 * @param cursor
 	 *            Use to get value from database.
-     * @param sparseArray
-     *            Use SparseArray to cache the query information at first loop. Then the rest loop
-     *            can get query information directly to speed up.
 	 * @throws SecurityException
 	 * @throws IllegalArgumentException
 	 * @throws NoSuchMethodException
@@ -681,31 +676,41 @@ abstract class DataHandler extends LitePalBase {
 	 * @throws java.lang.reflect.InvocationTargetException
 	 */
 	protected void setValueToModel(Object modelInstance, List<Field> supportedFields,
-			List<AssociationsInfo> foreignKeyAssociations, Cursor cursor, SparseArray<QueryInfoCache> sparseArray) throws SecurityException,
+			List<AssociationsInfo> foreignKeyAssociations, Cursor cursor) throws SecurityException,
 			IllegalArgumentException, NoSuchMethodException, IllegalAccessException,
 			InvocationTargetException {
-        int cacheSize = sparseArray.size();
-        if (cacheSize > 0) {
-            for (int i = 0; i < cacheSize; i++) {
-                int columnIndex = sparseArray.keyAt(i);
-                QueryInfoCache cache = sparseArray.get(columnIndex);
-                setToModelByReflection(modelInstance, cache.field, columnIndex, cache.getMethodName, cursor);
-            }
-        } else {
-            for (Field field : supportedFields) {
-                String getMethodName = genGetColumnMethod(field);
-                String columnName = isIdColumn(field.getName()) ? "id" : field.getName();
-                int columnIndex = cursor.getColumnIndex(BaseUtility.changeCase(columnName));
-                if (columnIndex != -1) {
-                    setToModelByReflection(modelInstance, field, columnIndex, getMethodName, cursor);
-                    QueryInfoCache cache = new QueryInfoCache();
-                    cache.getMethodName = getMethodName;
-                    cache.field = field;
-                    sparseArray.put(columnIndex, cache);
-                }
-            }
-        }
-
+		for (Field field : supportedFields) {
+			String getMethodName = genGetColumnMethod(field);
+			String columnName = isIdColumn(field.getName()) ? "id" : field.getName();
+			int columnIndex = cursor.getColumnIndex(BaseUtility.changeCase(columnName));
+			if (columnIndex != -1) {
+				Class<?> cursorClass = cursor.getClass();
+				Method method = cursorClass.getMethod(getMethodName, int.class);
+				Object value = method.invoke(cursor, columnIndex);
+				if (isIdColumn(field.getName())) {
+					DynamicExecutor.setField(modelInstance, field.getName(), value,
+							modelInstance.getClass());
+				} else {
+					if (field.getType() == boolean.class || field.getType() == Boolean.class) {
+						if ("0".equals(String.valueOf(value))) {
+							value = false;
+						} else if ("1".equals(String.valueOf(value))) {
+							value = true;
+						}
+					} else if (field.getType() == char.class || field.getType() == Character.class) {
+						value = ((String) value).charAt(0);
+					} else if (field.getType() == Date.class) {
+						long date = (Long) value;
+						if (date <= 0) {
+							value = null;
+						} else {
+							value = new Date(date);
+						}
+					}
+					putSetMethodValueByField((DataSupport) modelInstance, field, value);
+				}
+			}
+		}
 		if (foreignKeyAssociations != null) {
 			for (AssociationsInfo associationInfo : foreignKeyAssociations) {
 				String foreignKeyColumn = getForeignKeyColumnName(DBUtility
@@ -845,9 +850,6 @@ abstract class DataHandler extends LitePalBase {
 		if ("char".equals(paramTypeName) || "java.lang.Character".equals(paramTypeName)) {
 			return ' ';
 		}
-        if ("[B".equals(paramTypeName) || "[Ljava.lang.Byte;".equals(paramTypeName)) {
-            return new byte[0];
-        }
 		if ("java.lang.String".equals(paramTypeName)) {
 			return "";
 		}
@@ -976,7 +978,7 @@ abstract class DataHandler extends LitePalBase {
 	}
 
 	/**
-	 * Generate the getter method name by field, following the Android Studio rule.
+	 * Generate the getter method name by field, following the eclipse rule.
 	 * 
 	 * @param field
 	 *            The field to generate getter method from.
@@ -1001,7 +1003,7 @@ abstract class DataHandler extends LitePalBase {
 	}
 
 	/**
-	 * Generate the setter method name by field, following the Android Studio rule.
+	 * Generate the setter method name by field, following the eclipse rule.
 	 * 
 	 * @param field
 	 *            The field to generate setter method from.
@@ -1021,11 +1023,9 @@ abstract class DataHandler extends LitePalBase {
 	}
 
 	/**
-	 * Generates the getType method for cursor based on field. There're couple of
-     * unusual conditions. If field type is boolean, generate getInt method. If
-     * field type is char, generate getString method. If field type is Date, generate
-     * getLong method. If filed type is Integer, generate getInt method. If field type
-     * is bytes, generate getBlob method.
+	 * Generates the getType method for cursor based on field. There're two
+	 * unusual conditions. If field type is boolean, generate getInt method. If
+	 * field type is char, generate getString method.
 	 * 
 	 * @param field
 	 *            To generate getType method for cursor.
@@ -1036,11 +1036,9 @@ abstract class DataHandler extends LitePalBase {
 	}
 
 	/**
-	 * Generates the getType method for cursor based on field. There're couple of
+	 * Generates the getType method for cursor based on field. There're two
 	 * unusual conditions. If field type is boolean, generate getInt method. If
-	 * field type is char, generate getString method. If field type is Date, generate
-     * getLong method. If filed type is Integer, generate getInt method. If field type
-     * is bytes, generate getBlob method.
+	 * field type is char, generate getString method.
 	 * 
 	 * @param fieldType
 	 *            To generate getType method for cursor.
@@ -1050,9 +1048,9 @@ abstract class DataHandler extends LitePalBase {
 		String typeName;
 		if (fieldType.isPrimitive()) {
 			typeName = BaseUtility.capitalize(fieldType.getName());
-        } else {
-            typeName = fieldType.getSimpleName();
-        }
+		} else {
+			typeName = fieldType.getSimpleName();
+		}
 		String methodName = "get" + typeName;
 		if ("getBoolean".equals(methodName)) {
 			methodName = "getInt";
@@ -1062,9 +1060,7 @@ abstract class DataHandler extends LitePalBase {
 			methodName = "getLong";
 		} else if ("getInteger".equals(methodName)) {
 			methodName = "getInt";
-		} else if ("getbyte[]".equalsIgnoreCase(methodName)) {
-            methodName = "getBlob";
-        }
+		}
 		return methodName;
 	}
 
@@ -1156,7 +1152,7 @@ abstract class DataHandler extends LitePalBase {
 		for (AssociationsInfo info : fkInOtherModel) {
 			Cursor cursor = null;
 			String associatedClassName = info.getAssociatedClassName();
-			boolean isM2M = info.getAssociationType() == Const.Model.MANY_TO_MANY;
+			boolean isM2M = info.getAssociationType() == Const.Model.MANY_TO_MANY ? true : false;
 			try {
 				List<Field> supportedFields = getSupportedFields(associatedClassName);
 				if (isM2M) {
@@ -1182,13 +1178,12 @@ abstract class DataHandler extends LitePalBase {
 							new String[] { String.valueOf(baseObj.getBaseObjId()) }, null, null,
 							null, null);
 				}
-				if (cursor != null && cursor.moveToFirst()) {
-                    SparseArray<QueryInfoCache> queryInfoCacheSparseArray = new SparseArray<QueryInfoCache>();
+				if (cursor.moveToFirst()) {
 					do {
-						DataSupport modelInstance = (DataSupport) createInstanceFromClass(Class.forName(associatedClassName));
+						DataSupport modelInstance = (DataSupport)  createInstanceFromClass(Class.forName(associatedClassName));
 						giveBaseObjIdValue(modelInstance,
 								cursor.getLong(cursor.getColumnIndexOrThrow("id")));
-						setValueToModel(modelInstance, supportedFields, null, cursor, queryInfoCacheSparseArray);
+						setValueToModel(modelInstance, supportedFields, null, cursor);
 						if (info.getAssociationType() == Const.Model.MANY_TO_ONE || isM2M) {
 							Collection collection = (Collection) takeGetMethodValueByField(baseObj,
 									info.getAssociateOtherModelFromSelf());
@@ -1198,7 +1193,6 @@ abstract class DataHandler extends LitePalBase {
 									info.getAssociateOtherModelFromSelf(), modelInstance);
 						}
 					} while (cursor.moveToNext());
-                    queryInfoCacheSparseArray.clear();
 				}
 			} catch (Exception e) {
 				throw new DataSupportException(e.getMessage());
@@ -1209,47 +1203,5 @@ abstract class DataHandler extends LitePalBase {
 			}
 		}
 	}
-
-    private void setToModelByReflection(Object modelInstance, Field field, int columnIndex, String getMethodName, Cursor cursor)
-            throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-        Class<?> cursorClass = cursor.getClass();
-        Method method = cursorClass.getMethod(getMethodName, int.class);
-        Object value = method.invoke(cursor, columnIndex);
-        if (isIdColumn(field.getName())) {
-            DynamicExecutor.setField(modelInstance, field.getName(), value,
-                    modelInstance.getClass());
-        } else {
-            if (field.getType() == boolean.class || field.getType() == Boolean.class) {
-                if ("0".equals(String.valueOf(value))) {
-                    value = false;
-                } else if ("1".equals(String.valueOf(value))) {
-                    value = true;
-                }
-            } else if (field.getType() == char.class || field.getType() == Character.class) {
-                value = ((String) value).charAt(0);
-            } else if (field.getType() == Date.class) {
-                long date = (Long) value;
-                if (date <= 0) {
-                    value = null;
-                } else {
-                    value = new Date(date);
-                }
-            }
-            putSetMethodValueByField((DataSupport) modelInstance, field, value);
-        }
-    }
-
-    /**
-     * Cache core info for query operation to improve query performance.
-     *
-     * @since 1.3.1
-     */
-    class QueryInfoCache {
-
-        String getMethodName;
-
-        Field field;
-
-    }
 
 }
