@@ -32,7 +32,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
-import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.nodes.*;
@@ -615,10 +615,10 @@ public class WriteBarrierVerificationTest extends GraalCompilerTest {
 
             public AssertionError call() {
                 final StructuredGraph graph = parse(snippet);
-                HighTierContext highTierContext = new HighTierContext(getProviders(), new Assumptions(false), null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
+                HighTierContext highTierContext = new HighTierContext(runtime(), new Assumptions(false), replacements, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL);
                 new InliningPhase(new CanonicalizerPhase(true)).apply(graph, highTierContext);
 
-                MidTierContext midTierContext = new MidTierContext(getProviders(), new Assumptions(false), getCodeCache().getTarget(), OptimisticOptimizations.ALL);
+                MidTierContext midTierContext = new MidTierContext(runtime(), new Assumptions(false), replacements, runtime().getTarget(), OptimisticOptimizations.ALL);
 
                 new LoweringPhase(new CanonicalizerPhase(true)).apply(graph, highTierContext);
                 new GuardLoweringPhase().apply(graph, midTierContext);
@@ -629,13 +629,12 @@ public class WriteBarrierVerificationTest extends GraalCompilerTest {
 
                 int barriers = 0;
                 // First, the total number of expected barriers is checked.
-                HotSpotVMConfig config = HotSpotGraalRuntime.runtime().getConfig();
-                if (config.useG1GC) {
-                    barriers = graph.getNodes().filter(G1PreWriteBarrier.class).count() + graph.getNodes().filter(G1PostWriteBarrier.class).count() +
-                                    graph.getNodes().filter(G1ArrayRangePreWriteBarrier.class).count() + graph.getNodes().filter(G1ArrayRangePostWriteBarrier.class).count();
+                if (((HotSpotRuntime) runtime()).config.useG1GC) {
+                    barriers = graph.getNodes(G1PreWriteBarrier.class).count() + graph.getNodes(G1PostWriteBarrier.class).count() + graph.getNodes(G1ArrayRangePreWriteBarrier.class).count() +
+                                    graph.getNodes(G1ArrayRangePostWriteBarrier.class).count();
                     Assert.assertTrue(expectedBarriers * 2 == barriers);
                 } else {
-                    barriers = graph.getNodes().filter(SerialWriteBarrier.class).count() + graph.getNodes().filter(SerialArrayRangeWriteBarrier.class).count();
+                    barriers = graph.getNodes(SerialWriteBarrier.class).count() + graph.getNodes(SerialArrayRangeWriteBarrier.class).count();
                     Assert.assertTrue(expectedBarriers == barriers);
                 }
                 // Iterate over all write nodes and remove barriers according to input indices.
@@ -692,10 +691,10 @@ public class WriteBarrierVerificationTest extends GraalCompilerTest {
                     }
                 };
 
-                DebugConfig debugConfig = DebugScope.getConfig();
+                DebugConfig config = DebugScope.getConfig();
                 try {
                     ReentrantNodeIterator.apply(closure, graph.start(), false, null);
-                    Debug.setConfig(Debug.fixedConfig(false, false, false, false, debugConfig.dumpHandlers(), debugConfig.output()));
+                    Debug.setConfig(Debug.fixedConfig(false, false, false, false, config.dumpHandlers(), config.output()));
                     new WriteBarrierVerificationPhase().apply(graph);
                 } catch (AssertionError error) {
                     /*
@@ -705,7 +704,7 @@ public class WriteBarrierVerificationTest extends GraalCompilerTest {
                     Assert.assertTrue(error.getMessage().contains("Write barrier must be present"));
                     return error;
                 } finally {
-                    Debug.setConfig(debugConfig);
+                    Debug.setConfig(config);
                 }
                 return null;
             }
