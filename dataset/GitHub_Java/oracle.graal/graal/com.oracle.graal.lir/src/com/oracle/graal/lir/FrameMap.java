@@ -285,7 +285,7 @@ public abstract class FrameMap {
         if (freedSlots != null) {
             for (Iterator<StackSlot> iter = freedSlots.iterator(); iter.hasNext();) {
                 StackSlot s = iter.next();
-                if (s.getLIRKind().equals(kind)) {
+                if (s.getLIRKind() == kind) {
                     iter.remove();
                     if (freedSlots.isEmpty()) {
                         freedSlots = null;
