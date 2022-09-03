@@ -34,27 +34,27 @@ public final class Constant extends Value {
     private static final Constant[] INT_CONSTANT_CACHE = new Constant[100];
     static {
         for (int i = 0; i < INT_CONSTANT_CACHE.length; ++i) {
-            INT_CONSTANT_CACHE[i] = new Constant(Kind.Int, null, i);
+            INT_CONSTANT_CACHE[i] = new Constant(Kind.Int, i);
         }
     }
 
-    public static final Constant NULL_OBJECT = new Constant(Kind.Object, null, 0);
-    public static final Constant INT_MINUS_1 = new Constant(Kind.Int, null, -1);
+    public static final Constant NULL_OBJECT = new Constant(null);
+    public static final Constant INT_MINUS_1 = new Constant(Kind.Int, -1);
     public static final Constant INT_0 = forInt(0);
     public static final Constant INT_1 = forInt(1);
     public static final Constant INT_2 = forInt(2);
     public static final Constant INT_3 = forInt(3);
     public static final Constant INT_4 = forInt(4);
     public static final Constant INT_5 = forInt(5);
-    public static final Constant LONG_0 = new Constant(Kind.Long, null, 0L);
-    public static final Constant LONG_1 = new Constant(Kind.Long, null, 1L);
-    public static final Constant FLOAT_0 = new Constant(Kind.Float, null, Float.floatToRawIntBits(0.0F));
-    public static final Constant FLOAT_1 = new Constant(Kind.Float, null, Float.floatToRawIntBits(1.0F));
-    public static final Constant FLOAT_2 = new Constant(Kind.Float, null, Float.floatToRawIntBits(2.0F));
-    public static final Constant DOUBLE_0 = new Constant(Kind.Double, null, Double.doubleToRawLongBits(0.0D));
-    public static final Constant DOUBLE_1 = new Constant(Kind.Double, null, Double.doubleToRawLongBits(1.0D));
-    public static final Constant TRUE = new Constant(Kind.Boolean, null, 1L);
-    public static final Constant FALSE = new Constant(Kind.Boolean, null, 0L);
+    public static final Constant LONG_0 = new Constant(Kind.Long, 0L);
+    public static final Constant LONG_1 = new Constant(Kind.Long, 1L);
+    public static final Constant FLOAT_0 = new Constant(Kind.Float, Float.floatToRawIntBits(0.0F));
+    public static final Constant FLOAT_1 = new Constant(Kind.Float, Float.floatToRawIntBits(1.0F));
+    public static final Constant FLOAT_2 = new Constant(Kind.Float, Float.floatToRawIntBits(2.0F));
+    public static final Constant DOUBLE_0 = new Constant(Kind.Double, Double.doubleToRawLongBits(0.0D));
+    public static final Constant DOUBLE_1 = new Constant(Kind.Double, Double.doubleToRawLongBits(1.0D));
+    public static final Constant TRUE = new Constant(Kind.Boolean, 1L);
+    public static final Constant FALSE = new Constant(Kind.Boolean, 0L);
 
     static {
         assert FLOAT_0 != forFloat(-0.0F) : "Constant for 0.0f must be different from -0.0f";
@@ -75,9 +75,43 @@ public final class Constant extends Value {
      */
     private final long primitive;
 
-    private Constant(Kind kind, Object object, long primitive) {
-        super(kind);
+    /**
+     * Creates a constant represented by the specified object reference.
+     * @param object the value of this constant
+     */
+    private Constant(Object object) {
+        super(Kind.Object);
         this.object = object;
+        this.primitive = 0L;
+    }
+
+    /**
+     * Creates a constant represented by the specified primitive.
+     *
+     * @param kind the type of this constant
+     * @param primitive the value of this constant
+     */
+    public Constant(Kind kind, long primitive) {
+        super(kind);
+        assert kind != Kind.Object;
+        this.object = null;
+        this.primitive = primitive;
+    }
+
+    /**
+     * Creates an annotated primitive constant. An annotation enables a {@linkplain MetaAccessProvider provider} to
+     * associate some extra semantic or debugging information with a primitive. An annotated primitive constant
+     * is never {@linkplain #equals(Object) equal} to a non-annotated constant.
+     *
+     * @param kind the type of this constant
+     * @param primitive the value of this constant
+     * @param annotation an arbitrary non-null object
+     */
+    public Constant(Kind kind, long primitive, Object annotation) {
+        super(kind);
+        assert kind != Kind.Object;
+        assert annotation != null;
+        this.object = annotation;
         this.primitive = primitive;
     }
 
@@ -268,7 +302,7 @@ public final class Constant extends Value {
         if (Double.compare(d, 1.0D) == 0) {
             return DOUBLE_1;
         }
-        return new Constant(Kind.Double, null, Double.doubleToRawLongBits(d));
+        return new Constant(Kind.Double, Double.doubleToRawLongBits(d));
     }
 
     /**
@@ -287,7 +321,7 @@ public final class Constant extends Value {
         if (Float.compare(f, 2.0F) == 0) {
             return FLOAT_2;
         }
-        return new Constant(Kind.Float, null, Float.floatToRawIntBits(f));
+        return new Constant(Kind.Float, Float.floatToRawIntBits(f));
     }
 
     /**
@@ -297,7 +331,7 @@ public final class Constant extends Value {
      * @return a boxed copy of {@code value}
      */
     public static Constant forLong(long i) {
-        return i == 0 ? LONG_0 : i == 1 ? LONG_1 : new Constant(Kind.Long, null, i);
+        return i == 0 ? LONG_0 : i == 1 ? LONG_1 : new Constant(Kind.Long, i);
     }
 
     /**
@@ -313,7 +347,7 @@ public final class Constant extends Value {
         if (i >= 0 && i < INT_CONSTANT_CACHE.length) {
             return INT_CONSTANT_CACHE[i];
         }
-        return new Constant(Kind.Int, null, i);
+        return new Constant(Kind.Int, i);
     }
 
     /**
@@ -323,7 +357,7 @@ public final class Constant extends Value {
      * @return a boxed copy of {@code value}
      */
     public static Constant forByte(byte i) {
-        return new Constant(Kind.Byte, null, i);
+        return new Constant(Kind.Byte, i);
     }
 
     /**
@@ -343,7 +377,7 @@ public final class Constant extends Value {
      * @return a boxed copy of {@code value}
      */
     public static Constant forChar(char i) {
-        return new Constant(Kind.Char, null, i);
+        return new Constant(Kind.Char, i);
     }
 
     /**
@@ -353,7 +387,7 @@ public final class Constant extends Value {
      * @return a boxed copy of {@code value}
      */
     public static Constant forShort(short i) {
-        return new Constant(Kind.Short, null, i);
+        return new Constant(Kind.Short, i);
     }
 
     /**
@@ -363,7 +397,7 @@ public final class Constant extends Value {
      * @return a boxed copy of {@code value}
      */
     public static Constant forJsr(int i) {
-        return new Constant(Kind.Jsr, null, i);
+        return new Constant(Kind.Jsr, i);
     }
 
     /**
@@ -376,27 +410,7 @@ public final class Constant extends Value {
         if (o == null) {
             return NULL_OBJECT;
         }
-        return new Constant(Kind.Object, o, 0L);
-    }
-
-    /**
-     * Creates an annotated int or long constant. An annotation enables a client to associate some extra semantic or
-     * debugging information with a primitive. An annotated primitive constant is never {@linkplain #equals(Object)
-     * equal} to a non-annotated constant.
-     *
-     * @param kind the type of this constant
-     * @param i the value of this constant
-     * @param annotation an arbitrary non-null object
-     */
-    public static Constant forIntegerKind(Kind kind, long i, Object annotation) {
-        switch (kind) {
-            case Int:
-                return new Constant(kind, annotation, (int) i);
-            case Long:
-                return new Constant(kind, annotation, i);
-            default:
-                throw new IllegalArgumentException("not an integer kind: " + kind);
-        }
+        return new Constant(o);
     }
 
     /**
