@@ -65,7 +65,7 @@ public final class GlobalLivenessAnalysisPhase extends AllocationPhase {
 
     private final class Analyser {
 
-        private static final int LOG_LEVEL = Debug.INFO_LEVEL;
+        private static final int LOG_LEVEL = Debug.INFO_LOG_LEVEL;
 
         /**
          * Bit map specifying which operands are live upon entry to this block. These are values
