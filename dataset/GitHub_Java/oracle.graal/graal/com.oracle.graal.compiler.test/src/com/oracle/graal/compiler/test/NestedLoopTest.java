@@ -24,7 +24,6 @@ package com.oracle.graal.compiler.test;
 
 import org.junit.*;
 
-import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -149,10 +148,10 @@ public class NestedLoopTest extends GraalCompilerTest {
         Debug.dump(graph, "Graph");
         ControlFlowGraph cfg = ControlFlowGraph.compute(graph, true, true, true, true);
 
-        Assert.assertTrue(cfg.getLoops().size() == 3);
-        Loop<Block> rootLoop = cfg.getLoops().get(0);
-        Loop<Block> nestedLoop = cfg.getLoops().get(1);
-        Loop<Block> innerMostLoop = cfg.getLoops().get(2);
+        Assert.assertTrue(cfg.getLoops().length == 3);
+        Loop rootLoop = cfg.getLoops()[0];
+        Loop nestedLoop = cfg.getLoops()[1];
+        Loop innerMostLoop = cfg.getLoops()[2];
         Invoke a = getInvoke("a", graph);
         Invoke b = getInvoke("b", graph);
         Invoke c = getInvoke("c", graph);
@@ -163,20 +162,20 @@ public class NestedLoopTest extends GraalCompilerTest {
         Assert.assertTrue(containsDirect(innerMostLoop, d, cfg));
         Assert.assertTrue(contains(rootLoop, d, cfg));
         Assert.assertTrue(contains(nestedLoop, d, cfg));
-        Assert.assertEquals(rootExits, rootLoop.getExits().size());
-        Assert.assertEquals(nestedExits, nestedLoop.getExits().size());
-        Assert.assertEquals(innerExits, innerMostLoop.getExits().size());
+        Assert.assertEquals(rootExits, rootLoop.exits.size());
+        Assert.assertEquals(nestedExits, nestedLoop.exits.size());
+        Assert.assertEquals(innerExits, innerMostLoop.exits.size());
         Debug.dump(graph, "Graph");
     }
 
-    private static boolean contains(Loop<Block> loop, Invoke node, ControlFlowGraph cfg) {
+    private static boolean contains(Loop loop, Invoke node, ControlFlowGraph cfg) {
         Block block = cfg.blockFor((Node) node);
         Assert.assertNotNull(block);
-        return loop.getBlocks().contains(block);
+        return loop.blocks.contains(block);
     }
 
-    private static boolean containsDirect(Loop<Block> loop, Invoke node, ControlFlowGraph cfg) {
-        for (Loop<Block> child : loop.getChildren()) {
+    private static boolean containsDirect(Loop loop, Invoke node, ControlFlowGraph cfg) {
+        for (Loop child : loop.children) {
             if (contains(child, node, cfg)) {
                 return false;
             }

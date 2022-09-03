@@ -41,8 +41,7 @@ import com.oracle.graal.nodes.*;
 public class ArrayCopyIntrinsificationTest extends GraalCompilerTest {
 
     @Override
-    protected InstalledCode getCode(ResolvedJavaMethod method, StructuredGraph g) {
-        StructuredGraph graph = g == null ? parseForCompile(method) : g;
+    protected InstalledCode getCode(ResolvedJavaMethod method, StructuredGraph graph) {
         int nodeCount = graph.getNodeCount();
         InstalledCode result = super.getCode(method, graph);
         boolean graphWasProcessed = nodeCount != graph.getNodeCount();
@@ -53,10 +52,10 @@ public class ArrayCopyIntrinsificationTest extends GraalCompilerTest {
                         Invoke invoke = (Invoke) node;
                         Assert.assertTrue(invoke.callTarget() instanceof DirectCallTargetNode);
                         LoweredCallTargetNode directCall = (LoweredCallTargetNode) invoke.callTarget();
-                        JavaMethod callee = directCall.targetMethod();
+                        JavaMethod callee = directCall.target();
                         Assert.assertTrue(callee.getName().equals("<init>"));
-                        Assert.assertTrue(getMetaAccess().lookupJavaType(ArrayIndexOutOfBoundsException.class).equals(callee.getDeclaringClass()) ||
-                                        getMetaAccess().lookupJavaType(NullPointerException.class).equals(callee.getDeclaringClass()));
+                        Assert.assertTrue(runtime.lookupJavaType(ArrayIndexOutOfBoundsException.class).equals(callee.getDeclaringClass()) ||
+                                        runtime.lookupJavaType(NullPointerException.class).equals(callee.getDeclaringClass()));
                     }
                 }
             } else {
@@ -65,8 +64,8 @@ public class ArrayCopyIntrinsificationTest extends GraalCompilerTest {
                     if (node instanceof Invoke) {
                         Invoke invoke = (Invoke) node;
                         LoweredCallTargetNode directCall = (LoweredCallTargetNode) invoke.callTarget();
-                        JavaMethod callee = directCall.targetMethod();
-                        if (callee.getDeclaringClass().equals(getMetaAccess().lookupJavaType(System.class)) && callee.getName().equals("arraycopy")) {
+                        JavaMethod callee = directCall.target();
+                        if (callee.getDeclaringClass().equals(runtime.lookupJavaType(System.class)) && callee.getName().equals("arraycopy")) {
                             found = true;
                         } else {
                             fail("found invoke to some method other than arraycopy: " + callee);
