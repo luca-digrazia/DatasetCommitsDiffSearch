@@ -287,7 +287,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
         } else if (object instanceof JavaType) {
             JavaType type = (JavaType) object;
             writeByte(POOL_CLASS);
-            writeString(type.toJavaName());
+            writeString(MetaUtil.toJavaName(type));
             writeByte(KLASS);
         } else if (object instanceof NodeClass) {
             NodeClass nodeClass = (NodeClass) object;
@@ -410,11 +410,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
             NodeClass nodeClass = node.getNodeClass();
             node.getDebugProperties(props);
             if (probabilities != null && node instanceof FixedNode) {
-                try {
-                    props.put("probability", probabilities.applyAsDouble((FixedNode) node));
-                } catch (Throwable t) {
-                    props.put("probability", t);
-                }
+                props.put("probability", probabilities.applyAsDouble((FixedNode) node));
             }
             writeInt(getNodeId(node));
             writePoolObject(nodeClass);
