@@ -24,8 +24,6 @@ package com.oracle.graal.debug.test;
 
 import static org.junit.Assert.*;
 
-import java.lang.management.*;
-
 import org.junit.*;
 
 import com.oracle.graal.debug.*;
@@ -33,46 +31,39 @@ import com.oracle.graal.debug.internal.*;
 
 public class DebugTimerTest {
 
-    private static final ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
+    private static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+        }
+    }
 
-    /**
-     * Actively spins the current thread for at least a given number of milliseconds in such a way
-     * that timers for the current thread keep ticking over.
-     *
-     * @return the number of milliseconds actually spent spinning which is guaranteed to be >=
-     *         {@code ms}
-     */
-    private static long spin(long ms) {
-        long start = threadMXBean.getCurrentThreadCpuTime();
-        do {
-            long durationMS = (threadMXBean.getCurrentThreadCpuTime() - start) / 1000;
-            if (durationMS >= ms) {
-                return durationMS;
-            }
-        } while (true);
+    private static boolean runningOnWindows() {
+        return System.getProperty("os.name").toLowerCase().contains("windows");
     }
 
     @Test
     public void test1() {
+        if (runningOnWindows()) {
+            // mx beans regression
+            return;
+        }
         DebugConfig debugConfig = Debug.fixedConfig(0, 0, false, false, true, false, null, null, System.out);
         try (DebugConfigScope dcs = new DebugConfigScope(debugConfig); Debug.Scope s = Debug.scope("DebugTimerTest")) {
 
             DebugTimer timerA = Debug.timer("TimerA");
             DebugTimer timerB = Debug.timer("TimerB");
 
-            long spinA;
-            long spinB;
-
             try (TimerCloseable a1 = timerA.start()) {
-                spinA = spin(50);
+                sleep(50);
                 try (TimerCloseable b1 = timerB.start()) {
-                    spinB = spin(50);
+                    sleep(50);
                 }
             }
 
             Assert.assertTrue(timerB.getCurrentValue() < timerA.getCurrentValue());
             if (timerA.getFlat() != null && timerB.getFlat() != null) {
-                assertTrue(spinB >= spinA || timerB.getFlat().getCurrentValue() < timerA.getFlat().getCurrentValue());
+                assertTrue(timerB.getFlat().getCurrentValue() < timerA.getFlat().getCurrentValue());
                 assertEquals(timerA.getFlat().getCurrentValue(), timerA.getCurrentValue() - timerB.getFlat().getCurrentValue(), 10D);
             }
         }
@@ -84,15 +75,15 @@ public class DebugTimerTest {
         try (DebugConfigScope dcs = new DebugConfigScope(debugConfig); Debug.Scope s = Debug.scope("DebugTimerTest")) {
             DebugTimer timerC = Debug.timer("TimerC");
             try (TimerCloseable c1 = timerC.start()) {
-                spin(50);
+                sleep(50);
                 try (TimerCloseable c2 = timerC.start()) {
-                    spin(50);
+                    sleep(50);
                     try (TimerCloseable c3 = timerC.start()) {
-                        spin(50);
+                        sleep(50);
                         try (TimerCloseable c4 = timerC.start()) {
-                            spin(50);
+                            sleep(50);
                             try (TimerCloseable c5 = timerC.start()) {
-                                spin(50);
+                                sleep(50);
                             }
                         }
                     }
@@ -106,6 +97,10 @@ public class DebugTimerTest {
 
     @Test
     public void test3() {
+        if (runningOnWindows()) {
+            // mx beans regression
+            return;
+        }
         DebugConfig debugConfig = Debug.fixedConfig(0, 0, false, false, true, false, null, null, System.out);
         try (DebugConfigScope dcs = new DebugConfigScope(debugConfig); Debug.Scope s = Debug.scope("DebugTimerTest")) {
 
@@ -113,13 +108,13 @@ public class DebugTimerTest {
             DebugTimer timerE = Debug.timer("TimerE");
 
             try (TimerCloseable d1 = timerD.start()) {
-                spin(50);
+                sleep(50);
                 try (TimerCloseable e1 = timerE.start()) {
-                    spin(50);
+                    sleep(50);
                     try (TimerCloseable d2 = timerD.start()) {
-                        spin(50);
+                        sleep(50);
                         try (TimerCloseable d3 = timerD.start()) {
-                            spin(50);
+                            sleep(50);
                         }
                     }
                 }
