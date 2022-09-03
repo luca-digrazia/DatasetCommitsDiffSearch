@@ -43,10 +43,8 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleInstrumentBranchesCount;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleInstrumentBranchesFilter;
@@ -55,8 +53,8 @@ import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleInstrumentB
 public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
 
     private static final MethodFilter[] METHOD_FILTER;
+    private static final int ACCESS_TABLE_SIZE = TruffleInstrumentBranchesCount.getValue();
     private static final Field ACCESS_TABLE_JAVA_FIELD;
-    static final int ACCESS_TABLE_SIZE = TruffleInstrumentBranchesCount.getValue();
     public static final boolean[] ACCESS_TABLE = new boolean[ACCESS_TABLE_SIZE];
     public static BranchInstrumentation instrumentation = new BranchInstrumentation();
 
@@ -119,21 +117,26 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
         private static String filterAndEncode(Node ifNode) {
             NodeSourcePosition pos = ifNode.getNodeSourcePosition();
             if (pos != null) {
-                if (!MethodFilter.matches(METHOD_FILTER, pos.getMethod())) {
-                    return null;
-                }
                 if (TruffleInstrumentBranchesPerInlineSite.getValue()) {
+                    boolean matched = false;
                     StringBuilder sb = new StringBuilder();
                     while (pos != null) {
+                        if (MethodFilter.matches(METHOD_FILTER, pos.getMethod())) {
+                            matched = true;
+                        }
                         MetaUtil.appendLocation(sb.append("at "), pos.getMethod(), pos.getBCI());
                         pos = pos.getCaller();
                         if (pos != null) {
                             sb.append(CodeUtil.NEW_LINE);
                         }
                     }
-                    return sb.toString();
+                    return (matched) ? (sb.toString()) : null;
                 } else {
-                    return MetaUtil.appendLocation(new StringBuilder(), pos.getMethod(), pos.getBCI()).toString();
+                    if (MethodFilter.matches(METHOD_FILTER, pos.getMethod())) {
+                        return MetaUtil.appendLocation(new StringBuilder(), pos.getMethod(), pos.getBCI()).toString();
+                    } else {
+                        return null;
+                    }
                 }
             } else {
                 // IfNode has no position information, and is probably synthetic, so we do not instrument it.
@@ -141,16 +144,12 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
             }
         }
 
-        public synchronized ArrayList<String> accessTableToList() {
-            return pointMap.entrySet().stream().map(entry -> entry.getKey() + "\n" + entry.getValue()).collect(Collectors.toCollection(ArrayList::new));
-        }
-
         public synchronized void dumpAccessTable() {
             // Dump accumulated profiling information.
             TTY.println("Branch execution profile");
             TTY.println("========================");
-            for (String line : accessTableToList()) {
-                TTY.println(line);
+            for (Map.Entry<String, Point> entry : pointMap.entrySet()) {
+                TTY.println(entry.getKey() + ": " + entry.getValue());
                 TTY.println();
             }
         }
