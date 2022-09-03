@@ -47,16 +47,23 @@ import com.oracle.truffle.api.vm.PolyglotEngine.LegacyEngineImpl;
 
 /**
  * Ahead-of-time initialization. If the JVM is started with {@link TruffleOptions#AOT}, it populates
- * runtimeCache with languages found in application classloader.
+ * cache with languages found in application classloader.
  */
 final class LanguageCache implements Comparable<LanguageCache> {
-    private static final Map<String, LanguageCache> nativeImageCache = TruffleOptions.AOT ? new HashMap<>() : null;
-    private static volatile Map<String, LanguageCache> runtimeCache;
+    private static final boolean PRELOAD;
+    private static final Map<String, LanguageCache> CACHE;
+
+    private static volatile Map<String, LanguageCache> cache;
+    static {
+        if (VMAccessor.SPI == null) {
+            VMAccessor.initialize(new LegacyEngineImpl());
+        }
+    }
+    static final Collection<ClassLoader> AOT_LOADERS = TruffleOptions.AOT ? VMAccessor.SPI.allLoaders() : null;
     private final String className;
     private final Set<String> mimeTypes;
     private final String id;
     private final String name;
-    private final String implementationName;
     private final String version;
     private final boolean interactive;
     private final boolean internal;
@@ -65,16 +72,27 @@ final class LanguageCache implements Comparable<LanguageCache> {
     private volatile Class<? extends TruffleLanguage<?>> languageClass;
 
     static {
-        if (VMAccessor.SPI == null) {
-            VMAccessor.initialize(new LegacyEngineImpl());
-        }
+        CACHE = TruffleOptions.AOT ? initializeLanguages(loader()) : null;
+        PRELOAD = CACHE != null;
+    }
+
+    /**
+     * This method initializes all languages under the provided classloader.
+     *
+     * NOTE: Method's signature should not be changed as it is reflectively invoked from AOT
+     * compilation.
+     *
+     * @param loader The classloader to be used for finding languages.
+     * @return A map of initialized languages.
+     */
+    private static Map<String, LanguageCache> initializeLanguages(final ClassLoader loader) {
+        return createLanguages(loader);
     }
 
     private LanguageCache(String prefix, Properties info, ClassLoader loader) {
         this.loader = loader;
         this.className = info.getProperty(prefix + "className");
         this.name = info.getProperty(prefix + "name");
-        this.implementationName = info.getProperty(prefix + "implementationName");
         this.version = info.getProperty(prefix + "version");
         String resolvedId = info.getProperty(prefix + "id");
 
@@ -91,7 +109,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
         this.interactive = Boolean.valueOf(info.getProperty(prefix + "interactive"));
         this.internal = Boolean.valueOf(info.getProperty(prefix + "internal"));
 
-        if (TruffleOptions.AOT) {
+        if (PRELOAD) {
             this.languageClass = loadLanguageClass();
             this.singletonLanguage = readSingleton(languageClass);
         } else {
@@ -101,12 +119,11 @@ final class LanguageCache implements Comparable<LanguageCache> {
     }
 
     @SuppressWarnings("unchecked")
-    LanguageCache(String id, Set<String> mimeTypes, String name, String implementationName, String version, boolean interactive, boolean internal,
+    LanguageCache(String id, Set<String> mimeTypes, String name, String version, boolean interactive, boolean internal,
                     TruffleLanguage<?> instance) {
         this.id = id;
         this.className = instance.getClass().getName();
         this.mimeTypes = mimeTypes;
-        this.implementationName = implementationName;
         this.name = name;
         this.version = version;
         this.interactive = interactive;
@@ -135,27 +152,44 @@ final class LanguageCache implements Comparable<LanguageCache> {
         return resolvedId;
     }
 
-    static Map<String, LanguageCache> languages() {
-        if (TruffleOptions.AOT) {
-            return nativeImageCache;
+    private static ClassLoader loader() {
+        ClassLoader l;
+        if (PolyglotEngine.JDK8OrEarlier) {
+            l = PolyglotEngine.class.getClassLoader();
+            if (l == null) {
+                l = ClassLoader.getSystemClassLoader();
+            }
+        } else {
+            l = ModuleResourceLocator.createLoader();
         }
-        if (runtimeCache == null) {
+        return l;
+    }
+
+    static Map<String, LanguageCache> languages() {
+        if (PRELOAD) {
+            return CACHE;
+        }
+        if (cache == null) {
             synchronized (LanguageCache.class) {
-                if (runtimeCache == null) {
-                    runtimeCache = createLanguages(null);
+                if (cache == null) {
+                    cache = createLanguages(null);
                 }
             }
         }
-        return runtimeCache;
+        return cache;
     }
 
     private static Map<String, LanguageCache> createLanguages(ClassLoader additionalLoader) {
         List<LanguageCache> caches = new ArrayList<>();
-        for (ClassLoader loader : VMAccessor.SPI.allLoaders()) {
+        for (ClassLoader loader : (AOT_LOADERS == null ? VMAccessor.SPI.allLoaders() : AOT_LOADERS)) {
             collectLanguages(loader, caches);
         }
         if (additionalLoader != null) {
             collectLanguages(additionalLoader, caches);
+        }
+        Map<String, LanguageCache> seenClasses = new HashMap<>();
+        for (LanguageCache languageCache : caches) {
+            seenClasses.put(languageCache.className, languageCache);
         }
         Map<String, LanguageCache> cacheToMimeType = new HashMap<>();
         for (LanguageCache languageCache : caches) {
@@ -215,10 +249,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
         return name;
     }
 
-    String getImplementationName() {
-        return implementationName;
-    }
-
     String getVersion() {
         return version;
     }
@@ -239,7 +269,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
         TruffleLanguage<?> instance;
         boolean singleton = true;
         try {
-            if (TruffleOptions.AOT) {
+            if (PRELOAD) {
                 instance = singletonLanguage;
                 if (instance == null) {
                     instance = this.languageClass.newInstance();
@@ -247,10 +277,14 @@ final class LanguageCache implements Comparable<LanguageCache> {
                 }
             } else {
                 Class<? extends TruffleLanguage<?>> clazz = loadLanguageClass();
-                instance = readSingleton(clazz);
-                if (instance == null) {
-                    instance = clazz.newInstance();
-                    singleton = false;
+                try {
+                    instance = readSingleton(clazz);
+                    if (instance == null) {
+                        instance = clazz.newInstance();
+                        singleton = false;
+                    }
+                } catch (Exception e) {
+                    throw e;
                 }
             }
         } catch (Exception e) {
@@ -301,57 +335,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
             return singleton;
         }
 
-    }
-
-    /**
-     * Initializes state for native image generation.
-     *
-     * NOTE: this method is called reflectively by downstream projects.
-     *
-     * @param imageClassLoader class loader passed by the image builder.
-     */
-    @SuppressWarnings("unused")
-    private static void initializeNativeImageState(ClassLoader imageClassLoader) {
-        assert TruffleOptions.AOT : "Only supported during image generation";
-        nativeImageCache.putAll(createLanguages(imageClassLoader));
-    }
-
-    /**
-     * Resets the state for native image generation.
-     *
-     * NOTE: this method is called reflectively by downstream projects.
-     */
-    @SuppressWarnings("unused")
-    private static void resetNativeImageState() {
-        assert TruffleOptions.AOT : "Only supported during image generation";
-        nativeImageCache.clear();
-    }
-
-    /**
-     * Allows removal of loaded languages during native image generation.
-     *
-     * NOTE: this method is called reflectively by downstream projects.
-     */
-    @SuppressWarnings("unused")
-    private static void removeLanguageFromNativeImage(String languageMime) {
-        assert TruffleOptions.AOT : "Only supported during image generation";
-        assert nativeImageCache.containsKey(languageMime);
-        nativeImageCache.remove(languageMime);
-    }
-
-    /**
-     * Fetches all active language classes.
-     *
-     * NOTE: this method is called reflectively by downstream projects.
-     */
-    @SuppressWarnings("unused")
-    private static Collection<Class<?>> getLanguageClasses() {
-        assert TruffleOptions.AOT : "Only supported during image generation";
-        ArrayList<Class<?>> list = new ArrayList<>();
-        for (LanguageCache cache : nativeImageCache.values()) {
-            list.add(cache.languageClass);
-        }
-        return list;
     }
 
 }
