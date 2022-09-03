@@ -57,7 +57,6 @@ import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayoutConverter.DataSpecConverterImpl;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceContext;
 import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
-import com.oracle.truffle.llvm.runtime.interop.export.InteropNodeFactory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
 import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
@@ -106,8 +105,6 @@ public final class LLVMContext {
 
     private boolean initialized;
     private boolean cleanupNecessary;
-
-    private final InteropNodeFactory interopNodeFactory;
 
     public static final class LLVMGlobalsStack {
 
@@ -166,7 +163,7 @@ public final class LLVMContext {
         }
     }
 
-    public LLVMContext(Env env, List<ContextExtension> contextExtensions, InteropNodeFactory interopNodeFactory) {
+    public LLVMContext(Env env, List<ContextExtension> contextExtensions) {
         this.env = env;
         this.contextExtensions = contextExtensions;
         this.initialized = false;
@@ -188,8 +185,6 @@ public final class LLVMContext {
         Object mainArgs = env.getConfig().get(LLVMLanguage.MAIN_ARGS_KEY);
         this.mainArguments = mainArgs == null ? env.getApplicationArguments() : (Object[]) mainArgs;
         this.environment = System.getenv();
-
-        this.interopNodeFactory = interopNodeFactory;
 
         addLibraryPaths(SulongEngineOption.getPolyglotOptionSearchPaths(env));
         addDefaultLibraries();
@@ -270,10 +265,6 @@ public final class LLVMContext {
 
     public LLVMGlobalsStack getGlobalsStack() {
         return globalStack;
-    }
-
-    public InteropNodeFactory getInteropNodeFactory() {
-        return interopNodeFactory;
     }
 
     public ExternalLibrary[] addExternalLibraries(List<String> external) {
