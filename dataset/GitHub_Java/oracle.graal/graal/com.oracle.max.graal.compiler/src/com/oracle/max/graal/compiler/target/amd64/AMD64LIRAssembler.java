@@ -533,17 +533,15 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                 } else {
                     unorderedLabel = op.unorderedBlock().label;
                 }
-                if (unorderedLabel != op.label() || !trueOnUnordered(op.cond())) {
-                    masm.jcc(ConditionFlag.parity, unorderedLabel);
-                }
+                masm.jcc(ConditionFlag.parity, unorderedLabel);
                 // Checkstyle: off
                 switch (op.cond()) {
                     case EQ : acond = ConditionFlag.equal; break;
                     case NE : acond = ConditionFlag.notEqual; break;
-                    case BT : acond = ConditionFlag.below; break;
-                    case BE : acond = ConditionFlag.belowEqual; break;
-                    case AE : acond = ConditionFlag.aboveEqual; break;
-                    case AT : acond = ConditionFlag.above; break;
+                    case LT : acond = ConditionFlag.below; break;
+                    case LE : acond = ConditionFlag.belowEqual; break;
+                    case GE : acond = ConditionFlag.aboveEqual; break;
+                    case GT : acond = ConditionFlag.above; break;
                     default : throw Util.shouldNotReachHere();
                 }
             } else {
@@ -712,8 +710,7 @@ public final class AMD64LIRAssembler extends LIRAssembler {
     }
 
     @Override
-    protected void emitConditionalMove(Condition condition, CiValue opr1, CiValue opr2, CiValue result, boolean mayBeUnordered, boolean unorderedcmovOpr1) {
-        //TTY.println("cmov " + condition + " " + opr1 + " : " + opr2 + " mayBeUnordered:" + mayBeUnordered + " pcmovop=" + (unorderedcmovOpr1 ? 1 : 2));
+    protected void emitConditionalMove(Condition condition, CiValue opr1, CiValue opr2, CiValue result) {
         ConditionFlag acond;
         ConditionFlag ncond;
         switch (condition) {
@@ -757,14 +754,6 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                 acond = ConditionFlag.above;
                 ncond = ConditionFlag.belowEqual;
                 break;
-            case OF:
-                acond = ConditionFlag.overflow;
-                ncond = ConditionFlag.noOverflow;
-                break;
-            case NOF:
-                acond = ConditionFlag.noOverflow;
-                ncond = ConditionFlag.overflow;
-                break;
             default:
                 throw Util.shouldNotReachHere();
         }
@@ -777,17 +766,13 @@ public final class AMD64LIRAssembler extends LIRAssembler {
             def = opr2;
             other = opr1;
             // and flip the condition
-            condition = condition.negate();
             ConditionFlag tcond = acond;
             acond = ncond;
             ncond = tcond;
-            unorderedcmovOpr1 = !unorderedcmovOpr1;
         }
 
         if (def.isRegister()) {
-            if (def.asRegister() != result.asRegister()) {
-                reg2reg(def, result);
-            }
+            reg2reg(def, result);
         } else if (def.isStackSlot()) {
             stack2reg(def, result, result.kind);
         } else {
@@ -795,24 +780,29 @@ public final class AMD64LIRAssembler extends LIRAssembler {
             const2reg(def, result, null);
         }
 
-        boolean cmovOnParity = (unorderedcmovOpr1 && mayBeTrueOnUnordered(condition.negate())) || (!unorderedcmovOpr1 && mayBeFalseOnUnordered(condition.negate()));
-        if (!other.isConstant() && !(cmovOnParity && def.isConstant())) {
+        if (!other.isConstant()) {
             // optimized version that does not require a branch
-            //TTY.println("> emitting cmov" + (mayBeUnordered && cmovOnParity ? " (with parity check)" : ""));
-            cmov(result, ncond, other);
-            if (mayBeUnordered && cmovOnParity) {
-                cmov(result, ConditionFlag.parity, unorderedcmovOpr1 ? def : other);
+            if (other.isRegister()) {
+                assert other.asRegister() != result.asRegister() : "other already overwritten by previous move";
+                if (other.kind.isInt()) {
+                    masm.cmovq(ncond, result.asRegister(), other.asRegister());
+                } else {
+                    masm.cmovq(ncond, result.asRegister(), other.asRegister());
+                }
+            } else {
+                assert other.isStackSlot();
+                CiStackSlot otherSlot = (CiStackSlot) other;
+                if (other.kind.isInt()) {
+                    masm.cmovl(ncond, result.asRegister(), frameMap.toStackAddress(otherSlot));
+                } else {
+                    masm.cmovq(ncond, result.asRegister(), frameMap.toStackAddress(otherSlot));
+                }
             }
+
         } else {
-            //TTY.println("> emitting jumps instead of cmov");
             // conditional move not available, use emit a branch and move
             Label skip = new Label();
-            Label mov = new Label();
-            if (mayBeUnordered && ((mayBeTrueOnUnordered(condition) && !unorderedcmovOpr1) || (mayBeFalseOnUnordered(condition) && unorderedcmovOpr1))) {
-                masm.jcc(ConditionFlag.parity, unorderedcmovOpr1 ? skip : mov);
-            }
             masm.jcc(acond, skip);
-            masm.bind(mov);
             if (other.isRegister()) {
                 reg2reg(other, result);
             } else if (other.isStackSlot()) {
@@ -822,25 +812,6 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                 const2reg(other, result, null);
             }
             masm.bind(skip);
-        }
-    }
-
-    private void cmov(CiValue result, ConditionFlag ncond, CiValue other) {
-        if (other.isRegister()) {
-            assert other.asRegister() != result.asRegister() : "other already overwritten by previous move";
-            if (other.kind.isInt()) {
-                masm.cmovl(ncond, result.asRegister(), other.asRegister());
-            } else {
-                masm.cmovq(ncond, result.asRegister(), other.asRegister());
-            }
-        } else {
-            assert other.isStackSlot();
-            CiStackSlot otherSlot = (CiStackSlot) other;
-            if (other.kind.isInt()) {
-                masm.cmovl(ncond, result.asRegister(), frameMap.toStackAddress(otherSlot));
-            } else {
-                masm.cmovq(ncond, result.asRegister(), frameMap.toStackAddress(otherSlot));
-            }
         }
     }
 
@@ -1121,6 +1092,22 @@ public final class AMD64LIRAssembler extends LIRAssembler {
             moveRegs(lreg, AMD64.rax);
 
             Label continuation = new Label();
+
+            if (GraalOptions.GenSpecialDivChecks) {
+                // check for special case of Integer.MIN_VALUE / -1
+                Label normalCase = new Label();
+                masm.cmpl(AMD64.rax, Integer.MIN_VALUE);
+                masm.jcc(ConditionFlag.notEqual, normalCase);
+                if (code == LIROpcode.Irem) {
+                    // prepare X86Register.rdx for possible special case where remainder = 0
+                    masm.xorl(AMD64.rdx, AMD64.rdx);
+                }
+                masm.cmpl(rreg, -1);
+                masm.jcc(ConditionFlag.equal, continuation);
+
+                // handle normal case
+                masm.bind(normalCase);
+            }
             masm.cdql();
             int offset = masm.codeBuffer.position();
             masm.idivl(rreg);
@@ -1154,8 +1141,7 @@ public final class AMD64LIRAssembler extends LIRAssembler {
 
         Label continuation = new Label();
 
-        System.out.println("gen check" + code);
-        if (GraalOptions.GenSpecialDivChecks && code == LIROpcode.Ldiv) {
+        if (GraalOptions.GenSpecialDivChecks && code == LIROpcode.Div) {
             // check for special case of Long.MIN_VALUE / -1
             Label normalCase = new Label();
             masm.movq(AMD64.rdx, java.lang.Long.MIN_VALUE);
@@ -1274,8 +1260,8 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                     case Double  : masm.ucomisd(reg1, tasm.recordDataReferenceInCode(CiConstant.forDouble(((CiConstant) opr2).asDouble()))); break;
                     case Long    :
                     case Word    : {
-                        if (NumUtil.isInt(c.asLong())) {
-                            masm.cmpq(reg1, (int) c.asLong());
+                        if (c.asLong() == 0) {
+                            masm.cmpq(reg1, 0);
                         } else {
                             masm.movq(rscratch1, c.asLong());
                             masm.cmpq(reg1, rscratch1);
@@ -1305,21 +1291,10 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                     case Short   :
                     case Int     : masm.cmpl(left, right.asInt()); break;
                     case Long    :
-                    case Word    : if (NumUtil.isInt(right.asLong())) {
-                                       masm.cmpq(left, (int) right.asLong());
-                                   } else {
-                                       masm.movq(rscratch1, right.asLong());
-                                       masm.cmpq(left, rscratch1);
-
-                                   }
-                                   break;
-                    case Object  : if (right.isNull()) {
-                                       masm.cmpq(left, 0);
-                                   } else {
-                                       movoop(rscratch1, right);
-                                       masm.cmpq(left, rscratch1);
-                                   }
-                                   break;
+                    case Word    : assert NumUtil.isInt(right.asLong());
+                                   masm.cmpq(left, right.asInt()); break;
+                    case Object  : assert right.isNull();
+                                   masm.cmpq(left, 0); break;
                     default      : throw Util.shouldNotReachHere();
                 }
             } else {
@@ -2248,51 +2223,6 @@ public final class AMD64LIRAssembler extends LIRAssembler {
         int after = masm.codeBuffer.position();
         tasm.recordIndirectCall(before, after, target, info);
         tasm.recordExceptionHandlers(after, info);
-    }
-
-    @Override
-    public boolean falseOnUnordered(Condition condition) {
-        switch(condition) {
-            case AE:
-            case NE:
-            case GT:
-            case AT:
-                return true;
-            case EQ:
-            case LE:
-            case BE:
-            case BT:
-            case LT:
-            case GE:
-            case OF:
-            case NOF:
-                return false;
-            default:
-                throw Util.shouldNotReachHere();
-        }
-    }
-
-    @Override
-    public boolean trueOnUnordered(Condition condition) {
-        switch(condition) {
-            case AE:
-            case NE:
-            case GT:
-            case AT:
-                return false;
-            case EQ:
-            case LE:
-            case BE:
-            case BT:
-                return true;
-            case LT:
-            case GE:
-            case OF:
-            case NOF:
-                return false;
-            default:
-                throw Util.shouldNotReachHere();
-        }
     }
 
     protected void stop(String msg) {
