@@ -126,14 +126,12 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeUtil;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.llvm.nativeint.NativeLookup;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionRegistry;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMMetadataNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMStatementNode;
@@ -182,10 +180,8 @@ import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunction;
-import com.oracle.truffle.llvm.types.LLVMFunction.LLVMRuntimeType;
 import com.oracle.truffle.llvm.types.LLVMMetadata;
 import com.oracle.truffle.llvm.types.memory.LLVMHeap;
-import com.oracle.truffle.llvm.types.memory.LLVMMemory;
 import com.oracle.truffle.llvm.types.memory.LLVMStack;
 
 /**
@@ -222,77 +218,11 @@ public class LLVMVisitor implements LLVMParserRuntime {
         LLVMTypeHelper.setParserRuntime(this);
     }
 
-    public RootCallTarget getMain(Model model, NodeFactoryFacade facade) {
-        visit(model, facade);
-        currentContext.getFunctionRegistry();
-        LLVMFunction mainFunction = LLVMFunction.createFromName("@main");
-        RootCallTarget mainCallTarget = LLVMFunctionRegistry.lookup(mainFunction);
-        int argParamCount = mainFunction.getLlvmParamTypes().length;
-        RootNode globalFunction;
-        LLVMNode[] staticInits = globalNodes.toArray(new LLVMNode[globalNodes.size()]);
-        int argsCount = currentContext.getMainArguments().length + 1;
-        if (argParamCount == 0) {
-            globalFunction = factoryFacade.createGlobalRootNode(staticInits, mainCallTarget, deallocations);
-        } else {
-            if (argParamCount == 1) {
-                globalFunction = factoryFacade.createGlobalRootNode(staticInits, mainCallTarget, deallocations, argsCount);
-            } else {
-                Object[] args = new Object[argsCount];
-                args[0] = currentContext.getSourceFile();
-                System.arraycopy(currentContext.getMainArguments(), 0, args, 1, currentContext.getMainArguments().length);
-                LLVMAddress allocatedArgsStartAddress = getArgsAsStringArray(args);
-                // Checkstyle: stop magic number check
-                if (argParamCount == 2) {
-                    globalFunction = factoryFacade.createGlobalRootNode(staticInits, mainCallTarget, deallocations, argsCount, allocatedArgsStartAddress);
-                } else if (argParamCount == 3) {
-                    LLVMAddress posixEnvPointer = LLVMAddress.NULL_POINTER;
-                    globalFunction = factoryFacade.createGlobalRootNode(staticInits, mainCallTarget, deallocations, argsCount, allocatedArgsStartAddress, posixEnvPointer);
-                } else {
-                    throw new AssertionError(argParamCount);
-                }
-                // Checkstyle: resume magic number check
-            }
-        }
-        RootCallTarget wrappedCallTarget = Truffle.getRuntime().createCallTarget(wrapMainFunction(Truffle.getRuntime().createCallTarget(globalFunction)));
-        return wrappedCallTarget;
-    }
-
-    private RootNode wrapMainFunction(RootCallTarget mainCallTarget) {
-        LLVMFunction mainSignature = LLVMFunction.createFromName("@main");
-        LLVMRuntimeType returnType = mainSignature.getLlvmReturnType();
-        return factoryFacade.createGlobalRootNodeWrapping(mainCallTarget, returnType);
-    }
-
-    private static LLVMAddress getArgsAsStringArray(Object... args) {
-        String[] stringArgs = getStringArgs(args);
-        int argsMemory = stringArgs.length * LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE;
-        LLVMAddress allocatedArgsStartAddress = LLVMHeap.allocateMemory(argsMemory);
-        LLVMAddress allocatedArgs = allocatedArgsStartAddress;
-        for (int i = 0; i < stringArgs.length; i++) {
-            String string = stringArgs[i];
-            LLVMAddress allocatedCString = LLVMHeap.allocateCString(string);
-            LLVMMemory.putAddress(allocatedArgs, allocatedCString);
-            allocatedArgs = allocatedArgs.increment(LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE);
-        }
-        return allocatedArgsStartAddress;
-    }
-
-    private static String[] getStringArgs(Object... args) {
-        String[] stringArgs = new String[args.length];
-        for (int i = 0; i < args.length; i++) {
-            stringArgs[i] = args[i].toString();
-            if (stringArgs[i] == null) {
-                throw new AssertionError();
-            }
-        }
-        return stringArgs;
-    }
-
     public List<LLVMFunction> visit(Model model, NodeFactoryFacade facade) {
         this.factoryFacade = facade;
         List<EObject> objects = model.eContents();
         List<LLVMFunction> functions = new ArrayList<>();
-        globalNodes = new ArrayList<>();
+        List<LLVMNode> globalNodes = new ArrayList<>();
         List<GlobalVariable> staticVars = new ArrayList<>();
         functionToLabelMapping = new HashMap<>();
         setTargetInfo(objects);
@@ -334,7 +264,8 @@ public class LLVMVisitor implements LLVMParserRuntime {
         currentContext.getFunctionRegistry().register(functionCallTargets);
         List<LLVMNode> globalVarNodes = addGlobalVars(this, staticVars);
         globalNodes.addAll(globalVarNodes);
-        deallocations = globalDeallocations.toArray(new LLVMAddress[globalDeallocations.size()]);
+        LLVMAddress[] deallocations = globalDeallocations.toArray(new LLVMAddress[globalDeallocations.size()]);
+        currentContext.setStaticInits(globalNodes.toArray(new LLVMNode[globalNodes.size()]), deallocations);
         return functions;
     }
 
@@ -355,11 +286,11 @@ public class LLVMVisitor implements LLVMParserRuntime {
     }
 
     private List<LLVMNode> addGlobalVars(LLVMVisitor visitor, List<GlobalVariable> globalVariables) {
-        List<LLVMNode> globalVarNodes = new ArrayList<>();
+        List<LLVMNode> globalNodes = new ArrayList<>();
         for (GlobalVariable globalVar : globalVariables) {
             LLVMNode globalVarWrite = visitor.visitGlobalVariable(globalVar);
             if (globalVarWrite != null) {
-                globalVarNodes.add(globalVarWrite);
+                globalNodes.add(globalVarWrite);
             }
             if (globalVar.getName().equals("@llvm.global_ctors")) {
                 ResolvedArrayType type = (ResolvedArrayType) typeResolver.resolve(globalVar.getType());
@@ -378,13 +309,13 @@ public class LLVMVisitor implements LLVMParserRuntime {
                     LLVMAddressNode functionLoadTarget = (LLVMAddressNode) factoryFacade.createGetElementPtr(LLVMBaseType.I32, loadedStruct, oneLiteralNode, indexedTypeLength);
                     LLVMFunctionNode loadedFunction = (LLVMFunctionNode) factoryFacade.createLoad(functionType, functionLoadTarget);
                     LLVMNode functionCall = factoryFacade.createFunctionCall(loadedFunction, new LLVMExpressionNode[0], LLVMBaseType.VOID);
-                    globalVarNodes.add(functionCall);
+                    globalNodes.add(functionCall);
                 }
             } else if (globalVar.getName().equals("llvm.global_dtors")) {
                 throw new AssertionError("destructors not yet supported!");
             }
         }
-        return globalVarNodes;
+        return globalNodes;
     }
 
     private static void visitTargetInfo(TargetInfo object) {
@@ -621,10 +552,6 @@ public class LLVMVisitor implements LLVMParserRuntime {
     }
 
     public static DataSpecConverter layoutConverter;
-
-    private LLVMAddress[] deallocations;
-
-    private List<LLVMNode> globalNodes;
 
     private List<LLVMNode> visitBasicBlock(BasicBlock basicBlock) {
         List<LLVMNode> statements = new ArrayList<>(basicBlock.getInstructions().size());

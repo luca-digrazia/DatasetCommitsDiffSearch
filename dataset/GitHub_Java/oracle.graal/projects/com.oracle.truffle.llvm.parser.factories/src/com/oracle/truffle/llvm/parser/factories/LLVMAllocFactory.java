@@ -39,25 +39,24 @@ import com.oracle.truffle.llvm.nodes.impl.memory.LLVMAllocInstructionFactory.LLV
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMAllocInstructionFactory.LLVMI32AllocaInstructionNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMAllocInstructionFactory.LLVMI64AllocaInstructionNodeGen;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
-import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 
 public class LLVMAllocFactory {
 
-    public static LLVMExpressionNode createAlloc(LLVMParserRuntime runtime, LLVMBaseType llvmType, LLVMExpressionNode numElements, int byteSize, int alignment) {
+    public static LLVMExpressionNode createAlloc(LLVMBaseType llvmType, LLVMExpressionNode numElements, int byteSize, int alignment) {
         LLVMContext context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
         switch (llvmType) {
             case I32:
-                return LLVMI32AllocaInstructionNodeGen.create((LLVMI32Node) numElements, byteSize, alignment, context, runtime.getStackPointerSlot());
+                return LLVMI32AllocaInstructionNodeGen.create((LLVMI32Node) numElements, byteSize, alignment, context);
             case I64:
-                return LLVMI64AllocaInstructionNodeGen.create((LLVMI64Node) numElements, byteSize, alignment, context, runtime.getStackPointerSlot());
+                return LLVMI64AllocaInstructionNodeGen.create((LLVMI64Node) numElements, byteSize, alignment, context);
             default:
                 throw new AssertionError(llvmType);
         }
     }
 
-    public static LLVMAllocaInstruction createAlloc(LLVMParserRuntime runtime, int byteSize, int alignment) {
+    public static LLVMAllocaInstruction createAlloc(int size, int alignment) {
         LLVMContext context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
-        return LLVMAllocaInstructionNodeGen.create(byteSize, alignment, context, runtime.getStackPointerSlot());
+        return LLVMAllocaInstructionNodeGen.create(size, alignment, context);
     }
 
 }
