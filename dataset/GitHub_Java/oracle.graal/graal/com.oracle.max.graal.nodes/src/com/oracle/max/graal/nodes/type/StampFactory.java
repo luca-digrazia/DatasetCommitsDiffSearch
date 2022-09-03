@@ -24,8 +24,8 @@ package com.oracle.max.graal.nodes.type;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 
 public class StampFactory {
@@ -78,11 +78,6 @@ public class StampFactory {
                 return kind == other.kind() && nonNull() == other.nonNull() && declaredType() == other.declaredType() && exactType() == other.exactType();
             }
             return false;
-        }
-
-        @Override
-        public int hashCode() {
-            return kind.hashCode();
         }
 
         @Override
@@ -173,7 +168,7 @@ public class StampFactory {
             RiResolvedType exactType = first.exactType();
             while (iterator.hasNext()) {
                 Stamp current = iterator.next().stamp();
-                assert current.kind() == first.kind() : values + " first=" + first + " current=" + current + " first kind=" + first.kind() + " current kind=" + current.kind();
+                assert current.kind() == first.kind() : values + " first=" + first + " current=" + current;
                 nonNull &= current.nonNull();
                 declaredType = orTypes(declaredType, current.declaredType());
                 exactType = orTypes(exactType, current.exactType());

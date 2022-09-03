@@ -24,22 +24,22 @@ package com.oracle.max.graal.nodes.java;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.graal.debug.*;
+import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
-import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 public final class IsTypeNode extends BooleanNode implements Canonicalizable, LIRLowerable {
 
-    @Input private ValueNode objectClass;
-    @Data private final RiResolvedType type;
+    @Input private ValueNode object;
 
-    public ValueNode objectClass() {
-        return objectClass;
+    public ValueNode object() {
+        return object;
     }
+
+    private final RiResolvedType type;
 
     /**
      * Constructs a new IsTypeNode.
@@ -47,11 +47,11 @@ public final class IsTypeNode extends BooleanNode implements Canonicalizable, LI
      * @param object the instruction producing the object to check against the given type
      * @param type the type for this check
      */
-    public IsTypeNode(ValueNode objectClass, RiResolvedType type) {
+    public IsTypeNode(ValueNode object, RiResolvedType type) {
         super(StampFactory.illegal());
-        assert objectClass == null || objectClass.kind() == CiKind.Object;
+        assert object == null || object.kind() == CiKind.Object;
         this.type = type;
-        this.objectClass = objectClass;
+        this.object = object;
     }
 
     public RiResolvedType type() {
@@ -71,10 +71,9 @@ public final class IsTypeNode extends BooleanNode implements Canonicalizable, LI
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        RiResolvedType exactType = objectClass() instanceof ReadHubNode ? ((ReadHubNode) objectClass()).object().exactType() : null;
-        if (exactType != null) {
-            return ConstantNode.forBoolean(exactType == type(), graph());
+    public Node canonical(CanonicalizerTool tool) {
+        if (object().exactType() != null) {
+            return ConstantNode.forBoolean(object().exactType() == type(), graph());
         }
         // constants return the correct exactType, so they are handled by the code above
         return this;

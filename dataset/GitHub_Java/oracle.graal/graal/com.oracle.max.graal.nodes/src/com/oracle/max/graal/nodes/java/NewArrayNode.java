@@ -24,12 +24,12 @@ package com.oracle.max.graal.nodes.java;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 /**
  * The {@code NewArrayNode} class is the base of all instructions that allocate arrays.
@@ -110,9 +110,10 @@ public abstract class NewArrayNode extends FixedWithNextNode implements EscapeAn
         public void beforeUpdate(Node node, Node usage) {
             if (usage instanceof ArrayLengthNode) {
                 ArrayLengthNode x = (ArrayLengthNode) usage;
-                StructuredGraph graph = (StructuredGraph) node.graph();
-                x.replaceAtUsages(((NewArrayNode) node).dimension(0));
-                graph.removeFixed(x);
+                FixedNode next = x.next();
+                x.setNext(null);
+                x.replaceAtPredecessors(next);
+                x.replaceAndDelete(((NewArrayNode) node).dimension(0));
             } else {
                 super.beforeUpdate(node, usage);
             }
@@ -126,10 +127,12 @@ public abstract class NewArrayNode extends FixedWithNextNode implements EscapeAn
                     int index = ((AccessIndexedNode) current).index().asConstant().asInt();
                     if (current instanceof LoadIndexedNode) {
                         x.replaceAtUsages(fieldState[index]);
-                        ((StructuredGraph) x.graph()).removeFixed(x);
+                        assert x.usages().size() == 0;
+                        x.replaceAndDelete(x.next());
                     } else if (current instanceof StoreIndexedNode) {
                         fieldState[index] = ((StoreIndexedNode) x).value();
-                        ((StructuredGraph) x.graph()).removeFixed(x);
+                        assert x.usages().size() == 0;
+                        x.replaceAndDelete(x.next());
                         return index;
                     }
                 }

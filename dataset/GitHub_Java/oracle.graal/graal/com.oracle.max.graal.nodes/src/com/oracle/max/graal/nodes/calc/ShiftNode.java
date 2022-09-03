@@ -22,8 +22,8 @@
  */
 package com.oracle.max.graal.nodes.calc;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.nodes.*;
+import com.sun.cri.ci.*;
 
 /**
  * The {@code ShiftOp} class represents shift operations.
@@ -37,7 +37,7 @@ public abstract class ShiftNode extends BinaryNode {
      */
     public ShiftNode(CiKind kind, ValueNode x, ValueNode s) {
         super(kind, x, s);
-        // TODO (cwimmer) Why check for null here - what is a shift with no left operand?
+        // TODO(cwi) Why check for null here - what is a shift with no left operand?
         assert x == null || x.kind() == kind;
     }
 }

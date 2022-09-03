@@ -22,12 +22,12 @@
  */
 package com.oracle.max.graal.nodes.java;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 /**
  * This node is used to perform the finalizer registration at the end of the java.lang.Object constructor.
@@ -52,10 +52,10 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements C
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        RiResolvedType declaredType = object.declaredType();
+        RiType declaredType = object.declaredType();
         RiResolvedType exactType = object.exactType();
-        if (exactType == null && declaredType != null) {
-            exactType = declaredType.exactType();
+        if (exactType == null && declaredType instanceof RiResolvedType) {
+            exactType = ((RiResolvedType) declaredType).exactType();
         }
 
         boolean needsCheck = true;
@@ -64,8 +64,8 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements C
             needsCheck = exactType.hasFinalizer();
         } else {
             // if either the declared type of receiver or the holder can be assumed to have no finalizers
-            if (declaredType != null && !declaredType.hasFinalizableSubclass()) {
-                if (tool.assumptions() != null && tool.assumptions().recordNoFinalizableSubclassAssumption(declaredType)) {
+            if (declaredType instanceof RiResolvedType && !((RiResolvedType) declaredType).hasFinalizableSubclass()) {
+                if (tool.assumptions() != null && tool.assumptions().recordNoFinalizableSubclassAssumption((RiResolvedType) declaredType)) {
                     needsCheck = false;
                 }
             }

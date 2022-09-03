@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,10 +25,9 @@ package com.oracle.max.graal.compiler.util;
 import java.lang.reflect.*;
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.graphbuilder.*;
 import com.oracle.max.graal.cri.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
@@ -37,6 +36,8 @@ import com.oracle.max.graal.nodes.calc.*;
 import com.oracle.max.graal.nodes.java.*;
 import com.oracle.max.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.max.graal.nodes.util.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 public class InliningUtil {
 
@@ -47,15 +48,15 @@ public class InliningUtil {
     }
 
     public static String methodName(RiResolvedMethod method) {
-        return CiUtil.format("%H.%n(%p):%r", method) + " (" + method.codeSize() + " bytes)";
+        return CiUtil.format("%H.%n(%p):%r", method, false) + " (" + method.codeSize() + " bytes)";
     }
 
     private static String methodName(RiResolvedMethod method, Invoke invoke) {
         if (invoke != null && invoke.stateAfter() != null) {
             RiMethod parent = invoke.stateAfter().method();
-            return parent.name() + "@" + invoke.bci() + ": " + CiUtil.format("%H.%n(%p):%r", method) + " (" + method.codeSize() + " bytes)";
+            return parent.name() + "@" + invoke.bci() + ": " + CiUtil.format("%H.%n(%p):%r", method, false) + " (" + method.codeSize() + " bytes)";
         } else {
-            return CiUtil.format("%H.%n(%p):%r", method) + " (" + method.codeSize() + " bytes)";
+            return CiUtil.format("%H.%n(%p):%r", method, false) + " (" + method.codeSize() + " bytes)";
         }
     }
 
@@ -96,6 +97,33 @@ public class InliningUtil {
     }
 
     /**
+     * Represents an inlining opportunity where an intrinsification can take place. Weight and level are always zero.
+     */
+    private static class IntrinsicInlineInfo extends InlineInfo {
+        public final StructuredGraph intrinsicGraph;
+
+        public IntrinsicInlineInfo(Invoke invoke, StructuredGraph intrinsicGraph) {
+            super(invoke, 0, 0);
+            this.intrinsicGraph = intrinsicGraph;
+        }
+
+        @Override
+        public Node inline(StructuredGraph compilerGraph, GraalRuntime runtime, InliningCallback callback) {
+            return InliningUtil.inline(invoke, intrinsicGraph, true);
+        }
+
+        @Override
+        public String toString() {
+            return "intrinsic inlining " + CiUtil.format("%H.%n(%p):%r", invoke.callTarget().targetMethod(), false);
+        }
+
+        @Override
+        public boolean canDeopt() {
+            return false;
+        }
+    }
+
+    /**
      * Represents an inlining opportunity where the compiler can statically determine a monomorphic target method and
      * therefore is able to determine the called method exactly.
      */
@@ -109,24 +137,24 @@ public class InliningUtil {
 
         @Override
         public Node inline(StructuredGraph compilerGraph, GraalRuntime runtime, InliningCallback callback) {
-            StructuredGraph graph = null; // TODO: Solve graph caching differently! GraphBuilderPhase.cachedGraphs.get(concrete);
-//            if (graph != null) {
-//                if (GraalOptions.TraceInlining) {
-//                    TTY.println("Reusing graph for %s", methodName(concrete, invoke));
-//                }
-//            } else {
+            StructuredGraph graph = GraphBuilderPhase.cachedGraphs.get(concrete);
+            if (graph != null) {
+                if (GraalOptions.TraceInlining) {
+                    TTY.println("Reusing graph for %s", methodName(concrete, invoke));
+                }
+            } else {
                 if (GraalOptions.TraceInlining) {
                     TTY.println("Building graph for %s, locals: %d, stack: %d", methodName(concrete, invoke), concrete.maxLocals(), concrete.maxStackSize());
                 }
                 graph = callback.buildGraph(concrete);
-//            }
+            }
 
             return InliningUtil.inline(invoke, graph, true);
         }
 
         @Override
         public String toString() {
-            return "exact inlining " + CiUtil.format("%H.%n(%p):%r", concrete);
+            return "exact inlining " + CiUtil.format("%H.%n(%p):%r", concrete, false);
         }
 
         @Override
@@ -166,7 +194,7 @@ public class InliningUtil {
 
         @Override
         public String toString() {
-            return "type-checked inlining " + CiUtil.format("%H.%n(%p):%r", concrete);
+            return "type-checked inlining " + CiUtil.format("%H.%n(%p):%r", concrete, false);
         }
 
         @Override
@@ -190,8 +218,8 @@ public class InliningUtil {
         @Override
         public Node inline(StructuredGraph graph, GraalRuntime runtime, InliningCallback callback) {
             if (GraalOptions.TraceInlining) {
-                String targetName = CiUtil.format("%H.%n(%p):%r", invoke.callTarget().targetMethod());
-                String concreteName = CiUtil.format("%H.%n(%p):%r", concrete);
+                String targetName = CiUtil.format("%H.%n(%p):%r", invoke.callTarget().targetMethod(), false);
+                String concreteName = CiUtil.format("%H.%n(%p):%r", concrete, false);
                 TTY.println("recording concrete method assumption: %s on receiver type %s -> %s", targetName, context, concreteName);
             }
             callback.recordConcreteMethodAssumption(invoke.callTarget().targetMethod(), context, concrete);
@@ -200,7 +228,7 @@ public class InliningUtil {
 
         @Override
         public String toString() {
-            return "inlining with assumption " + CiUtil.format("%H.%n(%p):%r", concrete);
+            return "inlining with assumption " + CiUtil.format("%H.%n(%p):%r", concrete, false);
         }
 
         @Override
@@ -225,7 +253,7 @@ public class InliningUtil {
         MethodCallTargetNode callTarget = invoke.callTarget();
 
         if (callTarget.invokeKind() == InvokeKind.Special || callTarget.targetMethod().canBeStaticallyBound()) {
-            if (checkTargetConditions(callTarget.targetMethod())) {
+            if (checkTargetConditions(callTarget.targetMethod(), runtime)) {
                 double weight = callback == null ? 0 : callback.inliningWeight(parent, callTarget.targetMethod(), invoke);
                 return new ExactInlineInfo(invoke, weight, level, callTarget.targetMethod());
             }
@@ -235,7 +263,7 @@ public class InliningUtil {
             RiResolvedType exact = callTarget.receiver().exactType();
             assert exact.isSubtypeOf(callTarget.targetMethod().holder()) : exact + " subtype of " + callTarget.targetMethod().holder();
             RiResolvedMethod resolved = exact.resolveMethodImpl(callTarget.targetMethod());
-            if (checkTargetConditions(resolved)) {
+            if (checkTargetConditions(resolved, runtime)) {
                 double weight = callback == null ? 0 : callback.inliningWeight(parent, resolved, invoke);
                 return new ExactInlineInfo(invoke, weight, level, resolved);
             }
@@ -257,7 +285,7 @@ public class InliningUtil {
         }
         RiResolvedMethod concrete = holder.uniqueConcreteMethod(callTarget.targetMethod());
         if (concrete != null) {
-            if (checkTargetConditions(concrete)) {
+            if (checkTargetConditions(concrete, runtime)) {
                 double weight = callback == null ? 0 : callback.inliningWeight(parent, concrete, invoke);
                 return new AssumptionInlineInfo(invoke, weight, level, holder, concrete);
             }
@@ -268,7 +296,7 @@ public class InliningUtil {
             if (GraalOptions.InlineWithTypeCheck) {
                 // type check and inlining...
                 concrete = profile.types[0].resolveMethodImpl(callTarget.targetMethod());
-                if (concrete != null && checkTargetConditions(concrete)) {
+                if (concrete != null && checkTargetConditions(concrete, runtime)) {
                     double weight = callback == null ? 0 : callback.inliningWeight(parent, concrete, invoke);
                     return new TypeGuardInlineInfo(invoke, weight, level, concrete, profile.types[0], profile.probabilities[0]);
                 }
@@ -294,16 +322,27 @@ public class InliningUtil {
             }
             return false;
         }
+        if (invoke.stateAfter().locksSize() > 0) {
+            if (GraalOptions.TraceInlining) {
+                TTY.println("not inlining %s because of locks", methodName(invoke.callTarget().targetMethod(), invoke));
+            }
+            return false;
+        }
         if (invoke.predecessor() == null) {
             if (GraalOptions.TraceInlining) {
                 TTY.println("not inlining %s because the invoke is dead code", methodName(invoke.callTarget().targetMethod(), invoke));
             }
             return false;
         }
+        if (invoke.stateAfter() == null) {
+            if (GraalOptions.TraceInlining) {
+                TTY.println("not inlining %s because of missing frame state", methodName(invoke.callTarget().targetMethod(), invoke));
+            }
+        }
         return true;
     }
 
-    private static boolean checkTargetConditions(RiMethod method) {
+    private static boolean checkTargetConditions(RiMethod method, GraalRuntime runtime) {
         if (!(method instanceof RiResolvedMethod)) {
             if (GraalOptions.TraceInlining) {
                 TTY.println("not inlining %s because it is unresolved", method.toString());
@@ -311,6 +350,12 @@ public class InliningUtil {
             return false;
         }
         RiResolvedMethod resolvedMethod = (RiResolvedMethod) method;
+        if (runtime.mustNotInline(resolvedMethod)) {
+            if (GraalOptions.TraceInlining) {
+                TTY.println("not inlining %s because the CRI set it to be non-inlinable", methodName(resolvedMethod));
+            }
+            return false;
+        }
         if (Modifier.isNative(resolvedMethod.accessFlags())) {
             if (GraalOptions.TraceInlining) {
                 TTY.println("not inlining %s because it is a native method", methodName(resolvedMethod));
@@ -346,9 +391,9 @@ public class InliningUtil {
         FrameState stateAfter = invoke.stateAfter();
         assert stateAfter.isAlive();
 
-        IdentityHashMap<Node, Node> replacements = new IdentityHashMap<>();
-        ArrayList<Node> nodes = new ArrayList<>();
-        ArrayList<Node> frameStates = new ArrayList<>();
+        IdentityHashMap<Node, Node> replacements = new IdentityHashMap<Node, Node>();
+        ArrayList<Node> nodes = new ArrayList<Node>();
+        ArrayList<Node> frameStates = new ArrayList<Node>();
         ReturnNode returnNode = null;
         UnwindNode unwindNode = null;
         BeginNode entryPointNode = inlineGraph.start();

@@ -78,11 +78,7 @@ public class HotSpotOptions {
                         value = Boolean.parseBoolean(valueString);
                     }
                 } else if (f.getType() == String.class) {
-                    if (valueString == null) {
-                        value = "";
-                    } else {
-                        value = valueString;
-                    }
+                    value = valueString;
                 }
             }
             if (value != null) {

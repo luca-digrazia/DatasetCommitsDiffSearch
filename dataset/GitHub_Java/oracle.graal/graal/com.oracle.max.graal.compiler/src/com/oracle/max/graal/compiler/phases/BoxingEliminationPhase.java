@@ -24,39 +24,44 @@ package com.oracle.max.graal.compiler.phases;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.PhiNode.*;
 import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.virtual.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 public class BoxingEliminationPhase extends Phase {
 
+    private RiRuntime runtime;
+
+    public BoxingEliminationPhase(RiRuntime runtime) {
+        this.runtime = runtime;
+    }
+
     @Override
     protected void run(StructuredGraph graph) {
-        if (graph.getNodes(UnboxNode.class).isNotEmpty()) {
+        if (graph.getNodes(UnboxNode.class).iterator().hasNext()) {
 
-            Map<PhiNode, PhiNode> phiReplacements = new HashMap<>();
+            Map<PhiNode, PhiNode> phiReplacements = new HashMap<PhiNode, PhiNode>();
             for (UnboxNode unboxNode : graph.getNodes(UnboxNode.class)) {
-                tryEliminate(graph, unboxNode, phiReplacements);
+                tryEliminate(unboxNode, graph, phiReplacements);
             }
 
             new DeadCodeEliminationPhase().apply(graph);
 
             for (BoxNode boxNode : graph.getNodes(BoxNode.class)) {
-                tryEliminate(boxNode);
+                tryEliminate(boxNode, graph);
             }
         }
     }
 
-    private void tryEliminate(StructuredGraph graph, UnboxNode unboxNode, Map<PhiNode, PhiNode> phiReplacements) {
+    private void tryEliminate(UnboxNode unboxNode, StructuredGraph graph, Map<PhiNode, PhiNode> phiReplacements) {
         ValueNode unboxedValue = unboxedValue(unboxNode.source(), unboxNode.destinationKind(), phiReplacements);
         if (unboxedValue != null) {
             assert unboxedValue.kind() == unboxNode.destinationKind();
-            unboxNode.replaceAtUsages(unboxedValue);
-            graph.removeFixed(unboxNode);
+            unboxNode.replaceAndUnlink(unboxedValue);
         }
     }
 
@@ -66,8 +71,7 @@ public class BoxingEliminationPhase extends Phase {
             if (phiNode.stamp().nonNull()) {
                 RiResolvedType exactType = phiNode.stamp().exactType();
                 if (exactType != null && exactType.toJava() == kind.toUnboxedJavaClass()) {
-                    StructuredGraph graph = (StructuredGraph) phiNode.graph();
-                    result = graph.add(new PhiNode(kind, phiNode.merge(), PhiType.Value));
+                    result = phiNode.graph().add(new PhiNode(kind, phiNode.merge(), PhiType.Value));
                     phiReplacements.put(phiNode, result);
                     virtualizeUsages(phiNode, result, exactType);
                     int i = 0;
@@ -77,9 +81,10 @@ public class BoxingEliminationPhase extends Phase {
                             assert unboxedValue.kind() == kind;
                             result.addInput(unboxedValue);
                         } else {
-                            UnboxNode unboxNode = graph.add(new UnboxNode(kind, n));
+                            UnboxNode unboxNode = phiNode.graph().add(new UnboxNode(kind, n));
                             FixedNode pred = phiNode.merge().phiPredecessorAt(i);
-                            graph.addBeforeFixed(pred, unboxNode);
+                            pred.replaceAtPredecessors(unboxNode);
+                            unboxNode.setNext(pred);
                             result.addInput(unboxNode);
                         }
                         ++i;
@@ -102,7 +107,7 @@ public class BoxingEliminationPhase extends Phase {
         }
     }
 
-    private static void tryEliminate(BoxNode boxNode) {
+    private void tryEliminate(BoxNode boxNode, StructuredGraph graph) {
 
         virtualizeUsages(boxNode, boxNode.source(), boxNode.exactType());
 
@@ -113,16 +118,16 @@ public class BoxingEliminationPhase extends Phase {
             }
         }
 
-        // TODO(ls) this seems weird: there might still be references to boxNode, yet it is deleted...
-
         FrameState stateAfter = boxNode.stateAfter();
         boxNode.setStateAfter(null);
         stateAfter.safeDelete();
-
-        ((StructuredGraph) boxNode.graph()).removeFixed(boxNode);
+        FixedNode next = boxNode.next();
+        boxNode.setNext(null);
+        boxNode.replaceAtPredecessors(next);
+        boxNode.safeDelete();
     }
 
-    private static void virtualizeUsages(ValueNode boxNode, ValueNode replacement, RiResolvedType exactType) {
+    private void virtualizeUsages(ValueNode boxNode, ValueNode replacement, RiResolvedType exactType) {
         ValueNode virtualValueNode = null;
         VirtualObjectNode virtualObjectNode = null;
         for (Node n : boxNode.usages().filter(FrameState.class).or(VirtualObjectFieldNode.class).snapshot()) {

@@ -38,7 +38,7 @@ public class Loop {
 
     public Loop(LoopBeginNode loopBegin) {
         this.loopBegin = loopBegin;
-        this.children = new ArrayList<>(1);
+        this.children = new ArrayList<Loop>(1);
         this.exits = loopBegin.graph().createNodeBitMap();
         this.directCFGNodes = loopBegin.graph().createNodeBitMap();
     }
@@ -75,12 +75,12 @@ public class Loop {
         return parent == l || (parent != null && parent.isChildOf(l));
     }
 
-    public boolean containsDirectFixed(FixedNode n) {
+    public boolean localContainsFixed(FixedNode n) {
         return directCFGNodes.isMarked(n);
     }
 
     public boolean containsFixed(FixedNode n) {
-        if (containsDirectFixed(n)) {
+        if (localContainsFixed(n)) {
             return true;
         }
         for (Loop child : children()) {
@@ -104,7 +104,7 @@ public class Loop {
     }
 
     @SuppressWarnings("unchecked")
-    public Iterable<FixedNode> directFixedNodes() {
+    public Iterable<FixedNode> fixedNodes() {
         return (Iterable) directCFGNodes;
     }
 
@@ -113,7 +113,7 @@ public class Loop {
         loop.parent = this;
     }
 
-    NodeBitMap directCFGNodes() {
+    NodeBitMap directCFGNode() {
         return directCFGNodes;
     }
 

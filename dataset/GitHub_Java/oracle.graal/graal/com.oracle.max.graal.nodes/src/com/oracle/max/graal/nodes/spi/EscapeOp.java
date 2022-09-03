@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,12 +24,12 @@ package com.oracle.max.graal.nodes.spi;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.calc.*;
 import com.oracle.max.graal.nodes.java.*;
 import com.oracle.max.graal.nodes.virtual.*;
+import com.sun.cri.ci.*;
 
 
 public abstract class EscapeOp {
@@ -41,13 +41,13 @@ public abstract class EscapeOp {
             assert ((NullCheckNode) usage).object() == node;
             return false;
         } else if (usage instanceof IsTypeNode) {
-            assert ((IsTypeNode) usage).objectClass() == node;
+            assert ((IsTypeNode) usage).object() == node;
             return false;
         } else if (usage instanceof FrameState) {
-            assert usage.inputs().contains(node);
+            assert ((FrameState) usage).inputs().contains(node);
             return true;
-        } else if (usage instanceof AccessMonitorNode) {
-            assert ((AccessMonitorNode) usage).object() == node;
+        } else if (usage instanceof MonitorObject) {
+            assert ((MonitorObject) usage).owner() == node;
             return false;
         } else if (usage instanceof LoadFieldNode) {
             assert ((LoadFieldNode) usage).object() == node;
@@ -102,13 +102,19 @@ public abstract class EscapeOp {
         // IsNonNullNode and IsTypeNode should have been eliminated by the CanonicalizerPhase, but we can't rely on this
         if (usage instanceof NullCheckNode) {
             NullCheckNode x = (NullCheckNode) usage;
-            ((StructuredGraph) x.graph()).replaceFloating(x, ConstantNode.forBoolean(!x.expectedNull, node.graph()));
+            x.replaceAndDelete(ConstantNode.forBoolean(!x.expectedNull, node.graph()));
         } else if (usage instanceof IsTypeNode) {
             IsTypeNode x = (IsTypeNode) usage;
             assert x.type() == ((ValueNode) node).exactType();
-            ((StructuredGraph) x.graph()).replaceFloating(x, ConstantNode.forBoolean(true, node.graph()));
-        } else if (usage instanceof AccessMonitorNode) {
-            ((AccessMonitorNode) usage).eliminate();
+            x.replaceAndDelete(ConstantNode.forBoolean(true, node.graph()));
+        } else if (usage instanceof MonitorObject) {
+            // delete all MonitorEnterNode and MonitorExitNode
+            for (Node n : usage.usages().snapshot()) {
+                if (n instanceof AccessMonitorNode) {
+                    AccessMonitorNode x = (AccessMonitorNode) n;
+                    x.replaceAndDelete(x.next());
+                }
+            }
         }
     }
 

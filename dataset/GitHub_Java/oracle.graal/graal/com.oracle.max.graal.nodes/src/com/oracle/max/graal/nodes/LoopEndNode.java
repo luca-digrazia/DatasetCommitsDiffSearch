@@ -22,29 +22,19 @@
  */
 package com.oracle.max.graal.nodes;
 
-import java.util.*;
-
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.spi.*;
+import com.oracle.max.graal.nodes.type.*;
 
 
-public final class LoopEndNode extends EndNode {
+public class LoopEndNode extends FixedNode implements Node.IterableNodeType, LIRLowerable {
 
     @Input(notDataflow = true) private LoopBeginNode loopBegin;
     @Data private boolean safepointPolling;
-    @Data private int endIndex;
 
-    public LoopEndNode(LoopBeginNode begin) {
-        int idx = begin.nextEndIndex();
-        assert idx >= 0;
+    public LoopEndNode() {
+        super(StampFactory.illegal());
         this.safepointPolling = true;
-        this.endIndex = idx;
-        this.loopBegin = begin;
-    }
-
-    @Override
-    public MergeNode merge() {
-        return loopBegin();
     }
 
     public LoopBeginNode loopBegin() {
@@ -68,26 +58,11 @@ public final class LoopEndNode extends EndNode {
     @Override
     public void generate(LIRGeneratorTool gen) {
         gen.visitLoopEnd(this);
-        super.generate(gen);
     }
 
     @Override
     public boolean verify() {
         assertTrue(loopBegin != null, "must have a loop begin");
-        assertTrue(usages().count() == 0, "LoopEnds can not be used");
         return super.verify();
-    }
-
-    public int endIndex() {
-        return endIndex;
-    }
-
-    public void setEndIndex(int idx) {
-        this.endIndex = idx;
-    }
-
-    @Override
-    public Iterable< ? extends Node> cfgSuccessors() {
-        return Collections.emptyList();
     }
 }

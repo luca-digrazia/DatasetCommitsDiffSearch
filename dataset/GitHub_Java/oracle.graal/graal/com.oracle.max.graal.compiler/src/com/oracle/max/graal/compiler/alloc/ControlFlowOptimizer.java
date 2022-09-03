@@ -28,6 +28,7 @@ import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
+import com.sun.cri.ci.*;
 
 /**
  * This class performs basic optimizations on the control flow graph after LIR generation.
@@ -43,8 +44,8 @@ final class ControlFlowOptimizer {
         List<LIRBlock> code = ir.codeEmittingOrder();
         //optimizer.reorderShortLoops(code);
         optimizer.deleteEmptyBlocks(code);
-        ControlFlowOptimizer.deleteUnnecessaryJumps(code);
-        //ControlFlowOptimizer.deleteJumpsToReturn(code);
+        optimizer.deleteUnnecessaryJumps(code);
+        optimizer.deleteJumpsToReturn(code);
     }
 
     private final LIR ir;
@@ -140,7 +141,7 @@ final class ControlFlowOptimizer {
         assert verify(code);
     }
 
-    private static void deleteUnnecessaryJumps(List<LIRBlock> code) {
+    private void deleteUnnecessaryJumps(List<LIRBlock> code) {
         // skip the last block because there a branch is always necessary
         for (int i = code.size() - 2; i >= 0; i--) {
             LIRBlock block = code.get(i);
@@ -174,8 +175,7 @@ final class ControlFlowOptimizer {
         assert verify(code);
     }
 
-/*
-    private static void deleteJumpsToReturn(List<LIRBlock> code) {
+    private void deleteJumpsToReturn(List<LIRBlock> code) {
         for (int i = code.size() - 1; i >= 0; i--) {
             LIRBlock block = code.get(i);
             List<LIRInstruction> curInstructions = block.lir();
@@ -212,9 +212,8 @@ final class ControlFlowOptimizer {
             }
         }
     }
-*/
 
-    private static boolean verify(List<LIRBlock> code) {
+    private boolean verify(List<LIRBlock> code) {
         for (LIRBlock block : code) {
             for (Block sux : block.getSuccessors()) {
                 assert code.contains(sux) : "missing successor from: " + block + "to: " + sux;

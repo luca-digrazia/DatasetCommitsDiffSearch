@@ -22,59 +22,47 @@
  */
 package com.oracle.max.graal.alloc.simple;
 
-import static com.oracle.max.graal.compiler.lir.LIRPhiMapping.*;
-import static com.oracle.max.cri.ci.CiValueUtil.*;
 import static com.oracle.max.graal.alloc.util.ValueUtil.*;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ci.CiRegister.RegisterFlag;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.alloc.util.*;
+import com.oracle.max.graal.alloc.util.MoveResolver;
+import com.oracle.max.graal.alloc.util.RegisterVerifier;
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.alloc.*;
 import com.oracle.max.graal.compiler.lir.*;
-import com.oracle.max.graal.compiler.lir.LIRInstruction.*;
+import com.oracle.max.graal.compiler.lir.LIRInstruction.ValueProcedure;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ci.CiRegister.RegisterFlag;
+import com.sun.cri.ri.*;
 
 public class SpillAllAllocator {
     private final GraalContext context;
     private final LIR lir;
     private final FrameMap frameMap;
+    private final OperandPool operands;
     private final RiRegisterConfig registerConfig;
+    private final CiCallingConvention incomingArguments;
 
     private final DataFlowAnalysis dataFlow;
 
-    public SpillAllAllocator(GraalContext context, LIR lir, GraalCompilation compilation, RiRegisterConfig registerConfig) {
+    public SpillAllAllocator(GraalContext context, LIR lir, GraalCompilation compilation, OperandPool pool, RiRegisterConfig registerConfig, CiCallingConvention incomingArguments) {
         this.context = context;
         this.lir = lir;
+        this.operands = pool;
         this.registerConfig = registerConfig;
         this.frameMap = compilation.frameMap();
+        this.incomingArguments = incomingArguments;
 
-        this.dataFlow = new DataFlowAnalysis(context, lir, registerConfig);
+        this.dataFlow = new DataFlowAnalysis(context, lir, pool, registerConfig, incomingArguments);
         this.blockLocations = new LocationMap[lir.linearScanOrder().size()];
-        this.moveResolver = new MoveResolverImpl(frameMap);
+        this.moveResolver = new MoveResolver(frameMap);
     }
 
-    private class MoveResolverImpl extends MoveResolver {
-        public MoveResolverImpl(FrameMap frameMap) {
-            super(frameMap);
-        }
-
-        @Override
-        protected CiValue scratchRegister(Variable spilled) {
-            EnumMap<RegisterFlag, CiRegister[]> categorizedRegs = registerConfig.getCategorizedAllocatableRegisters();
-            CiRegister[] availableRegs = categorizedRegs.get(spilled.flag);
-            for (CiRegister reg : availableRegs) {
-                if (curInRegisterState[reg.number] == null && curOutRegisterState[reg.number] == null) {
-                    return reg.asValue(spilled.kind);
-                }
-            }
-            throw new CiBailout("No register found");
-        }
-    }
 
     private class ResolveDataFlowImpl extends ResolveDataFlow {
         public ResolveDataFlowImpl(LIR lir, MoveResolver moveResolver) {
@@ -132,55 +120,66 @@ public class SpillAllAllocator {
     private LIRInstruction curInstruction;
 
     public void execute() {
-        assert LIRVerifier.verify(true, lir, frameMap, registerConfig);
+        assert LIRVerifier.verify(true, lir, incomingArguments, frameMap, registerConfig, operands);
 
         dataFlow.execute();
+
         allocate();
-        frameMap.finish();
 
         context.observable.fireCompilationEvent("After spill all allocation", lir);
+
+        frameMap.finish();
 
         ResolveDataFlow resolveDataFlow = new ResolveDataFlowImpl(lir, moveResolver);
         resolveDataFlow.execute();
 
         context.observable.fireCompilationEvent("After resolve data flow", lir);
-        assert RegisterVerifier.verify(lir, frameMap, registerConfig);
+
+        assert RegisterVerifier.verify(lir, incomingArguments, frameMap, registerConfig);
 
         AssignRegisters assignRegisters = new AssignRegistersImpl(lir, frameMap);
         assignRegisters.execute();
 
         context.observable.fireCompilationEvent("After register asignment", lir);
-        assert LIRVerifier.verify(true, lir, frameMap, registerConfig);
+
+        assert LIRVerifier.verify(true, lir, incomingArguments, frameMap, registerConfig, operands);
     }
 
     private void allocate() {
-        ValueProcedure killNonLiveProc =  new ValueProcedure() {    @Override public CiValue doValue(CiValue value) { return killNonLive(value); } };
-        ValueProcedure killBeginProc =    new ValueProcedure() {    @Override public CiValue doValue(CiValue value) { return kill(value, false); } };
-        ValueProcedure killEndProc =      new ValueProcedure() {    @Override public CiValue doValue(CiValue value) { return kill(value, true); } };
-        ValueProcedure killLocationProc = new ValueProcedure() {    @Override public CiValue doValue(CiValue value) { return killLocation(value); } };
-        ValueProcedure blockProc =        new ValueProcedure() {    @Override public CiValue doValue(CiValue value) { return block(value); } };
-        ValueProcedure loadProc =         new ValueProcedure() {    @Override public CiValue doValue(CiValue value, OperandMode mode, EnumSet<OperandFlag> flags) { return load(value, mode, flags); } };
-        ValueProcedure spillProc =        new ValueProcedure() {    @Override public CiValue doValue(CiValue value, OperandMode mode, EnumSet<OperandFlag> flags) { return spill(value, mode, flags); } };
-        PhiValueProcedure useSlotProc =   new PhiValueProcedure() { @Override public CiValue doValue(CiValue value) { return useSlot(value); } };
-        ValueProcedure defSlotProc =      new ValueProcedure() {    @Override public CiValue doValue(CiValue value) { return defSlot(value); } };
+        ValueProcedure killNonLiveProc =  new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return killNonLive(value); } };
+        ValueProcedure killBeginProc =    new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return kill(value, false); } };
+        ValueProcedure killEndProc =      new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return kill(value, true); } };
+        ValueProcedure killLocationProc = new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return killLocation(value); } };
+        ValueProcedure blockProc =        new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return block(value); } };
+        ValueProcedure inputProc =        new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return load(value, false); } };
+        ValueProcedure aliveProc =        new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return load(value, true); } };
+        ValueProcedure tempProc =         new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return spill(value, true); } };
+        ValueProcedure outputProc =       new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return spill(value, false); } };
+        ValueProcedure useSlotProc =      new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return useSlot(value); } };
+        ValueProcedure defSlotProc =      new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return defSlot(value); } };
 
         trace(1, "==== start spill all allocation ====");
         curInRegisterState = new Object[maxRegisterNum()];
         curOutRegisterState = new Object[maxRegisterNum()];
-        curRegisterLocations = new LocationMap(lir.numVariables());
+        curRegisterLocations = new LocationMap(operands.numVariables());
         for (LIRBlock block : lir.linearScanOrder()) {
             trace(1, "start block %s  loop %d depth %d", block, block.loopIndex(), block.loopDepth());
             assert checkEmpty(curOutRegisterState);
 
-            if (block.dominator() != null) {
+            if (block.numberOfPreds() == 0) {
+                curStackLocations = new LocationMap(operands.numVariables());
+                trace(1, "  arguments");
+                curInstruction = lir.startBlock().lir().get(0);
+                for (CiValue value : incomingArguments.locations) {
+                    block(value);
+                }
+            } else {
                 LocationMap dominatorState = locationsFor(block.dominator());
                 curStackLocations = new LocationMap(dominatorState);
                 // Clear out all variables that are not live at the begin of this block
                 curLiveIn = dataFlow.liveIn(block);
                 curStackLocations.forEachLocation(killNonLiveProc);
                 assert checkInputState(block);
-            } else {
-                curStackLocations = new LocationMap(lir.numVariables());
             }
             traceState();
 
@@ -204,8 +203,8 @@ public class SpillAllAllocator {
 
                 moveResolver.init(block.lir(), opIdx);
                 // Process Alive before Input because they are more restricted and the same variable can be Alive and Input.
-                op.forEachAlive(loadProc);
-                op.forEachInput(loadProc);
+                op.forEachAlive(aliveProc);
+                op.forEachInput(inputProc);
                 moveResolver.resolve();
                 op.forEachState(useSlotProc);
 
@@ -213,8 +212,8 @@ public class SpillAllAllocator {
                 assert !op.hasCall() || checkNoCallerSavedRegister() : "caller saved register in use accross call site";
 
                 moveResolver.init(block.lir(), opIdx + 1);
-                op.forEachTemp(spillProc);
-                op.forEachOutput(spillProc);
+                op.forEachTemp(tempProc);
+                op.forEachOutput(outputProc);
                 moveResolver.resolve();
 
                 dataFlow.forEachKilled(op, true, killEndProc);
@@ -256,7 +255,7 @@ public class SpillAllAllocator {
         if (isVariable(value)) {
             trace(3, "    kill variable %s", value);
 
-            Variable variable = asVariable(value);
+            CiVariable variable = asVariable(value);
             curStackLocations.clear(variable);
 
             Location loc = curRegisterLocations.get(variable);
@@ -310,11 +309,7 @@ public class SpillAllAllocator {
         return value;
     }
 
-    private CiValue load(CiValue value, OperandMode mode, EnumSet<OperandFlag> flags) {
-        assert mode == OperandMode.Input || mode == OperandMode.Alive;
-        if (flags.contains(OperandFlag.Stack)) {
-            return useSlot(value);
-        }
+    private CiValue load(CiValue value, boolean isAlive) {
         if (isVariable(value)) {
             trace(3, "    load %s", value);
             Location regLoc = curRegisterLocations.get(asVariable(value));
@@ -322,7 +317,7 @@ public class SpillAllAllocator {
                 // This variable has already been processed before.
                 trace(3, "      found location %s", regLoc);
             } else {
-                regLoc = allocateRegister(asVariable(value), curInRegisterState, mode == OperandMode.Alive ? curOutRegisterState : null, mode, flags);
+                regLoc = allocateRegister(asVariable(value), curInRegisterState, isAlive ? curOutRegisterState : null);
                 Location stackLoc = curStackLocations.get(asVariable(value));
                 assert stackLoc != null;
                 moveResolver.add(stackLoc, regLoc);
@@ -334,16 +329,12 @@ public class SpillAllAllocator {
         }
     }
 
-    private CiValue spill(CiValue value, OperandMode mode, EnumSet<OperandFlag> flags) {
-        assert mode == OperandMode.Temp || mode == OperandMode.Output;
-        if (flags.contains(OperandFlag.Stack)) {
-            return defSlot(value);
-        }
+    private CiValue spill(CiValue value, boolean isTemp) {
         if (isVariable(value)) {
             trace(3, "    spill %s", value);
             assert curStackLocations.get(asVariable(value)) == null;
-            Location regLoc = allocateRegister(asVariable(value), null, curOutRegisterState, mode, flags);
-            if (mode == OperandMode.Output) {
+            Location regLoc = allocateRegister(asVariable(value), null, curOutRegisterState);
+            if (!isTemp) {
                 Location stackLoc = new Location(asVariable(value), frameMap.allocateSpillSlot(value.kind));
                 curStackLocations.put(stackLoc);
                 moveResolver.add(regLoc, stackLoc);
@@ -380,59 +371,36 @@ public class SpillAllAllocator {
         }
     }
 
-    private Location allocateRegister(final Variable variable, final Object[] inRegisterState, final Object[] outRegisterState, OperandMode mode, EnumSet<OperandFlag> flags) {
-        if (flags.contains(OperandFlag.RegisterHint)) {
-            CiValue result = curInstruction.forEachRegisterHint(variable, mode, new ValueProcedure() {
-                @Override
-                public CiValue doValue(CiValue registerHint) {
-                    trace(3, "      registerHint %s", registerHint);
-                    CiRegister hint = null;
-                    if (isRegister(registerHint)) {
-                        hint = asRegister(registerHint);
-                    } else if (isLocation(registerHint) && isRegister(asLocation(registerHint).location)) {
-                        hint = asRegister(asLocation(registerHint).location);
-                    }
-                    if (hint != null && hint.isSet(variable.flag) && isFree(hint, inRegisterState, outRegisterState)) {
-                        return selectRegister(hint, variable, inRegisterState, outRegisterState);
-                    }
-                    return null;
-                }
-            });
-
-            if (result != null) {
-                return asLocation(result);
-            }
+    private Location allocateRegister(CiVariable variable, Object[] inRegisterState, Object[] outRegisterState) {
+        EnumMap<RegisterFlag, CiRegister[]> categorizedRegs = registerConfig.getCategorizedAllocatableRegisters();
+        CiRegister[] availableRegs;
+        if (operands.mustBeByteRegister(variable)) {
+            assert variable.kind != CiKind.Float && variable.kind != CiKind.Double : "cpu regs only";
+            availableRegs = categorizedRegs.get(RegisterFlag.Byte);
+        } else if (variable.kind == CiKind.Float || variable.kind == CiKind.Double) {
+            availableRegs = categorizedRegs.get(RegisterFlag.FPU);
+        } else {
+            availableRegs = categorizedRegs.get(RegisterFlag.CPU);
         }
 
-        EnumMap<RegisterFlag, CiRegister[]> categorizedRegs = registerConfig.getCategorizedAllocatableRegisters();
-        CiRegister[] availableRegs = categorizedRegs.get(variable.flag);
-
         for (CiRegister reg : availableRegs) {
-            if (isFree(reg, inRegisterState, outRegisterState)) {
-                return selectRegister(reg, variable, inRegisterState, outRegisterState);
+            if ((inRegisterState == null || inRegisterState[reg.number] == null) && (outRegisterState == null || outRegisterState[reg.number] == null)) {
+                Location loc = new Location(variable, reg.asValue(variable.kind));
+                if (inRegisterState != null) {
+                    inRegisterState[reg.number] = loc;
+                }
+                if (outRegisterState != null) {
+                    outRegisterState[reg.number] = loc;
+                }
+                assert curRegisterLocations.get(variable) == null;
+                curRegisterLocations.put(loc);
+                trace(3, "      selected register %s", loc);
+                return loc;
             }
-
         }
         throw new CiBailout("No register found");
     }
 
-    private static boolean isFree(CiRegister reg, Object[] inRegisterState, Object[] outRegisterState) {
-        return (inRegisterState == null || inRegisterState[reg.number] == null) && (outRegisterState == null || outRegisterState[reg.number] == null);
-    }
-
-    private Location selectRegister(CiRegister reg, Variable variable, Object[] inRegisterState, Object[] outRegisterState) {
-        Location loc = new Location(variable, reg.asValue(variable.kind));
-        if (inRegisterState != null) {
-            inRegisterState[reg.number] = loc;
-        }
-        if (outRegisterState != null) {
-            outRegisterState[reg.number] = loc;
-        }
-        assert curRegisterLocations.get(variable) == null;
-        curRegisterLocations.put(loc);
-        trace(3, "      selected register %s", loc);
-        return loc;
-    }
 
     private boolean checkInputState(final LIRBlock block) {
         final BitSet liveState = new BitSet();
@@ -456,9 +424,19 @@ public class SpillAllAllocator {
         return true;
     }
 
+//    private boolean checkBlocked(CiValue value, Object[] inRegisterState, Object[] outRegisterState) {
+//        if (isAllocatableRegister(value)) {
+//            int regNum = asRegister(value).number;
+//            assert inRegisterState == null || inRegisterState[regNum] instanceof LIRInstruction;
+//        }
+//        return !isAllocatableRegister(value) || asRegister(curRegisterState[asRegister(value).number]) == asRegister(value);
+//    }
+//
     private boolean checkNoCallerSavedRegister() {
         for (CiRegister reg : registerConfig.getCallerSaveRegisters()) {
             assert curOutRegisterState[reg.number] == null || curOutRegisterState[reg.number] == curInstruction : "caller saved register in use accross call site";
+            // TODO check if that assertion holds, otherwise the code below is necessary (outside of an assertion!)
+            // curRegisterState[reg.number] = null;
         }
         return true;
     }

@@ -22,8 +22,6 @@
  */
 package com.oracle.max.graal.compiler.schedule;
 
-import com.oracle.max.graal.compiler.cfg.*;
-
 /**
  * The {@code BlockClosure} interface represents a closure for iterating over blocks.
  */

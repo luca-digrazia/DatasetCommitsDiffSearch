@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,21 +24,33 @@ package com.sun.cri.ci;
 
 import java.io.*;
 
+
+
 /**
  * Abstract base class for values manipulated by the compiler. All values have a {@linkplain CiKind kind} and are immutable.
  */
 public abstract class CiValue implements Serializable {
-    private static final long serialVersionUID = -6909397188697766469L;
 
-    @SuppressWarnings("serial")
     public static CiValue IllegalValue = new CiValue(CiKind.Illegal) {
         @Override
-        public String toString() {
-            return "-";
+        public String name() {
+            return "<illegal>";
         }
         @Override
         public CiRegister asRegister() {
             return CiRegister.None;
+        }
+        @Override
+        public int hashCode() {
+            return -1;
+        }
+        @Override
+        public boolean equals(Object obj) {
+            return obj == this;
+        }
+        @Override
+        public boolean equalsIgnoringKind(CiValue other) {
+            return other == this;
         }
     };
 
@@ -96,14 +108,52 @@ public abstract class CiValue implements Serializable {
         return this instanceof CiConstant;
     }
 
-    @Override
-    public abstract String toString();
+    /**
+     * Gets a string name for this value without indicating its {@linkplain #kind kind}.
+     */
+    public abstract String name();
 
-    protected final String kindSuffix() {
-        return "|" + kind.typeChar;
+    @Override
+    public abstract boolean equals(Object obj);
+
+    public abstract boolean equalsIgnoringKind(CiValue other);
+
+    @Override
+    public abstract int hashCode();
+
+    @Override
+    public final String toString() {
+        return name() + kindSuffix();
+    }
+
+    public final String kindSuffix() {
+        if (kind == CiKind.Illegal) {
+            return "";
+        }
+        return ":" + kind.typeChar;
     }
 
     public final boolean isConstant0() {
         return isConstant() && ((CiConstant) this).asInt() == 0;
     }
+
+    /**
+     * Utility for specializing how a {@linkplain CiValue LIR operand} is formatted to a string.
+     * The {@linkplain Formatter#DEFAULT default formatter} returns the value of
+     * {@link CiValue#toString()}.
+     */
+    public static class Formatter {
+        public static final Formatter DEFAULT = new Formatter();
+
+        /**
+         * Formats a given operand as a string.
+         *
+         * @param operand the operand to format
+         * @return {@code operand} as a string
+         */
+        public String format(CiValue operand) {
+            return operand.toString();
+        }
+    }
+
 }

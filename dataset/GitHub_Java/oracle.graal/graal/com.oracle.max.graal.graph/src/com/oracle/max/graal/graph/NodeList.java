@@ -27,9 +27,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 
-import com.oracle.max.graal.graph.iterators.*;
-
-public abstract class NodeList<T extends Node> extends NodeIterable<T> implements List<T> {
+public abstract class NodeList<T extends Node> implements Iterable<T>, List<T> {
 
     protected static final Node[] EMPTY_NODE_ARRAY = new Node[0];
 
@@ -64,21 +62,6 @@ public abstract class NodeList<T extends Node> extends NodeIterable<T> implement
         }
     }
 
-    protected NodeList(List<? extends T> elements) {
-        if (elements == null || elements.isEmpty()) {
-            this.size = 0;
-            this.nodes = EMPTY_NODE_ARRAY;
-            this.initialSize = 0;
-        } else {
-            this.size = elements.size();
-            this.initialSize = elements.size();
-            this.nodes = new Node[elements.size()];
-            for (int i = 0; i < elements.size(); i++) {
-                this.nodes[i] = elements.get(i);
-            }
-        }
-    }
-
     protected abstract void update(T oldNode, T newNode);
 
     @Override
@@ -89,16 +72,6 @@ public abstract class NodeList<T extends Node> extends NodeIterable<T> implement
     @Override
     public final boolean isEmpty() {
         return size == 0;
-    }
-
-    @Override
-    public boolean isNotEmpty() {
-        return size > 0;
-    }
-
-    @Override
-    public int count() {
-        return size;
     }
 
     protected final void incModCount() {
@@ -241,7 +214,6 @@ public abstract class NodeList<T extends Node> extends NodeIterable<T> implement
         };
     }
 
-    @Override
     public boolean contains(T other) {
         for (int i = 0; i < size; i++) {
             if (nodes[i] == other) {
@@ -251,10 +223,33 @@ public abstract class NodeList<T extends Node> extends NodeIterable<T> implement
         return false;
     }
 
-    @SuppressWarnings("unchecked")
-    @Override
-    public List<T> snapshot() {
-        return (List<T>) Arrays.asList(Arrays.copyOf(this.nodes, this.size));
+    public Iterable<T> snapshot() {
+        return new Iterable<T>() {
+
+            @Override
+            public Iterator<T> iterator() {
+                return new Iterator<T>() {
+                    private Node[] nodesCopy = Arrays.copyOf(NodeList.this.nodes, NodeList.this.size);
+                    private int index = 0;
+
+                    @Override
+                    public boolean hasNext() {
+                        return index < nodesCopy.length;
+                    }
+
+                    @SuppressWarnings("unchecked")
+                    @Override
+                    public T next() {
+                        return (T) nodesCopy[index++];
+                    }
+
+                    @Override
+                    public void remove() {
+                        throw new UnsupportedOperationException();
+                    }
+                };
+            }
+        };
     }
 
     @SuppressWarnings("unchecked")

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,8 +22,6 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
-import static com.sun.cri.ci.CiValueUtil.*;
-
 import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.AMD64Assembler.ConditionFlag;
 import com.oracle.max.asm.target.amd64.*;
@@ -43,17 +41,19 @@ public enum AMD64ConvertFLOpcode implements LIROpcode {
         return new AMD64LIRInstruction(this, result, null, inputs, LIRInstruction.NO_OPERANDS, temps) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                emit(tasm, masm, result(), stub, input(0), temp(0));
+                CiValue input = input(0);
+                CiValue scratch = temp(0);
+                emit(tasm, masm, result(), stub, input, scratch);
             }
         };
     }
 
     private void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CompilerStub stub, CiValue input, CiValue scratch) {
-        CiRegister dst = asLongReg(result);
-        CiRegister tmp = asLongReg(scratch);
+        CiRegister dst = tasm.asLongReg(result);
+        CiRegister tmp = tasm.asLongReg(scratch);
         switch (this) {
-            case F2L: masm.cvttss2siq(dst, asFloatReg(input)); break;
-            case D2L: masm.cvttsd2siq(dst, asDoubleReg(input)); break;
+            case F2L: masm.cvttss2siq(dst, tasm.asFloatReg(input)); break;
+            case D2L: masm.cvttsd2siq(dst, tasm.asDoubleReg(input)); break;
             default: throw Util.shouldNotReachHere();
         }
 
@@ -61,7 +61,7 @@ public enum AMD64ConvertFLOpcode implements LIROpcode {
         masm.movq(tmp, java.lang.Long.MIN_VALUE);
         masm.cmpq(dst, tmp);
         masm.jcc(ConditionFlag.notEqual, endLabel);
-        AMD64CallOpcode.callStub(tasm, masm, stub, null, result, input);
+        AMD64CallOpcode.callStub(tasm, masm, stub, stub.resultKind, null, result, input);
         masm.bind(endLabel);
     }
 }

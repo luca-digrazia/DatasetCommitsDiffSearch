@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,16 +24,16 @@ package com.oracle.max.graal.compiler.target.amd64;
 
 import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ci.CiCompiler.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.cri.xir.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.gen.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.stub.*;
 import com.oracle.max.graal.compiler.stub.CompilerStub.Id;
 import com.oracle.max.graal.compiler.target.*;
+import com.sun.cri.ci.CiCompiler.DebugInfoLevel;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
+import com.sun.cri.xir.*;
 
 /**
  * The {@code X86Backend} class represents the backend for the AMD64 architecture.
@@ -54,8 +54,8 @@ public class AMD64Backend extends Backend {
     }
 
     @Override
-    public FrameMap newFrameMap(RiRuntime runtime, CiTarget target, RiRegisterConfig registerConfig) {
-        return new FrameMap(runtime, target, registerConfig);
+    public FrameMap newFrameMap(GraalCompilation compilation, RiResolvedMethod method) {
+        return new FrameMap(compilation, method);
     }
 
     @Override
@@ -72,7 +72,7 @@ public class AMD64Backend extends Backend {
     public CompilerStub emit(GraalContext context, Id stub) {
         final GraalCompilation comp = new GraalCompilation(context, compiler, null, -1, null, DebugInfoLevel.FULL);
         try {
-            return new AMD64CompilerStubEmitter(comp, stub.arguments, stub.resultKind).emit(stub);
+            return new AMD64CompilerStubEmitter(context, comp, stub.arguments, stub.resultKind).emit(stub);
         } finally {
             comp.close();
         }
@@ -82,7 +82,7 @@ public class AMD64Backend extends Backend {
     public CompilerStub emit(GraalContext context, CiRuntimeCall rtCall) {
         final GraalCompilation comp = new GraalCompilation(context, compiler, null, -1, null, DebugInfoLevel.FULL);
         try {
-            return new AMD64CompilerStubEmitter(comp, rtCall.arguments, rtCall.resultKind).emit(rtCall);
+            return new AMD64CompilerStubEmitter(context, comp, rtCall.arguments, rtCall.resultKind).emit(rtCall);
         } finally {
             comp.close();
         }
@@ -102,7 +102,7 @@ public class AMD64Backend extends Backend {
     public CompilerStub emit(GraalContext context, XirTemplate t) {
         final GraalCompilation comp = new GraalCompilation(context, compiler, null, -1, null, DebugInfoLevel.FULL);
         try {
-            return new AMD64CompilerStubEmitter(comp, getArgumentKinds(t), t.resultOperand.kind).emit(t);
+            return new AMD64CompilerStubEmitter(context, comp, getArgumentKinds(t), t.resultOperand.kind).emit(t);
         } finally {
             comp.close();
         }

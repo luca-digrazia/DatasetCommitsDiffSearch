@@ -22,11 +22,11 @@
  */
 package com.oracle.max.graal.nodes.calc;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.PhiNode.PhiType;
 import com.oracle.max.graal.nodes.spi.*;
+import com.sun.cri.ci.*;
 
 /**
  * The {@code ConditionalNode} class represents a comparison that yields one of two values. Note that these nodes are not
@@ -81,8 +81,8 @@ public class ConditionalNode extends BinaryNode implements Canonicalizable, LIRL
         ifNode.setTrueSuccessor(BeginNode.begin(trueEnd));
         ifNode.setFalseSuccessor(BeginNode.begin(falseEnd));
         MergeNode merge = graph.add(new MergeNode());
-        merge.addForwardEnd(trueEnd);
-        merge.addForwardEnd(falseEnd);
+        merge.addEnd(trueEnd);
+        merge.addEnd(falseEnd);
         PhiNode phi = graph.unique(new PhiNode(kind, merge, PhiType.Value));
         phi.addInput(trueValue);
         phi.addInput(falseValue);
@@ -90,7 +90,7 @@ public class ConditionalNode extends BinaryNode implements Canonicalizable, LIRL
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
+    public Node canonical(CanonicalizerTool tool) {
         if (condition instanceof ConstantNode) {
             ConstantNode c = (ConstantNode) condition;
             if (c.asConstant().asBoolean()) {

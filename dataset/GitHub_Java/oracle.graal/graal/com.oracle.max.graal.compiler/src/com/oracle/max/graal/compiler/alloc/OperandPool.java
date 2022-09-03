@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,8 +21,6 @@
  * questions.
  */
 package com.oracle.max.graal.compiler.alloc;
-
-import static com.sun.cri.ci.CiValueUtil.*;
 
 import java.util.*;
 
@@ -86,7 +84,7 @@ public final class OperandPool {
     private BitMap mustStayInMemory;
 
     /**
-     * Flags that can be set for {@linkplain CiValue#xxisVariable() variable} operands.
+     * Flags that can be set for {@linkplain CiValue#isVariable() variable} operands.
      */
     public enum VariableFlag {
         /**
@@ -110,16 +108,15 @@ public final class OperandPool {
     }
 
     private static BitMap set(BitMap map, CiVariable variable) {
-        BitMap result = map;
-        if (result == null) {
+        if (map == null) {
             int length = BitMap.roundUpLength(variable.index + 1);
-            result = new BitMap(length);
-        } else if (result.size() <= variable.index) {
+            map = new BitMap(length);
+        } else if (map.size() <= variable.index) {
             int length = BitMap.roundUpLength(variable.index + 1);
-            result.grow(length);
+            map.grow(length);
         }
-        result.set(variable.index);
-        return result;
+        map.set(variable.index);
+        return map;
     }
 
     private static boolean get(BitMap map, CiVariable variable) {
@@ -135,9 +132,10 @@ public final class OperandPool {
      * @param target description of the target architecture for a compilation
      */
     public OperandPool(CiTarget target) {
-        this.registers = target.arch.registers;
+        CiRegister[] registers = target.arch.registers;
         this.firstVariableNumber = registers.length;
-        variables = new ArrayList<>(INITIAL_VARIABLE_CAPACITY);
+        this.registers = registers;
+        variables = new ArrayList<CiVariable>(INITIAL_VARIABLE_CAPACITY);
         variableDefs = GraalOptions.DetailedAsserts ? new ArrayList<ValueNode>(INITIAL_VARIABLE_CAPACITY) : null;
     }
 
@@ -197,12 +195,12 @@ public final class OperandPool {
      * @return the unique number for {@code operand} in the range {@code [0 .. size())}
      */
     public int operandNumber(CiValue operand) {
-        if (isRegister(operand)) {
-            int number = asRegister(operand).number;
+        if (operand.isRegister()) {
+            int number = operand.asRegister().number;
             assert number < firstVariableNumber;
             return number;
         }
-        assert isVariable(operand) : operand;
+        assert operand.isVariable() : operand;
         return firstVariableNumber + ((CiVariable) operand).index;
     }
 

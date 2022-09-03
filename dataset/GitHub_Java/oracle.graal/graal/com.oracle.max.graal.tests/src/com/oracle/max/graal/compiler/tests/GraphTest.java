@@ -28,14 +28,12 @@ import org.junit.*;
 
 import junit.framework.Assert;
 
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.phases.*;
-import com.oracle.max.graal.compiler.phases.PhasePlan.*;
+import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.graphbuilder.*;
 import com.oracle.max.graal.cri.*;
-import com.oracle.max.graal.java.*;
 import com.oracle.max.graal.nodes.*;
-import com.oracle.max.graal.printer.*;
+import com.sun.cri.ri.*;
 
 /**
  * Base class for Graal compiler unit tests. These are white box tests
@@ -102,15 +100,9 @@ public abstract class GraphTest {
      */
     protected StructuredGraph parse(Method m) {
         RiResolvedMethod riMethod = runtime.getRiMethod(m);
-        StructuredGraph graph = new StructuredGraph(riMethod);
-        new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getSnippetDefault()).apply(graph);
+        StructuredGraph graph = new StructuredGraph();
+        new GraphBuilderPhase(runtime, riMethod, null, GraphBuilderConfiguration.getDeoptFreeDefault()).apply(graph);
         return graph;
-    }
-
-    protected PhasePlan getDefaultPhasePlan() {
-        PhasePlan plan = new PhasePlan();
-        plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getSnippetDefault()));
-        return plan;
     }
 
     protected void print(String title, StructuredGraph... graphs) {

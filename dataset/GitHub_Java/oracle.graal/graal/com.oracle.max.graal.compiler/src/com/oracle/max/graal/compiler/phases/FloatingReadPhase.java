@@ -24,7 +24,6 @@ package com.oracle.max.graal.compiler.phases;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.loop.*;
@@ -33,6 +32,7 @@ import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.PhiNode.*;
 import com.oracle.max.graal.nodes.extended.*;
+import com.sun.cri.ci.*;
 
 public class FloatingReadPhase extends Phase {
 
@@ -44,7 +44,7 @@ public class FloatingReadPhase extends Phase {
 
         public MemoryMap(Block block) {
             this.block = block;
-            map = new IdentityHashMap<>();
+            map = new IdentityHashMap<Object, Node>();
         }
 
         public MemoryMap(Block block, MemoryMap other) {
@@ -107,7 +107,7 @@ public class FloatingReadPhase extends Phase {
             mergeOperationCount++;
         }
 
-        private void mergeNodes(Object location, Node original, Node newValue, Block mergeBlock) {
+        private void mergeNodes(Object location, Node original, Node newValue, Block block) {
             if (original == newValue) {
                 // Nothing to merge.
                 if (GraalOptions.TraceMemoryMaps) {
@@ -115,7 +115,7 @@ public class FloatingReadPhase extends Phase {
                 }
                 return;
             }
-            MergeNode m = (MergeNode) mergeBlock.firstNode();
+            MergeNode m = (MergeNode) block.firstNode();
             if (m.isPhiAtMerge(original)) {
                 PhiNode phi = (PhiNode) original;
                 phi.addInput((ValueNode) newValue);
@@ -124,6 +124,7 @@ public class FloatingReadPhase extends Phase {
                 }
                 assert phi.valueCount() <= phi.merge().endCount() : phi.merge();
             } else {
+                assert m != null;
                 PhiNode phi = m.graph().unique(new PhiNode(CiKind.Illegal, m, PhiType.Memory));
                 for (int i = 0; i < mergeOperationCount + 1; ++i) {
                     phi.addInput((ValueNode) original);
@@ -177,7 +178,7 @@ public class FloatingReadPhase extends Phase {
 
         public void createLoopEntryMemoryMap(Set<Object> modifiedLocations, Loop loop) {
 
-            loopEntryMap = new IdentityHashMap<>();
+            loopEntryMap = new IdentityHashMap<Object, Node>();
 
             for (Object modifiedLocation : modifiedLocations) {
                 Node other;
@@ -186,19 +187,19 @@ public class FloatingReadPhase extends Phase {
                 } else {
                     other = map.get(LocationNode.ANY_LOCATION);
                 }
-                createLoopEntryPhi(modifiedLocation, other, loop);
+                createLoopEntryPhi(modifiedLocation, other, loop, loopEntryMap);
             }
 
             if (modifiedLocations.contains(LocationNode.ANY_LOCATION)) {
                 for (Map.Entry<Object, Node> entry : map.entrySet()) {
                     if (!modifiedLocations.contains(entry.getKey())) {
-                        createLoopEntryPhi(entry.getKey(), entry.getValue(), loop);
+                        createLoopEntryPhi(entry.getKey(), entry.getValue(), loop, loopEntryMap);
                     }
                 }
             }
         }
 
-        private void createLoopEntryPhi(Object modifiedLocation, Node other, Loop loop) {
+        private void createLoopEntryPhi(Object modifiedLocation, Node other, Loop loop, IdentityHashMap<Object, Node> loopEntryMap) {
             PhiNode phi = other.graph().unique(new PhiNode(CiKind.Illegal, loop.loopBegin(), PhiType.Memory));
             phi.addInput((ValueNode) other);
             map.put(modifiedLocation, phi);
@@ -219,10 +220,10 @@ public class FloatingReadPhase extends Phase {
 
         LoopInfo loopInfo = LoopUtil.computeLoopInfo(graph);
 
-        HashMap<Loop, Set<Object>> modifiedValues = new HashMap<>();
+        HashMap<Loop, Set<Object>> modifiedValues = new HashMap<Loop, Set<Object>>();
         // Initialize modified values to empty hash set.
         for (Loop loop : loopInfo.loops()) {
-            modifiedValues.put(loop, new HashSet<>());
+            modifiedValues.put(loop, new HashSet<Object>());
         }
 
         // Get modified values in loops.
@@ -244,12 +245,12 @@ public class FloatingReadPhase extends Phase {
         }
 
         if (GraalOptions.TraceMemoryMaps) {
-            print(loopInfo, modifiedValues);
+            print(graph, loopInfo, modifiedValues);
         }
 
         // Identify blocks.
         final IdentifyBlocksPhase s = new IdentifyBlocksPhase(false);
-        s.apply(graph, currentContext);
+        s.apply(graph, context);
         List<Block> blocks = s.getBlocks();
 
         // Process blocks (predecessors first).
@@ -259,7 +260,7 @@ public class FloatingReadPhase extends Phase {
         }
     }
 
-    private static void addStartCheckpoint(StructuredGraph graph) {
+    private void addStartCheckpoint(StructuredGraph graph) {
         BeginNode entryPoint = graph.start();
         FixedNode next = entryPoint.next();
         if (!(next instanceof MemoryCheckpoint)) {
@@ -328,7 +329,7 @@ public class FloatingReadPhase extends Phase {
         }
     }
 
-    private static void traceMemoryCheckpoint(Loop loop, HashMap<Loop, Set<Object>> modifiedValues) {
+    private void traceMemoryCheckpoint(Loop loop, HashMap<Loop, Set<Object>> modifiedValues) {
         modifiedValues.get(loop).add(LocationNode.ANY_LOCATION);
     }
 
@@ -339,11 +340,11 @@ public class FloatingReadPhase extends Phase {
         }
     }
 
-    private static void traceWrite(Loop loop, Object locationIdentity, HashMap<Loop, Set<Object>> modifiedValues) {
+    private void traceWrite(Loop loop, Object locationIdentity, HashMap<Loop, Set<Object>> modifiedValues) {
         modifiedValues.get(loop).add(locationIdentity);
     }
 
-    private static void print(LoopInfo loopInfo, HashMap<Loop, Set<Object>> modifiedValues) {
+    private void print(StructuredGraph graph, LoopInfo loopInfo, HashMap<Loop, Set<Object>> modifiedValues) {
         TTY.println();
         TTY.println("Loops:");
         for (Loop loop : loopInfo.loops()) {

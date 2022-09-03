@@ -23,14 +23,15 @@
 package com.oracle.max.criutils;
 
 import java.io.*;
+import java.lang.reflect.*;
 import java.util.*;
 import java.util.regex.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CompilationResult.CodeAnnotation;
-import com.oracle.graal.api.code.CompilationResult.CodeComment;
-import com.oracle.graal.api.code.CompilationResult.JumpTable;
-import com.oracle.graal.api.code.CompilationResult.LookupTable;
+import com.sun.cri.ci.*;
+import com.sun.cri.ci.CiTargetMethod.CodeAnnotation;
+import com.sun.cri.ci.CiTargetMethod.CodeComment;
+import com.sun.cri.ci.CiTargetMethod.JumpTable;
+import com.sun.cri.ci.CiTargetMethod.LookupTable;
 
 
 /**
@@ -86,7 +87,7 @@ import com.oracle.graal.api.code.CompilationResult.LookupTable;
  */
 public class HexCodeFile {
 
-    public static final String NEW_LINE = CodeUtil.NEW_LINE;
+    public static final String NEW_LINE = CiUtil.NEW_LINE;
     public static final String SECTION_DELIM = " <||@";
     public static final Pattern SECTION = Pattern.compile("(\\S+)\\s+(.*)", Pattern.DOTALL);
     public static final Pattern COMMENT = Pattern.compile("(\\d+)\\s+(.*)", Pattern.DOTALL);
@@ -109,18 +110,18 @@ public class HexCodeFile {
     /**
      * Map from a machine code position to a list of comments for the position.
      */
-    public final Map<Integer, List<String>> comments = new TreeMap<>();
+    public final Map<Integer, List<String>> comments = new TreeMap<Integer, List<String>>();
 
     /**
      * Map from a machine code position to a comment for the operands of the instruction at the position.
      */
-    public final Map<Integer, String> operandComments = new TreeMap<>();
+    public final Map<Integer, String> operandComments = new TreeMap<Integer, String>();
 
     public final byte[] code;
 
-    public final ArrayList<JumpTable> jumpTables = new ArrayList<>();
+    public final ArrayList<JumpTable> jumpTables = new ArrayList<JumpTable>();
 
-    public final ArrayList<LookupTable> lookupTables = new ArrayList<>();
+    public final ArrayList<LookupTable> lookupTables = new ArrayList<LookupTable>();
 
     public final String isa;
 
@@ -138,12 +139,12 @@ public class HexCodeFile {
     /**
      * Parses a string in the format produced by {@link #toString()} to produce a {@link HexCodeFile} object.
      */
-    public static HexCodeFile parse(String input, int sourceOffset, String source, String sourceName) {
-        return new Parser(input, sourceOffset, source, sourceName).hcf;
+    public static HexCodeFile parse(String source, String sourceName) {
+        return new Parser(source, sourceName).hcf;
     }
 
     /**
-     * Formats this HexCodeFile as a string that can be parsed with {@link #parse(String, int, String, String)}.
+     * Formats this HexCodeFile as a string that can be parsed with {@link #parse(String, String)}.
      */
     @Override
     public String toString() {
@@ -204,7 +205,7 @@ public class HexCodeFile {
     public void addComment(int pos, String comment) {
         List<String> list = comments.get(pos);
         if (list == null) {
-            list = new ArrayList<>();
+            list = new ArrayList<String>();
             comments.put(pos, list);
         }
         list.add(encodeString(comment));
@@ -243,9 +244,8 @@ public class HexCodeFile {
     /**
      * Modifies a string to mangle any substrings matching {@link #SECTION_DELIM}.
      */
-    public static String encodeString(String input) {
+    public static String encodeString(String s) {
         int index;
-        String s = input;
         while ((index = s.indexOf(SECTION_DELIM)) != -1) {
             s = s.substring(0, index) + " < |@" + s.substring(index + SECTION_DELIM.length());
         }
@@ -257,6 +257,18 @@ public class HexCodeFile {
      * and produce a {@link HexCodeFile} object.
      */
     static class Parser {
+        private static final Field offsetField = stringField("offset");
+        private static final Field valueField = stringField("value");
+
+        static Field stringField(String name) {
+            try {
+                Field field = String.class.getDeclaredField(name);
+                field.setAccessible(true);
+                return field;
+            } catch (Exception e) {
+                throw new Error("Could not get reflective access to field " + String.class.getName() + "." + name);
+            }
+        }
 
         final String input;
         final String inputSource;
@@ -266,10 +278,10 @@ public class HexCodeFile {
         long startAddress;
         HexCodeFile hcf;
 
-        Parser(String input, int sourceOffset, String source, String sourceName) {
-            this.input = input;
+        Parser(String source, String sourceName) {
+            this.input = storage(source);
             this.inputSource = sourceName;
-            parseSections(sourceOffset, source);
+            parseSections(source);
         }
 
         void makeHCF() {
@@ -280,22 +292,49 @@ public class HexCodeFile {
             }
         }
 
-        void checkHCF(String section, int offset) {
-            check(hcf != null, offset, section + " section must be after Platform and HexCode section");
+        void checkHCF(String section, String where) {
+            check(hcf != null, where, section + " section must be after Platform and HexCode section");
         }
 
-        void check(boolean condition, int offset, String message) {
+        void check(boolean condition, String where, String message) {
             if (!condition) {
-                error(offset, message);
+                error(where, message);
             }
+        }
+
+        int offset(String s) {
+            try {
+                return offsetField.getInt(s);
+            } catch (Exception e) {
+                throw new Error("Could not read value of field " + offsetField, e);
+            }
+        }
+
+        /**
+         * Gets a string corresponding to the storage char array for a given string.
+         */
+        String storage(String s) {
+            try {
+                char[] value = (char[]) valueField.get(s);
+                if (offset(s) == 0 && value.length == s.length()) {
+                    return s;
+                }
+                return new String(value);
+            } catch (Exception e) {
+                throw new Error("Could not read value of field " + valueField, e);
+            }
+        }
+
+        Error error(String where, String message) {
+            return error(offset(where), message);
         }
 
         Error error(int offset, String message) {
             throw new Error(errorMessage(offset, message));
         }
 
-        void warning(int offset, String message) {
-            System.err.println("Warning: " + errorMessage(offset, message));
+        void warning(String where, String message) {
+            System.err.println("Warning: " + errorMessage(offset(where), message));
         }
 
         String errorMessage(int offset, String message) {
@@ -318,75 +357,67 @@ public class HexCodeFile {
 
         InputPos filePos(int index) {
             assert input != null;
-            int lineStart = input.lastIndexOf(HexCodeFile.NEW_LINE, index) + 1;
-
-            String l = input.substring(lineStart, lineStart + 10);
-            System.out.println("YYY" + input.substring(index, index + 10) + "...");
-            System.out.println("XXX" + l + "...");
-
-            int pos = input.indexOf(HexCodeFile.NEW_LINE, 0);
             int line = 1;
-            while (pos > 0 && pos < index) {
-                line++;
-                pos = input.indexOf(HexCodeFile.NEW_LINE, pos + 1);
+            int lineEnd = 0;
+            int lineStart = 0;
+            while ((lineEnd = input.indexOf(HexCodeFile.NEW_LINE, lineStart)) != -1) {
+                if (lineEnd < index) {
+                    line++;
+                    lineStart = lineEnd + HexCodeFile.NEW_LINE.length();
+                } else {
+                    break;
+                }
             }
             return new InputPos(line, index - lineStart);
         }
 
-        void parseSections(int offset, String source) {
-            assert input.startsWith(source, offset);
+        void parseSections(String source) {
             int index = 0;
             int endIndex = source.indexOf(SECTION_DELIM);
             while (endIndex != -1) {
-                while (source.charAt(index) <= ' ') {
-                    index++;
-                }
                 String section = source.substring(index, endIndex).trim();
-                parseSection(offset + index, section);
+                parseSection(section);
                 index = endIndex + SECTION_DELIM.length();
                 endIndex = source.indexOf(SECTION_DELIM, index);
             }
         }
 
-        int parseInt(int offset, String value) {
+        int parseInt(String value) {
             try {
                 return Integer.parseInt(value);
             } catch (NumberFormatException e) {
-                throw error(offset, "Not a valid integer: " + value);
+                throw error(value, "Not a valid integer: " + value);
             }
         }
 
-        void parseSection(int offset, String section) {
+        void parseSection(String section) {
             if (section.isEmpty()) {
                 return;
             }
-            assert input.startsWith(section, offset);
             Matcher m = HexCodeFile.SECTION.matcher(section);
-            check(m.matches(), offset, "Section does not match pattern " + HexCodeFile.SECTION);
+            check(m.matches(), section, "Section does not match pattern " + HexCodeFile.SECTION);
 
             String header = m.group(1);
             String body = m.group(2);
-            int headerOffset = offset + m.start(1);
-            int bodyOffset = offset + m.start(2);
 
             if (header.equals("Platform")) {
-                check(isa == null, bodyOffset, "Duplicate Platform section found");
+                check(isa == null, body, "Duplicate Platform section found");
                 m = HexCodeFile.PLATFORM.matcher(body);
-                check(m.matches(), bodyOffset, "Platform does not match pattern " + HexCodeFile.PLATFORM);
+                check(m.matches(), body, "Platform does not match pattern " + HexCodeFile.PLATFORM);
                 isa = m.group(1);
-                wordWidth = parseInt(bodyOffset + m.start(2), m.group(2));
+                wordWidth = parseInt(m.group(2));
                 makeHCF();
             } else if (header.equals("HexCode")) {
-                check(code == null, bodyOffset, "Duplicate Code section found");
+                check(code == null, body, "Duplicate Code section found");
                 m = HexCodeFile.HEX_CODE.matcher(body);
-                check(m.matches(), bodyOffset, "Code does not match pattern " + HexCodeFile.HEX_CODE);
+                check(m.matches(), body, "Code does not match pattern " + HexCodeFile.HEX_CODE);
                 String hexAddress = m.group(1);
                 startAddress = Long.valueOf(hexAddress, 16);
                 String hexCode = m.group(2);
                 if (hexCode == null) {
                     code = new byte[0];
                 } else {
-                    check((hexCode.length() % 2) == 0, bodyOffset, "Hex code length must be even");
+                    check((hexCode.length() % 2) == 0, body, "Hex code length must be even");
                     code = new byte[hexCode.length() / 2];
                     for (int i = 0; i < code.length; i++) {
                         String hexByte = hexCode.substring(i * 2, (i + 1) * 2);
@@ -395,39 +426,39 @@ public class HexCodeFile {
                 }
                 makeHCF();
             } else if (header.equals("Comment")) {
-                checkHCF("Comment", headerOffset);
+                checkHCF("Comment", header);
                 m = HexCodeFile.COMMENT.matcher(body);
-                check(m.matches(), bodyOffset, "Comment does not match pattern " + HexCodeFile.COMMENT);
-                int pos = parseInt(bodyOffset + m.start(1), m.group(1));
+                check(m.matches(), body, "Comment does not match pattern " + HexCodeFile.COMMENT);
+                int pos = parseInt(m.group(1));
                 String comment = m.group(2);
                 hcf.addComment(pos, comment);
             } else if (header.equals("OperandComment")) {
-                checkHCF("OperandComment", headerOffset);
+                checkHCF("OperandComment", header);
                 m = HexCodeFile.OPERAND_COMMENT.matcher(body);
-                check(m.matches(), bodyOffset, "OperandComment does not match pattern " + HexCodeFile.OPERAND_COMMENT);
-                int pos = parseInt(bodyOffset + m.start(1), m.group(1));
+                check(m.matches(), body, "OperandComment does not match pattern " + HexCodeFile.OPERAND_COMMENT);
+                int pos = parseInt(m.group(1));
                 String comment = m.group(2);
                 hcf.addOperandComment(pos, comment);
             } else if (header.equals("JumpTable")) {
-                checkHCF("JumpTable", headerOffset);
+                checkHCF("JumpTable", header);
                 m = HexCodeFile.JUMP_TABLE.matcher(body);
-                check(m.matches(), bodyOffset, "JumpTable does not match pattern " + HexCodeFile.JUMP_TABLE);
-                int pos = parseInt(bodyOffset + m.start(1), m.group(1));
-                int entrySize = parseInt(bodyOffset + m.start(2), m.group(2));
-                int low = parseInt(bodyOffset + m.start(3), m.group(3));
-                int high = parseInt(bodyOffset + m.start(4), m.group(4));
+                check(m.matches(), body, "JumpTable does not match pattern " + HexCodeFile.JUMP_TABLE);
+                int pos = parseInt(m.group(1));
+                int entrySize = parseInt(m.group(2));
+                int low = parseInt(m.group(3));
+                int high = parseInt(m.group(4));
                 hcf.jumpTables.add(new JumpTable(pos, low, high, entrySize));
             } else if (header.equals("LookupTable")) {
-                checkHCF("LookupTable", headerOffset);
+                checkHCF("LookupTable", header);
                 m = HexCodeFile.LOOKUP_TABLE.matcher(body);
-                check(m.matches(), bodyOffset, "LookupTable does not match pattern " + HexCodeFile.LOOKUP_TABLE);
-                int pos = parseInt(bodyOffset + m.start(1), m.group(1));
-                int npairs = parseInt(bodyOffset + m.start(2), m.group(2));
-                int keySize = parseInt(bodyOffset + m.start(3), m.group(3));
-                int offsetSize = parseInt(bodyOffset + m.start(4), m.group(4));
+                check(m.matches(), body, "LookupTable does not match pattern " + HexCodeFile.LOOKUP_TABLE);
+                int pos = parseInt(m.group(1));
+                int npairs = parseInt(m.group(2));
+                int keySize = parseInt(m.group(3));
+                int offsetSize = parseInt(m.group(4));
                 hcf.lookupTables.add(new LookupTable(pos, npairs, keySize, offsetSize));
             } else {
-                error(offset, "Unknown section header: " + header);
+                error(section, "Unknown section header: " + header);
             }
         }
     }

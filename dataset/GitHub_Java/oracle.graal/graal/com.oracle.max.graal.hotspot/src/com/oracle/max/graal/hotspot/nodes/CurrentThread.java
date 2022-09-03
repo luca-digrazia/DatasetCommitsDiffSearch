@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,10 +23,10 @@
 package com.oracle.max.graal.hotspot.nodes;
 
 import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.nodes.calc.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
+import com.sun.cri.ci.*;
 
 public final class CurrentThread extends FloatingNode implements LIRLowerable {
 
@@ -39,10 +39,9 @@ public final class CurrentThread extends FloatingNode implements LIRLowerable {
 
     @Override
     public void generate(LIRGeneratorTool generator) {
-        generator.setResult(this, generator.emitLoad(new CiAddress(CiKind.Object, AMD64.r15.asValue(generator.target().wordKind), threadObjectOffset), false));
+        generator.setResult(this, generator.emitLoad(new CiAddress(generator.target().wordKind, AMD64.r15.asValue(generator.target().wordKind), threadObjectOffset), CiKind.Object, false));
     }
 
-    @SuppressWarnings("unused")
     @NodeIntrinsic
     public static Object get(int threadObjectOffset) {
         throw new UnsupportedOperationException();

@@ -24,18 +24,25 @@ package com.oracle.max.graal.compiler.schedule;
 
 import java.util.*;
 
-import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.nodes.*;
+import com.oracle.max.graal.nodes.java.*;
 
 
 public class Block {
 
     private int blockID;
-    private final List<Block> successors = new ArrayList<Block>();
-    private final List<Block> predecessors = new ArrayList<Block>();
+    protected final List<Block> successors = new ArrayList<Block>();
+    protected final List<Block> predecessors = new ArrayList<Block>();
+    private final List<Block> dominated = new ArrayList<Block>();
     private List<Node> instructions = new ArrayList<Node>();
+    private Block alwaysReachedBlock;
     private Block dominator;
-    private final List<Block> dominators = new ArrayList<Block>();
+    private FixedNode anchor;
+    private EndNode end;
+    private int loopDepth = 0;
+    private int loopIndex = -1;
+    private double probability;
 
     private Node firstNode;
     private Node lastNode;
@@ -46,10 +53,63 @@ public class Block {
 
     public void setFirstNode(Node node) {
         this.firstNode = node;
+        this.anchor = null;
+    }
+
+    public Block alwaysReachedBlock() {
+        return alwaysReachedBlock;
+    }
+
+    public boolean isExceptionBlock() {
+        return firstNode() instanceof ExceptionObjectNode;
+    }
+
+    public void setAlwaysReachedBlock(Block alwaysReachedBlock) {
+        assert alwaysReachedBlock != this;
+        this.alwaysReachedBlock = alwaysReachedBlock;
+    }
+
+    public EndNode end() {
+        return end;
+    }
+
+    public void setEnd(EndNode end) {
+        this.end = end;
     }
 
     public Node lastNode() {
         return lastNode;
+    }
+
+    public int loopDepth() {
+        return loopDepth;
+    }
+
+    public void setLoopDepth(int i) {
+        loopDepth = i;
+    }
+
+    public int loopIndex() {
+        return loopIndex;
+    }
+
+    public void setLoopIndex(int i) {
+        loopIndex = i;
+    }
+
+    public double probability() {
+        return probability;
+    }
+
+
+    public void setProbability(double probability) {
+        if (probability > this.probability) {
+            this.probability = probability;
+        }
+    }
+
+    public BeginNode createAnchor() {
+        return (BeginNode) firstNode;
     }
 
     public void setLastNode(Node node) {
@@ -64,11 +124,11 @@ public class Block {
         assert this.dominator == null;
         assert dominator != null;
         this.dominator = dominator;
-        dominator.dominators.add(this);
+        dominator.dominated.add(this);
     }
 
-    public List<Block> getDominators() {
-        return Collections.unmodifiableList(dominators);
+    public List<Block> getDominated() {
+        return Collections.unmodifiableList(dominated);
     }
 
     public List<Node> getInstructions() {
@@ -98,7 +158,7 @@ public class Block {
      * @param closure the closure to apply to each block
      */
     public void iteratePreOrder(BlockClosure closure) {
-        // XXX: identity hash map might be too slow, consider a boolean array or a mark field
+        // TODO: identity hash map might be too slow, consider a boolean array or a mark field
         iterate(new IdentityHashMap<Block, Block>(), closure);
     }
 
@@ -122,11 +182,65 @@ public class Block {
         return "B" + blockID;
     }
 
+    public boolean isLoopHeader() {
+        return firstNode instanceof LoopBeginNode;
+    }
+
+    public boolean isLoopEnd() {
+        return lastNode instanceof LoopEndNode;
+    }
+
     public Block dominator() {
         return dominator;
     }
 
     public void setInstructions(List<Node> instructions) {
         this.instructions = instructions;
+    }
+
+    public static void iteratePostOrder(List<Block> blocks, BlockClosure closure) {
+        ArrayList<Block> startBlocks = new ArrayList<Block>();
+        for (Block block : blocks) {
+            if (block.getPredecessors().size() == 0) {
+                startBlocks.add(block);
+            }
+        }
+        iteratePostOrder(blocks, closure, startBlocks.toArray(new Block[startBlocks.size()]));
+    }
+
+    public static void iteratePostOrder(List<Block> blocks, BlockClosure closure, Block... startBlocks) {
+        BitMap visited = new BitMap(blocks.size());
+        LinkedList<Block> workList = new LinkedList<Block>();
+        for (Block block : startBlocks) {
+            workList.add(block);
+            visited.set(block.blockID());
+        }
+
+        while (!workList.isEmpty()) {
+            Block b = workList.remove();
+
+            closure.apply(b);
+
+            for (Block succ : b.getSuccessors()) {
+                if (!visited.get(succ.blockID())) {
+                    boolean delay = false;
+                    for (Block pred : succ.getPredecessors()) {
+                        if (!visited.get(pred.blockID()) && !(pred.lastNode instanceof LoopEndNode)) {
+                            delay = true;
+                            break;
+                        }
+                    }
+
+                    if (!delay) {
+                        visited.set(succ.blockID());
+                        workList.add(succ);
+                    }
+                }
+            }
+        }
+    }
+
+    public String name() {
+        return "B" + blockID;
     }
 }

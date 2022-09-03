@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,16 +26,13 @@ import java.io.*;
 import java.net.*;
 
 import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.cri.xir.*;
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.target.*;
 import com.oracle.max.graal.cri.*;
-import com.oracle.max.graal.hotspot.bridge.*;
 import com.oracle.max.graal.hotspot.logging.*;
-import com.oracle.max.graal.hotspot.ri.*;
 import com.oracle.max.graal.hotspot.server.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
+import com.sun.cri.xir.*;
 
 /**
  * Singleton class holding the instance of the GraalCompiler.
@@ -63,7 +60,7 @@ public final class CompilerImpl implements Compiler, Remote {
                 System.out.println("Graal compiler started in client/server mode, server: " + remote);
                 Socket socket = new Socket(remote, 1199);
                 ReplacingStreams streams = new ReplacingStreams(socket.getOutputStream(), socket.getInputStream());
-                streams.getInvocation().sendResult(new CompilerToVMImpl());
+                streams.getInvocation().sendResult(new VMEntriesNative());
 
                 theInstance = (Compiler) streams.getInvocation().waitForResult(false);
             } catch (IOException e1) {
@@ -79,15 +76,16 @@ public final class CompilerImpl implements Compiler, Remote {
         }
     }
 
-    public static Compiler initializeServer(CompilerToVM entries) {
+    public static Compiler initializeServer(VMEntries entries) {
         assert theInstance == null;
         theInstance = new CompilerImpl(entries);
         return theInstance;
     }
 
-    private final CompilerToVM vmEntries;
-    private final VMToCompiler vmExits;
+    private final VMEntries vmEntries;
+    private final VMExits vmExits;
 
+    private GraalContext context;
     private HotSpotRuntime runtime;
     private GraalCompiler compiler;
     private CiTarget target;
@@ -98,25 +96,24 @@ public final class CompilerImpl implements Compiler, Remote {
         return config;
     }
 
-    private CompilerImpl(CompilerToVM initialEntries) {
+    private CompilerImpl(VMEntries entries) {
 
-        CompilerToVM entries = initialEntries;
         // initialize VMEntries
         if (entries == null) {
-            entries = new CompilerToVMImpl();
+            entries = new VMEntriesNative();
         }
 
         // initialize VMExits
-        VMToCompiler exits = new VMToCompilerImpl(this);
+        VMExits exits = new VMExitsNative(this);
 
         // logging, etc.
         if (CountingProxy.ENABLED) {
-            exits = CountingProxy.getProxy(VMToCompiler.class, exits);
-            entries = CountingProxy.getProxy(CompilerToVM.class, entries);
+            exits = CountingProxy.getProxy(VMExits.class, exits);
+            entries = CountingProxy.getProxy(VMEntries.class, entries);
         }
         if (Logger.ENABLED) {
-            exits = LoggingProxy.getProxy(VMToCompiler.class, exits);
-            entries = LoggingProxy.getProxy(CompilerToVM.class, entries);
+            exits = LoggingProxy.getProxy(VMExits.class, exits);
+            entries = LoggingProxy.getProxy(VMEntries.class, entries);
         }
 
         // set the final fields
@@ -133,7 +130,7 @@ public final class CompilerImpl implements Compiler, Remote {
         if (target == null) {
             final int wordSize = 8;
             final int stackFrameAlignment = 16;
-            target = new CiTarget(new AMD64(), true, stackFrameAlignment, config.vmPageSize, wordSize, true, true, true);
+            target = new HotSpotTarget(new AMD64(), true, wordSize, stackFrameAlignment, config.vmPageSize, wordSize, true);
         }
 
         return target;
@@ -149,36 +146,35 @@ public final class CompilerImpl implements Compiler, Remote {
     @Override
     public GraalCompiler getCompiler() {
         if (compiler == null) {
+            RiRegisterConfig registerConfig;
+
             // these options are important - graal will not generate correct code without them
             GraalOptions.StackShadowPages = config.stackShadowPages;
 
-            RiXirGenerator generator = new HotSpotXirGenerator(config, getTarget(), getRuntime().getGlobalStubRegisterConfig(), this);
+            registerConfig = getRuntime().globalStubRegConfig;
+            RiXirGenerator generator = new HotSpotXirGenerator(config, getTarget(), registerConfig, this);
             if (Logger.ENABLED) {
                 generator = LoggingProxy.getProxy(RiXirGenerator.class, generator);
             }
-
-            Backend backend = Backend.create(target.arch, runtime, target);
-            generator.initialize(backend.newXirAssembler());
-
-            compiler = new GraalCompiler(getRuntime(), getTarget(), backend, generator);
+            compiler = new GraalCompiler(context, getRuntime(), getTarget(), generator, registerConfig);
         }
         return compiler;
     }
 
     @Override
-    public CompilerToVM getVMEntries() {
+    public VMEntries getVMEntries() {
         return vmEntries;
     }
 
     @Override
-    public VMToCompiler getVMExits() {
+    public VMExits getVMExits() {
         return vmExits;
     }
 
     @Override
     public RiType lookupType(String returnType, HotSpotTypeResolved accessingClass) {
-        if (returnType.length() == 1 && vmExits instanceof VMToCompilerImpl) {
-            VMToCompilerImpl exitsNative = (VMToCompilerImpl) vmExits;
+        if (returnType.length() == 1 && vmExits instanceof VMExitsNative) {
+            VMExitsNative exitsNative = (VMExitsNative) vmExits;
             CiKind kind = CiKind.fromPrimitiveOrVoidTypeChar(returnType.charAt(0));
             switch(kind) {
                 case Boolean:
@@ -213,20 +209,8 @@ public final class CompilerImpl implements Compiler, Remote {
     @Override
     public HotSpotRuntime getRuntime() {
         if (runtime == null) {
-            if (GraalOptions.PrintCFGToFile) {
-//                context.addCompilationObserver(new CFGPrinterObserver());
-            }
-           // if (GraalOptions.PrintIdealGraphLevel != 0 || GraalOptions.Plot || GraalOptions.PlotOnError) {
-             //   CompilationObserver observer;
-               // if (GraalOptions.PrintIdealGraphFile) {
-              //      observer = new IdealGraphPrinterObserver();
-              //  } else {
-              //      observer = new IdealGraphPrinterObserver(GraalOptions.PrintIdealGraphAddress, GraalOptions.PrintIdealGraphPort);
-              //  }
-//                context.addCompilationObserver(observer);
-                // TODO(tw): Install observer.
-           // }
-            runtime = new HotSpotRuntime(config, this);
+            context = new GraalContext("Virtual Machine Compiler");
+            runtime = new HotSpotRuntime(context, config, this);
         }
         return runtime;
     }

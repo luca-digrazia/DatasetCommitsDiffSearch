@@ -22,121 +22,43 @@
  */
 package com.oracle.max.graal.compiler.observer;
 
-import java.util.*;
-
-import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.alloc.*;
-import com.oracle.max.graal.compiler.graph.*;
-import com.oracle.max.graal.graph.*;
-import com.sun.cri.ci.*;
-import com.sun.cri.ri.*;
-
 /**
  * An event that occurred during compilation. Instances of this class provide information about the event and the state
- * of the compilation when the event was raised. {@link #getCompilation()} and {@link #getMethod()} are guaranteed to
- * always return a non-{@code null} value. Other objects provided by getter methods may be {@code null},
- * depending on the available information when and where the event was triggered.
- *
- * @author Peter Hofer
+ * of the compilation when the event was raised. Depending on the state of the compiler and the compilation phase,
+ * different types of objects are provided in the {@link #debugObjects}. The observer should filter events that it is
+ * interested in by checking if an object of a specific type is provided by the event.
  */
 public class CompilationEvent {
 
-    private final C1XCompilation compilation;
-    private final String label;
-    private Graph graph;
+    /**
+     * Marker object for the {@link #debugObject} array: When this object is present, the event is the result of a compilation error.
+     */
+    public static final Object ERROR = new Object() {};
 
-    private BlockMap blockMap;
-    private int codeSize = -1;
+    public final String label;
+    private Object[] debugObjects;
 
-    private LinearScan allocator;
-    private CiTargetMethod targetMethod;
-    private boolean hirValid = false;
-    private boolean lirValid = false;
-
-    private Interval[] intervals;
-    private int intervalsSize;
-    private Interval[] intervalsCopy = null;
-
-    public CompilationEvent(C1XCompilation compilation) {
-        this(compilation, null);
-    }
-
-    private CompilationEvent(C1XCompilation compilation, String label) {
-        assert compilation != null;
+    protected CompilationEvent(String label, Object...debugObjects) {
         this.label = label;
-        this.compilation = compilation;
+        this.debugObjects = debugObjects;
     }
 
-    public CompilationEvent(C1XCompilation compilation, String label, Graph graph, boolean hirValid, boolean lirValid) {
-        this(compilation, label);
-        this.graph = graph;
-        this.hirValid = hirValid;
-        this.lirValid = lirValid;
-    }
-
-    public CompilationEvent(C1XCompilation compilation, String label, Graph graph, boolean hirValid, boolean lirValid, CiTargetMethod targetMethod) {
-        this(compilation, label, graph, hirValid, lirValid);
-        this.targetMethod = targetMethod;
-    }
-
-    public CompilationEvent(C1XCompilation compilation, String label, BlockMap blockMap, int codeSize) {
-        this(compilation, label);
-        this.blockMap = blockMap;
-        this.codeSize = codeSize;
-    }
-
-    public CompilationEvent(C1XCompilation compilation, String label, LinearScan allocator, Interval[] intervals, int intervalsSize) {
-        this(compilation, label);
-        this.allocator = allocator;
-        this.intervals = intervals;
-        this.intervalsSize = intervalsSize;
-    }
-
-    public C1XCompilation getCompilation() {
-        return compilation;
-    }
-
-    public String getLabel() {
-        return label;
-    }
-
-    public RiMethod getMethod() {
-        return compilation.method;
-    }
-
-    public BlockMap getBlockMap() {
-        return blockMap;
-    }
-
-    public Graph getGraph() {
-        return graph;
-    }
-
-    public LinearScan getAllocator() {
-        return allocator;
-    }
-
-    public CiTargetMethod getTargetMethod() {
-        return targetMethod;
-    }
-
-    public boolean isHIRValid() {
-        return hirValid;
-    }
-
-    public boolean isLIRValid() {
-        return lirValid;
-    }
-
-    public Interval[] getIntervals() {
-        if (intervalsCopy == null && intervals != null) {
-            // deferred copy of the valid range of the intervals array
-            intervalsCopy = Arrays.copyOf(intervals, intervalsSize);
+    @SuppressWarnings("unchecked")
+    public <T> T debugObject(Class<T> type) {
+        for (Object o : debugObjects) {
+            if (type.isInstance(o)) {
+                return (T) o;
+            }
         }
-        return intervalsCopy;
+        return null;
     }
 
-    public int getCodeSize() {
-        return codeSize;
+    public boolean hasDebugObject(Object search) {
+        for (Object o : debugObjects) {
+            if (o == search) {
+                return true;
+            }
+        }
+        return false;
     }
 }

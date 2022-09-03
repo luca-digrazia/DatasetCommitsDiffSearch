@@ -37,7 +37,7 @@ public class LoopUtil {
             mark(begin, nodeToLoop);
         }
 
-        List<Loop> rootLoops = new ArrayList<>(1);
+        List<Loop> rootLoops = new ArrayList<Loop>(1);
         LoopInfo info = new LoopInfo(nodeToLoop, rootLoops);
 
         // Get parent-child relationships between loops.
@@ -53,13 +53,11 @@ public class LoopUtil {
 
         //Find exits
         for (Loop loop : info.loops()) {
-            for (FixedNode n : loop.directFixedNodes()) {
+            for (FixedNode n : loop.fixedNodes()) {
                 if (n instanceof ControlSplitNode) {
                     for (BeginNode sux : ((ControlSplitNode) n).blockSuccessors()) {
-                        Loop l = loop;
-                        while (l != null && !l.containsFixed(sux)) {
-                            l.exits().mark(sux);
-                            l = l.parent();
+                        if (!loop.containsFixed(sux)) {
+                            loop.exits().mark(sux);
                         }
                     }
                 }
@@ -105,10 +103,10 @@ public class LoopUtil {
                 mark((LoopBeginNode) n, nodeToLoop);
             } else {
                 if (oldMark != null) {
-                    oldMark.directCFGNodes().clear(n);
+                    oldMark.directCFGNode().clear(n);
                 }
                 nodeToLoop.set(n, loop);
-                loop.directCFGNodes().mark(n);
+                loop.directCFGNode().mark(n);
             }
         }
     }

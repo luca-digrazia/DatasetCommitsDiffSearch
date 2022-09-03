@@ -30,6 +30,6 @@ public interface MergeableState <T> {
     T clone();
     boolean merge(MergeNode merge, Collection<T> withStates);
     void loopBegin(LoopBeginNode loopBegin);
-    void loopEnds(LoopBeginNode loopBegin, Collection<T> loopEndStates);
+    void loopEnd(LoopEndNode loopEnd, T loopEndState);
     void afterSplit(FixedNode node);
 }

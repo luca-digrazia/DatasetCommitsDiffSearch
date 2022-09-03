@@ -22,24 +22,22 @@
  */
 package com.oracle.max.graal.nodes.extended;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.java.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 
 public final class UnboxNode extends FixedWithNextNode implements Node.IterableNodeType, Canonicalizable {
 
     @Input private ValueNode source;
-    @Data private CiKind destinationKind;
 
     public UnboxNode(CiKind kind, ValueNode source) {
         super(StampFactory.forKind(kind));
         this.source = source;
-        this.destinationKind = kind;
         assert kind != CiKind.Object : "can only unbox to primitive";
         assert source.kind() == CiKind.Object : "can only unbox objects";
     }
@@ -49,42 +47,40 @@ public final class UnboxNode extends FixedWithNextNode implements Node.IterableN
     }
 
     public CiKind destinationKind() {
-        return destinationKind;
+        return this.kind();
     }
 
     public void expand(BoxingMethodPool pool) {
         RiResolvedField field = pool.getBoxField(kind());
         LoadFieldNode loadField = graph().add(new LoadFieldNode(source, field));
         loadField.setProbability(probability());
-        ((StructuredGraph) graph()).replaceFixedWithFixed(this, loadField);
+        this.replaceWithFixedWithNext(loadField);
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
+    public Node canonical(CanonicalizerTool tool) {
         if (source.isConstant()) {
             CiConstant constant = source.asConstant();
             Object o = constant.asObject();
-            if (o != null) {
-                switch (destinationKind) {
-                    case Boolean:
-                        return ConstantNode.forBoolean((Boolean) o, graph());
-                    case Byte:
-                        return ConstantNode.forByte((Byte) o, graph());
-                    case Char:
-                        return ConstantNode.forChar((Character) o, graph());
-                    case Short:
-                        return ConstantNode.forShort((Short) o, graph());
-                    case Int:
-                        return ConstantNode.forInt((Integer) o, graph());
-                    case Long:
-                        return ConstantNode.forLong((Long) o, graph());
-                    case Float:
-                        return ConstantNode.forFloat((Long) o, graph());
-                    case Double:
-                        return ConstantNode.forDouble((Long) o, graph());
-                    default:
-                        ValueUtil.shouldNotReachHere();
-                }
+            switch (kind()) {
+                case Boolean:
+                    return ConstantNode.forBoolean((Boolean) o, graph());
+                case Byte:
+                    return ConstantNode.forByte((Byte) o, graph());
+                case Char:
+                    return ConstantNode.forChar((Character) o, graph());
+                case Short:
+                    return ConstantNode.forShort((Short) o, graph());
+                case Int:
+                    return ConstantNode.forInt((Integer) o, graph());
+                case Long:
+                    return ConstantNode.forLong((Long) o, graph());
+                case Float:
+                    return ConstantNode.forFloat((Long) o, graph());
+                case Double:
+                    return ConstantNode.forDouble((Long) o, graph());
+                default:
+                    assert false;
             }
         }
         return this;

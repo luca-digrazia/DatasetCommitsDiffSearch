@@ -22,19 +22,17 @@
  */
 package com.oracle.max.graal.hotspot;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.cri.*;
-import com.oracle.max.graal.hotspot.bridge.*;
-import com.oracle.max.graal.hotspot.ri.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 public interface Compiler {
 
-    CompilerToVM getVMEntries();
-    VMToCompiler getVMExits();
+    VMEntries getVMEntries();
+    VMExits getVMExits();
     GraalCompiler getCompiler();
-    RiType lookupType(String returnType, HotSpotTypeResolved accessingClass, boolean eagerResolve);
+    RiType lookupType(String returnType, HotSpotTypeResolved accessingClass);
     HotSpotVMConfig getConfig();
     GraalRuntime getRuntime();
     CiTarget getTarget();

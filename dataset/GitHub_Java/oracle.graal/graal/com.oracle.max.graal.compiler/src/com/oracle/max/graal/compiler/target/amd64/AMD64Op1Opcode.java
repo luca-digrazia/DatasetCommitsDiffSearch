@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,8 +22,6 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
-import static com.sun.cri.ci.CiValueUtil.*;
-
 import com.oracle.max.asm.target.amd64.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
@@ -39,8 +37,9 @@ public enum AMD64Op1Opcode implements LIROpcode {
         return new AMD64LIRInstruction(this, result, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                AMD64MoveOpcode.move(tasm, masm, result(), input(0));
-                emit(masm, result());
+                CiValue input = input(0);
+                AMD64MoveOpcode.move(tasm, masm, result(), input);
+                emit(tasm, masm, result());
             }
 
             @Override
@@ -55,10 +54,10 @@ public enum AMD64Op1Opcode implements LIROpcode {
         };
     }
 
-    private void emit(AMD64MacroAssembler masm, CiValue inputAndResult) {
+    private void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue inputAndResult) {
         switch (this) {
-            case INEG: masm.negl(asIntReg(inputAndResult)); break;
-            case LNEG: masm.negq(asLongReg(inputAndResult)); break;
+            case INEG: masm.negl(tasm.asIntReg(inputAndResult)); break;
+            case LNEG: masm.negq(tasm.asLongReg(inputAndResult)); break;
             default:   throw Util.shouldNotReachHere();
         }
     }

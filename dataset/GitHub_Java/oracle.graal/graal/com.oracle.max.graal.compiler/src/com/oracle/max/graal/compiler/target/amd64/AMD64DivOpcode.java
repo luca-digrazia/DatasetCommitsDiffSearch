@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,8 +22,6 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
-import static com.sun.cri.ci.CiValueUtil.*;
-
 import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.*;
 import com.oracle.max.asm.target.amd64.AMD64Assembler.ConditionFlag;
@@ -39,12 +37,14 @@ public enum AMD64DivOpcode implements LIROpcode {
     public LIRInstruction create(CiRegisterValue result, LIRDebugInfo info, CiRegisterValue left, CiVariable right) {
         CiValue[] inputs = new CiValue[] {left};
         CiValue[] alives = new CiValue[] {right};
-        CiValue[] temps = new CiValue[] {result.reg == AMD64.rax ? AMD64.rdx.asValue(result.kind) : AMD64.rax.asValue(result.kind)};
+        CiValue[] temps = new CiValue[] {AMD64.rdx.asValue()};
 
         return new AMD64LIRInstruction(this, result, info, inputs, alives, temps) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                emit(tasm, masm, asRegister(result()), info, asRegister(input(0)), asRegister(alive(0)));
+                CiValue left = input(0);
+                CiValue right = alive(0);
+                emit(tasm, masm, tasm.asRegister(result()), info, tasm.asRegister(left), tasm.asRegister(right));
             }
         };
     }

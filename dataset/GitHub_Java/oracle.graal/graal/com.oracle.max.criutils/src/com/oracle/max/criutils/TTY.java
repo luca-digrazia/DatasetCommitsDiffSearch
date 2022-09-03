@@ -42,7 +42,7 @@ public class TTY {
 
         /**
          * Creates an object that will suppress {@link TTY} for the current thread if the given filter does not
-         * match the given object. To revert the suppression state to how it was
+         * {@linkplain #matches(String, Object) match} the given object. To revert the suppression state to how it was
          * before this call, the {@link #remove()} method must be called on the suppression object.
          *
          * @param filter the pattern for matching. If {@code null}, then the match is successful. If it starts with "~",
@@ -89,10 +89,12 @@ public class TTY {
         }
     }
 
+    public static final String MAX_TTY_LOG_FILE_PROPERTY = "max.tty.file";
+
     public static PrintStream cachedOut;
 
-    public static void initialize(PrintStream ps) {
-        cachedOut = ps;
+    public static void initialize() {
+        cachedOut = System.out;
     }
 
     private static LogStream createLog() {
@@ -100,7 +102,16 @@ public class TTY {
             // In case initialize() was not called.
             cachedOut = System.out;
         }
-        return new LogStream(cachedOut);
+        PrintStream out = cachedOut;
+        String value = System.getProperty(MAX_TTY_LOG_FILE_PROPERTY);
+        if (value != null) {
+            try {
+                out = new PrintStream(new FileOutputStream(value));
+            } catch (FileNotFoundException e) {
+                System.err.println("Could not open log file " + value + ": " + e);
+            }
+        }
+        return new LogStream(out);
     }
 
     private static final ThreadLocal<LogStream> out = new ThreadLocal<LogStream>() {
@@ -276,7 +287,7 @@ public class TTY {
     private static String printMap(Map<?, ?> m) {
         StringBuilder sb = new StringBuilder();
 
-        List<String> keys = new ArrayList<>();
+        List<String> keys = new ArrayList<String>();
         for (Object key : m.keySet()) {
             keys.add((String) key);
         }
@@ -290,6 +301,14 @@ public class TTY {
         }
 
         return sb.toString();
+    }
+
+    private static void printField(String fieldName, long value) {
+        TTY.print("    " + fieldName + " = " + value + "\n");
+    }
+
+    private static void printField(String fieldName, double value) {
+        TTY.print("    " + fieldName + " = " + value + "\n");
     }
 
     public static void flush() {

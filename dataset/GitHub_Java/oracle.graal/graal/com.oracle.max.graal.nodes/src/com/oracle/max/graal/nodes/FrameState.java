@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,12 +24,12 @@ package com.oracle.max.graal.nodes;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.PhiNode.PhiType;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.virtual.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 /**
  * The {@code FrameState} class encapsulates the frame state (i.e. local variables and
@@ -40,6 +40,8 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
     protected final int localsSize;
 
     protected final int stackSize;
+
+    protected final int locksSize;
 
     private boolean rethrowException;
 
@@ -110,36 +112,40 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
      * @param bci the bytecode index of the frame state
      * @param localsSize number of locals
      * @param stackSize size of the stack
+     * @param lockSize number of locks
      * @param rethrowException if true the VM should re-throw the exception on top of the stack when deopt'ing using this framestate
      */
-    public FrameState(RiResolvedMethod method, int bci, int localsSize, int stackSize, boolean rethrowException) {
+    public FrameState(RiResolvedMethod method, int bci, int localsSize, int stackSize, int locksSize, boolean rethrowException) {
         assert stackSize >= 0;
         this.method = method;
         this.bci = bci;
         this.localsSize = localsSize;
         this.stackSize = stackSize;
-        this.values = new NodeInputList<>(this, localsSize + stackSize);
-        this.virtualObjectMappings = new NodeInputList<>(this);
+        this.locksSize = locksSize;
+        this.values = new NodeInputList<ValueNode>(this, localsSize + stackSize + locksSize);
+        this.virtualObjectMappings = new NodeInputList<Node>(this);
         this.rethrowException = rethrowException;
-        assert !rethrowException || stackSize == 1 : "must have exception on top of the stack";
     }
 
-    public FrameState(RiResolvedMethod method, int bci, ValueNode[] locals, ValueNode[] stack, int stackSize, boolean rethrowException) {
+    public FrameState(RiResolvedMethod method, int bci, ValueNode[] locals, ValueNode[] stack, int stackSize, List<MonitorObject> locks, boolean rethrowException) {
         this.method = method;
         this.bci = bci;
         this.localsSize = locals.length;
         this.stackSize = stackSize;
-        final ValueNode[] newValues = new ValueNode[locals.length + stackSize];
+        this.locksSize = locks.size();
+        final ValueNode[] values = new ValueNode[locals.length + stackSize + locks.size()];
         for (int i = 0; i < locals.length; i++) {
-            newValues[i] = locals[i];
+            values[i] = locals[i];
         }
         for (int i = 0; i < stackSize; i++) {
-            newValues[localsSize + i] = stack[i];
+            values[localsSize + i] = stack[i];
         }
-        this.values = new NodeInputList<>(this, newValues);
-        this.virtualObjectMappings = new NodeInputList<>(this);
+        for (int i = 0; i < locks.size(); i++) {
+            values[locals.length + stackSize + i] = locks.get(i);
+        }
+        this.values = new NodeInputList<ValueNode>(this, values);
+        this.virtualObjectMappings = new NodeInputList<Node>(this);
         this.rethrowException = rethrowException;
-        assert !rethrowException || stackSize == 1 : "must have exception on top of the stack";
     }
 
     public boolean rethrowException() {
@@ -170,25 +176,25 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
     /**
      * Gets a copy of this frame state.
      */
-    public FrameState duplicate(int newBci) {
-        return duplicate(newBci, false);
+    public FrameState duplicate(int bci) {
+        return duplicate(bci, false);
     }
 
-    public FrameState duplicate(int newBci, boolean duplicateOuter) {
-        FrameState other = graph().add(new FrameState(method, newBci, localsSize, stackSize, rethrowException));
+    public FrameState duplicate(int bci, boolean duplicateOuter) {
+        FrameState other = graph().add(new FrameState(method, bci, localsSize, stackSize, locksSize, rethrowException));
         other.values.setAll(values);
         other.virtualObjectMappings.setAll(virtualObjectMappings);
-        FrameState newOuterFrameState = outerFrameState();
-        if (duplicateOuter && newOuterFrameState != null) {
-            newOuterFrameState = newOuterFrameState.duplicate(newOuterFrameState.bci, duplicateOuter);
+        FrameState outerFrameState = outerFrameState();
+        if (duplicateOuter && outerFrameState != null) {
+            outerFrameState = outerFrameState.duplicate(outerFrameState.bci, duplicateOuter);
         }
-        other.setOuterFrameState(newOuterFrameState);
+        other.setOuterFrameState(outerFrameState);
         return other;
     }
 
     @Override
-    public FrameState duplicateWithException(int newBci, ValueNode exceptionObject) {
-        return duplicateModified(newBci, true, CiKind.Void, exceptionObject);
+    public FrameState duplicateWithException(int bci, ValueNode exceptionObject) {
+        return duplicateModified(bci, true, CiKind.Void, exceptionObject);
     }
 
     /**
@@ -196,10 +202,10 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
      * values in pushedValues pushed on the stack. The pushedValues are expected to be in slot encoding: a long
      * or double is followed by a null slot.
      */
-    public FrameState duplicateModified(int newBci, boolean newRethrowException, CiKind popKind, ValueNode... pushedValues) {
+    public FrameState duplicateModified(int bci, boolean rethrowException, CiKind popKind, ValueNode... pushedValues) {
         int popSlots = popKind == CiKind.Void ? 0 : isTwoSlot(popKind) ? 2 : 1;
         int pushSlots = pushedValues.length;
-        FrameState other = graph().add(new FrameState(method, newBci, localsSize, stackSize - popSlots + pushSlots, newRethrowException));
+        FrameState other = graph().add(new FrameState(method, bci, localsSize, stackSize - popSlots + pushSlots, locksSize(), rethrowException));
         for (int i = 0; i < localsSize; i++) {
             other.setValueAt(i, localAt(i));
         }
@@ -210,19 +216,27 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
         for (int i = 0; i < pushSlots; i++) {
             other.setValueAt(slot++, pushedValues[i]);
         }
+        for (int i = 0; i < locksSize; i++) {
+            other.setValueAt(localsSize + other.stackSize + i, lockAt(i));
+        }
         other.virtualObjectMappings.setAll(virtualObjectMappings);
         other.setOuterFrameState(outerFrameState());
         return other;
     }
 
     public boolean isCompatibleWith(FrameStateAccess other) {
-        if (stackSize() != other.stackSize() || localsSize() != other.localsSize()) {
+        if (stackSize() != other.stackSize() || localsSize() != other.localsSize() || locksSize() != other.locksSize()) {
             return false;
         }
         for (int i = 0; i < stackSize(); i++) {
             ValueNode x = stackAt(i);
             ValueNode y = other.stackAt(i);
             if (x != y && ValueUtil.typeMismatch(x, y)) {
+                return false;
+            }
+        }
+        for (int i = 0; i < locksSize(); i++) {
+            if (lockAt(i) != other.lockAt(i)) {
                 return false;
             }
         }
@@ -233,13 +247,18 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
     }
 
     public boolean equals(FrameStateAccess other) {
-        if (stackSize() != other.stackSize() || localsSize() != other.localsSize()) {
+        if (stackSize() != other.stackSize() || localsSize() != other.localsSize() || locksSize() != other.locksSize()) {
             return false;
         }
         for (int i = 0; i < stackSize(); i++) {
             ValueNode x = stackAt(i);
             ValueNode y = other.stackAt(i);
             if (x != y) {
+                return false;
+            }
+        }
+        for (int i = 0; i < locksSize(); i++) {
+            if (lockAt(i) != other.lockAt(i)) {
                 return false;
             }
         }
@@ -261,6 +280,13 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
      */
     public int stackSize() {
         return stackSize;
+    }
+
+    /**
+     * Gets number of locks held by this frame state.
+     */
+    public int locksSize() {
+        return locksSize;
     }
 
     /**
@@ -324,6 +350,16 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
     }
 
     /**
+     * Retrieves the lock at the specified index in the lock stack.
+     * @param i the index into the lock stack
+     * @return the instruction which produced the object at the specified location in the lock stack
+     */
+    public MonitorObject lockAt(int i) {
+        assert i >= 0;
+        return (MonitorObject) valueAt(localsSize + stackSize + i);
+    }
+
+    /**
      * Inserts a phi statement into the stack at the specified stack index.
      * @param block the block begin for which we are creating the phi
      * @param i the index into the stack for which to create a phi
@@ -373,7 +409,7 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
      * @return the value at index {@code i} which may be {@code null}
      */
     public ValueNode valueAt(int i) {
-        assert i < (localsSize + stackSize);
+        assert i < (localsSize + stackSize + locksSize);
         return values.isEmpty() ? null : values.get(i);
     }
 
@@ -424,7 +460,7 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
         return phi;
     }
 
-    private static void addToPhi(PhiNode phiNode, ValueNode otherValue) {
+    private void addToPhi(PhiNode phiNode, ValueNode otherValue) {
         if (otherValue == null || otherValue.kind() != phiNode.kind()) {
             phiNode.replaceAtUsages(null);
             phiNode.safeDelete();
@@ -569,6 +605,10 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
             ValueNode value = stackAt(i);
             sb.append(String.format("  stack[%d] = %-8s : %s%n", i, value == null ? "bogus" : value.kind().javaName, value));
         }
+        for (int i = 0; i < locksSize(); ++i) {
+            ValueNode value = lockAt(i);
+            sb.append(String.format("  lock[%d] = %-8s : %s%n", i, value == null ? "bogus" : value.kind().javaName, value));
+        }
         return sb.toString();
     }
 
@@ -577,10 +617,9 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
         // Nothing to do, frame states are processed as part of the handling of AbstractStateSplit nodes.
     }
 
-    public static String toString(FrameState frameState) {
+    public static String toString(FrameState fs) {
         StringBuilder sb = new StringBuilder();
         String nl = CiUtil.NEW_LINE;
-        FrameState fs = frameState;
         while (fs != null) {
             CiUtil.appendLocation(sb, fs.method, fs.bci).append(nl);
             for (int i = 0; i < fs.localsSize(); ++i) {
@@ -590,6 +629,10 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
             for (int i = 0; i < fs.stackSize(); ++i) {
                 ValueNode value = fs.stackAt(i);
                 sb.append(String.format("  stack[%d] = %-8s : %s%n", i, value == null ? "bogus" : value.kind().javaName, value));
+            }
+            for (int i = 0; i < fs.locksSize(); ++i) {
+                ValueNode value = fs.lockAt(i);
+                sb.append(String.format("  lock[%d] = %-8s : %s%n", i, value == null ? "bogus" : value.kind().javaName, value));
             }
             fs = fs.outerFrameState();
         }
@@ -607,15 +650,21 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
         }
     }
 
+    public void visitFrameState(FrameState i) {
+        // nothing to do for now
+    }
+
     public void insertLoopPhis(LoopBeginNode loopBegin) {
-        for (int i = 0; i < stackSize(); i++) {
+        int stackSize = stackSize();
+        for (int i = 0; i < stackSize; i++) {
             // always insert phis for the stack
             ValueNode x = stackAt(i);
             if (x != null) {
                 setupPhiForStack(loopBegin, i).addInput(x);
             }
         }
-        for (int i = 0; i < localsSize(); i++) {
+        int localsSize = localsSize();
+        for (int i = 0; i < localsSize; i++) {
             ValueNode x = localAt(i);
             if (x != null) {
                 setupPhiForLocal(loopBegin, i).addInput(x);
@@ -627,7 +676,7 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
     public Map<Object, Object> getDebugProperties() {
         Map<Object, Object> properties = super.getDebugProperties();
         properties.put("bci", bci);
-        properties.put("method", CiUtil.format("%H.%n(%p):%r", method));
+        properties.put("method", CiUtil.format("%H.%n(%p):%r", method, false));
         StringBuilder str = new StringBuilder();
         for (int i = 0; i < localsSize(); i++) {
             str.append(i == 0 ? "" : ", ").append(localAt(i) == null ? "_" : localAt(i).toString(Verbosity.Id));
@@ -638,8 +687,18 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
             str.append(i == 0 ? "" : ", ").append(stackAt(i) == null ? "_" : stackAt(i).toString(Verbosity.Id));
         }
         properties.put("stack", str.toString());
+        str = new StringBuilder();
+        for (int i = 0; i < locksSize(); i++) {
+            str.append(i == 0 ? "" : ", ").append(lockAt(i) == null ? "_" : lockAt(i).toString(Verbosity.Id));
+        }
+        properties.put("locks", str.toString());
         properties.put("rethrowException", rethrowException);
         return properties;
+    }
+
+    @Override
+    public void setRethrowException(boolean b) {
+        rethrowException = b;
     }
 
     public CiCodePos toCodePos() {

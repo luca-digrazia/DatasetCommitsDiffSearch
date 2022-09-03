@@ -22,9 +22,9 @@
  */
 package com.oracle.max.graal.nodes.calc;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.cri.util.*;
+import com.oracle.max.cri.intrinsics.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 /**
  * Condition codes used in conditionals.
@@ -134,27 +134,6 @@ public enum Condition {
         throw new IllegalArgumentException(this.toString());
     }
 
-    public boolean implies(Condition other) {
-        if (other == this) {
-            return true;
-        }
-        switch (this) {
-            case EQ: return other == LE || other == GE || other == BE || other == AE;
-            case NE: return false;
-            case LT: return other == LE;
-            case LE: return false;
-            case GT: return other == GE;
-            case GE: return false;
-            case BT: return other == BE;
-            case BE: return false;
-            case AT: return other == AE;
-            case AE: return false;
-            case OF: return false;
-            case NOF: return false;
-        }
-        throw new IllegalArgumentException(this.toString());
-    }
-
     /**
      * Mirror this conditional (i.e. commute "a op b" to "b op' a")
      * @return the condition representing the equivalent commuted operation
@@ -248,9 +227,13 @@ public enum Condition {
                 switch (this) {
                     case EQ: return x == y;
                     case NE: return x != y;
+                    case BT:
                     case LT: return x < y;
+                    case BE:
                     case LE: return x <= y;
+                    case AT:
                     case GT: return x > y;
+                    case AE:
                     case GE: return x >= y;
                 }
             }
@@ -263,9 +246,13 @@ public enum Condition {
                 switch (this) {
                     case EQ: return x == y;
                     case NE: return x != y;
+                    case BT:
                     case LT: return x < y;
+                    case BE:
                     case LE: return x <= y;
+                    case AT:
                     case GT: return x > y;
+                    case AE:
                     case GE: return x >= y;
                 }
             }

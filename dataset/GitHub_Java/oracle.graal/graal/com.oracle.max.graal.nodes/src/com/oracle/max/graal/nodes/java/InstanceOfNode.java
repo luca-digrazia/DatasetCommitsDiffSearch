@@ -22,23 +22,20 @@
  */
 package com.oracle.max.graal.nodes.java;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.calc.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 /**
  * The {@code InstanceOfNode} represents an instanceof test.
  */
 public final class InstanceOfNode extends TypeCheckNode implements Canonicalizable, LIRLowerable {
 
-    @Data private final boolean negated;
-
-    public boolean negated() {
-        return negated;
-    }
+    @Data public final boolean negated;
 
     /**
      * Constructs a new InstanceOfNode.
@@ -58,7 +55,7 @@ public final class InstanceOfNode extends TypeCheckNode implements Canonicalizab
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
+    public Node canonical(CanonicalizerTool tool) {
         if (object().exactType() != null) {
             boolean result = object().exactType().isSubtypeOf(targetClass());
             if (result != negated) {
@@ -75,7 +72,8 @@ public final class InstanceOfNode extends TypeCheckNode implements Canonicalizab
             if (constant.isNull()) {
                 return ConstantNode.forBoolean(negated, graph());
             } else {
-                assert false : "non-null constants are always expected to provide an exactType";
+                // this should never happen - non-null constants are always expected to provide an exactType
+                assert false;
             }
         }
         return this;

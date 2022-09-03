@@ -24,19 +24,16 @@ package com.oracle.max.graal.compiler.lir;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.gen.*;
-import com.oracle.max.graal.compiler.lir.LIRInstruction.OperandFlag;
-import com.oracle.max.graal.compiler.lir.LIRInstruction.OperandMode;
-import com.oracle.max.graal.compiler.lir.LIRInstruction.ValueProcedure;
+import com.oracle.max.graal.compiler.lir.LIRDebugInfo.ValueProcedure;
 import com.oracle.max.graal.nodes.*;
-import com.oracle.max.graal.nodes.PhiNode.*;
+import com.sun.cri.ci.*;
 
 public class LIRPhiMapping {
     private final LIRBlock block;
 
-    private CiValue[][] inputs;
-    private CiValue[] results;
+    private final CiValue[][] inputs;
+    private final CiValue[] results;
 
     public LIRPhiMapping(LIRBlock block, LIRGenerator gen) {
         this.block = block;
@@ -45,43 +42,23 @@ public class LIRPhiMapping {
         MergeNode mergeNode = (MergeNode) block.firstNode();
         List<PhiNode> phis = mergeNode.phis().snapshot();
 
-        for (int i = 0; i < phis.size(); i++) {
-            PhiNode phi = phis.get(i);
-            if (phi.type() == PhiType.Value) {
-                gen.setResult(phi, gen.newVariable(phi.kind()));
-            }
-        }
-    }
-
-    public void fillInputs(LIRGenerator gen) {
-        assert block.firstNode() instanceof MergeNode : "phi functions are only present at control flow merges";
-        MergeNode mergeNode = (MergeNode) block.firstNode();
-        List<PhiNode> phis = mergeNode.phis().snapshot();
-
-        int numPhis = 0;
-        for (int i = 0; i < phis.size(); i++) {
-            if (phis.get(i).type() == PhiType.Value) {
-                numPhis++;
-            }
-        }
+        int numPhis = phis.size();
         int numPreds = block.numberOfPreds();
 
         results = new CiValue[numPhis];
-        inputs = new CiValue[numPreds][numPhis];
+        for (int i = 0; i < numPhis; i++) {
+            CiVariable opd = gen.newVariable(phis.get(i).kind());
+            gen.setResult(phis.get(i), opd);
+            results[i] = opd;
+        }
 
-        int phiIdx = 0;
-        for (int i = 0; i < phis.size(); i++) {
-            PhiNode phi = phis.get(i);
-            if (phi.type() == PhiType.Value) {
-                results[phiIdx] = gen.operand(phi);
-                for (int j = 0; j < numPreds; j++) {
-                    assert j == mergeNode.phiPredecessorIndex((FixedNode) block.predAt(j).lastNode()) : "block predecessors and node predecessors must have same order";
-                    inputs[j][phiIdx] = gen.operand(phi.valueAt(j));
-                }
-                phiIdx++;
+        inputs = new CiValue[numPreds][numPhis];
+        for (int i = 0; i < numPreds; i++) {
+            assert i == mergeNode.phiPredecessorIndex((FixedNode) block.predAt(i).lastNode()) : "block predecessors and node predecessors must have same order";
+            for (int j = 0; j < numPhis; j++) {
+                inputs[i][j] = gen.operand(phis.get(j).valueAt(i));
             }
         }
-        assert phiIdx == numPhis;
     }
 
     public CiValue[] results() {
@@ -93,38 +70,22 @@ public class LIRPhiMapping {
         return inputs[block.getPredecessors().indexOf(pred)];
     }
 
-    private static final EnumSet<OperandFlag> INPUT_FLAGS = EnumSet.of(OperandFlag.Register, OperandFlag.Stack, OperandFlag.Constant);
-    private static final EnumSet<OperandFlag> OUTPUT_FLAGS = EnumSet.of(OperandFlag.Register, OperandFlag.Stack);
-
-    public void forEachInput(LIRBlock pred, PhiValueProcedure proc) {
+    public void forEachInput(LIRBlock pred, ValueProcedure proc) {
         CiValue[] predInputs = inputs(pred);
         for (int i = 0; i < predInputs.length; i++) {
-            predInputs[i] = proc.doValue(predInputs[i], results[i]);
+            CiValue newValue = proc.doValue(predInputs[i]);
+            if (newValue != null) {
+                predInputs[i] = newValue;
+            }
         }
     }
 
     public void forEachOutput(ValueProcedure proc) {
         for (int i = 0; i < results.length; i++) {
-            results[i] = proc.doValue(results[i], OperandMode.Output, OUTPUT_FLAGS);
+            CiValue newValue = proc.doValue(results[i]);
+            if (newValue != null) {
+                results[i] = newValue;
+            }
         }
-    }
-
-    public abstract static class PhiValueProcedure extends ValueProcedure {
-        /**
-         * Iterator method to be overwritten. This version of the iterator has both the input and output of the phi function as parameters.
-         * to keep the signature short.
-         *
-         * @param input The input value that is iterated.
-         * @param output The output value that is iterated.
-         * @return The new value to replace the input value that was passed in.
-         */
-        protected CiValue doValue(CiValue input, CiValue output) {
-            return doValue(input, OperandMode.Input, INPUT_FLAGS);
-        }
-    }
-
-    @Override
-    public String toString() {
-        return "PhiMapping for " + block + ": " + Arrays.toString(results);
     }
 }

@@ -29,30 +29,9 @@ import java.util.*;
  */
 public class GraalInternalError extends Error {
 
-    /**
-     *
-     */
-    private static final long serialVersionUID = 8776065085829593278L;
     private Node node;
     private Graph graph;
-    private final ArrayList<String> context = new ArrayList<>();
-
-    public static RuntimeException unimplemented() {
-        throw new GraalInternalError("unimplemented");
-    }
-
-    public static RuntimeException unimplemented(String msg) {
-        throw new GraalInternalError("unimplemented: %s", msg);
-    }
-
-    public static RuntimeException shouldNotReachHere() {
-        throw new GraalInternalError("should not reach here");
-    }
-
-    public static RuntimeException shouldNotReachHere(String msg) {
-        throw new GraalInternalError("should not reach here: %s", msg);
-    }
-
+    private final ArrayList<String> context = new ArrayList<String>();
 
     /**
      * This constructor creates a {@link GraalInternalError} with a message assembled via {@link String#format(String, Object...)}.
@@ -77,7 +56,7 @@ public class GraalInternalError extends Error {
         StringBuilder str = new StringBuilder();
         str.append(super.toString());
         for (String s : context) {
-            str.append("\n\tat ").append(s);
+            str.append("\n\t\tat ").append(s);
         }
         return str.toString();
     }
@@ -87,7 +66,7 @@ public class GraalInternalError extends Error {
             // expand Iterable parameters into a list representation
             for (int i = 0; i < args.length; i++) {
                 if (args[i] instanceof Iterable<?>) {
-                    ArrayList<Object> list = new ArrayList<>();
+                    ArrayList<Object> list = new ArrayList<Object>();
                     for (Object o : (Iterable<?>) args[i]) {
                         list.add(o);
                     }
@@ -98,8 +77,8 @@ public class GraalInternalError extends Error {
         return String.format(Locale.ENGLISH, msg, args);
     }
 
-    public GraalInternalError addContext(String newContext) {
-        this.context.add(newContext);
+    public GraalInternalError addContext(String context) {
+        this.context.add(context);
         return this;
     }
 
@@ -109,13 +88,13 @@ public class GraalInternalError extends Error {
 
     /**
      * Adds a graph to the context of this VerificationError. The first graph added via this method will be returned by {@link #graph()}.
-     * @param newGraph the graph which is in a incorrect state, if the verification error was not caused by a specific node
+     * @param graph the graph which is in a incorrect state, if the verification error was not caused by a specific node
      */
-    public GraalInternalError addContext(Graph newGraph) {
-        if (newGraph != this.graph) {
-            addContext("graph", newGraph);
+    public GraalInternalError addContext(Graph graph) {
+        if (graph != this.graph) {
+            addContext("graph", graph);
             if (this.graph == null) {
-                this.graph = newGraph;
+                this.graph = graph;
             }
         }
         return this;
@@ -123,13 +102,13 @@ public class GraalInternalError extends Error {
 
     /**
      * Adds a node to the context of this VerificationError. The first node added via this method will be returned by {@link #node()}.
-     * @param newNode the node which is in a incorrect state, if the verification error was caused by a node
+     * @param node the node which is in a incorrect state, if the verification error was caused by a node
      */
-    public GraalInternalError addContext(Node newNode) {
-        if (newNode != this.node) {
-            addContext("node", newNode);
+    public GraalInternalError addContext(Node node) {
+        if (node != this.node) {
+            addContext("node", node);
             if (this.node == null) {
-                this.node = newNode;
+                this.node = node;
             }
         }
         return this;

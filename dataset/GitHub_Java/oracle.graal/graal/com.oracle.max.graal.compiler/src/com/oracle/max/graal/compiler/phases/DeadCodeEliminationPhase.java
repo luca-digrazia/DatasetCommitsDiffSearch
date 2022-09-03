@@ -22,7 +22,8 @@
  */
 package com.oracle.max.graal.compiler.phases;
 
-import com.oracle.max.graal.debug.*;
+import com.oracle.max.criutils.*;
+import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 
@@ -30,16 +31,18 @@ import com.oracle.max.graal.nodes.*;
 public class DeadCodeEliminationPhase extends Phase {
 
     private NodeFlood flood;
+    private StructuredGraph graph;
 
     @Override
     protected void run(StructuredGraph graph) {
+        this.graph = graph;
         this.flood = graph.createNodeFlood();
 
         flood.add(graph.start());
         iterateSuccessors();
-        disconnectCFGNodes(graph);
-        iterateInputs(graph);
-        deleteNodes(graph);
+        disconnectCFGNodes();
+        iterateInputs();
+        deleteNodes();
 
         // remove chained Merges
         for (MergeNode merge : graph.getNodes(MergeNode.class)) {
@@ -66,7 +69,7 @@ public class DeadCodeEliminationPhase extends Phase {
         }
     }
 
-    private void disconnectCFGNodes(StructuredGraph graph) {
+    private void disconnectCFGNodes() {
         for (EndNode node : graph.getNodes(EndNode.class)) {
             if (!flood.isMarked(node)) {
                 MergeNode merge = node.merge();
@@ -80,7 +83,9 @@ public class DeadCodeEliminationPhase extends Phase {
             if (!flood.isMarked(node)) {
                 LoopBeginNode loop = node.loopBegin();
                 if (flood.isMarked(loop)) {
-                    Debug.log("Removing loop with unreachable end: %s", loop);
+                    if (GraalOptions.TraceDeadCodeElimination) {
+                        TTY.println("Removing loop with unreachable end: " + loop);
+                    }
                     node.setLoopBegin(null);
                     EndNode endNode = loop.endAt(0);
                     assert endNode.predecessor() != null;
@@ -96,13 +101,13 @@ public class DeadCodeEliminationPhase extends Phase {
         }
     }
 
-    private static void replacePhis(MergeNode merge) {
+    private void replacePhis(MergeNode merge) {
         for (PhiNode phi : merge.phis().snapshot()) {
-            ((StructuredGraph) merge.graph()).replaceFloating(phi, phi.valueAt(0));
+            phi.replaceAndDelete((phi).valueAt(0));
         }
     }
 
-    private void deleteNodes(StructuredGraph graph) {
+    private void deleteNodes() {
         for (Node node : graph.getNodes()) {
             if (!flood.isMarked(node)) {
                 node.clearInputs();
@@ -116,7 +121,7 @@ public class DeadCodeEliminationPhase extends Phase {
         }
     }
 
-    private void iterateInputs(StructuredGraph graph) {
+    private void iterateInputs() {
         for (Node node : graph.getNodes()) {
             if (node instanceof LocalNode) {
                 flood.add(node);

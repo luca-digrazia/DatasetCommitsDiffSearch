@@ -22,8 +22,6 @@
  */
 package com.oracle.max.graal.compiler.tests;
 
-import junit.framework.AssertionFailedError;
-
 import org.junit.*;
 
 import com.oracle.max.graal.compiler.phases.*;
@@ -70,17 +68,17 @@ public class StraighteningTest extends GraphTest {
         return c == 1;
     }
 
-    @Test(expected = AssertionFailedError.class)
+    @Test
     public void test1() {
         test("test1Snippet");
     }
 
-    @Test(expected = AssertionFailedError.class)
+    @Test
     public void test2() {
         test("test2Snippet");
     }
 
-    @Test(expected = AssertionFailedError.class)
+    @Test
     public void test3() {
         test("test3Snippet");
     }

@@ -31,7 +31,7 @@ import com.oracle.max.graal.nodes.spi.*;
  */
 public class MergeNode extends BeginNode implements Node.IterableNodeType, LIRLowerable {
 
-    @Input(notDataflow = true) private final NodeInputList<EndNode> ends = new NodeInputList<>(this);
+    @Input(notDataflow = true) private final NodeInputList<EndNode> ends = new NodeInputList<EndNode>(this);
 
     @Override
     public boolean needsStateAfter() {
@@ -43,24 +43,28 @@ public class MergeNode extends BeginNode implements Node.IterableNodeType, LIRLo
         gen.visitMerge(this);
     }
 
-    public int forwardEndIndex(EndNode end) {
+    public int endIndex(EndNode end) {
         return ends.indexOf(end);
     }
 
-    public void addForwardEnd(EndNode end) {
+    public void addEnd(EndNode end) {
         ends.add(end);
     }
 
-    public int forwardEndCount() {
+    public int endCount() {
         return ends.size();
     }
 
-    public EndNode forwardEndAt(int index) {
+    public EndNode endAt(int index) {
         return ends.get(index);
     }
 
+    public Iterable<? extends Node> phiPredecessors() {
+        return ends;
+    }
+
     @Override
-    public NodeIterable<EndNode> cfgPredecessors() {
+    public Iterable<EndNode> cfgPredecessors() {
         return ends;
     }
 
@@ -74,41 +78,67 @@ public class MergeNode extends BeginNode implements Node.IterableNodeType, LIRLo
         return value instanceof PhiNode && ((PhiNode) value).merge() == this;
     }
 
+
+    /**
+     * Formats a given instruction as a value in a {@linkplain FrameState frame state}. If the instruction is a phi defined at a given
+     * block, its {@linkplain PhiNode#valueCount() inputs} are appended to the returned string.
+     *
+     * @param index the index of the value in the frame state
+     * @param value the frame state value
+     * @return the instruction representation as a string
+     */
+    public String stateString(int index, ValueNode value) {
+        StringBuilder sb = new StringBuilder(30);
+        sb.append(String.format("%2d  %s", index, ValueUtil.valueString(value)));
+        if (value instanceof PhiNode) {
+            PhiNode phi = (PhiNode) value;
+            // print phi operands
+            if (phi.merge() == this) {
+                sb.append(" [");
+                for (int j = 0; j < phi.valueCount(); j++) {
+                    sb.append(' ');
+                    ValueNode operand = phi.valueAt(j);
+                    if (operand != null) {
+                        sb.append(ValueUtil.valueString(operand));
+                    } else {
+                        sb.append("NULL");
+                    }
+                }
+                sb.append("] ");
+            }
+        }
+        return sb.toString();
+    }
+
     /**
      * Removes the given end from the merge, along with the entries corresponding to this end in the phis connected to the merge.
      * @param pred the end to remove
      */
     public void removeEnd(EndNode pred) {
-        int predIndex = phiPredecessorIndex(pred);
+        int predIndex = ends.indexOf(pred);
         assert predIndex != -1;
-        deleteEnd(pred);
+        ends.remove(predIndex);
+
         for (PhiNode phi : phis()) {
             phi.removeInput(predIndex);
         }
-    }
-
-    protected void deleteEnd(EndNode end) {
-        ends.remove(end);
     }
 
     public void clearEnds() {
         ends.clear();
     }
 
-    public NodeIterable<EndNode> forwardEnds() {
-        return ends;
-    }
-
     public int phiPredecessorCount() {
-        return forwardEndCount();
+        return endCount();
     }
 
-    public int phiPredecessorIndex(EndNode pred) {
-        return forwardEndIndex(pred);
+    public int phiPredecessorIndex(FixedNode pred) {
+        EndNode end = (EndNode) pred;
+        return endIndex(end);
     }
 
-    public EndNode phiPredecessorAt(int index) {
-        return forwardEndAt(index);
+    public FixedNode phiPredecessorAt(int index) {
+        return endAt(index);
     }
 
     public NodeIterable<PhiNode> phis() {

@@ -22,8 +22,8 @@
  */
 package com.oracle.max.graal.snippets;
 
-import com.oracle.max.cri.util.*;
 import com.oracle.max.graal.nodes.calc.*;
+import com.sun.max.annotate.*;
 
 /**
  * Snippets for {@link java.lang.Double} methods.
@@ -44,7 +44,9 @@ public class DoubleSnippets implements SnippetsInterface {
         if (value != value) {
             return NAN_RAW_LONG_BITS;
         } else {
-            return doubleToRawLongBits(value);
+            @JavacBug(id = 6995200)
+            Long result = ConvertNode.convert(ConvertNode.Op.MOV_D2L, value);
+            return result;
         }
     }
 

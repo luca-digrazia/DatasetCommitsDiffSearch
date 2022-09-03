@@ -41,7 +41,6 @@ public final class LookupSwitchNode extends SwitchNode implements LIRLowerable {
      */
     public LookupSwitchNode(ValueNode value, BeginNode[] successors, int[] keys, double[] probability) {
         super(value, successors, probability);
-        assert successors.length == keys.length + 1;
         this.keys = keys;
     }
 

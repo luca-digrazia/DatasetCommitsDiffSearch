@@ -23,98 +23,116 @@
 package com.oracle.max.graal.compiler.debug;
 
 import java.io.*;
+import java.util.*;
 
+import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.alloc.*;
+import com.oracle.max.graal.compiler.graphbuilder.*;
+import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.observer.*;
+import com.oracle.max.graal.compiler.schedule.*;
+import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.nodes.*;
+import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * Observes compilation events and uses {@link CFGPrinter} to produce a control flow graph for the <a
- * href="https://c1visualizer.dev.java.net/">C1 Visualizer</a>.
- *
- * @author Peter Hofer
+ * href="http://java.net/projects/c1visualizer/">C1 Visualizer</a>.
  */
 public class CFGPrinterObserver implements CompilationObserver {
 
-    private C1XCompilation currentCompilation;
-    private CFGPrinter cfgPrinter;
-    private ByteArrayOutputStream buffer = null;
-    private final OutputStream stream;
-
-    public CFGPrinterObserver() {
-        this(CFGPrinter.cfgFileStream());
-    }
-
-    public CFGPrinterObserver(OutputStream stream) {
-        this.stream = stream;
-    }
+    /**
+     * A thread local stack of {@link CFGPrinter}s to support thread-safety and re-entrant compilation.
+     */
+    private ThreadLocal<LinkedList<CFGPrinter>> observations = new ThreadLocal<LinkedList<CFGPrinter>>() {
+        @Override
+        protected java.util.LinkedList<CFGPrinter> initialValue() {
+            return new LinkedList<CFGPrinter>();
+        }
+    };
 
     @Override
-    public void compilationStarted(CompilationEvent event) {
-        // Supports only one compilation at the same time
-        assert currentCompilation == null;
-
-        currentCompilation = event.getCompilation();
-        if (buffer == null) {
-            buffer = new ByteArrayOutputStream();
+    public void compilationStarted(GraalCompilation compilation) {
+        if (TTY.isSuppressed()) {
+            return;
         }
-        cfgPrinter = new CFGPrinter(buffer, currentCompilation.target);
-        cfgPrinter.printCompilation(currentCompilation.method);
+
+        CFGPrinter cfgPrinter = new CFGPrinter(new ByteArrayOutputStream(), compilation);
+        cfgPrinter.printCompilation(compilation.method);
+        observations.get().push(cfgPrinter);
     }
 
     @Override
     public void compilationEvent(CompilationEvent event) {
-        assert currentCompilation == event.getCompilation();
-
-        String label = event.getLabel();
-
-        if (event.getAllocator() != null && event.getIntervals() != null) {
-            cfgPrinter.printIntervals(event.getAllocator(), event.getIntervals(), label);
+        if (TTY.isSuppressed()) {
+            return;
+        }
+        CFGPrinter cfgPrinter = observations.get().peek();
+        if (cfgPrinter == null) {
+            return;
         }
 
-        boolean cfgprinted = false;
+        RiRuntime runtime = cfgPrinter.runtime;
+        BlockMap blockMap = event.debugObject(BlockMap.class);
+        Graph graph = event.debugObject(Graph.class);
+        IdentifyBlocksPhase schedule = event.debugObject(IdentifyBlocksPhase.class);
+        LIR lir = event.debugObject(LIR.class);
+        LinearScan allocator = event.debugObject(LinearScan.class);
+        Interval[] intervals = event.debugObject(Interval[].class);
+        CiTargetMethod targetMethod = event.debugObject(CiTargetMethod.class);
 
-        if (event.getBlockMap() != null && event.getCodeSize() >= 0) {
-            cfgPrinter.printCFG(event.getMethod(), event.getBlockMap(), event.getCodeSize(), label, event.isHIRValid(), event.isLIRValid());
-            cfgprinted = true;
+        if (blockMap != null) {
+            cfgPrinter.printCFG(event.label, blockMap);
+            cfgPrinter.printBytecodes(runtime.disassemble(blockMap.method));
         }
-
-        // TODO fix that when schedule is here (startBlock : Instruction->Block)
-        /*if (event.getStartBlock() != null) {
-            cfgPrinter.printCFG((BlockBegin) event.getStartBlock(), label, event.isHIRValid(), event.isLIRValid());
-            cfgprinted = true;
-        }*/
-
-        if (event.getTargetMethod() != null) {
-            if (cfgprinted) {
-                // Avoid duplicate "cfg" section
-                label = null;
+        if (lir != null) {
+            cfgPrinter.printCFG(event.label, lir.codeEmittingOrder(), graph != null);
+            if (targetMethod != null) {
+                cfgPrinter.printMachineCode(runtime.disassemble(targetMethod), null);
             }
+        } else if (graph != null) {
+            List<? extends Block> blocks = null;
+            if (schedule == null) {
+                try {
+                    schedule = new IdentifyBlocksPhase(true, LIRBlock.FACTORY);
+                    schedule.apply((StructuredGraph) graph, false, false);
+                    blocks = schedule.getBlocks();
 
-            RiRuntime runtime = event.getCompilation().runtime;
-            cfgPrinter.printMachineCode(runtime.disassemble(event.getTargetMethod()), label);
+                    ComputeLinearScanOrder clso = new ComputeLinearScanOrder(schedule.getBlocks().size(), schedule.loopCount(), (LIRBlock) schedule.getStartBlock());
+                    blocks = clso.codeEmittingOrder();
+                } catch (Throwable t) {
+                    // nothing to do here...
+                }
+            }
+            if (blocks != null) {
+                cfgPrinter.printCFG(event.label, blocks, true);
+            }
+        }
+        if (allocator != null && intervals != null) {
+            cfgPrinter.printIntervals(event.label, allocator, intervals);
         }
     }
 
     @Override
-    public void compilationFinished(CompilationEvent event) {
-        assert currentCompilation == event.getCompilation();
-
+    public void compilationFinished(GraalCompilation compilation) {
+        if (TTY.isSuppressed()) {
+            return;
+        }
+        CFGPrinter cfgPrinter = observations.get().pop();
         cfgPrinter.flush();
 
+        OutputStream stream = CompilationPrinter.globalOut();
         if (stream != null) {
             synchronized (stream) {
                 try {
-                    stream.write(buffer.toByteArray());
+                    stream.write(cfgPrinter.buffer.toByteArray());
                     stream.flush();
                 } catch (IOException e) {
-                    TTY.println("WARNING: Error writing CFGPrinter output for %s: %s", event.getMethod(), e);
+                    TTY.println("WARNING: Error writing CFGPrinter output: %s", e);
                 }
             }
         }
-
-        buffer.reset();
-        cfgPrinter = null;
-        currentCompilation = null;
     }
 }

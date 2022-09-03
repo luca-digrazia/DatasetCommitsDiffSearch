@@ -24,19 +24,19 @@ package com.oracle.max.graal.snippets;
 
 import java.lang.reflect.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.graphbuilder.*;
 import com.oracle.max.graal.compiler.observer.*;
 import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.cri.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.java.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.java.*;
-import com.oracle.max.graal.printer.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 /**
  * Utilities for snippet installation and management.
@@ -128,9 +128,9 @@ public class Snippets {
 
     private static StructuredGraph buildSnippetGraph(RiResolvedMethod snippetRiMethod, GraalRuntime runtime, CiTarget target, GraalContext context, BoxingMethodPool pool, PhasePlan plan, IdealGraphPrinterObserver observer) {
 
-        GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault();
-        GraphBuilderPhase graphBuilder = new GraphBuilderPhase(runtime, config);
-        StructuredGraph graph = new StructuredGraph(snippetRiMethod);
+        GraphBuilderConfiguration config = GraphBuilderConfiguration.getDeoptFreeDefault();
+        GraphBuilderPhase graphBuilder = new GraphBuilderPhase(runtime, snippetRiMethod, null, config);
+        StructuredGraph graph = new StructuredGraph();
         graphBuilder.apply(graph, context);
 
         if (observer != null) {

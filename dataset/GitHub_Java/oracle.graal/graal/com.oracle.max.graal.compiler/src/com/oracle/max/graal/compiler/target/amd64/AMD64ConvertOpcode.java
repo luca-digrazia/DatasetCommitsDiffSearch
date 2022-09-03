@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,8 +22,6 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
-import static com.sun.cri.ci.CiValueUtil.*;
-
 import com.oracle.max.asm.target.amd64.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
@@ -43,7 +41,8 @@ public enum AMD64ConvertOpcode implements LIROpcode {
         return new AMD64LIRInstruction(this, result, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                emit(tasm, masm, result(), input(0));
+                CiValue input = input(0);
+                emit(tasm, masm, result(), input);
             }
 
             @Override
@@ -57,31 +56,31 @@ public enum AMD64ConvertOpcode implements LIROpcode {
         switch (this) {
             case L2I:
                 AMD64MoveOpcode.move(tasm, masm, result, input);
-                masm.andl(asIntReg(result), 0xFFFFFFFF);
+                masm.andl(tasm.asIntReg(result), 0xFFFFFFFF);
                 break;
             case I2B:
                 AMD64MoveOpcode.move(tasm, masm, result, input);
-                masm.signExtendByte(asIntReg(result));
+                masm.signExtendByte(tasm.asIntReg(result));
                 break;
             case I2C:
                 AMD64MoveOpcode.move(tasm, masm, result, input);
-                masm.andl(asIntReg(result), 0xFFFF);
+                masm.andl(tasm.asIntReg(result), 0xFFFF);
                 break;
             case I2S:
                 AMD64MoveOpcode.move(tasm, masm, result, input);
-                masm.signExtendShort(asIntReg(result));
+                masm.signExtendShort(tasm.asIntReg(result));
                 break;
-            case I2L: masm.movslq(asLongReg(result), asIntReg(input)); break;
-            case F2D: masm.cvtss2sd(asDoubleReg(result), asFloatReg(input)); break;
-            case D2F: masm.cvtsd2ss(asFloatReg(result), asDoubleReg(input)); break;
-            case I2F: masm.cvtsi2ssl(asFloatReg(result), asIntReg(input)); break;
-            case I2D: masm.cvtsi2sdl(asDoubleReg(result), asIntReg(input)); break;
-            case L2F: masm.cvtsi2ssq(asFloatReg(result), asLongReg(input)); break;
-            case L2D: masm.cvtsi2sdq(asDoubleReg(result), asLongReg(input)); break;
-            case MOV_I2F: masm.movdl(asFloatReg(result), asIntReg(input)); break;
-            case MOV_L2D: masm.movdq(asDoubleReg(result), asLongReg(input)); break;
-            case MOV_F2I: masm.movdl(asIntReg(result), asFloatReg(input)); break;
-            case MOV_D2L: masm.movdq(asLongReg(result), asDoubleReg(input)); break;
+            case I2L: masm.movslq(tasm.asLongReg(result), tasm.asIntReg(input)); break;
+            case F2D: masm.cvtss2sd(tasm.asDoubleReg(result), tasm.asFloatReg(input)); break;
+            case D2F: masm.cvtsd2ss(tasm.asFloatReg(result), tasm.asDoubleReg(input)); break;
+            case I2F: masm.cvtsi2ssl(tasm.asFloatReg(result), tasm.asIntReg(input)); break;
+            case I2D: masm.cvtsi2sdl(tasm.asDoubleReg(result), tasm.asIntReg(input)); break;
+            case L2F: masm.cvtsi2ssq(tasm.asFloatReg(result), tasm.asLongReg(input)); break;
+            case L2D: masm.cvtsi2sdq(tasm.asDoubleReg(result), tasm.asLongReg(input)); break;
+            case MOV_I2F: masm.movdl(tasm.asFloatReg(result), tasm.asIntReg(input)); break;
+            case MOV_L2D: masm.movdq(tasm.asDoubleReg(result), tasm.asLongReg(input)); break;
+            case MOV_F2I: masm.movdl(tasm.asIntReg(result), tasm.asFloatReg(input)); break;
+            case MOV_D2L: masm.movdq(tasm.asLongReg(result), tasm.asDoubleReg(input)); break;
             default: throw Util.shouldNotReachHere();
         }
     }

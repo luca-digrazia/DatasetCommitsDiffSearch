@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,8 +22,6 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
-import static com.sun.cri.ci.CiValueUtil.*;
-
 import com.oracle.max.asm.target.amd64.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
@@ -45,7 +43,9 @@ public enum AMD64CompareOpcode implements LIROpcode {
         return new AMD64LIRInstruction(this, CiValue.IllegalValue, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                emit(tasm, masm, input(0), input(1));
+                CiValue left = input(0);
+                CiValue right = input(1);
+                emit(tasm, masm, left, right);
             }
 
             @Override
@@ -56,9 +56,9 @@ public enum AMD64CompareOpcode implements LIROpcode {
     }
 
     protected void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue left, CiValue right) {
-        CiRegister lreg = asRegister(left);
-        if (isRegister(right)) {
-            CiRegister rreg = asRegister(right);
+        CiRegister lreg = tasm.asRegister(left);
+        if (right.isRegister()) {
+            CiRegister rreg = tasm.asRegister(right);
             switch (this) {
                 case ICMP: masm.cmpl(lreg, rreg); break;
                 case LCMP: masm.cmpq(lreg, rreg); break;
@@ -67,7 +67,7 @@ public enum AMD64CompareOpcode implements LIROpcode {
                 case DCMP: masm.ucomisd(lreg, rreg); break;
                 default:   throw Util.shouldNotReachHere();
             }
-        } else if (isConstant(right)) {
+        } else if (right.isConstant()) {
             switch (this) {
                 case ICMP: masm.cmpl(lreg, tasm.asIntConst(right)); break;
                 case LCMP: masm.cmpq(lreg, tasm.asIntConst(right)); break;

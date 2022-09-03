@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,17 +24,15 @@ package com.oracle.max.graal.compiler.lir;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.CiTargetMethod.Mark;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.cri.xir.CiXirAssembler.XirMark;
-import com.oracle.max.cri.xir.*;
-import com.oracle.max.graal.compiler.asm.*;
-import com.oracle.max.graal.compiler.util.*;
+import com.sun.cri.ci.CiTargetMethod.Mark;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
+import com.sun.cri.xir.CiXirAssembler.XirMark;
+import com.sun.cri.xir.*;
 
 public class StandardOpcode {
     // Checkstyle: stop
-    public static MoveOpcode SPILL_MOVE;
+    public static MoveOpcode MOVE;
     public static NullCheckOpcode NULL_CHECK;
     public static CallOpcode DIRECT_CALL;
     public static CallOpcode INDIRECT_CALL;
@@ -42,15 +40,14 @@ public class StandardOpcode {
     public static LIROpcode JUMP;
     public static ReturnOpcode RETURN;
     public static XirOpcode XIR;
-    public static ParametersOpcode PARAMS = ParametersOpcode.PARAMS;
     // Checkstyle: resume
 
     public interface MoveOpcode extends LIROpcode {
-        MoveInstruction create(CiValue result, CiValue input);
+        LIRInstruction create(CiValue result, CiValue input);
     }
 
     public interface NullCheckOpcode extends LIROpcode {
-        LIRInstruction create(Variable input, LIRDebugInfo info);
+        LIRInstruction create(CiVariable input, LIRDebugInfo info);
     }
 
     public interface CallOpcode extends LIROpcode {
@@ -64,28 +61,5 @@ public class StandardOpcode {
     public interface XirOpcode extends LIROpcode {
         LIRInstruction create(XirSnippet snippet, CiValue[] operands, CiValue outputOperand, CiValue[] inputs, CiValue[] temps, int[] inputOperandIndices, int[] tempOperandIndices, int outputOperandIndex,
                         LIRDebugInfo info, LIRDebugInfo infoAfter, RiMethod method);
-    }
-
-
-    public enum ParametersOpcode implements LIROpcode {
-        @SuppressWarnings("hiding")
-        PARAMS;
-
-        public LIRInstruction create(CiValue[] params) {
-            return new LIRInstruction(this, params, null, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
-                @Override
-                public void emitCode(TargetMethodAssembler tasm) {
-                    // No code to emit. This is not the actual method prologue, but only a meta-instruction that defines the incoming method parameters.
-                }
-
-                @Override
-                protected EnumSet<OperandFlag> flagsFor(OperandMode mode, int index) {
-                    if (mode == OperandMode.Output) {
-                        return EnumSet.of(OperandFlag.Register, OperandFlag.Stack);
-                    }
-                    throw Util.shouldNotReachHere();
-                }
-            };
-        }
     }
 }

@@ -24,7 +24,6 @@ package com.oracle.max.graal.compiler.schedule;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.phases.*;
@@ -34,6 +33,7 @@ import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.loop.*;
 import com.oracle.max.graal.nodes.virtual.*;
+import com.sun.cri.ci.*;
 
 
 public class IdentifyBlocksPhase extends Phase {
@@ -45,10 +45,11 @@ public class IdentifyBlocksPhase extends Phase {
     }
 
     private final BlockFactory blockFactory;
-    private final List<Block> blocks = new ArrayList<>();
+    private final List<Block> blocks = new ArrayList<Block>();
     private NodeMap<Block> nodeToBlock;
     private NodeMap<Block> earliestCache;
     private Block startBlock;
+    private StructuredGraph graph;
     private boolean scheduleAllNodes;
     private int loopCount;
 
@@ -74,7 +75,7 @@ public class IdentifyBlocksPhase extends Phase {
             b.setAlwaysReachedBlock(b.getSuccessors().get(0));
         } else if (b.getSuccessors().size() > 1) {
             BitMap blockBitMap = new BitMap(blocks.size());
-            List<Block> visitedBlocks = new ArrayList<>();
+            List<Block> visitedBlocks = new ArrayList<Block>();
 
             // Do a fill starting at the dominated blocks and going upwards over predecessors.
             for (Block dominated : b.getDominated()) {
@@ -93,6 +94,7 @@ public class IdentifyBlocksPhase extends Phase {
                         ok = false;
                         break;
                     }
+                    assert unmarkedDominated == null : "b=" + b + ", unmarkedDominated=" + unmarkedDominated + ", dominated=" + dominated;
                     unmarkedDominated = dominated;
                 }
             }
@@ -138,9 +140,10 @@ public class IdentifyBlocksPhase extends Phase {
 
     @Override
     protected void run(StructuredGraph graph) {
+        this.graph = graph;
         nodeToBlock = graph.createNodeMap();
         earliestCache = graph.createNodeMap();
-        identifyBlocks(graph);
+        identifyBlocks();
     }
 
     public Block getStartBlock() {
@@ -165,8 +168,7 @@ public class IdentifyBlocksPhase extends Phase {
         return loopCount;
     }
 
-    private Block assignBlockNew(Node n, Block block, StructuredGraph graph) {
-        Block b = block;
+    private Block assignBlockNew(Node n, Block b) {
         if (b == null) {
             b = createBlock();
         }
@@ -214,7 +216,25 @@ public class IdentifyBlocksPhase extends Phase {
         return trueSuccessorCount(n) > 1 || n instanceof ReturnNode || n instanceof UnwindNode || n instanceof DeoptimizeNode;
     }
 
-    private void identifyBlocks(StructuredGraph graph) {
+    private void print(boolean instructions) {
+        Block dominatorRoot = nodeToBlock.get(graph.start());
+        TTY.println("Root = " + dominatorRoot);
+        TTY.println("nodeToBlock :");
+        TTY.println(nodeToBlock.toString());
+        TTY.println("Blocks :");
+        for (Block b : blocks) {
+            TTY.println(b + " [S:" + b.getSuccessors() + ", P:" + b.getPredecessors() + ", D:" + b.getDominated());
+            if (instructions) {
+                TTY.println("  f " + b.firstNode());
+                for (Node n : b.getInstructions()) {
+                    TTY.println("  - " + n);
+                }
+                TTY.println("  l " + b.lastNode());
+            }
+        }
+    }
+
+    private void identifyBlocks() {
 
         // Identify blocks.
         for (Node n : graph.getNodes()) {
@@ -223,7 +243,7 @@ public class IdentifyBlocksPhase extends Phase {
                 Node currentNode = n;
                 Node prev = null;
                 while (nodeToBlock.get(currentNode) == null) {
-                    block = assignBlockNew(currentNode, block, graph);
+                    block = assignBlockNew(currentNode, block);
                     if (currentNode instanceof FixedNode) {
                         block.setProbability(((FixedNode) currentNode).probability());
                     }
@@ -263,12 +283,12 @@ public class IdentifyBlocksPhase extends Phase {
             }
         }
 
-        computeDominators(graph);
+        computeDominators();
 
         if (scheduleAllNodes) {
             computeLoopInformation(); // Will make the graph cyclic.
-            assignBlockToNodes(graph);
-            sortNodesWithinBlocks(graph);
+            assignBlockToNodes();
+            sortNodesWithinBlocks();
         }
     }
 
@@ -282,40 +302,38 @@ public class IdentifyBlocksPhase extends Phase {
                 Block loopBeginBlock = nodeToBlock.get(loopEnd.loopBegin());
                 block.addSuccessor(loopBeginBlock);
                 BitMap map = new BitMap(blocks.size());
-                loopBeginBlock.loopBlocks = new ArrayList<>();
                 markBlocks(block, loopBeginBlock, map, loopCount++, block.loopDepth());
                 assert loopBeginBlock.loopDepth() == block.loopDepth() && loopBeginBlock.loopIndex() == block.loopIndex();
             }
         }
     }
 
-    private void markBlocks(Block block, Block loopBeginBlock, BitMap map, int loopIndex, int initialDepth) {
+    private void markBlocks(Block block, Block endBlock, BitMap map, int loopIndex, int initialDepth) {
         if (map.get(block.blockID())) {
             return;
         }
 
         map.set(block.blockID());
-        loopBeginBlock.loopBlocks.add(block);
         if (block.loopDepth() <= initialDepth) {
             assert block.loopDepth() == initialDepth;
             block.setLoopIndex(loopIndex);
         }
         block.setLoopDepth(block.loopDepth() + 1);
 
-        if (block == loopBeginBlock) {
+        if (block == endBlock) {
             return;
         }
 
         for (Block pred : block.getPredecessors()) {
-            markBlocks(pred, loopBeginBlock, map, loopIndex, initialDepth);
+            markBlocks(pred, endBlock, map, loopIndex, initialDepth);
         }
 
         if (block.isLoopHeader()) {
-            markBlocks(nodeToBlock.get(((LoopBeginNode) block.firstNode()).loopEnd()), loopBeginBlock, map, loopIndex, initialDepth);
+            markBlocks(nodeToBlock.get(((LoopBeginNode) block.firstNode()).loopEnd()), endBlock, map, loopIndex, initialDepth);
         }
     }
 
-    private void assignBlockToNodes(StructuredGraph graph) {
+    private void assignBlockToNodes() {
         for (Node n : graph.getNodes()) {
             assignBlockToNode(n);
         }
@@ -372,8 +390,8 @@ public class IdentifyBlocksPhase extends Phase {
             this.block = block;
         }
         @Override
-        public void apply(Block newBlock) {
-            this.block = getCommonDominator(this.block, newBlock);
+        public void apply(Block block) {
+            this.block = getCommonDominator(this.block, block);
         }
     }
 
@@ -387,7 +405,7 @@ public class IdentifyBlocksPhase extends Phase {
             return earliest;
         }
         BitMap bits = new BitMap(blocks.size());
-        ArrayList<Node> before = new ArrayList<>();
+        ArrayList<Node> before = new ArrayList<Node>();
         if (n.predecessor() != null) {
             before.add(n.predecessor());
         }
@@ -408,7 +426,7 @@ public class IdentifyBlocksPhase extends Phase {
             }
         }
         if (earliest == null) {
-            Block start = nodeToBlock.get(((StructuredGraph) n.graph()).start());
+            Block start = nodeToBlock.get(graph.start());
             assert start != null;
             return start;
         }
@@ -417,7 +435,7 @@ public class IdentifyBlocksPhase extends Phase {
     }
 
 
-    private static Block scheduleOutOfLoops(Node n, Block latestBlock, Block earliest) {
+    private Block scheduleOutOfLoops(Node n, Block latestBlock, Block earliest) {
         assert latestBlock != null : "no latest : " + n;
         Block cur = latestBlock;
         Block result = latestBlock;
@@ -485,7 +503,7 @@ public class IdentifyBlocksPhase extends Phase {
         return commonDominator(a, b);
     }
 
-    private void sortNodesWithinBlocks(StructuredGraph graph) {
+    private void sortNodesWithinBlocks() {
         NodeBitMap map = graph.createNodeBitMap();
         for (Block b : blocks) {
             sortNodesWithinBlocks(b, map);
@@ -494,7 +512,7 @@ public class IdentifyBlocksPhase extends Phase {
 
     private void sortNodesWithinBlocks(Block b, NodeBitMap map) {
         List<Node> instructions = b.getInstructions();
-        List<Node> sortedInstructions = new ArrayList<>(instructions.size() + 2);
+        List<Node> sortedInstructions = new ArrayList<Node>(instructions.size() + 2);
 
         assert !map.isMarked(b.firstNode()) && nodeToBlock.get(b.firstNode()) == b;
         assert !map.isMarked(b.lastNode()) && nodeToBlock.get(b.lastNode()) == b;
@@ -568,13 +586,13 @@ public class IdentifyBlocksPhase extends Phase {
         sortedInstructions.add(i);
     }
 
-    private void computeDominators(StructuredGraph graph) {
+    private void computeDominators() {
         Block dominatorRoot = nodeToBlock.get(graph.start());
         assert dominatorRoot != null;
         assert dominatorRoot.getPredecessors().size() == 0;
         BitMap visited = new BitMap(blocks.size());
         visited.set(dominatorRoot.blockID());
-        LinkedList<Block> workList = new LinkedList<>();
+        LinkedList<Block> workList = new LinkedList<Block>();
         workList.add(dominatorRoot);
 
         int cnt = 0;

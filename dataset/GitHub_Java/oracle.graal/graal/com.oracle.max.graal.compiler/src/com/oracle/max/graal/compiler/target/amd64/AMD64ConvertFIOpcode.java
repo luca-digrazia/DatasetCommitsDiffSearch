@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,8 +22,6 @@
  */
 package com.oracle.max.graal.compiler.target.amd64;
 
-import static com.sun.cri.ci.CiValueUtil.*;
-
 import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.AMD64Assembler.ConditionFlag;
 import com.oracle.max.asm.target.amd64.*;
@@ -42,22 +40,23 @@ public enum AMD64ConvertFIOpcode implements LIROpcode {
         return new AMD64LIRInstruction(this, result, null, inputs, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS) {
             @Override
             public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-                emit(tasm, masm, result(), stub, input(0));
+                CiValue input = input(0);
+                emit(tasm, masm, result(), stub, input);
             }
         };
     }
 
     private void emit(TargetMethodAssembler tasm, AMD64MacroAssembler masm, CiValue result, CompilerStub stub, CiValue input) {
         switch (this) {
-            case F2I: masm.cvttss2sil(asIntReg(result), asFloatReg(input)); break;
-            case D2I: masm.cvttsd2sil(asIntReg(result), asDoubleReg(input)); break;
+            case F2I: masm.cvttss2sil(tasm.asIntReg(result), tasm.asFloatReg(input)); break;
+            case D2I: masm.cvttsd2sil(tasm.asIntReg(result), tasm.asDoubleReg(input)); break;
             default: throw Util.shouldNotReachHere();
         }
 
         Label endLabel = new Label();
-        masm.cmp32(asIntReg(result), Integer.MIN_VALUE);
+        masm.cmp32(tasm.asIntReg(result), Integer.MIN_VALUE);
         masm.jcc(ConditionFlag.notEqual, endLabel);
-        AMD64CallOpcode.callStub(tasm, masm, stub, null, result, input);
+        AMD64CallOpcode.callStub(tasm, masm, stub, stub.resultKind, null, result, input);
         masm.bind(endLabel);
     }
 }

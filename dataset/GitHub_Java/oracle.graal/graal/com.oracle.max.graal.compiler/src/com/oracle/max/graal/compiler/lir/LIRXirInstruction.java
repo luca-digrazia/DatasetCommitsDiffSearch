@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,11 +22,10 @@
  */
 package com.oracle.max.graal.compiler.lir;
 
-import static com.sun.cri.ci.CiValueUtil.*;
-
 import java.util.*;
 
 import com.sun.cri.ci.*;
+import com.sun.cri.ci.CiValue.Formatter;
 import com.sun.cri.ri.*;
 import com.sun.cri.xir.*;
 
@@ -99,17 +98,17 @@ public abstract class LIRXirInstruction extends LIRInstruction {
      * Prints this instruction.
      */
     @Override
-    public String operationString() {
-        return toString();
+    public String operationString(Formatter operandFmt) {
+        return toString(operandFmt);
     }
 
     @Override
-    public String toString() {
+    public String toString(Formatter operandFmt) {
         StringBuilder sb = new StringBuilder();
         sb.append("XIR: ");
 
-        if (isLegal(result())) {
-            sb.append(result() + " = ");
+        if (result().isLegal()) {
+            sb.append(operandFmt.format(result()) + " = ");
         }
 
         sb.append(snippet.template);
@@ -120,9 +119,14 @@ public abstract class LIRXirInstruction extends LIRInstruction {
                 sb.append(", ");
             }
             if (a.constant != null) {
-                sb.append(a.constant);
+                sb.append(operandFmt.format(a.constant));
             } else {
-                sb.append(a.object);
+                Object o = a.object;
+                if (o instanceof CiValue) {
+                    sb.append(operandFmt.format((CiValue) o));
+                } else {
+                    sb.append(o);
+                }
             }
         }
         sb.append(')');
@@ -141,9 +145,9 @@ public abstract class LIRXirInstruction extends LIRInstruction {
             }
             if (n != 0) {
                 sb.append(' ').append(mode.name().toLowerCase()).append("=(");
-                HashSet<String> operands = new HashSet<>();
+                HashSet<String> operands = new HashSet<String>();
                 for (int i = 0; i < n; i++) {
-                    String operand = operandAt(mode, i).toString();
+                    String operand = operandFmt.format(operandAt(mode, i));
                     if (!operands.contains(operand)) {
                         if (!operands.isEmpty()) {
                             sb.append(", ");
@@ -156,7 +160,7 @@ public abstract class LIRXirInstruction extends LIRInstruction {
             }
         }
 
-        appendDebugInfo(sb);
+        appendDebugInfo(sb, operandFmt, info);
 
         return sb.toString();
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,6 @@
 package com.oracle.max.graal.compiler.gen;
 
 import static com.sun.cri.ci.CiValue.*;
-import static com.sun.cri.ci.CiValueUtil.*;
 
 import java.util.*;
 
@@ -82,7 +81,7 @@ public class PhiResolver {
 
         PhiResolverNode(CiValue operand) {
             this.operand = operand;
-            destinations = new ArrayList<>(4);
+            destinations = new ArrayList<PhiResolverNode>(4);
         }
 
         @Override
@@ -107,13 +106,13 @@ public class PhiResolver {
 
     private CiValue temp;
 
-    private final ArrayList<PhiResolverNode> variableOperands = new ArrayList<>(3);
-    private final ArrayList<PhiResolverNode> otherOperands = new ArrayList<>(3);
+    private final ArrayList<PhiResolverNode> variableOperands = new ArrayList<PhiResolverNode>(3);
+    private final ArrayList<PhiResolverNode> otherOperands = new ArrayList<PhiResolverNode>(3);
 
     /**
      * Maps operands to nodes.
      */
-    private final HashMap<CiValue, PhiResolverNode> operandToNodeMap = new HashMap<>();
+    private final HashMap<CiValue, PhiResolverNode> operandToNodeMap = new HashMap<CiValue, PhiResolverNode>();
 
     public PhiResolver(LIRGenerator gen) {
         this.gen = gen;
@@ -128,7 +127,7 @@ public class PhiResolver {
                 loop = null;
                 move(null, node);
                 node.startNode = true;
-                assert isIllegal(temp) : "moveTempTo() call missing";
+                assert temp.isIllegal() : "moveTempTo() call missing";
             }
         }
 
@@ -142,10 +141,10 @@ public class PhiResolver {
     }
 
     public void move(CiValue src, CiValue dest) {
-        assert isVariable(dest) : "destination must be virtual";
+        assert dest.isVariable() : "destination must be virtual";
         // tty.print("move "); src.print(); tty.print(" to "); dest.print(); tty.cr();
-        assert isLegal(src) : "source for phi move is illegal";
-        assert isLegal(dest) : "destination for phi move is illegal";
+        assert src.isLegal() : "source for phi move is illegal";
+        assert dest.isLegal() : "destination for phi move is illegal";
         PhiResolverNode srcNode = sourceNode(src);
         PhiResolverNode destNode = destinationNode(dest);
         srcNode.destinations.add(destNode);
@@ -153,7 +152,7 @@ public class PhiResolver {
 
     private PhiResolverNode createNode(CiValue operand, boolean source) {
         PhiResolverNode node;
-        if (isVariable(operand)) {
+        if (operand.isVariable()) {
             node = operandToNodeMap.get(operand);
             assert node == null || node.operand.equals(operand);
             if (node == null) {
@@ -180,8 +179,8 @@ public class PhiResolver {
     }
 
     private void emitMove(CiValue src, CiValue dest) {
-        assert isLegal(src);
-        assert isLegal(dest);
+        assert src.isLegal();
+        assert dest.isLegal();
         gen.emitMove(src, dest);
     }
 
@@ -218,13 +217,13 @@ public class PhiResolver {
     }
 
     private void moveTempTo(CiValue dest) {
-        assert isLegal(temp);
+        assert temp.isLegal();
         emitMove(temp, dest);
         temp = IllegalValue;
     }
 
     private void moveToTemp(CiValue src) {
-        assert isIllegal(temp);
+        assert temp.isIllegal();
         temp = gen.newVariable(src.kind);
         emitMove(src, temp);
     }

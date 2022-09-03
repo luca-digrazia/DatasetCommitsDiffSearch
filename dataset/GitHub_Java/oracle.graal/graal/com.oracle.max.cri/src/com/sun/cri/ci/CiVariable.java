@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,7 +28,6 @@ package com.sun.cri.ci;
  * by a register allocator.
  */
 public final class CiVariable extends CiValue {
-    private static final long serialVersionUID = 4507578431686109809L;
 
     /**
      * The identifier of the variable. This is a non-zero index in a contiguous 0-based name space.
@@ -95,12 +94,24 @@ public final class CiVariable extends CiValue {
     }
 
     @Override
+    public boolean equalsIgnoringKind(CiValue o) {
+        if (this == o) {
+            return true;
+        }
+        if (o instanceof CiVariable) {
+            CiVariable var = (CiVariable) o;
+            return index == var.index;
+        }
+        return false;
+    }
+
+    @Override
     public int hashCode() {
         return (index << 4) | kind.ordinal();
     }
 
     @Override
-    public String toString() {
-        return "v" + index + kindSuffix();
+    public String name() {
+        return "v" + index;
     }
 }

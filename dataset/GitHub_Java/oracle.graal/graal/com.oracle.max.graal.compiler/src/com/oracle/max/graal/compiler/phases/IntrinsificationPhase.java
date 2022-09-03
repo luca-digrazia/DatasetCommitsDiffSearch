@@ -22,12 +22,11 @@
  */
 package com.oracle.max.graal.compiler.phases;
 
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.cri.*;
-import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
+import com.sun.cri.ri.*;
 
 public class IntrinsificationPhase extends Phase {
 
@@ -52,6 +51,7 @@ public class IntrinsificationPhase extends Phase {
         tryIntrinsify(invoke, target, runtime);
     }
 
+    @SuppressWarnings("unchecked")
     public static void tryIntrinsify(Invoke invoke, RiResolvedMethod target, GraalRuntime runtime) {
         StructuredGraph intrinsicGraph = (StructuredGraph) target.compilerStorage().get(Graph.class);
         if (intrinsicGraph == null) {
@@ -59,7 +59,6 @@ public class IntrinsificationPhase extends Phase {
             intrinsicGraph = runtime.intrinsicGraph(invoke.stateAfter().method(), invoke.bci(), target, invoke.callTarget().arguments());
         }
         if (intrinsicGraph != null) {
-            Debug.log(" > Intrinsify %s", target);
             InliningUtil.inline(invoke, intrinsicGraph, true);
         }
     }

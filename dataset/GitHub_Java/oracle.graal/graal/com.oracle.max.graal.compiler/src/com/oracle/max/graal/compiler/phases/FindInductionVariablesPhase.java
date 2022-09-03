@@ -24,13 +24,13 @@ package com.oracle.max.graal.compiler.phases;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.compiler.util.LoopUtil.Loop;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.calc.*;
 import com.oracle.max.graal.nodes.loop.*;
+import com.sun.cri.ci.*;
 
 
 /**
@@ -54,7 +54,7 @@ public class FindInductionVariablesPhase extends Phase {
         }
     }
 
-    private static void findInductionVariables(Loop loop) {
+    private void findInductionVariables(Loop loop) {
         LoopBeginNode loopBegin = loop.loopBegin();
         NodeBitMap loopNodes = loop.nodes();
         for (PhiNode phi : loopBegin.phis().snapshot()) {
@@ -64,50 +64,53 @@ public class FindInductionVariablesPhase extends Phase {
                 continue;
             }
             if (loopNodes.isMarked(backEdge)) {
+                BinaryNode binary;
                 if (backEdge instanceof IntegerAddNode || backEdge instanceof IntegerSubNode) {
-                    final IntegerArithmeticNode arithmetic = (IntegerArithmeticNode) backEdge;
-                    ValueNode stride;
-                    if (arithmetic.x() == phi) {
-                        stride = arithmetic.y();
-                    } else if (arithmetic.y() == phi) {
-                        stride = arithmetic.x();
-                    } else {
-                        continue;
+                    binary = (BinaryNode) backEdge;
+                } else {
+                    continue;
+                }
+                ValueNode stride;
+                if (binary.x() == phi) {
+                    stride = binary.y();
+                } else if (binary.y() == phi) {
+                    stride = binary.x();
+                } else {
+                    continue;
+                }
+                if (loopNodes.isNotNewNotMarked(stride)) {
+                    Graph graph = loopBegin.graph();
+                    if (backEdge instanceof IntegerSubNode) {
+                        stride = graph.unique(new NegateNode(stride));
                     }
-                    if (loopNodes.isNotNewNotMarked(stride)) {
-                        Graph graph = loopBegin.graph();
-                        if (arithmetic instanceof IntegerSubNode) {
-                            stride = graph.unique(new NegateNode(stride));
-                        }
-                        CiKind kind = phi.kind();
-                        LoopCounterNode counter = loopBegin.loopCounter(kind);
-                        BasicInductionVariableNode biv1 = null;
-                        BasicInductionVariableNode biv2 = null;
-                        if (phi.usages().size() > 1) {
-                            biv1 = graph.add(new BasicInductionVariableNode(kind, init, stride, counter));
-                            ((StructuredGraph) phi.graph()).replaceFloating(phi, biv1);
-                        } else {
-                            phi.replaceFirstInput(arithmetic, null);
-                            phi.safeDelete();
-                        }
-                        if (arithmetic.usages().size() > 0) {
-                            biv2 = graph.add(new BasicInductionVariableNode(kind, IntegerArithmeticNode.add(init, stride), stride, counter));
-                            ((StructuredGraph) arithmetic.graph()).replaceFloating(arithmetic, biv2);
-                        } else {
-                            arithmetic.safeDelete();
-                        }
-                        if (biv1 != null) {
-                            findDerivedInductionVariable(biv1, kind, loopNodes);
-                        }
-                        if (biv2 != null) {
-                            findDerivedInductionVariable(biv2, kind, loopNodes);
-                        }
+                    CiKind kind = phi.kind();
+                    LoopCounterNode counter = loopBegin.loopCounter(kind);
+                    BasicInductionVariableNode biv1 = null;
+                    BasicInductionVariableNode biv2 = null;
+                    if (phi.usages().size() > 1) {
+                        biv1 = graph.add(new BasicInductionVariableNode(kind, init, stride, counter));
+                        phi.replaceAndDelete(biv1);
+                    } else {
+                        phi.replaceFirstInput(binary, null);
+                        phi.safeDelete();
+                    }
+                    if (backEdge.usages().size() > 0) {
+                        biv2 = graph.add(new BasicInductionVariableNode(kind, IntegerArithmeticNode.add(init, stride), stride, counter));
+                        backEdge.replaceAndDelete(biv2);
+                    } else {
+                        backEdge.safeDelete();
+                    }
+                    if (biv1 != null) {
+                        findDerivedInductionVariable(biv1, kind, loopNodes);
+                    }
+                    if (biv2 != null) {
+                        findDerivedInductionVariable(biv2, kind, loopNodes);
                     }
                 }
             }
         }
     }
-    private static void findDerivedInductionVariable(BasicInductionVariableNode biv, CiKind kind, NodeBitMap loopNodes) {
+    private void findDerivedInductionVariable(BasicInductionVariableNode biv, CiKind kind, NodeBitMap loopNodes) {
         for (Node usage : biv.usages().snapshot()) {
             ValueNode scale = scale(usage, biv, loopNodes);
             ValueNode offset = null;
@@ -138,13 +141,12 @@ public class FindInductionVariablesPhase extends Phase {
                     offset = ConstantNode.forIntegerKind(kind, 0, biv.graph());
                 }
                 DerivedInductionVariableNode div = biv.graph().add(new DerivedInductionVariableNode(kind, offset, scale, biv));
-                assert node instanceof FloatingNode;
-                ((StructuredGraph) node.graph()).replaceFloating((FloatingNode) node, div);
+                node.replaceAndDelete(div);
             }
         }
     }
 
-    private static ValueNode scale(Node n, BasicInductionVariableNode biv, NodeBitMap loopNodes) {
+    private ValueNode scale(Node n, BasicInductionVariableNode biv, NodeBitMap loopNodes) {
         if (n instanceof IntegerMulNode) {
             IntegerMulNode mul = (IntegerMulNode) n;
             ValueNode scale = null;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,13 +23,10 @@
 
 package com.oracle.max.graal.compiler;
 
-import static com.sun.cri.ci.CiValueUtil.*;
-
 import java.util.*;
 
 import com.oracle.max.asm.*;
 import com.oracle.max.criutils.*;
-import com.oracle.max.graal.alloc.simple.*;
 import com.oracle.max.graal.compiler.alloc.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.gen.*;
@@ -114,7 +111,7 @@ public final class GraalCompilation {
 
     public void setOperand(ValueNode valueNode, CiValue operand) {
         assert operand(valueNode) == null : "operand cannot be set twice";
-        assert operand != null && isLegal(operand) : "operand must be legal";
+        assert operand != null && operand.isLegal() : "operand must be legal";
         assert operand.kind.stackKind() == valueNode.kind();
         assert !(valueNode instanceof VirtualObjectNode);
         nodeOperands.set(valueNode, operand);
@@ -278,7 +275,7 @@ public final class GraalCompilation {
             }
 
             List<Block> blocks = schedule.getBlocks();
-            NodeMap<LIRBlock> valueToBlock = new NodeMap<>(graph);
+            NodeMap<LIRBlock> valueToBlock = new NodeMap<LIRBlock>(graph);
             for (Block b : blocks) {
                 for (Node i : b.getInstructions()) {
                     valueToBlock.set(i, (LIRBlock) b);
@@ -302,7 +299,7 @@ public final class GraalCompilation {
                 lir = new LIR(startBlock, linearScanOrder, codeEmittingOrder, valueToBlock);
 
                 if (context().isObserved()) {
-                    context().observable.fireCompilationEvent("After linear scan order", this, graph, lir);
+                    context().observable.fireCompilationEvent("After linear scan order", this, graph);
                 }
             } catch (AssertionError t) {
                     context().observable.fireCompilationEvent("AssertionError in ComputeLinearScanOrder", CompilationEvent.ERROR, this, graph);
@@ -318,8 +315,8 @@ public final class GraalCompilation {
         }
     }
 
-    public void initFrameMap() {
-        frameMap = this.compiler.backend.newFrameMap(this);
+    public void initFrameMap(int numberOfLocks) {
+        frameMap = this.compiler.backend.newFrameMap(this, method);
     }
 
     private void emitLIR(RiXirGenerator xir) {
@@ -330,35 +327,22 @@ public final class GraalCompilation {
                 nodeOperands = graph.createNodeMap();
                 LIRGenerator lirGenerator = null;
                 try {
-                    initFrameMap();
+                    initFrameMap(maxLocks());
 
                     lirGenerator = compiler.backend.newLIRGenerator(this, xir);
 
                     for (LIRBlock b : lir.linearScanOrder()) {
                         lirGenerator.doBlock(b);
                     }
-
-                    for (LIRBlock b : lir.linearScanOrder()) {
-                        if (b.phis != null) {
-                            b.phis.fillInputs(lirGenerator);
-                        }
-                    }
                 } finally {
                     context().timers.endScope();
                 }
 
-                if (context().isObserved()) {
-                    context().observable.fireCompilationEvent("After LIR generation", this, graph, lir);
-                }
                 if (GraalOptions.PrintLIR && !TTY.isSuppressed()) {
                     LIR.printLIR(lir.linearScanOrder());
                 }
 
-                if (GraalOptions.AllocSSA) {
-                    new SpillAllAllocator(context(), lir, this, lirGenerator.operands, registerConfig, lirGenerator.incomingArguments).execute();
-                } else {
-                    new LinearScan(this, lir, lirGenerator, frameMap()).allocate();
-                }
+                new LinearScan(this, lir, lirGenerator, frameMap()).allocate();
             }
         } catch (Error e) {
             if (context().isObserved() && GraalOptions.PlotOnError) {
@@ -422,9 +406,9 @@ public final class GraalCompilation {
         return compiler.context;
     }
 
-    public void printGraph(String phase, Graph printedGraph) {
+    public void printGraph(String phase, Graph graph) {
         if (context().isObserved()) {
-            context().observable.fireCompilationEvent(phase, this, printedGraph);
+            context().observable.fireCompilationEvent(phase, this, graph);
         }
     }
 }

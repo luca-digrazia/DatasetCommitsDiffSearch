@@ -28,7 +28,6 @@ import org.junit.*;
 
 import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.compiler.phases.PhasePlan.PhasePosition;
-import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.extended.*;
 
@@ -69,37 +68,31 @@ public class IfBoxingEliminationTest extends GraphTest {
         return result;
     }
 
-    private void test(final String snippet) {
-        Debug.scope("IfBoxingEliminationTest", new DebugDumpScope(snippet), new Runnable() {
-            @Override
-            public void run() {
-                StructuredGraph graph = parse(snippet);
-                BoxingMethodPool pool = new BoxingMethodPool(runtime());
-                IdentifyBoxingPhase identifyBoxingPhase = new IdentifyBoxingPhase(pool);
-                PhasePlan phasePlan = getDefaultPhasePlan();
-                phasePlan.addPhase(PhasePosition.AFTER_PARSING, identifyBoxingPhase);
-                phasePlan.addPhase(PhasePosition.AFTER_PARSING, new PhiStampPhase());
-                identifyBoxingPhase.apply(graph);
-                Collection<Invoke> hints = new ArrayList<>();
-                for (Invoke invoke : graph.getInvokes()) {
-                    hints.add(invoke);
-                }
-                new InliningPhase(null, runtime(), hints, null, phasePlan).apply(graph);
-                new CanonicalizerPhase(null, runtime(), null).apply(graph);
-                new PhiStampPhase().apply(graph);
-                new CanonicalizerPhase(null, runtime(), null).apply(graph);
-                Debug.dump(graph, "Graph");
-                new BoxingEliminationPhase().apply(graph);
-                Debug.dump(graph, "Graph");
-                new ExpandBoxingNodesPhase(pool).apply(graph);
-                new CanonicalizerPhase(null, runtime(), null).apply(graph);
-                new DeadCodeEliminationPhase().apply(graph);
-                StructuredGraph referenceGraph = parse(REFERENCE_SNIPPET);
-                new CanonicalizerPhase(null, runtime(), null).apply(referenceGraph);
-                new DeadCodeEliminationPhase().apply(referenceGraph);
-
-                assertEquals(referenceGraph, graph);
-            }
-        });
+    private void test(String snippet) {
+        StructuredGraph graph = parse(snippet);
+        BoxingMethodPool pool = new BoxingMethodPool(runtime());
+        IdentifyBoxingPhase identifyBoxingPhase = new IdentifyBoxingPhase(pool);
+        PhasePlan phasePlan = new PhasePlan();
+        phasePlan.addPhase(PhasePosition.AFTER_PARSING, identifyBoxingPhase);
+        phasePlan.addPhase(PhasePosition.AFTER_PARSING, new PhiStampPhase());
+        identifyBoxingPhase.apply(graph);
+        Collection<Invoke> hints = new ArrayList<Invoke>();
+        for (Invoke invoke : graph.getInvokes()) {
+            hints.add(invoke);
+        }
+        new InliningPhase(null, runtime(), hints, null, phasePlan).apply(graph);
+        new CanonicalizerPhase(null, runtime(), null).apply(graph);
+        new PhiStampPhase().apply(graph);
+        new CanonicalizerPhase(null, runtime(), null).apply(graph);
+        print(graph);
+        new BoxingEliminationPhase(runtime()).apply(graph);
+        print(graph);
+        new ExpandBoxingNodesPhase(pool).apply(graph);
+        new CanonicalizerPhase(null, runtime(), null).apply(graph);
+        new DeadCodeEliminationPhase().apply(graph);
+        StructuredGraph referenceGraph = parse(REFERENCE_SNIPPET);
+        new CanonicalizerPhase(null, runtime(), null).apply(referenceGraph);
+        new DeadCodeEliminationPhase().apply(referenceGraph);
+        assertEquals(referenceGraph, graph);
     }
 }

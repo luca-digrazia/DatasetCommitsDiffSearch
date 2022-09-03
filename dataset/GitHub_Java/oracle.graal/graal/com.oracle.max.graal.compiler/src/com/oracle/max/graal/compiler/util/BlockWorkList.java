@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2009, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,7 @@
  */
 package com.oracle.max.graal.compiler.util;
 
-import com.oracle.max.graal.compiler.ir.*;
+import com.oracle.max.graal.nodes.*;
 
 /**
  * This class implements a worklist for dealing with blocks. The worklist can
@@ -34,11 +34,9 @@ import com.oracle.max.graal.compiler.ir.*;
  * Note that this implementation is slightly less efficient than the dedicated
  * work list in {@link com.oracle.max.graal.compiler.graph.ScopeData}, because this worklist uses
  * an externally supplied number.
- *
- * @author Ben L. Titzer
  */
 public class BlockWorkList {
-    Merge[] workList;
+    MergeNode[] workList;
     int[] workListNumbers;
     int workListIndex;
 
@@ -46,7 +44,7 @@ public class BlockWorkList {
      * Adds a block to this list in an unsorted fashion, like a stack.
      * @param block the block to add
      */
-    public void add(Merge block) {
+    public void add(MergeNode block) {
         if (workList == null) {
             // worklist not allocated yet
             allocate();
@@ -64,7 +62,7 @@ public class BlockWorkList {
      * @param block the block to add
      * @param number the number used to sort the block
      */
-    public void addSorted(Merge block, int number) {
+    public void addSorted(MergeNode block, int number) {
         if (workList == null) {
             // worklist not allocated yet
             allocate();
@@ -96,7 +94,7 @@ public class BlockWorkList {
      * the last block added is returned.
      * @return the next block in the list
      */
-    public Merge removeFromWorkList() {
+    public MergeNode removeFromWorkList() {
         if (workListIndex != 0) {
             return workList[--workListIndex];
         }
@@ -112,13 +110,13 @@ public class BlockWorkList {
     }
 
     private void allocate() {
-        workList = new Merge[5];
+        workList = new MergeNode[5];
         workListNumbers = new int[5];
     }
 
     private void grow() {
         int prevLength = workList.length;
-        Merge[] nworkList = new Merge[prevLength * 3];
+        MergeNode[] nworkList = new MergeNode[prevLength * 3];
         System.arraycopy(workList, 0, nworkList, 0, prevLength);
         workList = nworkList;
 

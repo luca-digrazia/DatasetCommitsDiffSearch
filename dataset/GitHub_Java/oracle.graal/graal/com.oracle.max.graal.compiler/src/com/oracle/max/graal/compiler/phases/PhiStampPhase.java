@@ -22,6 +22,7 @@
  */
 package com.oracle.max.graal.compiler.phases;
 
+import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 
 public class PhiStampPhase extends Phase {
@@ -44,16 +45,22 @@ public class PhiStampPhase extends Phase {
 
     private void iterativeInferPhi(PhiNode phi) {
         if (phi.inferStamp()) {
-            for (PhiNode phiUsage : phi.usages().filter(PhiNode.class)) {
-                iterativeInferPhi(phiUsage);
+            for (Node n : phi.usages()) {
+                if (n instanceof PhiNode) {
+                    PhiNode phiUsage = (PhiNode) n;
+                    iterativeInferPhi(phiUsage);
+                }
             }
         }
     }
 
     private void inferPhi(PhiNode phi) {
-        for (PhiNode phiInput : phi.values().filter(PhiNode.class)) {
-            if (!phiInput.isLoopPhi()) {
-                inferPhi(phiInput);
+        for (ValueNode v : phi.values()) {
+            if (v instanceof PhiNode) {
+                PhiNode phiInput = (PhiNode) v;
+                if (!phiInput.isLoopPhi()) {
+                    inferPhi(phiInput);
+                }
             }
         }
         phi.inferStamp();

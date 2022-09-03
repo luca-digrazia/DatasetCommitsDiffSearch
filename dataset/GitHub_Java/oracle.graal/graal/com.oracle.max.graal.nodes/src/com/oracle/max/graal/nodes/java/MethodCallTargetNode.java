@@ -22,12 +22,12 @@
  */
 package com.oracle.max.graal.nodes.java;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 public class MethodCallTargetNode extends CallTargetNode implements Node.IterableNodeType, Canonicalizable {
     public enum InvokeKind {
@@ -106,7 +106,10 @@ public class MethodCallTargetNode extends CallTargetNode implements Node.Iterabl
     }
 
     public Invoke invoke() {
-        return (Invoke) this.usages().first();
+        if (this.usages().size() == 0) {
+            return null;
+        }
+        return (Invoke) this.usages().iterator().next();
     }
 
 
@@ -129,11 +132,15 @@ public class MethodCallTargetNode extends CallTargetNode implements Node.Iterabl
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
+    public Node canonical(CanonicalizerTool tool) {
         if (!isStatic()) {
             ValueNode receiver = receiver();
             if (receiver != null && receiver.exactType() != null) {
-                if (invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual) {
+                if (invokeKind == InvokeKind.Interface) {
+                    invokeKind = InvokeKind.Virtual;
+                    targetMethod = receiver.exactType().resolveMethodImpl(targetMethod);
+                }
+                if (receiver.isConstant() && invokeKind == InvokeKind.Virtual) {
                     invokeKind = InvokeKind.Special;
                     targetMethod = receiver.exactType().resolveMethodImpl(targetMethod);
                 }

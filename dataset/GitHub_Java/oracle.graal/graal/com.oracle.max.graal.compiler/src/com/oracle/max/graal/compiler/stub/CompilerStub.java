@@ -22,9 +22,9 @@
  */
 package com.oracle.max.graal.compiler.stub;
 
-import static com.oracle.max.cri.ci.CiKind.*;
+import static com.sun.cri.ci.CiKind.*;
 
-import com.oracle.max.cri.ci.*;
+import com.sun.cri.ci.*;
 
 /**
  * A compiler stub is a shared routine that performs an operation on behalf of compiled code.

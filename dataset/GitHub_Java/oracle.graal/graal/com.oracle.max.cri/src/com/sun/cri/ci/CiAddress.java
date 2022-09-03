@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,7 +28,6 @@ package com.sun.cri.ci;
  * unassigned to target machine registers.
  */
 public final class CiAddress extends CiValue {
-    private static final long serialVersionUID = -1003772042519945089L;
 
     /**
      * A sentinel value used as a place holder in an instruction stream for an address that will be patched.
@@ -94,24 +93,23 @@ public final class CiAddress extends CiValue {
     public CiAddress(CiKind kind, CiValue base, CiValue index, Scale scale, int displacement) {
         super(kind);
 
-        this.base = base;
         if (index.isConstant()) {
             long longIndex = ((CiConstant) index).asLong();
             long longDisp = displacement + longIndex * scale.value;
             if ((int) longIndex != longIndex || (int) longDisp != longDisp) {
                 throw new Error("integer overflow when computing constant displacement");
             }
-            this.displacement = (int) longDisp;
-            this.index = IllegalValue;
-            this.scale = Scale.Times1;
-        } else {
-            assert base.isIllegal() || base.isVariableOrRegister();
-            assert index.isIllegal() || index.isVariableOrRegister();
-
-            this.index = index;
-            this.scale = scale;
-            this.displacement = displacement;
+            displacement = (int) longDisp;
+            index = IllegalValue;
+            scale = Scale.Times1;
         }
+        assert base.isIllegal() || base.isVariableOrRegister();
+        assert index.isIllegal() || index.isVariableOrRegister();
+
+        this.base = base;
+        this.index = index;
+        this.scale = scale;
+        this.displacement = displacement;
     }
 
     /**
@@ -226,13 +224,13 @@ public final class CiAddress extends CiValue {
     }
 
     @Override
-    public String toString() {
+    public String name() {
         // Checkstyle: stop
         switch (format()) {
-            case BASE            : return "[" + s(base) + kindSuffix() + "]";
-            case BASE_DISP       : return "[" + s(base) + signed(displacement) + kindSuffix() + "]";
-            case BASE_INDEX      : return "[" + s(base) + "+" + s(index) + kindSuffix() + "]";
-            case BASE_INDEX_DISP : return "[" + s(base) + "+(" + s(index) + "*" + scale.value + ")" + signed(displacement) + kindSuffix() + "]";
+            case BASE            : return "[" + s(base) + "]";
+            case BASE_DISP       : return "[" + s(base) + signed(displacement) + "]";
+            case BASE_INDEX      : return "[" + s(base) + "+" + s(index) + "]";
+            case BASE_INDEX_DISP : return "[" + s(base) + "+(" + s(index) + "*" + scale.value + ")" + signed(displacement) + "]";
             case PLACEHOLDER     : return "[<placeholder>]";
             default              : throw new IllegalArgumentException("unknown format: " + format());
         }
@@ -244,6 +242,15 @@ public final class CiAddress extends CiValue {
         if (obj instanceof CiAddress) {
             CiAddress addr = (CiAddress) obj;
             return kind == addr.kind && displacement == addr.displacement && base.equals(addr.base) && scale == addr.scale && index.equals(addr.index);
+        }
+        return false;
+    }
+
+    @Override
+    public boolean equalsIgnoringKind(CiValue o) {
+        if (o instanceof CiAddress) {
+            CiAddress addr = (CiAddress) o;
+            return displacement == addr.displacement && base.equalsIgnoringKind(addr.base) && scale == addr.scale && index.equalsIgnoringKind(addr.index);
         }
         return false;
     }

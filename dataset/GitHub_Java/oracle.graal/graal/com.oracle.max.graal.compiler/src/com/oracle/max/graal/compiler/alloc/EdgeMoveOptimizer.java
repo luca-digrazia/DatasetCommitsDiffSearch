@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -72,7 +72,7 @@ final class EdgeMoveOptimizer {
     private final List<List<LIRInstruction>> edgeInstructionSeqences;
 
     private EdgeMoveOptimizer() {
-        edgeInstructionSeqences = new ArrayList<>(4);
+        edgeInstructionSeqences = new ArrayList<List<LIRInstruction>>(4);
     }
 
     /**
@@ -84,14 +84,12 @@ final class EdgeMoveOptimizer {
      * @param op2 the second instruction to compare
      * @return {@code true} if {@code op1} and {@code op2} are the same by the above algorithm
      */
-    private static boolean same(LIRInstruction op1, LIRInstruction op2) {
+    private boolean same(LIRInstruction op1, LIRInstruction op2) {
         assert op1 != null;
         assert op2 != null;
 
-        if (op1 instanceof MoveInstruction && op2 instanceof MoveInstruction) {
-            MoveInstruction move1 = (MoveInstruction) op1;
-            MoveInstruction move2 = (MoveInstruction) op2;
-            if (move1.getSource() == move2.getSource() && move1.getDest() == move2.getDest()) {
+        if (op1.code == StandardOpcode.MOVE && op2.code == StandardOpcode.MOVE) {
+            if (op1.info == op2.info && op1.input(0).equals(op2.input(0)) && op1.result().equals(op2.result())) {
                 // these moves are exactly equal and can be optimized
                 return true;
             }

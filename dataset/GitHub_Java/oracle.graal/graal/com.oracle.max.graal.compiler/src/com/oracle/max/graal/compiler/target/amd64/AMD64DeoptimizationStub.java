@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,14 +26,14 @@ import java.util.*;
 
 import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.nodes.DeoptimizeNode.DeoptAction;
+import com.sun.cri.ci.*;
 
-public class AMD64DeoptimizationStub extends AMD64SlowPath {
+public class AMD64DeoptimizationStub implements LIR.SlowPath {
     public final Label label = new Label();
     public final LIRDebugInfo info;
     public final DeoptAction action;
@@ -46,12 +46,14 @@ public class AMD64DeoptimizationStub extends AMD64SlowPath {
     }
 
 
-    private static ArrayList<Object> keepAlive = new ArrayList<>();
+    private static ArrayList<Object> keepAlive = new ArrayList<Object>();
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+    public void emitCode(TargetMethodAssembler tasm) {
+        AMD64MacroAssembler masm = (AMD64MacroAssembler) tasm.asm;
+
         // TODO(cwi): we want to get rid of a generally reserved scratch register.
-        CiRegister scratch = tasm.frameMap.registerConfig.getScratchRegister();
+        CiRegister scratch = tasm.compilation.registerConfig.getScratchRegister();
 
         masm.bind(label);
         if (GraalOptions.CreateDeoptInfo && deoptInfo != null) {

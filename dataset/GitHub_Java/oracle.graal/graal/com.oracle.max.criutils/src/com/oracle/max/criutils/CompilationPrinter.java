@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,13 +22,12 @@
  */
 package com.oracle.max.criutils;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
-
 import java.io.*;
-import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ci.CiAddress.Scale;
+import com.sun.cri.ci.CiValue.Formatter;
+import com.sun.cri.ri.*;
 
 /**
  * Utility for printing compilation related data structures at various compilation phases.
@@ -97,8 +96,8 @@ public class CompilationPrinter {
      */
     public void printCompilation(RiMethod method) {
         begin("compilation");
-        out.print("name \" ").print(CiUtil.format("%H::%n", method)).println('"');
-        out.print("method \"").print(CiUtil.format("%f %r %H.%n(%p)", method)).println('"');
+        out.print("name \" ").print(CiUtil.format("%H::%n", method, true)).println('"');
+        out.print("method \"").print(CiUtil.format("%f %r %H.%n(%p)", method, true)).println('"');
         out.print("date ").println(System.currentTimeMillis());
         end("compilation");
     }
@@ -106,13 +105,13 @@ public class CompilationPrinter {
     /**
      * Formats a given {@linkplain FrameState JVM frame state} as a multi line string.
      */
-    protected String debugInfoToString(CiCodePos codePos, CiBitMap registerRefMap, CiBitMap frameRefMap, CiArchitecture arch) {
+    protected String debugInfoToString(CiCodePos codePos, CiBitMap registerRefMap, CiBitMap frameRefMap, OperandFormatter fmt, CiArchitecture arch) {
         StringBuilder sb = new StringBuilder();
 
         if (registerRefMap != null) {
             sb.append("reg-ref-map:");
             for (int reg = registerRefMap.nextSetBit(0); reg >= 0; reg = registerRefMap.nextSetBit(reg + 1)) {
-                sb.append(' ').append(arch == null ? "r" + reg : arch.registers[reg]);
+                sb.append(' ').append(arch == null ? "reg" + reg : arch.registers[reg]);
             }
             sb.append("\n");
         }
@@ -120,64 +119,102 @@ public class CompilationPrinter {
         if (frameRefMap != null) {
             sb.append("frame-ref-map:");
             for (int reg = frameRefMap.nextSetBit(0); reg >= 0; reg = frameRefMap.nextSetBit(reg + 1)) {
-                sb.append(' ').append("s").append(reg);
+                sb.append(' ').append(CiStackSlot.get(CiKind.Object, reg));
             }
             sb.append("\n");
         }
 
         if (codePos != null) {
-            CiCodePos curCodePos = codePos;
-            List<CiVirtualObject> virtualObjects = new ArrayList<>();
             do {
-                sb.append(CiUtil.toLocation(curCodePos.method, curCodePos.bci));
+                sb.append(CiUtil.toLocation(codePos.method, codePos.bci));
                 sb.append('\n');
-                if (curCodePos instanceof CiFrame) {
-                    CiFrame frame = (CiFrame) curCodePos;
+                if (codePos instanceof CiFrame) {
+                    CiFrame frame = (CiFrame) codePos;
                     if (frame.numStack > 0) {
                         sb.append("stack: ");
                         for (int i = 0; i < frame.numStack; i++) {
-                            sb.append(valueToString(frame.getStackValue(i), virtualObjects)).append(' ');
+                            sb.append(valueToString(frame.getStackValue(i), fmt)).append(' ');
                         }
                         sb.append("\n");
                     }
-                    sb.append("locals: ");
-                    for (int i = 0; i < frame.numLocals; i++) {
-                        sb.append(valueToString(frame.getLocalValue(i), virtualObjects)).append(' ');
-                    }
-                    sb.append("\n");
+
                     if (frame.numLocks > 0) {
                         sb.append("locks: ");
                         for (int i = 0; i < frame.numLocks; ++i) {
-                            sb.append(valueToString(frame.getLockValue(i), virtualObjects)).append(' ');
+                            sb.append(valueToString(frame.getLockValue(i), fmt)).append(' ');
                         }
                         sb.append("\n");
                     }
 
+                    sb.append("locals: ");
+                    for (int i = 0; i < frame.numLocals; i++) {
+                        sb.append(valueToString(frame.getLocalValue(i), fmt)).append(' ');
+                    }
+                    sb.append("\n");
                 }
-                curCodePos = curCodePos.caller;
-            } while (curCodePos != null);
-
-            for (int i = 0; i < virtualObjects.size(); i++) {
-                CiVirtualObject obj = virtualObjects.get(i);
-                sb.append(obj).append(" ").append(obj.type().name()).append(" ");
-                for (int j = 0; j < obj.values().length; j++) {
-                    sb.append(valueToString(obj.values()[j], virtualObjects)).append(' ');
-                }
-                sb.append("\n");
-
-            }
+                codePos = codePos.caller;
+            } while (codePos != null);
         }
         return sb.toString();
     }
 
-    protected String valueToString(CiValue value, List<CiVirtualObject> virtualObjects) {
+
+    protected String valueToString(CiValue value, Formatter operandFmt) {
         if (value == null) {
             return "-";
         }
-        if (isVirtualObject(value) && !virtualObjects.contains(asVirtualObject(value))) {
-            virtualObjects.add(asVirtualObject(value));
+        return operandFmt.format(value);
+    }
+
+
+    /**
+     * Formats LIR operands as expected by the C1 Visualizer.
+     */
+    public static class OperandFormatter extends Formatter {
+        /**
+         * The textual delimiters used for an operand depend on the context in which it is being
+         * printed. When printed as part of a frame state or as the result operand in a HIR node listing,
+         * it is enclosed in double-quotes (i.e. {@code "}'s).
+         */
+        public final boolean asStateOrHIROperandResult;
+
+        public OperandFormatter(boolean asStateOrHIROperandResult) {
+            this.asStateOrHIROperandResult = asStateOrHIROperandResult;
         }
-        return value.toString();
+
+        @Override
+        public String format(CiValue operand) {
+            if (operand.isLegal()) {
+                String op;
+                if (operand.isVariableOrRegister() || operand.isStackSlot()) {
+                    op = operand.name();
+                } else if (operand.isConstant()) {
+                    CiConstant constant = (CiConstant) operand;
+                    op = operand.kind.javaName + ":" + operand.kind.format(constant.boxedValue());
+                } else if (operand.isAddress()) {
+                    CiAddress address = (CiAddress) operand;
+                    op = "Base:" + format(address.base);
+                    if (!address.index.isIllegal()) {
+                        op += " Index:" + format(address.index);
+                    }
+                    if (address.scale != Scale.Times1) {
+                        op += " * " + address.scale.value;
+                    }
+                    op += " Disp:" + address.displacement;
+                } else {
+                    assert operand.isIllegal();
+                    op = "-";
+                }
+                if (operand.kind != CiKind.Illegal) {
+                    op += "|" + operand.kind.typeChar;
+                }
+                if (asStateOrHIROperandResult) {
+                    op = " \"" + op.replace('"', '\'') + "\" ";
+                }
+                return op;
+            }
+            return "";
+        }
     }
 
     public void printMachineCode(String code, String label) {

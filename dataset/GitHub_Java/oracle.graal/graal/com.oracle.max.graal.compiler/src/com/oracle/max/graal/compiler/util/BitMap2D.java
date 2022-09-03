@@ -26,9 +26,6 @@ import com.oracle.max.graal.graph.*;
 
 /**
  * This class implements a two-dimensional bitmap.
- *
- * @author Marcelo Cintra
- * @author Thomas Wuerthinger
  */
 public final class BitMap2D {
 

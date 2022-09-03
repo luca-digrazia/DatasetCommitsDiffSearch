@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,10 +22,10 @@
  */
 package com.oracle.max.graal.hotspot.nodes;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.spi.*;
+import com.sun.cri.ci.*;
 
 public final class ArrayWriteBarrier extends WriteBarrier implements LIRLowerable {
 
@@ -46,8 +46,8 @@ public final class ArrayWriteBarrier extends WriteBarrier implements LIRLowerabl
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        CiValue obj = gen.emitLea(gen.makeAddress(location(), object()));
-        generateBarrier(obj, gen);
+    public void generate(LIRGeneratorTool generator) {
+        CiVariable obj = generator.emitLea(location().createAddress(generator, object()));
+        generateBarrier(obj, generator);
     }
 }

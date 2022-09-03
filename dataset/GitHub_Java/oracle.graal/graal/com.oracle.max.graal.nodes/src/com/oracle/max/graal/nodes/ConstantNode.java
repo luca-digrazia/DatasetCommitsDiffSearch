@@ -22,23 +22,23 @@
  */
 package com.oracle.max.graal.nodes;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.graph.iterators.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 /**
  * The {@code ConstantNode} represents a constant such as an integer value,
  * long, float, object reference, address, etc.
  */
 @NodeInfo(shortName = "Const")
-public class ConstantNode extends BooleanNode implements LIRLowerable {
+public final class ConstantNode extends BooleanNode implements LIRLowerable {
 
     @Data public final CiConstant value;
+    private RiRuntime runtime;
 
-    protected ConstantNode(CiConstant value) {
+    private ConstantNode(CiConstant value) {
         this(value, null);
     }
 
@@ -46,22 +46,19 @@ public class ConstantNode extends BooleanNode implements LIRLowerable {
      * Constructs a new ConstantNode representing the specified constant.
      * @param value the constant
      */
-    protected ConstantNode(CiConstant value, RiRuntime runtime) {
+    private ConstantNode(CiConstant value, RiRuntime runtime) {
         super(StampFactory.forConstant(value, runtime));
         this.value = value;
+        this.runtime = runtime;
     }
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        if (gen.canInlineConstant(value) || onlyUsedInFrameState()) {
+        if (gen.canInlineConstant(value)) {
             gen.setResult(this, value);
         } else {
             gen.setResult(this, gen.emitMove(value));
         }
-    }
-
-    private boolean onlyUsedInFrameState() {
-        return usages().filter(NodePredicates.isNotA(FrameState.class)).isEmpty();
     }
 
     public static ConstantNode forCiConstant(CiConstant constant, RiRuntime runtime, Graph graph) {

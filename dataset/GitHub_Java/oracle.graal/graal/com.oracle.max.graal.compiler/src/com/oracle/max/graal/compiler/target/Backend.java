@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,13 +25,13 @@ package com.oracle.max.graal.compiler.target;
 import java.lang.reflect.*;
 
 import com.oracle.max.asm.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.cri.xir.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.gen.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.stub.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
+import com.sun.cri.xir.*;
 
 /**
  * The {@code Backend} class represents a compiler backend for Graal.
@@ -54,7 +54,7 @@ public abstract class Backend {
         }
     }
 
-    public abstract FrameMap newFrameMap(RiRuntime runtime, CiTarget target, RiRegisterConfig registerConfig);
+    public abstract FrameMap newFrameMap(GraalCompilation compilation, RiResolvedMethod method);
     public abstract LIRGenerator newLIRGenerator(GraalCompilation compilation, RiXirGenerator xir);
     public abstract AbstractAssembler newAssembler(RiRegisterConfig registerConfig);
     public abstract CiXirAssembler newXirAssembler();

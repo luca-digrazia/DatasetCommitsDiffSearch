@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,6 +26,7 @@ import java.util.*;
 
 import com.oracle.max.asm.*;
 import com.oracle.max.criutils.*;
+import com.oracle.max.graal.compiler.alloc.*;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
@@ -148,17 +149,6 @@ public final class LIRBlock extends Block {
         return (LIRBlock) successors.get(i);
     }
 
-    @SuppressWarnings({"unchecked", "cast"})
-    public List<LIRBlock> getLIRSuccessors() {
-        return (List<LIRBlock>) (List) super.getSuccessors();
-    }
-
-    @SuppressWarnings({"unchecked", "cast"})
-    public List<LIRBlock> getLIRPredecessors() {
-        return (List<LIRBlock>) (List) super.getPredecessors();
-    }
-
-
     @Override
     public String toString() {
         return "B" + blockID();
@@ -205,9 +195,9 @@ public final class LIRBlock extends Block {
         LIRInstruction lirInstruction = lir.get(lir.size() - 1);
         if (lirInstruction instanceof LIRXirInstruction) {
             LIRXirInstruction lirXirInstruction = (LIRXirInstruction) lirInstruction;
-            return (lirXirInstruction.falseSuccessor != null) && (lirXirInstruction.trueSuccessor != null);
+            return (lirXirInstruction.falseSuccessor() != null) && (lirXirInstruction.trueSuccessor() != null);
         }
-        return lirInstruction instanceof StandardOp.JumpOp;
+        return lirInstruction instanceof LIRBranch;
     }
 
     public boolean isExceptionEntry() {

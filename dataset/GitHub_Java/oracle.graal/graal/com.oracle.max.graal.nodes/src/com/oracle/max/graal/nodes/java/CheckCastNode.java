@@ -22,26 +22,21 @@
  */
 package com.oracle.max.graal.nodes.java;
 
-import java.util.*;
-
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
+import com.sun.cri.bytecode.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 /**
  * The {@code CheckCastNode} represents a {@link Bytecodes#CHECKCAST}.
  */
-public final class CheckCastNode extends TypeCheckNode implements Canonicalizable, LIRLowerable, Node.IterableNodeType {
+public final class CheckCastNode extends TypeCheckNode implements Canonicalizable, LIRLowerable {
 
-    @Input protected final AnchorNode anchor;
-
-    public AnchorNode anchor() {
-        return anchor;
-    }
+    @Input private final AnchorNode anchor;
 
     /**
      * Creates a new CheckCast instruction.
@@ -51,12 +46,7 @@ public final class CheckCastNode extends TypeCheckNode implements Canonicalizabl
      * @param object the instruction producing the object
      */
     public CheckCastNode(AnchorNode anchor, ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object) {
-        this(anchor, targetClassInstruction, targetClass, object, null, EMPTY_HINTS, false);
-    }
-
-    public CheckCastNode(AnchorNode anchor, ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, List<? extends ValueNode> hintInstructions, RiResolvedType[] hints, boolean hintsExact) {
-        super(targetClassInstruction, targetClass, object, hintInstructions, hints, hintsExact, targetClass == null ? StampFactory.forKind(CiKind.Object) : StampFactory.declared(targetClass));
-        assert targetClass != null;
+        super(targetClassInstruction, targetClass, object, targetClass == null ? StampFactory.forKind(CiKind.Object) : StampFactory.declared(targetClass));
         this.anchor = anchor;
     }
 
@@ -66,7 +56,7 @@ public final class CheckCastNode extends TypeCheckNode implements Canonicalizabl
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
+    public Node canonical(CanonicalizerTool tool) {
         RiResolvedType objectDeclaredType = object().declaredType();
         RiResolvedType targetClass = targetClass();
         if (objectDeclaredType != null && targetClass != null && objectDeclaredType.isSubtypeOf(targetClass)) {
@@ -86,9 +76,9 @@ public final class CheckCastNode extends TypeCheckNode implements Canonicalizabl
 
     // TODO(tw): Find a better way to handle anchors.
     private void freeAnchor() {
-        ValueAnchorNode anchorUsage = usages().filter(ValueAnchorNode.class).first();
-        if (anchorUsage != null) {
-            anchorUsage.replaceFirstInput(this, null);
+        ValueAnchorNode anchor = usages().filter(ValueAnchorNode.class).first();
+        if (anchor != null) {
+            anchor.replaceFirstInput(this, null);
         }
     }
 

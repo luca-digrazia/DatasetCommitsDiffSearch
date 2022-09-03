@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,6 @@ package com.oracle.max.graal.compiler.lir;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.asm.*;
@@ -64,16 +63,6 @@ public class LIR {
      */
     public SlowPath methodEndMarker;
 
-    private int numVariables;
-
-    private final int loopCount;
-
-    public SpillMoveFactory spillMoveFactory;
-
-    public interface SpillMoveFactory {
-        LIRInstruction createMove(CiValue result, CiValue input);
-        LIRInstruction createExchange(CiValue input1, CiValue input2);
-    }
 
     public interface SlowPath {
         void emitCode(TargetMethodAssembler tasm);
@@ -81,18 +70,16 @@ public class LIR {
 
     /**
      * Creates a new LIR instance for the specified compilation.
-     * @param loopCount number of loops
      * @param compilation the compilation
      */
-    public LIR(LIRBlock startBlock, List<LIRBlock> linearScanOrder, List<LIRBlock> codeEmittingOrder, NodeMap<LIRBlock> valueToBlock, int loopCount) {
+    public LIR(LIRBlock startBlock, List<LIRBlock> linearScanOrder, List<LIRBlock> codeEmittingOrder, NodeMap<LIRBlock> valueToBlock) {
         this.codeEmittingOrder = codeEmittingOrder;
         this.linearScanOrder = linearScanOrder;
         this.startBlock = startBlock;
         this.valueToBlock = valueToBlock;
-        this.loopCount = loopCount;
 
-        slowPaths = new ArrayList<>();
-        deoptimizationStubs = new ArrayList<>();
+        slowPaths = new ArrayList<SlowPath>();
+        deoptimizationStubs = new ArrayList<SlowPath>();
     }
 
     /**
@@ -115,17 +102,6 @@ public class LIR {
         return valueToBlock;
     }
 
-    public int loopCount() {
-        return loopCount;
-    }
-
-    public int numVariables() {
-        return numVariables;
-    }
-
-    public int nextVariable() {
-        return numVariables++;
-    }
 
     public void emitCode(TargetMethodAssembler tasm) {
         if (GraalOptions.PrintLIR && !TTY.isSuppressed()) {
@@ -138,14 +114,14 @@ public class LIR {
 
         // generate code for slow cases
         for (SlowPath sp : slowPaths) {
-            emitSlowPath(tasm, sp);
+            sp.emitCode(tasm);
         }
         // generate deoptimization stubs
         for (SlowPath sp : deoptimizationStubs) {
-            emitSlowPath(tasm, sp);
+            sp.emitCode(tasm);
         }
         // generate traps at the end of the method
-        emitSlowPath(tasm, methodEndMarker);
+        methodEndMarker.emitCode(tasm);
     }
 
     private void emitBlock(TargetMethodAssembler tasm, LIRBlock block) {
@@ -154,12 +130,16 @@ public class LIR {
         }
 
         if (GraalOptions.CommentedAssembly) {
-            tasm.blockComment(String.format("block B%d loop %d depth %d", block.blockID(), block.loopIndex(), block.loopDepth()));
+            String st = String.format(" block B%d", block.blockID());
+            tasm.blockComment(st);
         }
 
         for (LIRInstruction op : block.lir()) {
             if (GraalOptions.CommentedAssembly) {
-                tasm.blockComment(String.format("%d %s", op.id(), op));
+                // Only print out branches
+                if (op.code instanceof LIRBranch) {
+                    tasm.blockComment(op.toStringWithIdPrefix());
+                }
             }
             if (GraalOptions.PrintLIRWithAssembly && !TTY.isSuppressed()) {
                 // print out the LIR operation followed by the resulting assembly
@@ -175,7 +155,7 @@ public class LIR {
         }
     }
 
-    private static void emitOp(TargetMethodAssembler tasm, LIRInstruction op) {
+    private void emitOp(TargetMethodAssembler tasm, LIRInstruction op) {
         try {
             try {
                 op.emitCode(tasm);
@@ -189,19 +169,12 @@ public class LIR {
         }
     }
 
-    private static void emitSlowPath(TargetMethodAssembler tasm, SlowPath sp) {
-        if (GraalOptions.CommentedAssembly) {
-            tasm.blockComment(String.format("slow case %s", sp.getClass().getName()));
-        }
-        sp.emitCode(tasm);
-    }
-
     private int lastDecodeStart;
 
     private void printAssembly(TargetMethodAssembler tasm) {
         byte[] currentBytes = tasm.asm.codeBuffer.copyData(lastDecodeStart, tasm.asm.codeBuffer.position());
         if (currentBytes.length > 0) {
-            String disasm = tasm.runtime.disassemble(currentBytes, lastDecodeStart);
+            String disasm = tasm.compilation.compiler.runtime.disassemble(currentBytes, lastDecodeStart);
             if (disasm.length() != 0) {
                 TTY.println(disasm);
             } else {

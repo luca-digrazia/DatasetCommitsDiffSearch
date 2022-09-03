@@ -26,21 +26,20 @@ import java.util.*;
 
 import org.junit.*;
 
-import com.oracle.max.graal.compiler.cfg.*;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 
 public class GraphScheduleTest extends GraphTest {
     protected void assertOrderedAfterSchedule(StructuredGraph graph, Node a, Node b) {
-        SchedulePhase ibp = new SchedulePhase();
+        IdentifyBlocksPhase ibp = new IdentifyBlocksPhase(true);
         ibp.apply(graph);
-        NodeMap<Block> nodeToBlock = ibp.getCFG().getNodeToBlock();
+        NodeMap<Block> nodeToBlock = ibp.getNodeToBlock();
         Block bBlock = nodeToBlock.get(b);
         Block aBlock = nodeToBlock.get(a);
 
         if (bBlock == aBlock) {
-            List<Node> instructions = ibp.nodesFor(bBlock);
+            List<Node> instructions = bBlock.getInstructions();
             Assert.assertTrue(instructions.indexOf(b) > instructions.indexOf(a));
         } else {
             Block block = bBlock;
@@ -48,7 +47,7 @@ public class GraphScheduleTest extends GraphTest {
                 if (block == aBlock) {
                     break;
                 }
-                block = block.getDominator();
+                block = block.dominator();
             }
             Assert.assertTrue(block == aBlock);
         }

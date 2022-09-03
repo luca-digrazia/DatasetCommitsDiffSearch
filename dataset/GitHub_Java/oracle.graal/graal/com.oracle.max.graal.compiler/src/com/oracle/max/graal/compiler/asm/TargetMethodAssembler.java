@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,8 +21,6 @@
  * questions.
  */
 package com.oracle.max.graal.compiler.asm;
-
-import static com.sun.cri.ci.CiValueUtil.*;
 
 import java.util.*;
 
@@ -131,7 +129,7 @@ public class TargetMethodAssembler {
         if (info != null) {
             if (info.exceptionEdge != null) {
                 if (exceptionInfoList == null) {
-                    exceptionInfoList = new ArrayList<>(4);
+                    exceptionInfoList = new ArrayList<ExceptionInfo>(4);
                 }
                 exceptionInfoList.add(new ExceptionInfo(pcOffset, info.exceptionEdge, info.topFrame.bci));
             }
@@ -148,18 +146,18 @@ public class TargetMethodAssembler {
         }
     }
 
-    public void recordDirectCall(int posBefore, int posAfter, Object callTarget, LIRDebugInfo info) {
+    public void recordDirectCall(int posBefore, int posAfter, Object target, LIRDebugInfo info) {
         CiDebugInfo debugInfo = info != null ? info.debugInfo() : null;
         assert lastSafepointPos < posAfter;
         lastSafepointPos = posAfter;
-        targetMethod.recordCall(posBefore, posAfter - posBefore, callTarget, debugInfo, true);
+        targetMethod.recordCall(posBefore, posAfter - posBefore, target, debugInfo, true);
     }
 
-    public void recordIndirectCall(int posBefore, int posAfter, Object callTarget, LIRDebugInfo info) {
+    public void recordIndirectCall(int posBefore, int posAfter, Object target, LIRDebugInfo info) {
         CiDebugInfo debugInfo = info != null ? info.debugInfo() : null;
         assert lastSafepointPos < posAfter;
         lastSafepointPos = posAfter;
-        targetMethod.recordCall(posBefore, posAfter - posBefore, callTarget, debugInfo, false);
+        targetMethod.recordCall(posBefore, posAfter - posBefore, target, debugInfo, false);
     }
 
     public void recordSafepoint(int pos, LIRDebugInfo info) {
@@ -188,12 +186,42 @@ public class TargetMethodAssembler {
     }
 
 
+    public CiRegister asIntReg(CiValue value) {
+        assert value.kind == CiKind.Int || value.kind == CiKind.Jsr;
+        return asRegister(value);
+    }
+
+    public CiRegister asLongReg(CiValue value) {
+        assert value.kind == CiKind.Long : value.kind;
+        return asRegister(value);
+    }
+
+    public CiRegister asObjectReg(CiValue value) {
+        assert value.kind == CiKind.Object;
+        return asRegister(value);
+    }
+
+    public CiRegister asFloatReg(CiValue value) {
+        assert value.kind == CiKind.Float;
+        return asRegister(value);
+    }
+
+    public CiRegister asDoubleReg(CiValue value) {
+        assert value.kind == CiKind.Double;
+        return asRegister(value);
+    }
+
+    public CiRegister asRegister(CiValue value) {
+        assert value.isRegister();
+        return value.asRegister();
+    }
+
     /**
      * Returns the integer value of any constants that can be represented by a 32-bit integer value,
      * including long constants that fit into the 32-bit range.
      */
     public int asIntConst(CiValue value) {
-        assert (value.kind.stackKind() == CiKind.Int || value.kind == CiKind.Jsr || value.kind == CiKind.Long) && isConstant(value);
+        assert (value.kind.stackKind() == CiKind.Int || value.kind == CiKind.Jsr || value.kind == CiKind.Long) && value.isConstant();
         long c = ((CiConstant) value).asLong();
         if (!(NumUtil.isInt(c))) {
             throw Util.shouldNotReachHere();
@@ -209,7 +237,7 @@ public class TargetMethodAssembler {
     }
 
     public CiAddress asFloatConstRef(CiValue value, int alignment) {
-        assert value.kind == CiKind.Float && isConstant(value);
+        assert value.kind == CiKind.Float && value.isConstant();
         return recordDataReferenceInCode((CiConstant) value, alignment);
     }
 
@@ -221,14 +249,13 @@ public class TargetMethodAssembler {
     }
 
     public CiAddress asDoubleConstRef(CiValue value, int alignment) {
-        assert value.kind == CiKind.Double && isConstant(value);
+        assert value.kind == CiKind.Double && value.isConstant();
         return recordDataReferenceInCode((CiConstant) value, alignment);
     }
 
     public CiAddress asAddress(CiValue value) {
-        if (isStackSlot(value)) {
-            CiStackSlot slot = (CiStackSlot) value;
-            return new CiAddress(slot.kind, compilation.registerConfig.getFrameRegister().asValue(), compilation.frameMap().offsetForStackSlot(slot));
+        if (value.isStackSlot()) {
+            return compilation.frameMap().toStackAddress((CiStackSlot) value);
         }
         return (CiAddress) value;
     }

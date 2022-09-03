@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,6 @@
  */
 package com.oracle.max.asm.target.amd64;
 
-import static com.sun.cri.ci.CiValueUtil.*;
 import static com.oracle.max.asm.NumUtil.*;
 import static com.oracle.max.asm.target.amd64.AMD64.*;
 import static com.oracle.max.cri.intrinsics.MemoryBarriers.*;
@@ -167,9 +166,9 @@ public class AMD64Assembler extends AbstractAssembler {
     }
 
     private void emitOperandHelper(CiRegister reg, CiAddress addr) {
-        CiRegister base = isLegal(addr.base) ? asRegister(addr.base) : CiRegister.None;
-        CiRegister index = isLegal(addr.index) ? asRegister(addr.index) : CiRegister.None;
+        CiRegister base = addr.base();
 
+        CiRegister index = addr.index();
         CiAddress.Scale scale = addr.scale;
         int disp = addr.displacement;
 
@@ -689,10 +688,10 @@ public class AMD64Assembler extends AbstractAssembler {
         emitOperandHelper(rax, dst);
     }
 
-    public final void jcc(ConditionFlag cc, int jumpTarget, boolean forceDisp32) {
+    public final void jcc(ConditionFlag cc, int target, boolean forceDisp32) {
         int shortSize = 2;
         int longSize = 6;
-        long disp = jumpTarget - codeBuffer.position();
+        long disp = target - codeBuffer.position();
         if (!forceDisp32 && isByte(disp - shortSize)) {
             // 0111 tttn #8-bit disp
             emitByte(0x70 | cc.value);
@@ -746,10 +745,10 @@ public class AMD64Assembler extends AbstractAssembler {
         emitOperandHelper(rsp, adr);
     }
 
-    public final void jmp(int jumpTarget, boolean forceDisp32) {
+    public final void jmp(int target, boolean forceDisp32) {
         int shortSize = 2;
         int longSize = 5;
-        long disp = jumpTarget - codeBuffer.position();
+        long disp = target - codeBuffer.position();
         if (!forceDisp32 && isByte(disp - shortSize)) {
             emitByte(0xEB);
             emitByte((int) ((disp - shortSize) & 0xFF));
@@ -1279,8 +1278,7 @@ public class AMD64Assembler extends AbstractAssembler {
         nop(1);
     }
 
-    public void nop(int count) {
-        int i = count;
+    public void nop(int i) {
         if (AsmOptions.UseNormalNop) {
             assert i > 0 : " ";
             // The fancy nops aren't currently recognized by debuggers making it a
@@ -2125,7 +2123,7 @@ public class AMD64Assembler extends AbstractAssembler {
     int prefixAndEncode(int regEnc, boolean byteinst) {
         if (regEnc >= 8) {
             emitByte(Prefix.REXB);
-            return regEnc - 8;
+            regEnc -= 8;
         } else if (byteinst && regEnc >= 4) {
             emitByte(Prefix.REX);
         }
@@ -2135,20 +2133,18 @@ public class AMD64Assembler extends AbstractAssembler {
     int prefixqAndEncode(int regEnc) {
         if (regEnc < 8) {
             emitByte(Prefix.REXW);
-            return regEnc;
         } else {
             emitByte(Prefix.REXWB);
-            return regEnc - 8;
+            regEnc -= 8;
         }
+        return regEnc;
     }
 
     int prefixAndEncode(int dstEnc, int srcEnc) {
         return prefixAndEncode(dstEnc, srcEnc, false);
     }
 
-    int prefixAndEncode(int dstEncoding, int srcEncoding, boolean byteinst) {
-        int srcEnc = srcEncoding;
-        int dstEnc = dstEncoding;
+    int prefixAndEncode(int dstEnc, int srcEnc, boolean byteinst) {
         if (dstEnc < 8) {
             if (srcEnc >= 8) {
                 emitByte(Prefix.REXB);
@@ -2176,9 +2172,7 @@ public class AMD64Assembler extends AbstractAssembler {
      * @param rmEnc the encoding of the r/m part of the ModRM-Byte
      * @return the lower 6 bits of the ModRM-Byte that should be emitted
      */
-    private int prefixqAndEncode(int regEncoding, int rmEncoding) {
-        int rmEnc = rmEncoding;
-        int regEnc = regEncoding;
+    private int prefixqAndEncode(int regEnc, int rmEnc) {
         if (regEnc < 8) {
             if (rmEnc < 8) {
                 emitByte(Prefix.REXW);
@@ -2204,34 +2198,29 @@ public class AMD64Assembler extends AbstractAssembler {
         }
     }
 
-    private static boolean needsRex(CiValue value) {
-        return isRegister(value) && asRegister(value).encoding >= MinEncodingNeedsRex;
-    }
-
-
     private void prefix(CiAddress adr) {
-        if (needsRex(adr.base)) {
-            if (needsRex(adr.index)) {
+        if (adr.base().encoding >= MinEncodingNeedsRex) {
+            if (adr.index().encoding >= MinEncodingNeedsRex) {
                 emitByte(Prefix.REXXB);
             } else {
                 emitByte(Prefix.REXB);
             }
         } else {
-            if (needsRex(adr.index)) {
+            if (adr.index().encoding >= MinEncodingNeedsRex) {
                 emitByte(Prefix.REXX);
             }
         }
     }
 
     private void prefixq(CiAddress adr) {
-        if (needsRex(adr.base)) {
-            if (needsRex(adr.index)) {
+        if (adr.base().encoding >= MinEncodingNeedsRex) {
+            if (adr.index().encoding >= MinEncodingNeedsRex) {
                 emitByte(Prefix.REXWXB);
             } else {
                 emitByte(Prefix.REXWB);
             }
         } else {
-            if (needsRex(adr.index)) {
+            if (adr.index().encoding >= MinEncodingNeedsRex) {
                 emitByte(Prefix.REXWX);
             } else {
                 emitByte(Prefix.REXW);
@@ -2241,28 +2230,28 @@ public class AMD64Assembler extends AbstractAssembler {
 
     private void prefix(CiAddress adr, CiRegister reg) {
         if (reg.encoding < 8) {
-            if (needsRex(adr.base)) {
-                if (needsRex(adr.index)) {
+            if (adr.base().encoding >= MinEncodingNeedsRex) {
+                if (adr.index().encoding >= MinEncodingNeedsRex) {
                     emitByte(Prefix.REXXB);
                 } else {
                     emitByte(Prefix.REXB);
                 }
             } else {
-                if (needsRex(adr.index)) {
+                if (adr.index().encoding >= MinEncodingNeedsRex) {
                     emitByte(Prefix.REXX);
                 } else if (reg.encoding >= 4) {
                     emitByte(Prefix.REX);
                 }
             }
         } else {
-            if (needsRex(adr.base)) {
-                if (needsRex(adr.index)) {
+            if (adr.base().encoding >= MinEncodingNeedsRex) {
+                if (adr.index().encoding >= MinEncodingNeedsRex) {
                     emitByte(Prefix.REXRXB);
                 } else {
                     emitByte(Prefix.REXRB);
                 }
             } else {
-                if (needsRex(adr.index)) {
+                if (adr.index().encoding >= MinEncodingNeedsRex) {
                     emitByte(Prefix.REXRX);
                 } else {
                     emitByte(Prefix.REXR);
@@ -2273,28 +2262,28 @@ public class AMD64Assembler extends AbstractAssembler {
 
     private void prefixq(CiAddress adr, CiRegister src) {
         if (src.encoding < 8) {
-            if (needsRex(adr.base)) {
-                if (needsRex(adr.index)) {
+            if (adr.base().encoding >= MinEncodingNeedsRex) {
+                if (adr.index().encoding >= MinEncodingNeedsRex) {
                     emitByte(Prefix.REXWXB);
                 } else {
                     emitByte(Prefix.REXWB);
                 }
             } else {
-                if (needsRex(adr.index)) {
+                if (adr.index().encoding >= MinEncodingNeedsRex) {
                     emitByte(Prefix.REXWX);
                 } else {
                     emitByte(Prefix.REXW);
                 }
             }
         } else {
-            if (needsRex(adr.base)) {
-                if (needsRex(adr.index)) {
+            if (adr.base().encoding >= MinEncodingNeedsRex) {
+                if (adr.index().encoding >= MinEncodingNeedsRex) {
                     emitByte(Prefix.REXWRXB);
                 } else {
                     emitByte(Prefix.REXWRB);
                 }
             } else {
-                if (needsRex(adr.index)) {
+                if (adr.index().encoding >= MinEncodingNeedsRex) {
                     emitByte(Prefix.REXWRX);
                 } else {
                     emitByte(Prefix.REXWR);
@@ -2940,7 +2929,8 @@ public class AMD64Assembler extends AbstractAssembler {
         emitByte(0xC8);
         // appended:
         emitByte(imm16 & 0xff);
-        emitByte((imm16 >> 8) & 0xff);
+        imm16 >>= 8;
+        emitByte(imm16 & 0xff);
         emitByte(imm8);
     }
 

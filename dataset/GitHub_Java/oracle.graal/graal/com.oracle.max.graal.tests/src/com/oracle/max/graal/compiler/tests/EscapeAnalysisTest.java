@@ -22,14 +22,14 @@
  */
 package com.oracle.max.graal.compiler.tests;
 
-import junit.framework.*;
+import junit.framework.Assert;
 
 import org.junit.Test;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.java.*;
+import com.sun.cri.ci.*;
 
 /**
  * In these test cases the probability of all invokes is set to a high value, such that an InliningPhase should inline them all.
@@ -42,7 +42,6 @@ public class EscapeAnalysisTest extends GraphTest {
         test("test1Snippet", CiConstant.forInt(101));
     }
 
-    @SuppressWarnings("all")
     public static int test1Snippet(int a) {
         Integer x = new Integer(101);
         return x.intValue();
@@ -53,7 +52,6 @@ public class EscapeAnalysisTest extends GraphTest {
         test("test2Snippet", CiConstant.forInt(0));
     }
 
-    @SuppressWarnings("all")
     public static int test2Snippet(int a) {
         Integer[] x = new Integer[0];
         return x.length;
@@ -64,7 +62,6 @@ public class EscapeAnalysisTest extends GraphTest {
         test("test3Snippet", CiConstant.forObject(null));
     }
 
-    @SuppressWarnings("all")
     public static Object test3Snippet(int a) {
         Integer[] x = new Integer[1];
         return x[0];
@@ -77,7 +74,6 @@ public class EscapeAnalysisTest extends GraphTest {
 
     private static native void notInlineable();
 
-    @SuppressWarnings("all")
     public static int testMonitorSnippet(int a) {
         Integer x = new Integer(0);
         Integer[] y = new Integer[0];
@@ -92,6 +88,7 @@ public class EscapeAnalysisTest extends GraphTest {
         return x.intValue();
     }
 
+    @Test
     public void testMonitor2() {
         test("testMonitor2Snippet", CiConstant.forInt(0));
     }
@@ -99,7 +96,6 @@ public class EscapeAnalysisTest extends GraphTest {
     /**
      * This test case differs from the last one in that it requires inlining within a synchronized region.
      */
-    @SuppressWarnings("all")
     public static int testMonitor2Snippet(int a) {
         Integer x = new Integer(0);
         Integer[] y = new Integer[0];
@@ -114,16 +110,17 @@ public class EscapeAnalysisTest extends GraphTest {
         }
     }
 
+    @SuppressWarnings("unused")
     private void test(String snippet, CiConstant expectedResult) {
         StructuredGraph graph = parse(snippet);
         for (Invoke n : graph.getInvokes()) {
             n.node().setProbability(100000);
         }
 
-        new InliningPhase(null, runtime(), null, null, getDefaultPhasePlan()).apply(graph);
+        new InliningPhase(null, runtime(), null, null, PhasePlan.DEFAULT).apply(graph);
         new DeadCodeEliminationPhase().apply(graph);
         print(graph);
-        new EscapeAnalysisPhase(null, runtime(), null, getDefaultPhasePlan()).apply(graph);
+        new EscapeAnalysisPhase(null, runtime(), null, PhasePlan.DEFAULT).apply(graph);
         print(graph);
         int retCount = 0;
         for (ReturnNode ret : graph.getNodes(ReturnNode.class)) {
@@ -133,10 +130,10 @@ public class EscapeAnalysisTest extends GraphTest {
         }
         Assert.assertEquals(1, retCount);
         int newInstanceCount = 0;
-        for (@SuppressWarnings("unused") NewInstanceNode n : graph.getNodes(NewInstanceNode.class)) {
+        for (NewInstanceNode n : graph.getNodes(NewInstanceNode.class)) {
             newInstanceCount++;
         }
-        for (@SuppressWarnings("unused") NewObjectArrayNode n : graph.getNodes(NewObjectArrayNode.class)) {
+        for (NewObjectArrayNode n : graph.getNodes(NewObjectArrayNode.class)) {
             newInstanceCount++;
         }
         Assert.assertEquals(0, newInstanceCount);

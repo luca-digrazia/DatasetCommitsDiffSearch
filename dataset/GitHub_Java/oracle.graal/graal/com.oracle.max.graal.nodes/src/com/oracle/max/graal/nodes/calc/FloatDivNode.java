@@ -22,10 +22,10 @@
  */
 package com.oracle.max.graal.nodes.calc;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.spi.*;
+import com.sun.cri.ci.*;
 
 @NodeInfo(shortName = "/")
 public final class FloatDivNode extends FloatArithmeticNode implements Canonicalizable, LIRLowerable {
@@ -35,17 +35,13 @@ public final class FloatDivNode extends FloatArithmeticNode implements Canonical
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
+    public Node canonical(CanonicalizerTool tool) {
         if (x().isConstant() && y().isConstant()) {
             if (kind() == CiKind.Float) {
-                if (y().asConstant().asFloat() != 0) {
-                    return ConstantNode.forFloat(x().asConstant().asFloat() / y().asConstant().asFloat(), graph());
-                }
+                return ConstantNode.forFloat(x().asConstant().asFloat() / y().asConstant().asFloat(), graph());
             } else {
                 assert kind() == CiKind.Double;
-                if (y().asConstant().asDouble() != 0) {
-                    return ConstantNode.forDouble(x().asConstant().asDouble() / y().asConstant().asDouble(), graph());
-                }
+                return ConstantNode.forDouble(x().asConstant().asDouble() / y().asConstant().asDouble(), graph());
             }
         }
         return this;

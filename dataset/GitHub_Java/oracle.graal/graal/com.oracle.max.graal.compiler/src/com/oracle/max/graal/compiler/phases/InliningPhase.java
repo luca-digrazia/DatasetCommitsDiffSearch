@@ -24,18 +24,18 @@ package com.oracle.max.graal.compiler.phases;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.graphbuilder.*;
 import com.oracle.max.graal.compiler.phases.PhasePlan.PhasePosition;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.compiler.util.InliningUtil.InlineInfo;
 import com.oracle.max.graal.compiler.util.InliningUtil.InliningCallback;
 import com.oracle.max.graal.cri.*;
-import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 
 public class InliningPhase extends Phase implements InliningCallback {
@@ -45,38 +45,49 @@ public class InliningPhase extends Phase implements InliningCallback {
      * - honor the result of overrideInliningDecision(0, caller, invoke.bci, method, true);
      */
 
+    private static final int MAX_ITERATIONS = 1000;
+
     private final CiTarget target;
     private final GraalRuntime runtime;
 
+    private int inliningSize;
     private final Collection<Invoke> hints;
 
-    private final PriorityQueue<InlineInfo> inlineCandidates = new PriorityQueue<>();
+    private final PriorityQueue<InlineInfo> inlineCandidates = new PriorityQueue<InlineInfo>();
+    private NodeMap<InlineInfo> inlineInfos;
+
+    private StructuredGraph graph;
     private CiAssumptions assumptions;
 
     private final PhasePlan plan;
 
-    // Metrics
-    private static final DebugMetric metricInliningPerformed = Debug.metric("InliningPerformed");
-    private static final DebugMetric metricInliningConsidered = Debug.metric("InliningConsidered");
+    private final GraphBuilderConfiguration config;
 
     public InliningPhase(CiTarget target, GraalRuntime runtime, Collection<Invoke> hints, CiAssumptions assumptions, PhasePlan plan) {
+        this(target, runtime, hints, assumptions, plan, GraphBuilderConfiguration.getDefault(plan));
+    }
+
+    public InliningPhase(CiTarget target, GraalRuntime runtime, Collection<Invoke> hints, CiAssumptions assumptions, PhasePlan plan, GraphBuilderConfiguration config) {
         this.target = target;
         this.runtime = runtime;
         this.hints = hints;
         this.assumptions = assumptions;
         this.plan = plan;
+        this.config = config;
     }
 
     @SuppressWarnings("unchecked")
     @Override
     protected void run(StructuredGraph graph) {
-        graph.createNodeMap();
+        this.graph = graph;
+        inlineInfos = graph.createNodeMap();
 
         if (hints != null) {
-            scanInvokes((Iterable<? extends Node>) Util.uncheckedCast(this.hints), 0, graph);
+            Iterable<? extends Node> hints = Util.uncheckedCast(this.hints);
+            scanInvokes(hints, 0);
         } else {
-            scanInvokes(graph.getNodes(InvokeNode.class), 0, graph);
-            scanInvokes(graph.getNodes(InvokeWithExceptionNode.class), 0, graph);
+            scanInvokes(graph.getNodes(InvokeNode.class), 0);
+            scanInvokes(graph.getNodes(InvokeWithExceptionNode.class), 0);
         }
 
         while (!inlineCandidates.isEmpty() && graph.getNodeCount() < GraalOptions.MaximumDesiredSize) {
@@ -95,20 +106,24 @@ public class InliningPhase extends Phase implements InliningCallback {
             Iterable<Node> newNodes = null;
             if (info.invoke.node().isAlive()) {
                 try {
-                    info.inline(graph, runtime, this);
+                    info.inline(this.graph, runtime, this);
                     if (GraalOptions.TraceInlining) {
                         TTY.println("inlining %f: %s", info.weight, info);
                     }
-                    Debug.dump(graph, "after inlining %s", info);
+                    if (GraalOptions.TraceInlining) {
+                        context.observable.fireCompilationEvent("after inlining " + info, graph);
+                    }
                     // get the new nodes here, the canonicalizer phase will reset the mark
                     newNodes = graph.getNewNodes();
                     if (GraalOptions.OptCanonicalizer) {
                         new CanonicalizerPhase(target, runtime, true, assumptions).apply(graph);
                     }
                     if (GraalOptions.Intrinsify) {
-                        new IntrinsificationPhase(runtime).apply(graph);
+                        new IntrinsificationPhase(runtime).apply(graph, context);
                     }
-                    metricInliningPerformed.increment();
+                    if (GraalOptions.Meter) {
+                        context.metrics.InlinePerformed++;
+                    }
                 } catch (CiBailout bailout) {
                     // TODO determine if we should really bail out of the whole compilation.
                     throw bailout;
@@ -121,12 +136,12 @@ public class InliningPhase extends Phase implements InliningCallback {
                 }
             }
             if (newNodes != null && info.level <= GraalOptions.MaximumInlineLevel) {
-                scanInvokes(newNodes, info.level + 1, graph);
+                scanInvokes(newNodes, info.level + 1);
             }
         }
     }
 
-    private void scanInvokes(Iterable<? extends Node> newNodes, int level, StructuredGraph graph) {
+    private void scanInvokes(Iterable<? extends Node> newNodes, int level) {
         graph.mark();
         for (Node node : newNodes) {
             if (node != null) {
@@ -147,27 +162,31 @@ public class InliningPhase extends Phase implements InliningCallback {
     private void scanInvoke(Invoke invoke, int level) {
         InlineInfo info = InliningUtil.getInlineInfo(invoke, level, runtime, assumptions, this);
         if (info != null) {
-            metricInliningConsidered.increment();
+            if (GraalOptions.Meter) {
+                context.metrics.InlineConsidered++;
+            }
+
             inlineCandidates.add(info);
         }
     }
 
-    public static final Map<RiMethod, Integer> parsedMethods = new HashMap<>();
+    public static final Map<RiMethod, Integer> parsedMethods = new HashMap<RiMethod, Integer>();
 
     @Override
     public StructuredGraph buildGraph(RiResolvedMethod method) {
-        StructuredGraph newGraph = new StructuredGraph(method);
+        StructuredGraph graph = new StructuredGraph();
+        new GraphBuilderPhase(runtime, method, null, config).apply(graph, context, true, false);
 
         if (plan != null) {
-            plan.runPhases(PhasePosition.AFTER_PARSING, newGraph);
+            plan.runPhases(PhasePosition.AFTER_PARSING, graph, context);
         }
 
         if (GraalOptions.ProbabilityAnalysis) {
-            new DeadCodeEliminationPhase().apply(newGraph);
-            new ComputeProbabilityPhase().apply(newGraph);
+            new DeadCodeEliminationPhase().apply(graph, context, true, false);
+            new ComputeProbabilityPhase().apply(graph, context, true, false);
         }
-        new CanonicalizerPhase(target, runtime, assumptions).apply(newGraph);
-        return newGraph;
+        new CanonicalizerPhase(target, runtime, assumptions).apply(graph, context, true, false);
+        return graph;
     }
 
     @Override
@@ -209,12 +228,10 @@ public class InliningPhase extends Phase implements InliningCallback {
         int count;
         if (GraalOptions.ParseBeforeInlining) {
             if (!parsedMethods.containsKey(method)) {
-                StructuredGraph newGraph = new StructuredGraph(method);
-                if (plan != null) {
-                    plan.runPhases(PhasePosition.AFTER_PARSING, newGraph);
-                }
-                new CanonicalizerPhase(target, runtime, assumptions).apply(newGraph);
-                count = graphComplexity(newGraph);
+                StructuredGraph graph = new StructuredGraph();
+                new GraphBuilderPhase(runtime, method, null).apply(graph, context, true, false);
+                new CanonicalizerPhase(target, runtime, assumptions).apply(graph, context, true, false);
+                count = graphComplexity(graph);
                 parsedMethods.put(method, count);
             } else {
                 count = parsedMethods.get(method);

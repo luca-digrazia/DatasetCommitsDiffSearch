@@ -24,38 +24,39 @@ package com.oracle.max.graal.snippets;
 
 import java.lang.reflect.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.cri.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
+import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.java.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 public class IntrinsifyArrayCopyPhase extends Phase {
     private final GraalRuntime runtime;
+    private final CiTarget target;
+    private final PhasePlan plan;
+    private BoxingMethodPool pool;
     private RiResolvedMethod arrayCopy;
     private RiResolvedMethod byteArrayCopy;
     private RiResolvedMethod shortArrayCopy;
     private RiResolvedMethod charArrayCopy;
     private RiResolvedMethod intArrayCopy;
     private RiResolvedMethod longArrayCopy;
-    private RiResolvedMethod floatArrayCopy;
-    private RiResolvedMethod doubleArrayCopy;
-    private RiResolvedMethod objectArrayCopy;
 
-    public IntrinsifyArrayCopyPhase(GraalRuntime runtime) {
+    public IntrinsifyArrayCopyPhase(GraalRuntime runtime, CiTarget target, PhasePlan plan) {
         this.runtime = runtime;
+        this.target = target;
+        this.plan = plan;
+        this.pool = new BoxingMethodPool(runtime);
         try {
             byteArrayCopy = getArrayCopySnippet(runtime, byte.class);
             charArrayCopy = getArrayCopySnippet(runtime, char.class);
             shortArrayCopy = getArrayCopySnippet(runtime, short.class);
             intArrayCopy = getArrayCopySnippet(runtime, int.class);
             longArrayCopy = getArrayCopySnippet(runtime, long.class);
-            floatArrayCopy = getArrayCopySnippet(runtime, float.class);
-            doubleArrayCopy = getArrayCopySnippet(runtime, double.class);
-            objectArrayCopy = getArrayCopySnippet(runtime, Object.class);
             arrayCopy = runtime.getRiMethod(System.class.getDeclaredMethod("arraycopy", Object.class, int.class, Object.class, int.class, int.class));
         } catch (SecurityException e) {
             e.printStackTrace();
@@ -85,29 +86,19 @@ public class IntrinsifyArrayCopyPhase extends Phase {
                 if (srcDeclaredType != null
                                 && srcDeclaredType.isArrayClass()
                                 && destDeclaredType != null
-                                && destDeclaredType.isArrayClass()) {
-                    CiKind componentKind = srcDeclaredType.componentType().kind(false);
-                    if (srcDeclaredType.componentType() == destDeclaredType.componentType()) {
-                        if (componentKind == CiKind.Int) {
-                            snippetMethod = intArrayCopy;
-                        } else if (componentKind == CiKind.Char) {
-                            snippetMethod = charArrayCopy;
-                        } else if (componentKind == CiKind.Long) {
-                            snippetMethod = longArrayCopy;
-                        } else if (componentKind == CiKind.Byte) {
-                            snippetMethod = byteArrayCopy;
-                        } else if (componentKind == CiKind.Short) {
-                            snippetMethod = shortArrayCopy;
-                        } else if (componentKind == CiKind.Float) {
-                            snippetMethod = floatArrayCopy;
-                        } else if (componentKind == CiKind.Double) {
-                            snippetMethod = doubleArrayCopy;
-                        } else if (componentKind == CiKind.Object) {
-                            snippetMethod = objectArrayCopy;
-                        }
-                    } else if (componentKind == CiKind.Object
-                                    && srcDeclaredType.componentType().isSubtypeOf(destDeclaredType.componentType())) {
-                        snippetMethod = objectArrayCopy;
+                                && destDeclaredType.isArrayClass()
+                                && srcDeclaredType.componentType() == destDeclaredType.componentType()) {
+                    Class<?> componentType = srcDeclaredType.componentType().toJava();
+                    if (componentType.equals(int.class)) {
+                        snippetMethod = intArrayCopy;
+                    } else if (componentType.equals(char.class)) {
+                        snippetMethod = charArrayCopy;
+                    } else if (componentType.equals(long.class)) {
+                        snippetMethod = longArrayCopy;
+                    } else if (componentType.equals(byte.class)) {
+                        snippetMethod = byteArrayCopy;
+                    } else if (componentType.equals(short.class)) {
+                        snippetMethod = shortArrayCopy;
                     }
                 }
             }

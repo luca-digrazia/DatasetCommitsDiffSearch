@@ -22,9 +22,9 @@
  */
 package com.oracle.max.graal.nodes.calc;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
+import com.sun.cri.ci.*;
 
 
 public abstract class IntegerArithmeticNode extends ArithmeticNode {
@@ -37,6 +37,7 @@ public abstract class IntegerArithmeticNode extends ArithmeticNode {
     public static IntegerAddNode add(ValueNode v1, ValueNode v2) {
         assert v1.kind() == v2.kind() && v1.graph() == v2.graph();
         Graph graph = v1.graph();
+        //TODO (gd) handle conversions here instead of strong assert ?
         switch(v1.kind()) {
             case Int:
                 return graph.unique(new IntegerAddNode(CiKind.Int, v1, v2));
@@ -50,6 +51,7 @@ public abstract class IntegerArithmeticNode extends ArithmeticNode {
     public static IntegerMulNode mul(ValueNode v1, ValueNode v2) {
         assert v1.kind() == v2.kind() && v1.graph() == v2.graph();
         Graph graph = v1.graph();
+        //TODO (gd) handle conversions here instead of strong assert ?
         switch(v1.kind()) {
             case Int:
                 return graph.unique(new IntegerMulNode(CiKind.Int, v1, v2));

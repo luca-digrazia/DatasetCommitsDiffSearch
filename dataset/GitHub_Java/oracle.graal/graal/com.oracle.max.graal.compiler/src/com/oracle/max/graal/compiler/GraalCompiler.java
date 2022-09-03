@@ -24,19 +24,19 @@ package com.oracle.max.graal.compiler;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.cri.xir.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.compiler.stub.*;
 import com.oracle.max.graal.compiler.target.*;
 import com.oracle.max.graal.cri.*;
 import com.oracle.max.graal.nodes.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
+import com.sun.cri.xir.*;
 
 public class GraalCompiler {
 
-    public final Map<Object, CompilerStub> stubs = new HashMap<>();
+    public final Map<Object, CompilerStub> stubs = new HashMap<Object, CompilerStub>();
 
     public final GraalContext context;
 
@@ -77,10 +77,6 @@ public class GraalCompiler {
     }
 
     public CiTargetMethod compileMethod(RiResolvedMethod method, int osrBCI, CiStatistics stats, CiCompiler.DebugInfoLevel debugInfoLevel, PhasePlan plan) {
-        return compileMethod(method, new StructuredGraph(method), osrBCI, stats, debugInfoLevel, plan);
-    }
-
-    public CiTargetMethod compileMethod(RiResolvedMethod method, StructuredGraph graph, int osrBCI, CiStatistics stats, CiCompiler.DebugInfoLevel debugInfoLevel, PhasePlan plan) {
         context.timers.startScope(getClass());
         try {
             long startTime = 0;
@@ -97,7 +93,7 @@ public class GraalCompiler {
 
             CiTargetMethod result = null;
             TTY.Filter filter = new TTY.Filter(GraalOptions.PrintFilter, method);
-            GraalCompilation compilation = new GraalCompilation(context, this, method, graph, osrBCI, stats, debugInfoLevel);
+            GraalCompilation compilation = new GraalCompilation(context, this, method, osrBCI, stats, debugInfoLevel);
             try {
                 result = compilation.compile(plan);
             } finally {
@@ -120,6 +116,12 @@ public class GraalCompiler {
         } finally {
             context.timers.endScope();
         }
+    }
+
+    public CiTargetMethod compileMethod(RiResolvedMethod method, StructuredGraph graph, PhasePlan plan) {
+        assert graph.verify();
+        GraalCompilation compilation = new GraalCompilation(context, this, method, graph, -1, null, CiCompiler.DebugInfoLevel.FULL);
+        return compilation.compile(plan);
     }
 
     private void init() {

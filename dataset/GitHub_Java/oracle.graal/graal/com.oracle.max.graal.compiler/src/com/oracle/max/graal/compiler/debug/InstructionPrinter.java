@@ -24,20 +24,19 @@ package com.oracle.max.graal.compiler.debug;
 
 import static com.oracle.max.graal.compiler.debug.InstructionPrinter.InstructionLineColumn.*;
 
-import com.oracle.max.graal.compiler.ir.*;
+import com.oracle.max.criutils.*;
+import com.oracle.max.graal.nodes.*;
 
 /**
- * A {@link ValueVisitor} for {@linkplain #printInstruction(Value) printing}
- * an {@link FixedNodeWithNext} as an expression or statement.
- *
- * @author Doug Simon
+ * A {@link ValueVisitor} for {@linkplain #printInstruction(ValueNode) printing}
+ * an {@link FixedWithNextNode} as an expression or statement.
  */
 public class InstructionPrinter {
 
 
     /**
      * The columns printed in a tabulated instruction
-     * {@linkplain InstructionPrinter#printInstructionListing(Value) listing}.
+     * {@linkplain InstructionPrinter#printInstructionListing(ValueNode) listing}.
      */
     public enum InstructionLineColumn {
         /**
@@ -101,17 +100,7 @@ public class InstructionPrinter {
     }
 
     /**
-     * Prints a given instruction as an expression or statement.
-     *
-     * @param instruction the instruction to print
-     */
-    public void printInstruction(Value instruction) {
-        instruction.print(out);
-    }
-
-
-    /**
-     * Prints a header for the tabulated data printed by {@link #printInstructionListing(Value)}.
+     * Prints a header for the tabulated data printed by {@link #printInstructionListing(ValueNode)}.
      */
     public void printInstructionListingHeader() {
         BCI.printLabel(out);
@@ -128,23 +117,23 @@ public class InstructionPrinter {
      *
      * @param instruction the instruction to print
      */
-    public void printInstructionListing(Value instruction) {
+    public void printInstructionListing(ValueNode instruction) {
         int indentation = out.indentationLevel();
         out.fillTo(BCI.position + indentation, ' ').
              print(0).
              fillTo(USE.position + indentation, ' ').
              print("0").
              fillTo(VALUE.position + indentation, ' ').
-             print(instruction).
+             print(ValueUtil.valueString(instruction)).
              fillTo(INSTRUCTION.position + indentation, ' ');
         printInstruction(instruction);
-        String flags = instruction.flagsToString();
-        if (!flags.isEmpty()) {
-            out.print("  [flags: " + flags + "]");
-        }
         if (instruction instanceof StateSplit) {
             out.print("  [state: " + ((StateSplit) instruction).stateAfter() + "]");
         }
         out.println();
+    }
+
+    public void printInstruction(ValueNode node) {
+        out.print(node.toString());
     }
 }

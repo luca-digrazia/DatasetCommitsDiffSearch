@@ -28,13 +28,13 @@ import com.oracle.max.graal.nodes.DeoptimizeNode.DeoptAction;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
 
-public final class FixedGuardNode extends FixedWithNextNode implements Simplifiable, Lowerable, LIRLowerable {
+public final class FixedGuardNode extends FixedWithNextNode implements Canonicalizable, Lowerable, LIRLowerable {
 
     @Input private final NodeInputList<BooleanNode> conditions;
 
     public FixedGuardNode(BooleanNode condition) {
         super(StampFactory.illegal());
-        this.conditions = new NodeInputList<>(this, new BooleanNode[] {condition});
+        this.conditions = new NodeInputList<BooleanNode>(this, new BooleanNode[] {condition});
     }
 
     @Override
@@ -53,7 +53,7 @@ public final class FixedGuardNode extends FixedWithNextNode implements Simplifia
     }
 
     @Override
-    public void simplify(SimplifierTool tool) {
+    public Node canonical(CanonicalizerTool tool) {
         for (BooleanNode n : conditions.snapshot()) {
             if (n instanceof ConstantNode) {
                 ConstantNode c = (ConstantNode) n;
@@ -61,25 +61,29 @@ public final class FixedGuardNode extends FixedWithNextNode implements Simplifia
                     conditions.remove(n);
                 } else {
                     FixedNode next = this.next();
-                    setNext(graph().add(new DeoptimizeNode(DeoptAction.InvalidateRecompile)));
                     if (next != null) {
                         tool.deleteBranch(next);
                     }
-                    return;
+                    return graph().add(new DeoptimizeNode(DeoptAction.InvalidateRecompile));
                 }
             }
         }
+
         if (conditions.isEmpty()) {
-            ((StructuredGraph) graph()).removeFixed(this);
+            return next();
         }
+        return this;
     }
 
     @Override
     public void lower(CiLoweringTool tool) {
         AnchorNode newAnchor = graph().add(new AnchorNode());
+        FixedNode next = this.next();
+        this.setNext(null);
+        newAnchor.setNext(next);
         for (BooleanNode b : conditions) {
             newAnchor.addGuard((GuardNode) tool.createGuard(b));
         }
-        ((StructuredGraph) graph()).replaceFixedWithFixed(this, newAnchor);
+        this.replaceAndDelete(newAnchor);
     }
 }

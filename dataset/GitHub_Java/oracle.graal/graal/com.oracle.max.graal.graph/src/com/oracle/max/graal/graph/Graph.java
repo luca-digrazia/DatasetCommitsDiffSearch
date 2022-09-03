@@ -48,9 +48,8 @@ public class Graph {
     private int mark;
     private GraphEventLog eventLog;
 
-    ArrayList<Node> usagesDropped = new ArrayList<>();
-    NodeWorkList inputChanged;
-    private final HashMap<CacheEntry, Node> cachedNodes = new HashMap<>();
+    ArrayList<Node> usagesDropped = new ArrayList<Node>();
+    private final HashMap<CacheEntry, Node> cachedNodes = new HashMap<CacheEntry, Node>();
 
     private static final class CacheEntry {
 
@@ -94,9 +93,9 @@ public class Graph {
      * @param name the name of the graph, used for debugging purposes
      */
     public Graph(String name) {
-        nodes = new ArrayList<>(32);
-        nodeCacheFirst = new ArrayList<>(NodeClass.cacheSize());
-        nodeCacheLast = new ArrayList<>(NodeClass.cacheSize());
+        nodes = new ArrayList<Node>(32);
+        nodeCacheFirst = new ArrayList<Node>(NodeClass.cacheSize());
+        nodeCacheLast = new ArrayList<Node>(NodeClass.cacheSize());
         this.name = name;
     }
 
@@ -112,10 +111,9 @@ public class Graph {
      *
      * @param name the name of the copy, used for debugging purposes (can be null)
      */
-    public Graph copy(String newName) {
-        Graph copy = new Graph(newName);
-        Map<Node, Node> emptyMap = Collections.emptyMap();
-        copy.addDuplicates(getNodes(), emptyMap);
+    public Graph copy(String name) {
+        Graph copy = new Graph(name);
+        copy.addDuplicates(getNodes(), null);
         return copy;
     }
 
@@ -156,16 +154,8 @@ public class Graph {
 
     public List<Node> getAndCleanUsagesDroppedNodes() {
         ArrayList<Node> result = usagesDropped;
-        usagesDropped = new ArrayList<>();
+        usagesDropped = new ArrayList<Node>();
         return result;
-    }
-
-    public void trackInputChange(NodeWorkList worklist) {
-        this.inputChanged = worklist;
-    }
-
-    public void stopTrackingInputChange() {
-        inputChanged = null;
     }
 
     /**
@@ -210,7 +200,7 @@ public class Graph {
         return null;
     }
 
-    private static boolean checkValueNumberable(Node node) {
+    private boolean checkValueNumberable(Node node) {
         if (!node.getNodeClass().valueNumberable()) {
             throw new VerificationError("node is not valueNumberable").addContext(node);
         }
@@ -274,9 +264,9 @@ public class Graph {
      * Returns an {@link Iterable} providing all nodes added since the last {@link Graph#mark() mark}.
      * @return an {@link Iterable} providing the new nodes
      */
-    public NodeIterable<Node> getNewNodes() {
+    public Iterable<Node> getNewNodes() {
         final int index = this.mark;
-        return new NodeIterable<Node>() {
+        return new Iterable<Node>() {
             @Override
             public Iterator<Node> iterator() {
                 return new NodeIterator(index);
@@ -360,7 +350,7 @@ public class Graph {
         return new NodeIterable<T>() {
             @Override
             public Iterator<T> iterator() {
-                return new TypedNodeIterator<>(start);
+                return new TypedNodeIterator<T>(start);
             }
         };
     }
@@ -386,7 +376,7 @@ public class Graph {
     }
 
     public <T> NodeMap<T> createNodeMap() {
-        return new NodeMap<>(this);
+        return new NodeMap<T>(this);
     }
 
     public NodeFlood createNodeFlood() {
@@ -493,11 +483,11 @@ public class Graph {
      * Edges between duplicate and replacement nodes will also be recreated so care should be taken
      * regarding the matching of node types in the replacement map.
      *
-     * @param newNodes the nodes to be duplicated
+     * @param nodes the nodes to be duplicated
      * @param replacements the replacement map (can be null if no replacement is to be performed)
      * @return a map which associates the original nodes from {@code nodes} to their duplicates
      */
-    public Map<Node, Node> addDuplicates(Iterable<Node> newNodes, Map<Node, Node> replacements) {
-        return NodeClass.addGraphDuplicate(this, newNodes, replacements);
+    public Map<Node, Node> addDuplicates(Iterable<Node> nodes, Map<Node, Node> replacements) {
+        return NodeClass.addGraphDuplicate(this, nodes, replacements);
     }
 }

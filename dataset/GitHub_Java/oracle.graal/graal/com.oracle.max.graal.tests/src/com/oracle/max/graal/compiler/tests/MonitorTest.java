@@ -22,18 +22,12 @@
  */
 package com.oracle.max.graal.compiler.tests;
 
-import static com.oracle.max.graal.graph.iterators.NodePredicates.*;
-
 import java.util.*;
 
-import junit.framework.*;
-
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
 import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.graph.iterators.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.java.*;
 
@@ -46,7 +40,6 @@ public class MonitorTest extends GraphTest {
 
     private static final String REFERENCE_SNIPPET = "referenceSnippet";
 
-    @SuppressWarnings("all")
     public static synchronized int referenceSnippet(int a) {
         return 1;
     }
@@ -55,12 +48,11 @@ public class MonitorTest extends GraphTest {
         return 1;
     }
 
-    @Test(expected = AssertionFailedError.class)
+    @Test
     public void test1() {
         test("test1Snippet");
     }
 
-    @SuppressWarnings("all")
     public static synchronized int test1Snippet(int a) {
         return const1();
     }
@@ -68,12 +60,12 @@ public class MonitorTest extends GraphTest {
     @Test
     public void test2() {
         StructuredGraph graph = parseAndProcess("test2Snippet");
-        NodeIterable<MonitorExitNode> monitors = graph.getNodes(MonitorExitNode.class);
-        Assert.assertEquals(1, monitors.count());
-        Assert.assertEquals(monitors.first().stateAfter().bci, 3);
+        Collection<MonitorExitNode> monitors = graph.getNodes(MonitorExitNode.class).snapshot();
+        Assert.assertEquals(1, monitors.size());
+        MonitorExitNode monitor = monitors.iterator().next();
+        Assert.assertEquals(monitor.stateAfter().bci, 3);
     }
 
-    @SuppressWarnings("all")
     public static int test2Snippet(int a) {
         return const2();
     }
@@ -84,16 +76,20 @@ public class MonitorTest extends GraphTest {
 
     private StructuredGraph parseAndProcess(String snippet) {
         StructuredGraph graph = parse(snippet);
-        LocalNode local = graph.getNodes(LocalNode.class).first();
+        LocalNode local = graph.getNodes(LocalNode.class).iterator().next();
         ConstantNode constant = ConstantNode.forInt(0, graph);
-        for (Node n : local.usages().filter(isNotA(FrameState.class)).snapshot()) {
-            n.replaceFirstInput(local, constant);
+        for (Node n : local.usages().snapshot()) {
+            if (n instanceof FrameState) {
+                // Do not replace.
+            } else {
+                n.replaceFirstInput(local, constant);
+            }
         }
-        Collection<Invoke> hints = new ArrayList<>();
+        Collection<Invoke> hints = new ArrayList<Invoke>();
         for (Invoke invoke : graph.getInvokes()) {
             hints.add(invoke);
         }
-        new InliningPhase(null, runtime(), hints, null, getDefaultPhasePlan()).apply(graph);
+        new InliningPhase(null, runtime(), hints, null, PhasePlan.DEFAULT).apply(graph);
         new CanonicalizerPhase(null, runtime(), null).apply(graph);
         new DeadCodeEliminationPhase().apply(graph);
         return graph;

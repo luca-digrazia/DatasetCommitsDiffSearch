@@ -24,13 +24,13 @@ package com.oracle.max.graal.nodes;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.calc.*;
 import com.oracle.max.graal.nodes.extended.*;
 import com.oracle.max.graal.nodes.java.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.util.*;
+import com.sun.cri.ci.*;
 
 public class InvokeWithExceptionNode extends ControlSplitNode implements Node.IterableNodeType, Invoke, MemoryCheckpoint, LIRLowerable {
     private static final int NORMAL_EDGE = 0;
@@ -47,6 +47,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
      */
     public InvokeWithExceptionNode(MethodCallTargetNode callTarget, BeginNode exceptionEdge, int bci) {
         super(callTarget.returnStamp(), new BeginNode[]{null, exceptionEdge}, new double[]{1.0, 0.0});
+        assert callTarget != null;
         this.bci = bci;
         this.callTarget = callTarget;
     }
@@ -115,7 +116,8 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     }
 
     public FrameState stateDuring() {
-        return stateAfter().duplicateModified(bci(), stateAfter().rethrowException(), this.callTarget.targetMethod().signature().returnKind(false));
+        FrameState stateAfter = stateAfter();
+        return stateAfter.duplicateModified(bci(), stateAfter.rethrowException(), this.callTarget.targetMethod().signature().returnKind(false));
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,7 +28,6 @@ package com.sun.cri.ci;
  * instances that represent frequently used constant values, such as {@link #ZERO}.
  */
 public final class CiConstant extends CiValue {
-    private static final long serialVersionUID = -6355452536852663986L;
 
     private static final CiConstant[] INT_CONSTANT_CACHE = new CiConstant[100];
     static {
@@ -126,8 +125,8 @@ public final class CiConstant extends CiValue {
     }
 
     @Override
-    public String toString() {
-        return kind.javaName + "[" + kind.format(boxedValue()) + (kind != CiKind.Object ? "|0x" + Long.toHexString(primitive) : "") + "]";
+    public String name() {
+        return "const[" + kind.format(boxedValue()) + (kind != CiKind.Object ? "|0x" + Long.toHexString(primitive) : "") + "]";
     }
 
     /**
@@ -158,6 +157,16 @@ public final class CiConstant extends CiValue {
      * @return the value of this constant
      */
     public Object boxedValue() {
+        return boxedValue(kind);
+    }
+
+    /**
+     * Returns the value of this constant as a boxed Java value.
+     *
+     * @param kind the kind of the boxed value to be returned
+     * @return the value of this constant
+     */
+    public Object boxedValue(CiKind kind) {
         // Checkstyle: stop
         switch (kind) {
             case Byte: return (byte) asInt();
@@ -304,6 +313,11 @@ public final class CiConstant extends CiValue {
     @Override
     public boolean equals(Object o) {
         return o == this || o instanceof CiConstant && valueEqual((CiConstant) o, false);
+    }
+
+    @Override
+    public boolean equalsIgnoringKind(CiValue o) {
+        return o == this || o instanceof CiConstant && valueEqual((CiConstant) o, true);
     }
 
     /**

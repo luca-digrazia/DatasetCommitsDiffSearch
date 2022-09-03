@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,7 +28,6 @@ package com.sun.cri.ci;
  * retrieve the canonical {@link CiRegisterValue} instance for a given (register,kind) pair.
  */
 public final class CiRegisterValue extends CiValue {
-    private static final long serialVersionUID = 7999341472196897163L;
 
     /**
      * The register.
@@ -38,19 +37,32 @@ public final class CiRegisterValue extends CiValue {
     /**
      * Should only be called from {@link CiRegister#CiRegister} to ensure canonicalization.
      */
-    protected CiRegisterValue(CiKind kind, CiRegister register) {
+    CiRegisterValue(CiKind kind, CiRegister register) {
         super(kind);
         this.reg = register;
     }
 
     @Override
     public int hashCode() {
-        return (reg.number << 4) ^ kind.ordinal();
+        return kind.ordinal() ^ reg.number;
     }
 
     @Override
-    public String toString() {
-        return reg.name + kindSuffix();
+    public boolean equals(Object o) {
+        return o == this;
+    }
+
+    @Override
+    public boolean equalsIgnoringKind(CiValue other) {
+        if (other instanceof CiRegisterValue) {
+            return ((CiRegisterValue) other).reg == reg;
+        }
+        return false;
+    }
+
+    @Override
+    public String name() {
+        return reg.name;
     }
 
     @Override

@@ -32,6 +32,7 @@ import com.oracle.max.graal.compiler.alloc.Interval.State;
  */
 public class IntervalWalker {
 
+    protected final GraalCompilation compilation;
     protected final LinearScan allocator;
 
     /**
@@ -52,7 +53,7 @@ public class IntervalWalker {
     /**
      * The current interval (taken from the unhandled list) being processed.
      */
-    protected Interval currentInterval;
+    protected Interval current;
 
     /**
      * The current position (intercept point through the intervals).
@@ -65,10 +66,10 @@ public class IntervalWalker {
     protected RegisterBinding currentBinding;
 
     /**
-     * Processes the {@linkplain #currentInterval} interval in an attempt to allocate a physical
+     * Processes the {@linkplain #current} interval in an attempt to allocate a physical
      * register to it and thus allow it to be moved to a list of {@linkplain #activeLists active} intervals.
      *
-     * @return {@code true} if a register was allocated to the {@linkplain #currentInterval} interval
+     * @return {@code true} if a register was allocated to the {@linkplain #current} interval
      */
     boolean activateCurrent() {
         return true;
@@ -90,13 +91,14 @@ public class IntervalWalker {
      * @param unhandledAny the list of unhandled {@linkplain RegisterBinding#Any non-fixed} intervals
      */
     IntervalWalker(LinearScan allocator, Interval unhandledFixed, Interval unhandledAny) {
+        this.compilation = allocator.compilation;
         this.allocator = allocator;
 
         unhandledLists = new RegisterBindingLists(unhandledFixed, unhandledAny);
         activeLists = new RegisterBindingLists(Interval.EndMarker, Interval.EndMarker);
         inactiveLists = new RegisterBindingLists(Interval.EndMarker, Interval.EndMarker);
         currentPosition = -1;
-        currentInterval = null;
+        current = null;
         nextInterval();
     }
 
@@ -143,7 +145,7 @@ public class IntervalWalker {
                     if (cur.currentAtEnd()) {
                         // move to handled state (not maintained as a list)
                         cur.state = State.Handled;
-                        intervalMoved(cur, state, State.Handled);
+                        intervalMoved(cur, binding, state, State.Handled);
                     } else if (cur.currentFrom() <= from) {
                         // sort into active list
                         activeLists.addToListSortedByCurrentFromPositions(binding, cur);
@@ -153,7 +155,7 @@ public class IntervalWalker {
                             prevprev = prev;
                             prev = cur.next;
                         }
-                        intervalMoved(cur, state, State.Active);
+                        intervalMoved(cur, binding, state, State.Active);
                     } else {
                         // sort into inactive list
                         inactiveLists.addToListSortedByCurrentFromPositions(binding, cur);
@@ -163,7 +165,7 @@ public class IntervalWalker {
                             prevprev = prev;
                             prev = cur.next;
                         }
-                        intervalMoved(cur, state, State.Inactive);
+                        intervalMoved(cur, binding, state, State.Inactive);
                     }
                 } else {
                     prevprev = prev;
@@ -188,21 +190,21 @@ public class IntervalWalker {
         } else if (fixed != Interval.EndMarker) {
             binding = RegisterBinding.Fixed;
         } else {
-            currentInterval = null;
+            current = null;
             return;
         }
         currentBinding = binding;
-        currentInterval = unhandledLists.get(binding);
-        unhandledLists.set(binding, currentInterval.next);
-        currentInterval.next = Interval.EndMarker;
-        currentInterval.rewindRange();
+        current = unhandledLists.get(binding);
+        unhandledLists.set(binding, current.next);
+        current.next = Interval.EndMarker;
+        current.rewindRange();
     }
 
     void walkTo(int toOpId) {
         assert currentPosition <= toOpId : "can not walk backwards";
-        while (currentInterval != null) {
-            boolean isActive = currentInterval.from() <= toOpId;
-            int opId = isActive ? currentInterval.from() : toOpId;
+        while (current != null) {
+            boolean isActive = current.from() <= toOpId;
+            int opId = isActive ? current.from() : toOpId;
 
             if (GraalOptions.TraceLinearScanLevel >= 2 && !TTY.isSuppressed()) {
                 if (currentPosition < opId) {
@@ -219,10 +221,10 @@ public class IntervalWalker {
             walkTo(State.Inactive, opId);
 
             if (isActive) {
-                currentInterval.state = State.Active;
+                current.state = State.Active;
                 if (activateCurrent()) {
-                    activeLists.addToListSortedByCurrentFromPositions(currentBinding, currentInterval);
-                    intervalMoved(currentInterval, State.Unhandled, State.Active);
+                    activeLists.addToListSortedByCurrentFromPositions(currentBinding, current);
+                    intervalMoved(current, currentBinding, State.Unhandled, State.Active);
                 }
 
                 nextInterval();
@@ -232,7 +234,7 @@ public class IntervalWalker {
         }
     }
 
-    private void intervalMoved(Interval interval, State from, State to) {
+    private void intervalMoved(Interval interval, RegisterBinding kind, State from, State to) {
         // intervalMoved() is called whenever an interval moves from one interval list to another.
         // In the implementation of this method it is prohibited to move the interval to any list.
         if (GraalOptions.TraceLinearScanLevel >= 4 && !TTY.isSuppressed()) {

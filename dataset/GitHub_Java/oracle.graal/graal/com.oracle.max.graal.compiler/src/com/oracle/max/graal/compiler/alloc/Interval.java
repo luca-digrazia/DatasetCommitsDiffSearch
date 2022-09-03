@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,8 +21,6 @@
  * questions.
  */
 package com.oracle.max.graal.compiler.alloc;
-
-import static com.sun.cri.ci.CiValueUtil.*;
 
 import java.util.*;
 
@@ -419,7 +417,7 @@ public final class Interval {
 
     /**
      * The kind of this interval.
-     * Only valid if this is a {@linkplain #xxisVariable() variable}.
+     * Only valid if this is a {@linkplain #isVariable() variable}.
      */
     private CiKind kind;
 
@@ -485,20 +483,19 @@ public final class Interval {
      */
     private Interval locationHint;
 
-    void assignLocation(CiValue newLocation) {
-        if (isRegister(newLocation)) {
+    void assignLocation(CiValue location) {
+        if (location.isRegister()) {
             assert this.location == null : "cannot re-assign location for " + this;
-            if (newLocation.kind == CiKind.Illegal && kind != CiKind.Illegal) {
-                this.location = asRegister(newLocation).asValue(kind);
-                return;
+            if (location.kind == CiKind.Illegal && kind != CiKind.Illegal) {
+                location = location.asRegister().asValue(kind);
             }
         } else {
-            assert this.location == null || isRegister(this.location) : "cannot re-assign location for " + this;
-            assert isStackSlot(newLocation);
-            assert newLocation.kind != CiKind.Illegal;
-            assert newLocation.kind == this.kind;
+            assert this.location == null || this.location.isRegister() : "cannot re-assign location for " + this;
+            assert location.isStackSlot();
+            assert location.kind != CiKind.Illegal;
+            assert location.kind == this.kind;
         }
-        this.location = newLocation;
+        this.location = location;
     }
 
     /**
@@ -509,12 +506,12 @@ public final class Interval {
     }
 
     public CiKind kind() {
-        assert !isRegister(operand) : "cannot access type for fixed interval";
+        assert !operand.isRegister() : "cannot access type for fixed interval";
         return kind;
     }
 
     void setKind(CiKind kind) {
-        assert isRegister(operand) || this.kind() == CiKind.Illegal || this.kind() == kind : "overwriting existing type";
+        assert operand.isRegister() || this.kind() == CiKind.Illegal || this.kind() == kind : "overwriting existing type";
         assert kind == kind.stackKind() || kind == CiKind.Short : "these kinds should have int type registers";
         this.kind = kind;
     }
@@ -666,10 +663,10 @@ public final class Interval {
         assert operand != null;
         this.operand = operand;
         this.operandNumber = operandNumber;
-        if (isRegister(operand)) {
+        if (operand.isRegister()) {
             location = operand;
         } else {
-            assert isIllegal(operand) || isVariable(operand);
+            assert operand.isIllegal() || operand.isVariable();
         }
         this.kind = CiKind.Illegal;
         this.first = Range.EndMarker;
@@ -723,7 +720,7 @@ public final class Interval {
         return true;
     }
 
-    public Interval locationHint(boolean searchSplitChild) {
+    public Interval locationHint(boolean searchSplitChild, LinearScan allocator) {
         if (!searchSplitChild) {
             return locationHint;
         }
@@ -731,14 +728,14 @@ public final class Interval {
         if (locationHint != null) {
             assert locationHint.isSplitParent() : "ony split parents are valid hint registers";
 
-            if (locationHint.location != null && isRegister(locationHint.location)) {
+            if (locationHint.location != null && locationHint.location.isRegister()) {
                 return locationHint;
             } else if (!locationHint.splitChildren.isEmpty()) {
                 // search the first split child that has a register assigned
                 int len = locationHint.splitChildren.size();
                 for (int i = 0; i < len; i++) {
                     Interval interval = locationHint.splitChildren.get(i);
-                    if (interval.location != null && isRegister(interval.location)) {
+                    if (interval.location != null && interval.location.isRegister()) {
                         return interval;
                     }
                 }
@@ -789,9 +786,9 @@ public final class Interval {
             // this is an error
             StringBuilder msg = new StringBuilder(this.toString()).append(" has no child at ").append(opId);
             if (!splitChildren.isEmpty()) {
-                Interval firstChild = splitChildren.get(0);
-                Interval lastChild = splitChildren.get(splitChildren.size() - 1);
-                msg.append(" (first = ").append(firstChild).append(", last = ").append(lastChild).append(")");
+                Interval first = splitChildren.get(0);
+                Interval last = splitChildren.get(splitChildren.size() - 1);
+                msg.append(" (first = ").append(first).append(", last = ").append(last).append(")");
             }
             throw new CiBailout("Linear Scan Error: " + msg);
         }
@@ -855,7 +852,7 @@ public final class Interval {
 
     // Note: use positions are sorted descending . first use has highest index
     int firstUsage(RegisterPriority minRegisterPriority) {
-        assert isVariable(operand) : "cannot access use positions for fixed intervals";
+        assert operand.isVariable() : "cannot access use positions for fixed intervals";
 
         for (int i = usePosList.size() - 1; i >= 0; --i) {
             RegisterPriority registerPriority = usePosList.registerPriority(i);
@@ -867,7 +864,7 @@ public final class Interval {
     }
 
     int nextUsage(RegisterPriority minRegisterPriority, int from) {
-        assert isVariable(operand) : "cannot access use positions for fixed intervals";
+        assert operand.isVariable() : "cannot access use positions for fixed intervals";
 
         for (int i = usePosList.size() - 1; i >= 0; --i) {
             int usePos = usePosList.usePos(i);
@@ -879,7 +876,7 @@ public final class Interval {
     }
 
     int nextUsageExact(RegisterPriority exactRegisterPriority, int from) {
-        assert isVariable(operand) : "cannot access use positions for fixed intervals";
+        assert operand.isVariable() : "cannot access use positions for fixed intervals";
 
         for (int i = usePosList.size() - 1; i >= 0; --i) {
             int usePos = usePosList.usePos(i);
@@ -891,7 +888,7 @@ public final class Interval {
     }
 
     int previousUsage(RegisterPriority minRegisterPriority, int from) {
-        assert isVariable(operand) : "cannot access use positions for fixed intervals";
+        assert operand.isVariable() : "cannot access use positions for fixed intervals";
 
         int prev = 0;
         for (int i = usePosList.size() - 1; i >= 0; --i) {
@@ -910,7 +907,7 @@ public final class Interval {
         assert covers(pos, LIRInstruction.OperandMode.Input) : "use position not covered by live range";
 
         // do not add use positions for precolored intervals because they are never used
-        if (registerPriority != RegisterPriority.None && isVariable(operand)) {
+        if (registerPriority != RegisterPriority.None && operand.isVariable()) {
             if (GraalOptions.DetailedAsserts) {
                 for (int i = 0; i < usePosList.size(); i++) {
                     assert pos <= usePosList.usePos(i) : "already added a use-position with lower position";
@@ -962,7 +959,7 @@ public final class Interval {
             assert isSplitParent() : "list must be initialized at first split";
 
             // Create new non-shared list
-            parent.splitChildren = new ArrayList<>(4);
+            parent.splitChildren = new ArrayList<Interval>(4);
             parent.splitChildren.add(this);
         }
         parent.splitChildren.add(result);
@@ -985,7 +982,7 @@ public final class Interval {
      * @return the child interval split off from this interval
      */
     Interval split(int splitPos, LinearScan allocator) {
-        assert isVariable(operand) : "cannot split fixed intervals";
+        assert operand.isVariable() : "cannot split fixed intervals";
 
         // allocate new interval
         Interval result = newSplitChild(allocator);
@@ -1033,7 +1030,7 @@ public final class Interval {
      * Currently, only the first range can be split, and the new interval must not have split positions
      */
     Interval splitFromStart(int splitPos, LinearScan allocator) {
-        assert isVariable(operand) : "cannot split fixed intervals";
+        assert operand.isVariable() : "cannot split fixed intervals";
         assert splitPos > from() && splitPos < to() : "can only split inside interval";
         assert splitPos > first.from && splitPos <= first.to : "can only split inside first range";
         assert firstUsage(RegisterPriority.None) > splitPos : "can not split when use positions are present";
@@ -1115,8 +1112,8 @@ public final class Interval {
             from = String.valueOf(from());
             to = String.valueOf(to());
         }
-        String locationString = this.location == null ? "" : "@" + this.location;
-        return operandNumber + ":" + operand + (isRegister(operand) ? "" : locationString) + "[" + from + "," + to + "]";
+        String location = this.location == null ? "" : "@" + this.location.name();
+        return operandNumber + ":" + operand + (operand.isRegister() ? "" : location) + "[" + from + "," + to + "]";
     }
 
     /**
@@ -1134,14 +1131,14 @@ public final class Interval {
     public String logString(LinearScan allocator) {
         StringBuilder buf = new StringBuilder(100);
         buf.append(operandNumber).append(':').append(operand).append(' ');
-        if (!isRegister(operand)) {
+        if (!operand.isRegister()) {
             if (location != null) {
                 buf.append("location{").append(location).append("} ");
             }
         }
 
         buf.append("hints{").append(splitParent.operandNumber);
-        Interval hint = locationHint(false);
+        Interval hint = locationHint(false, allocator);
         if (hint != null && hint.operandNumber != splitParent.operandNumber) {
             buf.append(", ").append(hint.operandNumber);
         }

@@ -27,26 +27,26 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Queue;
 
-
 public class NodeWorkList implements Iterable<Node> {
     private final NodeBitMap visited;
     private final NodeBitMap inQueue;
     private final Queue<Node> worklist;
     private int iterationLimit = Integer.MAX_VALUE;
+    private Node firstNoChange;
+    private Node lastPull;
+    private Node lastChain;
 
-    NodeWorkList(Graph graph) {
+    public NodeWorkList(Graph graph) {
         this(graph, false, -1);
     }
 
-    NodeWorkList(Graph graph, boolean fill, int iterationLimitPerNode) {
+    public NodeWorkList(Graph graph, boolean fill, int iterationLimitPerNode) {
         visited = graph.createNodeBitMap();
         inQueue = graph.createNodeBitMap();
         if (fill) {
             ArrayDeque<Node> deque = new ArrayDeque<Node>(graph.getNodeCount());
             for (Node node : graph.getNodes()) {
-                if (node != null) {
-                    deque.add(node);
-                }
+                deque.add(node);
             }
             worklist = deque;
         } else {
@@ -57,59 +57,83 @@ public class NodeWorkList implements Iterable<Node> {
         }
     }
 
-    public void add(Node node) {
-        if (node != null && !visited.isMarked(node)) {
-            doAdd(node);
+    public void addAll(Iterable<? extends Node> nodes) {
+        for (Node node : nodes) {
+            this.add(node);
         }
     }
 
-    private void doAdd(Node node) {
+    public void add(Node node) {
+        if (node != null) {
+            if (visited.isNew(node)) {
+                visited.grow(node);
+                inQueue.grow(node);
+            }
+            if (!visited.isMarked(node)) {
+                addAgain(node);
+            }
+        }
+    }
+
+    public void addAgain(Node node) {
+        if (visited.isNew(node)) {
+            visited.grow(node);
+            inQueue.grow(node);
+        }
         if (node != null && !inQueue.isMarked(node)) {
+            if (lastPull == node) {
+                if (firstNoChange == null) {
+                    firstNoChange = node;
+                    lastChain = node;
+                } else if (node == firstNoChange) {
+                    throw new InfiniteWorkException("ReAdded " + node);
+                } else {
+                    lastChain = node;
+                }
+            } else {
+                firstNoChange = null;
+            }
             visited.mark(node);
             inQueue.mark(node);
             worklist.add(node);
         }
     }
 
-    public void replaced(Node newNode, Node oldNode, EdgeType... edges) {
-        this.replaced(newNode, oldNode, false, edges);
+    public void clearVisited() {
+        visited.clearAll();
     }
 
-    public void replaced(Node newNode, Node oldNode, boolean add, EdgeType... edges) {
-        visited.grow(newNode);
+    public void replaced(Node newNode, Node oldNode) {
+        this.replaced(newNode, oldNode, false);
+    }
+
+    public void replaced(Node newNode, Node oldNode, boolean add) {
         worklist.remove(oldNode);
-        assert !worklist.contains(oldNode);
+        if (newNode == null) {
+            return;
+        }
         if (add) {
             this.add(newNode);
         }
-        for (EdgeType type : edges) {
-            switch (type) {
-                case INPUTS:
-                    for (Node n : newNode.inputs()) {
-                        doAdd(n);
-                    }
-                    break;
-                case PREDECESSORS:
-                    for (Node n : newNode.predecessors()) {
-                        doAdd(n);
-                    }
-                    break;
-                case USAGES:
-                    for (Node n : newNode.usages()) {
-                        doAdd(n);
-                    }
-                    break;
-                case SUCCESSORS:
-                    for (Node n : newNode.successors()) {
-                        doAdd(n);
-                    }
-                    break;
-            }
+        for (Node n : newNode.usages()) {
+            addAgain(n);
         }
     }
 
     public boolean isMarked(Node node) {
         return visited.isMarked(node);
+    }
+
+    public boolean isNew(Node node) {
+        return visited.isNew(node);
+    }
+
+    public boolean isEmpty() {
+        return worklist.isEmpty();
+    }
+
+    public boolean isInQueue(Node node) {
+        return !inQueue.isNew(node) && inQueue.isMarked(node);
     }
 
     private class QueueConsumingIterator implements Iterator<Node> {
@@ -121,6 +145,7 @@ public class NodeWorkList implements Iterable<Node> {
 
         @Override
         public boolean hasNext() {
+            dropDeleted();
             return iterationLimit > 0 && !queue.isEmpty();
         }
 
@@ -129,9 +154,20 @@ public class NodeWorkList implements Iterable<Node> {
             if (iterationLimit-- <= 0) {
                 throw new NoSuchElementException();
             }
+            dropDeleted();
             Node node = queue.remove();
+            if (lastPull != lastChain) {
+                firstNoChange = null;
+            }
+            lastPull = node;
             inQueue.clear(node);
             return node;
+        }
+
+        private void dropDeleted() {
+            while (!queue.isEmpty() && queue.peek().isDeleted()) {
+                queue.remove();
+            }
         }
 
         @Override
@@ -194,5 +230,15 @@ public class NodeWorkList implements Iterable<Node> {
                 return new UnmarkedNodeIterator(visited, visited.graph().getNodes().iterator());
             }
         };
+    }
+
+    public static class InfiniteWorkException extends RuntimeException {
+        private static final long serialVersionUID = -5319329402219396658L;
+        public InfiniteWorkException() {
+            super();
+        }
+        public InfiniteWorkException(String message) {
+            super(message);
+        }
     }
 }

@@ -22,17 +22,17 @@
  */
 package com.oracle.max.graal.compiler.phases;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
+import com.sun.cri.ci.*;
 
 public abstract class Phase {
 
     private final String name;
     private final boolean shouldVerify;
-    protected GraalContext currentContext;
+    protected GraalContext context;
 
     protected Phase() {
         this.name = this.getClass().getSimpleName();
@@ -57,18 +57,18 @@ public abstract class Phase {
     }
 
     public final void apply(StructuredGraph graph, GraalContext context) {
-        apply(graph, context, true);
+        apply(graph, context, true, true);
     }
 
-    public final void apply(StructuredGraph graph, boolean plot) {
-        apply(graph,  GraalContext.EMPTY_CONTEXT, plot);
+    public final void apply(StructuredGraph graph, boolean plotOnError, boolean plot) {
+        apply(graph,  GraalContext.EMPTY_CONTEXT, plotOnError, plot);
     }
 
-    public final void apply(StructuredGraph graph, GraalContext context, boolean plot) {
+    public final void apply(StructuredGraph graph, GraalContext context, boolean plotOnError, boolean plot) {
 
-        this.currentContext = context;
+        this.context = context;
         try {
-            assert graph != null && (!shouldVerify || graph.verify());
+            assert graph != null && !shouldVerify || graph.verify();
         } catch (GraalInternalError e) {
             throw e.addContext("start of phase", getDetailedName());
         }

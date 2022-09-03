@@ -46,6 +46,4 @@ public interface Invoke extends StateSplit {
     void intrinsify(Node node);
 
     Graph graph();
-
-    double probability();
 }

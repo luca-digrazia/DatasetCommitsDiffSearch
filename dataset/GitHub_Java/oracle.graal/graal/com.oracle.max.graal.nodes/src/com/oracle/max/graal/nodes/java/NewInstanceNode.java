@@ -24,11 +24,11 @@ package com.oracle.max.graal.nodes.java;
 
 import java.util.*;
 
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
+import com.sun.cri.ri.*;
 
 /**
  * The {@code NewInstanceNode} represents the allocation of an instance class object.
@@ -91,7 +91,7 @@ public final class NewInstanceNode extends FixedWithNextNode implements EscapeAn
         @Override
         public EscapeField[] fields(Node node) {
             NewInstanceNode x = (NewInstanceNode) node;
-            List<EscapeField> escapeFields = new ArrayList<>();
+            List<EscapeField> escapeFields = new ArrayList<EscapeField>();
             fillEscapeFields(x.instanceClass(), escapeFields);
             return escapeFields.toArray(new EscapeField[escapeFields.size()]);
         }
@@ -100,7 +100,7 @@ public final class NewInstanceNode extends FixedWithNextNode implements EscapeAn
         public void beforeUpdate(Node node, Node usage) {
             if (usage instanceof RegisterFinalizerNode) {
                 RegisterFinalizerNode x = (RegisterFinalizerNode) usage;
-                ((StructuredGraph) x.graph()).removeFixed(x);
+                x.replaceAndDelete(x.next());
             } else {
                 super.beforeUpdate(node, usage);
             }
@@ -111,15 +111,16 @@ public final class NewInstanceNode extends FixedWithNextNode implements EscapeAn
             if (current instanceof AccessFieldNode) {
                 AccessFieldNode x = (AccessFieldNode) current;
                 if (x.object() == node) {
-                    int field = fieldIndex.get(x.field());
-                    StructuredGraph graph = (StructuredGraph) x.graph();
+                    int field = fieldIndex.get(((AccessFieldNode) current).field());
                     if (current instanceof LoadFieldNode) {
-                        assert fieldState[field] != null : field + ", " + x.field();
+                        assert fieldState[field] != null : field + ", " + ((AccessFieldNode) current).field();
                         x.replaceAtUsages(fieldState[field]);
-                        graph.removeFixed(x);
+                        assert x.usages().size() == 0;
+                        x.replaceAndDelete(x.next());
                     } else if (current instanceof StoreFieldNode) {
                         fieldState[field] = ((StoreFieldNode) x).value();
-                        graph.removeFixed(x);
+                        assert x.usages().size() == 0;
+                        x.replaceAndDelete(x.next());
                         return field;
                     }
                 }

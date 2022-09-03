@@ -101,7 +101,7 @@ public final class NodeBitMap implements Iterable<Node>{
 
     @Override
     public String toString() {
-        return bitMap.toBinaryString();
+        return bitMap.toBinaryString(-1);
     }
 
     public <T extends Node> void markAll(Collection<T> nodes) {
@@ -159,9 +159,5 @@ public final class NodeBitMap implements Iterable<Node>{
     @Override
     public Iterator<Node> iterator() {
         return new MarkedNodeIterator(NodeBitMap.this, graph().getNodes().iterator());
-    }
-
-    public int cardinality() {
-        return bitMap.cardinality();
     }
 }

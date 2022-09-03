@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,11 @@
  */
 package com.oracle.max.graal.compiler.lir;
 
-import static com.sun.cri.ci.CiValueUtil.*;
-
 import java.util.*;
 
 import com.sun.cri.ci.*;
 import com.sun.cri.ci.CiTargetMethod.Mark;
+import com.sun.cri.ci.CiValue.Formatter;
 import com.sun.cri.ri.*;
 import com.sun.cri.xir.CiXirAssembler.XirMark;
 
@@ -93,13 +92,13 @@ public abstract class LIRCall extends LIRInstruction {
     }
 
     @Override
-    public String operationString() {
+    public String operationString(Formatter operandFmt) {
         StringBuilder buf = new StringBuilder();
-        if (isLegal(result)) {
-            buf.append(result).append(" = ");
+        if (result.isLegal()) {
+            buf.append(operandFmt.format(result)).append(" = ");
         }
         if (targetAddressIndex >= 0) {
-            buf.append(targetAddress());
+            buf.append(operandFmt.format(targetAddress()));
         }
         if (inputs.length + alives.length > 1) {
             buf.append("(");
@@ -107,13 +106,13 @@ public abstract class LIRCall extends LIRInstruction {
         String sep = "";
         for (CiValue input : inputs) {
             if (input != targetAddress()) {
-                buf.append(sep).append(input);
+                buf.append(sep).append(operandFmt.format(input));
                 sep = ", ";
             }
         }
         for (CiValue input : alives) {
             if (input != targetAddress()) {
-                buf.append(sep).append(input).append(" ~");
+                buf.append(sep).append(operandFmt.format(input)).append(" ~");
                 sep = ", ";
             }
         }
