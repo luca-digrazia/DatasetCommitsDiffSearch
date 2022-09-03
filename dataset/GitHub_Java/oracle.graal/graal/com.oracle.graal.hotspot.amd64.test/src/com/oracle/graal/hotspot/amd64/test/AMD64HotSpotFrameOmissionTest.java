@@ -34,6 +34,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.phases.*;
 
 /**
  * Ensures that frame omission works in cases where it is expected to.
@@ -106,6 +107,10 @@ public class AMD64HotSpotFrameOmissionTest extends GraalCompilerTest {
         AMD64Assembler asm = new AMD64Assembler(target, registerConfig);
 
         gen.generateCode(asm);
+        for (int i = 0; i < GraalOptions.MethodEndBreakpointGuards; ++i) {
+            asm.int3();
+        }
+
         byte[] expectedCode = asm.codeBuffer.close(true);
 
         // Only compare up to expectedCode.length bytes to ignore
