@@ -59,8 +59,7 @@ public class SPARCHotSpotRegisterConfig implements RegisterConfig {
         for (Register reg : getAllocatableRegisters()) {
             if (architecture.canStoreValue(reg.getRegisterCategory(), kind)) {
                 // Special treatment for double precision
-                // TODO: This is wasteful it uses only half of the registers as float.
-                if (kind == Kind.Double || kind == Kind.Float) {
+                if (kind == Kind.Double) {
                     // Only even register numbers are valid double precision regs
                     if (reg.number % 2 == 0) {
                         list.add(reg);
