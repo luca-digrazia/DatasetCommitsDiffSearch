@@ -95,27 +95,26 @@ class CPUTracerCLI extends ProfilerCLI {
     }
 
     private static void printTracerJson(PrintStream out, CPUTracer tracer) {
-        JSONPrinter printer = new JSONPrinter(out);
         List<CPUTracer.Payload> payloads = new ArrayList<>(tracer.getPayloads());
-        printer.startArray();
+        out.print("[");
         int i = 0;
         for (CPUTracer.Payload payload : payloads) {
-            printer.startObject();
-            printer.printKeyValue("root name", payload.getRootName());
-            printer.comma();
-            printer.printKeyValue("source section", getShortDescription(payload.getSourceSection()));
-            printer.comma();
-            printer.printKeyValue("count", payload.getCount());
-            printer.comma();
-            printer.printKeyValue("interpreted count", payload.getCountInterpreted());
-            printer.comma();
-            printer.printKeyValue("compiled count", payload.getCountCompiled());
-            printer.endObject();
+            out.print("{");
+            out.print(jsonEntry("root name", payload.getRootName()));
+            out.print(',');
+            out.print(jsonEntry("source section", getShortDescription(payload.getSourceSection())));
+            out.print(',');
+            out.print(jsonEntry("count", String.valueOf(payload.getCount())));
+            out.print(',');
+            out.print(jsonEntry("interpreted count", String.valueOf(payload.getCountInterpreted())));
+            out.print(',');
+            out.print(jsonEntry("compiled count", String.valueOf(payload.getCountCompiled())));
+            out.print("}");
             if (i++ < payloads.size() - 1) {
-                printer.comma();
+                out.print(',');
             }
         }
-        printer.endArray();
+        out.print("]");
     }
 
     static void printTracerHistogram(PrintStream out, CPUTracer tracer) {
