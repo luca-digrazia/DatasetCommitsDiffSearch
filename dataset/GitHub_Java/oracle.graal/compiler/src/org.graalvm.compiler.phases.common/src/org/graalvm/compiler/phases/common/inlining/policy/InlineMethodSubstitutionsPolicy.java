@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,7 +26,6 @@ import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.nodes.CallTargetNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.spi.Replacements;
-import org.graalvm.compiler.phases.common.inlining.info.InlineInfo;
 import org.graalvm.compiler.phases.common.inlining.walker.MethodInvocation;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -39,11 +36,11 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 public final class InlineMethodSubstitutionsPolicy extends InlineEverythingPolicy {
 
     @Override
-    public Decision isWorthInlining(Replacements replacements, MethodInvocation invocation, InlineInfo calleeInfo, int inliningDepth, boolean fullyProcessed) {
-        final boolean isTracing = GraalOptions.TraceInlining.getValue(calleeInfo.graph().getOptions());
+    public Decision isWorthInlining(Replacements replacements, MethodInvocation invocation, int inliningDepth, boolean fullyProcessed) {
+        final boolean isTracing = GraalOptions.TraceInlining.getValue(replacements.getOptions());
         CallTargetNode callTarget = invocation.callee().invoke().callTarget();
         if (callTarget instanceof MethodCallTargetNode) {
-            ResolvedJavaMethod calleeMethod = callTarget.targetMethod();
+            ResolvedJavaMethod calleeMethod = ((MethodCallTargetNode) callTarget).targetMethod();
             if (replacements.hasSubstitution(calleeMethod, invocation.callee().invoke().bci())) {
                 return Decision.YES.withReason(isTracing, "has a method subtitution");
             }

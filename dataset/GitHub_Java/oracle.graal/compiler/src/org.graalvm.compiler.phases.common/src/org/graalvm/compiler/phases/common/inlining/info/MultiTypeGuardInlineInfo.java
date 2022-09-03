@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -208,7 +206,7 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
             FixedNode exceptionSux = exceptionEdge.next();
             graph.addBeforeFixed(exceptionSux, exceptionMerge);
             exceptionObjectPhi = graph.addWithoutUnique(new ValuePhiNode(StampFactory.forKind(JavaKind.Object), exceptionMerge));
-            exceptionMerge.setStateAfter(exceptionEdge.stateAfter().duplicateModified(invoke.bci(), true, JavaKind.Object, new JavaKind[]{JavaKind.Object},
+            exceptionMerge.setStateAfter(exceptionEdge.stateAfter().duplicateModified(invoke.stateAfter().bci, true, JavaKind.Object, new JavaKind[]{JavaKind.Object},
                             new ValueNode[]{exceptionObjectPhi}));
         }
 
