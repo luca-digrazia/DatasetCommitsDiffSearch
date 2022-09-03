@@ -105,6 +105,7 @@ public abstract class GraalCompilerState {
     /**
      * The graph processed by the benchmark.
      */
+    private final OptionValues options;
     private StructuredGraph graph;
     private final Backend backend;
     private final Providers providers;
@@ -115,12 +116,13 @@ public abstract class GraalCompilerState {
      */
     @SuppressWarnings("try")
     protected GraalCompilerState() {
+        this.options = Graal.getRequiredCapability(OptionValues.class);
         this.backend = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend();
         this.providers = backend.getProviders();
 
         // Ensure a debug configuration for this thread is initialized
         if (Debug.isEnabled() && DebugScope.getConfig() == null) {
-            DebugEnvironment.ensureInitialized();
+            DebugEnvironment.ensureInitialized(options);
         }
 
     }
@@ -244,14 +246,16 @@ public abstract class GraalCompilerState {
         return structuredGraph;
     }
 
-    protected Suites createSuites(OptionValues options) {
-        Suites ret = backend.getSuites().getDefaultSuites(options).copy();
-        return ret;
+    protected OptionValues getOptions() {
+        return options;
     }
 
-    protected LIRSuites createLIRSuites(OptionValues options) {
-        LIRSuites ret = backend.getSuites().getDefaultLIRSuites(options).copy();
-        return ret;
+    protected Suites createSuites(OptionValues opts) {
+        return backend.getSuites().getDefaultSuites(opts).copy();
+    }
+
+    protected LIRSuites createLIRSuites(OptionValues opts) {
+        return backend.getSuites().getDefaultLIRSuites(opts).copy();
     }
 
     protected Backend getBackend() {
@@ -321,7 +325,7 @@ public abstract class GraalCompilerState {
         assert !graph.isFrozen();
         ResolvedJavaMethod installedCodeOwner = graph.method();
         request = new Request<>(graph, installedCodeOwner, getProviders(), getBackend(), getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL,
-                        graph.getProfilingInfo(), createSuites(graph.getOptions()), createLIRSuites(graph.getOptions()), new CompilationResult(), CompilationResultBuilderFactory.Default);
+                        graph.getProfilingInfo(), createSuites(getOptions()), createLIRSuites(getOptions()), new CompilationResult(), CompilationResultBuilderFactory.Default);
     }
 
     /**
@@ -372,11 +376,15 @@ public abstract class GraalCompilerState {
         codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blocks.length, startBlock);
         linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blocks.length, startBlock);
 
-        LIR lir = new LIR(cfg, linearScanOrder, codeEmittingOrder, graph.getOptions());
+        LIR lir = new LIR(cfg, linearScanOrder, codeEmittingOrder, getGraphOptions());
         FrameMapBuilder frameMapBuilder = request.backend.newFrameMapBuilder(registerConfig);
         lirGenRes = request.backend.newLIRGenerationResult(graph.compilationId(), lir, frameMapBuilder, request.graph, stub);
         lirGenTool = request.backend.newLIRGenerator(lirGenRes);
         nodeLirGen = request.backend.newNodeLIRBuilder(request.graph, lirGenTool);
+    }
+
+    protected OptionValues getGraphOptions() {
+        return graph.getOptions();
     }
 
     private static ControlFlowGraph deepCopy(ControlFlowGraph cfg) {
