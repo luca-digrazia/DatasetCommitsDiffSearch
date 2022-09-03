@@ -25,8 +25,8 @@ package com.oracle.graal.hotspot.replacements;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.PRIMARY_SUPERS_LOCATION;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.SECONDARY_SUPER_CACHE_LOCATION;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.loadHubIntrinsic;
-import static com.oracle.graal.hotspot.replacements.HotspotSnippetsOptions.TypeCheckMaxHints;
-import static com.oracle.graal.hotspot.replacements.HotspotSnippetsOptions.TypeCheckMinProfileHitProbability;
+import static com.oracle.graal.hotspot.replacements.InstanceOfSnippetsOptions.TypeCheckMaxHints;
+import static com.oracle.graal.hotspot.replacements.InstanceOfSnippetsOptions.TypeCheckMinProfileHitProbability;
 import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.checkSecondarySubType;
 import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.checkUnknownSubType;
 import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.createHints;
@@ -249,8 +249,8 @@ public class InstanceOfSnippets implements Snippets {
                 InstanceOfNode instanceOf = (InstanceOfNode) replacer.instanceOf;
                 ValueNode object = instanceOf.getValue();
                 Assumptions assumptions = instanceOf.graph().getAssumptions();
-                TypeCheckHints hintInfo = new TypeCheckHints(instanceOf.type().getType(), instanceOf.profile(), assumptions, TypeCheckMinProfileHitProbability.getValue(), TypeCheckMaxHints.getValue());
-                final HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) instanceOf.type().getType();
+                TypeCheckHints hintInfo = new TypeCheckHints(instanceOf.type(), instanceOf.profile(), assumptions, TypeCheckMinProfileHitProbability.getValue(), TypeCheckMaxHints.getValue());
+                final HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) instanceOf.type();
                 ConstantNode hub = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), type.klass(), providers.getMetaAccess(), instanceOf.graph());
 
                 Arguments args;

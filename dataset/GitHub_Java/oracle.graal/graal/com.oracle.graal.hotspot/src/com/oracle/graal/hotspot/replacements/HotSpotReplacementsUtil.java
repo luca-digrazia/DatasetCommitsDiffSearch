@@ -47,9 +47,9 @@ import jdk.vm.ci.meta.LocationIdentity;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 import com.oracle.graal.api.replacements.Fold;
+import com.oracle.graal.compiler.common.GraalOptions;
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.compiler.common.type.ObjectStamp;
-import com.oracle.graal.compiler.common.type.TypeReference;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
@@ -195,14 +195,14 @@ public class HotSpotReplacementsUtil {
     public static final LocationIdentity TLAB_END_LOCATION = NamedLocationIdentity.mutable("TlabEnd");
 
     @Fold
-    static int threadTlabEndOffset() {
+    private static int threadTlabEndOffset() {
         return config().threadTlabEndOffset();
     }
 
     public static final LocationIdentity TLAB_START_LOCATION = NamedLocationIdentity.mutable("TlabStart");
 
     @Fold
-    static int threadTlabStartOffset() {
+    private static int threadTlabStartOffset() {
         return config().threadTlabStartOffset();
     }
 
@@ -212,7 +212,7 @@ public class HotSpotReplacementsUtil {
      * @see HotSpotVMConfig#pendingExceptionOffset
      */
     @Fold
-    static int threadPendingExceptionOffset() {
+    private static int threadPendingExceptionOffset() {
         return config().pendingExceptionOffset;
     }
 
@@ -222,14 +222,14 @@ public class HotSpotReplacementsUtil {
      * @see HotSpotVMConfig#pendingDeoptimizationOffset
      */
     @Fold
-    static int threadPendingDeoptimizationOffset() {
+    private static int threadPendingDeoptimizationOffset() {
         return config().pendingDeoptimizationOffset;
     }
 
     public static final LocationIdentity OBJECT_RESULT_LOCATION = NamedLocationIdentity.mutable("ObjectResult");
 
     @Fold
-    static int objectResultOffset() {
+    private static int objectResultOffset() {
         return config().threadObjectResultOffset;
     }
 
@@ -288,10 +288,10 @@ public class HotSpotReplacementsUtil {
     /**
      * Clears the pending exception for the given thread.
      *
-     * @return the pending exception, or null if there was none
+     * @return {@code true} if there was a pending exception
      */
-    public static Object clearPendingException(Word thread) {
-        Object result = thread.readObject(threadPendingExceptionOffset(), PENDING_EXCEPTION_LOCATION);
+    public static boolean clearPendingException(Word thread) {
+        boolean result = thread.readObject(threadPendingExceptionOffset(), PENDING_EXCEPTION_LOCATION) != null;
         thread.writeObject(threadPendingExceptionOffset(), null, PENDING_EXCEPTION_LOCATION);
         return result;
     }
@@ -490,12 +490,12 @@ public class HotSpotReplacementsUtil {
     public static final LocationIdentity HUB_LOCATION = new HotSpotOptimizingLocationIdentity("Hub") {
         @Override
         public ValueNode canonicalizeRead(ValueNode read, AddressNode location, ValueNode object, CanonicalizerTool tool) {
-            TypeReference constantType = StampTool.typeReferenceOrNull(object);
-            if (constantType != null && constantType.isExact()) {
+            ResolvedJavaType constantType = LoadHubNode.findSynonymType(read.graph(), tool.getMetaAccess(), object);
+            if (constantType != null) {
                 if (config().useCompressedClassPointers) {
-                    return ConstantNode.forConstant(read.stamp(), ((HotSpotMetaspaceConstant) tool.getConstantReflection().asObjectHub(constantType.getType())).compress(), tool.getMetaAccess());
+                    return ConstantNode.forConstant(read.stamp(), ((HotSpotMetaspaceConstant) constantType.getObjectHub()).compress(), tool.getMetaAccess());
                 } else {
-                    return ConstantNode.forConstant(read.stamp(), tool.getConstantReflection().asObjectHub(constantType.getType()), tool.getMetaAccess());
+                    return ConstantNode.forConstant(read.stamp(), constantType.getObjectHub(), tool.getMetaAccess());
                 }
             }
             return read;
@@ -503,7 +503,7 @@ public class HotSpotReplacementsUtil {
     };
 
     @Fold
-    static int hubOffset() {
+    private static int hubOffset() {
         return config().hubOffset;
     }
 
@@ -769,6 +769,13 @@ public class HotSpotReplacementsUtil {
         return config().instanceKlassStateFullyInitialized;
     }
 
+    public static final LocationIdentity INSTANCE_KLASS_CONSTANTS = NamedLocationIdentity.immutable("InstanceKlass::_constants");
+
+    @Fold
+    public static int instanceKlassConstantsOffset() {
+        return config().instanceKlassConstantsOffset;
+    }
+
     /**
      *
      * @param hub the hub of an InstanceKlass
@@ -814,6 +821,26 @@ public class HotSpotReplacementsUtil {
     }
 
     public static final LocationIdentity CLASS_MIRROR_LOCATION = NamedLocationIdentity.immutable("Klass::_java_mirror");
+
+    @Fold
+    public static int classMirrorOffset() {
+        return config().classMirrorOffset;
+    }
+
+    @Fold
+    public static int constantPoolSize() {
+        return config().constantPoolSize;
+    }
+
+    @Fold
+    public static int constantPoolHolderOffset() {
+        return config().constantPoolHolderOffset;
+    }
+
+    @Fold
+    public static int constantPoolLengthOffset() {
+        return config().constantPoolLengthOffset;
+    }
 
     public static final LocationIdentity HEAP_TOP_LOCATION = NamedLocationIdentity.mutable("HeapTop");
 
@@ -950,6 +977,16 @@ public class HotSpotReplacementsUtil {
     public static native int identityHashCode(@ConstantNodeParameter ForeignCallDescriptor descriptor, Object object);
 
     @Fold
+    public static boolean isImmutableCode() {
+        return GraalOptions.ImmutableCode.getValue();
+    }
+
+    @Fold
+    public static boolean generatePIC() {
+        return GraalOptions.GeneratePIC.getValue();
+    }
+
+    @Fold
     public static int verifiedEntryPointOffset() {
         return config().nmethodEntryOffset;
     }
@@ -981,7 +1018,7 @@ public class HotSpotReplacementsUtil {
                         AssumptionResult<ResolvedJavaType> leafType = element.findLeafConcreteSubtype();
                         if (leafType != null && leafType.canRecordTo(assumptions)) {
                             leafType.recordTo(assumptions);
-                            return ConstantNode.forConstant(read.stamp(), tool.getConstantReflection().asObjectHub(leafType.getResult()), tool.getMetaAccess());
+                            return ConstantNode.forConstant(read.stamp(), leafType.getResult().getObjectHub(), tool.getMetaAccess());
                         }
                     }
                 }

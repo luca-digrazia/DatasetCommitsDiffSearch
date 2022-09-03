@@ -384,7 +384,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             return;
         }
         ValueNode hub = createReadHub(graph, loadHub.getValue(), tool);
-        loadHub.replaceAtUsagesAndDelete(hub);
+        graph.replaceFloating(loadHub, hub);
     }
 
     protected void lowerMonitorEnterNode(MonitorEnterNode monitorEnter, LoweringTool tool, StructuredGraph graph) {
@@ -631,7 +631,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         for (Node usage : commit.usages().snapshot()) {
             AllocatedObjectNode addObject = (AllocatedObjectNode) usage;
             int index = commit.getVirtualObjects().indexOf(addObject.getVirtualObject());
-            addObject.replaceAtUsagesAndDelete(allocations[index]);
+            graph.replaceFloating(addObject, allocations[index]);
         }
     }
 
@@ -715,58 +715,35 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         return stamp;
     }
 
-    public final ValueNode implicitLoadConvert(StructuredGraph graph, JavaKind kind, ValueNode value) {
+    public ValueNode implicitLoadConvert(StructuredGraph graph, JavaKind kind, ValueNode value) {
         return implicitLoadConvert(graph, kind, value, true);
+
     }
 
-    public ValueNode implicitLoadConvert(JavaKind kind, ValueNode value) {
-        return implicitLoadConvert(kind, value, true);
-    }
-
-    protected final ValueNode implicitLoadConvert(StructuredGraph graph, JavaKind kind, ValueNode value, boolean compressible) {
-        ValueNode ret = implicitLoadConvert(kind, value, compressible);
-        if (!ret.isAlive()) {
-            ret = graph.addOrUnique(ret);
-        }
-        return ret;
-    }
-
-    protected ValueNode implicitLoadConvert(JavaKind kind, ValueNode value, @SuppressWarnings("unused") boolean compressible) {
+    protected ValueNode implicitLoadConvert(StructuredGraph graph, JavaKind kind, ValueNode value, @SuppressWarnings("unused") boolean compressible) {
         switch (kind) {
             case Byte:
             case Short:
-                return new SignExtendNode(value, 32);
+                return graph.unique(new SignExtendNode(value, 32));
             case Boolean:
             case Char:
-                return new ZeroExtendNode(value, 32);
+                return graph.unique(new ZeroExtendNode(value, 32));
         }
         return value;
     }
 
-    public final ValueNode implicitStoreConvert(StructuredGraph graph, JavaKind kind, ValueNode value) {
+    public ValueNode implicitStoreConvert(StructuredGraph graph, JavaKind kind, ValueNode value) {
         return implicitStoreConvert(graph, kind, value, true);
     }
 
-    public ValueNode implicitStoreConvert(JavaKind kind, ValueNode value) {
-        return implicitStoreConvert(kind, value, true);
-    }
-
-    protected final ValueNode implicitStoreConvert(StructuredGraph graph, JavaKind kind, ValueNode value, boolean compressible) {
-        ValueNode ret = implicitStoreConvert(kind, value, compressible);
-        if (!ret.isAlive()) {
-            ret = graph.addOrUnique(ret);
-        }
-        return ret;
-    }
-
-    protected ValueNode implicitStoreConvert(JavaKind kind, ValueNode value, @SuppressWarnings("unused") boolean compressible) {
+    protected ValueNode implicitStoreConvert(StructuredGraph graph, JavaKind kind, ValueNode value, @SuppressWarnings("unused") boolean compressible) {
         switch (kind) {
             case Boolean:
             case Byte:
-                return new NarrowNode(value, 8);
+                return graph.unique(new NarrowNode(value, 8));
             case Char:
             case Short:
-                return new NarrowNode(value, 16);
+                return graph.unique(new NarrowNode(value, 16));
         }
         return value;
     }

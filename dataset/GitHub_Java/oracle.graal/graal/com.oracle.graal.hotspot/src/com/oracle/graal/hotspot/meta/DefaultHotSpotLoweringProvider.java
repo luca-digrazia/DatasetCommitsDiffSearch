@@ -63,7 +63,6 @@ import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeInputList;
 import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
 import com.oracle.graal.hotspot.nodes.CompressionNode;
-import com.oracle.graal.hotspot.nodes.CompressionNode.CompressionOp;
 import com.oracle.graal.hotspot.nodes.ComputeObjectAddressNode;
 import com.oracle.graal.hotspot.nodes.G1ArrayRangePostWriteBarrier;
 import com.oracle.graal.hotspot.nodes.G1ArrayRangePreWriteBarrier;
@@ -332,7 +331,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         StructuredGraph graph = n.graph();
         assert !n.getHub().isConstant();
         AddressNode address = createOffsetAddress(graph, n.getHub(), config().klassLayoutHelperOffset);
-        n.replaceAtUsagesAndDelete(graph.unique(new FloatingReadNode(address, KLASS_LAYOUT_HELPER_LOCATION, null, n.stamp(), n.getGuard(), BarrierType.NONE)));
+        graph.replaceFloating(n, graph.unique(new FloatingReadNode(address, KLASS_LAYOUT_HELPER_LOCATION, null, n.stamp(), n.getGuard(), BarrierType.NONE)));
     }
 
     private void lowerHubGetClassNode(HubGetClassNode n, LoweringTool tool) {
@@ -344,7 +343,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         assert !n.getHub().isConstant();
         AddressNode address = createOffsetAddress(graph, n.getHub(), config().classMirrorOffset);
         FloatingReadNode read = graph.unique(new FloatingReadNode(address, CLASS_MIRROR_LOCATION, null, n.stamp(), n.getGuard(), BarrierType.NONE));
-        n.replaceAtUsagesAndDelete(read);
+        graph.replaceFloating(n, read);
     }
 
     private void lowerClassGetHubNode(ClassGetHubNode n, LoweringTool tool) {
@@ -356,7 +355,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         assert !n.getValue().isConstant();
         AddressNode address = createOffsetAddress(graph, n.getValue(), config().klassOffset);
         FloatingReadNode read = graph.unique(new FloatingReadNode(address, CLASS_KLASS_LOCATION, null, n.stamp(), n.getGuard(), BarrierType.NONE));
-        n.replaceAtUsagesAndDelete(read);
+        graph.replaceFloating(n, read);
     }
 
     private void lowerInvoke(Invoke invoke, LoweringTool tool, StructuredGraph graph) {
@@ -413,11 +412,11 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     }
 
     @Override
-    protected ValueNode implicitLoadConvert(JavaKind kind, ValueNode value, boolean compressible) {
+    protected ValueNode implicitLoadConvert(StructuredGraph graph, JavaKind kind, ValueNode value, boolean compressible) {
         if (kind == JavaKind.Object && compressible && config().useCompressedOops) {
-            return new CompressionNode(CompressionOp.Uncompress, value, config().getOopEncoding());
+            return CompressionNode.uncompress(value, config().getOopEncoding());
         }
-        return super.implicitLoadConvert(kind, value, compressible);
+        return super.implicitLoadConvert(graph, kind, value, compressible);
     }
 
     @Override
@@ -428,11 +427,11 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     }
 
     @Override
-    protected ValueNode implicitStoreConvert(JavaKind kind, ValueNode value, boolean compressible) {
+    protected ValueNode implicitStoreConvert(StructuredGraph graph, JavaKind kind, ValueNode value, boolean compressible) {
         if (kind == JavaKind.Object && compressible && config().useCompressedOops) {
-            return new CompressionNode(CompressionOp.Compress, value, config().getOopEncoding());
+            return CompressionNode.compress(value, config().getOopEncoding());
         }
-        return super.implicitStoreConvert(kind, value, compressible);
+        return super.implicitStoreConvert(graph, kind, value, compressible);
     }
 
     @Override
@@ -466,7 +465,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         StampProvider stampProvider = tool.getStampProvider();
         LoadHubNode hub = graph.unique(new LoadHubNode(stampProvider, getClass.getObject()));
         HubGetClassNode hubGetClass = graph.unique(new HubGetClassNode(tool.getMetaAccess(), hub));
-        getClass.replaceAtUsagesAndDelete(hubGetClass);
+        graph.replaceFloating(getClass, hubGetClass);
         hub.lower(tool);
         hubGetClass.lower(tool);
     }
@@ -510,7 +509,8 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
                 osrLocal.replaceAndDelete(load);
                 graph.addBeforeFixed(migrationEnd, load);
             }
-            osrStart.replaceAtUsagesAndDelete(newStart);
+            osrStart.replaceAtUsages(newStart);
+            osrStart.safeDelete();
         }
     }
 

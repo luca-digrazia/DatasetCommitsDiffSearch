@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,26 +22,37 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.api.code.DeoptimizationAction.*;
-import static com.oracle.graal.api.meta.DeoptimizationReason.*;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
-import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.*;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
-import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
-import static com.oracle.graal.replacements.SnippetTemplate.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.SECONDARY_SUPER_CACHE_LOCATION;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.loadHubIntrinsic;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.verifyOop;
+import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.checkUnknownSubType;
+import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.isNull;
+import static com.oracle.graal.nodes.PiNode.piCast;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.NOT_FREQUENT_PROBABILITY;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.probability;
+import static com.oracle.graal.replacements.SnippetTemplate.DEFAULT_REPLACER;
+import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
+import static jdk.vm.ci.meta.DeoptimizationReason.ClassCastException;
+import jdk.vm.ci.code.TargetDescription;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.hotspot.meta.HotSpotProviders;
+import com.oracle.graal.hotspot.nodes.SnippetAnchorNode;
+import com.oracle.graal.hotspot.word.KlassPointer;
+import com.oracle.graal.nodes.DeoptimizeNode;
+import com.oracle.graal.nodes.PiNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.nodes.java.CheckCastDynamicNode;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.replacements.Snippet;
+import com.oracle.graal.replacements.SnippetTemplate;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
-import com.oracle.graal.word.*;
+import com.oracle.graal.replacements.Snippets;
 
 /**
  * Snippet used for lowering {@link CheckCastDynamicNode}.
@@ -49,39 +60,39 @@ import com.oracle.graal.word.*;
 public class CheckCastDynamicSnippets implements Snippets {
 
     @Snippet
-    public static Object checkcastDynamic(Word hub, Object object, @ConstantParameter boolean checkNull) {
-        if (checkNull && probability(NOT_FREQUENT_PROBABILITY, object == null)) {
+    public static Object checkcastDynamic(KlassPointer hub, Object object) {
+        if (probability(NOT_FREQUENT_PROBABILITY, object == null)) {
             isNull.inc();
         } else {
-            Word objectHub = loadHub(object);
+            GuardingNode anchorNode = SnippetAnchorNode.anchor();
+            KlassPointer objectHub = loadHubIntrinsic(PiNode.piCastNonNull(object, anchorNode));
             if (!checkUnknownSubType(hub, objectHub)) {
                 DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
             }
         }
-        BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
-        return unsafeCast(verifyOop(object), StampFactory.forNodeIntrinsic(), anchorNode);
+        GuardingNode anchorNode = SnippetAnchorNode.anchor();
+        return piCast(verifyOop(object), StampFactory.forNodeIntrinsic(), anchorNode);
     }
 
     public static class Templates extends AbstractTemplates {
 
-        private final SnippetInfo dynamic = snippet(CheckCastDynamicSnippets.class, "checkcastDynamic");
+        private final SnippetInfo dynamic = snippet(CheckCastDynamicSnippets.class, "checkcastDynamic", SECONDARY_SUPER_CACHE_LOCATION);
 
-        public Templates(CodeCacheProvider runtime, Replacements replacements, TargetDescription target) {
-            super(runtime, replacements, target);
+        public Templates(HotSpotProviders providers, TargetDescription target) {
+            super(providers, providers.getSnippetReflection(), target);
         }
 
-        public void lower(CheckCastDynamicNode checkcast) {
+        public void lower(CheckCastDynamicNode checkcast, LoweringTool tool) {
             StructuredGraph graph = checkcast.graph();
             ValueNode object = checkcast.object();
 
-            Arguments args = new Arguments(dynamic);
+            Arguments args = new Arguments(dynamic, graph.getGuardsStage(), tool.getLoweringStage());
             args.add("hub", checkcast.hub());
             args.add("object", object);
-            args.addConst("checkNull", !object.stamp().nonNull());
 
             SnippetTemplate template = template(args);
             Debug.log("Lowering dynamic checkcast in %s: node=%s, template=%s, arguments=%s", graph, checkcast, template, args);
-            template.instantiate(runtime, checkcast, DEFAULT_REPLACER, args);
+            template.instantiate(providers.getMetaAccess(), checkcast, DEFAULT_REPLACER, args);
         }
     }
 }

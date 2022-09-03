@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,13 +22,15 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
+import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
+import jdk.vm.ci.hotspot.HotSpotResolvedPrimitiveType;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.LocationIdentity;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
@@ -78,10 +80,12 @@ public final class ClassGetHubNode extends FloatingGuardedNode implements Lowera
                 MetaAccessProvider metaAccess = tool.getMetaAccess();
                 if (metaAccess != null) {
                     ResolvedJavaType exactType = tool.getConstantReflection().asJavaType(clazz.asJavaConstant());
-                    if (exactType.isPrimitive()) {
+                    if (exactType instanceof HotSpotResolvedObjectType) {
+                        HotSpotResolvedObjectType objectType = (HotSpotResolvedObjectType) exactType;
+                        ConstantNode cn = ConstantNode.forConstant(stamp(), objectType.getObjectHub(), metaAccess);
+                        return cn;
+                    } else if (exactType instanceof HotSpotResolvedPrimitiveType) {
                         return ConstantNode.forConstant(stamp(), JavaConstant.NULL_POINTER, metaAccess);
-                    } else {
-                        return ConstantNode.forConstant(stamp(), tool.getConstantReflection().asObjectHub(exactType), metaAccess);
                     }
                 }
             }
@@ -108,7 +112,6 @@ public final class ClassGetHubNode extends FloatingGuardedNode implements Lowera
     @NodeIntrinsic
     public static native KlassPointer readClass(Class<?> clazz, GuardingNode guard);
 
-    @Override
     public ValueNode getValue() {
         return clazz;
     }
@@ -116,10 +119,12 @@ public final class ClassGetHubNode extends FloatingGuardedNode implements Lowera
     @Override
     public Constant convert(Constant c, ConstantReflectionProvider constantReflection) {
         ResolvedJavaType exactType = constantReflection.asJavaType(c);
-        if (exactType.isPrimitive()) {
-            return JavaConstant.NULL_POINTER;
+        if (exactType instanceof HotSpotResolvedObjectType) {
+            HotSpotResolvedObjectType objectType = (HotSpotResolvedObjectType) exactType;
+            return objectType.getObjectHub();
         } else {
-            return constantReflection.asObjectHub(exactType);
+            assert exactType instanceof HotSpotResolvedPrimitiveType;
+            return JavaConstant.NULL_POINTER;
         }
     }
 
@@ -127,10 +132,9 @@ public final class ClassGetHubNode extends FloatingGuardedNode implements Lowera
     public Constant reverse(Constant c, ConstantReflectionProvider constantReflection) {
         assert !c.equals(JavaConstant.NULL_POINTER);
         ResolvedJavaType objectType = constantReflection.asJavaType(c);
-        return constantReflection.asJavaClass(objectType);
+        return objectType.getJavaClass();
     }
 
-    @Override
     public boolean isLossless() {
         return false;
     }
@@ -139,7 +143,7 @@ public final class ClassGetHubNode extends FloatingGuardedNode implements Lowera
     public boolean preservesOrder(Condition op, Constant value, ConstantReflectionProvider constantReflection) {
         assert op == Condition.EQ || op == Condition.NE;
         ResolvedJavaType exactType = constantReflection.asJavaType(value);
-        return !exactType.isPrimitive();
+        return exactType instanceof HotSpotResolvedObjectType;
     }
 
 }

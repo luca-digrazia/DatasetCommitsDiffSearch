@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,12 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
+import static com.oracle.graal.hotspot.nodes.CStringNode.cstring;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.clearPendingException;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.config;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.getAndClearObjectResult;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.loadHubIntrinsic;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.verifyOops;
-import static com.oracle.graal.replacements.nodes.CStringConstant.cstring;
 import static com.oracle.graal.word.Word.unsigned;
 import static jdk.vm.ci.meta.DeoptimizationReason.RuntimeConstraint;
 
@@ -92,7 +92,7 @@ public class StubUtil {
     }
 
     public static void handlePendingException(Word thread, boolean isObjectResult) {
-        if (clearPendingException(thread) != null) {
+        if (clearPendingException(thread)) {
             if (isObjectResult) {
                 getAndClearObjectResult(thread);
             }
@@ -252,22 +252,22 @@ public class StubUtil {
     }
 
     @Fold
-    static long verifyOopCounterAddress() {
+    private static long verifyOopCounterAddress() {
         return config().verifyOopCounterAddress;
     }
 
     @Fold
-    static long verifyOopMask() {
+    private static long verifyOopMask() {
         return config().verifyOopMask;
     }
 
     @Fold
-    static long verifyOopBits() {
+    private static long verifyOopBits() {
         return config().verifyOopBits;
     }
 
     @Fold
-    static int hubOffset() {
+    private static int hubOffset() {
         return config().hubOffset;
     }
 }
