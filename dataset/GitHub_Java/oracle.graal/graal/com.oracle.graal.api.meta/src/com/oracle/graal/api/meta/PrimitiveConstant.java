@@ -64,7 +64,7 @@ public class PrimitiveConstant extends AbstractValue implements JavaConstant, Se
 
     @Override
     public int asInt() {
-        assert getKind().getStackKind() == Kind.Int : getKind().getStackKind();
+        assert getKind().getStackKind() == Kind.Int;
         return (int) primitive;
     }
 

@@ -609,8 +609,6 @@ public class FloatStamp extends PrimitiveStamp {
         }
     },
 
-    null, null, null,
-
     new UnaryOp.Abs() {
 
         @Override
