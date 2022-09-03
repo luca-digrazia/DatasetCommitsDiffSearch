@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,186 +29,105 @@
  */
 package com.oracle.truffle.llvm.nodes.func;
 
-import java.util.Deque;
-import java.util.List;
-import java.util.Map;
-
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.llvm.context.LLVMContext;
-import com.oracle.truffle.llvm.context.LLVMLanguage;
-import com.oracle.truffle.llvm.nodes.base.LLVMFrameUtil;
-import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMAbort;
-import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMSignal;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMExitException;
-import com.oracle.truffle.llvm.runtime.LLVMFunction;
-import com.oracle.truffle.llvm.runtime.LLVMLogger;
-import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType.PrimitiveKind;
+import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.VoidType;
 
-/**
- * The global entry point initializes the global scope and starts execution with the main function.
- */
 public class LLVMGlobalRootNode extends RootNode {
 
-    protected final DirectCallNode main;
-    @CompilationFinal protected final Object[] arguments;
-    protected final LLVMContext context;
-    // FIXME instead make the option system "PE safe"
-    protected final boolean printNativeStats = LLVMOptions.DEBUG.printNativeCallStatistics();
-    protected final int executionCount = LLVMOptions.ENGINE.executionCount();
-    protected final boolean printExecutionTime = LLVMOptions.DEBUG.printExecutionTime();
-    protected final FrameSlot stackPointerSlot;
-    protected long startExecutionTime;
-    protected long endExecutionTime;
+    private final DirectCallNode startFunction;
+    private final int mainFunctionType;
+    private final String applicationPath;
+    private final ContextReference<LLVMContext> ctxRef;
 
-    public LLVMGlobalRootNode(FrameSlot stackSlot, FrameDescriptor descriptor, LLVMContext context, CallTarget main, Object... arguments) {
-        super(LLVMLanguage.class, null, descriptor);
-        this.stackPointerSlot = stackSlot;
-        this.context = context;
-        this.main = Truffle.getRuntime().createDirectCallNode(main);
-        this.arguments = arguments;
+    public LLVMGlobalRootNode(LLVMLanguage language, FrameDescriptor descriptor, LLVMFunctionDescriptor mainFunctionDescriptor, CallTarget startFunction, String applicationPath) {
+        super(language, descriptor);
+        this.startFunction = Truffle.getRuntime().createDirectCallNode(startFunction);
+        this.mainFunctionType = getMainFunctionType(mainFunctionDescriptor);
+        this.applicationPath = applicationPath;
+        this.ctxRef = language.getContextReference();
     }
 
     @Override
-    @ExplodeLoop
+    public boolean isInternal() {
+        return true;
+    }
+
+    @Override
     public Object execute(VirtualFrame frame) {
-        LLVMAddress stackPointer = context.getStack().getUpperBounds();
-        try {
-            Object result = null;
-            for (int i = 0; i < executionCount; i++) {
-                assert LLVMSignal.getNumberOfRegisteredSignals() == 0;
-
-                frame.setObject(stackPointerSlot, stackPointer);
-                Object[] realArgs = new Object[arguments.length + LLVMCallNode.ARG_START_INDEX];
-                realArgs[0] = LLVMFrameUtil.getAddress(frame, stackPointerSlot);
-                System.arraycopy(arguments, 0, realArgs, LLVMCallNode.ARG_START_INDEX, arguments.length);
-                result = executeIteration(frame, i, realArgs);
-
-                context.awaitThreadTermination();
-                assert LLVMSignal.getNumberOfRegisteredSignals() == 0;
-            }
-            return result;
-        } catch (LLVMExitException e) {
-            context.awaitThreadTermination();
-            assert LLVMSignal.getNumberOfRegisteredSignals() == 0;
-            return e.getReturnCode();
-        } finally {
-            // if not done already, we want at least call a shutdown command
-            context.shutdownThreads();
-            if (printNativeStats) {
-                printNativeCallStats(context);
-            }
-        }
-    }
-
-    protected Object executeIteration(VirtualFrame frame, int iteration, Object[] args) {
-        Object result;
-
-        if (iteration != 0) {
-            executeStaticInits();
-            executeConstructorFunctions();
-        }
-
-        if (printExecutionTime) {
-            startExecutionTime = System.currentTimeMillis();
-        }
-
-        int returnCode = 0;
-
-        try {
-            result = main.call(frame, args);
-        } catch (LLVMExitException e) {
-            returnCode = e.getReturnCode();
-            throw e;
-        } finally {
-            // We shouldn't execute atexit, when there was an abort
-            if (returnCode != LLVMAbort.UNIX_SIGABORT) {
-                executeAtExitFunctions();
-            }
-        }
-
-        if (printExecutionTime) {
-            endExecutionTime = System.currentTimeMillis();
-            printExecutionTime();
-        }
-
-        if (iteration != executionCount - 1) {
-            executeDestructorFunctions();
-        }
-        return result;
-    }
-
-    @TruffleBoundary
-    protected void printExecutionTime() {
-        long executionTime = endExecutionTime - startExecutionTime;
-        LLVMLogger.unconditionalInfo("execution time: " + executionTime + " ms");
-    }
-
-    @TruffleBoundary
-    protected void executeStaticInits() {
-        List<RootCallTarget> globalVarInits = context.getGlobalVarInits();
-        for (RootCallTarget callTarget : globalVarInits) {
-            callTarget.call(globalVarInits);
-        }
-    }
-
-    @TruffleBoundary
-    private void executeConstructorFunctions() {
-        List<RootCallTarget> constructorFunctions = context.getConstructorFunctions();
-        for (RootCallTarget callTarget : constructorFunctions) {
-            callTarget.call(constructorFunctions);
-        }
-    }
-
-    @TruffleBoundary
-    protected void executeDestructorFunctions() {
-        List<RootCallTarget> destructorFunctions = context.getDestructorFunctions();
-        for (RootCallTarget callTarget : destructorFunctions) {
-            callTarget.call(destructorFunctions);
-        }
-    }
-
-    @TruffleBoundary
-    protected void executeAtExitFunctions() {
-        Deque<RootCallTarget> atExitFunctions = context.getAtExitFunctions();
-        LLVMExitException lastExitException = null;
-        while (!atExitFunctions.isEmpty()) {
+        try (StackPointer basePointer = getContext().getThreadingStack().getStack().newFrame()) {
             try {
-                atExitFunctions.pop().call(atExitFunctions);
+                TruffleObject appPath = (TruffleObject) ctxRef.get().getEnv().asGuestValue(applicationPath.getBytes());
+                LLVMManagedPointer applicationPathObj = LLVMManagedPointer.create(LLVMTypedForeignObject.createUnknown(appPath));
+                Object[] realArgs = new Object[]{basePointer, mainFunctionType, applicationPathObj};
+                Object result = startFunction.call(realArgs);
+                getContext().awaitThreadTermination();
+                return (int) result;
             } catch (LLVMExitException e) {
-                lastExitException = e;
+                LLVMContext context = getContext();
+                // if any variant of exit or abort was called, we know that all the necessary
+                // cleanup was already done
+                context.setCleanupNecessary(false);
+                context.awaitThreadTermination();
+                return e.getReturnCode();
+            } finally {
+                // if not done already, we want at least call a shutdown command
+                getContext().shutdownThreads();
             }
-        }
-        if (lastExitException != null) {
-            throw lastExitException;
         }
     }
 
-    @TruffleBoundary
-    protected static void printNativeCallStats(LLVMContext context) {
-        Map<LLVMFunction, Integer> nativeFunctionCallSites = context.getNativeFunctionLookupStats();
-        // Checkstyle: stop
-        if (!nativeFunctionCallSites.isEmpty()) {
-            System.out.println("==========================");
-            System.out.println("native function sites:");
-            System.out.println("==========================");
-            for (LLVMFunction function : nativeFunctionCallSites.keySet()) {
-                String output = String.format("%15s: %3d", function.getName(), nativeFunctionCallSites.get(function));
-                System.out.println(output);
+    /**
+     * Identify the signature of the main method so that crt0.c:_start can invoke the main method
+     * with the correct signature. This is necessary because languages like Rust use non-standard C
+     * main functions.
+     */
+    private static int getMainFunctionType(LLVMFunctionDescriptor mainFunctionDescriptor) {
+        CompilerAsserts.neverPartOfCompilation();
+        Type returnType = mainFunctionDescriptor.getType().getReturnType();
+        Type[] argumentTypes = mainFunctionDescriptor.getType().getArgumentTypes();
+        if (argumentTypes.length > 0 && argumentTypes[0] instanceof PrimitiveType) {
+            if (((PrimitiveType) argumentTypes[0]).getPrimitiveKind() == PrimitiveKind.I64) {
+                return 1;
             }
-            System.out.println("==========================");
         }
-        // Checkstyle: resume
+
+        if (returnType instanceof VoidType) {
+            return 2;
+        } else if (returnType instanceof PrimitiveType) {
+            switch (((PrimitiveType) returnType).getPrimitiveKind()) {
+                case I8:
+                    return 3;
+                case I16:
+                    return 4;
+                case I32:
+                    return 0;
+                case I64:
+                    return 5;
+            }
+        }
+
+        throw new AssertionError("Unexpected main method signature");
     }
 
+    public final LLVMContext getContext() {
+        return getRootNode().getLanguage(LLVMLanguage.class).getContextReference().get();
+    }
 }
