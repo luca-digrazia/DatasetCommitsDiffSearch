@@ -213,10 +213,7 @@ public abstract class Source {
      * then cached. The {@link #getShortName() short name} of the source is equal to
      * {@link File#getName() name of the file}. The {@link #getName() name} of the file is exactly
      * the provided <code>fileName</code> string. The {@link #getPath() path} is
-     * {@link File#getCanonicalPath() canonical path} of the provided file name. When rewritting to
-     * {@link #newBuilder(java.io.File)}, use:
-     *
-     * {@link SourceSnippets#likeFileName}
+     * {@link File#getCanonicalPath() canonical path} of the provided file name.
      *
      * @param fileName path to the file with the source
      * @return source representing the file's content
@@ -1247,16 +1244,6 @@ class SourceSnippets {
         assert file.toURI().equals(source.getURI());
         assert "text/x-java".equals(source.getMimeType());
         // END: SourceSnippets#fromFile
-        return source;
-    }
-
-    public static Source likeFileName(String fileName) throws IOException {
-        // BEGIN: SourceSnippets#likeFileName
-        File file = new File(fileName);
-        Source source = Source.newBuilder(file.getCanonicalFile()).
-            name(file.getPath()).
-            build();
-        // END: SourceSnippets#likeFileName
         return source;
     }
 
