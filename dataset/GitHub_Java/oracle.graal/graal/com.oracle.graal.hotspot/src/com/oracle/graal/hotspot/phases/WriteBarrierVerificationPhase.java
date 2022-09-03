@@ -48,9 +48,11 @@ public class WriteBarrierVerificationPhase extends Phase {
     }
 
     private static void processWrites(StructuredGraph graph) {
+        List<Node> processedWrites = new LinkedList<>();
         for (Node node : graph.getNodes()) {
-            if (isObjectWrite(node)) {
+            if (isObjectWrite(node) && !processedWrites.contains(node)) {
                 validateWrite(node);
+                processedWrites.add(node);
             }
         }
     }
