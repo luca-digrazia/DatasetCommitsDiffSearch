@@ -24,34 +24,30 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "*")
 public final class FloatMulNode extends FloatArithmeticNode implements Canonicalizable {
 
-    public FloatMulNode(Stamp stamp, ValueNode x, ValueNode y, boolean isStrictFP) {
-        super(stamp, x, y, isStrictFP);
+    public FloatMulNode(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP) {
+        super(kind, x, y, isStrictFP);
     }
 
     public Constant evalConst(Constant... inputs) {
         assert inputs.length == 2;
-        assert inputs[0].getKind() == inputs[1].getKind();
-        if (inputs[0].getKind() == Kind.Float) {
+        if (kind() == Kind.Float) {
             return Constant.forFloat(inputs[0].asFloat() * inputs[1].asFloat());
         } else {
-            assert inputs[0].getKind() == Kind.Double;
+            assert kind() == Kind.Double;
             return Constant.forDouble(inputs[0].asDouble() * inputs[1].asDouble());
         }
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (x().isConstant() && !y().isConstant()) {
-            return graph().unique(new FloatMulNode(stamp(), y(), x(), isStrictFP()));
+            return graph().unique(new FloatMulNode(kind(), y(), x(), isStrictFP()));
         }
         if (x().isConstant()) {
             return ConstantNode.forPrimitive(evalConst(x().asConstant(), y().asConstant()), graph());
@@ -60,7 +56,7 @@ public final class FloatMulNode extends FloatArithmeticNode implements Canonical
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
+    public void generate(ArithmeticLIRGenerator gen) {
         Value op1 = gen.operand(x());
         Value op2 = gen.operand(y());
         if (!y().isConstant() && !FloatAddNode.livesLonger(this, y(), gen)) {
@@ -68,15 +64,6 @@ public final class FloatMulNode extends FloatArithmeticNode implements Canonical
             op1 = op2;
             op2 = op;
         }
-        gen.setResult(this, gen.getLIRGeneratorTool().emitMul(op1, op2));
-    }
-
-    @Override
-    public boolean generate(MemoryArithmeticLIRLowerer gen, Access access) {
-        Value result = gen.emitMulMemory(x(), y(), access);
-        if (result != null) {
-            gen.setResult(this, result);
-        }
-        return result != null;
+        gen.setResult(this, gen.emitMul(op1, op2));
     }
 }

@@ -24,68 +24,54 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "-")
 public final class FloatSubNode extends FloatArithmeticNode implements Canonicalizable {
 
-    public FloatSubNode(Stamp stamp, ValueNode x, ValueNode y, boolean isStrictFP) {
-        super(stamp, x, y, isStrictFP);
+    public FloatSubNode(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP) {
+        super(kind, x, y, isStrictFP);
     }
 
     public Constant evalConst(Constant... inputs) {
         assert inputs.length == 2;
-        assert inputs[0].getKind() == inputs[1].getKind();
-        if (inputs[0].getKind() == Kind.Float) {
+        if (kind() == Kind.Float) {
             return Constant.forFloat(inputs[0].asFloat() - inputs[1].asFloat());
         } else {
-            assert inputs[0].getKind() == Kind.Double;
+            assert kind() == Kind.Double;
             return Constant.forDouble(inputs[0].asDouble() - inputs[1].asDouble());
         }
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (x() == y()) {
-            return ConstantNode.forFloatingStamp(stamp(), 0.0f, graph());
+            return ConstantNode.forFloatingKind(kind(), 0.0f, graph());
         }
         if (x().isConstant() && y().isConstant()) {
             return ConstantNode.forPrimitive(evalConst(x().asConstant(), y().asConstant()), graph());
         } else if (y().isConstant()) {
-            Constant c = y().asConstant();
-            if (c.getKind() == Kind.Float) {
-                float f = c.asFloat();
-                if (f == 0.0f) {
+            if (kind() == Kind.Float) {
+                float c = y().asConstant().asFloat();
+                if (c == 0.0f) {
                     return x();
                 }
-                return graph().unique(new FloatAddNode(stamp(), x(), ConstantNode.forFloat(-f, graph()), isStrictFP()));
+                return graph().unique(new FloatAddNode(kind(), x(), ConstantNode.forFloat(-c, graph()), isStrictFP()));
             } else {
-                assert c.getKind() == Kind.Double;
-                double d = c.asDouble();
-                if (d == 0.0) {
+                assert kind() == Kind.Double;
+                double c = y().asConstant().asDouble();
+                if (c == 0.0) {
                     return x();
                 }
-                return graph().unique(new FloatAddNode(stamp(), x(), ConstantNode.forDouble(-d, graph()), isStrictFP()));
+                return graph().unique(new FloatAddNode(kind(), x(), ConstantNode.forDouble(-c, graph()), isStrictFP()));
             }
         }
         return this;
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        gen.setResult(this, gen.getLIRGeneratorTool().emitSub(gen.operand(x()), gen.operand(y())));
-    }
-
-    @Override
-    public boolean generate(MemoryArithmeticLIRLowerer gen, Access access) {
-        Value result = gen.emitSubMemory(x(), y(), access);
-        if (result != null) {
-            gen.setResult(this, result);
-        }
-        return result != null;
+    public void generate(ArithmeticLIRGenerator gen) {
+        gen.setResult(this, gen.emitSub(gen.operand(x()), gen.operand(y())));
     }
 }
