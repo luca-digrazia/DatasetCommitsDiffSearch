@@ -31,18 +31,16 @@ public class IntegerPTXTest extends PTXTestBase {
     @Test
     public void testAdd() {
 
-        // @formatter:off
-        /* Integer r4 = (Integer) invoke(compile("testAdd2B"), (byte) 6, (byte) 4);
+        Integer r4 = (Integer) invoke(compile("testAdd2B"), (byte) 6, (byte) 4);
         if (r4 == null) {
             printReport("testAdd2B FAILED");
         } else if (r4.intValue() == testAdd2B((byte) 6, (byte) 4)) {
             printReport("testAdd2B PASSED");
         } else {
             printReport("testAdd2B FAILED");
-        } */
-        // @formatter:on
+        }
 
-        Integer r4 = (Integer) invoke(compile("testAdd2I"), 18, 24);
+        r4 = (Integer) invoke(compile("testAdd2I"), 18, 24);
         if (r4 == null) {
             printReport("testAdd2I FAILED");
         } else if (r4.intValue() == testAdd2I(18, 24)) {
@@ -267,7 +265,6 @@ public class IntegerPTXTest extends PTXTestBase {
         return 32 / a;
     }
 
-    @Ignore
     @Test
     public void testRem() {
         Integer r1 = (Integer) invoke(compile("testRem2I"), 8, 4);
@@ -297,7 +294,6 @@ public class IntegerPTXTest extends PTXTestBase {
         return a % b;
     }
 
-    @Ignore
     @Test
     public void testIntConversion() {
         Long r1 = (Long) invoke(compile("testI2L"), 8);
@@ -346,6 +342,13 @@ public class IntegerPTXTest extends PTXTestBase {
 
     public static int testL2I(long a) {
         return (int) a;
+    }
+
+    public static void printReport(String message) {
+        // CheckStyle: stop system..print check
+        System.out.println(message);
+        // CheckStyle: resume system..print check
+
     }
 
     public static void main(String[] args) {
