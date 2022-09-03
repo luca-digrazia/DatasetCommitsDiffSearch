@@ -24,7 +24,6 @@ package com.oracle.graal.graph;
 
 import java.util.*;
 
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.GraphEvent.NodeEvent;
 import com.oracle.graal.graph.Node.ValueNumberable;
@@ -461,14 +460,6 @@ public class Graph {
         int getValue() {
             return value;
         }
-
-        /**
-         * Determines if this mark still represents the {@linkplain Graph#getNodeCount() live node
-         * count} of the graph.
-         */
-        public boolean isCurrent() {
-            return value == graph.nodeIdCount();
-        }
     }
 
     /**
@@ -748,11 +739,19 @@ public class Graph {
     }
 
     public NodeBitMap createNodeBitMap() {
-        return new NodeBitMap(this);
+        return createNodeBitMap(false);
+    }
+
+    public NodeBitMap createNodeBitMap(boolean autoGrow) {
+        return new NodeBitMap(this, autoGrow);
     }
 
     public <T> NodeMap<T> createNodeMap() {
-        return new NodeMap<>(this);
+        return createNodeMap(false);
+    }
+
+    public <T> NodeMap<T> createNodeMap(boolean autoGrow) {
+        return new NodeMap<>(this, autoGrow);
     }
 
     public NodeFlood createNodeFlood() {
@@ -760,11 +759,11 @@ public class Graph {
     }
 
     public NodeWorkList createNodeWorkList() {
-        return new NodeWorkList.SingletonNodeWorkList(this);
+        return new NodeWorkList(this);
     }
 
-    public NodeWorkList createIterativeNodeWorkList(boolean fill, int iterationLimitPerNode) {
-        return new NodeWorkList.IterativeNodeWorkList(this, fill, iterationLimitPerNode);
+    public NodeWorkList createNodeWorkList(boolean fill, int iterationLimitPerNode) {
+        return new NodeWorkList(this, fill, iterationLimitPerNode);
     }
 
     void register(Node node) {
@@ -840,7 +839,7 @@ public class Graph {
                     throw new GraalInternalError(t);
                 }
             } catch (GraalInternalError e) {
-                throw GraalGraphInternalError.transformAndAddContext(e, node).addContext(this);
+                throw e.addContext(node).addContext(this);
             }
         }
         return true;

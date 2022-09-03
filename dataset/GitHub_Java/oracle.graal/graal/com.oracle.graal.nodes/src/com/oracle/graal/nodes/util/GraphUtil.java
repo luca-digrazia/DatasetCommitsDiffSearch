@@ -137,11 +137,6 @@ public class GraphUtil {
     }
 
     public static void removeFixedWithUnusedInputs(FixedWithNextNode fixed) {
-        if (fixed instanceof StateSplit) {
-            FrameState stateAfter = ((StateSplit) fixed).stateAfter();
-            ((StateSplit) fixed).setStateAfter(null);
-            killWithUnusedFloatingInputs(stateAfter);
-        }
         FixedNode next = fixed.next();
         fixed.setNext(null);
         fixed.replaceAtPredecessor(next);
@@ -168,7 +163,7 @@ public class GraphUtil {
     }
 
     public static void checkRedundantProxy(ProxyNode vpn) {
-        BeginNode proxyPoint = vpn.proxyPoint();
+        AbstractBeginNode proxyPoint = vpn.proxyPoint();
         if (proxyPoint instanceof LoopExitNode) {
             LoopExitNode exit = (LoopExitNode) proxyPoint;
             LoopBeginNode loopBegin = exit.loopBegin();
@@ -329,14 +324,6 @@ public class GraphUtil {
             v = new OriginalValueSearch(proxy).result;
         }
         return v;
-    }
-
-    public static boolean tryKillUnused(Node node) {
-        if (node.isAlive() && isFloatingNode().apply(node) && node.recordsUsages() && node.usages().isEmpty()) {
-            killWithUnusedFloatingInputs(node);
-            return true;
-        }
-        return false;
     }
 
     /**
