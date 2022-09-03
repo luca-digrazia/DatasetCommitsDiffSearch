@@ -338,7 +338,7 @@ class JavaObjectMessageResolution {
             if (TruffleOptions.AOT) {
                 return false;
             }
-            return receiver.obj != null && JavaInteropReflect.findFunctionalInterfaceMethodName(receiver.clazz) != null;
+            return receiver.obj != null && JavaInteropReflect.findFunctionalInterfaceMethodName(receiver.obj.getClass()) != null;
         }
     }
 
@@ -354,14 +354,12 @@ class JavaObjectMessageResolution {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 doExecute = insert(ExecuteMethodNode.create());
             }
-            if (receiver.obj != null) {
-                assert !receiver.isClass();
-                String functionalInterfaceMethodName = JavaInteropReflect.findFunctionalInterfaceMethodName(receiver.clazz);
-                if (functionalInterfaceMethodName != null) {
-                    JavaMethodDesc method = JavaInteropReflect.findMethod(receiver, functionalInterfaceMethodName);
-                    if (method != null) {
-                        return doExecute.execute(method, receiver.obj, args, receiver.languageContext);
-                    }
+            Object obj = receiver.obj;
+            String functionalInterfaceMethodName = JavaInteropReflect.findFunctionalInterfaceMethodName(obj.getClass());
+            if (functionalInterfaceMethodName != null) {
+                JavaMethodDesc method = JavaInteropReflect.findMethod(receiver, functionalInterfaceMethodName);
+                if (method != null) {
+                    return doExecute.execute(method, obj, args, receiver.languageContext);
                 }
             }
             throw UnsupportedMessageException.raise(Message.createExecute(args.length));

@@ -25,7 +25,6 @@
 package com.oracle.truffle.api.interop.java;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
@@ -36,14 +35,12 @@ import com.oracle.truffle.api.nodes.Node;
 final class ToPrimitiveNode extends Node {
     @Child Node isNullNode;
     @Child Node isBoxedNode;
-    @Child Node hasKeysNode;
     @Child Node hasSizeNode;
     @Child Node unboxNode;
 
     private ToPrimitiveNode() {
         this.isNullNode = Message.IS_NULL.createNode();
         this.isBoxedNode = Message.IS_BOXED.createNode();
-        this.hasKeysNode = Message.HAS_KEYS.createNode();
         this.hasSizeNode = Message.HAS_SIZE.createNode();
         this.unboxNode = Message.UNBOX.createNode();
     }
@@ -78,25 +75,25 @@ final class ToPrimitiveNode extends Node {
             if (requestedType != null) {
                 Number n = (Number) attr;
                 if (requestedType == byte.class || requestedType == Byte.class) {
-                    return byteValue(n);
+                    return n.byteValue();
                 }
                 if (requestedType == short.class || requestedType == Short.class) {
-                    return shortValue(n);
+                    return n.shortValue();
                 }
                 if (requestedType == int.class || requestedType == Integer.class) {
-                    return intValue(n);
+                    return n.intValue();
                 }
                 if (requestedType == long.class || requestedType == Long.class) {
-                    return longValue(n);
+                    return n.longValue();
                 }
                 if (requestedType == float.class || requestedType == Float.class) {
-                    return floatValue(n);
+                    return n.floatValue();
                 }
                 if (requestedType == double.class || requestedType == Double.class) {
-                    return doubleValue(n);
+                    return n.doubleValue();
                 }
                 if (requestedType == char.class || requestedType == Character.class) {
-                    return (char) intValue(n);
+                    return (char) n.intValue();
                 }
             }
             if (JavaInterop.isPrimitive(attr)) {
@@ -105,14 +102,14 @@ final class ToPrimitiveNode extends Node {
                 return null;
             }
         }
-        if (attr instanceof String) {
-            String str = (String) attr;
+        if (attr instanceof CharSequence) {
+            CharSequence str = (CharSequence) attr;
             if (requestedType == char.class || requestedType == Character.class) {
                 if (str.length() == 1) {
                     return str.charAt(0);
                 }
             }
-            return str;
+            return str.toString();
         }
         if (attr instanceof Character) {
             return attr;
@@ -121,40 +118,6 @@ final class ToPrimitiveNode extends Node {
             return attr;
         }
         return null;
-    }
-
-    @TruffleBoundary(allowInlining = true)
-    private static byte byteValue(Number n) {
-        return n.byteValue();
-    }
-
-    @TruffleBoundary(allowInlining = true)
-    private static short shortValue(Number n) {
-        return n.shortValue();
-    }
-
-    @TruffleBoundary(allowInlining = true)
-    private static int intValue(Number n) {
-        return n.intValue();
-    }
-
-    @TruffleBoundary(allowInlining = true)
-    private static long longValue(Number n) {
-        return n.longValue();
-    }
-
-    @TruffleBoundary(allowInlining = true)
-    private static float floatValue(Number n) {
-        return n.floatValue();
-    }
-
-    @TruffleBoundary(allowInlining = true)
-    private static double doubleValue(Number n) {
-        return n.doubleValue();
-    }
-
-    boolean hasKeys(TruffleObject truffleObject) {
-        return ForeignAccess.sendHasKeys(hasKeysNode, truffleObject);
     }
 
     boolean hasSize(TruffleObject truffleObject) {
