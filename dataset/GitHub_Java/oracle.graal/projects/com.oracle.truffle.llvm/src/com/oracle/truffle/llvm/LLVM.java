@@ -48,6 +48,7 @@ import com.google.inject.Injector;
 import com.intel.llvm.ireditor.LLVM_IRStandaloneSetup;
 import com.intel.llvm.ireditor.lLVM_IR.Model;
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
@@ -80,15 +81,15 @@ public class LLVM {
                 Node findContext = LLVMLanguage.INSTANCE.createFindContextNode0();
                 LLVMContext llvmContext = LLVMLanguage.INSTANCE.findContext0(findContext);
 
-                CallTarget mainFunction;
                 if (code.getMimeType() == LLVMLanguage.LLVM_MIME_TYPE) {
                     ParserResult parserResult = parseFile(code.getPath(), llvmContext);
-                    mainFunction = parserResult.getMainFunction();
+                    RootCallTarget mainFunction = parserResult.getMainFunction();
                     llvmContext.getFunctionRegistry().register(parserResult.getParsedFunctions());
                     parserResult.getStaticInits().call();
+                    return mainFunction;
                 } else if (code.getMimeType() == LLVMLanguage.SULONG_LIBRARY_MIME_TYPE) {
-
                     final List<CallTarget> mainFunctions = new ArrayList<>();
+
                     final SulongLibrary library = new SulongLibrary(new File(code.getPath()));
 
                     try {
@@ -101,7 +102,7 @@ public class LLVM {
                             } catch (IOException e) {
                                 throw new UncheckedIOException(e);
                             }
-                            parserResult.getStaticInits().call();
+
                             llvmContext.getFunctionRegistry().register(parserResult.getParsedFunctions());
                             mainFunctions.add(parserResult.getMainFunction());
                         });
@@ -113,11 +114,10 @@ public class LLVM {
                         throw new UnsupportedOperationException();
                     }
 
-                    mainFunction = mainFunctions.get(0);
+                    return mainFunctions.get(0);
                 } else {
                     throw new IllegalArgumentException("undeclared mime type");
                 }
-                return mainFunction;
             }
 
             @Override

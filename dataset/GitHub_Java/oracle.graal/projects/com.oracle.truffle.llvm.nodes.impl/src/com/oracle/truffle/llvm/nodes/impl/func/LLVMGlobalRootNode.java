@@ -41,6 +41,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFrameUtil;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
@@ -54,6 +55,7 @@ import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
  */
 public class LLVMGlobalRootNode extends RootNode {
 
+    @Children private final LLVMNode[] staticDestructors;
     private final DirectCallNode main;
     @CompilationFinal private final Object[] arguments;
     private final LLVMContext context;
@@ -61,11 +63,12 @@ public class LLVMGlobalRootNode extends RootNode {
     private final boolean printNativeStats = LLVMOptions.printNativeCallStats();
     private final FrameSlot stackPointerSlot;
 
-    public LLVMGlobalRootNode(FrameSlot stackSlot, FrameDescriptor descriptor, LLVMContext context, CallTarget main, Object... arguments) {
+    public LLVMGlobalRootNode(FrameSlot stackSlot, FrameDescriptor descriptor, LLVMContext context, CallTarget main, LLVMNode[] staticDestructors, Object... arguments) {
         super(LLVMLanguage.class, null, descriptor);
         this.stackPointerSlot = stackSlot;
         this.context = context;
         this.main = Truffle.getRuntime().createDirectCallNode(main);
+        this.staticDestructors = staticDestructors;
         this.arguments = arguments;
     }
 
@@ -92,6 +95,9 @@ public class LLVMGlobalRootNode extends RootNode {
             }
             return result;
         } finally {
+            for (LLVMNode node : staticDestructors) {
+                node.executeVoid(frame);
+            }
             if (printNativeStats) {
                 printNativeCallStats(context);
             }
