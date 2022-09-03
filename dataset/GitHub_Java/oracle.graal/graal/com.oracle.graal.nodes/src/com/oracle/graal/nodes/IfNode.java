@@ -229,17 +229,15 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                         trueNext.replaceAtPredecessor(next);
                         graph().addBeforeFixed(this, trueNext);
                         for (Node usage : trueNext.usages().snapshot()) {
+                            if (usage.getNodeClass().valueNumberable() && !usage.getNodeClass().isLeafNode()) {
+                                Node newNode = graph().findDuplicate(usage);
+                                if (newNode != null) {
+                                    usage.replaceAtUsages(newNode);
+                                    usage.safeDelete();
+                                }
+                            }
                             if (usage.isAlive()) {
-                                if (usage.getNodeClass().valueNumberable() && !usage.getNodeClass().isLeafNode()) {
-                                    Node newNode = graph().findDuplicate(usage);
-                                    if (newNode != null) {
-                                        usage.replaceAtUsages(newNode);
-                                        usage.safeDelete();
-                                    }
-                                }
-                                if (usage.isAlive()) {
-                                    tool.addToWorkList(usage);
-                                }
+                                tool.addToWorkList(usage);
                             }
                         }
                         continue;
