@@ -30,13 +30,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.PrimitiveIterator;
-import java.util.Set;
 
 import org.graalvm.compiler.core.common.util.TypeConversion;
 import org.graalvm.compiler.core.common.util.TypeWriter;
 import org.graalvm.compiler.core.common.util.UnsafeArrayTypeWriter;
 
-import com.oracle.svm.core.FrameAccess;
 import com.oracle.svm.core.code.CodeInfoQueryResult;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.util.ByteArrayReader;
@@ -57,10 +55,6 @@ public class ReferenceMapEncoder {
          * @throws NoSuchElementException
          */
         boolean isNextCompressed();
-
-        boolean isNextDerived();
-
-        Set<Integer> getDerivedOffsets(int baseOffset);
     }
 
     public interface Input {
@@ -132,8 +126,8 @@ public class ReferenceMapEncoder {
      * @return The index into the final bytes.
      */
     private long encode(OffsetIterator offsets) {
-        int compressedSize = ConfigurationValues.getObjectLayout().getReferenceSize();
-        int uncompressedSize = FrameAccess.uncompressedReferenceSize();
+        int compressedSize = ConfigurationValues.getObjectLayout().getCompressedReferenceSize();
+        int uncompressedSize = ConfigurationValues.getObjectLayout().getReferenceSize();
 
         long startIndex = writeBuffer.getBytesWritten();
         int run = 0;
@@ -143,52 +137,38 @@ public class ReferenceMapEncoder {
         int expectedOffset = 0;
         while (offsets.hasNext()) {
             boolean compressed = offsets.isNextCompressed();
-            boolean derived = offsets.isNextDerived();
             int offset = offsets.nextInt();
-            if (offset == expectedOffset && compressed == expectedCompressed && !derived) {
+            if (offset == expectedOffset && compressed == expectedCompressed) {
                 // An adjacent offset in this run.
                 run += 1;
             } else {
                 assert offset >= expectedOffset : "values must be strictly increasing";
                 if (run > 0) {
                     // The end of a run. Encode the *previous* gap and this run of offsets.
-                    encodeRun(gap, run, expectedCompressed, false);
+                    encodeRun(gap, run, expectedCompressed);
                 }
                 // Beginning of the next gap+run pair.
                 gap = offset - expectedOffset;
                 run = 1;
             }
             int size = (compressed ? compressedSize : uncompressedSize);
-            if (derived) {
-                encodeDerivedRun(gap, offset, offsets.getDerivedOffsets(offset), compressed, size);
-                run = 0;
-                gap = 0;
-            }
             expectedOffset = offset + size;
             expectedCompressed = compressed;
         }
         if (run > 0) {
-            encodeRun(gap, run, expectedCompressed, false);
+            encodeRun(gap, run, expectedCompressed);
         }
         encodeEndOfTable();
         return startIndex;
     }
 
-    private void encodeRun(int gap, int refsCount, boolean compressed, boolean derived) {
+    private void encodeRun(int gap, int refsCount, boolean compressed) {
         assert gap >= 0 && refsCount >= 0;
-        writeBuffer.putSV(derived ? -gap - 1 : gap);
+        writeBuffer.putUV(gap);
         writeBuffer.putSV(compressed ? -refsCount : refsCount);
     }
 
-    private void encodeDerivedRun(int gap, int baseOffset, Set<Integer> derivedOffsets, boolean compressed, int size) {
-        encodeRun(gap, derivedOffsets.size(), compressed, true);
-        for (int derivedOffset : derivedOffsets) {
-            assert baseOffset % size == 0 && derivedOffset % size == 0 && derivedOffset != baseOffset;
-            writeBuffer.putSV((derivedOffset - baseOffset) / size);
-        }
-    }
-
     private void encodeEndOfTable() {
-        encodeRun(0, 0, false, false);
+        encodeRun(0, 0, false);
     }
 }

@@ -42,6 +42,7 @@ public class SubstrateReferenceMap extends ReferenceMap implements ReferenceMapE
 
     private final BitSet input;
     private final boolean defaultCompressed;
+    private BitSet nondefaultInput;
 
     private Map<Integer, Object> debugAllUsedRegisters;
     private Map<Integer, Object> debugAllUsedStackSlots;
@@ -49,7 +50,6 @@ public class SubstrateReferenceMap extends ReferenceMap implements ReferenceMapE
     public SubstrateReferenceMap() {
         this.input = new BitSet();
         this.defaultCompressed = SubstrateOptions.UseHeapBaseRegister.getValue();
-        assert ConfigurationValues.getObjectLayout().getCompressedReferenceSize() > 2 : "needs to be three bits or more for encoding and validation";
     }
 
     public boolean isOffsetMarked(int offset) {
@@ -57,8 +57,11 @@ public class SubstrateReferenceMap extends ReferenceMap implements ReferenceMapE
     }
 
     public boolean isOffsetCompressed(int offset) {
-        assert isOffsetMarked(offset);
-        return input.get(offset + 1);
+        boolean compressed = defaultCompressed;
+        if (nondefaultInput != null) {
+            compressed ^= nondefaultInput.get(offset);
+        }
+        return compressed;
     }
 
     public void markReferenceAtOffset(int offset) {
@@ -68,23 +71,23 @@ public class SubstrateReferenceMap extends ReferenceMap implements ReferenceMapE
     public void markReferenceAtOffset(int offset, boolean compressed) {
         assert isValidToMark(offset, compressed) : "already marked or would overlap with predecessor or successor";
         input.set(offset);
-        if (compressed) {
-            input.set(offset + 1);
+        if (compressed != defaultCompressed) {
+            if (nondefaultInput == null) {
+                nondefaultInput = new BitSet(offset + 1);
+            }
+            nondefaultInput.set(offset);
         }
     }
 
     private boolean isValidToMark(int offset, boolean isCompressed) {
         int uncompressedSize = ConfigurationValues.getObjectLayout().getReferenceSize();
         int compressedSize = ConfigurationValues.getObjectLayout().getCompressedReferenceSize();
+        assert compressedSize <= uncompressedSize;
 
-        int previousOffset = input.previousSetBit(offset - 1);
-        if (previousOffset != -1) {
-            int minOffset = previousOffset + uncompressedSize;
-            if (previousOffset != 0 && input.get(previousOffset - 1)) {
-                previousOffset--; // found a compression bit, previous bit represents the reference
-                minOffset = previousOffset + compressedSize;
-            }
-            if (offset < minOffset) {
+        int previousIndex = input.previousSetBit(offset - 1);
+        if (previousIndex != -1) {
+            int previousSlots = isOffsetCompressed(previousIndex) ? compressedSize : uncompressedSize;
+            if (previousIndex + previousSlots > offset) {
                 return false;
             }
         }
@@ -138,7 +141,7 @@ public class SubstrateReferenceMap extends ReferenceMap implements ReferenceMapE
                     throw new NoSuchElementException();
                 }
                 int index = nextIndex;
-                nextIndex = input.nextSetBit(index + 2); // +1: skip compression bit
+                nextIndex = input.nextSetBit(index + 1);
                 return index;
             }
 
@@ -154,7 +157,7 @@ public class SubstrateReferenceMap extends ReferenceMap implements ReferenceMapE
 
     @Override
     public int hashCode() {
-        return (input.hashCode() * 31 + Boolean.hashCode(defaultCompressed));
+        return (input.hashCode() * 31 + Boolean.hashCode(defaultCompressed)) * 31 + Objects.hashCode(nondefaultInput);
     }
 
     @Override
@@ -163,7 +166,7 @@ public class SubstrateReferenceMap extends ReferenceMap implements ReferenceMapE
             return true;
         } else if (obj instanceof SubstrateReferenceMap) {
             SubstrateReferenceMap other = (SubstrateReferenceMap) obj;
-            return Objects.equals(input, other.input) && defaultCompressed == other.defaultCompressed;
+            return Objects.equals(input, other.input) && defaultCompressed == other.defaultCompressed && Objects.equals(nondefaultInput, other.nondefaultInput);
         } else {
             return false;
         }

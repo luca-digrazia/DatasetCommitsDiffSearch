@@ -128,17 +128,16 @@ public class CodeInfoEncoder {
 
     public void addMethod(SharedMethod method, CompilationResult compilation, int compilationOffset) {
         int totalFrameSize = compilation.getTotalFrameSize();
-        int encodedFrameSize = method.isEntryPoint() ? CodeInfoQueryResult.ENTRY_POINT_FRAME_SIZE : totalFrameSize;
 
         /* Mark the method start and register the frame size. */
         IPData startEntry = makeEntry(compilationOffset);
-        startEntry.frameSizeEncoding = encodeFrameSize(encodedFrameSize, true);
+        startEntry.frameSizeEncoding = encodeFrameSize(totalFrameSize, true);
 
         /* Register the frame size for all entries that are starting points for the index. */
         long entryIP = CodeInfoDecoder.lookupEntryIP(CodeInfoDecoder.indexGranularity() + compilationOffset);
         while (entryIP <= CodeInfoDecoder.lookupEntryIP(compilation.getTargetCodeSize() + compilationOffset)) {
             IPData entry = makeEntry(entryIP);
-            entry.frameSizeEncoding = encodeFrameSize(encodedFrameSize, false);
+            entry.frameSizeEncoding = encodeFrameSize(totalFrameSize, false);
             entryIP += CodeInfoDecoder.indexGranularity();
         }
 
@@ -399,9 +398,9 @@ class CodeInfoVerifier extends CodeInfoDecoder {
             int totalIP = relativeIP + compilationOffset;
             CodeInfoQueryResult codeInfo = new CodeInfoQueryResult();
             lookupCodeInfo(totalIP, codeInfo);
-            assert codeInfo.isEntryPoint() || codeInfo.getTotalFrameSize() == compilation.getTotalFrameSize();
+            assert codeInfo.getTotalFrameSize() == compilation.getTotalFrameSize();
 
-            assert codeInfo.isEntryPoint() || lookupTotalFrameSize(totalIP) == codeInfo.getTotalFrameSize();
+            assert lookupTotalFrameSize(totalIP) == codeInfo.getTotalFrameSize();
             assert lookupExceptionOffset(totalIP) == codeInfo.getExceptionOffset();
             assert lookupReferenceMapIndex(totalIP) == codeInfo.getReferenceMapIndex();
             assert getReferenceMapEncoding() == codeInfo.getReferenceMapEncoding();
@@ -505,11 +504,11 @@ class CodeInfoVerifier extends CodeInfoDecoder {
         // Kind.Object && expectedType.getObjectHub().equals(actualHub.getValue());
 
         if (expectedType.isArray()) {
-            JavaKind kind = ((SharedType) expectedType.getComponentType()).getStorageKind();
+            JavaKind kind = expectedType.getComponentType().getJavaKind();
             int expectedLength = 0;
             for (int i = 0; i < expectedObject.getValues().length; i++) {
                 JavaValue expectedValue = expectedObject.getValues()[i];
-                UnsignedWord expectedOffset = WordFactory.unsigned(objectLayout.getArrayElementOffset(kind, expectedLength));
+                UnsignedWord expectedOffset = WordFactory.unsigned(objectLayout.getArrayElementOffset(expectedType.getComponentType().getJavaKind(), expectedLength));
                 ValueInfo actualValue = findActualArrayElement(actualObject, expectedOffset);
                 verifyValue(compilation, expectedValue, actualValue, actualFrame, visitedVirtualObjects);
 
@@ -575,7 +574,7 @@ class CodeInfoVerifier extends CodeInfoDecoder {
         int curIdx = startIdx;
         while (curOffset.notEqual(expectedOffset)) {
             ValueInfo value = actualObject[curIdx];
-            curOffset = curOffset.add(objectLayout.sizeInBytes(value.getKind()));
+            curOffset = curOffset.add(objectLayout.sizeInBytes(value.getKind(), value.isCompressedReference));
             curIdx++;
         }
         assert curOffset.equal(expectedOffset);

@@ -278,7 +278,7 @@ public class InstalledCodeBuilder {
             values[count] = value;
             count++;
 
-            referenceMap.markReferenceAtOffset(offset, true);
+            referenceMap.markReferenceAtOffset(offset);
         }
     }
 
