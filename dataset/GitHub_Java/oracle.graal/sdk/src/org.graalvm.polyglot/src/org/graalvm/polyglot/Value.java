@@ -1,42 +1,26 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package org.graalvm.polyglot;
 
@@ -386,48 +370,6 @@ public final class Value {
     public Value newInstance(Object... arguments) {
         Objects.requireNonNull(arguments, "arguments");
         return impl.newInstance(receiver, arguments);
-    }
-
-    /**
-     * Returns <code>true</code> if the given member exists and can be invoked. Returns
-     * <code>false</code> if the member does not exist ({@link #hasMember(String)} returns
-     * <code>false</code>), or is not invocable.
-     *
-     * @param identifier the member identifier
-     * @throws IllegalStateException if the context is already closed.
-     * @throws PolyglotException if a guest language error occurred.
-     * @see #getMemberKeys() For a list of members.
-     * @see #invokeMember(String, Object...)
-     * @since 1.0
-     */
-    public boolean canInvokeMember(String identifier) {
-        Objects.requireNonNull(identifier, "identifier");
-        return impl.canInvoke(identifier, receiver);
-    }
-
-    /**
-     * Invokes the given member of this value. Unlike {@link #execute(Object...)}, this is an object
-     * oriented execution of a member of an object. To test whether invocation is supported, call
-     * {@link #canInvokeMember(String)}. When object oriented semantics is not supported, use
-     * <code>{@link #getMember(String)}.{@link #execute(Object...) execute(Object...)}</code>
-     * instead.
-     *
-     * @param identifier the member identifier to invoke
-     * @param arguments the invocation arguments
-     * @throws UnsupportedOperationException if this member cannot be invoked.
-     * @throws PolyglotException if a guest language error occurred during invocation.
-     * @throws NullPointerException if the arguments array is null.
-     * @see #canInvokeMember(String)
-     * @since 1.0
-     */
-    public Value invokeMember(String identifier, Object... arguments) {
-        Objects.requireNonNull(identifier, "identifier");
-        if (arguments.length == 0) {
-            // specialized entry point for zero argument invoke calls
-            return impl.invoke(receiver, identifier);
-        } else {
-            return impl.invoke(receiver, identifier, arguments);
-        }
     }
 
     /**
@@ -910,11 +852,10 @@ public final class Value {
      * @throws NullPointerException if the target type is null.
      * @since 1.0
      */
-    @SuppressWarnings("unchecked")
     public <T> T as(Class<T> targetType) throws ClassCastException, IllegalStateException, PolyglotException {
         Objects.requireNonNull(targetType, "targetType");
         if (targetType == Value.class) {
-            return (T) this;
+            return targetType.cast(this);
         }
         return impl.as(receiver, targetType);
     }
@@ -975,10 +916,7 @@ public final class Value {
      * @since 1.0
      */
     public static Value asValue(Object o) {
-        if (o instanceof Value) {
-            return (Value) o;
-        }
-        return Engine.getImpl().asValue(o);
+        return Context.getCurrent().asValue(o);
     }
 
 }
