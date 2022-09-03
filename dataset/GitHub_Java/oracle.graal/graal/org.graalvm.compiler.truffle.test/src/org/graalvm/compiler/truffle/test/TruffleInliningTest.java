@@ -39,6 +39,8 @@ import org.graalvm.compiler.truffle.TruffleInlining;
 import org.graalvm.compiler.truffle.TruffleInliningDecision;
 import org.junit.Test;
 
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -48,6 +50,7 @@ public class TruffleInliningTest {
     class InlineTestRootNode extends RootNode {
 
         @Children final Node[] children;
+        @CompilationFinal FrameSlot param1;
         String name;
 
         @Override
@@ -255,7 +258,6 @@ public class TruffleInliningTest {
         TruffleInlining decisions = builder.target("callee", TruffleCompilerOptions.TruffleInliningMaxCallerSize.getValue() / 3).target("caller").calls("callee").calls("callee").calls(
                         "callee").build();
         assertNotInlined(decisions, "callee");
-        assert (decisions.getCallSites().get(0).getProfile().getFailedReason().startsWith("deepNodeCount * callSites  >"));
     }
 
     @Test
