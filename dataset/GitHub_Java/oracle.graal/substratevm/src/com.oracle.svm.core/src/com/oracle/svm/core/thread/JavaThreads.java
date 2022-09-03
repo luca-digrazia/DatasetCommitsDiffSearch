@@ -84,7 +84,6 @@ import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.XOptions;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.stack.JavaStackWalker;
-import com.oracle.svm.core.stack.StackOverflowCheck;
 import com.oracle.svm.core.thread.ParkEvent.WaitResult;
 import com.oracle.svm.core.threadlocal.FastThreadLocalFactory;
 import com.oracle.svm.core.threadlocal.FastThreadLocalObject;
@@ -808,17 +807,6 @@ final class Target_java_lang_Thread {
                 chosenStackSize = defaultThreadStackSize;
             }
         }
-
-        if (chosenStackSize != 0) {
-            /*
-             * Add the yellow+red zone size: This area of the stack is not accessible to the user's
-             * Java code, so it would be surprising if we gave the user less stack space to use than
-             * explicitly requested. In particular, a size less than the yellow+red size would lead
-             * to an immediate StackOverflowError.
-             */
-            chosenStackSize += StackOverflowCheck.singleton().yellowAndRedZoneSize();
-        }
-
         /*
          * The threadStatus must be set to RUNNABLE by the parent thread and before the child thread
          * starts because we are creating child threads asynchronously (there is no coordination
@@ -1148,7 +1136,7 @@ final class SleepSupport {
 
 @TargetClass(classNameProvider = Package_jdk_internal_misc.class, className = "Unsafe")
 @SuppressWarnings({"static-method"})
-final class Target_Unsafe_JavaThreads {
+final class Target_jdk_internal_misc_Unsafe {
 
     /**
      * Block current thread, returning when a balancing <tt>unpark</tt> occurs, or a balancing
