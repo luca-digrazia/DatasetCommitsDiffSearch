@@ -40,6 +40,7 @@ import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.FieldLocationIdentity;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.NamedLocationIdentity;
+import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.AndNode;
@@ -93,7 +94,7 @@ public class SubstrateBasicLoweringProvider extends DefaultJavaLoweringProvider 
 
     private RuntimeConfiguration runtimeConfig;
     private final CompressEncoding compressEncoding;
-    private final AbstractObjectStamp dynamicHubStamp;
+    private final AbstractObjectStamp objectStamp;
 
     private static boolean useHeapBaseRegister() {
         return SubstrateOptions.UseHeapBaseRegister.getValue();
@@ -109,7 +110,7 @@ public class SubstrateBasicLoweringProvider extends DefaultJavaLoweringProvider 
         if (useHeapBaseRegister()) {
             hubStamp = SubstrateNarrowOopStamp.compressed(hubStamp, compressEncoding);
         }
-        dynamicHubStamp = hubStamp;
+        objectStamp = hubStamp;
     }
 
     @Override
@@ -161,18 +162,10 @@ public class SubstrateBasicLoweringProvider extends DefaultJavaLoweringProvider 
         return ConstantNode.forConstant(SubstrateObjectConstant.forObject(fields), getProviders().getMetaAccess(), graph);
     }
 
-    private static ValueNode createReadBaseWithOffset(StructuredGraph graph, ValueNode base, int offset, Stamp stamp) {
-        AddressNode address = graph.unique(new OffsetAddressNode(base, ConstantNode.forIntegerKind(FrameAccess.getWordKind(), offset, graph)));
-        return graph.unique(new FloatingReadNode(address, NamedLocationIdentity.FINAL_LOCATION, null, stamp, null, BarrierType.NONE));
-    }
-
-    private ValueNode uncompress(ValueNode node) {
-        return useHeapBaseRegister() ? SubstrateCompressionNode.uncompress(node, compressEncoding) : node;
-    }
-
     @Override
     protected ValueNode createReadArrayComponentHub(StructuredGraph graph, ValueNode arrayHub, FixedNode anchor) {
-        return uncompress(createReadBaseWithOffset(graph, arrayHub, runtimeConfig.getComponentHubOffset(), dynamicHubStamp));
+        AddressNode address = graph.unique(new OffsetAddressNode(arrayHub, ConstantNode.forIntegerKind(FrameAccess.getWordKind(), runtimeConfig.getComponentHubOffset(), graph)));
+        return graph.unique(new FloatingReadNode(address, NamedLocationIdentity.FINAL_LOCATION, null, arrayHub.stamp(NodeView.DEFAULT), null, BarrierType.NONE));
     }
 
     @Override
@@ -183,10 +176,15 @@ public class SubstrateBasicLoweringProvider extends DefaultJavaLoweringProvider 
 
         assert !object.isConstant() || object.asJavaConstant().isNull();
 
-        ValueNode memoryRead = createReadBaseWithOffset(graph, object, getObjectLayout().getHubOffset(), FrameAccess.getWordStamp());
+        AddressNode address = graph.unique(new OffsetAddressNode(object, ConstantNode.forIntegerKind(FrameAccess.getWordKind(), getObjectLayout().getHubOffset(), graph)));
+        ValueNode memoryRead = graph.unique(new FloatingReadNode(address, NamedLocationIdentity.FINAL_LOCATION, null, FrameAccess.getWordStamp(), null, BarrierType.NONE));
         ValueNode masked = graph.unique(new AndNode(memoryRead, ConstantNode.forIntegerKind(FrameAccess.getWordKind(), ObjectHeader.BITS_CLEAR.rawValue(), graph)));
 
-        return uncompress(graph.unique(new FloatingWordCastNode(dynamicHubStamp, masked)));
+        ValueNode casted = graph.unique(new FloatingWordCastNode(objectStamp, masked));
+        if (useHeapBaseRegister()) {
+            casted = SubstrateCompressionNode.uncompress(casted, compressEncoding);
+        }
+        return casted;
     }
 
     @Override

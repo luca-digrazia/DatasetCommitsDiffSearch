@@ -22,7 +22,6 @@
  */
 package com.oracle.svm.core.graal.nodes;
 
-import com.oracle.svm.core.meta.CompressibleConstant;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.MemoryAccessProvider;
@@ -56,8 +55,9 @@ public final class SubstrateNarrowOopStamp extends NarrowOopStamp {
 
     @Override
     public Constant readConstant(MemoryAccessProvider memoryAccessProvider, Constant base, long displacement) {
-        JavaConstant constant = ((SubstrateMemoryAccessProvider) memoryAccessProvider).readNarrowObjectConstant(base, displacement);
-        assert constant != null && ((CompressibleConstant) constant).isCompressed();
+        SubstrateMemoryAccessProvider provider = (SubstrateMemoryAccessProvider) memoryAccessProvider;
+        SubstrateObjectConstant constant = (SubstrateObjectConstant) provider.readNarrowObjectConstant(base, displacement);
+        assert constant != null && constant.isCompressed();
         return constant;
     }
 

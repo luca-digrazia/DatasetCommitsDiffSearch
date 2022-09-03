@@ -32,7 +32,6 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.KeyInfo;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
@@ -382,11 +381,6 @@ class JavaObjectMessageResolution {
     @Resolve(message = "KEY_INFO")
     abstract static class PropertyInfoNode extends Node {
 
-        private static final int READABLE = KeyInfo.newBuilder().setReadable(true).build();
-        private static final int READABLE_WRITABLE = KeyInfo.newBuilder().setReadable(true).setWritable(true).build();
-        private static final int READABLE_WRITABLE_INVOCABLE = KeyInfo.newBuilder().setReadable(true).setWritable(true).setInvocable(true).build();
-        private static final int READABLE_WRITABLE_INVOCABLE_INTERNAL = KeyInfo.newBuilder().setReadable(true).setWritable(true).setInvocable(true).setInternal(true).build();
-
         @TruffleBoundary
         public int access(JavaObject receiver, Number index) {
             int i = index.intValue();
@@ -400,12 +394,7 @@ class JavaObjectMessageResolution {
             if (receiver.isArray()) {
                 int length = Array.getLength(receiver.obj);
                 if (i < length) {
-                    return READABLE_WRITABLE;
-                }
-            } else if (receiver.obj instanceof List) {
-                int length = ((List<?>) receiver.obj).size();
-                if (i < length) {
-                    return READABLE_WRITABLE;
+                    return 0b111;
                 }
             }
             return 0;
@@ -417,17 +406,17 @@ class JavaObjectMessageResolution {
                 return 0;
             }
             if (JavaInteropReflect.isField(receiver, name)) {
-                return READABLE_WRITABLE;
+                return 0b111;
             }
             if (JavaInteropReflect.isMethod(receiver, name)) {
                 if (JavaInteropReflect.isInternalMethod(receiver, name)) {
-                    return READABLE_WRITABLE_INVOCABLE_INTERNAL;
+                    return 0b11111;
                 } else {
-                    return READABLE_WRITABLE_INVOCABLE;
+                    return 0b1111;
                 }
             }
             if (JavaInteropReflect.isMemberType(receiver, name)) {
-                return READABLE;
+                return 0b11;
             }
             return 0;
         }
