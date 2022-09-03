@@ -35,6 +35,7 @@ import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.LIRInstruction.Opcode;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.asm.*;
 
@@ -117,14 +118,14 @@ public class AMD64Move {
         }
     }
 
-    public static class LoadCompressedPointer extends LoadOp {
+    public static class LoadCompressedOop extends LoadOp {
 
         private long narrowOopBase;
         private int narrowOopShift;
         private int logMinObjAlignment;
         @Temp({REG}) private AllocatableValue scratch;
 
-        public LoadCompressedPointer(Kind kind, AllocatableValue result, AllocatableValue scratch, AMD64AddressValue address, LIRFrameState state, long narrowOopBase, int narrowOopShift,
+        public LoadCompressedOop(Kind kind, AllocatableValue result, AllocatableValue scratch, AMD64AddressValue address, LIRFrameState state, long narrowOopBase, int narrowOopShift,
                         int logMinObjAlignment) {
             super(kind, result, address, state);
             this.narrowOopBase = narrowOopBase;
@@ -190,7 +191,7 @@ public class AMD64Move {
         }
     }
 
-    public static class StoreCompressedPointer extends AMD64LIRInstruction {
+    public static class StoreCompressedOop extends AMD64LIRInstruction {
 
         protected final Kind kind;
         private long narrowOopBase;
@@ -201,7 +202,7 @@ public class AMD64Move {
         @Alive({COMPOSITE}) protected AMD64AddressValue address;
         @State protected LIRFrameState state;
 
-        public StoreCompressedPointer(Kind kind, AMD64AddressValue address, AllocatableValue input, AllocatableValue scratch, LIRFrameState state, long narrowOopBase, int narrowOopShift,
+        public StoreCompressedOop(Kind kind, AMD64AddressValue address, AllocatableValue input, AllocatableValue scratch, LIRFrameState state, long narrowOopBase, int narrowOopShift,
                         int logMinObjAlignment) {
             this.narrowOopBase = narrowOopBase;
             this.narrowOopShift = narrowOopShift;
