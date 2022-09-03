@@ -24,6 +24,8 @@
  */
 package com.oracle.truffle.api.vm;
 
+import static com.oracle.truffle.api.vm.PolyglotEngine.LOG;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
@@ -37,11 +39,11 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.logging.Level;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.vm.PolyglotEngine.LegacyEngineImpl;
-import java.io.PrintStream;
 
 /**
  * Ahead-of-time initialization. If the JVM is started with {@link TruffleOptions#AOT}, it populates
@@ -52,7 +54,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
     private static volatile Map<String, LanguageCache> runtimeCache;
     private final String className;
     private final Set<String> mimeTypes;
-    private final Set<String> dependentLanguages;
     private final String id;
     private final String name;
     private final String implementationName;
@@ -76,8 +77,16 @@ final class LanguageCache implements Comparable<LanguageCache> {
         this.implementationName = info.getProperty(prefix + "implementationName");
         this.version = info.getProperty(prefix + "version");
         String resolvedId = info.getProperty(prefix + "id");
-        this.mimeTypes = parseList(info, prefix + "mimeType");
-        this.dependentLanguages = parseList(info, prefix + "dependentLanguage");
+
+        TreeSet<String> mimeTypesSet = new TreeSet<>();
+        for (int i = 0;; i++) {
+            String mt = info.getProperty(prefix + "mimeType." + i);
+            if (mt == null) {
+                break;
+            }
+            mimeTypesSet.add(mt);
+        }
+        this.mimeTypes = Collections.unmodifiableSet(mimeTypesSet);
         this.id = resolvedId == null ? defaultId() : resolvedId;
         this.interactive = Boolean.valueOf(info.getProperty(prefix + "interactive"));
         this.internal = Boolean.valueOf(info.getProperty(prefix + "internal"));
@@ -91,18 +100,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
         }
     }
 
-    private static TreeSet<String> parseList(Properties info, String prefix) {
-        TreeSet<String> mimeTypesSet = new TreeSet<>();
-        for (int i = 0;; i++) {
-            String mt = info.getProperty(prefix + "." + i);
-            if (mt == null) {
-                break;
-            }
-            mimeTypesSet.add(mt);
-        }
-        return mimeTypesSet;
-    }
-
     @SuppressWarnings("unchecked")
     LanguageCache(String id, Set<String> mimeTypes, String name, String implementationName, String version, boolean interactive, boolean internal,
                     TruffleLanguage<?> instance) {
@@ -114,7 +111,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
         this.version = version;
         this.interactive = interactive;
         this.internal = internal;
-        this.dependentLanguages = Collections.emptySet();
         this.loader = instance.getClass().getClassLoader();
         this.singletonLanguage = instance;
         this.languageClass = (Class<? extends TruffleLanguage<?>>) instance.getClass();
@@ -189,9 +185,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
                     p.load(is);
                 }
             } catch (IOException ex) {
-                PrintStream out = System.err;
-                out.println("Cannot process " + u + " as language definition");
-                ex.printStackTrace();
+                LOG.log(Level.CONFIG, "Cannot process " + u + " as language definition", ex);
                 continue;
             }
             for (int cnt = 1;; cnt++) {
@@ -206,7 +200,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
     }
 
     public int compareTo(LanguageCache o) {
-        return id.compareTo(o.id);
+        return className.compareTo(o.className);
     }
 
     String getId() {
@@ -225,10 +219,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
         return implementationName;
     }
 
-    Set<String> getDependentLanguages() {
-        return dependentLanguages;
-    }
-
     String getVersion() {
         return version;
     }
@@ -237,7 +227,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
         return className;
     }
 
-    boolean isInternal() {
+    public boolean isInternal() {
         return internal;
     }
 
@@ -270,20 +260,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
     }
 
     @SuppressWarnings("unchecked")
-    Class<? extends TruffleLanguage<?>> getLanguageClass() {
-        if (TruffleOptions.AOT) {
-            TruffleLanguage<?> instance = singletonLanguage;
-            if (instance != null) {
-                return (Class<? extends TruffleLanguage<?>>) instance.getClass();
-            } else {
-                return this.languageClass;
-            }
-        } else {
-            return loadLanguageClass();
-        }
-    }
-
-    @SuppressWarnings("unchecked")
     private Class<? extends TruffleLanguage<?>> loadLanguageClass() {
         if (languageClass == null) {
             synchronized (this) {
@@ -297,11 +273,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
             }
         }
         return languageClass;
-    }
-
-    @Override
-    public String toString() {
-        return "LanguageCache [id=" + id + ", name=" + name + ", implementationName=" + implementationName + ", version=" + version + ", className=" + className + "]";
     }
 
     private static TruffleLanguage<?> readSingleton(Class<?> languageClass) {
@@ -378,7 +349,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
         assert TruffleOptions.AOT : "Only supported during image generation";
         ArrayList<Class<?>> list = new ArrayList<>();
         for (LanguageCache cache : nativeImageCache.values()) {
-            assert cache.languageClass != null;
             list.add(cache.languageClass);
         }
         return list;
