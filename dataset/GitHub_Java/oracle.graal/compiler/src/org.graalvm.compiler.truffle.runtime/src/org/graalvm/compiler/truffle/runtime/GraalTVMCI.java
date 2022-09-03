@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,6 +24,7 @@ package org.graalvm.compiler.truffle.runtime;
 
 import java.util.function.Supplier;
 
+import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionValues;
 
@@ -148,20 +147,18 @@ final class GraalTVMCI extends TVMCI {
         int splitCount;
     }
 
-    private static final Supplier<EngineData> engineDataConstructor = new Supplier<EngineData>() {
-        @Override
-        public EngineData get() {
-            return new EngineData();
-        }
-    };
-
     EngineData getEngineData(RootNode rootNode) {
-        return getOrCreateRuntimeData(rootNode, engineDataConstructor);
+        return getOrCreateRuntimeData(rootNode, new Supplier<EngineData>() {
+            @Override
+            public EngineData get() {
+                return new EngineData();
+            }
+        });
     }
 
     @Override
     protected void reportPolymorphicSpecialize(Node source) {
-        if (TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleExperimentalSplitting)) {
+        if (TruffleCompilerOptions.getValue(TruffleCompilerOptions.TruffleExperimentalSplitting)) {
             TruffleSplittingStrategy.newPolymorphicSpecialize(source);
             final RootNode rootNode = source.getRootNode();
             final OptimizedCallTarget callTarget = rootNode == null ? null : (OptimizedCallTarget) rootNode.getCallTarget();
