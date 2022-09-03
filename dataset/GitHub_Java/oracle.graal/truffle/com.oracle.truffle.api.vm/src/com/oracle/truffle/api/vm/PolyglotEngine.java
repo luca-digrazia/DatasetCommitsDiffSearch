@@ -270,15 +270,12 @@ public class PolyglotEngine {
 
         /**
          * Provide configuration data to initialize the {@link PolyglotEngine} for a specific
-         * language. These arguments {@link com.oracle.truffle.api.TruffleLanguage.Env#getConfig()
-         * can be used by the language} to initialize and configure their
-         * {@link com.oracle.truffle.api.TruffleLanguage#createContext(com.oracle.truffle.api.TruffleLanguage.Env)
-         * initial execution state} correctly.
+         * language. These arguments can be used by languages to initialize and configure their
+         * initial execution state.
          *
          * @param mimeType of the language for which the arguments are
          * @param key to identify a language-specific configuration element
-         * @param value to parameterize initial state of a language
-         * @return instance of this builder
+         * @param value an object to parameterize initial state of a language
          */
         public Builder config(String mimeType, String key, Object value) {
             if (arguments == null) {
