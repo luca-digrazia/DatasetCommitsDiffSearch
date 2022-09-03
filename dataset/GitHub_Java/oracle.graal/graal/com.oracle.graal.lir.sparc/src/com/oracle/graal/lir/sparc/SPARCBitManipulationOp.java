@@ -96,7 +96,6 @@ public class SPARCBitManipulationOp extends SPARCLIRInstruction {
                     Kind ikind = input.getKind();
                     assert ikind == Kind.Int;
                     Register tmp = asRegister(scratch);
-                    assert !tmp.equals(dst);
                     new Srl(src, 1, tmp).emit(masm);
                     new Srl(src, 0, dst).emit(masm);
                     new Or(src, tmp, dst).emit(masm);
@@ -116,7 +115,6 @@ public class SPARCBitManipulationOp extends SPARCLIRInstruction {
                     Kind lkind = input.getKind();
                     assert lkind == Kind.Long;
                     Register tmp = asRegister(scratch);
-                    assert !tmp.equals(dst);
                     new Srlx(src, 1, tmp).emit(masm);
                     new Or(src, tmp, dst).emit(masm);
                     new Srlx(dst, 2, tmp).emit(masm);

@@ -398,11 +398,6 @@ public enum SPARCArithmetic {
                     assert isSimm13(crb.asIntConst(src2));
                     new Srlx(asLongReg(src1), crb.asIntConst(src2), asLongReg(dst)).emit(masm);
                     break;
-                case DAND:
-                    SPARCAddress addr = (SPARCAddress) crb.recordDataReferenceInCode(asConstant(src2), 4);
-                    new Lddf(addr, asDoubleReg(dst)).emit(masm);
-                    new Fandd(asDoubleReg(src1), asDoubleReg(dst), asDoubleReg(dst)).emit(masm);
-                    break;
                 case FADD:
                 case FMUL:
                 case FDIV:
@@ -669,28 +664,28 @@ public enum SPARCArithmetic {
                     break;
                 case F2L:
                     new Fcmp(CC.Fcc0, Opfs.Fcmps, asFloatReg(dst), asFloatReg(dst)).emit(masm);
-                    new Fbe(false, 4).emit(masm);
+                    new Fbfcc(masm, FCond.Fbo, false, 4);
                     new Fstox(masm, asFloatReg(src), asFloatReg(dst));
                     new Fitos(masm, asFloatReg(dst), asFloatReg(dst));
                     new Fsubs(asFloatReg(dst), asFloatReg(dst), asFloatReg(dst)).emit(masm);
                     break;
                 case F2I:
                     new Fcmp(CC.Fcc0, Opfs.Fcmps, asFloatReg(dst), asFloatReg(dst)).emit(masm);
-                    new Fbo(false, 4).emit(masm);
+                    new Fbfcc(masm, FCond.Fbo, false, 4);
                     new Fstoi(masm, asFloatReg(src), asFloatReg(dst));
                     new Fitos(masm, asFloatReg(dst), asFloatReg(dst));
                     new Fsubs(asFloatReg(dst), asFloatReg(dst), asFloatReg(dst)).emit(masm);
                     break;
                 case D2L:
                     new Fcmp(CC.Fcc0, Opfs.Fcmpd, asDoubleReg(dst), asDoubleReg(dst)).emit(masm);
-                    new Fbo(false, 4).emit(masm);
+                    new Fbfcc(masm, FCond.Fbo, false, 4);
                     new Fdtox(masm, asDoubleReg(src), asDoubleReg(dst));
                     new Fxtod(masm, asDoubleReg(dst), asDoubleReg(dst));
                     new Fsubd(asDoubleReg(dst), asDoubleReg(dst), asDoubleReg(dst)).emit(masm);
                     break;
                 case D2I:
                     new Fcmp(CC.Fcc0, Opfs.Fcmpd, asDoubleReg(dst), asDoubleReg(dst)).emit(masm);
-                    new Fbo(false, 4).emit(masm);
+                    new Fbfcc(masm, FCond.Fbo, false, 4);
                     new Fdtoi(masm, asDoubleReg(src), asDoubleReg(dst));
                     new Fitod(masm, asDoubleReg(dst), asDoubleReg(dst));
                     new Fsubd(asDoubleReg(dst), asDoubleReg(dst), asDoubleReg(dst)).emit(masm);
@@ -777,7 +772,6 @@ public enum SPARCArithmetic {
                 yk = y.getKind();
                 assert rk == Kind.Float && xk == Kind.Float && yk == Kind.Float;
                 break;
-            case DAND:
             case DADD:
             case DSUB:
             case DMUL:
