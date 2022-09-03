@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,22 +22,31 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.lir.StandardOp.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import jdk.vm.ci.meta.JavaKind;
+
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.hotspot.HotSpotLIRGenerator;
+import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
  * Saves all allocatable registers.
  */
-public class SaveAllRegistersNode extends FixedWithNextNode implements LIRLowerable {
+@NodeInfo(allowedUsageTypes = {InputType.Memory})
+public final class SaveAllRegistersNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Single {
 
-    private SaveRegistersOp saveRegistersOp;
+    public static final NodeClass<SaveAllRegistersNode> TYPE = NodeClass.create(SaveAllRegistersNode.class);
+    protected SaveRegistersOp saveRegistersOp;
 
     public SaveAllRegistersNode() {
-        super(StampFactory.forKind(Kind.Long));
+        super(TYPE, StampFactory.forKind(JavaKind.Long));
     }
 
     @Override
@@ -59,4 +68,9 @@ public class SaveAllRegistersNode extends FixedWithNextNode implements LIRLowera
      */
     @NodeIntrinsic
     public static native long saveAllRegisters();
+
+    @Override
+    public LocationIdentity getLocationIdentity() {
+        return LocationIdentity.any();
+    }
 }

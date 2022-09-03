@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,40 +22,43 @@
  */
 package com.oracle.graal.nodes.cfg;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
 
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph;
+import com.oracle.graal.compiler.common.cfg.Loop;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.nodes.AbstractBeginNode;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.InvokeWithExceptionNode;
+import com.oracle.graal.nodes.LoopBeginNode;
+import com.oracle.graal.nodes.LoopEndNode;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
 
-public class Block {
+public final class Block extends AbstractBlockBase<Block> {
 
-    protected int id;
+    public static final Block[] EMPTY_ARRAY = new Block[0];
 
-    protected BeginNode beginNode;
+    protected final AbstractBeginNode beginNode;
+
     protected FixedNode endNode;
-    protected Loop loop;
+
     protected double probability;
+    protected Loop<Block> loop;
 
-    protected List<Block> predecessors;
-    protected List<Block> successors;
-
-    protected Block dominator;
-    protected List<Block> dominated;
     protected Block postdominator;
+    protected Block distancedDominatorCache;
+    private LocationSet killLocations;
+    private LocationSet killLocationsBetweenThisAndDominator;
 
-    // Fields that still need to be worked on, try to remove them later.
-    public boolean align;
-    public int linearScanNumber;
-
-    protected Block() {
-        id = ControlFlowGraph.BLOCK_ID_INITIAL;
+    protected Block(AbstractBeginNode node) {
+        this.beginNode = node;
     }
 
-    public int getId() {
-        return id;
-    }
-
-    public BeginNode getBeginNode() {
+    public AbstractBeginNode getBeginNode() {
         return beginNode;
     }
 
@@ -63,36 +66,42 @@ public class Block {
         return endNode;
     }
 
-    public Loop getLoop() {
+    @Override
+    public Loop<Block> getLoop() {
         return loop;
     }
 
-    public int getLoopDepth() {
-        return loop == null ? 0 : loop.depth;
+    public void setLoop(Loop<Block> loop) {
+        this.loop = loop;
     }
 
+    @Override
+    public int getLoopDepth() {
+        return loop == null ? 0 : loop.getDepth();
+    }
+
+    @Override
     public boolean isLoopHeader() {
         return getBeginNode() instanceof LoopBeginNode;
     }
 
+    @Override
     public boolean isLoopEnd() {
         return getEndNode() instanceof LoopEndNode;
     }
 
+    @Override
     public boolean isExceptionEntry() {
-        return getBeginNode().next() instanceof ExceptionObjectNode;
+        Node predecessor = getBeginNode().predecessor();
+        return predecessor != null && predecessor instanceof InvokeWithExceptionNode && getBeginNode() == ((InvokeWithExceptionNode) predecessor).exceptionEdge();
     }
 
-    public List<Block> getPredecessors() {
-        return predecessors;
+    public Block getFirstPredecessor() {
+        return getPredecessors()[0];
     }
 
-    public List<Block> getSuccessors() {
-        return successors;
-    }
-
-    public Block getDominator() {
-        return dominator;
+    public Block getFirstSuccessor() {
+        return getSuccessors()[0];
     }
 
     public Block getEarliestPostDominated() {
@@ -108,21 +117,16 @@ public class Block {
         return b;
     }
 
-    public List<Block> getDominated() {
-        if (dominated == null) {
-            return Collections.emptyList();
-        }
-        return dominated;
-    }
-
+    @Override
     public Block getPostdominator() {
         return postdominator;
     }
 
     private class NodeIterator implements Iterator<FixedNode> {
+
         private FixedNode cur;
 
-        public NodeIterator() {
+        NodeIterator() {
             cur = getBeginNode();
         }
 
@@ -134,12 +138,17 @@ public class Block {
         @Override
         public FixedNode next() {
             FixedNode result = cur;
-            if (cur == getEndNode()) {
-                cur = null;
+            if (result instanceof FixedWithNextNode) {
+                FixedWithNextNode fixedWithNextNode = (FixedWithNextNode) result;
+                FixedNode next = fixedWithNextNode.next();
+                if (next instanceof AbstractBeginNode) {
+                    next = null;
+                }
+                cur = next;
             } else {
-                cur = ((FixedWithNextNode) cur).next();
+                cur = null;
             }
-            assert !(cur instanceof BeginNode);
+            assert !(cur instanceof AbstractBeginNode);
             return result;
         }
 
@@ -151,6 +160,7 @@ public class Block {
 
     public Iterable<FixedNode> getNodes() {
         return new Iterable<FixedNode>() {
+
             @Override
             public Iterator<FixedNode> iterator() {
                 return new NodeIterator();
@@ -175,36 +185,142 @@ public class Block {
         return "B" + id;
     }
 
-
-// to be inlined later on
-    public int numberOfPreds() {
-        return getPredecessors().size();
+    @Override
+    public double probability() {
+        return probability;
     }
 
-    public int numberOfSux() {
-        return getSuccessors().size();
+    public void setProbability(double probability) {
+        assert probability >= 0 && Double.isFinite(probability);
+        this.probability = probability;
     }
 
-    public Block predAt(int i) {
-        return getPredecessors().get(i);
-    }
-
-    public Block suxAt(int i) {
-        return getSuccessors().get(i);
-    }
-// end to be inlined later on
-
-    public boolean dominates(Block block) {
-        return block.isDominatedBy(this);
-    }
-
-    public boolean isDominatedBy(Block block) {
-        if (block == this) {
-            return true;
+    @Override
+    public Block getDominator(int distance) {
+        Block result = this;
+        for (int i = 0; i < distance; ++i) {
+            result = result.getDominator();
         }
-        if (dominator == null) {
+        return result;
+    }
+
+    public boolean canKill(LocationIdentity location) {
+        if (location.isImmutable()) {
             return false;
         }
-        return dominator.isDominatedBy(block);
+        return getKillLocations().contains(location);
+    }
+
+    public LocationSet getKillLocations() {
+        if (killLocations == null) {
+            killLocations = calcKillLocations();
+        }
+        return killLocations;
+    }
+
+    private LocationSet calcKillLocations() {
+        LocationSet result = new LocationSet();
+        for (FixedNode node : this.getNodes()) {
+            if (node instanceof MemoryCheckpoint.Single) {
+                LocationIdentity identity = ((MemoryCheckpoint.Single) node).getLocationIdentity();
+                result.add(identity);
+            } else if (node instanceof MemoryCheckpoint.Multi) {
+                for (LocationIdentity identity : ((MemoryCheckpoint.Multi) node).getLocationIdentities()) {
+                    result.add(identity);
+                }
+            }
+            if (result.isAny()) {
+                break;
+            }
+        }
+        return result;
+    }
+
+    public boolean canKillBetweenThisAndDominator(LocationIdentity location) {
+        if (location.isImmutable()) {
+            return false;
+        }
+        return this.getKillLocationsBetweenThisAndDominator().contains(location);
+    }
+
+    private LocationSet getKillLocationsBetweenThisAndDominator() {
+        if (this.killLocationsBetweenThisAndDominator == null) {
+            LocationSet dominatorResult = new LocationSet();
+            Block stopBlock = getDominator();
+            if (this.isLoopHeader()) {
+                assert stopBlock.getLoopDepth() < this.getLoopDepth();
+                dominatorResult.addAll(((HIRLoop) this.getLoop()).getKillLocations());
+            } else {
+                for (Block b : this.getPredecessors()) {
+                    assert !this.isLoopHeader();
+                    if (b != stopBlock) {
+                        dominatorResult.addAll(b.getKillLocations());
+                        if (dominatorResult.isAny()) {
+                            break;
+                        }
+                        b.calcKillLocationsBetweenThisAndTarget(dominatorResult, stopBlock);
+                        if (dominatorResult.isAny()) {
+                            break;
+                        }
+                    }
+                }
+            }
+            this.killLocationsBetweenThisAndDominator = dominatorResult;
+        }
+        return this.killLocationsBetweenThisAndDominator;
+    }
+
+    private void calcKillLocationsBetweenThisAndTarget(LocationSet result, Block stopBlock) {
+        assert AbstractControlFlowGraph.dominates(stopBlock, this);
+        if (stopBlock == this || result.isAny()) {
+            // We reached the stop block => nothing to do.
+            return;
+        } else {
+            if (stopBlock == this.getDominator()) {
+                result.addAll(this.getKillLocationsBetweenThisAndDominator());
+            } else {
+                // Divide and conquer: Aggregate kill locations from this to the dominator and then
+                // from the dominator onwards.
+                calcKillLocationsBetweenThisAndTarget(result, this.getDominator());
+                result.addAll(this.getDominator().getKillLocations());
+                if (result.isAny()) {
+                    return;
+                }
+                this.getDominator().calcKillLocationsBetweenThisAndTarget(result, stopBlock);
+            }
+        }
+    }
+
+    @Override
+    public void delete() {
+
+        // adjust successor and predecessor lists
+        Block next = getSuccessors()[0];
+        for (Block pred : getPredecessors()) {
+            Block[] predSuccs = pred.successors;
+            Block[] newPredSuccs = new Block[predSuccs.length];
+            for (int i = 0; i < predSuccs.length; ++i) {
+                if (predSuccs[i] == this) {
+                    newPredSuccs[i] = next;
+                } else {
+                    newPredSuccs[i] = predSuccs[i];
+                }
+            }
+            pred.setSuccessors(newPredSuccs);
+        }
+
+        ArrayList<Block> newPreds = new ArrayList<>();
+        for (int i = 0; i < next.getPredecessorCount(); i++) {
+            Block curPred = next.getPredecessors()[i];
+            if (curPred == this) {
+                for (Block b : getPredecessors()) {
+                    newPreds.add(b);
+                }
+            } else {
+                newPreds.add(curPred);
+            }
+        }
+
+        next.setPredecessors(newPreds.toArray(new Block[0]));
     }
 }

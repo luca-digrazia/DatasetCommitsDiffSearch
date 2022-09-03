@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot.replacements.arraycopy;
 
 import static com.oracle.graal.compiler.common.GraalOptions.SnippetCounters;
-import static com.oracle.graal.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.KLASS_SUPER_CHECK_OFFSET_LOCATION;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.OBJ_ARRAY_KLASS_ELEMENT_KLASS_LOCATION;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.arrayBaseOffset;
@@ -41,12 +40,18 @@ import java.lang.reflect.Method;
 import java.util.EnumMap;
 import java.util.Map;
 
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
 import com.oracle.graal.api.directives.GraalDirectives;
 import com.oracle.graal.api.replacements.Fold;
-import com.oracle.graal.api.replacements.Snippet;
-import com.oracle.graal.api.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.hotspot.nodes.type.KlassPointerStamp;
@@ -64,6 +69,8 @@ import com.oracle.graal.nodes.extended.UnsafeLoadNode;
 import com.oracle.graal.nodes.java.ArrayLengthNode;
 import com.oracle.graal.nodes.spi.LoweringTool;
 import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.replacements.Snippet;
+import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.SnippetCounter;
 import com.oracle.graal.replacements.SnippetTemplate;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
@@ -73,14 +80,6 @@ import com.oracle.graal.replacements.nodes.BasicArrayCopyNode;
 import com.oracle.graal.replacements.nodes.DirectObjectStoreNode;
 import com.oracle.graal.replacements.nodes.ExplodeLoopNode;
 import com.oracle.graal.word.Word;
-
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 public class ArrayCopySnippets implements Snippets {
 
@@ -242,8 +241,8 @@ public class ArrayCopySnippets implements Snippets {
                 objectCheckcastSameTypeCopiedCounter.add(length);
                 ArrayCopyCallNode.arraycopyObjectKillsAny(nonNullSrc, srcPos, nonNullDest, destPos, length);
             } else {
-                KlassPointer destElemKlass = destKlass.readKlassPointer(arrayClassElementOffset(INJECTED_VMCONFIG), OBJ_ARRAY_KLASS_ELEMENT_KLASS_LOCATION);
-                Word superCheckOffset = Word.signed(destElemKlass.readInt(superCheckOffsetOffset(INJECTED_VMCONFIG), KLASS_SUPER_CHECK_OFFSET_LOCATION));
+                KlassPointer destElemKlass = destKlass.readKlassPointer(arrayClassElementOffset(), OBJ_ARRAY_KLASS_ELEMENT_KLASS_LOCATION);
+                Word superCheckOffset = Word.signed(destElemKlass.readInt(superCheckOffsetOffset(), KLASS_SUPER_CHECK_OFFSET_LOCATION));
                 objectCheckcastCounter.inc();
                 objectCheckcastCopiedCounter.add(length);
                 int copiedElements = CheckcastArrayCopyCallNode.checkcastArraycopy(nonNullSrc, srcPos, nonNullDest, destPos, length, superCheckOffset, destElemKlass, false);
@@ -267,7 +266,7 @@ public class ArrayCopySnippets implements Snippets {
         KlassPointer destHub = loadHub(nonNullDest);
         if (probability(FAST_PATH_PROBABILITY, srcHub.equal(destHub)) && probability(FAST_PATH_PROBABILITY, nonNullSrc != nonNullDest)) {
             int layoutHelper = checkArrayType(srcHub);
-            final boolean isObjectArray = ((layoutHelper & layoutHelperElementTypePrimitiveInPlace(INJECTED_VMCONFIG)) == 0);
+            final boolean isObjectArray = ((layoutHelper & layoutHelperElementTypePrimitiveInPlace()) == 0);
             checkLimits(nonNullSrc, srcPos, nonNullDest, destPos, length);
             if (probability(FAST_PATH_PROBABILITY, isObjectArray)) {
                 genericObjectExactCallCounter.inc();
@@ -386,13 +385,13 @@ public class ArrayCopySnippets implements Snippets {
             super(providers, providers.getSnippetReflection(), target);
         }
 
-        private ResolvedJavaMethod originalArraycopy() throws GraalError {
+        private ResolvedJavaMethod originalArraycopy() throws JVMCIError {
             if (originalArraycopy == null) {
                 Method method;
                 try {
                     method = System.class.getDeclaredMethod("arraycopy", Object.class, int.class, Object.class, int.class, int.class);
                 } catch (NoSuchMethodException | SecurityException e) {
-                    throw new GraalError(e);
+                    throw new JVMCIError(e);
                 }
                 originalArraycopy = providers.getMetaAccess().lookupJavaMethod(method);
             }
@@ -598,7 +597,7 @@ public class ArrayCopySnippets implements Snippets {
                     CallTargetNode call = invoke.callTarget();
 
                     if (!call.targetMethod().equals(originalArraycopy)) {
-                        throw new GraalError("unexpected invoke %s in snippet", call.targetMethod());
+                        throw new JVMCIError("unexpected invoke %s in snippet", call.targetMethod());
                     }
                     // Here we need to fix the bci of the invoke
                     InvokeNode newInvoke = graph.add(new InvokeNode(invoke.callTarget(), arraycopy.getBci()));

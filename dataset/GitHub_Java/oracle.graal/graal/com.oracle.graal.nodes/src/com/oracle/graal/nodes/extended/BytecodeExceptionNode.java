@@ -30,9 +30,7 @@ import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.TypeReference;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.nodeinfo.NodeCycles;
 import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.NodeSize;
 import com.oracle.graal.nodeinfo.Verbosity;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.memory.AbstractMemoryCheckpoint;
@@ -44,7 +42,7 @@ import com.oracle.graal.nodes.spi.LoweringTool;
  * A node that represents an exception thrown implicitly by a Java bytecode. It can be lowered to
  * either a {@linkplain ForeignCallDescriptor foreign} call or a pre-allocated exception object.
  */
-@NodeInfo(cycles = NodeCycles.CYCLES_UNKNOWN, size = NodeSize.SIZE_UNKNOWN)
+@NodeInfo
 public final class BytecodeExceptionNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single {
 
     public static final NodeClass<BytecodeExceptionNode> TYPE = NodeClass.create(BytecodeExceptionNode.class);

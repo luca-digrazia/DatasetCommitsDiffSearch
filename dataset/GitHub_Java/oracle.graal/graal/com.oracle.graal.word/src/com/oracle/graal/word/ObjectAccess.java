@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,12 +27,12 @@ import com.oracle.graal.word.Word.Opcode;
 import com.oracle.graal.word.Word.Operation;
 
 /**
- * Medium-level memory access for Objects. Similarly to the readXxx and writeXxx methods defined for
- * {@link Pointer} and {@link ObjectAccess}, these methods access the memory without any null
- * checks. However, these methods use read- or write barriers. When the VM uses compressed pointers,
- * then readObject and writeObject methods access compressed pointers.
+ * Low-level memory access for Objects. Similarly to the readXxx and writeXxx methods defined for
+ * {@link Pointer}, these methods access the raw memory without any null checks, read- or write
+ * barriers. When the VM uses compressed pointers, then readObject and writeObject methods access
+ * compressed pointers.
  */
-public final class BarrieredAccess {
+public final class ObjectAccess {
 
     /**
      * Reads the memory at address {@code (object + offset)}. The offset is in bytes.
@@ -46,7 +46,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native byte readByte(Object object, WordBase offset, LocationIdentity locationIdentity);
 
     /**
@@ -61,7 +61,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native char readChar(Object object, WordBase offset, LocationIdentity locationIdentity);
 
     /**
@@ -76,7 +76,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native short readShort(Object object, WordBase offset, LocationIdentity locationIdentity);
 
     /**
@@ -91,7 +91,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native int readInt(Object object, WordBase offset, LocationIdentity locationIdentity);
 
     /**
@@ -106,7 +106,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native long readLong(Object object, WordBase offset, LocationIdentity locationIdentity);
 
     /**
@@ -121,7 +121,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native float readFloat(Object object, WordBase offset, LocationIdentity locationIdentity);
 
     /**
@@ -136,7 +136,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native double readDouble(Object object, WordBase offset, LocationIdentity locationIdentity);
 
     /**
@@ -151,7 +151,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native Word readWord(Object object, WordBase offset, LocationIdentity locationIdentity);
 
     /**
@@ -166,7 +166,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native Object readObject(Object object, WordBase offset, LocationIdentity locationIdentity);
 
     /**
@@ -177,7 +177,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native byte readByte(Object object, int offset, LocationIdentity locationIdentity);
 
     /**
@@ -188,7 +188,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native char readChar(Object object, int offset, LocationIdentity locationIdentity);
 
     /**
@@ -199,7 +199,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native short readShort(Object object, int offset, LocationIdentity locationIdentity);
 
     /**
@@ -210,7 +210,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native int readInt(Object object, int offset, LocationIdentity locationIdentity);
 
     /**
@@ -221,7 +221,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native long readLong(Object object, int offset, LocationIdentity locationIdentity);
 
     /**
@@ -232,7 +232,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native float readFloat(Object object, int offset, LocationIdentity locationIdentity);
 
     /**
@@ -243,7 +243,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native double readDouble(Object object, int offset, LocationIdentity locationIdentity);
 
     /**
@@ -254,7 +254,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native Word readWord(Object object, int offset, LocationIdentity locationIdentity);
 
     /**
@@ -265,7 +265,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the read
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native Object readObject(Object object, int offset, LocationIdentity locationIdentity);
 
     /**
@@ -280,7 +280,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeByte(Object object, WordBase offset, byte val, LocationIdentity locationIdentity);
 
     /**
@@ -295,7 +295,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeChar(Object object, WordBase offset, char val, LocationIdentity locationIdentity);
 
     /**
@@ -310,7 +310,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeShort(Object object, WordBase offset, short val, LocationIdentity locationIdentity);
 
     /**
@@ -325,7 +325,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeInt(Object object, WordBase offset, int val, LocationIdentity locationIdentity);
 
     /**
@@ -340,7 +340,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeLong(Object object, WordBase offset, long val, LocationIdentity locationIdentity);
 
     /**
@@ -355,7 +355,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeFloat(Object object, WordBase offset, float val, LocationIdentity locationIdentity);
 
     /**
@@ -370,7 +370,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeDouble(Object object, WordBase offset, double val, LocationIdentity locationIdentity);
 
     /**
@@ -385,7 +385,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeWord(Object object, WordBase offset, WordBase val, LocationIdentity locationIdentity);
 
     /**
@@ -400,7 +400,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeObject(Object object, WordBase offset, Object val, LocationIdentity locationIdentity);
 
     /**
@@ -411,7 +411,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeByte(Object object, int offset, byte val, LocationIdentity locationIdentity);
 
     /**
@@ -422,7 +422,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeChar(Object object, int offset, char val, LocationIdentity locationIdentity);
 
     /**
@@ -433,7 +433,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeShort(Object object, int offset, short val, LocationIdentity locationIdentity);
 
     /**
@@ -444,7 +444,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeInt(Object object, int offset, int val, LocationIdentity locationIdentity);
 
     /**
@@ -455,7 +455,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeLong(Object object, int offset, long val, LocationIdentity locationIdentity);
 
     /**
@@ -466,7 +466,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeFloat(Object object, int offset, float val, LocationIdentity locationIdentity);
 
     /**
@@ -477,7 +477,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeDouble(Object object, int offset, double val, LocationIdentity locationIdentity);
 
     /**
@@ -488,7 +488,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeWord(Object object, int offset, WordBase val, LocationIdentity locationIdentity);
 
     /**
@@ -499,7 +499,7 @@ public final class BarrieredAccess {
      * @param locationIdentity the identity of the write
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeObject(Object object, int offset, Object val, LocationIdentity locationIdentity);
 
     /**
@@ -513,7 +513,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native byte readByte(Object object, WordBase offset);
 
     /**
@@ -527,7 +527,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native char readChar(Object object, WordBase offset);
 
     /**
@@ -541,7 +541,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native short readShort(Object object, WordBase offset);
 
     /**
@@ -555,7 +555,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native int readInt(Object object, WordBase offset);
 
     /**
@@ -569,7 +569,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native long readLong(Object object, WordBase offset);
 
     /**
@@ -583,7 +583,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native float readFloat(Object object, WordBase offset);
 
     /**
@@ -597,7 +597,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native double readDouble(Object object, WordBase offset);
 
     /**
@@ -611,7 +611,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native Word readWord(Object object, WordBase offset);
 
     /**
@@ -625,7 +625,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native Object readObject(Object object, WordBase offset);
 
     /**
@@ -635,7 +635,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native byte readByte(Object object, int offset);
 
     /**
@@ -645,7 +645,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native char readChar(Object object, int offset);
 
     /**
@@ -655,7 +655,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native short readShort(Object object, int offset);
 
     /**
@@ -665,7 +665,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native int readInt(Object object, int offset);
 
     /**
@@ -675,7 +675,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native long readLong(Object object, int offset);
 
     /**
@@ -685,7 +685,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native float readFloat(Object object, int offset);
 
     /**
@@ -695,7 +695,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native double readDouble(Object object, int offset);
 
     /**
@@ -705,7 +705,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native Word readWord(Object object, int offset);
 
     /**
@@ -715,7 +715,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @return the result of the memory access
      */
-    @Operation(opcode = Opcode.READ_BARRIERED)
+    @Operation(opcode = Opcode.READ_OBJECT)
     public static native Object readObject(Object object, int offset);
 
     /**
@@ -729,7 +729,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeByte(Object object, WordBase offset, byte val);
 
     /**
@@ -743,7 +743,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeChar(Object object, WordBase offset, char val);
 
     /**
@@ -757,7 +757,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeShort(Object object, WordBase offset, short val);
 
     /**
@@ -771,7 +771,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeInt(Object object, WordBase offset, int val);
 
     /**
@@ -785,7 +785,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeLong(Object object, WordBase offset, long val);
 
     /**
@@ -799,7 +799,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeFloat(Object object, WordBase offset, float val);
 
     /**
@@ -813,7 +813,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeDouble(Object object, WordBase offset, double val);
 
     /**
@@ -827,7 +827,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeWord(Object object, WordBase offset, WordBase val);
 
     /**
@@ -841,7 +841,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeObject(Object object, WordBase offset, Object val);
 
     /**
@@ -851,7 +851,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeByte(Object object, int offset, byte val);
 
     /**
@@ -861,7 +861,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeChar(Object object, int offset, char val);
 
     /**
@@ -871,7 +871,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeShort(Object object, int offset, short val);
 
     /**
@@ -881,7 +881,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeInt(Object object, int offset, int val);
 
     /**
@@ -891,7 +891,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeLong(Object object, int offset, long val);
 
     /**
@@ -901,7 +901,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeFloat(Object object, int offset, float val);
 
     /**
@@ -911,7 +911,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeDouble(Object object, int offset, double val);
 
     /**
@@ -921,7 +921,7 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeWord(Object object, int offset, WordBase val);
 
     /**
@@ -931,6 +931,6 @@ public final class BarrieredAccess {
      * @param offset the signed offset for the memory access
      * @param val the value to be written to memory
      */
-    @Operation(opcode = Opcode.WRITE_BARRIERED)
+    @Operation(opcode = Opcode.WRITE_OBJECT)
     public static native void writeObject(Object object, int offset, Object val);
 }

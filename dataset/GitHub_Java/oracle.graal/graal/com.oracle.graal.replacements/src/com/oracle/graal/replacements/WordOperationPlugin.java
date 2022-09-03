@@ -35,7 +35,6 @@ import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.Invoke;
 import com.oracle.graal.nodes.ValueNode;
@@ -68,7 +67,7 @@ import com.oracle.graal.word.Word.Operation;
 import com.oracle.graal.word.WordTypes;
 import com.oracle.graal.word.nodes.WordCastNode;
 
-import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.JavaTypeProfile;
@@ -174,40 +173,18 @@ public class WordOperationPlugin implements NodePlugin, TypePlugin, InlineInvoke
     }
 
     @Override
-    public boolean handleStoreField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field, ValueNode value) {
-        if (field.getJavaKind() == JavaKind.Object) {
-            boolean isWordField = wordTypes.isWord(field.getType());
-            boolean isWordValue = value.getStackKind() == wordTypes.getWordKind();
-
-            if (isWordField && !isWordValue) {
-                throw bailout(b, "Cannot store a non-word value into a word field: " + field.format("%H.%n"));
-            } else if (!isWordField && isWordValue) {
-                throw bailout(b, "Cannot store a word value into a non-word field: " + field.format("%H.%n"));
-            }
-        }
-
-        /* We never need to intercept the field store. */
-        return false;
-    }
-
-    @Override
-    public boolean handleStoreStaticField(GraphBuilderContext b, ResolvedJavaField field, ValueNode value) {
-        return handleStoreField(b, null, field, value);
-    }
-
-    @Override
     public boolean handleStoreIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, JavaKind elementKind, ValueNode value) {
         ResolvedJavaType arrayType = StampTool.typeOrNull(array);
         if (arrayType != null && wordTypes.isWord(arrayType.getComponentType())) {
             assert elementKind == JavaKind.Object;
             if (value.getStackKind() != wordTypes.getWordKind()) {
-                throw bailout(b, "Cannot store a non-word value into a word array: " + arrayType.toJavaName(true));
+                throw b.bailout("Cannot store a non-word value into a word array: " + arrayType.toJavaName(true));
             }
             b.add(createStoreIndexedNode(array, index, value));
             return true;
         }
         if (elementKind == JavaKind.Object && value.getStackKind() == wordTypes.getWordKind()) {
-            throw bailout(b, "Cannot store a word value into a non-word array: " + arrayType.toJavaName(true));
+            throw b.bailout("Cannot store a word value into a non-word array: " + arrayType.toJavaName(true));
         }
         return false;
     }
@@ -220,13 +197,13 @@ public class WordOperationPlugin implements NodePlugin, TypePlugin, InlineInvoke
     public boolean handleCheckCast(GraphBuilderContext b, ValueNode object, ResolvedJavaType type, JavaTypeProfile profile) {
         if (!wordTypes.isWord(type)) {
             if (object.getStackKind() != JavaKind.Object) {
-                throw bailout(b, "Cannot cast a word value to a non-word type: " + type.toJavaName(true));
+                throw b.bailout("Cannot cast a word value to a non-word type: " + type.toJavaName(true));
             }
             return false;
         }
 
         if (object.getStackKind() != wordTypes.getWordKind()) {
-            throw bailout(b, "Cannot cast a non-word value to a word type: " + type.toJavaName(true));
+            throw b.bailout("Cannot cast a non-word value to a word type: " + type.toJavaName(true));
         }
         b.push(JavaKind.Object, object);
         return true;
@@ -235,14 +212,14 @@ public class WordOperationPlugin implements NodePlugin, TypePlugin, InlineInvoke
     @Override
     public boolean handleInstanceOf(GraphBuilderContext b, ValueNode object, ResolvedJavaType type, JavaTypeProfile profile) {
         if (wordTypes.isWord(type)) {
-            throw bailout(b, "Cannot use instanceof for word a type: " + type.toJavaName(true));
+            throw b.bailout("Cannot use instanceof for word a type: " + type.toJavaName(true));
         } else if (object.getStackKind() != JavaKind.Object) {
-            throw bailout(b, "Cannot use instanceof on a word value: " + type.toJavaName(true));
+            throw b.bailout("Cannot use instanceof on a word value: " + type.toJavaName(true));
         }
         return false;
     }
 
-    protected void processWordOperation(GraphBuilderContext b, ValueNode[] args, ResolvedJavaMethod wordMethod) throws GraalError {
+    protected void processWordOperation(GraphBuilderContext b, ValueNode[] args, ResolvedJavaMethod wordMethod) throws JVMCIError {
         Operation operation = wordMethod.getAnnotation(Word.Operation.class);
         JavaKind returnKind = wordMethod.getSignature().getReturnKind();
         switch (operation.opcode()) {
@@ -350,7 +327,7 @@ public class WordOperationPlugin implements NodePlugin, TypePlugin, InlineInvoke
                 break;
 
             default:
-                throw new GraalError("Unknown opcode: %s", operation.opcode());
+                throw new JVMCIError("Unknown opcode: %s", operation.opcode());
         }
     }
 
@@ -364,7 +341,7 @@ public class WordOperationPlugin implements NodePlugin, TypePlugin, InlineInvoke
             Constructor<?> cons = nodeClass.getDeclaredConstructor(ValueNode.class, ValueNode.class);
             return (ValueNode) cons.newInstance(left, right);
         } catch (Throwable ex) {
-            throw new GraalError(ex).addContext(nodeClass.getName());
+            throw new JVMCIError(ex).addContext(nodeClass.getName());
         }
     }
 
@@ -461,9 +438,5 @@ public class WordOperationPlugin implements NodePlugin, TypePlugin, InlineInvoke
 
     public WordTypes getWordTypes() {
         return wordTypes;
-    }
-
-    private static BailoutException bailout(GraphBuilderContext b, String msg) {
-        throw b.bailout(msg + "\nat " + b.getMethod().asStackTraceElement(b.bci()));
     }
 }

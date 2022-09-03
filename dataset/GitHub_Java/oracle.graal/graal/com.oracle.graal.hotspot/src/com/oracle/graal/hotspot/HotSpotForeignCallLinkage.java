@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,178 +22,102 @@
  */
 package com.oracle.graal.hotspot;
 
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.*;
+import jdk.vm.ci.meta.InvokeTarget;
 
-import java.util.*;
-
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CallingConvention.Type;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.stubs.*;
-import com.oracle.graal.word.*;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
+import com.oracle.graal.compiler.target.Backend;
+import com.oracle.graal.hotspot.stubs.Stub;
 
 /**
  * The details required to link a HotSpot runtime or stub call.
  */
-public class HotSpotForeignCallLinkage implements ForeignCallLinkage, InvokeTarget {
+public interface HotSpotForeignCallLinkage extends ForeignCallLinkage, InvokeTarget {
 
     /**
-     * Constants for specifying whether a call destroys or preserves registers. A call will always
-     * destroy {@link HotSpotForeignCallLinkage#getCallingConvention() its}
-     * {@linkplain CallingConvention#getTemporaries() temporary} registers.
+     * Constants for specifying whether a foreign call destroys or preserves registers. A foreign
+     * call will always destroy {@link HotSpotForeignCallLinkage#getOutgoingCallingConvention() its}
+     * {@linkplain ForeignCallLinkage#getTemporaries() temporary} registers.
      */
-    public enum RegisterEffect {
-        DESTROYS_REGISTERS, PRESERVES_REGISTERS
+    enum RegisterEffect {
+        DESTROYS_REGISTERS,
+        PRESERVES_REGISTERS
     }
 
     /**
-     * Constants for specifying whether a call is a leaf or not. A leaf function does not lock, GC
-     * or throw exceptions. That is, the thread's execution state during the call is never inspected
-     * by another thread.
+     * Constants for specifying whether a call is a leaf or not and whether a
+     * {@code JavaFrameAnchor} prologue and epilogue is required around the call. A leaf function
+     * does not lock, GC or throw exceptions.
      */
-    public enum Transition {
-        LEAF, NOT_LEAF;
+    enum Transition {
+        /**
+         * A call to a leaf function that is guaranteed to not use floating point registers and will
+         * never have its caller stack inspected by the VM. That is, {@code JavaFrameAnchor}
+         * management around the call can be omitted.
+         */
+        LEAF_NOFP,
+
+        /**
+         * A call to a leaf function that might use floating point registers but will never have its
+         * caller stack inspected. That is, {@code JavaFrameAnchor} management around the call can
+         * be omitted.
+         */
+        LEAF,
+
+        /**
+         * A call to a leaf function that might use floating point registers and may have its caller
+         * stack inspected. That is, {@code JavaFrameAnchor} management code around the call is
+         * required.
+         */
+        STACK_INSPECTABLE_LEAF,
+
+        /**
+         * A function that may lock, GC or raise an exception and thus requires debug info to be
+         * associated with a call site to the function. The execution stack may be inspected while
+         * in the called function. That is, {@code JavaFrameAnchor} management code around the call
+         * is required.
+         */
+        SAFEPOINT,
     }
 
     /**
      * Sentinel marker for a computed jump address.
      */
-    public static final long JUMP_ADDRESS = 0xDEADDEADBEEFBEEFL;
+    long JUMP_ADDRESS = 0xDEADDEADBEEFBEEFL;
 
-    /**
-     * The descriptor of the call.
-     */
-    private final ForeignCallDescriptor descriptor;
+    boolean isReexecutable();
 
-    /**
-     * The entry point address of this call's target.
-     */
-    private long address;
+    LocationIdentity[] getKilledLocations();
 
-    /**
-     * Non-null (eventually) iff this is a call to a compiled {@linkplain Stub stub}.
-     */
-    private Stub stub;
-
-    /**
-     * The calling convention for this call.
-     */
-    private CallingConvention cc;
-
-    private final RegisterEffect effect;
-
-    private final Transition transition;
-
-    /**
-     * Creates a {@link HotSpotForeignCallLinkage}.
-     * 
-     * @param descriptor the descriptor of the call
-     * @param address the address of the code to call
-     * @param effect specifies if the call destroys or preserves all registers (apart from
-     *            temporaries which are always destroyed)
-     * @param ccType calling convention type
-     * @param transition specifies if this is a {@linkplain #isLeaf() leaf} call
-     */
-    public static HotSpotForeignCallLinkage create(ForeignCallDescriptor descriptor, long address, RegisterEffect effect, Type ccType, Transition transition) {
-        CallingConvention targetCc = createCallingConvention(descriptor, ccType);
-        return new HotSpotForeignCallLinkage(descriptor, address, effect, transition, targetCc);
-    }
-
-    /**
-     * Gets a calling convention for a given descriptor and call type.
-     */
-    public static CallingConvention createCallingConvention(ForeignCallDescriptor descriptor, Type ccType) {
-        HotSpotRuntime runtime = graalRuntime().getRuntime();
-        Class<?>[] argumentTypes = descriptor.getArgumentTypes();
-        JavaType[] parameterTypes = new JavaType[argumentTypes.length];
-        for (int i = 0; i < parameterTypes.length; ++i) {
-            parameterTypes[i] = asJavaType(argumentTypes[i], runtime);
-        }
-        TargetDescription target = graalRuntime().getTarget();
-        JavaType returnType = asJavaType(descriptor.getResultType(), runtime);
-        return runtime.lookupRegisterConfig().getCallingConvention(ccType, returnType, parameterTypes, target, false);
-    }
-
-    private static JavaType asJavaType(Class type, HotSpotRuntime runtime) {
-        if (WordBase.class.isAssignableFrom(type)) {
-            return runtime.lookupJavaType(wordKind().toJavaClass());
-        } else {
-            return runtime.lookupJavaType(type);
-        }
-    }
-
-    public HotSpotForeignCallLinkage(ForeignCallDescriptor descriptor, long address, RegisterEffect effect, Transition transition, CallingConvention cc) {
-        this.address = address;
-        this.effect = effect;
-        this.transition = transition;
-        this.descriptor = descriptor;
-        this.cc = cc;
-    }
-
-    @Override
-    public String toString() {
-        return (stub == null ? descriptor.toString() : stub) + "@0x" + Long.toHexString(address) + ":" + cc;
-    }
-
-    public CallingConvention getCallingConvention() {
-        return cc;
-    }
-
-    public long getMaxCallTargetOffset() {
-        return graalRuntime().getCompilerToVM().getMaxCallTargetOffset(address);
-    }
-
-    public ForeignCallDescriptor getDescriptor() {
-        return descriptor;
-    }
-
-    public void setCompiledStub(Stub stub) {
-        assert address == 0L : "cannot set stub for linkage that already has an address: " + this;
-        this.stub = stub;
-    }
+    void setCompiledStub(Stub stub);
 
     /**
      * Determines if this is a call to a compiled {@linkplain Stub stub}.
      */
-    public boolean isCompiledStub() {
-        return address == 0L || stub != null;
-    }
+    boolean isCompiledStub();
 
-    public void finalizeAddress(Backend backend) {
-        if (address == 0) {
-            assert stub != null : "linkage without an address must be a stub - forgot to register a Stub associated with " + descriptor + "?";
-            InstalledCode code = stub.getCode(backend);
+    void finalizeAddress(Backend backend);
 
-            Set<Register> destroyedRegisters = stub.getDestroyedRegisters();
-            AllocatableValue[] temporaryLocations = new AllocatableValue[destroyedRegisters.size()];
-            int i = 0;
-            for (Register reg : destroyedRegisters) {
-                temporaryLocations[i++] = reg.asValue();
-            }
-            // Update calling convention with temporaries
-            cc = new CallingConvention(temporaryLocations, cc.getStackSize(), cc.getReturn(), cc.getArguments());
-            address = code.getStart();
-        }
-    }
-
-    public long getAddress() {
-        assert address != 0L : "address not yet finalized: " + this;
-        return address;
-    }
-
-    @Override
-    public boolean destroysRegisters() {
-        return effect == DESTROYS_REGISTERS;
-    }
+    long getAddress();
 
     /**
-     * Determines if this is call to a function that does not lock, GC or throw exceptions. That is,
-     * the thread's execution state during the call is never inspected by another thread.
+     * Determines if the runtime function or stub might use floating point registers. If the answer
+     * is no, then no FPU state management prologue or epilogue needs to be emitted around the call.
      */
-    public boolean isLeaf() {
-        return transition == Transition.LEAF;
-    }
+    boolean mayContainFP();
+
+    /**
+     * Determines if a {@code JavaFrameAnchor} needs to be set up and torn down around this call.
+     */
+    boolean needsJavaFrameAnchor();
+
+    /**
+     * Gets the VM symbol associated with the target {@linkplain #getAddress() address} of the call.
+     */
+    String getSymbol();
+
+    /**
+     * Identifies foreign calls which are guaranteed to include a safepoint check.
+     */
+    boolean isGuaranteedSafepoint();
 }

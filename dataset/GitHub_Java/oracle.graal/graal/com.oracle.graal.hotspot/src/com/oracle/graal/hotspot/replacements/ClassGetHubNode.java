@@ -22,8 +22,11 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_4;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.calc.Condition;
@@ -46,19 +49,13 @@ import com.oracle.graal.nodes.memory.address.AddressNode;
 import com.oracle.graal.nodes.spi.Lowerable;
 import com.oracle.graal.nodes.spi.LoweringTool;
 
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
 /**
  * Read {@code Class::_klass} to get the hub for a {@link java.lang.Class}. This node mostly exists
  * to replace {@code _klass._java_mirror._klass} with {@code _klass}. The constant folding could be
  * handled by
  * {@link ReadNode#canonicalizeRead(ValueNode, AddressNode, LocationIdentity, CanonicalizerTool)}.
  */
-@NodeInfo(cycles = CYCLES_4, size = SIZE_1)
+@NodeInfo
 public final class ClassGetHubNode extends FloatingGuardedNode implements Lowerable, Canonicalizable, ConvertNode {
     public static final NodeClass<ClassGetHubNode> TYPE = NodeClass.create(ClassGetHubNode.class);
     @Input protected ValueNode clazz;

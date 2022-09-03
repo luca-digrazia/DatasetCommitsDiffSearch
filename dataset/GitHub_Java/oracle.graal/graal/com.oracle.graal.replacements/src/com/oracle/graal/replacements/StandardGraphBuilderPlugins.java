@@ -36,6 +36,16 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import sun.misc.Unsafe;
+
 import com.oracle.graal.api.directives.GraalDirectives;
 import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.calc.Condition;
@@ -44,7 +54,6 @@ import com.oracle.graal.compiler.common.type.ObjectStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.Edges;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeList;
@@ -78,7 +87,6 @@ import com.oracle.graal.nodes.extended.GetClassNode;
 import com.oracle.graal.nodes.extended.MembarNode;
 import com.oracle.graal.nodes.extended.UnboxNode;
 import com.oracle.graal.nodes.extended.UnsafeLoadNode;
-import com.oracle.graal.nodes.extended.UnsafeMemoryStoreNode;
 import com.oracle.graal.nodes.extended.UnsafeStoreNode;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
@@ -100,20 +108,12 @@ import com.oracle.graal.phases.common.instrumentation.nodes.IsMethodInlinedNode;
 import com.oracle.graal.phases.common.instrumentation.nodes.RootNameNode;
 import com.oracle.graal.phases.common.instrumentation.nodes.RuntimePathNode;
 import com.oracle.graal.replacements.nodes.DirectReadNode;
+import com.oracle.graal.replacements.nodes.DirectStoreNode;
 import com.oracle.graal.replacements.nodes.ReverseBytesNode;
 import com.oracle.graal.replacements.nodes.VirtualizableInvokeMacroNode;
 import com.oracle.graal.replacements.nodes.arithmetic.IntegerAddExactNode;
 import com.oracle.graal.replacements.nodes.arithmetic.IntegerMulExactNode;
 import com.oracle.graal.replacements.nodes.arithmetic.IntegerSubExactNode;
-
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import sun.misc.Unsafe;
 
 /**
  * Provides non-runtime specific {@link InvocationPlugin}s.
@@ -150,7 +150,7 @@ public class StandardGraphBuilderPlugins {
         try {
             STRING_VALUE_FIELD = String.class.getDeclaredField("value");
         } catch (NoSuchFieldException e) {
-            throw new GraalError(e);
+            throw new JVMCIError(e);
         }
     }
 
@@ -481,7 +481,7 @@ public class StandardGraphBuilderPlugins {
         r.register2("isInstance", Receiver.class, Object.class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver type, ValueNode object) {
-                LogicNode condition = b.recursiveAppend(InstanceOfDynamicNode.create(b.getAssumptions(), b.getConstantReflection(), type.get(), object, false));
+                LogicNode condition = b.add(InstanceOfDynamicNode.create(b.getAssumptions(), b.getConstantReflection(), type.get(), object, false));
                 b.push(JavaKind.Boolean, b.recursiveAppend(new ConditionalNode(condition).canonical(null)));
                 return true;
             }
@@ -629,7 +629,7 @@ public class StandardGraphBuilderPlugins {
         public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver unsafe, ValueNode address, ValueNode value) {
             // Emits a null-check for the otherwise unused receiver
             unsafe.get();
-            b.add(new UnsafeMemoryStoreNode(address, value, kind, LocationIdentity.any()));
+            b.add(new DirectStoreNode(address, value, kind));
             b.getGraph().markUnsafeAccess();
             return true;
         }

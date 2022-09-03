@@ -22,16 +22,16 @@
  */
 package com.oracle.graal.nodes.memory;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_3;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
 import static com.oracle.graal.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATION;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
 
-import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.debug.DebugCloseable;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.Canonicalizable;
@@ -54,13 +54,10 @@ import com.oracle.graal.nodes.spi.Virtualizable;
 import com.oracle.graal.nodes.spi.VirtualizerTool;
 import com.oracle.graal.nodes.util.GraphUtil;
 
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.MetaAccessProvider;
-
 /**
  * Reads an {@linkplain FixedAccessNode accessed} value.
  */
-@NodeInfo(nameTemplate = "Read#{p#location/s}", cycles = CYCLES_3, size = SIZE_1)
+@NodeInfo(nameTemplate = "Read#{p#location/s}")
 public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canonicalizable, Virtualizable, GuardingNode {
 
     public static final NodeClass<ReadNode> TYPE = NodeClass.create(ReadNode.class);
@@ -173,7 +170,7 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canon
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        throw GraalError.shouldNotReachHere("unexpected ReadNode before PEA");
+        throw JVMCIError.shouldNotReachHere("unexpected ReadNode before PEA");
     }
 
     @Override

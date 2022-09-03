@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import static com.oracle.graal.nodeinfo.InputType.Memory;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_500;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_100;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.Value;
 
 import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.type.StampFactory;
@@ -32,6 +31,7 @@ import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.Canonicalizable;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.FixedWithNextNode;
@@ -47,15 +47,12 @@ import com.oracle.graal.nodes.spi.VirtualizerTool;
 import com.oracle.graal.nodes.util.GraphUtil;
 import com.oracle.graal.nodes.virtual.VirtualObjectNode;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.Value;
-
 // JaCoCo Exclude
 
 /**
  * Compares two arrays with the same length.
  */
-@NodeInfo(cycles = CYCLES_500, size = SIZE_100)
+@NodeInfo
 public final class ArrayEqualsNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable, Virtualizable, MemoryAccess {
 
     public static final NodeClass<ArrayEqualsNode> TYPE = NodeClass.create(ArrayEqualsNode.class);
@@ -71,7 +68,7 @@ public final class ArrayEqualsNode extends FixedWithNextNode implements LIRLower
     /** Length of both arrays. */
     @Input ValueNode length;
 
-    @OptionalInput(Memory) MemoryNode lastLocationAccess;
+    @OptionalInput(InputType.Memory) MemoryNode lastLocationAccess;
 
     public ArrayEqualsNode(ValueNode array1, ValueNode array2, ValueNode length, @ConstantNodeParameter JavaKind kind) {
         super(TYPE, StampFactory.forKind(JavaKind.Boolean));

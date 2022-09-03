@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,31 +20,22 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.nodes;
+package com.oracle.graal.nodes.memory;
 
 import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
 
 /**
- * The start node of a graph.
+ * This interface marks nodes that access some memory location, and that have an edge to the last
+ * node that kills this location.
  */
-@NodeInfo(allowedUsageTypes = {InputType.Memory}, nameTemplate = "Start")
-public class StartNode extends BeginStateSplitNode implements MemoryCheckpoint.Single {
-    public static final NodeClass<StartNode> TYPE = NodeClass.create(StartNode.class);
+public interface MemoryAccess {
 
-    protected StartNode(NodeClass<? extends StartNode> c) {
-        super(c);
-    }
+    LocationIdentity getLocationIdentity();
 
-    public StartNode() {
-        super(TYPE);
-    }
+    MemoryNode getLastLocationAccess();
 
-    @Override
-    public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.any();
-    }
+    /**
+     * @param lla the {@link MemoryNode} that represents the last kill of the location
+     */
+    void setLastLocationAccess(MemoryNode lla);
 }

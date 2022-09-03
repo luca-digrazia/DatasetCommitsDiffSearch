@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,34 +22,46 @@
  */
 package com.oracle.graal.truffle.nodes;
 
-import java.util.*;
+import java.util.Objects;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.LocationIdentity;
+
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
 
 /**
  * A {@link LocationIdentity} wrapping an object.
  */
-public final class ObjectLocationIdentity implements LocationIdentity {
+public final class ObjectLocationIdentity extends LocationIdentity {
 
-    private static HashMap<JavaConstant, LocationIdentity> map = new HashMap<>();
-
-    private JavaConstant object;
+    private final JavaConstant object;
 
     public static LocationIdentity create(JavaConstant object) {
-        assert object.getKind() == Kind.Object && object.isNonNull();
-        synchronized (map) {
-            if (map.containsKey(object)) {
-                return map.get(object);
-            } else {
-                ObjectLocationIdentity locationIdentity = new ObjectLocationIdentity(object);
-                map.put(object, locationIdentity);
-                return locationIdentity;
-            }
-        }
+        assert object.getJavaKind() == JavaKind.Object && object.isNonNull();
+        return new ObjectLocationIdentity(object);
     }
 
     private ObjectLocationIdentity(JavaConstant object) {
         this.object = object;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof ObjectLocationIdentity) {
+            ObjectLocationIdentity that = (ObjectLocationIdentity) obj;
+            return Objects.equals(that.object, this.object);
+        }
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        return object.hashCode();
+    }
+
+    @Override
+    public boolean isImmutable() {
+        return false;
     }
 
     @Override

@@ -22,8 +22,10 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.type.Stamp;
@@ -37,12 +39,7 @@ import com.oracle.graal.nodes.NamedLocationIdentity;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.type.StampTool;
 
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
-@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
+@NodeInfo
 public abstract class UnsafeAccessNode extends FixedWithNextNode implements Canonicalizable {
 
     public static final NodeClass<UnsafeAccessNode> TYPE = NodeClass.create(UnsafeAccessNode.class);

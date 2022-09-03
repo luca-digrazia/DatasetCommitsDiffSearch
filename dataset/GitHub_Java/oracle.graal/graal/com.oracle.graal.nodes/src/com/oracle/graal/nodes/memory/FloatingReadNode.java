@@ -22,11 +22,8 @@
  */
 package com.oracle.graal.nodes.memory;
 
-import static com.oracle.graal.nodeinfo.InputType.Memory;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import jdk.vm.ci.meta.LIRKind;
 
-import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.debug.DebugCloseable;
@@ -34,6 +31,7 @@ import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.Canonicalizable;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.PiNode;
 import com.oracle.graal.nodes.ValueNodeUtil;
@@ -47,11 +45,11 @@ import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
  * A floating read of a value from memory specified in terms of an object base and an object
  * relative location. This node does not null check the object.
  */
-@NodeInfo(nameTemplate = "Read#{p#location/s}", cycles = CYCLES_2, size = SIZE_1)
+@NodeInfo(nameTemplate = "Read#{p#location/s}")
 public final class FloatingReadNode extends FloatingAccessNode implements LIRLowerable, Canonicalizable {
     public static final NodeClass<FloatingReadNode> TYPE = NodeClass.create(FloatingReadNode.class);
 
-    @OptionalInput(Memory) MemoryNode lastLocationAccess;
+    @OptionalInput(InputType.Memory) MemoryNode lastLocationAccess;
 
     public FloatingReadNode(AddressNode address, LocationIdentity location, MemoryNode lastLocationAccess, Stamp stamp) {
         this(address, location, lastLocationAccess, stamp, null, BarrierType.NONE);

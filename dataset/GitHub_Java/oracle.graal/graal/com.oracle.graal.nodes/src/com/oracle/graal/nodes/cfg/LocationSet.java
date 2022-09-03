@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,9 +22,11 @@
  */
 package com.oracle.graal.nodes.cfg;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.LocationIdentity;
 
 public class LocationSet {
     private LocationIdentity firstLocation;
@@ -47,21 +49,24 @@ public class LocationSet {
         }
     }
 
-    public boolean isKillNone() {
+    public boolean isEmpty() {
         return firstLocation == null;
     }
 
-    public boolean isKillAll() {
-        return LocationIdentity.ANY_LOCATION.equals(firstLocation);
+    public boolean isAny() {
+        return firstLocation != null && firstLocation.isAny();
     }
 
     public void add(LocationIdentity location) {
-        if (this.isKillAll()) {
+        if (this.isAny()) {
             return;
-        } else if (LocationIdentity.ANY_LOCATION.equals(location)) {
+        } else if (location.isAny()) {
             firstLocation = location;
             list = null;
+        } else if (location.isImmutable()) {
+            return;
         } else {
+            assert location.isMutable() && location.isSingle();
             if (firstLocation == null) {
                 firstLocation = location;
             } else if (location.equals(firstLocation)) {
@@ -92,10 +97,9 @@ public class LocationSet {
     }
 
     public boolean contains(LocationIdentity locationIdentity) {
-        assert locationIdentity != null;
-        assert !locationIdentity.equals(LocationIdentity.ANY_LOCATION);
+        assert locationIdentity.isSingle();
         assert locationIdentity.isMutable();
-        if (LocationIdentity.ANY_LOCATION.equals(firstLocation)) {
+        if (LocationIdentity.any().equals(firstLocation)) {
             return true;
         }
         if (locationIdentity.equals(firstLocation)) {
@@ -125,10 +129,10 @@ public class LocationSet {
 
     @Override
     public String toString() {
-        if (this.isKillAll()) {
-            return "KILLALL";
-        } else if (this.isKillNone()) {
-            return "KILLNONE";
+        if (this.isAny()) {
+            return "ANY";
+        } else if (this.isEmpty()) {
+            return "EMPTY";
         } else {
             List<LocationIdentity> copyAsList = getCopyAsList();
             return Arrays.toString(copyAsList.toArray(new LocationIdentity[0]));

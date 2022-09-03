@@ -22,17 +22,23 @@
  */
 package com.oracle.graal.replacements.amd64;
 
-import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.EXP;
-import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.LOG;
-import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.LOG10;
+import static com.oracle.graal.compiler.target.Backend.ARITHMETIC_EXP;
+import static com.oracle.graal.replacements.amd64.AMD64MathIntrinsicNode.Operation.LOG;
+import static com.oracle.graal.replacements.amd64.AMD64MathIntrinsicNode.Operation.LOG10;
+import jdk.vm.ci.amd64.AMD64;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import sun.misc.Unsafe;
 
 import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
 import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.nodes.graphbuilderconf.ForeignCallPlugin;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin.Receiver;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin.Receiver;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.Registration;
 import com.oracle.graal.nodes.java.AtomicReadAndAddNode;
 import com.oracle.graal.nodes.java.AtomicReadAndWriteNode;
@@ -42,19 +48,11 @@ import com.oracle.graal.replacements.IntegerSubstitutions;
 import com.oracle.graal.replacements.LongSubstitutions;
 import com.oracle.graal.replacements.StandardGraphBuilderPlugins.UnsafeGetPlugin;
 import com.oracle.graal.replacements.StandardGraphBuilderPlugins.UnsafePutPlugin;
-import com.oracle.graal.replacements.nodes.BinaryMathIntrinsicNode;
 import com.oracle.graal.replacements.nodes.BitCountNode;
-import com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode;
-import com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation;
-
-import jdk.vm.ci.amd64.AMD64;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import sun.misc.Unsafe;
 
 public class AMD64GraphBuilderPlugins {
 
-    public static void register(Plugins plugins, AMD64 arch) {
+    public static void register(Plugins plugins, ForeignCallsProvider foreignCalls, AMD64 arch) {
         InvocationPlugins invocationPlugins = plugins.getInvocationPlugins();
         invocationPlugins.defer(new Runnable() {
             @Override
@@ -62,7 +60,7 @@ public class AMD64GraphBuilderPlugins {
                 registerIntegerLongPlugins(invocationPlugins, IntegerSubstitutions.class, JavaKind.Int, arch);
                 registerIntegerLongPlugins(invocationPlugins, LongSubstitutions.class, JavaKind.Long, arch);
                 registerUnsafePlugins(invocationPlugins);
-                registerMathPlugins(invocationPlugins);
+                registerMathPlugins(invocationPlugins, foreignCalls);
             }
         });
     }
@@ -115,33 +113,27 @@ public class AMD64GraphBuilderPlugins {
         }
     }
 
-    private static void registerMathPlugins(InvocationPlugins plugins) {
+    private static void registerMathPlugins(InvocationPlugins plugins, ForeignCallsProvider foreignCalls) {
         Registration r = new Registration(plugins, Math.class);
-        registerUnaryMath(r, "log", LOG);
-        registerUnaryMath(r, "log10", LOG10);
-        registerUnaryMath(r, "exp", EXP);
-
+        r.register1("log", Double.TYPE, new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
+                b.push(JavaKind.Double, b.recursiveAppend(AMD64MathIntrinsicNode.create(value, LOG)));
+                return true;
+            }
+        });
+        r.register1("log10", Double.TYPE, new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
+                b.push(JavaKind.Double, b.recursiveAppend(AMD64MathIntrinsicNode.create(value, LOG10)));
+                return true;
+            }
+        });
         r.registerMethodSubstitution(AMD64MathSubstitutions.class, "sin", double.class);
         r.registerMethodSubstitution(AMD64MathSubstitutions.class, "cos", double.class);
         r.registerMethodSubstitution(AMD64MathSubstitutions.class, "tan", double.class);
-        r.register2("pow", Double.TYPE, Double.TYPE, new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode x, ValueNode y) {
-                b.push(JavaKind.Double, b.recursiveAppend(BinaryMathIntrinsicNode.create(x, y, BinaryMathIntrinsicNode.BinaryOperation.POW)));
-                return true;
-            }
-        });
-
-    }
-
-    private static void registerUnaryMath(Registration r, String name, UnaryOperation operation) {
-        r.register1(name, Double.TYPE, new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
-                b.push(JavaKind.Double, b.recursiveAppend(UnaryMathIntrinsicNode.create(value, operation)));
-                return true;
-            }
-        });
+        r.registerMethodSubstitution(AMD64MathSubstitutions.class, "pow", double.class, double.class);
+        r.register1("exp", Double.TYPE, new ForeignCallPlugin(foreignCalls, ARITHMETIC_EXP));
     }
 
     private static void registerUnsafePlugins(InvocationPlugins plugins) {

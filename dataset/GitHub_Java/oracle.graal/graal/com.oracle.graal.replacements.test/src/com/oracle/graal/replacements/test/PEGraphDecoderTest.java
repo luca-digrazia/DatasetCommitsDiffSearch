@@ -22,8 +22,8 @@
  */
 package com.oracle.graal.replacements.test;
 
-import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
-import static com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo.createStandardInlineInfo;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 import org.junit.Test;
 
@@ -49,9 +49,6 @@ import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
 import com.oracle.graal.phases.tiers.PhaseContext;
 import com.oracle.graal.replacements.CachingPEGraphDecoder;
-
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public class PEGraphDecoderTest extends GraalCompilerTest {
 
@@ -123,7 +120,7 @@ public class PEGraphDecoderTest extends GraalCompilerTest {
     class InlineAll implements InlineInvokePlugin {
         @Override
         public InlineInfo shouldInlineInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
-            return createStandardInlineInfo(method);
+            return new InlineInfo(method, false);
         }
     }
 
@@ -137,7 +134,7 @@ public class PEGraphDecoderTest extends GraalCompilerTest {
             registerPlugins(graphBuilderConfig.getPlugins().getInvocationPlugins());
             CachingPEGraphDecoder decoder = new CachingPEGraphDecoder(getProviders(), graphBuilderConfig, OptimisticOptimizations.NONE, AllowAssumptions.YES, getTarget().arch);
 
-            targetGraph = new StructuredGraph(testMethod, AllowAssumptions.YES, INVALID_COMPILATION_ID);
+            targetGraph = new StructuredGraph(testMethod, AllowAssumptions.YES);
             decoder.decode(targetGraph, testMethod, null, null, new InlineInvokePlugin[]{new InlineAll()}, null);
             Debug.dump(Debug.BASIC_LOG_LEVEL, targetGraph, "Target Graph");
             targetGraph.verify();

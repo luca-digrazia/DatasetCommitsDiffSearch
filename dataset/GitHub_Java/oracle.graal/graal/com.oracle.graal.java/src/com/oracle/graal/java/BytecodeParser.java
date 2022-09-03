@@ -230,14 +230,14 @@ import static com.oracle.graal.compiler.common.GraalOptions.PrintProfilingInform
 import static com.oracle.graal.compiler.common.GraalOptions.ResolveClassBeforeStaticInvoke;
 import static com.oracle.graal.compiler.common.GraalOptions.StressInvokeWithExceptionNode;
 import static com.oracle.graal.compiler.common.type.StampFactory.objectNonNull;
-import static com.oracle.graal.debug.GraalError.guarantee;
-import static com.oracle.graal.debug.GraalError.shouldNotReachHere;
 import static com.oracle.graal.java.BytecodeParserOptions.DumpDuringGraphBuilding;
 import static com.oracle.graal.java.BytecodeParserOptions.TraceInlineDuringParsing;
 import static com.oracle.graal.java.BytecodeParserOptions.TraceParserPlugins;
 import static com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_DURING_PARSING;
 import static com.oracle.graal.nodes.type.StampTool.isPointerNonNull;
 import static java.lang.String.format;
+import static jdk.vm.ci.common.JVMCIError.guarantee;
+import static jdk.vm.ci.common.JVMCIError.shouldNotReachHere;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateRecompile;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.JavaSubroutineMismatch;
@@ -272,12 +272,10 @@ import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.compiler.common.util.Util;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.DebugCloseable;
 import com.oracle.graal.debug.DebugCounter;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.Indent;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.graph.Graph.Mark;
@@ -330,8 +328,10 @@ import com.oracle.graal.nodes.calc.ConditionalNode;
 import com.oracle.graal.nodes.calc.DivNode;
 import com.oracle.graal.nodes.calc.FloatConvertNode;
 import com.oracle.graal.nodes.calc.IntegerBelowNode;
+import com.oracle.graal.nodes.calc.IntegerDivNode;
 import com.oracle.graal.nodes.calc.IntegerEqualsNode;
 import com.oracle.graal.nodes.calc.IntegerLessThanNode;
+import com.oracle.graal.nodes.calc.IntegerRemNode;
 import com.oracle.graal.nodes.calc.IsNullNode;
 import com.oracle.graal.nodes.calc.LeftShiftNode;
 import com.oracle.graal.nodes.calc.MulNode;
@@ -343,8 +343,6 @@ import com.oracle.graal.nodes.calc.OrNode;
 import com.oracle.graal.nodes.calc.RemNode;
 import com.oracle.graal.nodes.calc.RightShiftNode;
 import com.oracle.graal.nodes.calc.SignExtendNode;
-import com.oracle.graal.nodes.calc.SignedDivNode;
-import com.oracle.graal.nodes.calc.SignedRemNode;
 import com.oracle.graal.nodes.calc.SubNode;
 import com.oracle.graal.nodes.calc.UnsignedRightShiftNode;
 import com.oracle.graal.nodes.calc.XorNode;
@@ -389,6 +387,7 @@ import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.site.InfopointReason;
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.ConstantPool;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -401,6 +400,7 @@ import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.JavaTypeProfile;
 import jdk.vm.ci.meta.LineNumberTable;
 import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.MetaUtil;
 import jdk.vm.ci.meta.ProfilingInfo;
 import jdk.vm.ci.meta.RawConstant;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -544,7 +544,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     @SuppressWarnings("serial")
-    public static class BytecodeParserError extends GraalError {
+    public static class BytecodeParserError extends JVMCIError {
 
         public BytecodeParserError(Throwable cause) {
             super(cause);
@@ -644,7 +644,7 @@ public class BytecodeParser implements GraphBuilderContext {
     protected void build(FixedWithNextNode startInstruction, FrameStateBuilder startFrameState) {
         if (PrintProfilingInformation.getValue() && profilingInfo != null) {
             TTY.println("Profiling info for " + method.format("%H.%n(%p)"));
-            TTY.println(Util.indent(profilingInfo.toString(method, CodeUtil.NEW_LINE), "  "));
+            TTY.println(MetaUtil.indent(profilingInfo.toString(method, CodeUtil.NEW_LINE), "  "));
         }
 
         try (Indent indent = Debug.logAndIndent("build graph for %s", method)) {
@@ -1037,11 +1037,11 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected ValueNode genIntegerDiv(ValueNode x, ValueNode y) {
-        return new SignedDivNode(x, y);
+        return new IntegerDivNode(x, y);
     }
 
     protected ValueNode genIntegerRem(ValueNode x, ValueNode y) {
-        return new SignedRemNode(x, y);
+        return new IntegerRemNode(x, y);
     }
 
     protected ValueNode genNegateOp(ValueNode x) {
@@ -2960,7 +2960,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
     private JavaField lookupField(int cpi, int opcode) {
         maybeEagerlyResolve(cpi, opcode);
-        JavaField result = constantPool.lookupField(cpi, method, opcode);
+        JavaField result = constantPool.lookupField(cpi, opcode);
         if (graphBuilderConfig.eagerResolving()) {
             assert result instanceof ResolvedJavaField : "Not resolved: " + result;
             ResolvedJavaType declaringClass = ((ResolvedJavaField) result).getDeclaringClass();

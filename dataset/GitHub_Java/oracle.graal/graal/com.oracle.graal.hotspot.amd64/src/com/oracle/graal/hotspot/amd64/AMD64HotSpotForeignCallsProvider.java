@@ -37,23 +37,22 @@ import static jdk.vm.ci.amd64.AMD64.rax;
 import static jdk.vm.ci.amd64.AMD64.rdx;
 import static jdk.vm.ci.hotspot.HotSpotCallingConventionType.NativeCall;
 import static jdk.vm.ci.meta.Value.ILLEGAL;
-
-import com.oracle.graal.compiler.common.LIRKind;
-import com.oracle.graal.hotspot.HotSpotForeignCallLinkageImpl;
-import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
-import com.oracle.graal.hotspot.meta.HotSpotHostForeignCallsProvider;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.word.WordTypes;
-
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
+import jdk.vm.ci.meta.LIRKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.PlatformKind;
 import jdk.vm.ci.meta.Value;
+
+import com.oracle.graal.hotspot.HotSpotForeignCallLinkageImpl;
+import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
+import com.oracle.graal.hotspot.meta.HotSpotHostForeignCallsProvider;
+import com.oracle.graal.hotspot.meta.HotSpotProviders;
+import com.oracle.graal.word.WordTypes;
 
 public class AMD64HotSpotForeignCallsProvider extends HotSpotHostForeignCallsProvider {
 
@@ -67,7 +66,7 @@ public class AMD64HotSpotForeignCallsProvider extends HotSpotHostForeignCallsPro
 
     @Override
     public void initialize(HotSpotProviders providers) {
-        GraalHotSpotVMConfig config = runtime.getVMConfig();
+        HotSpotVMConfig config = jvmciRuntime.getConfig();
         TargetDescription target = providers.getCodeCache().getTarget();
         PlatformKind word = target.arch.getWordKind();
 

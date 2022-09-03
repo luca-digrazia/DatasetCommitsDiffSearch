@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,37 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.java.*;
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.StampPair;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.Invoke;
+import com.oracle.graal.nodes.InvokeNode;
+import com.oracle.graal.nodes.StateSplit;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.java.MethodCallTargetNode;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
 
 /**
  * This is an extension of {@link MacroNode} that is a {@link StateSplit} and a
  * {@link MemoryCheckpoint}.
  */
-public class MacroStateSplitNode extends MacroNode implements StateSplit, MemoryCheckpoint.Single {
+@NodeInfo
+public abstract class MacroStateSplitNode extends MacroNode implements StateSplit, MemoryCheckpoint.Single {
 
-    @Input(InputType.State) private FrameState stateAfter;
+    public static final NodeClass<MacroStateSplitNode> TYPE = NodeClass.create(MacroStateSplitNode.class);
+    @OptionalInput(InputType.State) protected FrameState stateAfter;
 
-    protected MacroStateSplitNode(Invoke invoke) {
-        super(invoke);
-        this.stateAfter = invoke.stateAfter();
+    protected MacroStateSplitNode(NodeClass<? extends MacroNode> c, InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, StampPair returnStamp, ValueNode... arguments) {
+        super(c, invokeKind, targetMethod, bci, returnStamp, arguments);
     }
 
     @Override
@@ -48,33 +60,28 @@ public class MacroStateSplitNode extends MacroNode implements StateSplit, Memory
         return stateAfter;
     }
 
+    @Override
     public void setStateAfter(FrameState x) {
         assert x == null || x.isAlive() : "frame state must be in a graph";
         updateUsages(stateAfter, x);
         stateAfter = x;
     }
 
+    @Override
     public boolean hasSideEffect() {
         return true;
     }
 
+    @Override
     public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.ANY_LOCATION;
-    }
-
-    public MemoryCheckpoint asMemoryCheckpoint() {
-        return this;
-    }
-
-    public MemoryPhiNode asMemoryPhi() {
-        return null;
+        return LocationIdentity.any();
     }
 
     protected void replaceSnippetInvokes(StructuredGraph snippetGraph) {
-        for (MethodCallTargetNode call : snippetGraph.getNodes(MethodCallTargetNode.class)) {
+        for (MethodCallTargetNode call : snippetGraph.getNodes(MethodCallTargetNode.TYPE)) {
             Invoke invoke = call.invoke();
             if (!call.targetMethod().equals(getTargetMethod())) {
-                throw new GraalInternalError("unexpected invoke %s in snippet", getClass().getSimpleName());
+                throw new JVMCIError("unexpected invoke %s in snippet", getClass().getSimpleName());
             }
             assert invoke.stateAfter().bci == BytecodeFrame.AFTER_BCI;
             // Here we need to fix the bci of the invoke

@@ -20,31 +20,18 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.nodes;
+package com.oracle.graal.nodes.memory;
 
 import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.extended.GuardedNode;
+import com.oracle.graal.nodes.memory.address.AddressNode;
 
-/**
- * The start node of a graph.
- */
-@NodeInfo(allowedUsageTypes = {InputType.Memory}, nameTemplate = "Start")
-public class StartNode extends BeginStateSplitNode implements MemoryCheckpoint.Single {
-    public static final NodeClass<StartNode> TYPE = NodeClass.create(StartNode.class);
+public interface Access extends GuardedNode, HeapAccess {
 
-    protected StartNode(NodeClass<? extends StartNode> c) {
-        super(c);
-    }
+    AddressNode getAddress();
 
-    public StartNode() {
-        super(TYPE);
-    }
+    LocationIdentity getLocationIdentity();
 
-    @Override
-    public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.any();
-    }
+    boolean canNullCheck();
+
 }

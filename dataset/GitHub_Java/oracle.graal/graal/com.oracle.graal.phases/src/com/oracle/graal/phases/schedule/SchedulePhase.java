@@ -98,7 +98,7 @@ public final class SchedulePhase extends Phase {
         this(strategy, false);
     }
 
-    public SchedulePhase(SchedulingStrategy strategy, boolean immutableGraph) {
+    private SchedulePhase(SchedulingStrategy strategy, boolean immutableGraph) {
         this.selectedStrategy = strategy;
         this.immutableGraph = immutableGraph;
     }
@@ -351,9 +351,7 @@ public final class SchedulePhase extends Phase {
                 for (ProxyNode proxy : loopExitNode.proxies()) {
                     unprocessed.clear(proxy);
                     ValueNode value = proxy.value();
-                    // if multiple proxies reference the same value, schedule the value of a
-                    // proxy once
-                    if (value != null && nodeMap.get(value) == b && unprocessed.isMarked(value)) {
+                    if (value != null && nodeMap.get(value) == b) {
                         sortIntoList(value, b, result, nodeMap, unprocessed, null);
                     }
                 }
@@ -852,5 +850,4 @@ public final class SchedulePhase extends Phase {
             return blockToNodesMap.get(block);
         }
     }
-
 }

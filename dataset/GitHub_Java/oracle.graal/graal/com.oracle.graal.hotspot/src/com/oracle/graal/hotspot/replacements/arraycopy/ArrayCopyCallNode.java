@@ -25,6 +25,7 @@ package com.oracle.graal.hotspot.replacements.arraycopy;
 
 import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayBaseOffset;
 import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayIndexScale;
+import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -42,9 +43,7 @@ import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
 import com.oracle.graal.hotspot.meta.HotSpotHostForeignCallsProvider;
 import com.oracle.graal.hotspot.nodes.GetObjectAddressNode;
 import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeCycles;
 import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.NodeSize;
 import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.FixedWithNextNode;
 import com.oracle.graal.nodes.NamedLocationIdentity;
@@ -62,7 +61,7 @@ import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
 import com.oracle.graal.nodes.spi.Lowerable;
 import com.oracle.graal.nodes.spi.LoweringTool;
 
-@NodeInfo(allowedUsageTypes = {InputType.Memory}, cycles = NodeCycles.CYCLES_UNKNOWN, size = NodeSize.SIZE_UNKNOWN)
+@NodeInfo(allowedUsageTypes = {InputType.Memory})
 public final class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single, MemoryAccess, Canonicalizable {
 
     public static final NodeClass<ArrayCopyCallNode> TYPE = NodeClass.create(ArrayCopyCallNode.class);
@@ -220,8 +219,8 @@ public final class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements
         return uninitialized;
     }
 
-    boolean isHeapWordAligned(JavaConstant value, JavaKind kind) {
-        return (getArrayBaseOffset(kind) + (long) value.asInt() * getArrayIndexScale(kind)) % runtime.getVMConfig().heapWordSize == 0;
+    static boolean isHeapWordAligned(JavaConstant value, JavaKind kind) {
+        return (getArrayBaseOffset(kind) + (long) value.asInt() * getArrayIndexScale(kind)) % config().heapWordSize == 0;
     }
 
     public void updateAlignedDisjoint() {

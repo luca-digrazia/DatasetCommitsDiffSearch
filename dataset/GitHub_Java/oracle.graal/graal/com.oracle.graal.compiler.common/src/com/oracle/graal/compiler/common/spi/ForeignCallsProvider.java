@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.compiler.common.spi;
 
-import jdk.vm.ci.meta.LocationIdentity;
+import com.oracle.graal.compiler.common.LocationIdentity;
 
 /**
  * Details about a set of supported {@link ForeignCallDescriptor foreign calls}.
@@ -46,6 +46,11 @@ public interface ForeignCallsProvider {
      * Determines if deoptimization can occur during a given foreign call.
      */
     boolean canDeoptimize(ForeignCallDescriptor descriptor);
+
+    /**
+     * Identifies foreign calls which are guaranteed to include a safepoint check.
+     */
+    boolean isGuaranteedSafepoint(ForeignCallDescriptor descriptor);
 
     /**
      * Gets the linkage for a foreign call.

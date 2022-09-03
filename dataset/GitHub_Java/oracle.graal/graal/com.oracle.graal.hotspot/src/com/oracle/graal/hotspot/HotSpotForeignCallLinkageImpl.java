@@ -23,12 +23,25 @@
 package com.oracle.graal.hotspot;
 
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.DESTROYS_REGISTERS;
-import static com.oracle.graal.lir.LIRValueUtil.isVirtualStackSlot;
-import static jdk.vm.ci.code.ValueUtil.isStackSlot;
 import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntime.runtime;
 
-import java.util.Arrays;
 import java.util.Set;
+
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.CallingConvention.Type;
+import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
+import jdk.vm.ci.hotspot.HotSpotForeignCallTarget;
+import jdk.vm.ci.hotspot.HotSpotProxified;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.Value;
 
 import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
@@ -37,25 +50,10 @@ import com.oracle.graal.hotspot.meta.HotSpotForeignCallsProvider;
 import com.oracle.graal.hotspot.stubs.Stub;
 import com.oracle.graal.word.WordTypes;
 
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CallingConvention.Type;
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.ValueKindFactory;
-import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
-import jdk.vm.ci.hotspot.HotSpotForeignCallTarget;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.Value;
-
 /**
  * The details required to link a HotSpot runtime or stub call.
  */
-public class HotSpotForeignCallLinkageImpl extends HotSpotForeignCallTarget implements HotSpotForeignCallLinkage {
+public class HotSpotForeignCallLinkageImpl extends HotSpotForeignCallTarget implements HotSpotForeignCallLinkage, HotSpotProxified {
 
     /**
      * The descriptor of the call.
@@ -112,30 +110,29 @@ public class HotSpotForeignCallLinkageImpl extends HotSpotForeignCallTarget impl
     public static HotSpotForeignCallLinkage create(MetaAccessProvider metaAccess, CodeCacheProvider codeCache, WordTypes wordTypes, HotSpotForeignCallsProvider foreignCalls,
                     ForeignCallDescriptor descriptor, long address, RegisterEffect effect, Type outgoingCcType, Type incomingCcType, Transition transition, boolean reexecutable,
                     LocationIdentity... killedLocations) {
-        CallingConvention outgoingCc = createCallingConvention(metaAccess, codeCache, wordTypes, foreignCalls, descriptor, outgoingCcType);
-        CallingConvention incomingCc = incomingCcType == null ? null : createCallingConvention(metaAccess, codeCache, wordTypes, foreignCalls, descriptor, incomingCcType);
+        CallingConvention outgoingCc = createCallingConvention(metaAccess, codeCache, wordTypes, descriptor, outgoingCcType);
+        CallingConvention incomingCc = incomingCcType == null ? null : createCallingConvention(metaAccess, codeCache, wordTypes, descriptor, incomingCcType);
         HotSpotForeignCallLinkageImpl linkage = new HotSpotForeignCallLinkageImpl(descriptor, address, effect, transition, outgoingCc, incomingCc, reexecutable, killedLocations);
         if (outgoingCcType == HotSpotCallingConventionType.NativeCall) {
             linkage.temporaries = foreignCalls.getNativeABICallerSaveRegisters();
         }
-        linkage.addStackSlotsToTemporaries();
         return linkage;
     }
 
     /**
      * Gets a calling convention for a given descriptor and call type.
      */
-    public static CallingConvention createCallingConvention(MetaAccessProvider metaAccess, CodeCacheProvider codeCache, WordTypes wordTypes, ValueKindFactory<?> valueKindFactory,
-                    ForeignCallDescriptor descriptor, Type ccType) {
+    public static CallingConvention createCallingConvention(MetaAccessProvider metaAccess, CodeCacheProvider codeCache, WordTypes wordTypes, ForeignCallDescriptor descriptor, Type ccType) {
         assert ccType != null;
         Class<?>[] argumentTypes = descriptor.getArgumentTypes();
         JavaType[] parameterTypes = new JavaType[argumentTypes.length];
         for (int i = 0; i < parameterTypes.length; ++i) {
             parameterTypes[i] = asJavaType(argumentTypes[i], metaAccess, wordTypes);
         }
+        TargetDescription target = codeCache.getTarget();
         JavaType returnType = asJavaType(descriptor.getResultType(), metaAccess, wordTypes);
         RegisterConfig regConfig = codeCache.getRegisterConfig();
-        return regConfig.getCallingConvention(ccType, returnType, parameterTypes, valueKindFactory);
+        return regConfig.getCallingConvention(ccType, returnType, parameterTypes, target);
     }
 
     private static JavaType asJavaType(Class<?> type, MetaAccessProvider metaAccess, WordTypes wordTypes) {
@@ -153,9 +150,8 @@ public class HotSpotForeignCallLinkageImpl extends HotSpotForeignCallTarget impl
         this.address = address;
         this.effect = effect;
         this.transition = transition;
-        assert outgoingCallingConvention != null : "only incomingCallingConvention can be null";
         this.outgoingCallingConvention = outgoingCallingConvention;
-        this.incomingCallingConvention = incomingCallingConvention != null ? incomingCallingConvention : outgoingCallingConvention;
+        this.incomingCallingConvention = incomingCallingConvention;
         this.reexecutable = reexecutable;
         this.killedLocations = killedLocations;
     }
@@ -232,29 +228,6 @@ public class HotSpotForeignCallLinkageImpl extends HotSpotForeignCallTarget impl
         return address == 0L || stub != null;
     }
 
-    /**
-     * Ensure that outgoing stack slots appear to be killed by the call.
-     */
-    private void addStackSlotsToTemporaries() {
-        int extraTemps = 0;
-        AllocatableValue[] arguments = getOutgoingCallingConvention().getArguments();
-        for (Value p : arguments) {
-            if (isStackSlot(p)) {
-                extraTemps++;
-            }
-            assert !isVirtualStackSlot(p) : "only real stack slots in calling convention";
-        }
-        if (extraTemps != 0) {
-            int index = temporaries.length;
-            temporaries = Arrays.copyOf(temporaries, temporaries.length + extraTemps);
-            for (Value p : arguments) {
-                if (isStackSlot(p)) {
-                    temporaries[index++] = p;
-                }
-            }
-        }
-    }
-
     @Override
     public void finalizeAddress(Backend backend) {
         if (address == 0) {
@@ -270,7 +243,6 @@ public class HotSpotForeignCallLinkageImpl extends HotSpotForeignCallTarget impl
                 }
                 temporaries = temporaryLocations;
             }
-            addStackSlotsToTemporaries();
             address = code.getStart();
         }
     }

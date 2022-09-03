@@ -45,7 +45,6 @@ import static com.oracle.graal.hotspot.HotSpotBackend.UNCOMMON_TRAP;
 import static com.oracle.graal.hotspot.HotSpotBackend.UNPACK_FRAMES;
 import static com.oracle.graal.hotspot.HotSpotBackend.UNWIND_EXCEPTION_TO_CALLER;
 import static com.oracle.graal.hotspot.HotSpotBackend.VM_ERROR;
-import static com.oracle.graal.hotspot.HotSpotBackend.Options.GraalArithmeticStubs;
 import static com.oracle.graal.hotspot.HotSpotBackend.Options.PreferGraalStubs;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.DESTROYS_REGISTERS;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.PRESERVES_REGISTERS;
@@ -93,10 +92,8 @@ import java.util.Map;
 import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
 import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.hotspot.stubs.ArrayStoreExceptionStub;
 import com.oracle.graal.hotspot.stubs.ClassCastExceptionStub;
 import com.oracle.graal.hotspot.stubs.CreateExceptionStub;
@@ -113,7 +110,9 @@ import com.oracle.graal.word.Word;
 import com.oracle.graal.word.WordTypes;
 
 import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 
@@ -226,7 +225,7 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
     }
 
     public void initialize(HotSpotProviders providers) {
-        GraalHotSpotVMConfig c = runtime.getVMConfig();
+        HotSpotVMConfig c = jvmciRuntime.getConfig();
         if (!PreferGraalStubs.getValue()) {
             registerForeignCall(DEOPTIMIZATION_HANDLER, c.handleDeoptStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, REEXECUTABLE, NO_LOCATIONS);
             registerForeignCall(UNCOMMON_TRAP_HANDLER, c.uncommonTrapStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, REEXECUTABLE, NO_LOCATIONS);
@@ -239,10 +238,8 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
         registerForeignCall(ARITHMETIC_COS, c.arithmeticCosAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
         registerForeignCall(ARITHMETIC_TAN, c.arithmeticTanAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
         registerForeignCall(ARITHMETIC_EXP, c.arithmeticExpAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
-        if (!GraalArithmeticStubs.getValue()) {
-            registerForeignCall(ARITHMETIC_LOG, c.arithmeticLogAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
-            registerForeignCall(ARITHMETIC_LOG10, c.arithmeticLog10Address, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
-        }
+        registerForeignCall(ARITHMETIC_LOG, c.arithmeticLogAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
+        registerForeignCall(ARITHMETIC_LOG10, c.arithmeticLog10Address, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
         registerForeignCall(ARITHMETIC_POW, c.arithmeticPowAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
         registerForeignCall(LOAD_AND_CLEAR_EXCEPTION, c.loadAndClearExceptionAddress, NativeCall, DESTROYS_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE, any());
 
@@ -326,7 +323,7 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
                 registerForeignCall(DECRYPT_BLOCK, c.aescryptDecryptBlockStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE, NamedLocationIdentity.getArrayLocation(JavaKind.Byte));
                 registerForeignCall(DECRYPT_BLOCK_WITH_ORIGINAL_KEY, c.aescryptDecryptBlockStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE,
                                 NamedLocationIdentity.getArrayLocation(JavaKind.Byte));
-            } catch (GraalError e) {
+            } catch (JVMCIError e) {
                 if (!(e.getCause() instanceof ClassNotFoundException)) {
                     throw e;
                 }
@@ -339,7 +336,7 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
                                 NamedLocationIdentity.getArrayLocation(JavaKind.Byte));
                 registerForeignCall(DECRYPT_WITH_ORIGINAL_KEY, c.cipherBlockChainingDecryptAESCryptStub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE,
                                 NamedLocationIdentity.getArrayLocation(JavaKind.Byte));
-            } catch (GraalError e) {
+            } catch (JVMCIError e) {
                 if (!(e.getCause() instanceof ClassNotFoundException)) {
                     throw e;
                 }

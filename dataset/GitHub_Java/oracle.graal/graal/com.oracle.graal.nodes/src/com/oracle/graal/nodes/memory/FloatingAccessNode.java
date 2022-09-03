@@ -20,36 +20,42 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.nodes.extended;
+package com.oracle.graal.nodes.memory;
 
 import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.nodes.FloatingGuardedNode;
+import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.nodes.memory.address.AddressNode;
 
-/**
- * Creates a memory barrier.
- */
-@NodeInfo(allowedUsageTypes = {InputType.Memory})
-public final class MembarNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Single {
+@NodeInfo
+public abstract class FloatingAccessNode extends FloatingGuardedNode implements Access, MemoryAccess {
+    public static final NodeClass<FloatingAccessNode> TYPE = NodeClass.create(FloatingAccessNode.class);
 
-    public static final NodeClass<MembarNode> TYPE = NodeClass.create(MembarNode.class);
-    protected final int barriers;
+    @Input(InputType.Association) AddressNode address;
     protected final LocationIdentity location;
 
-    public MembarNode(int barriers) {
-        this(barriers, LocationIdentity.any());
+    protected BarrierType barrierType;
+
+    protected FloatingAccessNode(NodeClass<? extends FloatingAccessNode> c, AddressNode address, LocationIdentity location, Stamp stamp) {
+        super(c, stamp);
+        this.address = address;
+        this.location = location;
     }
 
-    public MembarNode(int barriers, LocationIdentity location) {
-        super(TYPE, StampFactory.forVoid());
-        this.barriers = barriers;
+    protected FloatingAccessNode(NodeClass<? extends FloatingAccessNode> c, AddressNode address, LocationIdentity location, Stamp stamp, GuardingNode guard, BarrierType barrierType) {
+        super(c, stamp, guard);
+        this.address = address;
         this.location = location;
+        this.barrierType = barrierType;
+    }
+
+    @Override
+    public AddressNode getAddress() {
+        return address;
     }
 
     @Override
@@ -58,13 +64,14 @@ public final class MembarNode extends FixedWithNextNode implements LIRLowerable,
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool generator) {
-        generator.getLIRGeneratorTool().emitMembar(barriers);
+    public BarrierType getBarrierType() {
+        return barrierType;
     }
 
-    @NodeIntrinsic
-    public static native void memoryBarrier(@ConstantNodeParameter int barriers);
+    @Override
+    public boolean canNullCheck() {
+        return true;
+    }
 
-    @NodeIntrinsic
-    public static native void memoryBarrier(@ConstantNodeParameter int barriers, @ConstantNodeParameter LocationIdentity location);
+    public abstract FixedAccessNode asFixedNode();
 }

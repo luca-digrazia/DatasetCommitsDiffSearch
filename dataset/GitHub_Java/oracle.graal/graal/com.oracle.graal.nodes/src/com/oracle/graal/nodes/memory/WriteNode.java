@@ -22,17 +22,15 @@
  */
 package com.oracle.graal.nodes.memory;
 
-import static com.oracle.graal.nodeinfo.InputType.Guard;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.LIRKind;
 
-import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.Simplifiable;
 import com.oracle.graal.graph.spi.SimplifierTool;
+import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.PiNode;
 import com.oracle.graal.nodes.ValueNode;
@@ -48,12 +46,12 @@ import com.oracle.graal.nodes.spi.VirtualizerTool;
 /**
  * Writes a given {@linkplain #value() value} a {@linkplain FixedAccessNode memory location}.
  */
-@NodeInfo(nameTemplate = "Write#{p#location/s}", cycles = CYCLES_2, size = SIZE_1)
+@NodeInfo(nameTemplate = "Write#{p#location/s}")
 public class WriteNode extends AbstractWriteNode implements LIRLowerable, Simplifiable, Virtualizable {
 
     public static final NodeClass<WriteNode> TYPE = NodeClass.create(WriteNode.class);
 
-    @OptionalInput(Guard) protected GuardingNode storeCheckGuard;
+    @OptionalInput(InputType.Guard) protected GuardingNode storeCheckGuard;
 
     protected WriteNode(ValueNode address, LocationIdentity location, ValueNode value, BarrierType barrierType) {
         this((AddressNode) address, location, value, barrierType);
@@ -98,7 +96,7 @@ public class WriteNode extends AbstractWriteNode implements LIRLowerable, Simpli
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        throw GraalError.shouldNotReachHere("unexpected WriteNode before PEA");
+        throw JVMCIError.shouldNotReachHere("unexpected WriteNode before PEA");
     }
 
     @Override

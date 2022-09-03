@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,54 +20,46 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.nodes.java;
-
-import jdk.vm.ci.meta.Value;
-import sun.misc.Unsafe;
+package com.oracle.graal.nodes.memory;
 
 import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.NodeInputList;
 import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.AbstractMergeNode;
+import com.oracle.graal.nodes.PhiNode;
 import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.memory.AbstractMemoryCheckpoint;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.memory.address.AddressNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
- * Represents an atomic read-and-add operation like {@link Unsafe#getAndAddInt(Object, long, int)}.
+ * Memory {@code PhiNode}s merge memory dependencies at control flow merges.
  */
-@NodeInfo(allowedUsageTypes = {InputType.Memory})
-public final class AtomicReadAndAddNode extends AbstractMemoryCheckpoint implements LIRLowerable, MemoryCheckpoint.Single {
+@NodeInfo(nameTemplate = "Phi({i#values}) {p#locationIdentity/s}", allowedUsageTypes = {InputType.Memory})
+public final class MemoryPhiNode extends PhiNode implements MemoryNode {
 
-    public static final NodeClass<AtomicReadAndAddNode> TYPE = NodeClass.create(AtomicReadAndAddNode.class);
-    @Input(InputType.Association) AddressNode address;
-    @Input ValueNode delta;
-
+    public static final NodeClass<MemoryPhiNode> TYPE = NodeClass.create(MemoryPhiNode.class);
+    @Input(InputType.Memory) NodeInputList<ValueNode> values;
     protected final LocationIdentity locationIdentity;
 
-    public AtomicReadAndAddNode(AddressNode address, ValueNode delta, LocationIdentity locationIdentity) {
-        super(TYPE, StampFactory.forKind(delta.getStackKind()));
-        this.address = address;
-        this.delta = delta;
+    public MemoryPhiNode(AbstractMergeNode merge, LocationIdentity locationIdentity) {
+        super(TYPE, StampFactory.forVoid(), merge);
         this.locationIdentity = locationIdentity;
+        this.values = new NodeInputList<>(this);
     }
 
-    public ValueNode delta() {
-        return delta;
+    public MemoryPhiNode(AbstractMergeNode merge, LocationIdentity locationIdentity, ValueNode[] values) {
+        super(TYPE, StampFactory.forVoid(), merge);
+        this.locationIdentity = locationIdentity;
+        this.values = new NodeInputList<>(this, values);
     }
 
-    @Override
     public LocationIdentity getLocationIdentity() {
         return locationIdentity;
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        Value result = gen.getLIRGeneratorTool().emitAtomicReadAndAdd(gen.operand(address), gen.operand(delta));
-        gen.setResult(this, result);
+    public NodeInputList<ValueNode> values() {
+        return values;
     }
 }

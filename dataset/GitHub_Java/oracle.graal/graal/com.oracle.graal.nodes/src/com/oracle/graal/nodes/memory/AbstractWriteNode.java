@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.nodes.memory;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_3;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
-
 import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.graph.Node;
@@ -38,7 +35,7 @@ import com.oracle.graal.nodes.ValueNodeUtil;
 import com.oracle.graal.nodes.extended.GuardingNode;
 import com.oracle.graal.nodes.memory.address.AddressNode;
 
-@NodeInfo(allowedUsageTypes = {InputType.Memory}, cycles = CYCLES_3, size = SIZE_1)
+@NodeInfo(allowedUsageTypes = {InputType.Memory})
 public abstract class AbstractWriteNode extends FixedAccessNode implements StateSplit, MemoryCheckpoint.Single, MemoryAccess, GuardingNode {
 
     public static final NodeClass<AbstractWriteNode> TYPE = NodeClass.create(AbstractWriteNode.class);

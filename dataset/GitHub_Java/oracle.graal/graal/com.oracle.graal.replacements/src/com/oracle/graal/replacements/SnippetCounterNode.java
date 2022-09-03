@@ -23,18 +23,19 @@
 package com.oracle.graal.replacements;
 
 import static com.oracle.graal.compiler.common.GraalOptions.SnippetCounters;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_IGNORED;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_IGNORED;
 import static com.oracle.graal.replacements.SnippetTemplate.DEFAULT_REPLACER;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
 
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.common.JVMCIError;
+import sun.misc.Unsafe;
+
 import com.oracle.graal.api.replacements.Fold;
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.FixedWithNextNode;
@@ -50,9 +51,6 @@ import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
 import com.oracle.graal.word.ObjectAccess;
 
-import jdk.vm.ci.code.TargetDescription;
-import sun.misc.Unsafe;
-
 /**
  * This node can be used to add a counter to the code that will estimate the dynamic number of calls
  * by adding an increment to the compiled code. This should of course only be used for
@@ -61,7 +59,7 @@ import sun.misc.Unsafe;
  * A unique counter will be created for each unique name passed to the constructor. Depending on the
  * value of withContext, the name of the root method is added to the counter's name.
  */
-@NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+@NodeInfo
 public class SnippetCounterNode extends FixedWithNextNode implements Lowerable {
 
     public static final NodeClass<SnippetCounterNode> TYPE = NodeClass.create(SnippetCounterNode.class);
@@ -134,7 +132,7 @@ public class SnippetCounterNode extends FixedWithNextNode implements Lowerable {
             try {
                 return (int) UNSAFE.objectFieldOffset(SnippetCounter.class.getDeclaredField("value"));
             } catch (Exception e) {
-                throw new GraalError(e);
+                throw new JVMCIError(e);
             }
         }
 

@@ -40,6 +40,18 @@ import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.Register.RegisterCategory;
+import jdk.vm.ci.meta.JavaField;
+import jdk.vm.ci.meta.JavaMethod;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.Value;
+
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
@@ -47,7 +59,6 @@ import org.junit.Test;
 import com.oracle.graal.api.test.Graal;
 import com.oracle.graal.compiler.CompilerThreadFactory;
 import com.oracle.graal.compiler.CompilerThreadFactory.DebugConfigAccess;
-import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
 import com.oracle.graal.debug.Debug;
@@ -63,8 +74,8 @@ import com.oracle.graal.nodes.PhiNode;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.PhaseSuite;
 import com.oracle.graal.phases.VerifyPhase;
@@ -77,17 +88,6 @@ import com.oracle.graal.phases.verify.VerifyUsageWithEquals;
 import com.oracle.graal.phases.verify.VerifyVirtualizableUsage;
 import com.oracle.graal.runtime.RuntimeProvider;
 import com.oracle.graal.test.GraalTest;
-
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.Register.RegisterCategory;
-import jdk.vm.ci.meta.JavaField;
-import jdk.vm.ci.meta.JavaMethod;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.Value;
 
 /**
  * Checks that all classes in *graal*.jar and *jvmci*.jar entries on the boot class path comply with
@@ -130,7 +130,7 @@ public class CheckGraalInvariants extends GraalTest {
 
         Assume.assumeTrue(VerifyPhase.class.desiredAssertionStatus());
 
-        String propertyName = Java8OrEarlier ? "sun.boot.class.path" : "jdk.module.path";
+        String propertyName = JDK8OrEarlier ? "sun.boot.class.path" : "jdk.module.path";
         String bootclasspath = System.getProperty(propertyName);
         Assert.assertNotNull("Cannot find value of " + propertyName, bootclasspath);
 

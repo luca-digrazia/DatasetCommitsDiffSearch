@@ -64,20 +64,29 @@ import static com.oracle.graal.replacements.nodes.CStringConstant.cstring;
 import static com.oracle.graal.replacements.nodes.ExplodeLoopNode.explodeLoop;
 import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayBaseOffset;
 import static jdk.vm.ci.hotspot.HotSpotMetaAccessProvider.computeArrayAllocationSize;
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
+import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 import com.oracle.graal.api.replacements.Fold;
 import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.HotSpotBackend;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.hotspot.meta.HotSpotRegistersProvider;
 import com.oracle.graal.hotspot.nodes.DimensionsNode;
-import com.oracle.graal.nodes.PrefetchAllocateNode;
+import com.oracle.graal.hotspot.nodes.PrefetchAllocateNode;
 import com.oracle.graal.hotspot.nodes.type.KlassPointerStamp;
 import com.oracle.graal.hotspot.word.KlassPointer;
 import com.oracle.graal.nodes.ConstantNode;
@@ -110,16 +119,6 @@ import com.oracle.graal.replacements.Snippets;
 import com.oracle.graal.replacements.nodes.ExplodeLoopNode;
 import com.oracle.graal.word.Word;
 
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
-import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
 /**
  * Snippets used for implementing NEW, ANEWARRAY and NEWARRAY.
  */
@@ -150,7 +149,7 @@ public class NewObjectSnippets implements Snippets {
             case Total:
                 return "bytes";
             default:
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
     }
 

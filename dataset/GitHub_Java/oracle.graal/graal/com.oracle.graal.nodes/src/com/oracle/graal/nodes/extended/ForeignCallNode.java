@@ -207,8 +207,4 @@ public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowe
     public boolean isGuaranteedSafepoint() {
         return foreignCalls.isGuaranteedSafepoint(descriptor);
     }
-
-    public NodeInputList<ValueNode> getArguments() {
-        return arguments;
-    }
 }

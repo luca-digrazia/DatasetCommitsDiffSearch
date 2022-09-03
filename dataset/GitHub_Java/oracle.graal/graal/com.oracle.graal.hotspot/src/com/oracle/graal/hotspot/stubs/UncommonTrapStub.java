@@ -22,33 +22,31 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
 import static com.oracle.graal.hotspot.HotSpotBackend.Options.PreferGraalStubs;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.config;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.readPendingDeoptimization;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.registerAsWord;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.writePendingDeoptimization;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.writeRegisterAsWord;
 
 import com.oracle.graal.api.replacements.Fold;
-import com.oracle.graal.api.replacements.Fold.InjectedParameter;
-import com.oracle.graal.api.replacements.Snippet;
-import com.oracle.graal.api.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.hotspot.nodes.SaveAllRegistersNode;
 import com.oracle.graal.hotspot.nodes.StubForeignCallNode;
 import com.oracle.graal.hotspot.nodes.UncommonTrapCallNode;
 import com.oracle.graal.nodes.NamedLocationIdentity;
+import com.oracle.graal.replacements.Snippet;
+import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.word.Word;
 
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.common.JVMCIError;
 
 /**
  * Uncommon trap stub.
@@ -112,7 +110,7 @@ public class UncommonTrapStub extends SnippetStub {
             case 1:
                 return providers.getRegisters().getStackPointerRegister();
             default:
-                throw GraalError.shouldNotReachHere("unknown parameter " + name + " at index " + index);
+                throw JVMCIError.shouldNotReachHere("unknown parameter " + name + " at index " + index);
         }
     }
 
@@ -136,7 +134,7 @@ public class UncommonTrapStub extends SnippetStub {
         final int actionAndReason = readPendingDeoptimization(thread);
         writePendingDeoptimization(thread, -1);
 
-        final Word unrollBlock = UncommonTrapCallNode.uncommonTrap(registerSaver, actionAndReason, deoptimizationUnpackUncommonTrap(INJECTED_VMCONFIG));
+        final Word unrollBlock = UncommonTrapCallNode.uncommonTrap(registerSaver, actionAndReason, deoptimizationUnpackUncommonTrap());
 
         DeoptimizationStub.deoptimizationCommon(stackPointerRegister, thread, registerSaver, unrollBlock);
     }
@@ -158,8 +156,8 @@ public class UncommonTrapStub extends SnippetStub {
     }
 
     @Fold
-    static int stackShadowPages(@InjectedParameter GraalHotSpotVMConfig config) {
-        return config.useStackBanging ? config.stackShadowPages : 0;
+    static int stackShadowPages() {
+        return config().useStackBanging ? config().stackShadowPages : 0;
     }
 
     /**
@@ -171,53 +169,53 @@ public class UncommonTrapStub extends SnippetStub {
      */
     @Deprecated
     @Fold
-    static int stackBias(@InjectedParameter GraalHotSpotVMConfig config) {
-        return config.stackBias;
+    static int stackBias() {
+        return config().stackBias;
     }
 
     @Fold
-    static int deoptimizationUnrollBlockSizeOfDeoptimizedFrameOffset(@InjectedParameter GraalHotSpotVMConfig config) {
-        return config.deoptimizationUnrollBlockSizeOfDeoptimizedFrameOffset;
+    static int deoptimizationUnrollBlockSizeOfDeoptimizedFrameOffset() {
+        return config().deoptimizationUnrollBlockSizeOfDeoptimizedFrameOffset;
     }
 
     @Fold
-    static int deoptimizationUnrollBlockCallerAdjustmentOffset(@InjectedParameter GraalHotSpotVMConfig config) {
-        return config.deoptimizationUnrollBlockCallerAdjustmentOffset;
+    static int deoptimizationUnrollBlockCallerAdjustmentOffset() {
+        return config().deoptimizationUnrollBlockCallerAdjustmentOffset;
     }
 
     @Fold
-    static int deoptimizationUnrollBlockNumberOfFramesOffset(@InjectedParameter GraalHotSpotVMConfig config) {
-        return config.deoptimizationUnrollBlockNumberOfFramesOffset;
+    static int deoptimizationUnrollBlockNumberOfFramesOffset() {
+        return config().deoptimizationUnrollBlockNumberOfFramesOffset;
     }
 
     @Fold
-    static int deoptimizationUnrollBlockTotalFrameSizesOffset(@InjectedParameter GraalHotSpotVMConfig config) {
-        return config.deoptimizationUnrollBlockTotalFrameSizesOffset;
+    static int deoptimizationUnrollBlockTotalFrameSizesOffset() {
+        return config().deoptimizationUnrollBlockTotalFrameSizesOffset;
     }
 
     @Fold
-    static int deoptimizationUnrollBlockFrameSizesOffset(@InjectedParameter GraalHotSpotVMConfig config) {
-        return config.deoptimizationUnrollBlockFrameSizesOffset;
+    static int deoptimizationUnrollBlockFrameSizesOffset() {
+        return config().deoptimizationUnrollBlockFrameSizesOffset;
     }
 
     @Fold
-    static int deoptimizationUnrollBlockFramePcsOffset(@InjectedParameter GraalHotSpotVMConfig config) {
-        return config.deoptimizationUnrollBlockFramePcsOffset;
+    static int deoptimizationUnrollBlockFramePcsOffset() {
+        return config().deoptimizationUnrollBlockFramePcsOffset;
     }
 
     @Fold
-    static int deoptimizationUnrollBlockInitialInfoOffset(@InjectedParameter GraalHotSpotVMConfig config) {
-        return config.deoptimizationUnrollBlockInitialInfoOffset;
+    static int deoptimizationUnrollBlockInitialInfoOffset() {
+        return config().deoptimizationUnrollBlockInitialInfoOffset;
     }
 
     @Fold
-    static int deoptimizationUnpackDeopt(@InjectedParameter GraalHotSpotVMConfig config) {
-        return config.deoptimizationUnpackDeopt;
+    static int deoptimizationUnpackDeopt() {
+        return config().deoptimizationUnpackDeopt;
     }
 
     @Fold
-    static int deoptimizationUnpackUncommonTrap(@InjectedParameter GraalHotSpotVMConfig config) {
-        return config.deoptimizationUnpackUncommonTrap;
+    static int deoptimizationUnpackUncommonTrap() {
+        return config().deoptimizationUnpackUncommonTrap;
     }
 
     @NodeIntrinsic(value = StubForeignCallNode.class, setStampFromReturnType = true)
