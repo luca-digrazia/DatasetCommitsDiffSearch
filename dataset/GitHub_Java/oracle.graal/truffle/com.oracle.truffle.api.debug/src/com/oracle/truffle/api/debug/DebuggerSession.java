@@ -427,8 +427,8 @@ public final class DebuggerSession implements Closeable {
     }
 
     /**
-     * Returns all breakpoints in the order they were installed. {@link Breakpoint#dispose()
-     * Disposed} breakpoints are automatically removed from this list.
+     * Returns all the breakpoints in the order they were installed. Breakpoints which were
+     * {@link Breakpoint#dispose() disposed} are automatically removed from this list.
      *
      * @since 0.17
      */
@@ -473,16 +473,13 @@ public final class DebuggerSession implements Closeable {
     }
 
     /**
-     * Adds a new breakpoint to this session and makes it capable of suspending execution.
-     * <p>
-     * The breakpoint suspends execution by making a {@link SuspendedCallback callback} to this
-     * session, together with an event description that includes
-     * {@linkplain SuspendedEvent#getBreakpoints() which breakpoint(s)} were hit.
+     * Installs a new breakpoint for this session. When the breakpoint is hit then the
+     * {@link SuspendedCallback callback} for this session is notified. To find out which breakpoint
+     * was hit {@link SuspendedEvent#getBreakpoints()} can be used. If the session is closed then an
+     * {@link IllegalStateException} is thrown.
      *
-     * @param breakpoint a new breakpoint
-     * @return the installed breakpoint
-     * @throws IllegalStateException if the session has been closed
-     *
+     * @param breakpoint the breakpoint to install
+     * @return the breakpoint instance that was passed in.
      * @since 0.17
      */
     public synchronized Breakpoint install(Breakpoint breakpoint) {
