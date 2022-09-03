@@ -32,6 +32,8 @@ import com.sun.cri.ri.*;
 /**
  * The {@code Constant} instruction represents a constant such as an integer value,
  * long, float, object reference, address, etc.
+ *
+ * @author Ben L. Titzer
  */
 public final class Constant extends Instruction {
 
@@ -127,30 +129,6 @@ public final class Constant extends Instruction {
      */
     public static Constant forWord(long val, Graph graph) {
         return new Constant(CiConstant.forWord(val), graph);
-    }
-
-    public static Constant defaultForKind(CiKind kind, Graph graph) {
-        switch(kind) {
-            case Boolean:
-                return Constant.forBoolean(false, graph);
-            case Byte:
-            case Char:
-            case Short:
-            case Int:
-                return Constant.forInt(0, graph);
-            case Double:
-                return Constant.forDouble(0.0, graph);
-            case Float:
-                return Constant.forFloat(0.0f, graph);
-            case Long:
-                return Constant.forLong(0L, graph);
-            case Object:
-                return Constant.forObject(null, graph);
-            case Word:
-                return Constant.forWord(0L, graph);
-            default:
-                return null;
-        }
     }
 
     @Override

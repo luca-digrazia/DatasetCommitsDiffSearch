@@ -49,6 +49,11 @@ public class IR {
      */
     public BlockBegin startBlock;
 
+    /**
+     * The entry block for an OSR compile.
+     */
+    public BlockBegin osrEntryBlock;
+
     private int maxLocks;
 
     /**
@@ -138,13 +143,17 @@ public class IR {
      * @param phase the name of the phase for printing
      */
     public void verifyAndPrint(String phase) {
-        if (C1XOptions.PrintHIR && !TTY.isSuppressed()) {
-            TTY.println(phase);
-            print(false);
-        }
+        printToTTY(phase);
 
         if (compilation.compiler.isObserved()) {
             compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, phase, startBlock, true, false));
+        }
+    }
+
+    private void printToTTY(String phase) {
+        if (C1XOptions.PrintHIR && !TTY.isSuppressed()) {
+            TTY.println(phase);
+            print(false);
         }
     }
 
