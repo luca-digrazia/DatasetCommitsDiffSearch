@@ -55,6 +55,9 @@ public final class Invoke extends StateSplit {
         this.arguments = args;
         this.target = target;
         this.returnType = returnType;
+        if (isStatic() || args[0].isNonNull() || args[0].kind.isWord()) {
+            eliminateNullCheck();
+        }
     }
 
     /**

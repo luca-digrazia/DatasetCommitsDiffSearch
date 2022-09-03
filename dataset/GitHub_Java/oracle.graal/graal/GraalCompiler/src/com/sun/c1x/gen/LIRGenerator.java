@@ -247,7 +247,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     public CiValue emitArrayLength(ArrayLength x) {
         XirArgument array = toXirArgument(x.array());
         XirSnippet snippet = xir.genArrayLength(site(x), array);
-        emitXir(snippet, x, stateFor(x), null, true);
+        emitXir(snippet, x, x.needsNullCheck() ? stateFor(x) : null, null, true);
         return x.operand();
     }
 
@@ -513,7 +513,13 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitLoadField(LoadField x) {
         RiField field = x.field();
-        LIRDebugInfo info = stateFor(x, x.stateBefore());
+        boolean needsPatching = !x.isLoaded();
+        LIRDebugInfo info = null;
+        if (needsPatching || x.needsNullCheck()) {
+            info = stateFor(x, x.stateBefore());
+            assert info != null;
+        }
+
         XirArgument receiver = toXirArgument(x.object());
         XirSnippet snippet = x.isStatic() ? xir.genGetStatic(site(x), receiver, field) : xir.genGetField(site(x), receiver, field);
         emitXir(snippet, x, info, null, true);
@@ -798,7 +804,12 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitStoreField(StoreField x) {
         RiField field = x.field();
-        LIRDebugInfo info = stateFor(x, x.stateBefore());
+        boolean needsPatching = !x.isLoaded();
+
+        LIRDebugInfo info = null;
+        if (needsPatching || x.needsNullCheck()) {
+            info = stateFor(x, x.stateBefore());
+        }
 
         if (x.isVolatile()) {
             vma.preVolatileWrite();
@@ -1597,23 +1608,23 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
 
         public boolean requiresNullCheck() {
-            return current == null || current.canTrap();
+            return current == null || current.needsNullCheck();
         }
 
         public boolean requiresBoundsCheck() {
-            return true;
+            return current == null || !current.checkFlag(Value.Flag.NoBoundsCheck);
         }
 
         public boolean requiresReadBarrier() {
-            return current == null || current.kind == CiKind.Object;
+            return current == null || !current.checkFlag(Value.Flag.NoReadBarrier);
         }
 
         public boolean requiresWriteBarrier() {
-            return current == null || current.kind == CiKind.Object;
+            return current == null || !current.checkFlag(Value.Flag.NoWriteBarrier);
         }
 
         public boolean requiresArrayStoreCheck() {
-            return true;
+            return current == null || !current.checkFlag(Value.Flag.NoStoreCheck);
         }
 
         public RiType getApproximateType(XirArgument argument) {

@@ -49,6 +49,9 @@ public abstract class AccessField extends StateSplit {
         super(kind, stateBefore);
         this.object = object;
         this.field = field;
+        if (field.isResolved() && object.isNonNull()) {
+            eliminateNullCheck();
+        }
         assert object != null : "every field access must reference some object";
     }
 
@@ -93,6 +96,13 @@ public abstract class AccessField extends StateSplit {
         return isLoaded() && Modifier.isVolatile(field.accessFlags());
     }
 
+    @Override
+    public void runtimeCheckCleared() {
+        if (isLoaded()) {
+            clearState();
+        }
+    }
+
     /**
      * Checks whether this field access may cause a trap or an exception, which
      * is if it either requires a null check or needs patching.
@@ -100,7 +110,7 @@ public abstract class AccessField extends StateSplit {
      */
     @Override
     public boolean canTrap() {
-        return true;
+        return !isLoaded() || needsNullCheck();
     }
 
     @Override

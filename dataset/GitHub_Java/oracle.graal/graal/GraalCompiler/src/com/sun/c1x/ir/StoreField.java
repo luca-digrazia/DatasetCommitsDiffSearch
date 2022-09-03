@@ -50,6 +50,9 @@ public final class StoreField extends AccessField {
         super(CiKind.Void, object, field, stateBefore);
         this.value = value;
         setFlag(Flag.LiveSideEffect);
+        if (value.kind != CiKind.Object) {
+            setFlag(Flag.NoWriteBarrier);
+        }
     }
 
     /**
@@ -58,6 +61,14 @@ public final class StoreField extends AccessField {
      */
     public Value value() {
         return value;
+    }
+
+    /**
+     * Checks whether this instruction needs a write barrier.
+     * @return {@code true} if this instruction needs a write barrier
+     */
+    public boolean needsWriteBarrier() {
+        return !checkFlag(Flag.NoWriteBarrier);
     }
 
     @Override
