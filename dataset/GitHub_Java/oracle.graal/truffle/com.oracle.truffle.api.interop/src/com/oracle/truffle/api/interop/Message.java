@@ -68,7 +68,7 @@ public abstract class Message {
      * @return execute message
      */
     public static Message createExecute(int argumentsLength) {
-        return Execute.create(Execute.EXECUTE, argumentsLength);
+        return Execute.create(false, argumentsLength);
     }
 
     /**
@@ -89,21 +89,7 @@ public abstract class Message {
      * @return read & execute message
      */
     public static Message createInvoke(int argumentsLength) {
-        return Execute.create(Execute.INVOKE, argumentsLength);
-    }
-
-    /**
-     * Creates an allocation message. All messages created by this method are
-     * {@link Object#equals(java.lang.Object) equal} to each other regardless of the value of
-     * <code>argumentsLength</code>. The expected behavior of this message is to allocate a new
-     * instance of the {@link ForeignAccess#getReceiver(com.oracle.truffle.api.frame.Frame)
-     * receiver} and then perform its constructor with appropriate number of arguments.
-     *
-     * @param argumentsLength number of parameters to pass to the target
-     * @return read & execute message
-     */
-    public static Message createNew(int argumentsLength) {
-        return Execute.create(Execute.NEW, argumentsLength);
+        return Execute.create(true, argumentsLength);
     }
 
     /**
