@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,9 +22,13 @@
  */
 package com.oracle.graal.nodes.cfg;
 
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.cfg.Loop;
+import com.oracle.graal.nodes.LoopBeginNode;
 
-public class HIRLoop extends Loop<Block> {
+public final class HIRLoop extends Loop<Block> {
+
+    private LocationSet killLocations;
 
     protected HIRLoop(Loop<Block> parent, int index, Block header) {
         super(parent, index, header);
@@ -32,6 +36,36 @@ public class HIRLoop extends Loop<Block> {
 
     @Override
     public long numBackedges() {
-        return ((LoopBeginNode) header.getBeginNode()).loopEnds().count();
+        return ((LoopBeginNode) getHeader().getBeginNode()).loopEnds().count();
+    }
+
+    public LocationSet getKillLocations() {
+        if (killLocations == null) {
+            killLocations = new LocationSet();
+            for (Block b : this.getBlocks()) {
+                if (b.getLoop() == this) {
+                    killLocations.addAll(b.getKillLocations());
+                    if (killLocations.isAny()) {
+                        break;
+                    }
+                }
+            }
+        }
+        for (Loop<Block> child : this.getChildren()) {
+            if (killLocations.isAny()) {
+                break;
+            }
+            killLocations.addAll(((HIRLoop) child).getKillLocations());
+        }
+        return killLocations;
+    }
+
+    public boolean canKill(LocationIdentity location) {
+        return getKillLocations().contains(location);
+    }
+
+    @Override
+    public String toString() {
+        return super.toString() + " header:" + getHeader().getBeginNode();
     }
 }
