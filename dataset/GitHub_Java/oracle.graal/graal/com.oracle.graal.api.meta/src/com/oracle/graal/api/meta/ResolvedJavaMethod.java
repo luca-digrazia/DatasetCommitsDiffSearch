@@ -34,14 +34,9 @@ public interface ResolvedJavaMethod extends JavaMethod, InvokeTarget {
 
     /**
      * Returns the bytecode of this method, if the method has code. The returned byte array does not
-     * contain breakpoints or non-Java bytecodes. This may return null if the
-     * {@link #getDeclaringClass() holder} is not {@link ResolvedJavaType#isLinked() linked}.
+     * contain breakpoints or non-Java bytecodes.
      * 
-     * The contained constant pool indices may not be the ones found in the original class file but
-     * they can be used with the Graal API (e.g. methods in {@link ConstantPool}).
-     * 
-     * @return the bytecode of the method, or {@code null} if {@code getCodeSize() == 0} or if the
-     *         code is not ready.
+     * @return the bytecode of the method, or {@code null} if {@code getCodeSize() == 0}
      */
     byte[] getCode();
 
