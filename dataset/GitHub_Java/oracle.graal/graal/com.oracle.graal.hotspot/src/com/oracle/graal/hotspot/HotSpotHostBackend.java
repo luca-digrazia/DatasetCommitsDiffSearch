@@ -33,7 +33,6 @@ import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.replacements.*;
 
 /**
  * Common functionality of HotSpot host backends.
@@ -41,16 +40,12 @@ import com.oracle.graal.replacements.*;
 public abstract class HotSpotHostBackend extends HotSpotBackend {
 
     /**
-     * Descriptor for {@code SharedRuntime::deopt_blob()->unpack()} or
-     * {@link DeoptimizationStub#deoptimizationHandler} depending on
-     * {@link HotSpotBackend.Options#PreferGraalStubs}.
+     * Descriptor for {@link DeoptimizationStub#deoptimizationHandler}.
      */
-    public static final ForeignCallDescriptor DEOPTIMIZATION_HANDLER = new ForeignCallDescriptor("deoptHandler", void.class);
+    public static final ForeignCallDescriptor DEOPTIMIZATION_HANDLER = new ForeignCallDescriptor("deoptimizationHandler", void.class);
 
     /**
-     * Descriptor for {@code SharedRuntime::deopt_blob()->uncommon_trap()} or
-     * {@link UncommonTrapStub#uncommonTrapHandler} depending on
-     * {@link HotSpotBackend.Options#PreferGraalStubs}.
+     * Descriptor for {@link UncommonTrapStub#uncommonTrapHandler}.
      */
     public static final ForeignCallDescriptor UNCOMMON_TRAP_HANDLER = new ForeignCallDescriptor("uncommonTrapHandler", void.class);
 
@@ -74,7 +69,7 @@ public abstract class HotSpotHostBackend extends HotSpotBackend {
         try (InitTimer st = timer("graphBuilderPlugins.initialize")) {
             GraphBuilderPhase phase = (GraphBuilderPhase) providers.getSuites().getDefaultGraphBuilderSuite().findPhase(GraphBuilderPhase.class).previous();
             InvocationPlugins plugins = phase.getGraphBuilderConfig().getInvocationPlugins();
-            registerInvocationPlugins(providers, plugins);
+            registerInvocationPlugins(providers.getMetaAccess(), plugins);
         }
 
         try (InitTimer st = timer("foreignCalls.initialize")) {
@@ -106,8 +101,8 @@ public abstract class HotSpotHostBackend extends HotSpotBackend {
         }
     }
 
-    protected void registerInvocationPlugins(HotSpotProviders providers, InvocationPlugins plugins) {
-        StandardGraphBuilderPlugins.registerInvocationPlugins(providers.getMetaAccess(), plugins);
-        HotSpotGraphBuilderPlugins.registerInvocationPlugins(providers, plugins);
+    protected void registerInvocationPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
+        StandardGraphBuilderPlugins.registerInvocationPlugins(metaAccess, plugins);
+        HotSpotGraphBuilderPlugins.registerInvocationPlugins(metaAccess, plugins);
     }
 }

@@ -25,24 +25,45 @@ package com.oracle.graal.java;
 import static com.oracle.graal.java.GraphBuilderContext.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.java.GraphBuilderPlugins.InvocationPlugin;
-import com.oracle.graal.java.GraphBuilderPlugins.Registration;
-import com.oracle.graal.java.GraphBuilderPlugins.Registration.Receiver;
+import com.oracle.graal.java.GraphBuilderPlugin.InvocationPlugin;
+import com.oracle.graal.java.InvocationPlugins.Registration;
+import com.oracle.graal.java.InvocationPlugins.Registration.Receiver;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 
 /**
- * Provider of non-runtime specific {@link GraphBuilderPlugin}s.
+ * Provides non-runtime specific {@link InvocationPlugin}s.
  */
 public class StandardGraphBuilderPlugins {
-    public static void registerPlugins(MetaAccessProvider metaAccess, GraphBuilderPlugins plugins) {
+    public static void registerInvocationPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
         Registration r = new Registration(plugins, metaAccess, Object.class);
         r.register1("<init>", Receiver.class, new InvocationPlugin() {
             public boolean apply(GraphBuilderContext builder, ValueNode object) {
                 if (RegisterFinalizerNode.mayHaveFinalizer(object, builder.getAssumptions())) {
                     builder.append(new RegisterFinalizerNode(object));
                 }
+                return true;
+            }
+        });
+
+        r = new Registration(plugins, metaAccess, Math.class);
+        r.register1("abs", Float.TYPE, new InvocationPlugin() {
+            public boolean apply(GraphBuilderContext builder, ValueNode value) {
+                builder.push(Kind.Float, builder.append(new AbsNode(value)));
+                return true;
+            }
+        });
+        r.register1("abs", Double.TYPE, new InvocationPlugin() {
+            public boolean apply(GraphBuilderContext builder, ValueNode value) {
+                builder.push(Kind.Double, builder.append(new AbsNode(value)));
+                return true;
+            }
+        });
+        r.register1("sqrt", Double.TYPE, new InvocationPlugin() {
+            public boolean apply(GraphBuilderContext builder, ValueNode value) {
+                builder.push(Kind.Double, builder.append(new SqrtNode(value)));
                 return true;
             }
         });
@@ -54,7 +75,7 @@ public class StandardGraphBuilderPlugins {
             }
         }
 
-        GraalDirectivePlugins.registerPlugins(metaAccess, plugins);
+        GraalDirectivePlugins.registerInvocationPlugins(metaAccess, plugins);
     }
 
     static class BoxPlugin implements InvocationPlugin {
@@ -71,7 +92,7 @@ public class StandardGraphBuilderPlugins {
             return true;
         }
 
-        void register(MetaAccessProvider metaAccess, GraphBuilderPlugins plugins) {
+        void register(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
             ResolvedJavaMethod method = Registration.resolve(metaAccess, kind.toBoxedJavaClass(), "valueOf", kind.toJavaClass());
             plugins.register(method, this);
         }
@@ -91,7 +112,7 @@ public class StandardGraphBuilderPlugins {
             return true;
         }
 
-        void register(MetaAccessProvider metaAccess, GraphBuilderPlugins plugins) {
+        void register(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
             String name = kind.toJavaClass().getSimpleName() + "Value";
             ResolvedJavaMethod method = Registration.resolve(metaAccess, kind.toBoxedJavaClass(), name);
             plugins.register(method, this);

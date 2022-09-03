@@ -152,7 +152,17 @@ public class PartialEvaluator {
         public boolean apply(GraphBuilderContext builder, ValueNode receiver, ResolvedJavaField field) {
             if (receiver.isConstant()) {
                 JavaConstant asJavaConstant = receiver.asJavaConstant();
-                return tryConstantFold(builder, providers.getMetaAccess(), providers.getConstantReflection(), field, asJavaConstant);
+                return tryConstantFold(builder, field, asJavaConstant);
+            }
+            return false;
+        }
+
+        private boolean tryConstantFold(GraphBuilderContext builder, ResolvedJavaField field, JavaConstant asJavaConstant) {
+            JavaConstant result = providers.getConstantReflection().readConstantFieldValue(field, asJavaConstant);
+            if (result != null) {
+                ConstantNode constantNode = builder.append(ConstantNode.forConstant(result, providers.getMetaAccess()));
+                builder.push(constantNode.getKind().getStackKind(), constantNode);
+                return true;
             }
             return false;
         }
@@ -163,7 +173,7 @@ public class PartialEvaluator {
                 builder.push(trueNode.getKind().getStackKind(), trueNode);
                 return true;
             }
-            return tryConstantFold(builder, providers.getMetaAccess(), providers.getConstantReflection(), staticField, null);
+            return tryConstantFold(builder, staticField, null);
         }
     }
 
