@@ -186,7 +186,7 @@ import java.lang.annotation.Target;
  * normal.
  *
  * <pre>
- * &#064;Layout
+ * &#64;Layout
  * interface JavaObjectLayout {
  *
  *     DynamicObjectFactory createJavaObjectShape(JavaClass klass);
@@ -239,7 +239,7 @@ import java.lang.annotation.Target;
  * Inherited shape properties work in a similar way.
  *
  * <pre>
- * &#064;Layout
+ * &#64;Layout
  * interface BaseLayout {
  *
  *     DynamicObject createBase(int a);
@@ -283,7 +283,7 @@ import java.lang.annotation.Target;
  * &#64;Layout
  * interface CustomIdentifierLayout {
  *
- *     public static final String A_IDENTIFIER = &quot;$A&quot;;
+ *     public static final String A_IDENTIFIER = "$A";
  *
  *     DynamicObject createCustomIdentifier(int a);
  *
