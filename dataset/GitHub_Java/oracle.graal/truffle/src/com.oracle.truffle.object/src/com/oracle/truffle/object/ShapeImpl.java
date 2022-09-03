@@ -1,56 +1,39 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.oracle.truffle.object;
 
+import java.util.AbstractMap;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
-import java.util.function.BiConsumer;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
@@ -92,7 +75,6 @@ import com.oracle.truffle.object.Transition.ShareShapeTransition;
  * @see Locations
  * @since 0.17 or earlier
  */
-@SuppressWarnings("deprecation")
 public abstract class ShapeImpl extends Shape {
     private final int id;
 
@@ -144,7 +126,7 @@ public abstract class ShapeImpl extends Shape {
      * <li>{@link Map}: mutable multiple entry map
      * </ol>
      *
-     * @see #queryTransition(Transition)
+     * @see #getTransitionMapForRead()
      * @see #addTransitionInternal(Transition, ShapeImpl)
      */
     private volatile Object transitionMap;
@@ -318,6 +300,7 @@ public abstract class ShapeImpl extends Shape {
         addTransitionInternal(transition, next);
     }
 
+    @SuppressWarnings("unchecked")
     private void addTransitionInternal(Transition transition, ShapeImpl successor) {
         Object prev;
         Object next;
@@ -325,114 +308,53 @@ public abstract class ShapeImpl extends Shape {
             prev = TRANSITION_MAP_UPDATER.get(this);
             if (prev == null) {
                 invalidateLeafAssumption();
-                next = newSingleEntry(transition, successor);
-            } else if (isSingleEntry(prev)) {
-                StrongKeyWeakValueEntry<Transition, ShapeImpl> entry = asSingleEntry(prev);
-                Transition exTra = entry.getKey();
-                ShapeImpl exSucc = entry.getValue();
-                if (exSucc != null) {
-                    next = newTransitionMap(exTra, exSucc, transition, successor);
-                } else {
-                    next = newSingleEntry(transition, successor);
-                }
+                next = new AbstractMap.SimpleImmutableEntry<>(transition, successor);
+            } else if (prev instanceof Map.Entry<?, ?>) {
+                Map.Entry<Transition, ShapeImpl> entry = (Map.Entry<Transition, ShapeImpl>) prev;
+                ConcurrentHashMap<Transition, ShapeImpl> map = new ConcurrentHashMap<>();
+                map.put(entry.getKey(), entry.getValue());
+                map.put(transition, successor);
+                next = map;
             } else {
-                next = addToTransitionMap(transition, successor, prev);
-            }
-            if (prev == next) {
+                assert prev instanceof Map<?, ?>;
+                Map<Transition, ShapeImpl> map = (Map<Transition, ShapeImpl>) prev;
+                map.put(transition, successor);
                 break;
             }
         } while (!TRANSITION_MAP_UPDATER.compareAndSet(this, prev, next));
     }
 
-    private static Object newTransitionMap(Transition firstTransition, ShapeImpl firstShape, Transition secondTransition, ShapeImpl secondShape) {
-        Map<Transition, ShapeImpl> map = newTransitionMap();
-        map.put(firstTransition, firstShape);
-        map.put(secondTransition, secondShape);
-        return map;
-    }
-
-    private static Object addToTransitionMap(Transition transition, ShapeImpl successor, Object prevMap) {
-        assert isTransitionMap(prevMap);
-        Map<Transition, ShapeImpl> map = asTransitionMap(prevMap);
-        map.put(transition, successor);
-        return map;
-    }
-
-    private static Map<Transition, ShapeImpl> newTransitionMap() {
-        return new TransitionMap<>();
-    }
-
+    /** @since 0.17 or earlier */
     @SuppressWarnings("unchecked")
-    private static Map<Transition, ShapeImpl> asTransitionMap(Object map) {
-        return (Map<Transition, ShapeImpl>) map;
-    }
-
-    private static boolean isTransitionMap(Object trans) {
-        return trans instanceof Map<?, ?>;
-    }
-
-    private static Object newSingleEntry(Transition transition, ShapeImpl successor) {
-        return new StrongKeyWeakValueEntry<>(transition, successor);
-    }
-
-    private static boolean isSingleEntry(Object trans) {
-        return trans instanceof StrongKeyWeakValueEntry;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static StrongKeyWeakValueEntry<Transition, ShapeImpl> asSingleEntry(Object trans) {
-        return (StrongKeyWeakValueEntry<Transition, ShapeImpl>) trans;
-    }
-
-    /**
-     * @since 0.17 or earlier
-     * @deprecated use {@link #forEachTransition(BiConsumer)} instead.
-     */
-    @Deprecated
     public final Map<Transition, ShapeImpl> getTransitionMapForRead() {
-        Map<Transition, ShapeImpl> snapshot = new HashMap<>();
-        forEachTransition(new BiConsumer<Transition, ShapeImpl>() {
-            @Override
-            public void accept(Transition t, ShapeImpl s) {
-                snapshot.put(t, s);
-            }
-        });
-        return snapshot;
-    }
-
-    public final void forEachTransition(BiConsumer<Transition, ShapeImpl> consumer) {
         Object trans = transitionMap;
         if (trans == null) {
-            return;
-        } else if (isSingleEntry(trans)) {
-            StrongKeyWeakValueEntry<Transition, ShapeImpl> entry = asSingleEntry(trans);
-            ShapeImpl shape = entry.getValue();
-            if (shape != null) {
-                Transition key = entry.getKey();
-                consumer.accept(key, shape);
-            }
+            return Collections.<Transition, ShapeImpl> emptyMap();
+        } else if (trans instanceof Map.Entry<?, ?>) {
+            Map.Entry<Transition, ShapeImpl> entry = (Map.Entry<Transition, ShapeImpl>) trans;
+            return Collections.singletonMap(entry.getKey(), entry.getValue());
         } else {
-            assert isTransitionMap(trans);
-            Map<Transition, ShapeImpl> map = asTransitionMap(trans);
-            map.forEach(consumer);
+            assert trans instanceof Map<?, ?>;
+            Map<Transition, ShapeImpl> map = (Map<Transition, ShapeImpl>) trans;
+            return map;
         }
     }
 
+    @SuppressWarnings("unchecked")
     private ShapeImpl queryTransitionImpl(Transition transition) {
         Object trans = transitionMap;
         if (trans == null) {
             return null;
-        } else if (isSingleEntry(trans)) {
-            StrongKeyWeakValueEntry<Transition, ShapeImpl> entry = asSingleEntry(trans);
-            Transition key = entry.getKey();
-            if (key.equals(transition)) {
+        } else if (trans instanceof Map.Entry<?, ?>) {
+            Map.Entry<Transition, ShapeImpl> entry = (Map.Entry<Transition, ShapeImpl>) trans;
+            if (entry.getKey().equals(transition)) {
                 return entry.getValue();
             } else {
                 return null;
             }
         } else {
-            assert isTransitionMap(trans);
-            Map<Transition, ShapeImpl> map = asTransitionMap(trans);
+            assert trans instanceof Map<?, ?>;
+            Map<Transition, ShapeImpl> map = (Map<Transition, ShapeImpl>) trans;
             return map.get(transition);
         }
     }
@@ -856,6 +778,7 @@ public abstract class ShapeImpl extends Shape {
     /**
      * Find difference between two shapes.
      *
+     * @see ObjectStorageOptions#TraceReshape
      * @since 0.17 or earlier
      */
     public static List<Property> diff(Shape oldShape, Shape newShape) {
@@ -1000,6 +923,13 @@ public abstract class ShapeImpl extends Shape {
     @Override
     public Shape tryMerge(Shape other) {
         return null;
+    }
+
+    /** @since 0.17 or earlier */
+    @SuppressWarnings("all")
+    @Deprecated
+    public <R> R accept(ShapeVisitor<R> visitor) {
+        return visitor.visitShape(this);
     }
 
     /** @since 0.18 */
@@ -1247,7 +1177,6 @@ public abstract class ShapeImpl extends Shape {
     private static final DebugCounter shapeCloneCount = DebugCounter.create("Shapes allocated cloned");
     private static final DebugCounter shapeCacheHitCount = DebugCounter.create("Shape cache hits");
     private static final DebugCounter shapeCacheMissCount = DebugCounter.create("Shape cache misses");
-    static final DebugCounter shapeCacheExpunged = DebugCounter.create("Shape cache expunged");
 
     /** @since 0.17 or earlier */
     public ForeignAccess getForeignAccessFactory(DynamicObject object) {
