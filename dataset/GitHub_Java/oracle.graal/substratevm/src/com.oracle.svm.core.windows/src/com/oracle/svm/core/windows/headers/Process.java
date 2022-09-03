@@ -28,12 +28,10 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.CContext;
 import org.graalvm.nativeimage.c.constant.CConstant;
+import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import org.graalvm.nativeimage.c.function.CFunction;
 import org.graalvm.nativeimage.c.function.CFunction.Transition;
-import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import org.graalvm.nativeimage.c.struct.CStruct;
-import org.graalvm.nativeimage.c.type.CCharPointer;
-import org.graalvm.nativeimage.c.type.CCharPointerPointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordBase;
@@ -46,14 +44,6 @@ import org.graalvm.word.WordBase;
 @CContext(WindowsDirectives.class)
 @Platforms(Platform.WINDOWS.class)
 public class Process {
-
-    /** Execute path with arguments argv. */
-    @CFunction
-    public static native int _execv(CCharPointer path, CCharPointerPointer argv);
-
-    /** Returns a pseudo-handle to the current process. */
-    @CFunction(transition = Transition.NO_TRANSITION)
-    public static native WinBase.HANDLE GetCurrentProcess();
 
     /**
      * Thread Creation
@@ -73,19 +63,6 @@ public class Process {
 
     @CFunction
     public static native int SwitchToThread();
-
-    @CFunction(transition = Transition.NO_TRANSITION)
-    public static native int GetCurrentThreadId();
-
-    /** Returns a pseudo-handle that points to the current thread. */
-    @CFunction(transition = Transition.NO_TRANSITION)
-    public static native WinBase.HANDLE GetCurrentThread();
-
-    /**
-     * Thread access rights.
-     */
-    @CConstant
-    public static native int SYNCHRONIZE();
 
     /**
      * Windows Thread local storage functions
@@ -159,7 +136,7 @@ public class Process {
     @CFunction
     public static native int SleepConditionVariableCS(PCONDITION_VARIABLE cond, PCRITICAL_SECTION mutex, int dwMilliseconds);
 
-    @CFunction(value = "SleepConditionVariableCS", transition = Transition.NO_TRANSITION)
+    @CFunction(value = "SleepConditionVariable", transition = Transition.NO_TRANSITION)
     public static native int SleepConditionVariableCSNoTrans(PCONDITION_VARIABLE cond, PCRITICAL_SECTION mutex, int dwMilliseconds);
 
     /** Wake a single thread waiting on the condition variable */
@@ -169,4 +146,5 @@ public class Process {
     /** Wake all threads waiting on the condition variable */
     @CFunction(transition = Transition.NO_TRANSITION)
     public static native void WakeAllConditionVariable(PCONDITION_VARIABLE cond);
+
 }
