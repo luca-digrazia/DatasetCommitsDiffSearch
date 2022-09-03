@@ -88,19 +88,7 @@ public class CheckGraalIntrinsics extends GraalTest {
     }
 
     public static ResolvedJavaMethod resolveIntrinsic(MetaAccessProvider metaAccess, VMIntrinsicMethod intrinsic) throws ClassNotFoundException {
-        Class<?> c;
-        try {
-            c = Class.forName(intrinsic.declaringClass.replace('/', '.'), false, CheckGraalIntrinsics.class.getClassLoader());
-        } catch (ClassNotFoundException ex) {
-            try {
-                Class.forName("javax.naming.Reference");
-            } catch (ClassNotFoundException coreNamingMissing) {
-                // if core JDK classes aren't found, we are probably running in a
-                // JDK9 java.base environment and then missing class is OK
-                return null;
-            }
-            throw ex;
-        }
+        Class<?> c = Class.forName(intrinsic.declaringClass.replace('/', '.'), false, CheckGraalIntrinsics.class.getClassLoader());
         for (Method javaMethod : c.getDeclaredMethods()) {
             if (javaMethod.getName().equals(intrinsic.name)) {
                 ResolvedJavaMethod method = metaAccess.lookupJavaMethod(javaMethod);
