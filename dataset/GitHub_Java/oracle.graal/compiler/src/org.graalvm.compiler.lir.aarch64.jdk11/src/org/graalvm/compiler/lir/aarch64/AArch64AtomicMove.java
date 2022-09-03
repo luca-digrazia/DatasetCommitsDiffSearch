@@ -26,6 +26,7 @@ import static jdk.vm.ci.code.ValueUtil.asRegister;
 
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.asm.aarch64.AArch64Assembler;
+import org.graalvm.compiler.asm.aarch64.AArch64Assembler.ShiftType;
 import org.graalvm.compiler.asm.aarch64.AArch64MacroAssembler;
 import org.graalvm.compiler.lir.LIRInstructionClass;
 import org.graalvm.compiler.lir.Opcode;
@@ -101,31 +102,33 @@ public class AArch64AtomicMove {
     }
 
     /**
-     * Load (Read) and Write instruction. Does the following atomically: <code>
-     *  ATOMIC_READ_AND_WRITE(newValue, result, address):
+     * Load (Read) and Add instruction. Does the following atomically: <code>
+     *  ATOMIC_READ_AND_ADD(addend, result, address):
      *    result = *address
-     *    *address = newValue
+     *    *address = result + addend
      *    return result
      * </code>
      */
-    @Opcode("ATOMIC_READ_AND_WRITE")
-    public static final class AtomicReadAndWriteOp extends AArch64LIRInstruction {
-        public static final LIRInstructionClass<AtomicReadAndWriteOp> TYPE = LIRInstructionClass.create(AtomicReadAndWriteOp.class);
+    @Opcode("ATOMIC_READ_AND_ADD")
+    public static final class AtomicReadAndAddOp extends AArch64LIRInstruction {
+        public static final LIRInstructionClass<AtomicReadAndAddOp> TYPE = LIRInstructionClass.create(AtomicReadAndAddOp.class);
 
         private final AArch64Kind accessKind;
 
         @Def protected AllocatableValue resultValue;
         @Alive protected AllocatableValue addressValue;
-        @Use protected Value newValue;
-        @Temp protected AllocatableValue scratchValue;
+        @Alive protected Value deltaValue;
+        @Temp protected AllocatableValue scratchValue1;
+        @Temp protected AllocatableValue scratchValue2;
 
-        public AtomicReadAndWriteOp(AArch64Kind kind, AllocatableValue result, AllocatableValue address, Value newValue, AllocatableValue scratch) {
+        public AtomicReadAndAddOp(AArch64Kind kind, AllocatableValue result, AllocatableValue address, Value delta, AllocatableValue scratch1, AllocatableValue scratch2) {
             super(TYPE);
             this.accessKind = kind;
             this.resultValue = result;
             this.addressValue = address;
-            this.newValue = newValue;
-            this.scratchValue = scratch;
+            this.deltaValue = delta;
+            this.scratchValue1 = scratch1;
+            this.scratchValue2 = scratch2;
         }
 
         @Override
@@ -134,19 +137,21 @@ public class AArch64AtomicMove {
             final int size = accessKind.getSizeInBytes() * Byte.SIZE;
 
             Register address = asRegister(addressValue);
-            Register value = asRegister(newValue);
+            Register delta = asRegister(deltaValue);
             Register result = asRegister(resultValue);
 
             if (masm.supports(CPUFeature.LSE) || masm.isFlagSet(Flag.UseLSE)) {
-                masm.swp(size, value, result, address, true, true);
+                masm.ldadd(size, delta, result, address, true, true);
             } else {
-                Register scratch = asRegister(scratchValue);
+                Register scratch1 = asRegister(scratchValue1);
+                Register scratch2 = asRegister(scratchValue2);
                 Label retry = new Label();
                 masm.bind(retry);
                 masm.ldaxr(size, result, address);
-                masm.stlxr(size, scratch, value, address);
-                // if scratch == 0 then write successful, else retry
-                masm.cbnz(32, scratch, retry);
+                masm.add(size, scratch1, result, delta, ShiftType.LSL, 0);
+                masm.stlxr(size, scratch2, scratch1, address);
+                // if scratch2 == 0 then write successful, else retry
+                masm.cbnz(32, scratch2, retry);
             }
         }
     }
