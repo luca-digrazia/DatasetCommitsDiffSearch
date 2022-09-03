@@ -55,13 +55,13 @@ class MultiLanguageShell {
     private final Context context;
     private final InputStream in;
     private final OutputStream out;
-    private final String defaultStartLanguage;
+    private final String startLanguage;
 
-    MultiLanguageShell(Context context, InputStream in, OutputStream out, String defaultStartLanguage) {
+    MultiLanguageShell(Context context, InputStream in, OutputStream out, String startLanguage) {
         this.context = context;
         this.in = in;
         this.out = out;
-        this.defaultStartLanguage = defaultStartLanguage;
+        this.startLanguage = startLanguage;
     }
 
     public int readEvalPrint() throws IOException {
@@ -95,7 +95,8 @@ class MultiLanguageShell {
         }
 
         if (languages.isEmpty()) {
-            throw new Launcher.AbortException("Error: No Graal languages installed. Exiting shell.", 1);
+            console.println("Error: No Graal languages installed. Exiting shell.");
+            System.exit(1);
         }
 
         printUsage(console, promptsString, false);
@@ -105,14 +106,10 @@ class MultiLanguageShell {
             maxNameLength = Math.max(maxNameLength, language.getName().length());
         }
 
-        String startLanguage = defaultStartLanguage;
-        if (startLanguage == null) {
-            startLanguage = languages.get(0).getId();
-        }
-
         Language currentLanguage = context.getEngine().getLanguages().get(startLanguage);
         if (currentLanguage == null) {
-            throw new Launcher.AbortException("Error: could not find language '" + startLanguage + "'", 1);
+            console.println("Error: could not find language '" + startLanguage + "'");
+            System.exit(1);
         }
         assert languages.indexOf(currentLanguage) >= 0;
         Source bufferSource = null;

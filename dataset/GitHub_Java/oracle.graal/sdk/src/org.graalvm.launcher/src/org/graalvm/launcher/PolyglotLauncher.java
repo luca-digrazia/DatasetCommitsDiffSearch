@@ -50,11 +50,16 @@ public final class PolyglotLauncher extends Launcher {
 
     private String mainLanguage = null;
 
+    static {
+        // TODO remove temporary hack to initialize engine if not yet initialized.
+        Source.create("js", "");
+    }
+
     @Override
     protected void printHelp(OptionCategory maxCategory) {
         Engine engine = Engine.create();
         // @formatter:off
-        printVersion(engine);
+        System.out.println("GraalVM polyglot launcher version " + engine.getVersion());
         System.out.println();
         System.out.println("Usage: polyglot [OPTION]... [FILE] [ARGS]...");
         List<Language> languages = sortedLanguages(engine);
@@ -85,17 +90,13 @@ public final class PolyglotLauncher extends Launcher {
 
     @Override
     protected void printVersion() {
-        printVersion(Engine.create());
-    }
-
-    protected static void printVersion(Engine engine) {
-        System.out.println("GraalVM polyglot launcher " + engine.getVersion());
+        printPolyglotVersions();
     }
 
     private void launch(String[] args) {
         List<String> arguments = new ArrayList<>(Arrays.asList(args));
         if (isAOT()) {
-            nativeAccess.maybeExec(arguments, true, Collections.emptyMap(), VMType.Native, true);
+            nativeAccess.maybeExec(arguments, true, Collections.emptyMap(), VMType.Native);
             nativeAccess.setGraalVMProperties();
         }
 
@@ -103,7 +104,6 @@ public final class PolyglotLauncher extends Launcher {
 
         List<Script> scripts = new ArrayList<>();
         int i = 0;
-        boolean version = false;
         boolean shell = false;
         boolean eval = false;
         boolean file = false;
@@ -145,8 +145,6 @@ public final class PolyglotLauncher extends Launcher {
             } else if (!arg.startsWith("-")) {
                 scripts.add(new FileScript(mainLanguage, arg, true));
                 break;
-            } else if (arg.equals("--version")) {
-                version = true;
             } else if (arg.equals("--shell")) {
                 shell = true;
             } else if (arg.equals("--eval")) {
@@ -168,17 +166,12 @@ public final class PolyglotLauncher extends Launcher {
         if (runPolyglotAction()) {
             return;
         }
-        Engine engine = Engine.create();
-        Context.Builder contextBuilder = Context.newBuilder().engine(engine).options(options).in(System.in).out(System.out).err(System.err);
+
+        Context.Builder contextBuilder = Context.newBuilder().options(options).in(System.in).out(System.out).err(System.err);
         if (!isAOT()) {
             contextBuilder.allowHostAccess(true);
         }
         contextBuilder.allowCreateThread(true);
-
-        if (version) {
-            printVersion(engine);
-            throw exit();
-        }
 
         if (shell) {
             runShell(contextBuilder);
