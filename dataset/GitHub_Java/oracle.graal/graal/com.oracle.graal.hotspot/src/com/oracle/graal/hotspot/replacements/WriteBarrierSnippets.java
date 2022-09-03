@@ -52,11 +52,7 @@ public class WriteBarrierSnippets implements Snippets {
     private static final SnippetCounter serialArrayWriteBarrierCounter = new SnippetCounter(countersWriteBarriers, "serialArrayWriteBarrier", "Number of Serial Array Write Barriers");
 
     @Snippet
-    public static void serialWriteBarrier(Object object, Object location, @ConstantParameter boolean usePrecise, @ConstantParameter boolean alwaysNull) {
-        // No barriers are added if we are always storing a null.
-        if (alwaysNull) {
-            return;
-        }
+    public static void serialWriteBarrier(Object object, Object location, @ConstantParameter boolean usePrecise) {
         Object fixedObject = FixedValueAnchorNode.getObject(object);
         Pointer oop;
         if (usePrecise) {
@@ -150,11 +146,7 @@ public class WriteBarrierSnippets implements Snippets {
     }
 
     @Snippet
-    public static void g1PostWriteBarrier(Object object, Object value, Object location, @ConstantParameter boolean usePrecise, @ConstantParameter boolean alwaysNull, @ConstantParameter boolean trace) {
-        // No barriers are added if we are always storing a null.
-        if (alwaysNull) {
-            return;
-        }
+    public static void g1PostWriteBarrier(Object object, Object value, Object location, @ConstantParameter boolean usePrecise, @ConstantParameter boolean trace) {
         Word thread = thread();
         Object fixedObject = FixedValueAnchorNode.getObject(object);
         Object fixedValue = FixedValueAnchorNode.getObject(value);
@@ -321,7 +313,6 @@ public class WriteBarrierSnippets implements Snippets {
             args.add("object", writeBarrier.getObject());
             args.add("location", writeBarrier.getLocation());
             args.addConst("usePrecise", writeBarrier.usePrecise());
-            args.addConst("alwaysNull", writeBarrier.getValue().objectStamp().alwaysNull());
             template(args).instantiate(runtime, writeBarrier, DEFAULT_REPLACER, args);
         }
 
@@ -361,7 +352,6 @@ public class WriteBarrierSnippets implements Snippets {
             args.add("value", writeBarrierPost.getValue());
             args.add("location", writeBarrierPost.getLocation());
             args.addConst("usePrecise", writeBarrierPost.usePrecise());
-            args.addConst("alwaysNull", writeBarrierPost.getValue().objectStamp().alwaysNull());
             args.addConst("trace", traceBarrier());
             template(args).instantiate(runtime, writeBarrierPost, DEFAULT_REPLACER, args);
         }
