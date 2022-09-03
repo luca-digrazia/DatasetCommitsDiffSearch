@@ -22,18 +22,44 @@
  */
 package com.oracle.truffle.dsl.processor.java;
 
-import java.io.*;
-import java.lang.annotation.*;
-import java.util.*;
-
-import javax.annotation.processing.*;
-import javax.lang.model.element.*;
-import javax.lang.model.type.*;
-import javax.lang.model.util.*;
-
-import com.oracle.truffle.dsl.processor.*;
-import com.oracle.truffle.dsl.processor.java.model.*;
+import com.oracle.truffle.dsl.processor.CompileErrorException;
+import com.oracle.truffle.dsl.processor.ProcessorContext;
+import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror.DeclaredCodeTypeMirror;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.lang.annotation.Annotation;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.AnnotationValue;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.element.PackageElement;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.ArrayType;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.ExecutableType;
+import javax.lang.model.type.PrimitiveType;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.type.WildcardType;
+import javax.lang.model.util.AbstractAnnotationValueVisitor7;
+import javax.lang.model.util.ElementFilter;
 
 /**
  * THIS IS NOT PUBLIC API.
@@ -84,6 +110,16 @@ public class ElementUtils {
         for (ExecutableElement executableElement : elements) {
             if (executableElement.getSimpleName().toString().equals(name)) {
                 return executableElement;
+            }
+        }
+        return null;
+    }
+
+    public static VariableElement findVariableElement(DeclaredType type, String name) {
+        List<? extends VariableElement> elements = ElementFilter.fieldsIn(type.asElement().getEnclosedElements());
+        for (VariableElement variableElement : elements) {
+            if (variableElement.getSimpleName().toString().equals(name)) {
+                return variableElement;
             }
         }
         return null;
@@ -769,7 +805,7 @@ public class ElementUtils {
         return (T) unboxedValue;
     }
 
-    public static AnnotationValue getAnnotationValue(AnnotationMirror mirror, String name) {
+    public static AnnotationValue getAnnotationValue(AnnotationMirror mirror, String name, boolean resolveDefault) {
         ExecutableElement valueMethod = null;
         for (ExecutableElement method : ElementFilter.methodsIn(mirror.getAnnotationType().asElement().getEnclosedElements())) {
             if (method.getSimpleName().toString().equals(name)) {
@@ -783,11 +819,18 @@ public class ElementUtils {
         }
 
         AnnotationValue value = mirror.getElementValues().get(valueMethod);
-        if (value == null) {
-            value = valueMethod.getDefaultValue();
+        if (resolveDefault) {
+            if (value == null) {
+                value = valueMethod.getDefaultValue();
+            }
         }
 
         return value;
+    }
+
+    public static AnnotationValue getAnnotationValue(AnnotationMirror mirror, String name) {
+        return getAnnotationValue(mirror, name, true);
+
     }
 
     private static class AnnotationValueVisitorImpl extends AbstractAnnotationValueVisitor7<Object, Void> {
@@ -926,7 +969,7 @@ public class ElementUtils {
             for (int i = 0; i < params.length; i++) {
                 TypeMirror param1 = params[i];
                 TypeMirror param2 = method.getParameters().get(i).asType();
-                if (param1.getKind() != TypeKind.TYPEVAR && param2.getKind() != TypeKind.TYPEVAR) {
+                if (param1 != null && param1.getKind() != TypeKind.TYPEVAR && param2 != null && param2.getKind() != TypeKind.TYPEVAR) {
                     if (!getQualifiedName(param1).equals(getQualifiedName(param2))) {
                         continue method;
                     }
@@ -1023,6 +1066,20 @@ public class ElementUtils {
         }
 
         Set<String> t2SuperSet = new HashSet<>(getQualifiedSuperTypeNames(fromTypeMirror(t2)));
+        if (t2SuperSet.contains(getQualifiedName(t1))) {
+            return 1;
+        }
+        return 0;
+    }
+
+    public static int compareByTypeHierarchy(TypeMirror t1, Set<String> t1SuperSet, TypeMirror t2, Set<String> t2SuperSet) {
+        if (typeEquals(t1, t2)) {
+            return 0;
+        }
+        if (t1SuperSet.contains(getQualifiedName(t2))) {
+            return -1;
+        }
+
         if (t2SuperSet.contains(getQualifiedName(t1))) {
             return 1;
         }
@@ -1221,7 +1278,7 @@ public class ElementUtils {
         }
         Map<String, TypeMirror> sourceTypes = new HashMap<>();
         for (TypeMirror type : types) {
-            sourceTypes.put(ElementUtils.getTypeId(type), type);
+            sourceTypes.put(ElementUtils.getUniqueIdentifier(type), type);
         }
         return sortTypes(new ArrayList<>(sourceTypes.values()), reverse);
     }
