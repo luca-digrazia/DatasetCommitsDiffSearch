@@ -26,7 +26,6 @@ package com.oracle.svm.driver;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -198,7 +197,7 @@ final class NativeImageServer extends NativeImage {
                         command.add("-task=" + "com.oracle.svm.hosted.NativeImageGeneratorRunner");
                         LinkedHashSet<Path> imagecp = new LinkedHashSet<>(serverClasspath);
                         imagecp.addAll(imageCP);
-                        command.addAll(Arrays.asList("-imagecp", imagecp.stream().map(NativeImageServer::pathToString).collect(Collectors.joining(File.pathSeparator))));
+                        command.addAll(Arrays.asList("-imagecp", imagecp.stream().map(Path::toString).collect(Collectors.joining(":"))));
                         command.addAll(imageArgs);
                         showVerboseMessage(isVerbose(), "SendBuildRequest [");
                         showVerboseMessage(isVerbose(), String.join("\n", command));
@@ -288,8 +287,8 @@ final class NativeImageServer extends NativeImage {
             sb.append("\nPID: ").append(pid);
             sb.append("\nPort: ").append(port);
             sb.append("\nJavaArgs: ").append(String.join(" ", serverJavaArgs));
-            sb.append("\nBootClasspath: ").append(serverBootClasspath.stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));
-            sb.append("\nClasspath: ").append(serverClasspath.stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));
+            sb.append("\nBootClasspath: ").append(serverBootClasspath.stream().map(Path::toString).collect(Collectors.joining(":")));
+            sb.append("\nClasspath: ").append(serverClasspath.stream().map(Path::toString).collect(Collectors.joining(":")));
             return sb.append('\n').toString();
         }
 
@@ -549,9 +548,9 @@ final class NativeImageServer extends NativeImage {
         List<String> command = pb.command();
         command.add(canonicalize(config.getJavaExecutable()).toString());
         if (!bootClasspath.isEmpty()) {
-            command.add(bootClasspath.stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator, "-Xbootclasspath/a:", "")));
+            command.add(bootClasspath.stream().map(Path::toString).collect(Collectors.joining(":", "-Xbootclasspath/a:", "")));
         }
-        command.addAll(Arrays.asList("-cp", classpath.stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator))));
+        command.addAll(Arrays.asList("-cp", classpath.stream().map(Path::toString).collect(Collectors.joining(":"))));
         command.addAll(javaArgs);
         command.add("com.oracle.svm.hosted.server.NativeImageBuildServer");
         command.add("-port=" + serverPort);
