@@ -143,13 +143,13 @@ public abstract class GraalCompilerState {
 
     protected Method getMethod() {
         Class<?> c = getClass();
-        if (isMethodSpecAnnotationPresent(c)) {
+        if (isAnnotationPresent(c)) {
             return getMethodFromMethodSpec(c);
         }
         return findParamField(this);
     }
 
-    protected boolean isMethodSpecAnnotationPresent(Class<?> startClass) {
+    protected boolean isAnnotationPresent(Class<?> startClass) {
         Class<?> c = startClass;
         while (c != null) {
             if (c.isAnnotationPresent(MethodSpec.class)) {
