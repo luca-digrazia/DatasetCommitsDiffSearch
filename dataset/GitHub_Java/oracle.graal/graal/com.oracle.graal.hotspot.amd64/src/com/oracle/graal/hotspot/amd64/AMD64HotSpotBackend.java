@@ -46,7 +46,6 @@ import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -57,7 +56,7 @@ import com.oracle.nfi.api.*;
  */
 public class AMD64HotSpotBackend extends HotSpotHostBackend {
 
-    public AMD64HotSpotBackend(HotSpotGraalRuntimeProvider runtime, HotSpotProviders providers) {
+    public AMD64HotSpotBackend(HotSpotGraalRuntime runtime, HotSpotProviders providers) {
         super(runtime, providers);
     }
 
@@ -68,8 +67,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
 
     @Override
     public FrameMapBuilder newFrameMapBuilder(RegisterConfig registerConfig) {
-        RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
-        return new AMD64FrameMapBuilder(newFrameMap(registerConfigNonNull), getCodeCache(), registerConfigNonNull);
+        return new AMD64FrameMapBuilder(this::newFrameMap, getCodeCache(), registerConfig);
     }
 
     @Override

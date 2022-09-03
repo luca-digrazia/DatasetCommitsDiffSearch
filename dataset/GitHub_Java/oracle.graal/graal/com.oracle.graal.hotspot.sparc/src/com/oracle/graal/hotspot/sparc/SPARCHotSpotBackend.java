@@ -51,7 +51,6 @@ import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.sparc.*;
 import com.oracle.graal.nodes.*;
@@ -74,8 +73,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
 
     @Override
     public FrameMapBuilder newFrameMapBuilder(RegisterConfig registerConfig) {
-        RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
-        return new FrameMapBuilderImpl(newFrameMap(registerConfigNonNull), getCodeCache(), registerConfigNonNull);
+        return new DelayedFrameMapBuilder(this::newFrameMap, getCodeCache(), registerConfig);
     }
 
     @Override

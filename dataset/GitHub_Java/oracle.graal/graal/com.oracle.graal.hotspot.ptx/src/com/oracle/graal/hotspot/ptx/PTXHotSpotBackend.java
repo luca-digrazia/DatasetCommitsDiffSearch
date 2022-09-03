@@ -48,7 +48,6 @@ import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.ptx.PTXControlFlow.PTXPredicatedLIRInstruction;
 import com.oracle.graal.lir.ptx.*;
@@ -158,8 +157,7 @@ public class PTXHotSpotBackend extends HotSpotBackend {
 
     @Override
     public FrameMapBuilder newFrameMapBuilder(RegisterConfig registerConfig) {
-        RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
-        return new FrameMapBuilderImpl(newFrameMap(registerConfigNonNull), getCodeCache(), registerConfigNonNull);
+        return new DelayedFrameMapBuilder(this::newFrameMap, getCodeCache(), registerConfig);
     }
 
     @Override
