@@ -192,11 +192,6 @@ public class UnsafeArrayCopySnippets implements Snippets {
             }
         } else {
             for (long i = 0; i < byteLength; i += VECTOR_SIZE) {
-                /*
-                 * TODO atomicity problem on 32-bit architectures: The JVM spec requires double
-                 * values to be copied atomically, but not long values. For example, on Intel 32-bit
-                 * this code is not atomic as long as the vector kind remains Kind.Long.
-                 */
                 Long a = UnsafeLoadNode.load(src, arrayBaseOffset, i + srcOffset, VECTOR_KIND);
                 UnsafeStoreNode.store(dest, arrayBaseOffset, i + destOffset, a.longValue(), VECTOR_KIND);
             }
@@ -230,22 +225,22 @@ public class UnsafeArrayCopySnippets implements Snippets {
         int log2ElementSize = (layoutHelper >> layoutHelperLog2ElementSizeShift()) & layoutHelperLog2ElementSizeMask();
         int headerSize = (layoutHelper >> layoutHelperHeaderSizeShift()) & layoutHelperHeaderSizeMask();
 
-        Unsigned srcOffset = Word.unsigned(srcPos).shiftLeft(log2ElementSize).add(headerSize);
-        Unsigned destOffset = Word.unsigned(destPos).shiftLeft(log2ElementSize).add(headerSize);
-        Unsigned destStart = destOffset;
-        Unsigned sizeInBytes = Word.unsigned(length).shiftLeft(log2ElementSize);
-        Unsigned destEnd = destOffset.add(Word.unsigned(length).shiftLeft(log2ElementSize));
+        Word srcOffset = (Word) Word.fromObject(src).add(headerSize).add(srcPos << log2ElementSize);
+        Word destOffset = (Word) Word.fromObject(dest).add(headerSize).add(destPos << log2ElementSize);
+        Word destStart = destOffset;
+        long sizeInBytes = ((long) length) << log2ElementSize;
+        Word destEnd = destOffset.add(Word.unsigned(length).shiftLeft(log2ElementSize));
 
-        Unsigned nonVectorBytes = sizeInBytes.unsignedRemainder(Word.unsigned(VECTOR_SIZE));
-        Unsigned destNonVectorEnd = destStart.add(nonVectorBytes);
+        int nonVectorBytes = (int) (sizeInBytes % VECTOR_SIZE);
+        Word destNonVectorEnd = destStart.add(nonVectorBytes);
 
         while (destOffset.belowThan(destNonVectorEnd)) {
-            ObjectAccess.writeByte(dest, destOffset, ObjectAccess.readByte(src, srcOffset, ANY_LOCATION), ANY_LOCATION);
+            destOffset.writeByte(0, srcOffset.readByte(0, ANY_LOCATION), ANY_LOCATION);
             destOffset = destOffset.add(1);
             srcOffset = srcOffset.add(1);
         }
         while (destOffset.belowThan(destEnd)) {
-            ObjectAccess.writeWord(dest, destOffset, ObjectAccess.readWord(src, srcOffset, ANY_LOCATION), ANY_LOCATION);
+            destOffset.writeWord(0, srcOffset.readWord(0, ANY_LOCATION), ANY_LOCATION);
             destOffset = destOffset.add(wordSize());
             srcOffset = srcOffset.add(wordSize());
         }
@@ -284,7 +279,7 @@ public class UnsafeArrayCopySnippets implements Snippets {
                 assert snippet != null : "arraycopy snippet for " + elementKind.name() + " not found";
             }
 
-            Arguments args = new Arguments(snippet, node.graph().getGuardsStage());
+            Arguments args = new Arguments(snippet);
             node.addSnippetArguments(args);
 
             SnippetTemplate template = template(args);
