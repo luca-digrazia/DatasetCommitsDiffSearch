@@ -135,15 +135,7 @@ public abstract class GraalKernelTester extends KernelTester {
      * with HSAIL code.
      */
     public boolean canHandleDeoptVirtualObjects() {
-        return false;
-    }
-
-    /**
-     * Determines if the runtime supports {@link StackSlot}s in {@link DebugInfo} associated with
-     * HSAIL code.
-     */
-    public boolean canHandleDeoptStackSlots() {
-        return false;
+        return true;
     }
 
     /**
