@@ -35,11 +35,8 @@ import com.oracle.truffle.dsl.processor.model.*;
 
 public class ExecutableTypeMethodParser extends NodeMethodParser<ExecutableTypeData> {
 
-    private final List<TypeMirror> frameTypes;
-
-    public ExecutableTypeMethodParser(ProcessorContext context, NodeData node, List<TypeMirror> frameTypes) {
+    public ExecutableTypeMethodParser(ProcessorContext context, NodeData node) {
         super(context, node);
-        this.frameTypes = frameTypes;
         setParseNullOnError(false);
         getParser().setEmitErrors(false);
         getParser().setUseVarArgs(true);
@@ -51,9 +48,8 @@ public class ExecutableTypeMethodParser extends NodeMethodParser<ExecutableTypeD
         List<ParameterSpec> requiredSpecs = new ArrayList<>(spec.getRequired());
         spec.getRequired().clear();
 
-        TypeSystemData typeSystem = getNode().getTypeSystem();
-        List<TypeMirror> allowedTypes = typeSystem.getPrimitiveTypeMirrors();
-        Set<String> allowedIdentifiers = typeSystem.getTypeIdentifiers();
+        List<TypeMirror> allowedTypes = getNode().getTypeSystem().getPrimitiveTypeMirrors();
+        Set<String> allowedIdentifiers = getNode().getTypeSystem().getTypeIdentifiers();
         for (ParameterSpec originalSpec : requiredSpecs) {
             spec.addRequired(new ParameterSpec(originalSpec, allowedTypes, allowedIdentifiers));
         }
@@ -65,11 +61,6 @@ public class ExecutableTypeMethodParser extends NodeMethodParser<ExecutableTypeD
         otherParameters.setSignature(true);
         spec.addRequired(otherParameters);
         return spec;
-    }
-
-    @Override
-    protected void addDefaultFrame(MethodSpec methodSpec) {
-        methodSpec.addOptional(new ParameterSpec("frame", frameTypes));
     }
 
     @Override
