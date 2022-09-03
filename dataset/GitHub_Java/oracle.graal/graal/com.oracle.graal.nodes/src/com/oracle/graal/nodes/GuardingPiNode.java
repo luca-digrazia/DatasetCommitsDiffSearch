@@ -95,13 +95,13 @@ public class GuardingPiNode extends FixedWithNextNode implements Lowerable, Guar
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
         if (stamp() == StampFactory.illegal(object.kind())) {
-            // The guard always fails
+            // The condition always fails
             return graph().add(new DeoptimizeNode(action, reason));
         }
         if (condition instanceof LogicConstantNode) {
             LogicConstantNode c = (LogicConstantNode) condition;
             if (c.getValue() == negated) {
-                // The guard always fails
+                // The condition always fails
                 return graph().add(new DeoptimizeNode(action, reason));
             }
 
