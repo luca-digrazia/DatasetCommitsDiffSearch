@@ -28,6 +28,7 @@ import java.lang.reflect.*;
 
 import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.word.*;
 
 // JaCoCo Exclude
 
@@ -80,8 +81,8 @@ public class HotSpotClassSubstitutions {
                 if (klassIsArray(klass)) {
                     return Object.class;
                 } else {
-                    KlassPointer superKlass = klass.readKlassPointer(klassSuperKlassOffset(), KLASS_SUPER_KLASS_LOCATION);
-                    if (superKlass.isNull()) {
+                    Word superKlass = klass.readWord(klassSuperKlassOffset(), KLASS_SUPER_KLASS_LOCATION);
+                    if (superKlass.equal(0)) {
                         return null;
                     } else {
                         return readJavaMirror(superKlass);
@@ -94,7 +95,7 @@ public class HotSpotClassSubstitutions {
         return null;
     }
 
-    public static Class<?> readJavaMirror(KlassPointer klass) {
+    public static Class<?> readJavaMirror(Word klass) {
         return PiNode.asNonNullClass(klass.readObject(classMirrorOffset(), CLASS_MIRROR_LOCATION));
     }
 
