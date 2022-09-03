@@ -134,7 +134,6 @@ import com.oracle.truffle.llvm.parser.LLVMType;
 import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
 import com.oracle.truffle.llvm.parser.base.LLVMParserResultImpl;
 import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
-import com.oracle.truffle.llvm.parser.base.model.LLVMToBitcodeAdapter;
 import com.oracle.truffle.llvm.parser.base.util.LLVMTypeHelperImpl;
 import com.oracle.truffle.llvm.parser.impl.LLVMPhiVisitor.Phi;
 import com.oracle.truffle.llvm.parser.impl.lifetime.LLVMLifeTimeAnalysisResult;
@@ -344,12 +343,12 @@ public final class LLVMVisitor implements LLVMParserRuntime {
             LLVMExpressionNode globalVarAddress = factoryFacade.createLiteral(allocGlobalVariable, LLVMBaseType.ADDRESS);
             LLVMExpressionNode iNode = factoryFacade.createLiteral(i, LLVMBaseType.I32);
             LLVMExpressionNode structPointer = factoryFacade.createGetElementPtr(LLVMBaseType.I32, globalVarAddress, iNode, structSize);
-            LLVMExpressionNode loadedStruct = factoryFacade.createLoad(LLVMToBitcodeAdapter.resolveType(structType), structPointer);
+            LLVMExpressionNode loadedStruct = factoryFacade.createLoad(structType, structPointer);
             ResolvedType functionType = structType.getContainedType(1);
             int indexedTypeLength = typeHelper.getAlignmentByte(functionType);
             LLVMExpressionNode oneLiteralNode = factoryFacade.createLiteral(1, LLVMBaseType.I32);
             LLVMExpressionNode functionLoadTarget = factoryFacade.createGetElementPtr(LLVMBaseType.I32, loadedStruct, oneLiteralNode, indexedTypeLength);
-            LLVMExpressionNode loadedFunction = factoryFacade.createLoad(LLVMToBitcodeAdapter.resolveType(functionType), functionLoadTarget);
+            LLVMExpressionNode loadedFunction = factoryFacade.createLoad(functionType, functionLoadTarget);
             LLVMExpressionNode[] argNodes = new LLVMExpressionNode[]{factoryFacade.createFrameRead(LLVMBaseType.ADDRESS, getStackPointerSlot())};
             assert argNodes.length == factoryFacade.getArgStartIndex().get();
             LLVMNode functionCall = factoryFacade.createFunctionCall(loadedFunction, argNodes, LLVMBaseType.VOID);
@@ -449,7 +448,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
     }
 
     private LLVMExpressionNode getArrayLiteral(List<LLVMExpressionNode> arrayValues, ResolvedType arrayType) {
-        return factoryFacade.createArrayLiteral(arrayValues, LLVMToBitcodeAdapter.resolveType(arrayType));
+        return factoryFacade.createArrayLiteral(arrayValues, arrayType);
     }
 
     private LLVMFunction visitFunction(FunctionDef def) {
@@ -681,7 +680,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
     }
 
     private LLVMNode getStoreNode(LLVMExpressionNode pointerNode, LLVMExpressionNode valueNode, Type type) {
-        return factoryFacade.createStore(pointerNode, valueNode, LLVMToBitcodeAdapter.resolveType(resolve(type)));
+        return factoryFacade.createStore(pointerNode, valueNode, resolve(type));
     }
 
     private LLVMType getLLVMType(EObject object) {
@@ -906,7 +905,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
 
     private LLVMNode getWriteNode(LLVMExpressionNode result, FrameSlot slot, EObject type) {
         LLVMBaseType baseType = getLLVMType(type).getType();
-        FrameSlotKind frameSlotKind = factoryFacade.getFrameSlotKind(LLVMToBitcodeAdapter.resolveType(resolve(type)));
+        FrameSlotKind frameSlotKind = factoryFacade.getFrameSlotKind(resolve(type));
         slot.setKind(frameSlotKind);
         return factoryFacade.createFrameWrite(baseType, result, slot);
     }
@@ -924,7 +923,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         LLVMExpressionNode pointerNode = visitValueRef(pointer.getRef(), pointer.getType());
         ResolvedType resolvedResultType = resolve(instr);
         LLVMExpressionNode loadTarget = pointerNode;
-        return factoryFacade.createLoad(LLVMToBitcodeAdapter.resolveType(resolvedResultType), loadTarget);
+        return factoryFacade.createLoad(resolvedResultType, loadTarget);
     }
 
     private LLVMExpressionNode visitAllocaInstruction(Instruction_alloca instr) {
@@ -946,12 +945,12 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         int byteSize = typeHelper.getByteSize(resolvedInstructionType);
         LLVMExpressionNode alloc;
         if (numElementsVal == null) {
-            alloc = factoryFacade.createAlloc(LLVMToBitcodeAdapter.resolveType(resolvedInstructionType), byteSize, alignment, null, null);
+            alloc = factoryFacade.createAlloc(resolvedInstructionType, byteSize, alignment, null, null);
         } else {
             Type numElementsType = instr.getNumElements().getType();
             LLVMBaseType llvmType = getLLVMType(numElementsType).getType();
             LLVMExpressionNode numElements = visitValueRef(numElementsVal.getRef(), numElementsType);
-            alloc = factoryFacade.createAlloc(LLVMToBitcodeAdapter.resolveType(resolvedInstructionType), byteSize, alignment, llvmType, numElements);
+            alloc = factoryFacade.createAlloc(resolvedInstructionType, byteSize, alignment, llvmType, numElements);
         }
         return alloc;
     }
@@ -978,7 +977,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         LLVMExpressionNode fromNode = visitValueRef(instr.getValue(), instr.getFromType());
         ResolvedType targetType = resolve(instr.getTargetType());
         ResolvedType fromType = resolve(instr.getFromType());
-        return factoryFacade.createCast(fromNode, LLVMToBitcodeAdapter.resolveType(targetType), LLVMToBitcodeAdapter.resolveType(fromType), type);
+        return factoryFacade.createCast(fromNode, targetType, fromType, type);
     }
 
     private LLVMExpressionNode visitValueRef(ValueRef valueRef, Type type) {
@@ -1066,7 +1065,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         ResolvedType targetType = resolve(conv.getTargetType());
         ResolvedType fromType = resolve(conv.getFromType());
         LLVMConversionType type = LLVMConversionType.fromString(conv.getOpcode());
-        return factoryFacade.createCast(visitValueRef(conv.getConstant(), conv.getFromType()), LLVMToBitcodeAdapter.resolveType(targetType), LLVMToBitcodeAdapter.resolveType(fromType), type);
+        return factoryFacade.createCast(visitValueRef(conv.getConstant(), conv.getFromType()), targetType, fromType, type);
     }
 
     private LLVMExpressionNode visitVectorConstant(VectorConstant constant) {
@@ -1224,7 +1223,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
             throw new AssertionError();
         }
         ResolvedType structureType = resolve(structure);
-        return factoryFacade.createStructureConstantNode(LLVMToBitcodeAdapter.resolveType(structureType), packed, LLVMToBitcodeAdapter.resolveTypes(types), constants);
+        return factoryFacade.createStructureConstantNode(structureType, packed, types, constants);
     }
 
     private LLVMExpressionNode getUndefinedValueNode(EObject type) {
@@ -1294,7 +1293,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         } else if (instructionType == LLVMBaseType.STRUCT) {
             throw new AssertionError(simpleConst);
         } else {
-            return factoryFacade.createSimpleConstantNoArray(stringValue, instructionType, LLVMToBitcodeAdapter.resolveType(resolve(type)));
+            return factoryFacade.createSimpleConstantNoArray(stringValue, instructionType, resolve(type));
         }
     }
 
@@ -1311,9 +1310,9 @@ public final class LLVMVisitor implements LLVMParserRuntime {
             throw new AssertionError("frame slot is null!");
         }
         if (frameSlot.getKind() == FrameSlotKind.Illegal) {
-            frameSlot.setKind(factoryFacade.getFrameSlotKind(LLVMToBitcodeAdapter.resolveType(type)));
+            frameSlot.setKind(factoryFacade.getFrameSlotKind(type));
         }
-        assert frameSlot.getKind() == factoryFacade.getFrameSlotKind(LLVMToBitcodeAdapter.resolveType(type));
+        assert frameSlot.getKind() == factoryFacade.getFrameSlotKind(type);
         return frameSlot;
     }
 
@@ -1432,8 +1431,8 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         } else {
             LLVMExpressionNode retValue = visitValueRef(val.getRef(), val.getType());
             ResolvedType resolvedType = resolve(val.getType());
-            retSlot.setKind(factoryFacade.getFrameSlotKind(LLVMToBitcodeAdapter.resolveType(resolvedType)));
-            return factoryFacade.createNonVoidRet(retValue, LLVMToBitcodeAdapter.resolveType(resolvedType));
+            retSlot.setKind(factoryFacade.getFrameSlotKind(resolvedType));
+            return factoryFacade.createNonVoidRet(retValue, resolvedType);
         }
     }
 
@@ -1461,7 +1460,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
 
     @Override
     public LLVMExpressionNode allocateFunctionLifetime(ResolvedType type, int size, int alignment) {
-        return factoryFacade.createAlloc(LLVMToBitcodeAdapter.resolveType(type), size, alignment, null, null);
+        return factoryFacade.createAlloc(type, size, alignment, null, null);
     }
 
     @Override

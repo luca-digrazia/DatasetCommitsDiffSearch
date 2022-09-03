@@ -88,7 +88,7 @@ import com.oracle.truffle.llvm.parser.base.model.types.IntegerType;
 import com.oracle.truffle.llvm.parser.base.model.types.StructureType;
 import com.oracle.truffle.llvm.parser.base.model.types.Type;
 import com.oracle.truffle.llvm.parser.base.util.LLVMBitcodeTypeHelper;
-import com.oracle.truffle.llvm.parser.base.util.LLVMTypeHelper;
+import com.oracle.truffle.llvm.parser.base.util.LLVMTypeHelperImpl;
 import com.oracle.truffle.llvm.parser.bc.impl.LLVMBitcodeFunctionVisitor;
 import com.oracle.truffle.llvm.parser.factories.LLVMArithmeticFactory;
 import com.oracle.truffle.llvm.parser.factories.LLVMCastsFactory;
@@ -303,7 +303,7 @@ public final class LLVMNodeGenerator {
                 throw new RuntimeException("Missed a compare operator");
         }
 
-        if (LLVMTypeHelper.isVectorType(llvmtype)) {
+        if (LLVMTypeHelperImpl.isVectorType(llvmtype)) {
             return LLVMComparisonFactory.createVectorComparison(target, lhs, rhs, llvmtype, comparison);
         } else {
             return LLVMComparisonFactory.createIntegerComparison(lhs, rhs, llvmtype, comparison);
@@ -405,8 +405,7 @@ public final class LLVMNodeGenerator {
     private LLVMExpressionNode resolveArrayConstant(ArrayConstant constant) {
 
         final int baseTypeSize = typeHelper.getByteSize(constant.getType().getElementType());
-        final LLVMAddressNode arrayAlloc = LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen.create(constant.getElementCount() * baseTypeSize,
-                        constant.getType().getAlignmentByte(method.getTargetDataLayout()),
+        final LLVMAddressNode arrayAlloc = LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen.create(constant.getElementCount() * baseTypeSize, typeHelper.getAlignment(constant.getType()),
                         method.getContext(), method.getStackSlot());
 
         final List<LLVMExpressionNode> arrayValues = new ArrayList<>(constant.getElementCount());
@@ -443,7 +442,7 @@ public final class LLVMNodeGenerator {
 
     private LLVMExpressionNode resolveStructureConstant(StructureConstant constant) {
         final int structSize = typeHelper.getByteSize(constant.getType());
-        final int structAlignment = constant.getType().getAlignmentByte(method.getTargetDataLayout());
+        final int structAlignment = typeHelper.getAlignment(constant.getType());
         final LLVMExpressionNode alloc = LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen.create(structSize, structAlignment, method.getContext(), method.getStackSlot());
 
         final int[] offsets = new int[constant.getElementCount()];
@@ -569,8 +568,7 @@ public final class LLVMNodeGenerator {
             values.add(resolve(constant.getElement(i)));
         }
 
-        final LLVMAddressNode target = LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen.create(typeHelper.getByteSize(constant.getType()),
-                        constant.getType().getAlignmentByte(method.getTargetDataLayout()),
+        final LLVMAddressNode target = LLVMAllocInstructionFactory.LLVMAllocaInstructionNodeGen.create(typeHelper.getByteSize(constant.getType()), typeHelper.getAlignment(constant.getType()),
                         method.getContext(),
                         method.getStackSlot());
 
