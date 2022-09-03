@@ -26,24 +26,8 @@ import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
-import com.sun.cri.ci.*;
-import com.sun.cri.ri.*;
 
 public class LoweringPhase extends Phase {
-
-    public static final LoweringOp DELEGATE_TO_RUNTIME = new LoweringOp() {
-        @Override
-        public Node lower(Node n, CiLoweringTool tool) {
-            return tool.getRuntime().lower(n, tool);
-        }
-    };
-
-    private final RiRuntime runtime;
-
-    public LoweringPhase(RiRuntime runtime) {
-        this.runtime = runtime;
-    }
-
     @Override
     protected void run(final Graph graph) {
         final IdentifyBlocksPhase s = new IdentifyBlocksPhase(false);
@@ -52,9 +36,9 @@ public class LoweringPhase extends Phase {
         for (Block b : s.getBlocks()) {
             //final Node firstNode = b.firstNode();
 
-            final CiLoweringTool loweringTool = new CiLoweringTool() {
+            final LoweringTool loweringTool = new LoweringTool() {
                 @Override
-                public Node getGuardAnchor() {
+                public Node createStructuredBlockAnchor() {
                     throw Util.unimplemented();
 //                    if (!(firstNode instanceof Anchor) && !(firstNode instanceof Merge)) {
 //                        Anchor a = new Anchor(graph);
@@ -66,11 +50,6 @@ public class LoweringPhase extends Phase {
 //                        return a;
 //                    }
 //                    return firstNode;
-                }
-
-                @Override
-                public RiRuntime getRuntime() {
-                    return runtime;
                 }
             };
 
@@ -88,7 +67,11 @@ public class LoweringPhase extends Phase {
         }
     }
 
+    public interface LoweringTool {
+        Node createStructuredBlockAnchor();
+    }
+
     public interface LoweringOp extends Op {
-        Node lower(Node n, CiLoweringTool tool);
+        Node lower(Node n, LoweringTool tool);
     }
 }
