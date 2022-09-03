@@ -68,35 +68,38 @@ public class IR {
      * Builds the graph, optimizes it, and computes the linear scan block order.
      */
     public void build() {
-        new GraphBuilderPhase(compilation, compilation.method, false, false).apply(compilation.graph);
-        printGraph("After GraphBuilding", compilation.graph);
+        if (GraalOptions.PrintTimers) {
+            GraalTimers.HIR_CREATE.start();
+        }
+
+        new GraphBuilderPhase(compilation, compilation.method, false).apply(compilation.graph);
+        verifyAndPrint("After GraphBuilder");
         //new DuplicationPhase().apply(compilation.graph);
         new DeadCodeEliminationPhase().apply(compilation.graph);
-        printGraph("After DeadCodeElimination", compilation.graph);
+        verifyAndPrint("After DeadCodeElimination");
 
         if (GraalOptions.Inline) {
             new InliningPhase(compilation, this).apply(compilation.graph);
-            printGraph("After Ininling", compilation.graph);
         }
 
-        if (GraalOptions.Time) {
-            GraalTimers.COMPUTE_LINEAR_SCAN_ORDER.start();
+        if (GraalOptions.PrintTimers) {
+            GraalTimers.HIR_CREATE.stop();
+            GraalTimers.HIR_OPTIMIZE.start();
         }
 
         Graph graph = compilation.graph;
 
         if (GraalOptions.OptCanonicalizer) {
             new CanonicalizerPhase().apply(graph);
-            printGraph("After Canonicalization", graph);
+            verifyAndPrint("After Canonicalization");
             new DeadCodeEliminationPhase().apply(compilation.graph);
+            verifyAndPrint("After DeadCodeElimination");
         }
 
         new SplitCriticalEdgesPhase().apply(graph);
 
         Schedule schedule = new Schedule();
         schedule.apply(graph);
-
-
         List<Block> blocks = schedule.getBlocks();
         List<LIRBlock> lirBlocks = new ArrayList<LIRBlock>();
         Map<Block, LIRBlock> map = new HashMap<Block, LIRBlock>();
@@ -141,10 +144,10 @@ public class IR {
             b.setLinearScanNumber(z++);
         }
 
-        printGraph("After linear scan order", compilation.graph);
+        verifyAndPrint("After linear scan order");
 
-        if (GraalOptions.Time) {
-            GraalTimers.COMPUTE_LINEAR_SCAN_ORDER.stop();
+        if (GraalOptions.PrintTimers) {
+            GraalTimers.HIR_OPTIMIZE.stop();
         }
     }
 
@@ -154,6 +157,16 @@ public class IR {
      */
     public List<LIRBlock> linearScanOrder() {
         return orderedBlocks;
+    }
+
+    /**
+     * Verifies the IR and prints it out if the relevant options are set.
+     * @param phase the name of the phase for printing
+     */
+    public void verifyAndPrint(String phase) {
+        if (compilation.compiler.isObserved()) {
+            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, phase, compilation.graph, true, false));
+        }
     }
 
     public void printGraph(String phase, Graph graph) {
