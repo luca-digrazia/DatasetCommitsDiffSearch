@@ -84,7 +84,7 @@ final class ForeignAccessFactoryGenerator {
         Utils.appendFactoryGeneratedFor(w, "", receiverTypeClass, ElementUtils.getQualifiedName(element));
         Utils.appendVisibilityModifier(w, element);
         w.append("final class ").append(simpleClassName);
-        w.append(" implements FactoryModel, Factory {\n");
+        w.append(" implements Factory26, Factory {\n");
 
         appendSingletonAndGetter(w);
         appendPrivateConstructor(w);
@@ -92,9 +92,7 @@ final class ForeignAccessFactoryGenerator {
 
         appendFactoryAccessIsNull(w);
         appendFactoryAccessIsExecutable(w);
-        appendFactoryAccessIsInstantiable(w);
         appendFactoryAccessIsBoxed(w);
-        appendFactoryAccessHasKeys(w);
         appendFactoryAccessHasSize(w);
         appendFactoryAccessGetSize(w);
         appendFactoryAccessUnbox(w);
@@ -105,7 +103,6 @@ final class ForeignAccessFactoryGenerator {
         appendFactoryAccessNew(w);
         appendFactoryAccessKeyInfo(w);
         appendFactoryAccessKeys(w);
-        appendFactoryAccessKeyDeclaredLocation(w);
         appendFactoryAccessIsPointer(w);
         appendFactoryAccessAsPointer(w);
         appendFactoryAccessToNative(w);
@@ -132,7 +129,7 @@ final class ForeignAccessFactoryGenerator {
             imports.add("com.oracle.truffle.api.CompilerDirectives.TruffleBoundary");
         }
         imports.add("com.oracle.truffle.api.Truffle");
-        imports.add("com.oracle.truffle.api.interop.ForeignAccess.FactoryModel");
+        imports.add("com.oracle.truffle.api.interop.ForeignAccess.Factory26");
         imports.add("com.oracle.truffle.api.interop.ForeignAccess.Factory");
         imports.add("com.oracle.truffle.api.interop.ForeignAccess");
         imports.add("com.oracle.truffle.api.interop.Message");
@@ -140,9 +137,7 @@ final class ForeignAccessFactoryGenerator {
         if (!(messageGenerators.containsKey(Message.IS_BOXED) &&
                         messageGenerators.containsKey(Message.IS_NULL) &&
                         messageGenerators.containsKey(Message.IS_EXECUTABLE) &&
-                        messageGenerators.containsKey(Message.IS_INSTANTIABLE) &&
                         messageGenerators.containsKey(Message.KEY_INFO) &&
-                        messageGenerators.containsKey(Message.HAS_KEYS) &&
                         messageGenerators.containsKey(Message.HAS_SIZE) &&
                         messageGenerators.containsKey(Message.IS_POINTER))) {
             imports.add("com.oracle.truffle.api.nodes.RootNode");
@@ -210,24 +205,10 @@ final class ForeignAccessFactoryGenerator {
         w.append("    }").append("\n");
     }
 
-    private void appendFactoryAccessIsInstantiable(Writer w) throws IOException {
-        w.append("    @Override").append("\n");
-        w.append("    public CallTarget accessIsInstantiable() {").append("\n");
-        appendOptionalDefaultHandlerBody(w, Message.IS_INSTANTIABLE);
-        w.append("    }").append("\n");
-    }
-
     private void appendFactoryAccessIsBoxed(Writer w) throws IOException {
         w.append("    @Override").append("\n");
         w.append("    public CallTarget accessIsBoxed() {").append("\n");
         appendOptionalDefaultHandlerBody(w, Message.IS_BOXED);
-        w.append("    }").append("\n");
-    }
-
-    private void appendFactoryAccessHasKeys(Writer w) throws IOException {
-        w.append("    @Override").append("\n");
-        w.append("    public CallTarget accessHasKeys() {").append("\n");
-        appendOptionalDefaultHandlerBody(w, Message.HAS_KEYS);
         w.append("    }").append("\n");
     }
 
@@ -268,13 +249,6 @@ final class ForeignAccessFactoryGenerator {
         w.append("    @Override").append("\n");
         w.append("    public CallTarget accessKeys() {").append("\n");
         appendOptionalHandlerBody(w, Message.KEYS);
-        w.append("    }").append("\n");
-    }
-
-    private void appendFactoryAccessKeyDeclaredLocation(Writer w) throws IOException {
-        w.append("    @Override").append("\n");
-        w.append("    public CallTarget accessKeyDeclaredLocation() {").append("\n");
-        appendOptionalHandlerBody(w, Message.KEY_DECLARED_LOCATION);
         w.append("    }").append("\n");
     }
 
