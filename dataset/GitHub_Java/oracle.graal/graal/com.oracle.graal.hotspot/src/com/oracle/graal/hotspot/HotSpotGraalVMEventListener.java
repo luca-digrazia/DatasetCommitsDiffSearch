@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,13 +24,13 @@ package com.oracle.graal.hotspot;
 
 import java.util.ArrayList;
 
-import jdk.vm.ci.code.CompiledCode;
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
-import jdk.vm.ci.hotspot.HotSpotVMEventListener;
+import jdk.internal.jvmci.code.CompilationResult;
+import jdk.internal.jvmci.code.InstalledCode;
+import jdk.internal.jvmci.hotspot.HotSpotCodeCacheProvider;
+import jdk.internal.jvmci.hotspot.HotSpotVMEventListener;
+import jdk.internal.jvmci.service.ServiceProvider;
 
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.serviceprovider.ServiceProvider;
 
 @ServiceProvider(HotSpotVMEventListener.class)
 public class HotSpotGraalVMEventListener implements HotSpotVMEventListener {
@@ -49,9 +49,9 @@ public class HotSpotGraalVMEventListener implements HotSpotVMEventListener {
     }
 
     @Override
-    public void notifyInstall(HotSpotCodeCacheProvider codeCache, InstalledCode installedCode, CompiledCode compiledCode) {
-        if (Debug.isDumpEnabled(Debug.INFO_LOG_LEVEL)) {
-            Debug.dump(Debug.INFO_LOG_LEVEL, new Object[]{compiledCode, installedCode}, "After code installation");
+    public void notifyInstall(HotSpotCodeCacheProvider codeCache, InstalledCode installedCode, CompilationResult compResult) {
+        if (Debug.isDumpEnabled()) {
+            Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
         }
         if (Debug.isLogEnabled()) {
             Debug.log("%s", codeCache.disassemble(installedCode));

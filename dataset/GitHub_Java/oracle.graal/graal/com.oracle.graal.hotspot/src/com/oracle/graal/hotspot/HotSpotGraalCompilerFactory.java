@@ -32,7 +32,6 @@ import jdk.internal.jvmci.options.Option;
 import jdk.internal.jvmci.options.OptionType;
 import jdk.internal.jvmci.options.OptionValue;
 import jdk.internal.jvmci.runtime.JVMCIRuntime;
-import jdk.internal.jvmci.service.Services;
 
 import com.oracle.graal.phases.tiers.CompilerConfiguration;
 
@@ -47,22 +46,6 @@ public abstract class HotSpotGraalCompilerFactory implements CompilerFactory {
 
     }
 
-    @SuppressWarnings("try")
-    private static class Lazy {
-
-        static {
-            try (InitTimer t = timer("HotSpotBackendFactory.register")) {
-                for (HotSpotBackendFactory backend : Services.load(HotSpotBackendFactory.class)) {
-                    backend.register();
-                }
-            }
-        }
-
-        static void registerBackends() {
-            // force run of static initializer
-        }
-    }
-
     protected abstract HotSpotBackendFactory getBackendFactory(Architecture arch);
 
     protected abstract CompilerConfiguration createCompilerConfiguration();
@@ -72,7 +55,6 @@ public abstract class HotSpotGraalCompilerFactory implements CompilerFactory {
     public Compiler createCompiler(JVMCIRuntime runtime) {
         HotSpotJVMCIRuntime jvmciRuntime = (HotSpotJVMCIRuntime) runtime;
         try (InitTimer t = timer("HotSpotGraalRuntime.<init>")) {
-            Lazy.registerBackends();
             HotSpotGraalRuntime graalRuntime = new HotSpotGraalRuntime(jvmciRuntime, this);
             HotSpotGraalVMEventListener.addRuntime(graalRuntime);
             return new HotSpotGraalCompiler(jvmciRuntime, graalRuntime);
