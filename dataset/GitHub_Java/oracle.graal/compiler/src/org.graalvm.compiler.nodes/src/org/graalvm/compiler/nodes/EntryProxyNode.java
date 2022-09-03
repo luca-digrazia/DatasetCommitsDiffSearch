@@ -44,7 +44,7 @@ public final class EntryProxyNode extends FloatingNode implements ValueProxy {
     @Input ValueNode value;
 
     public EntryProxyNode(ValueNode value, EntryMarkerNode proxyPoint) {
-        super(TYPE, value.stamp(NodeView.DEFAULT).unrestricted());
+        super(TYPE, value.stamp().unrestricted());
         this.value = value;
         this.proxyPoint = proxyPoint;
     }
