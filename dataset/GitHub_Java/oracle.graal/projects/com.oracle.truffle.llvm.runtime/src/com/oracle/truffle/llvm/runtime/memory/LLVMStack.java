@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,120 +29,211 @@
  */
 package com.oracle.truffle.llvm.runtime.memory;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.ValueType;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.frame.FrameUtil;
+import com.oracle.truffle.api.frame.VirtualFrame;
 
 /**
- * Implements a stack that grows from the top to the bottom.
+ * Implements a stack that grows from the top to the bottom. The stack is allocated lazily when it
+ * is accessed for the first time.
  */
-public final class LLVMStack extends LLVMMemory {
+public final class LLVMStack {
 
-    private static final long STACK_SIZE_KB = LLVMOptions.ENGINE.stackSize();
+    public static final String FRAME_ID = "<stackpointer>";
 
-    private static final long STACK_SIZE_BYTE = STACK_SIZE_KB * 1024;
+    private final int stackSize;
 
-    @CompilationFinal private long lowerBounds;
-    @CompilationFinal private long upperBounds;
-    private boolean isFreed = true;
+    private long lowerBounds;
+    private long upperBounds;
+    private boolean isAllocated;
 
-    /**
-     * Allocates the stack memory.
-     */
-    public LLVMAddress allocate() {
-        return allocate(STACK_SIZE_BYTE);
-    }
+    private long stackPointer;
+    private long uniquesRegionPointer;
 
-    /**
-     * Allocates the stack memory.
-     */
-    public LLVMAddress allocate(final long stackSize) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
-        if (!isFreed) {
-            throw new AssertionError("previously not deallocated");
-        }
-        final long stackAllocation = UNSAFE.allocateMemory(stackSize);
-        lowerBounds = stackAllocation;
-        upperBounds = stackAllocation + stackSize;
-        isFreed = false;
-        return LLVMAddress.fromLong(upperBounds);
-    }
+    public LLVMStack(int stackSize) {
+        this.stackSize = stackSize;
 
-    public boolean isFreed() {
-        return isFreed;
-    }
-
-    /**
-     * Deallocates the stack memory.
-     */
-    public void free() {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
-        if (isFreed) {
-            throw new AssertionError("already freed");
-        }
-        UNSAFE.freeMemory(lowerBounds);
         lowerBounds = 0;
         upperBounds = 0;
-        isFreed = true;
+        stackPointer = 0;
+        uniquesRegionPointer = 0;
+        isAllocated = false;
+    }
+
+    public final class StackPointer implements AutoCloseable {
+        private long basePointer;
+        private final long uniquesRegionBasePointer;
+
+        private StackPointer(long basePointer, long uniquesRegionBasePointer) {
+            this.basePointer = basePointer;
+            this.uniquesRegionBasePointer = uniquesRegionBasePointer;
+        }
+
+        public long get(LLVMMemory memory) {
+            if (basePointer == 0) {
+                basePointer = getStackPointer(memory);
+                stackPointer = basePointer;
+            }
+            return stackPointer;
+        }
+
+        public void set(long sp) {
+            stackPointer = sp;
+        }
+
+        public long getUniquesRegionPointer() {
+            return uniquesRegionPointer;
+        }
+
+        public void setUniquesRegionPointer(long urp) {
+            uniquesRegionPointer = urp;
+        }
+
+        @Override
+        public void close() {
+            if (basePointer != 0) {
+                stackPointer = basePointer;
+                uniquesRegionPointer = uniquesRegionBasePointer;
+            }
+        }
+
+        public StackPointer newFrame() {
+            return new StackPointer(stackPointer, uniquesRegionPointer);
+        }
+    }
+
+    /**
+     * Implements a stack region dedicated to values which should be bound to unique frame slots.
+     *
+     * Adding a slot to the region will extend it according to the specified slot size and slot
+     * alignment. The {@link #addSlot} method will return a handle to the new slot in the form of a
+     * {@link UniqueSlot}. In combination with a stack pointer this handle can be resolved to an
+     * address pointing to the corresponding pre-allocated slot on the current stack frame. This
+     * requires that the region has already been allocated on the current stack frame through the
+     * {@link #allocate} method of its {@link UniquesRegionAllocator}. Aside from allocating memory,
+     * this method is responsible for setting the region's base pointer for the current stack frame.
+     * A {@link UniqueSlot} uses the region's base pointer to resolve its internal unique relative
+     * address to an absolute address.
+     */
+    public static final class UniquesRegion {
+        private long currentSlotPointer = 0;
+        private int alignment = 1;
+
+        public UniqueSlot addSlot(int slotSize, int slotAlignment) {
+            CompilerAsserts.neverPartOfCompilation();
+            currentSlotPointer = getAlignedAllocation(currentSlotPointer, slotSize, slotAlignment);
+            // maximum of current alignment, slot alignment and the alignment masking slot size
+            alignment = Integer.highestOneBit(alignment | slotAlignment | Integer.highestOneBit(slotSize) << 1);
+            return new UniqueSlot(currentSlotPointer);
+        }
+
+        public UniquesRegionAllocator build() {
+            return new UniquesRegionAllocator(-currentSlotPointer, alignment);
+        }
+
+        public static final class UniquesRegionAllocator {
+            private final long uniquesRegionSize;
+            private final int uniquesRegionAlignment;
+
+            private UniquesRegionAllocator(long uniquesRegionSize, int uniquesRegionAlignment) {
+                this.uniquesRegionSize = uniquesRegionSize;
+                this.uniquesRegionAlignment = uniquesRegionAlignment;
+            }
+
+            void allocate(VirtualFrame frame, LLVMMemory memory, FrameSlot stackPointerSlot) {
+                if (uniquesRegionSize == 0) {
+                    // UniquesRegion is empty - nothing to allocate
+                    return;
+                }
+                StackPointer basePointer = (StackPointer) FrameUtil.getObjectSafe(frame, stackPointerSlot);
+                long stackPointer = basePointer.get(memory);
+                assert stackPointer != 0;
+                long uniquesRegionPointer = getAlignedBasePointer(stackPointer);
+                basePointer.setUniquesRegionPointer(uniquesRegionPointer);
+                long alignedAllocation = getAlignedAllocation(uniquesRegionPointer, uniquesRegionSize, NO_ALIGNMENT_REQUIREMENTS);
+                basePointer.set(alignedAllocation);
+            }
+
+            long getAlignedBasePointer(long address) {
+                assert uniquesRegionAlignment != 0 && powerOfTwo(uniquesRegionAlignment);
+                return address & -uniquesRegionAlignment;
+            }
+        }
+
+        public static final class UniqueSlot {
+            private final long address;
+
+            private UniqueSlot(long address) {
+                this.address = address;
+            }
+
+            public long toPointer(VirtualFrame frame, FrameSlot stackPointerSlot) {
+                StackPointer basePointer = (StackPointer) FrameUtil.getObjectSafe(frame, stackPointerSlot);
+                long uniquesRegionPointer = basePointer.getUniquesRegionPointer();
+                assert uniquesRegionPointer != 0;
+                return uniquesRegionPointer + address;
+            }
+        }
+
+    }
+
+    @TruffleBoundary
+    private void allocate(LLVMMemory memory) {
+        long size = stackSize * 1024L;
+        long stackAllocation = memory.allocateMemory(size).asNative();
+        lowerBounds = stackAllocation;
+        upperBounds = stackAllocation + size;
+        isAllocated = true;
+        stackPointer = upperBounds;
+    }
+
+    private long getStackPointer(LLVMMemory memory) {
+        if (!isAllocated) {
+            allocate(memory);
+        }
+        return this.stackPointer;
+    }
+
+    public StackPointer newFrame() {
+        return new StackPointer(stackPointer, uniquesRegionPointer);
+    }
+
+    @TruffleBoundary
+    public void free(LLVMMemory memory) {
+        if (isAllocated) {
+            /*
+             * It can be that the stack was never allocated.
+             */
+            memory.free(lowerBounds);
+            lowerBounds = 0;
+            upperBounds = 0;
+            stackPointer = 0;
+            isAllocated = false;
+        }
     }
 
     public static final int NO_ALIGNMENT_REQUIREMENTS = 1;
 
-    @ValueType
-    public static class AllocationResult {
-        private final LLVMAddress stackPointer;
-        private final LLVMAddress allocatedMemory;
-
-        public AllocationResult(LLVMAddress stackPointer, LLVMAddress allocatedMemory) {
-            this.stackPointer = stackPointer;
-            this.allocatedMemory = allocatedMemory;
-        }
-
-        public LLVMAddress getStackPointer() {
-            return stackPointer;
-        }
-
-        public LLVMAddress getAllocatedMemory() {
-            return allocatedMemory;
-        }
+    public static long allocateStackMemory(VirtualFrame frame, LLVMMemory memory, FrameSlot stackPointerSlot, final long size, final int alignment) {
+        StackPointer basePointer = (StackPointer) FrameUtil.getObjectSafe(frame, stackPointerSlot);
+        long stackPointer = basePointer.get(memory);
+        assert stackPointer != 0;
+        long alignedAllocation = getAlignedAllocation(stackPointer, size, alignment);
+        basePointer.set(alignedAllocation);
+        return alignedAllocation;
     }
 
-    /**
-     * Allocates stack memory.
-     *
-     * @param size the size of the memory to be allocated, must be greater equals zero
-     * @param alignment the alignment, either {@link #NO_ALIGNMENT_REQUIREMENTS} or a power of two.
-     * @return the allocated memory, satisfying the alignment requirements
-     */
-    public AllocationResult allocateMemory(final LLVMAddress stackPointer, final long size, final int alignment) {
+    private static long getAlignedAllocation(long address, long size, int alignment) {
         assert size >= 0;
-        assert alignment != 0 && powerOfTo(alignment);
-        final long alignedAllocation = (stackPointer.getVal() - size) & -alignment;
-        LLVMAddress newStackPointer = LLVMAddress.fromLong(alignedAllocation);
-        if (newStackPointer.getVal() < lowerBounds) {
-            CompilerDirectives.transferToInterpreter();
-            throw new StackOverflowError("stack overflow");
-        }
-        final LLVMAddress allocatedMemory = LLVMAddress.fromLong(alignedAllocation);
-        return new AllocationResult(newStackPointer, allocatedMemory);
+        assert alignment != 0 && powerOfTwo(alignment);
+        long alignedAllocation = (address - size) & -alignment;
+        assert alignedAllocation <= address;
+        return alignedAllocation;
     }
 
-    private static boolean powerOfTo(int value) {
+    private static boolean powerOfTwo(int value) {
         return (value & -value) == value;
     }
-
-    @Override
-    protected void finalize() throws Throwable {
-        super.finalize();
-        if (!isFreed) {
-            throw new AssertionError("did not free stack memory!");
-        }
-    }
-
-    public LLVMAddress getUpperBounds() {
-        return LLVMAddress.fromLong(upperBounds);
-    }
-
 }
