@@ -41,7 +41,6 @@ import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.spi.*;
@@ -77,7 +76,7 @@ public class MonitorSnippets implements Snippets {
     public static final boolean CHECK_BALANCED_MONITORS = Boolean.getBoolean("graal.monitors.checkBalanced");
 
     @Snippet
-    public static void monitorenter(Object object, @ConstantParameter int lockDepth, @ConstantParameter boolean checkNull, @ConstantParameter boolean trace) {
+    public static void monitorenter(Object object, @ConstantParameter boolean checkNull, @ConstantParameter boolean trace) {
         verifyOop(object);
 
         if (checkNull && object == null) {
@@ -87,7 +86,7 @@ public class MonitorSnippets implements Snippets {
         // Load the mark word - this includes a null-check on object
         final Word mark = loadWordFromObject(object, markOffset());
 
-        final Word lock = beginLockScope(lockDepth);
+        final Word lock = beginLockScope(false);
 
         trace(trace, "           object: 0x%016lx\n", Word.fromObject(object));
         trace(trace, "             lock: 0x%016lx\n", lock);
@@ -249,11 +248,17 @@ public class MonitorSnippets implements Snippets {
         }
     }
 
+    @Snippet
+    public static void monitorenterEliminated() {
+        incCounter();
+        beginLockScope(true);
+    }
+
     /**
      * Calls straight out to the monitorenter stub.
      */
     @Snippet
-    public static void monitorenterStub(Object object, @ConstantParameter int lockDepth, @ConstantParameter boolean checkNull, @ConstantParameter boolean trace) {
+    public static void monitorenterStub(Object object, @ConstantParameter boolean checkNull, @ConstantParameter boolean trace) {
         verifyOop(object);
         incCounter();
         if (checkNull && object == null) {
@@ -261,13 +266,13 @@ public class MonitorSnippets implements Snippets {
         }
         // BeginLockScope nodes do not read from object so a use of object
         // cannot float about the null check above
-        final Word lock = beginLockScope(lockDepth);
+        final Word lock = beginLockScope(false);
         traceObject(trace, "+lock{stub}", object);
         MonitorEnterStubCall.call(object, lock);
     }
 
     @Snippet
-    public static void monitorexit(Object object, @ConstantParameter int lockDepth, @ConstantParameter boolean trace) {
+    public static void monitorexit(Object object, @ConstantParameter boolean trace) {
         trace(trace, "           object: 0x%016lx\n", Word.fromObject(object));
         if (useBiasedLocking()) {
             // Check for biased locking unlock case, which is a no-op
@@ -286,7 +291,7 @@ public class MonitorSnippets implements Snippets {
             }
         }
 
-        final Word lock = CurrentLockNode.currentLock(lockDepth);
+        final Word lock = CurrentLockNode.currentLock();
 
         // Load displaced mark
         final Word displacedMark = lock.readWord(lockDisplacedMarkOffset(), DISPLACED_MARK_WORD_LOCATION);
@@ -304,7 +309,7 @@ public class MonitorSnippets implements Snippets {
                 // The object's mark word was not pointing to the displaced header,
                 // we do unlocking via runtime call.
                 traceObject(trace, "-lock{stub}", object);
-                MonitorExitStubCall.call(object, lockDepth);
+                MonitorExitStubCall.call(object);
             } else {
                 traceObject(trace, "-lock{cas}", object);
             }
@@ -317,10 +322,16 @@ public class MonitorSnippets implements Snippets {
      * Calls straight out to the monitorexit stub.
      */
     @Snippet
-    public static void monitorexitStub(Object object, @ConstantParameter int lockDepth, @ConstantParameter boolean trace) {
+    public static void monitorexitStub(Object object, @ConstantParameter boolean trace) {
         verifyOop(object);
         traceObject(trace, "-lock{stub}", object);
-        MonitorExitStubCall.call(object, lockDepth);
+        MonitorExitStubCall.call(object);
+        endLockScope();
+        decCounter();
+    }
+
+    @Snippet
+    public static void monitorexitEliminated() {
         endLockScope();
         decCounter();
     }
@@ -345,7 +356,7 @@ public class MonitorSnippets implements Snippets {
      */
     private static final boolean ENABLE_BREAKPOINT = false;
 
-    private static final LocationIdentity MONITOR_COUNTER_LOCATION = LocationNode.createLocation("MonitorCounter");
+    private static final Object MONITOR_COUNTER_LOCATION = LocationNode.createLocation("MonitorCounter");
 
     @NodeIntrinsic(BreakpointNode.class)
     static native void bkpt(Object object, Word mark, Word tmp, Word value);
@@ -387,6 +398,8 @@ public class MonitorSnippets implements Snippets {
         private final SnippetInfo monitorexit = snippet(MonitorSnippets.class, "monitorexit");
         private final SnippetInfo monitorenterStub = snippet(MonitorSnippets.class, "monitorenterStub");
         private final SnippetInfo monitorexitStub = snippet(MonitorSnippets.class, "monitorexitStub");
+        private final SnippetInfo monitorenterEliminated = snippet(MonitorSnippets.class, "monitorenterEliminated");
+        private final SnippetInfo monitorexitEliminated = snippet(MonitorSnippets.class, "monitorexitEliminated");
         private final SnippetInfo initCounter = snippet(MonitorSnippets.class, "initCounter");
         private final SnippetInfo checkCounter = snippet(MonitorSnippets.class, "checkCounter");
 
@@ -403,16 +416,18 @@ public class MonitorSnippets implements Snippets {
             FrameState stateAfter = monitorenterNode.stateAfter();
 
             Arguments args;
-            if (useFastLocking) {
-                args = new Arguments(monitorenter);
+            if (monitorenterNode.eliminated()) {
+                args = new Arguments(monitorenterEliminated);
             } else {
-                args = new Arguments(monitorenterStub);
+                if (useFastLocking) {
+                    args = new Arguments(monitorenter);
+                } else {
+                    args = new Arguments(monitorenterStub);
+                }
+                args.add("object", monitorenterNode.object());
+                args.addConst("checkNull", !monitorenterNode.object().stamp().nonNull());
+                args.addConst("trace", isTracingEnabledForType(monitorenterNode.object()) || isTracingEnabledForMethod(stateAfter.method()) || isTracingEnabledForMethod(graph.method()));
             }
-            args.add("object", monitorenterNode.object());
-            args.addConst("lockDepth", monitorenterNode.getLockDepth());
-            args.addConst("checkNull", !monitorenterNode.object().stamp().nonNull());
-            boolean tracingEnabledForMethod = stateAfter != null && (isTracingEnabledForMethod(stateAfter.method()) || isTracingEnabledForMethod(graph.method()));
-            args.addConst("trace", isTracingEnabledForType(monitorenterNode.object()) || tracingEnabledForMethod);
 
             Map<Node, Node> nodes = template(args).instantiate(runtime, monitorenterNode, DEFAULT_REPLACER, args);
 
@@ -420,6 +435,9 @@ public class MonitorSnippets implements Snippets {
                 if (n instanceof BeginLockScopeNode) {
                     BeginLockScopeNode begin = (BeginLockScopeNode) n;
                     begin.setStateAfter(stateAfter);
+                }
+                if (n instanceof MonitorReference) {
+                    ((MonitorReference) n).setLockDepth(monitorenterNode.getLockDepth());
                 }
             }
         }
@@ -429,14 +447,17 @@ public class MonitorSnippets implements Snippets {
             FrameState stateAfter = monitorexitNode.stateAfter();
 
             Arguments args;
-            if (useFastLocking) {
-                args = new Arguments(monitorexit);
+            if (monitorexitNode.eliminated()) {
+                args = new Arguments(monitorexitEliminated);
             } else {
-                args = new Arguments(monitorexitStub);
+                if (useFastLocking) {
+                    args = new Arguments(monitorexit);
+                } else {
+                    args = new Arguments(monitorexitStub);
+                }
+                args.add("object", monitorexitNode.object());
+                args.addConst("trace", isTracingEnabledForType(monitorexitNode.object()) || isTracingEnabledForMethod(stateAfter.method()) || isTracingEnabledForMethod(graph.method()));
             }
-            args.add("object", monitorexitNode.object());
-            args.addConst("lockDepth", monitorexitNode.getLockDepth());
-            args.addConst("trace", isTracingEnabledForType(monitorexitNode.object()) || isTracingEnabledForMethod(stateAfter.method()) || isTracingEnabledForMethod(graph.method()));
 
             Map<Node, Node> nodes = template(args).instantiate(runtime, monitorexitNode, DEFAULT_REPLACER, args);
 
@@ -444,6 +465,9 @@ public class MonitorSnippets implements Snippets {
                 if (n instanceof EndLockScopeNode) {
                     EndLockScopeNode end = (EndLockScopeNode) n;
                     end.setStateAfter(stateAfter);
+                }
+                if (n instanceof MonitorReference) {
+                    ((MonitorReference) n).setLockDepth(monitorexitNode.getLockDepth());
                 }
             }
         }
