@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -60,7 +60,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     private final CodeGenProviders providers;
     private final CallingConvention cc;
 
-    private AbstractBlockBase<?> currentBlock;
+    private AbstractBlock<?> currentBlock;
 
     private LIRGenerationResult res;
 
@@ -177,17 +177,16 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         return res.getFrameMapBuilder().getRegisterConfig().getReturnRegister((Kind) kind.getPlatformKind()).asValue(kind);
     }
 
-    public <I extends LIRInstruction> I append(I op) {
+    public void append(LIRInstruction op) {
         if (Options.PrintIRWithLIR.getValue() && !TTY.isSuppressed()) {
             TTY.println(op.toStringWithIdPrefix());
             TTY.println();
         }
         assert LIRVerifier.verify(op);
         res.getLIR().getLIRforBlock(currentBlock).add(op);
-        return op;
     }
 
-    public boolean hasBlockEnd(AbstractBlockBase<?> block) {
+    public boolean hasBlockEnd(AbstractBlock<?> block) {
         List<LIRInstruction> ops = getResult().getLIR().getLIRforBlock(block);
         if (ops.size() == 0) {
             return false;
@@ -195,7 +194,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         return ops.get(ops.size() - 1) instanceof BlockEndOp;
     }
 
-    public final void doBlockStart(AbstractBlockBase<?> block) {
+    public final void doBlockStart(AbstractBlock<?> block) {
         if (Options.PrintIRWithLIR.getValue()) {
             TTY.print(block.toString());
         }
@@ -213,7 +212,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         }
     }
 
-    public final void doBlockEnd(AbstractBlockBase<?> block) {
+    public final void doBlockEnd(AbstractBlock<?> block) {
 
         if (Options.TraceLIRGeneratorLevel.getValue() >= 1) {
             TTY.println("END Generating LIR for block B" + block.getId());
@@ -380,7 +379,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         }
     }
 
-    public AbstractBlockBase<?> getCurrentBlock() {
+    public AbstractBlock<?> getCurrentBlock() {
         return currentBlock;
     }
 
@@ -390,13 +389,5 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     public void emitBlackhole(Value operand) {
         append(new StandardOp.BlackholeOp(operand));
-    }
-
-    public LIRInstruction createBenchmarkCounter(String name, String group, Value increment) {
-        throw GraalInternalError.unimplemented();
-    }
-
-    public LIRInstruction createMultiBenchmarkCounter(String[] names, String[] groups, Value[] increments) {
-        throw GraalInternalError.unimplemented();
     }
 }
