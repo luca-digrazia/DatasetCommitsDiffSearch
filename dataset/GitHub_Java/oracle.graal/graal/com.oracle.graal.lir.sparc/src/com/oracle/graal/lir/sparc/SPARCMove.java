@@ -23,10 +23,7 @@
 package com.oracle.graal.lir.sparc;
 
 import static com.oracle.graal.asm.sparc.SPARCAssembler.MEMBAR_STORE_LOAD;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.isCPURegister;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.isDoubleFloatRegister;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.isSimm13;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.isSingleFloatRegister;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.COMPOSITE;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.HINT;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.ILLEGAL;
@@ -35,31 +32,32 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.UNINITIALIZED;
 import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
 import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
-import static jdk.vm.ci.code.MemoryBarriers.STORE_LOAD;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.asStackSlot;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
-import static jdk.vm.ci.code.ValueUtil.isStackSlot;
-import static jdk.vm.ci.sparc.SPARC.g0;
-import static jdk.vm.ci.sparc.SPARCKind.DOUBLE;
-import static jdk.vm.ci.sparc.SPARCKind.SINGLE;
-import static jdk.vm.ci.sparc.SPARCKind.WORD;
-import static jdk.vm.ci.sparc.SPARCKind.XWORD;
+import static jdk.internal.jvmci.code.MemoryBarriers.STORE_LOAD;
+import static jdk.internal.jvmci.code.ValueUtil.asRegister;
+import static jdk.internal.jvmci.code.ValueUtil.asStackSlot;
+import static jdk.internal.jvmci.code.ValueUtil.isRegister;
+import static jdk.internal.jvmci.code.ValueUtil.isStackSlot;
+import static jdk.internal.jvmci.sparc.SPARC.g0;
+import static jdk.internal.jvmci.sparc.SPARCKind.DOUBLE;
+import static jdk.internal.jvmci.sparc.SPARCKind.DWORD;
+import static jdk.internal.jvmci.sparc.SPARCKind.SINGLE;
+import static jdk.internal.jvmci.sparc.SPARCKind.WORD;
 
 import java.util.Set;
 
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.PlatformKind;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.sparc.SPARC;
-import jdk.vm.ci.sparc.SPARC.CPUFeature;
-import jdk.vm.ci.sparc.SPARCKind;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.code.StackSlot;
+import jdk.internal.jvmci.code.StackSlotValue;
+import jdk.internal.jvmci.common.JVMCIError;
+import jdk.internal.jvmci.meta.AllocatableValue;
+import jdk.internal.jvmci.meta.Constant;
+import jdk.internal.jvmci.meta.JavaConstant;
+import jdk.internal.jvmci.meta.LIRKind;
+import jdk.internal.jvmci.meta.PlatformKind;
+import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.sparc.SPARC;
+import jdk.internal.jvmci.sparc.SPARC.CPUFeature;
+import jdk.internal.jvmci.sparc.SPARCKind;
 
 import com.oracle.graal.asm.sparc.SPARCAddress;
 import com.oracle.graal.asm.sparc.SPARCAssembler;
@@ -74,7 +72,6 @@ import com.oracle.graal.lir.StandardOp.ImplicitNullCheck;
 import com.oracle.graal.lir.StandardOp.LoadConstantOp;
 import com.oracle.graal.lir.StandardOp.NullCheck;
 import com.oracle.graal.lir.StandardOp.ValueMoveOp;
-import com.oracle.graal.lir.VirtualStackSlot;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
 public class SPARCMove {
@@ -225,7 +222,7 @@ public class SPARCMove {
                 if (inputKind == WORD) {
                     masm.movxtod(asRegister(input, WORD), asRegister(result, DOUBLE));
                 } else {
-                    masm.movxtod(asRegister(input, XWORD), asRegister(result, DOUBLE));
+                    masm.movxtod(asRegister(input, DWORD), asRegister(result, DOUBLE));
                 }
             } else if (inputKind == SINGLE) {
                 if (resultKind == WORD) {
@@ -234,8 +231,8 @@ public class SPARCMove {
                     masm.movstouw(asRegister(input, SINGLE), asRegister(result, WORD));
                 }
             } else if (inputKind == DOUBLE) {
-                if (resultKind == XWORD) {
-                    masm.movdtox(asRegister(input, DOUBLE), asRegister(result, XWORD));
+                if (resultKind == DWORD) {
+                    masm.movdtox(asRegister(input, DOUBLE), asRegister(result, DWORD));
                 } else {
                     throw JVMCIError.shouldNotReachHere();
                 }
@@ -324,7 +321,7 @@ public class SPARCMove {
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             SPARCAddress address = addressValue.toAddress();
-            loadEffectiveAddress(crb, masm, address, asRegister(result, XWORD), getDelayedControlTransfer());
+            loadEffectiveAddress(crb, masm, address, asRegister(result, DWORD), getDelayedControlTransfer());
         }
     }
 
@@ -440,19 +437,18 @@ public class SPARCMove {
         public static final SizeEstimate SIZE = SizeEstimate.create(2);
 
         @Def({REG}) protected AllocatableValue result;
-        @Use({STACK, UNINITIALIZED}) protected AllocatableValue slot;
+        @Use({STACK, UNINITIALIZED}) protected StackSlotValue slot;
 
-        public StackLoadAddressOp(AllocatableValue result, AllocatableValue slot) {
+        public StackLoadAddressOp(AllocatableValue result, StackSlotValue address) {
             super(TYPE, SIZE);
             this.result = result;
-            this.slot = slot;
-            assert slot instanceof VirtualStackSlot || slot instanceof StackSlot;
+            this.slot = address;
         }
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             SPARCAddress address = (SPARCAddress) crb.asAddress(slot);
-            loadEffectiveAddress(crb, masm, address, asRegister(result, XWORD), getDelayedControlTransfer());
+            loadEffectiveAddress(crb, masm, address, asRegister(result, DWORD), getDelayedControlTransfer());
         }
     }
 
@@ -597,11 +593,11 @@ public class SPARCMove {
             return;
         }
         delaySlotLir.emitControlTransfer(crb, masm);
-        if (isCPURegister(src) && isCPURegister(dst)) {
+        if (SPARC.isCPURegister(src) && SPARC.isCPURegister(dst)) {
             masm.mov(src, dst);
-        } else if (isSingleFloatRegister(src) && isSingleFloatRegister(dst)) {
+        } else if (SPARC.isSingleFloatRegister(src) && SPARC.isSingleFloatRegister(dst)) {
             masm.fsrc2s(src, dst);
-        } else if (isDoubleFloatRegister(src) && isDoubleFloatRegister(dst)) {
+        } else if (SPARC.isDoubleFloatRegister(src) && SPARC.isDoubleFloatRegister(dst)) {
             masm.fsrc2d(src, dst);
         } else {
             throw JVMCIError.shouldNotReachHere(String.format("Trying to move between register domains src: %s dst: %s", src, dst));
@@ -720,7 +716,7 @@ public class SPARCMove {
             case WORD:
                 masm.cas(asRegister(address), asRegister(cmpValue), asRegister(newValue));
                 break;
-            case XWORD:
+            case DWORD:
                 masm.casx(asRegister(address), asRegister(cmpValue), asRegister(newValue));
                 break;
             default:

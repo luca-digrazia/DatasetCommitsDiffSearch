@@ -26,7 +26,6 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.COMPOSITE;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.CONST;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.HINT;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.ILLEGAL;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.OUTGOING;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.UNINITIALIZED;
@@ -41,10 +40,10 @@ import java.lang.annotation.Target;
 import java.util.EnumMap;
 import java.util.EnumSet;
 
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.RegisterValue;
+import jdk.internal.jvmci.code.StackSlot;
+import jdk.internal.jvmci.meta.JavaConstant;
+import jdk.internal.jvmci.meta.Value;
 
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.DebugMetric;
@@ -161,9 +160,6 @@ public abstract class LIRInstruction {
          * is only used to avoid false positives in verification code.
          */
         UNINITIALIZED,
-
-        /** Outgoing block value. */
-        OUTGOING,
     }
 
     /**
@@ -174,7 +170,7 @@ public abstract class LIRInstruction {
     static {
         ALLOWED_FLAGS = new EnumMap<>(OperandMode.class);
         ALLOWED_FLAGS.put(OperandMode.USE, EnumSet.of(REG, STACK, COMPOSITE, CONST, ILLEGAL, HINT, UNINITIALIZED));
-        ALLOWED_FLAGS.put(ALIVE, EnumSet.of(REG, STACK, COMPOSITE, CONST, ILLEGAL, HINT, UNINITIALIZED, OUTGOING));
+        ALLOWED_FLAGS.put(ALIVE, EnumSet.of(REG, STACK, COMPOSITE, CONST, ILLEGAL, HINT, UNINITIALIZED));
         ALLOWED_FLAGS.put(TEMP, EnumSet.of(REG, STACK, COMPOSITE, ILLEGAL, HINT));
         ALLOWED_FLAGS.put(DEF, EnumSet.of(REG, STACK, COMPOSITE, ILLEGAL, HINT));
     }
