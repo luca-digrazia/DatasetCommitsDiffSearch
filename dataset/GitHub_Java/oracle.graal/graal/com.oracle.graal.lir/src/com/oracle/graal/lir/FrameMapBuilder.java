@@ -26,29 +26,12 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.lir.gen.*;
 
 /**
  * A {@link FrameMapBuilder} is used to collect all information necessary to
- * {@linkplain #buildFrameMap create} a {@link FrameMap}.
+ * {@linkplain #buildFrameMap() create} a {@link FrameMap}.
  */
 public interface FrameMapBuilder {
-
-    /**
-     * A tool to get the real stack slot from a virtual stack slot.
-     */
-    @FunctionalInterface
-    interface FrameMappingTool {
-        StackSlot getStackSlot(VirtualStackSlot slot);
-    }
-
-    /**
-     * This interface should be implemented by all classes that store virtual stack slots to convert
-     * them into real stack slots when {@link FrameMapBuilder#buildFrameMap} is called.
-     */
-    interface FrameMappable {
-        void map(FrameMappingTool tool);
-    }
 
     /**
      * Reserves a spill slot in the frame of the method being compiled. The returned slot is aligned
@@ -58,7 +41,7 @@ public interface FrameMapBuilder {
      * @param kind The kind of the spill slot to be reserved.
      * @return A spill slot denoting the reserved memory area.
      */
-    VirtualStackSlot allocateSpillSlot(LIRKind kind);
+    StackSlot allocateSpillSlot(LIRKind kind);
 
     /**
      * Reserves a number of contiguous slots in the frame of the method being compiled. If the
@@ -73,17 +56,15 @@ public interface FrameMapBuilder {
      *            list
      * @return the first reserved stack slot (i.e., at the lowest address)
      */
-    VirtualStackSlot allocateStackSlots(int slots, BitSet objects, List<VirtualStackSlot> outObjectStackSlots);
+    StackSlot allocateStackSlots(int slots, BitSet objects, List<StackSlot> outObjectStackSlots);
 
     RegisterConfig getRegisterConfig();
-
-    CodeCacheProvider getCodeCache();
 
     /**
      * Frees a spill slot that was obtained via {@link #allocateSpillSlot(LIRKind)} such that it can
      * be reused for the next allocation request for the same kind of slot.
      */
-    void freeSpillSlot(VirtualStackSlot reservedSlot);
+    void freeSpillSlot(StackSlot slot);
 
     /**
      * Informs the frame map that the compiled code calls a particular method, which may need stack
@@ -94,14 +75,8 @@ public interface FrameMapBuilder {
     void callsMethod(CallingConvention cc);
 
     /**
-     * Registers a FrameMappable class so that virtual stack slots can be changed to real stack
-     * slots.
-     */
-    void requireMapping(FrameMappable mappable);
-
-    /**
      * Creates a {@linkplain FrameMap} based on the information collected by this
      * {@linkplain FrameMapBuilder}.
      */
-    FrameMap buildFrameMap(LIRGenerationResult result);
+    FrameMap buildFrameMap();
 }
