@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,15 +22,16 @@
  */
 package org.graalvm.compiler.core.test;
 
-import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.Debug;
+import org.graalvm.compiler.debug.Debug.Scope;
 import org.graalvm.compiler.debug.DebugDumpScope;
 import org.graalvm.compiler.loop.DefaultLoopPolicies;
 import org.graalvm.compiler.loop.phases.LoopFullUnrollPhase;
 import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
+import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.junit.Test;
 
 public class LoopFullUnrollTest extends GraalCompilerTest {
@@ -84,16 +83,15 @@ public class LoopFullUnrollTest extends GraalCompilerTest {
 
     @SuppressWarnings("try")
     private void test(String snippet, int loopCount) {
-        DebugContext debug = getDebugContext();
-        try (DebugContext.Scope s = debug.scope(getClass().getSimpleName(), new DebugDumpScope(snippet))) {
-            final StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO, debug);
+        try (Scope s = Debug.scope(getClass().getSimpleName(), new DebugDumpScope(snippet))) {
+            final StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
 
-            CoreProviders context = getProviders();
+            PhaseContext context = new PhaseContext(getProviders());
             new LoopFullUnrollPhase(new CanonicalizerPhase(), new DefaultLoopPolicies()).apply(graph, context);
 
             assertTrue(graph.getNodes().filter(LoopBeginNode.class).count() == loopCount);
         } catch (Throwable e) {
-            throw debug.handle(e);
+            throw Debug.handle(e);
         }
     }
 }
