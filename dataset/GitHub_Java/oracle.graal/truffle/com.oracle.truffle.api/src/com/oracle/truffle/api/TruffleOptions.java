@@ -24,11 +24,10 @@
  */
 package com.oracle.truffle.api;
 
-import java.security.AccessController;
-import java.security.PrivilegedAction;
-
 import com.oracle.truffle.api.nodes.NodeCost;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 
 /**
  * Class containing general Truffle options.
