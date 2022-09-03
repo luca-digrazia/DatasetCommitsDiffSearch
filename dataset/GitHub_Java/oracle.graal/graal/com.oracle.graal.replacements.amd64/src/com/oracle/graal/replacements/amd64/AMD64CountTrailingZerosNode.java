@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,73 +22,69 @@
  */
 package com.oracle.graal.replacements.amd64;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_3;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.lir.amd64.AMD64ArithmeticLIRGeneratorTool;
+import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.UnaryNode;
+import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.nodes.type.StampTool;
+
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
 
 /**
- * Count the number of trailing zeros.
+ * Count the number of trailing zeros using the {@code tzcntq} or {@code tzcntl} instructions.
  */
-@NodeInfo
-public class AMD64CountTrailingZerosNode extends UnaryNode implements LIRLowerable {
+@NodeInfo(cycles = CYCLES_3, size = SIZE_1)
+public final class AMD64CountTrailingZerosNode extends UnaryNode implements ArithmeticLIRLowerable {
+    public static final NodeClass<AMD64CountTrailingZerosNode> TYPE = NodeClass.create(AMD64CountTrailingZerosNode.class);
 
-    public static AMD64CountTrailingZerosNode create(ValueNode value) {
-        return new AMD64CountTrailingZerosNode(value);
-    }
-
-    protected AMD64CountTrailingZerosNode(ValueNode value) {
-        super(StampFactory.forInteger(Kind.Int, 0, ((PrimitiveStamp) value.stamp()).getBits()), value);
-        assert value.getKind() == Kind.Int || value.getKind() == Kind.Long;
+    public AMD64CountTrailingZerosNode(ValueNode value) {
+        super(TYPE, computeStamp(value.stamp(), value), value);
+        assert value.getStackKind() == JavaKind.Int || value.getStackKind() == JavaKind.Long;
     }
 
     @Override
-    public boolean inferStamp() {
-        IntegerStamp valueStamp = (IntegerStamp) getValue().stamp();
-        long mask = CodeUtil.mask(valueStamp.getBits());
-        int min = Long.numberOfTrailingZeros(valueStamp.upMask() & mask);
-        int max = Long.numberOfTrailingZeros(valueStamp.downMask() & mask);
-        return updateStamp(StampFactory.forInteger(Kind.Int, min, max));
+    public Stamp foldStamp(Stamp newStamp) {
+        return computeStamp(newStamp, getValue());
     }
 
-    @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        if (forValue.isConstant()) {
-            JavaConstant c = forValue.asJavaConstant();
-            if (forValue.getKind() == Kind.Int) {
+    static Stamp computeStamp(Stamp newStamp, ValueNode value) {
+        assert newStamp.isCompatible(value.stamp());
+        IntegerStamp valueStamp = (IntegerStamp) newStamp;
+        return StampTool.stampForTrailingZeros(valueStamp);
+    }
+
+    public static ValueNode tryFold(ValueNode value) {
+        if (value.isConstant()) {
+            JavaConstant c = value.asJavaConstant();
+            if (value.getStackKind() == JavaKind.Int) {
                 return ConstantNode.forInt(Integer.numberOfTrailingZeros(c.asInt()));
             } else {
                 return ConstantNode.forInt(Long.numberOfTrailingZeros(c.asLong()));
             }
         }
-        return this;
+        return null;
     }
 
-    /**
-     * Raw intrinsic for tzcntq instruction.
-     *
-     * @param v
-     * @return number of trailing zeros
-     */
-    @NodeIntrinsic
-    public static native int count(long v);
-
-    /**
-     * Raw intrinsic for tzcntl instruction.
-     *
-     * @param v
-     * @return number of trailing zeros
-     */
-    @NodeIntrinsic
-    public static native int count(int v);
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        ValueNode folded = tryFold(forValue);
+        return folded != null ? folded : this;
+    }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        Value result = gen.getLIRGeneratorTool().emitCountTrailingZeros(gen.operand(getValue()));
-        gen.setResult(this, result);
+    public void generate(NodeLIRBuilderTool builder, ArithmeticLIRGeneratorTool gen) {
+        builder.setResult(this, ((AMD64ArithmeticLIRGeneratorTool) gen).emitCountTrailingZeros(builder.operand(getValue())));
     }
 }

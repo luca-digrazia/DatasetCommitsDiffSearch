@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,29 +22,40 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodes.type.*;
+import java.util.stream.Collectors;
+
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.NodeInputList;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.spi.ArrayLengthProvider;
+import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.nodes.util.GraphUtil;
 
 /**
- * The {@code PhiNode} represents the merging of dataflow in the graph. It refers to a merge and a
- * variable.
+ * Value {@link PhiNode}s merge data flow values at control flow merges.
  */
-@NodeInfo(nameTemplate = "ValuePhi({i#values})")
-public class ValuePhiNode extends PhiNode implements Canonicalizable {
+@NodeInfo(nameTemplate = "Phi({i#values})")
+public class ValuePhiNode extends PhiNode implements ArrayLengthProvider {
 
-    @Input final NodeInputList<ValueNode> values = new NodeInputList<>(this);
+    public static final NodeClass<ValuePhiNode> TYPE = NodeClass.create(ValuePhiNode.class);
+    @Input protected NodeInputList<ValueNode> values;
 
-    /**
-     * Create a value phi with the specified stamp.
-     *
-     * @param stamp the stamp of the value
-     * @param merge the merge that the new phi belongs to
-     */
-    public ValuePhiNode(Stamp stamp, MergeNode merge) {
-        super(stamp, merge);
+    public ValuePhiNode(Stamp stamp, AbstractMergeNode merge) {
+        this(TYPE, stamp, merge);
+    }
+
+    protected ValuePhiNode(NodeClass<? extends ValuePhiNode> c, Stamp stamp, AbstractMergeNode merge) {
+        super(c, stamp, merge);
         assert stamp != StampFactory.forVoid();
+        values = new NodeInputList<>(this);
+    }
+
+    public ValuePhiNode(Stamp stamp, AbstractMergeNode merge, ValueNode[] values) {
+        super(TYPE, stamp, merge);
+        assert stamp != StampFactory.forVoid();
+        this.values = new NodeInputList<>(this, values);
     }
 
     @Override
@@ -54,10 +65,51 @@ public class ValuePhiNode extends PhiNode implements Canonicalizable {
 
     @Override
     public boolean inferStamp() {
-        return inferPhiStamp();
+        /*
+         * Meet all the values feeding this Phi but don't use the stamp of this Phi since that's
+         * what's being computed.
+         */
+        Stamp valuesStamp = StampTool.meetOrNull(values(), this);
+        if (valuesStamp == null) {
+            valuesStamp = stamp;
+        } else if (stamp.isCompatible(valuesStamp)) {
+            valuesStamp = stamp.join(valuesStamp);
+        }
+        return updateStamp(valuesStamp);
     }
 
-    public boolean inferPhiStamp() {
-        return updateStamp(StampTool.meet(values()));
+    @Override
+    public ValueNode length() {
+        if (merge() instanceof LoopBeginNode) {
+            return null;
+        }
+        ValueNode length = null;
+        for (ValueNode input : values()) {
+            ValueNode l = GraphUtil.arrayLength(input);
+            if (l == null) {
+                return null;
+            }
+            if (length == null) {
+                length = l;
+            } else if (length != l) {
+                return null;
+            }
+        }
+        return length;
+    }
+
+    @Override
+    public boolean verify() {
+        Stamp s = null;
+        for (ValueNode input : values()) {
+            if (s == null) {
+                s = input.stamp();
+            } else {
+                if (!s.isCompatible(input.stamp())) {
+                    fail("Phi Input Stamps are not compatible. Phi:%s inputs:%s", this, values().stream().map(x -> x.toString() + ":" + x.stamp()).collect(Collectors.joining(", ")));
+                }
+            }
+        }
+        return super.verify();
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,43 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.IterableNodeType;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.nodes.spi.ValueProxy;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+
+import jdk.vm.ci.meta.JavaKind;
 
 /**
  * A node that changes the type of its input, usually narrowing it. For example, a GuardedValueNode
  * is used to keep the nodes depending on guards inside a loop during speculative guard movement.
- * 
+ *
  * A GuardedValueNode will only go away if its guard is null or {@link StructuredGraph#start()}.
  */
-public class GuardedValueNode extends FloatingGuardedNode implements LIRLowerable, Virtualizable, Node.IterableNodeType, GuardingNode, Canonicalizable {
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+public final class GuardedValueNode extends FloatingGuardedNode implements LIRLowerable, Virtualizable, IterableNodeType, Canonicalizable, ValueProxy {
 
-    @Input private ValueNode object;
+    public static final NodeClass<GuardedValueNode> TYPE = NodeClass.create(GuardedValueNode.class);
+    @Input ValueNode object;
+    protected final Stamp piStamp;
 
     public GuardedValueNode(ValueNode object, GuardingNode guard, Stamp stamp) {
-        super(stamp, guard);
+        super(TYPE, computeStamp(stamp, object), guard);
         this.object = object;
+        this.piStamp = stamp;
     }
 
     public GuardedValueNode(ValueNode object, GuardingNode guard) {
@@ -52,33 +70,43 @@ public class GuardedValueNode extends FloatingGuardedNode implements LIRLowerabl
     }
 
     @Override
-    public void generate(LIRGeneratorTool generator) {
-        if (object.kind() != Kind.Void && object.kind() != Kind.Illegal) {
+    public void generate(NodeLIRBuilderTool generator) {
+        if (object.getStackKind() != JavaKind.Void && object.getStackKind() != JavaKind.Illegal) {
             generator.setResult(this, generator.operand(object));
         }
     }
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(stamp().join(object().stamp()));
+        return updateStamp(computeStamp(piStamp, object()));
+    }
+
+    static Stamp computeStamp(Stamp piStamp, ValueNode object) {
+        return piStamp.improveWith(object.stamp());
     }
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        State state = tool.getObjectState(object);
-        if (state != null && state.getState() == EscapeState.Virtual) {
-            tool.replaceWithVirtual(state.getVirtualObject());
+        ValueNode alias = tool.getAlias(object());
+        if (alias instanceof VirtualObjectNode) {
+            tool.replaceWithVirtual((VirtualObjectNode) alias);
         }
     }
 
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (getGuard() == graph().start()) {
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        if (getGuard() == null) {
             if (stamp().equals(object().stamp())) {
                 return object();
             } else {
-                return graph().unique(new PiNode(object(), stamp()));
+                return new PiNode(object(), stamp());
             }
         }
         return this;
+    }
+
+    @Override
+    public ValueNode getOriginalNode() {
+        return object;
     }
 }

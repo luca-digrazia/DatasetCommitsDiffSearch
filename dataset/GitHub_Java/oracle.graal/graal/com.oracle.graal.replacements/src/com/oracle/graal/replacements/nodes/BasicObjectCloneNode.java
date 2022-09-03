@@ -22,39 +22,55 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import java.util.*;
+import java.util.Collections;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.compiler.common.type.ObjectStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.StampPair;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.java.LoadFieldNode;
+import com.oracle.graal.nodes.java.MonitorIdNode;
+import com.oracle.graal.nodes.spi.ArrayLengthProvider;
+import com.oracle.graal.nodes.spi.VirtualizableAllocation;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.nodes.virtual.VirtualInstanceNode;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 @NodeInfo
-public class BasicObjectCloneNode extends MacroStateSplitNode implements VirtualizableAllocation, ArrayLengthProvider {
+public abstract class BasicObjectCloneNode extends MacroStateSplitNode implements VirtualizableAllocation, ArrayLengthProvider {
 
-    public static BasicObjectCloneNode create(Invoke invoke) {
-        return USE_GENERATED_NODES ? new BasicObjectCloneNodeGen(invoke) : new BasicObjectCloneNode(invoke);
-    }
+    public static final NodeClass<BasicObjectCloneNode> TYPE = NodeClass.create(BasicObjectCloneNode.class);
 
-    protected BasicObjectCloneNode(Invoke invoke) {
-        super(invoke);
+    public BasicObjectCloneNode(NodeClass<? extends MacroNode> c, InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, StampPair returnStamp, ValueNode... arguments) {
+        super(c, invokeKind, targetMethod, bci, returnStamp, arguments);
+        updateStamp(computeStamp(getObject()));
     }
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(getObject().stamp());
+        return updateStamp(computeStamp(getObject()));
+    }
+
+    private static Stamp computeStamp(ValueNode object) {
+        Stamp objectStamp = object.stamp();
+        if (objectStamp instanceof ObjectStamp) {
+            objectStamp = objectStamp.join(StampFactory.objectNonNull());
+        }
+        return objectStamp;
     }
 
     public ValueNode getObject() {
         return arguments.get(0);
-    }
-
-    protected static boolean isCloneableType(ResolvedJavaType type, MetaAccessProvider metaAccess) {
-        return metaAccess.lookupJavaType(Cloneable.class).isAssignableFrom(type);
     }
 
     /*
@@ -63,7 +79,7 @@ public class BasicObjectCloneNode extends MacroStateSplitNode implements Virtual
      *
      * If yes, then the exact type is returned, otherwise it returns null.
      */
-    protected static ResolvedJavaType getConcreteType(Stamp stamp, Assumptions assumptions, MetaAccessProvider metaAccess) {
+    protected static ResolvedJavaType getConcreteType(Stamp stamp) {
         if (!(stamp instanceof ObjectStamp)) {
             return null;
         }
@@ -71,40 +87,31 @@ public class BasicObjectCloneNode extends MacroStateSplitNode implements Virtual
         if (objectStamp.type() == null) {
             return null;
         } else if (objectStamp.isExactType()) {
-            return isCloneableType(objectStamp.type(), metaAccess) ? objectStamp.type() : null;
-        } else {
-            ResolvedJavaType type = objectStamp.type().findUniqueConcreteSubtype();
-            if (type != null && isCloneableType(type, metaAccess)) {
-                assumptions.recordConcreteSubtype(objectStamp.type(), type);
-                return type;
-            } else {
-                return null;
-            }
+            return objectStamp.type().isCloneableWithAllocation() ? objectStamp.type() : null;
         }
+        return null;
+    }
+
+    protected LoadFieldNode genLoadFieldNode(Assumptions assumptions, ValueNode originalAlias, ResolvedJavaField field) {
+        return LoadFieldNode.create(assumptions, originalAlias, field);
     }
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        State originalState = tool.getObjectState(getObject());
-        if (originalState != null && originalState.getState() == EscapeState.Virtual) {
-            VirtualObjectNode originalVirtual = originalState.getVirtualObject();
-            if (isCloneableType(originalVirtual.type(), tool.getMetaAccessProvider())) {
+        ValueNode originalAlias = tool.getAlias(getObject());
+        if (originalAlias instanceof VirtualObjectNode) {
+            VirtualObjectNode originalVirtual = (VirtualObjectNode) originalAlias;
+            if (originalVirtual.type().isCloneableWithAllocation()) {
                 ValueNode[] newEntryState = new ValueNode[originalVirtual.entryCount()];
                 for (int i = 0; i < newEntryState.length; i++) {
-                    newEntryState[i] = originalState.getEntry(i);
+                    newEntryState[i] = tool.getEntry(originalVirtual, i);
                 }
                 VirtualObjectNode newVirtual = originalVirtual.duplicate();
-                tool.createVirtualObject(newVirtual, newEntryState, Collections.<MonitorIdNode> emptyList());
+                tool.createVirtualObject(newVirtual, newEntryState, Collections.<MonitorIdNode> emptyList(), false);
                 tool.replaceWithVirtual(newVirtual);
             }
         } else {
-            ValueNode obj;
-            if (originalState != null) {
-                obj = originalState.getMaterializedValue();
-            } else {
-                obj = tool.getReplacedValue(getObject());
-            }
-            ResolvedJavaType type = getConcreteType(obj.stamp(), tool.getAssumptions(), tool.getMetaAccessProvider());
+            ResolvedJavaType type = getConcreteType(originalAlias.stamp());
             if (type != null && !type.isArray()) {
                 VirtualInstanceNode newVirtual = createVirtualInstanceNode(type, true);
                 ResolvedJavaField[] fields = newVirtual.getFields();
@@ -112,25 +119,21 @@ public class BasicObjectCloneNode extends MacroStateSplitNode implements Virtual
                 ValueNode[] state = new ValueNode[fields.length];
                 final LoadFieldNode[] loads = new LoadFieldNode[fields.length];
                 for (int i = 0; i < fields.length; i++) {
-                    state[i] = loads[i] = LoadFieldNode.create(obj, fields[i]);
+                    state[i] = loads[i] = genLoadFieldNode(graph().getAssumptions(), originalAlias, fields[i]);
                     tool.addNode(loads[i]);
                 }
-                tool.createVirtualObject(newVirtual, state, Collections.<MonitorIdNode> emptyList());
+                tool.createVirtualObject(newVirtual, state, Collections.<MonitorIdNode> emptyList(), false);
                 tool.replaceWithVirtual(newVirtual);
             }
         }
     }
 
     protected VirtualInstanceNode createVirtualInstanceNode(ResolvedJavaType type, boolean hasIdentity) {
-        return VirtualInstanceNode.create(type, hasIdentity);
+        return new VirtualInstanceNode(type, hasIdentity);
     }
 
     @Override
     public ValueNode length() {
-        if (getObject() instanceof ArrayLengthProvider) {
-            return ((ArrayLengthProvider) getObject()).length();
-        } else {
-            return null;
-        }
+        return GraphUtil.arrayLength(getObject());
     }
 }

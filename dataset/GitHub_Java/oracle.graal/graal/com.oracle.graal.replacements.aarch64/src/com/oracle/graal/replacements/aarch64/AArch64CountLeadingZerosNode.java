@@ -22,31 +22,44 @@
  */
 package com.oracle.graal.replacements.aarch64;
 
-import com.oracle.graal.compiler.common.type.PrimitiveStamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_6;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
 import com.oracle.graal.lir.aarch64.AArch64ArithmeticLIRGeneratorTool;
 import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
-import com.oracle.graal.nodeinfo.NodeCycles;
 import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.NodeSize;
 import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.calc.UnaryNode;
 import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.nodes.type.StampTool;
 
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 
-@NodeInfo(cycles = NodeCycles.CYCLES_6, size = NodeSize.SIZE_1)
+@NodeInfo(cycles = CYCLES_6, size = SIZE_1)
 public final class AArch64CountLeadingZerosNode extends UnaryNode implements ArithmeticLIRLowerable {
 
     public static final NodeClass<AArch64CountLeadingZerosNode> TYPE = NodeClass.create(AArch64CountLeadingZerosNode.class);
 
     public AArch64CountLeadingZerosNode(ValueNode value) {
-        super(TYPE, StampFactory.forInteger(JavaKind.Int, 0, ((PrimitiveStamp) value.stamp()).getBits()), value);
+        super(TYPE, computeStamp(value.stamp(), value), value);
+    }
+
+    @Override
+    public Stamp foldStamp(Stamp newStamp) {
+        return computeStamp(newStamp, getValue());
+    }
+
+    private static Stamp computeStamp(Stamp newStamp, ValueNode theValue) {
+        assert newStamp.isCompatible(theValue.stamp());
+        assert theValue.getStackKind() == JavaKind.Int || theValue.getStackKind() == JavaKind.Long;
+        return StampTool.stampForLeadingZeros((IntegerStamp) newStamp);
     }
 
     public static ValueNode tryFold(ValueNode value) {

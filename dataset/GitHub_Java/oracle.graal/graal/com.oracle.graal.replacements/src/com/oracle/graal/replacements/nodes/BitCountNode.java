@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,51 +22,61 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_3;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
 
-public class BitCountNode extends FloatingNode implements LIRGenLowerable, Canonicalizable {
+import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.UnaryNode;
+import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-    @Input private ValueNode value;
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+
+@NodeInfo(cycles = CYCLES_3, size = SIZE_1)
+public final class BitCountNode extends UnaryNode implements ArithmeticLIRLowerable {
+
+    public static final NodeClass<BitCountNode> TYPE = NodeClass.create(BitCountNode.class);
 
     public BitCountNode(ValueNode value) {
-        super(StampFactory.forInteger(Kind.Int, 0, value.kind().getBitCount()));
-        this.value = value;
+        super(TYPE, computeStamp(value.stamp(), value), value);
+        assert value.getStackKind() == JavaKind.Int || value.getStackKind() == JavaKind.Long;
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (value.isConstant()) {
-            long v = value.asConstant().asLong();
-            if (value.kind().getStackKind() == Kind.Int) {
-                return ConstantNode.forInt(Integer.bitCount((int) v), graph());
-            } else if (value.kind() == Kind.Long) {
-                return ConstantNode.forInt(Long.bitCount(v), graph());
-            }
+    public Stamp foldStamp(Stamp newStamp) {
+        ValueNode theValue = getValue();
+        return computeStamp(newStamp, theValue);
+    }
+
+    static Stamp computeStamp(Stamp newStamp, ValueNode theValue) {
+        assert newStamp.isCompatible(theValue.stamp());
+        IntegerStamp valueStamp = (IntegerStamp) newStamp;
+        assert (valueStamp.downMask() & CodeUtil.mask(valueStamp.getBits())) == valueStamp.downMask();
+        assert (valueStamp.upMask() & CodeUtil.mask(valueStamp.getBits())) == valueStamp.upMask();
+        return StampFactory.forInteger(JavaKind.Int, Long.bitCount(valueStamp.downMask()), Long.bitCount(valueStamp.upMask()));
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        if (forValue.isConstant()) {
+            JavaConstant c = forValue.asJavaConstant();
+            return ConstantNode.forInt(forValue.getStackKind() == JavaKind.Int ? Integer.bitCount(c.asInt()) : Long.bitCount(c.asLong()));
         }
         return this;
     }
 
-    @NodeIntrinsic
-    public static int bitCount(int v) {
-        return Integer.bitCount(v);
-    }
-
-    @NodeIntrinsic
-    public static int bitCount(long v) {
-        return Long.bitCount(v);
-    }
-
     @Override
-    public void generate(LIRGenerator gen) {
-        Variable result = gen.newVariable(Kind.Int);
-        gen.emitBitCount(result, gen.operand(value));
-        gen.setResult(this, result);
+    public void generate(NodeLIRBuilderTool builder, ArithmeticLIRGeneratorTool gen) {
+        builder.setResult(this, gen.emitBitCount(builder.operand(getValue())));
     }
 }
