@@ -24,6 +24,7 @@ package org.graalvm.compiler.hotspot.test;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.MonitorInfo;
+import java.lang.management.RuntimeMXBean;
 import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
 import java.util.Collection;
@@ -31,7 +32,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 
-import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.core.phases.HighTier;
 import org.graalvm.compiler.debug.DebugContext;
@@ -40,13 +40,13 @@ import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.hotspot.phases.OnStackReplacementPhase;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.compiler.serviceprovider.GraalServices;
+import org.graalvm.util.EconomicMap;
 import org.junit.Assert;
-import org.junit.Assume;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
+import org.junit.Assume;
+import org.junit.BeforeClass;
 
 /**
  * Test on-stack-replacement with locks.
@@ -58,6 +58,11 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
 
     @BeforeClass
     public static void checkVMArguments() {
+        try {
+            Class.forName("java.lang.management.ManagementFactory");
+        } catch (ClassNotFoundException ex) {
+            Assume.assumeNoException("cannot check for monitors without java.management JDK9 module", ex);
+        }
         /*
          * Note: The -Xcomp execution mode of the VM will stop most of the OSR test cases from
          * working as every method is compiled at level3 (followed by level4 on the second
@@ -66,8 +71,8 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
          * installed nmethod at a given BCI.
          *
          */
-        List<String> arguments = GraalServices.getInputArguments();
-        Assume.assumeTrue("cannot check for monitors without", arguments != null);
+        RuntimeMXBean runtimeMxBean = ManagementFactory.getRuntimeMXBean();
+        List<String> arguments = runtimeMxBean.getInputArguments();
         for (String arg : arguments) {
             Assume.assumeFalse(arg.equals(COMPILE_ONLY_FLAG));
         }
