@@ -199,10 +199,10 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
         // - has no incoming arguments passed on the stack
         // - has no deoptimization points
         // - makes no foreign calls (which require an aligned stack)
-        AMD64HotSpotLIRGenerationResult gen = (AMD64HotSpotLIRGenerationResult) lirGen;
+        AMD64HotSpotLIRGenerator gen = (AMD64HotSpotLIRGenerator) lirGen;
         FrameMap frameMap = gen.getFrameMap();
         LIR lir = gen.getLIR();
-        assert gen.getDeoptimizationRescueSlot() == null || frameMap.frameNeedsAllocating() : "method that can deoptimize must have a frame";
+        assert gen.deoptimizationRescueSlot == null || frameMap.frameNeedsAllocating() : "method that can deoptimize must have a frame";
         boolean omitFrame = CanOmitFrame.getValue() && !frameMap.frameNeedsAllocating() && !lir.hasArgInCallerFrame() && !gen.hasForeignCall();
 
         Stub stub = gen.getStub();
@@ -210,14 +210,14 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
         HotSpotFrameContext frameContext = new HotSpotFrameContext(stub != null, omitFrame);
         CompilationResultBuilder crb = factory.createBuilder(getCodeCache(), getForeignCalls(), frameMap, masm, frameContext, compilationResult);
         crb.setFrameSize(frameMap.frameSize());
-        StackSlot deoptimizationRescueSlot = gen.getDeoptimizationRescueSlot();
+        StackSlot deoptimizationRescueSlot = gen.deoptimizationRescueSlot;
         if (deoptimizationRescueSlot != null && stub == null) {
             crb.compilationResult.setCustomStackAreaOffset(frameMap.offsetForStackSlot(deoptimizationRescueSlot));
         }
 
         if (stub != null) {
             Set<Register> definedRegisters = gatherDefinedRegisters(lir);
-            updateStub(stub, definedRegisters, gen.getCalleeSaveInfo(), frameMap);
+            updateStub(stub, definedRegisters, gen.calleeSaveInfo, frameMap);
         }
 
         return crb;

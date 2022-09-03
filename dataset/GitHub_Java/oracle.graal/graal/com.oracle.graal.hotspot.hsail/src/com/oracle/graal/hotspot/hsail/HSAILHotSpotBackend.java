@@ -188,13 +188,8 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
     }
 
     @Override
-    public LIRGenerator newLIRGenerator(StructuredGraph graph, CallingConvention cc, LIRGenerationResult lirGenRes) {
-        return new HSAILHotSpotLIRGenerator(graph, getProviders(), getRuntime().getConfig(), cc, lirGenRes);
-    }
-
-    @Override
-    public LIRGenerationResult newLIRGenerationResult(LIR lir, FrameMap frameMap, Object stub) {
-        return new LIRGenerationResultBase(lir, frameMap);
+    public LIRGenerator newLIRGenerator(StructuredGraph graph, Object stub, FrameMap frameMap, CallingConvention cc, LIR lir) {
+        return new HSAILHotSpotLIRGenerator(graph, getProviders(), getRuntime().getConfig(), frameMap, cc, lir);
     }
 
     class HotSpotFrameContext implements FrameContext {
@@ -220,8 +215,8 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
     }
 
     @Override
-    public CompilationResultBuilder newCompilationResultBuilder(LIRGenerationResult lirGenRes, CompilationResult compilationResult, CompilationResultBuilderFactory factory) {
-        FrameMap frameMap = lirGenRes.getFrameMap();
+    public CompilationResultBuilder newCompilationResultBuilder(LIRGenerationResult lirGen, CompilationResult compilationResult, CompilationResultBuilderFactory factory) {
+        FrameMap frameMap = lirGen.getFrameMap();
         Assembler masm = createAssembler(frameMap);
         HotSpotFrameContext frameContext = new HotSpotFrameContext();
         CompilationResultBuilder crb = factory.createBuilder(getCodeCache(), getForeignCalls(), frameMap, masm, frameContext, compilationResult);
@@ -407,5 +402,4 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
         asm.emitString0("};");
         asm.emitString("");
     }
-
 }

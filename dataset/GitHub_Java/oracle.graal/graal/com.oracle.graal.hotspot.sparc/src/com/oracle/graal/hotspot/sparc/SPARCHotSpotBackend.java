@@ -160,9 +160,9 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
 
     @Override
     public CompilationResultBuilder newCompilationResultBuilder(LIRGenerationResult lirGen, CompilationResult compilationResult, CompilationResultBuilderFactory factory) {
-        SPARCHotSpotLIRGenerationResult gen = (SPARCHotSpotLIRGenerationResult) lirGen;
+        SPARCHotSpotLIRGenerator gen = (SPARCHotSpotLIRGenerator) lirGen;
         FrameMap frameMap = gen.getFrameMap();
-        assert gen.getDeoptimizationRescueSlot() == null || frameMap.frameNeedsAllocating() : "method that can deoptimize must have a frame";
+        assert gen.deoptimizationRescueSlot == null || frameMap.frameNeedsAllocating() : "method that can deoptimize must have a frame";
 
         Stub stub = gen.getStub();
         Assembler masm = createAssembler(frameMap);
@@ -170,7 +170,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         HotSpotFrameContext frameContext = new HotSpotFrameContext(stub != null);
         CompilationResultBuilder crb = factory.createBuilder(getProviders().getCodeCache(), getProviders().getForeignCalls(), frameMap, masm, frameContext, compilationResult);
         crb.setFrameSize(frameMap.frameSize());
-        StackSlot deoptimizationRescueSlot = gen.getDeoptimizationRescueSlot();
+        StackSlot deoptimizationRescueSlot = gen.deoptimizationRescueSlot;
         if (deoptimizationRescueSlot != null && stub == null) {
             crb.compilationResult.setCustomStackAreaOffset(frameMap.offsetForStackSlot(deoptimizationRescueSlot));
         }
