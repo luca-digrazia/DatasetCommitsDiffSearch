@@ -32,26 +32,11 @@ import com.oracle.truffle.api.dsl.test.TypeSystemTest.ArgumentNode;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ChildrenNode;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.TestRootNode;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
 
 /**
  * Utility class to provide some test helper functions.
  */
 class TestHelper {
-
-    // make nodes replacable
-    public static <T extends Node> T createRoot(final T node) {
-        new RootNode() {
-            @Child T child = node;
-
-            @Override
-            public Object execute(VirtualFrame frame) {
-                return null;
-            }
-        }.adoptChildren();
-        return node;
-    }
 
     private static ArgumentNode[] arguments(int count) {
         ArgumentNode[] nodes = new ArgumentNode[count];
@@ -97,22 +82,6 @@ class TestHelper {
 
     static CallTarget createCallTarget(TestRootNode<? extends ValueNode> node) {
         return Truffle.getRuntime().createCallTarget(node);
-    }
-
-    static RootCallTarget createCallTarget(NodeFactory<? extends ValueNode> factory, Object... constants) {
-        return Truffle.getRuntime().createCallTarget(createRoot(factory, constants));
-    }
-
-    static boolean assertionsEnabled() {
-        boolean assertOn = false;
-        // *assigns* true if assertions are on.
-        assert (assertOn = true) == true;
-        return assertOn;
-    }
-
-    @SuppressWarnings("unchecked")
-    static <T extends ValueNode> T getNode(CallTarget target) {
-        return ((TestRootNode<T>) ((RootCallTarget) target).getRootNode()).getNode();
     }
 
     static <E> Object executeWith(TestRootNode<? extends ValueNode> node, Object... values) {
