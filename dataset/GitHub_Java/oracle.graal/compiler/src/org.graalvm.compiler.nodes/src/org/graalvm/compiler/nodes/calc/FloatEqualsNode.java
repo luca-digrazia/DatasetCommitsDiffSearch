@@ -56,7 +56,7 @@ public final class FloatEqualsNode extends CompareNode implements BinaryCommutat
     }
 
     public static LogicNode create(ValueNode x, ValueNode y, NodeView view) {
-        LogicNode result = CompareNode.tryConstantFoldPrimitive(Condition.EQ, x, y, false, view);
+        LogicNode result = CompareNode.tryConstantFoldPrimitive(Condition.EQ, x, y, false);
         if (result != null) {
             return result;
         } else {

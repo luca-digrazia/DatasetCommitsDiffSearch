@@ -98,7 +98,7 @@ public class DerivedOffsetInductionVariable extends DerivedInductionVariable {
 
     @Override
     public ValueNode extremumNode(boolean assumePositiveTripCount, Stamp stamp) {
-        return op(base.extremumNode(assumePositiveTripCount, stamp), IntegerConvertNode.convert(offset, stamp, graph(), NodeView.DEFAULT));
+        return op(base.extremumNode(assumePositiveTripCount, stamp), IntegerConvertNode.convert(offset, stamp, graph()));
     }
 
     @Override

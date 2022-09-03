@@ -54,8 +54,7 @@ public final class IntegerBelowNode extends IntegerLowerThanNode {
         return OP.create(x, y, view);
     }
 
-    public static LogicNode create(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth, ValueNode x, ValueNode y,
-                    NodeView view) {
+    public static LogicNode create(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth, ValueNode x, ValueNode y, NodeView view) {
         LogicNode value = OP.canonical(constantReflection, metaAccess, options, smallestCompareWidth, OP.getCondition(), false, x, y, view);
         if (value != null) {
             return value;

@@ -22,7 +22,9 @@
  */
 package org.graalvm.compiler.nodes.calc;
 
-import org.graalvm.compiler.core.common.calc.CanonicalCondition;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.type.AbstractPointerStamp;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
@@ -39,13 +41,11 @@ import org.graalvm.compiler.nodes.extended.LoadHubNode;
 import org.graalvm.compiler.nodes.extended.LoadMethodNode;
 import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
-import org.graalvm.compiler.options.OptionValues;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.TriState;
+import org.graalvm.compiler.options.OptionValues;
 
 @NodeInfo(shortName = "==")
 public class PointerEqualsNode extends CompareNode implements BinaryCommutative<ValueNode> {
@@ -66,7 +66,7 @@ public class PointerEqualsNode extends CompareNode implements BinaryCommutative<
     }
 
     protected PointerEqualsNode(NodeClass<? extends PointerEqualsNode> c, ValueNode x, ValueNode y) {
-        super(c, CanonicalCondition.EQ, false, x, y);
+        super(c, Condition.EQ, false, x, y);
         assert x.stamp(NodeView.DEFAULT) instanceof AbstractPointerStamp;
         assert y.stamp(NodeView.DEFAULT) instanceof AbstractPointerStamp;
     }
@@ -74,7 +74,7 @@ public class PointerEqualsNode extends CompareNode implements BinaryCommutative<
     @Override
     public Node canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
         NodeView view = NodeView.from(tool);
-        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), CanonicalCondition.EQ, false, forX, forY, view);
+        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), Condition.EQ, false, forX, forY, view);
         if (value != null) {
             return value;
         }
@@ -88,9 +88,9 @@ public class PointerEqualsNode extends CompareNode implements BinaryCommutative<
          * could select a certain method and if so, returns {@code true} if the answer is guaranteed
          * to be false. Otherwise, returns {@code false}.
          */
-        private static boolean isAlwaysFailingVirtualDispatchTest(CanonicalCondition condition, ValueNode forX, ValueNode forY) {
+        private static boolean isAlwaysFailingVirtualDispatchTest(Condition condition, ValueNode forX, ValueNode forY) {
             if (forY.isConstant()) {
-                if (forX instanceof LoadMethodNode && condition == CanonicalCondition.EQ) {
+                if (forX instanceof LoadMethodNode && condition == Condition.EQ) {
                     LoadMethodNode lm = ((LoadMethodNode) forX);
                     if (lm.getMethod().getEncoding().equals(forY.asConstant())) {
                         if (lm.getHub() instanceof LoadHubNode) {
@@ -112,7 +112,7 @@ public class PointerEqualsNode extends CompareNode implements BinaryCommutative<
         }
 
         @Override
-        public LogicNode canonical(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth, CanonicalCondition condition,
+        public LogicNode canonical(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth, Condition condition,
                         boolean unorderedIsTrue, ValueNode forX, ValueNode forY, NodeView view) {
             LogicNode result = findSynonym(forX, forY, view);
             if (result != null) {

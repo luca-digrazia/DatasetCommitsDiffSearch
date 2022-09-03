@@ -32,7 +32,7 @@ public interface NodeView {
     class Default implements NodeView {
         @Override
         public Stamp stamp(ValueNode node) {
-            return node.stamp;
+            return node.stamp(NodeView.DEFAULT);
         }
     }
 

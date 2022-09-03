@@ -22,10 +22,12 @@
  */
 package org.graalvm.compiler.nodes.calc;
 
-import static org.graalvm.compiler.core.common.calc.CanonicalCondition.LT;
+import static org.graalvm.compiler.core.common.calc.Condition.LT;
 
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.MetaAccessProvider;
 import org.graalvm.compiler.core.common.NumUtil;
-import org.graalvm.compiler.core.common.calc.CanonicalCondition;
+import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.type.FloatStamp;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
@@ -40,15 +42,13 @@ import org.graalvm.compiler.nodes.LogicNegationNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.options.OptionValues;
 
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.PrimitiveConstant;
+import org.graalvm.compiler.options.OptionValues;
 
 @NodeInfo(shortName = "<")
 public final class IntegerLessThanNode extends IntegerLowerThanNode {
@@ -258,7 +258,7 @@ public final class IntegerLessThanNode extends IntegerLowerThanNode {
         }
 
         @Override
-        protected CanonicalCondition getCondition() {
+        protected Condition getCondition() {
             return LT;
         }
 

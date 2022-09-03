@@ -92,8 +92,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
         return null;
     }
 
-    @SuppressWarnings("unused")
-    public static LogicNode tryConstantFoldPrimitive(Condition condition, ValueNode forX, ValueNode forY, boolean unorderedIsTrue, NodeView view) {
+    public static LogicNode tryConstantFoldPrimitive(Condition condition, ValueNode forX, ValueNode forY, boolean unorderedIsTrue) {
         if (forX.asConstant() instanceof PrimitiveConstant && forY.asConstant() instanceof PrimitiveConstant) {
             return LogicConstantNode.forBoolean(condition.foldCondition((PrimitiveConstant) forX.asConstant(), (PrimitiveConstant) forY.asConstant(), unorderedIsTrue));
         }
