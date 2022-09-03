@@ -496,23 +496,20 @@ public class Graph {
                 return null;
             }
         } else {
-            /*
-             * Non-leaf node: look for another usage of the node's inputs that has the same data,
-             * inputs and successors as the node. To reduce the cost of this computation, only the
-             * input with lowest usage count is considered. If this node is the only user of any
-             * input then the search can terminate early. The usage count is only incremented once
-             * the Node is in the Graph, so account for that in the test.
-             */
-            final int earlyExitUsageCount = node.graph() != null ? 1 : 0;
+            // Non-leaf node: look for another usage of the node's inputs that
+            // has the same data, inputs and successors as the node. To reduce
+            // the cost of this computation, only the input with estimated highest
+            // usage count is considered.
+
             int minCount = Integer.MAX_VALUE;
             Node minCountNode = null;
             for (Node input : node.inputs()) {
                 if (input != null) {
-                    int usageCount = input.getUsageCount();
-                    if (usageCount == earlyExitUsageCount) {
+                    int estimate = input.getUsageCount();
+                    if (estimate == 0) {
                         return null;
-                    } else if (usageCount < minCount) {
-                        minCount = usageCount;
+                    } else if (estimate < minCount) {
+                        minCount = estimate;
                         minCountNode = input;
                     }
                 }
