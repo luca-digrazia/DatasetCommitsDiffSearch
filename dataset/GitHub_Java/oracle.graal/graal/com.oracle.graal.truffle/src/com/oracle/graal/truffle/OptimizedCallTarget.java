@@ -78,6 +78,7 @@ import com.oracle.truffle.api.profiles.ValueProfile;
  */
 @SuppressWarnings("deprecation")
 public class OptimizedCallTarget extends InstalledCode implements RootCallTarget, ReplaceObserver, com.oracle.truffle.api.LoopCountReceiver {
+    private static final RootNode UNINITIALIZED = RootNode.createConstantNode(null);
     private static final String NODE_REWRITING_ASSUMPTION_NAME = "nodeRewritingAssumption";
 
     private SpeculationLog speculationLog;
@@ -93,7 +94,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     @CompilationFinal private Assumption profiledReturnTypeAssumption;
 
     private final RootNode rootNode;
-    private volatile RootNode uninitializedRootNode;
+    private volatile RootNode uninitializedRootNode = UNINITIALIZED;
 
     private TruffleInlining inlining;
     private int cachedNonTrivialNodeCount = -1;
