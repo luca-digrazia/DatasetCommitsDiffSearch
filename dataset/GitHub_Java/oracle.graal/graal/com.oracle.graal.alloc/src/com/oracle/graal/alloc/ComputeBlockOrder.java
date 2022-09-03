@@ -25,6 +25,9 @@ package com.oracle.graal.alloc;
 
 import java.util.*;
 
+import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 
 /**
@@ -52,7 +55,7 @@ public final class ComputeBlockOrder {
             }
         }};
 
-    public ComputeBlockOrder(int maxBlockId, @SuppressWarnings("unused") int loopCount, Block startBlock, @SuppressWarnings("unused") boolean reorderLoops) {
+    public ComputeBlockOrder(int maxBlockId, int loopCount, Block startBlock, boolean reorderLoops) {
 
         List<Block> newLinearScanOrder = new ArrayList<>();
         List<Block> order = new ArrayList<>();
