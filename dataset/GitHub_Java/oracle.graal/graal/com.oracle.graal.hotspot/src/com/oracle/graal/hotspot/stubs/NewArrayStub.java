@@ -28,6 +28,7 @@ import static com.oracle.graal.hotspot.replacements.NewObjectSnippets.*;
 import static com.oracle.graal.hotspot.stubs.NewInstanceStub.*;
 import static com.oracle.graal.hotspot.stubs.StubUtil.*;
 
+import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
@@ -36,7 +37,6 @@ import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.replacements.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
@@ -53,7 +53,7 @@ import com.oracle.graal.word.*;
  */
 public class NewArrayStub extends SnippetStub {
 
-    public NewArrayStub(final HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotForeignCallLinkage linkage) {
+    public NewArrayStub(final HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotRuntimeCallTarget linkage) {
         super(runtime, replacements, target, linkage);
     }
 
@@ -89,7 +89,7 @@ public class NewArrayStub extends SnippetStub {
      */
     @Snippet
     private static Object newArray(Word hub, int length, @ConstantParameter Word intArrayHub) {
-        int layoutHelper = hub.readInt(layoutHelperOffset(), LocationIdentity.FINAL_LOCATION);
+        int layoutHelper = hub.readInt(layoutHelperOffset(), FINAL_LOCATION);
         int log2ElementSize = (layoutHelper >> layoutHelperLog2ElementSizeShift()) & layoutHelperLog2ElementSizeMask();
         int headerSize = (layoutHelper >> layoutHelperHeaderSizeShift()) & layoutHelperHeaderSizeMask();
         int elementKind = (layoutHelper >> layoutHelperElementTypeShift()) & layoutHelperElementTypeMask();
@@ -108,7 +108,8 @@ public class NewArrayStub extends SnippetStub {
                 if (logging()) {
                     printf("newArray: allocated new array at %p\n", memory.rawValue());
                 }
-                return verifyObject(formatArray(hub, sizeInBytes, length, headerSize, memory, Word.unsigned(arrayPrototypeMarkWord()), true));
+                formatArray(hub, sizeInBytes, length, headerSize, memory, Word.unsigned(arrayPrototypeMarkWord()), true);
+                return verifyObject(memory.toObject());
             }
         }
         if (logging()) {
@@ -120,8 +121,8 @@ public class NewArrayStub extends SnippetStub {
         return verifyObject(getAndClearObjectResult(thread()));
     }
 
-    public static final ForeignCallDescriptor NEW_ARRAY_C = descriptorFor(NewArrayStub.class, "newArrayC");
+    public static final Descriptor NEW_ARRAY_C = descriptorFor(NewArrayStub.class, "newArrayC", false);
 
-    @NodeIntrinsic(ForeignCallNode.class)
-    public static native void newArrayC(@ConstantNodeParameter ForeignCallDescriptor newArrayC, Word thread, Word hub, int length);
+    @NodeIntrinsic(CRuntimeCall.class)
+    public static native void newArrayC(@ConstantNodeParameter Descriptor newArrayC, Word thread, Word hub, int length);
 }

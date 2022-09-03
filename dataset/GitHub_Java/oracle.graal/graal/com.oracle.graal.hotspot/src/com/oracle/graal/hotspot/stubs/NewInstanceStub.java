@@ -22,13 +22,13 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.api.meta.LocationIdentity.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.nodes.DirectCompareAndSwapNode.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.hotspot.replacements.NewObjectSnippets.*;
 import static com.oracle.graal.hotspot.stubs.StubUtil.*;
 
+import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
@@ -37,7 +37,6 @@ import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.replacements.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
@@ -54,7 +53,7 @@ import com.oracle.graal.word.*;
  */
 public class NewInstanceStub extends SnippetStub {
 
-    public NewInstanceStub(final HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotForeignCallLinkage linkage) {
+    public NewInstanceStub(final HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotRuntimeCallTarget linkage) {
         super(runtime, replacements, target, linkage);
     }
 
@@ -88,7 +87,7 @@ public class NewInstanceStub extends SnippetStub {
      */
     @Snippet
     private static Object newInstance(Word hub, @ConstantParameter Word intArrayHub) {
-        int sizeInBytes = hub.readInt(klassInstanceSizeOffset(), LocationIdentity.FINAL_LOCATION);
+        int sizeInBytes = hub.readInt(klassInstanceSizeOffset(), FINAL_LOCATION);
         if (!forceSlowPath() && inlineContiguousAllocationSupported()) {
             if (hub.readInt(klassStateOffset(), CLASS_STATE_LOCATION) == klassStateFullyInitialized()) {
                 Word memory = refillAllocate(intArrayHub, sizeInBytes, logging());
@@ -240,8 +239,8 @@ public class NewInstanceStub extends SnippetStub {
         return Boolean.getBoolean("graal.newInstanceStub.forceSlowPath");
     }
 
-    public static final ForeignCallDescriptor NEW_INSTANCE_C = descriptorFor(NewInstanceStub.class, "newInstanceC");
+    public static final Descriptor NEW_INSTANCE_C = descriptorFor(NewInstanceStub.class, "newInstanceC", false);
 
-    @NodeIntrinsic(ForeignCallNode.class)
-    public static native void newInstanceC(@ConstantNodeParameter ForeignCallDescriptor newInstanceC, Word thread, Word hub);
+    @NodeIntrinsic(CRuntimeCall.class)
+    public static native void newInstanceC(@ConstantNodeParameter Descriptor newInstanceC, Word thread, Word hub);
 }

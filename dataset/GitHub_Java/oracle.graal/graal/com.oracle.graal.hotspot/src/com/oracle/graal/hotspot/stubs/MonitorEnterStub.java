@@ -23,6 +23,7 @@
 package com.oracle.graal.hotspot.stubs;
 
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.hotspot.stubs.StubUtil.*;
 
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.code.*;
@@ -47,7 +48,7 @@ public class MonitorEnterStub extends CRuntimeStub {
     @Snippet
     private static void monitorenter(Object object, Word lock) {
         monitorenterC(MONITORENTER_C, thread(), object, lock);
-        handlePendingException(false);
+        StubUtil.handlePendingException(false);
     }
 
     public static final Descriptor MONITORENTER_C = descriptorFor(MonitorEnterStub.class, "monitorenterC", false);

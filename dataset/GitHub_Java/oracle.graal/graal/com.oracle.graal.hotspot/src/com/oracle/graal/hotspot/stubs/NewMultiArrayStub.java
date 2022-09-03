@@ -22,7 +22,8 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.hotspot.stubs.StubUtil.*;
 
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.code.*;
@@ -48,7 +49,7 @@ public class NewMultiArrayStub extends CRuntimeStub {
     private static Object newMultiArray(Word hub, int rank, Word dims) {
         newMultiArrayC(NEW_MULTI_ARRAY_C, thread(), hub, rank, dims);
         handlePendingException(true);
-        return verifyOop(getAndClearObjectResult(thread()));
+        return verifyObject(getAndClearObjectResult(thread()));
     }
 
     public static final Descriptor NEW_MULTI_ARRAY_C = descriptorFor(NewMultiArrayStub.class, "newMultiArrayC", false);

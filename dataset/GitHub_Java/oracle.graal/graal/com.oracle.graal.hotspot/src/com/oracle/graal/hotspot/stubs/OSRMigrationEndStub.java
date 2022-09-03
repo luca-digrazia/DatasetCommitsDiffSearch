@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
+import static com.oracle.graal.hotspot.stubs.StubUtil.*;
+
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
@@ -45,9 +47,7 @@ public class OSRMigrationEndStub extends CRuntimeStub {
 
     @Snippet
     private static void osrMigrationEnd(Word buffer) {
-        printf("freeing OSR migration buffer %p\n", buffer.rawValue());
         osrMigrationEndC(OSR_MIGRATION_END_C, buffer);
-        printf("freed OSR migration buffer %p\n", buffer.rawValue());
     }
 
     public static final Descriptor OSR_MIGRATION_END_C = descriptorFor(OSRMigrationEndStub.class, "osrMigrationEndC", false);
