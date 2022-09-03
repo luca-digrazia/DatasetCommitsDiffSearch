@@ -23,7 +23,6 @@
 package com.oracle.graal.loop.phases;
 
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.graal.loop.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
@@ -52,12 +51,10 @@ public class LoopTransformLowPhase extends Phase {
                     final LoopsData dataUnswitch = new LoopsData(graph);
                     for (LoopEx loop : dataUnswitch.loops()) {
                         if (LoopPolicies.shouldTryUnswitch(loop)) {
-                            ControlSplitNode controlSplit = LoopTransformations.findUnswitchable(loop);
-                            if (controlSplit != null && LoopPolicies.shouldUnswitch(loop, controlSplit)) {
-                                if (Debug.isLogEnabled()) {
-                                    logUnswitch(loop, controlSplit);
-                                }
-                                LoopTransformations.unswitch(loop, controlSplit);
+                            IfNode ifNode = LoopTransformations.findUnswitchableIf(loop);
+                            if (ifNode != null && LoopPolicies.shouldUnswitch(loop, ifNode)) {
+                                Debug.log("Unswitching %s at %s [%f - %f]", loop, ifNode, ifNode.probability(ifNode.trueSuccessor()), ifNode.probability(ifNode.falseSuccessor()));
+                                LoopTransformations.unswitch(loop, ifNode);
                                 UNSWITCHED.increment();
                                 Debug.dump(graph, "After unswitch %s", loop);
                                 unswitched = true;
@@ -68,19 +65,5 @@ public class LoopTransformLowPhase extends Phase {
                 } while(unswitched);
             }
         }
-    }
-
-    private static void logUnswitch(LoopEx loop, ControlSplitNode controlSplit) {
-        StringBuilder sb = new StringBuilder("Unswitching ");
-        sb.append(loop).append(" at ").append(controlSplit).append(" [");
-        NodeClassIterator it = controlSplit.successors().iterator();
-        while (it.hasNext()) {
-            sb.append(controlSplit.probability((BeginNode) it.next()));
-            if (it.hasNext()) {
-                sb.append(", ");
-            }
-        }
-        sb.append("]");
-        Debug.log(sb.toString());
     }
 }

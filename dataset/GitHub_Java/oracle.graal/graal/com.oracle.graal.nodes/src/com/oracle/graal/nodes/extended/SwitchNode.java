@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import java.util.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -36,8 +34,8 @@ public abstract class SwitchNode extends ControlSplitNode {
     @Successor protected final NodeSuccessorList<BeginNode> successors;
     protected double[] successorProbabilities;
     @Input private ValueNode value;
-    private double[] keyProbabilities;
-    private int[] keySuccessors;
+    private final double[] keyProbabilities;
+    private final int[] keySuccessors;
 
     public ValueNode value() {
         return value;
@@ -140,14 +138,5 @@ public abstract class SwitchNode extends ControlSplitNode {
             probability[keySuccessors[i]] += keyProbabilities[i];
         }
         return probability;
-    }
-
-    @Override
-    public SwitchNode clone(Graph into) {
-        SwitchNode newSwitch = (SwitchNode) super.clone(into);
-        newSwitch.successorProbabilities = Arrays.copyOf(successorProbabilities, successorProbabilities.length);
-        newSwitch.keyProbabilities = Arrays.copyOf(keyProbabilities, keyProbabilities.length);
-        newSwitch.keySuccessors = Arrays.copyOf(keySuccessors, keySuccessors.length);
-        return newSwitch;
     }
 }

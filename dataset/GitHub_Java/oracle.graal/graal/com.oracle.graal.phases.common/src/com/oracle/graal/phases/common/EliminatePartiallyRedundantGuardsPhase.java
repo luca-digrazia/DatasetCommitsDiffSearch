@@ -33,6 +33,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.phases.*;
 
+
 public class EliminatePartiallyRedundantGuardsPhase extends Phase {
 
     private static final DebugMetric metricPRGuardsEliminatedAtMerge = Debug.metric("PRGuardsEliminatedAtMerge");
@@ -49,15 +50,12 @@ public class EliminatePartiallyRedundantGuardsPhase extends Phase {
     }
 
     private static class Condition {
-
         final BooleanNode conditionNode;
         final boolean negated;
-
         public Condition(BooleanNode conditionNode, boolean negated) {
             this.conditionNode = conditionNode;
             this.negated = negated;
         }
-
         @Override
         public int hashCode() {
             final int prime = 31;
@@ -66,7 +64,6 @@ public class EliminatePartiallyRedundantGuardsPhase extends Phase {
             result = prime * result + (negated ? 1231 : 1237);
             return result;
         }
-
         @Override
         public boolean equals(Object obj) {
             if (this == obj) {
@@ -108,7 +105,7 @@ public class EliminatePartiallyRedundantGuardsPhase extends Phase {
                     hits |= eliminateAtControlSplit(controlSplit);
                 }
             }
-        } while (hits);
+        } while(hits);
     }
 
     private static boolean eliminateAtMerge(MergeNode merge) {

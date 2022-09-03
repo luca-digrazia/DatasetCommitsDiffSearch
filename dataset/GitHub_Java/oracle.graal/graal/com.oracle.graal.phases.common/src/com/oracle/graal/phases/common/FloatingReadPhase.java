@@ -35,12 +35,10 @@ public class FloatingReadPhase extends Phase {
     private IdentityHashMap<LoopBeginNode, List<MemoryMap>> loopEndStatesMap;
 
     private static class LoopState {
-
         public LoopBeginNode loopBegin;
         public MemoryMap state;
         public IdentityHashMap<PhiNode, Object> loopPhiLocations = new IdentityHashMap<>();
         public ValueNode loopEntryAnyLocation;
-
         public LoopState(LoopBeginNode loopBegin, MemoryMap state, ValueNode loopEntryAnyLocation) {
             this.loopBegin = loopBegin;
             this.state = state;
@@ -54,7 +52,6 @@ public class FloatingReadPhase extends Phase {
     }
 
     private class MemoryMap implements MergeableState<MemoryMap> {
-
         private IdentityHashMap<Object, ValueNode> lastMemorySnapshot;
         private LinkedList<LoopState> loops;
 
@@ -174,7 +171,6 @@ public class FloatingReadPhase extends Phase {
     protected void run(StructuredGraph graph) {
         loopEndStatesMap = new IdentityHashMap<>();
         new PostOrderNodeIterator<MemoryMap>(graph.start(), new MemoryMap()) {
-
             @Override
             protected void node(FixedNode node) {
                 processNode(node, state);
