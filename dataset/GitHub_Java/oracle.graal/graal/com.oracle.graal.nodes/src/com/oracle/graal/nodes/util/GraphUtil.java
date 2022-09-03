@@ -112,10 +112,6 @@ public class GraphUtil {
                     }
                     for (Node successor : successors) {
                         newWorklist.add(successor);
-                        if (successor instanceof LoopExitNode) {
-                            LoopExitNode exit = (LoopExitNode) successor;
-                            exit.replaceFirstInput(exit.loopBegin(), null);
-                        }
                     }
                 }
             }
