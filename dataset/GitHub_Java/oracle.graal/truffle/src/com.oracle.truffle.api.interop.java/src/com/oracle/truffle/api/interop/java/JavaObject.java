@@ -45,10 +45,6 @@ final class JavaObject implements TruffleObject {
         this.languageContext = languageContext;
     }
 
-    static JavaObject forClass(Class<?> clazz, Object languageContext) {
-        return new JavaObject(null, clazz, languageContext);
-    }
-
     static boolean isInstance(TruffleObject obj) {
         return obj instanceof JavaObject;
     }
@@ -87,10 +83,6 @@ final class JavaObject implements TruffleObject {
 
     public boolean isArray() {
         return obj != null && obj.getClass().isArray();
-    }
-
-    Class<?> getClazz() {
-        return clazz;
     }
 
     @Override

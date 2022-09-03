@@ -34,12 +34,15 @@ import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.nodes.Node;
 
 abstract class ArrayReadNode extends Node {
+    @Child private ToPrimitiveNode primitive = ToPrimitiveNode.create();
 
     protected abstract Object executeWithTarget(JavaObject receiver, Object index);
 
+    @SuppressWarnings("unchecked")
     @Specialization(guards = {"receiver.isArray()", "index.getClass() == clazz"})
-    protected Object doNumber(JavaObject receiver, Number index, @Cached("index.getClass()") Class<? extends Number> clazz) {
-        return doArrayAccess(receiver, clazz.cast(index).intValue());
+    protected Object doNumber(JavaObject receiver, Number index, @Cached("index.getClass()") Class<?> clazz) {
+        Class<Number> numberClazz = (Class<Number>) clazz;
+        return doArrayAccess(receiver, numberClazz.cast(index).intValue());
     }
 
     @Specialization(guards = {"receiver.isArray()"}, replaces = "doNumber")
@@ -54,7 +57,7 @@ abstract class ArrayReadNode extends Node {
         throw UnknownIdentifierException.raise(String.valueOf(index));
     }
 
-    private static Object doArrayAccess(JavaObject object, int index) {
+    private Object doArrayAccess(JavaObject object, int index) {
         Object obj = object.obj;
         assert object.isArray();
         Object val = null;
@@ -64,10 +67,9 @@ abstract class ArrayReadNode extends Node {
             CompilerDirectives.transferToInterpreter();
             throw UnknownIdentifierException.raise(String.valueOf(index));
         }
+        if (primitive.isPrimitive(val)) {
+            return val;
+        }
         return JavaInterop.toGuestValue(val, object.languageContext);
-    }
-
-    static ArrayReadNode create() {
-        return ArrayReadNodeGen.create();
     }
 }
