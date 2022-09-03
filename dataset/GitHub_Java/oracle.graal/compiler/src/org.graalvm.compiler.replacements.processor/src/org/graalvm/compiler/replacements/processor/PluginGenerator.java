@@ -27,7 +27,6 @@ package org.graalvm.compiler.replacements.processor;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,8 +34,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.function.Function;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -125,63 +122,48 @@ public class PluginGenerator {
                 out.printf("// GENERATORS: %s, %s\n", ReplacementsAnnotationProcessor.class.getName(), PluginGenerator.class.getName());
                 out.printf("package %s;\n", pkg.getQualifiedName());
                 out.printf("\n");
-                createImports(out, processor, plugins, pkg.getQualifiedName().toString());
+                createImports(out, plugins);
                 out.printf("\n");
                 for (GeneratedPlugin plugin : plugins) {
                     plugin.generate(processor, out);
                     out.printf("\n");
                 }
-                out.printf("public class %s implements GeneratedPluginFactory {\n", genClassName);
+                out.printf("public class %s implements NodeIntrinsicPluginFactory {\n", genClassName);
                 createPluginFactoryMethod(out, plugins);
                 out.printf("}\n");
             }
         } catch (IOException e) {
             processor.env().getMessager().printMessage(Diagnostic.Kind.ERROR, e.getMessage());
         }
-        processor.createProviderFile(qualifiedGenClassName, "org.graalvm.compiler.nodes.graphbuilderconf.GeneratedPluginFactory", topLevelClass);
+        processor.createProviderFile(qualifiedGenClassName, "org.graalvm.compiler.nodes.graphbuilderconf.NodeIntrinsicPluginFactory", topLevelClass);
     }
 
-    protected static void createImports(PrintWriter out, AbstractProcessor processor, List<GeneratedPlugin> plugins, String importingPackage) {
-        HashSet<String> extra = new HashSet<>();
-
-        extra.add("jdk.vm.ci.meta.ResolvedJavaMethod");
-        extra.add("java.lang.annotation.Annotation");
-        extra.add("org.graalvm.compiler.nodes.ValueNode");
-        extra.add("org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext");
-        extra.add("org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin");
-        extra.add("org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins");
-        extra.add("org.graalvm.compiler.nodes.graphbuilderconf.GeneratedPluginFactory");
-        extra.add("org.graalvm.compiler.nodes.graphbuilderconf.GeneratedPluginInjectionProvider");
-
-        for (GeneratedPlugin plugin : plugins) {
-            plugin.extraImports(processor, extra);
-            extra.add("org.graalvm.compiler.nodes.graphbuilderconf." + plugin.pluginSuperclass());
-            if (plugin.needsReplacement(processor)) {
-                extra.add("org.graalvm.compiler.graph.NodeInputList");
-                extra.add("org.graalvm.compiler.nodes.PluginReplacementNode");
-            }
-        }
-        Pattern packageClassBoundary = Pattern.compile("\\.([A-Z])");
+    protected static void createImports(PrintWriter out, List<GeneratedPlugin> plugins) {
+        out.printf("import jdk.vm.ci.meta.ResolvedJavaMethod;\n");
         out.printf("\n");
-        String[] imports = extra.toArray(new String[extra.size()]);
-        Arrays.sort(imports);
-        for (String i : imports) {
-            Matcher matcher = packageClassBoundary.matcher(i);
-            if (matcher.find()) {
-                String packageName = i.substring(0, matcher.start());
-                String className = i.substring(matcher.start() + 1);
-                if (packageName.equals(importingPackage) && className.indexOf('.') == -1) {
-                    // No need to import top level class in the same package
-                    continue;
-                }
+        out.printf("import java.lang.annotation.Annotation;\n");
+        out.printf("import org.graalvm.compiler.nodes.ValueNode;\n");
+        out.printf("import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;\n");
+        out.printf("import org.graalvm.compiler.nodes.graphbuilderconf.GeneratedInvocationPlugin;\n");
+        out.printf("import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;\n");
+        out.printf("import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;\n");
+        out.printf("import org.graalvm.compiler.nodes.graphbuilderconf.NodeIntrinsicPluginFactory;\n");
+
+        HashSet<String> extra = new HashSet<>();
+        for (GeneratedPlugin plugin : plugins) {
+            plugin.extraImports(extra);
+        }
+        if (!extra.isEmpty()) {
+            out.printf("\n");
+            for (String i : extra) {
+                out.printf("import %s;\n", i);
             }
-            out.printf("import %s;\n", i);
         }
     }
 
     private static void createPluginFactoryMethod(PrintWriter out, List<GeneratedPlugin> plugins) {
         out.printf("    @Override\n");
-        out.printf("    public void registerPlugins(InvocationPlugins plugins, GeneratedPluginInjectionProvider injection) {\n");
+        out.printf("    public void registerPlugins(InvocationPlugins plugins, NodeIntrinsicPluginFactory.InjectionProvider injection) {\n");
         for (GeneratedPlugin plugin : plugins) {
             plugin.register(out);
         }
