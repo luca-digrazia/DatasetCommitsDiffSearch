@@ -38,7 +38,6 @@ public final class PythonFlags implements TruffleObject {
     private static final String FLAGS = "iLmsxatu";
     private static final String TYPE_FLAGS = "Lau";
     private static final String GLOBAL_FLAGS = "t";
-    private static final String INTERNAL_FLAGS = "y";
 
     public static final PythonFlags EMPTY_INSTANCE = new PythonFlags("");
     public static final PythonFlags TYPE_FLAGS_INSTANCE = new PythonFlags(TYPE_FLAGS);
@@ -56,13 +55,8 @@ public final class PythonFlags implements TruffleObject {
     }
 
     private static int maskForFlag(int flagChar) {
-        int index = FLAGS.indexOf(flagChar);
-        if (index >= 0) {
-            return 1 << index;
-        } else {
-            assert INTERNAL_FLAGS.indexOf(flagChar) >= 0;
-            return 1 << (FLAGS.length() + INTERNAL_FLAGS.indexOf(flagChar));
-        }
+        assert FLAGS.indexOf(flagChar) >= 0;
+        return 1 << FLAGS.indexOf(flagChar);
     }
 
     public boolean hasFlag(int flagChar) {
@@ -101,12 +95,8 @@ public final class PythonFlags implements TruffleObject {
         return hasFlag('u');
     }
 
-    public boolean isSticky() {
-        return hasFlag('y');
-    }
-
-    public PythonFlags addFlag(int flagChar) {
-        return new PythonFlags(this.value | maskForFlag(flagChar));
+    public PythonFlags addFlag(int flag) {
+        return new PythonFlags(this.value | maskForFlag(flag));
     }
 
     public PythonFlags addFlags(PythonFlags otherFlags) {
