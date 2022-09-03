@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.hotspot.nodes.type;
 
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.hotspot.HotSpotVMConfig.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
+import com.oracle.graal.hotspot.meta.*;
 
 public class NarrowOopStamp extends AbstractObjectStamp {
 
@@ -57,7 +56,7 @@ public class NarrowOopStamp extends AbstractObjectStamp {
 
     @Override
     public LIRKind getLIRKind(LIRKindTool tool) {
-        return ((HotSpotLIRKindTool) tool).getNarrowOopKind();
+        return LIRKind.reference(Kind.Int);
     }
 
     @Override
@@ -78,12 +77,6 @@ public class NarrowOopStamp extends AbstractObjectStamp {
             return encoding.equals(narrow.encoding);
         }
         return false;
-    }
-
-    @Override
-    public Constant readConstant(MemoryAccessProvider provider, Constant base, long displacement) {
-        HotSpotMemoryAccessProvider hsProvider = (HotSpotMemoryAccessProvider) provider;
-        return hsProvider.readNarrowOopConstant(base, displacement, encoding);
     }
 
     @Override
@@ -110,7 +103,7 @@ public class NarrowOopStamp extends AbstractObjectStamp {
     }
 
     @Override
-    public JavaConstant asConstant() {
+    public Constant asConstant() {
         if (alwaysNull()) {
             return HotSpotCompressedNullConstant.COMPRESSED_NULL;
         } else {
