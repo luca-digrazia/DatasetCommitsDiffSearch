@@ -265,13 +265,10 @@ public class TestResolvedJavaType extends TypeUniverse {
     static class Concrete3 extends Concrete2 {
     }
 
-    static final class Final1 extends Abstract1 {
-    }
-
     abstract static class Abstract4 extends Concrete3 {
     }
 
-    void checkConcreteSubtype(ResolvedJavaType type, ResolvedJavaType expected) {
+    void checkConcreteSubtype(ResolvedJavaType type, Class<?> expected) {
         ResolvedJavaType subtype = type.findUniqueConcreteSubtype();
         if (subtype == null) {
             // findUniqueConcreteSubtype() is conservative
@@ -279,7 +276,7 @@ public class TestResolvedJavaType extends TypeUniverse {
             if (expected == null) {
                 assertNull(subtype);
             } else {
-                assertTrue(subtype.equals(expected));
+                assertTrue(subtype.equals(metaAccess.lookupJavaType(expected)));
             }
         }
 
@@ -297,44 +294,31 @@ public class TestResolvedJavaType extends TypeUniverse {
     @Test
     public void findUniqueConcreteSubtypeTest() {
         ResolvedJavaType base = metaAccess.lookupJavaType(Base.class);
-        checkConcreteSubtype(base, base);
+        checkConcreteSubtype(base, Base.class);
 
         ResolvedJavaType a1 = metaAccess.lookupJavaType(Abstract1.class);
         ResolvedJavaType c1 = metaAccess.lookupJavaType(Concrete1.class);
 
         checkConcreteSubtype(base, null);
-        checkConcreteSubtype(a1, c1);
-        checkConcreteSubtype(c1, c1);
+        checkConcreteSubtype(a1, Concrete1.class);
+        checkConcreteSubtype(c1, Concrete1.class);
 
         ResolvedJavaType i1 = metaAccess.lookupJavaType(Interface1.class);
         ResolvedJavaType c2 = metaAccess.lookupJavaType(Concrete2.class);
 
         checkConcreteSubtype(base, null);
         checkConcreteSubtype(a1, null);
-        checkConcreteSubtype(c1, c1);
-        checkConcreteSubtype(i1, c2);
-        checkConcreteSubtype(c2, c2);
+        checkConcreteSubtype(c1, Concrete1.class);
+        checkConcreteSubtype(i1, Concrete2.class);
+        checkConcreteSubtype(c2, Concrete2.class);
 
         ResolvedJavaType c3 = metaAccess.lookupJavaType(Concrete3.class);
         checkConcreteSubtype(c2, null);
-        checkConcreteSubtype(c3, c3);
+        checkConcreteSubtype(c3, Concrete3.class);
 
         ResolvedJavaType a4 = metaAccess.lookupJavaType(Abstract4.class);
         checkConcreteSubtype(c3, null);
         checkConcreteSubtype(a4, null);
-
-        ResolvedJavaType a1a = metaAccess.lookupJavaType(Abstract1[].class);
-        checkConcreteSubtype(a1a, null);
-        ResolvedJavaType c1a = metaAccess.lookupJavaType(Concrete1[].class);
-        checkConcreteSubtype(c1a, null);
-        ResolvedJavaType f1a = metaAccess.lookupJavaType(Final1[].class);
-        checkConcreteSubtype(f1a, f1a);
-
-        ResolvedJavaType obja = metaAccess.lookupJavaType(Object[].class);
-        checkConcreteSubtype(obja, null);
-
-        ResolvedJavaType inta = metaAccess.lookupJavaType(int[].class);
-        checkConcreteSubtype(inta, inta);
     }
 
     @Test

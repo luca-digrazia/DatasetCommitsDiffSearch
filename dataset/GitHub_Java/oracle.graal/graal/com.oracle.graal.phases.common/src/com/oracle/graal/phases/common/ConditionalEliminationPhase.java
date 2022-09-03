@@ -337,7 +337,7 @@ public class ConditionalEliminationPhase extends Phase {
         private final LogicNode trueConstant;
         private final LogicNode falseConstant;
 
-        public ConditionalElimination(FixedNode start, State initialState) {
+        public ConditionalElimination(StartNode start, State initialState) {
             super(start, initialState);
             trueConstant = LogicConstantNode.tautology(graph);
             falseConstant = LogicConstantNode.contradiction(graph);
@@ -351,6 +351,7 @@ public class ConditionalEliminationPhase extends Phase {
             if (falseConstant.usages().isEmpty()) {
                 graph.removeFloating(falseConstant);
             }
+            super.finished();
         }
 
         private void registerCondition(boolean isTrue, LogicNode condition, ValueNode anchor) {
@@ -814,7 +815,7 @@ public class ConditionalEliminationPhase extends Phase {
                     if (receiver != null && (callTarget.invokeKind() == InvokeKind.Interface || callTarget.invokeKind() == InvokeKind.Virtual)) {
                         ResolvedJavaType type = state.getNodeType(receiver);
                         if (!Objects.equals(type, StampTool.typeOrNull(receiver))) {
-                            ResolvedJavaMethod method = type.resolveMethod(callTarget.targetMethod());
+                            ResolvedJavaMethod method = type.resolveMethod(callTarget.targetMethod(), invoke.getContextType());
                             if (method != null) {
                                 if (method.canBeStaticallyBound() || type.isFinal()) {
                                     callTarget.setInvokeKind(InvokeKind.Special);

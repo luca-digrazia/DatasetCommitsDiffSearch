@@ -62,6 +62,9 @@ public class WordTypeVerificationPhase extends Phase {
         InferStamps.inferStamps(graph);
 
         for (ValueNode node : graph.getNodes().filter(ValueNode.class)) {
+            if (!node.recordsUsages()) {
+                continue;
+            }
             for (Node usage : node.usages()) {
                 if (usage instanceof AccessMonitorNode) {
                     verify(!isWord(node), node, usage, "word value has no monitor");
@@ -70,7 +73,9 @@ public class WordTypeVerificationPhase extends Phase {
                 } else if (usage instanceof StoreFieldNode) {
                     verify(!isWord(node) || ((StoreFieldNode) usage).object() != node, node, usage, "cannot store to word value");
                 } else if (usage instanceof CheckCastNode) {
-                    verify(isWord(((CheckCastNode) usage).type()) == isWord(node), node, usage, "word cannot be cast to object, and vice versa");
+                    boolean expectWord = isWord(node);
+                    verify(isWord(node) == expectWord, node, usage, "word cannot be cast to object, and vice versa");
+                    verify(isWord(((CheckCastNode) usage).type()) == expectWord, node, usage, "word cannot be cast to object, and vice versa");
                 } else if (usage instanceof LoadIndexedNode) {
                     verify(!isWord(node) || ((LoadIndexedNode) usage).array() != node, node, usage, "cannot load from word value");
                     verify(!isWord(node) || ((LoadIndexedNode) usage).index() != node, node, usage, "cannot use word value as index");
@@ -81,8 +86,8 @@ public class WordTypeVerificationPhase extends Phase {
                     MethodCallTargetNode callTarget = (MethodCallTargetNode) usage;
                     verifyInvoke(node, callTarget);
                 } else if (usage instanceof ObjectEqualsNode) {
-                    verify(!isWord(node) || ((ObjectEqualsNode) usage).getX() != node, node, usage, "cannot use word type in comparison");
-                    verify(!isWord(node) || ((ObjectEqualsNode) usage).getY() != node, node, usage, "cannot use word type in comparison");
+                    verify(!isWord(node) || ((ObjectEqualsNode) usage).x() != node, node, usage, "cannot use word type in comparison");
+                    verify(!isWord(node) || ((ObjectEqualsNode) usage).y() != node, node, usage, "cannot use word type in comparison");
                 } else if (usage instanceof ArrayLengthNode) {
                     verify(!isWord(node) || ((ArrayLengthNode) usage).array() != node, node, usage, "cannot get array length from word value");
                 } else if (usage instanceof ValuePhiNode) {
@@ -109,7 +114,7 @@ public class WordTypeVerificationPhase extends Phase {
                 ValueNode receiver = arguments.get(argc);
                 if (receiver == node && isWord(node)) {
                     ResolvedJavaMethod resolvedMethod = wordAccess.wordImplType.resolveMethod(method, invoke.getContextType());
-                    verify(resolvedMethod != null, node, invoke.asNode(), "cannot resolve method on Word class: " + method.format("%H.%n(%P) %r"));
+                    verify(resolvedMethod != null, node, invoke.asNode(), "cannot resolve method on Word class: " + MetaUtil.format("%H.%n(%P) %r", method));
                     Operation operation = resolvedMethod.getAnnotation(Word.Operation.class);
                     verify(operation != null, node, invoke.asNode(), "cannot dispatch on word value to non @Operation annotated method " + resolvedMethod);
                 }
@@ -160,7 +165,7 @@ public class WordTypeVerificationPhase extends Phase {
             return buf.toString();
         } else {
             String loc = GraphUtil.approxSourceLocation(n);
-            return loc == null ? ((StructuredGraph) n.graph()).method().format("method %h.%n") : loc;
+            return loc == null ? MetaUtil.format("method %h.%n", ((StructuredGraph) n.graph()).method()) : loc;
         }
     }
 }
