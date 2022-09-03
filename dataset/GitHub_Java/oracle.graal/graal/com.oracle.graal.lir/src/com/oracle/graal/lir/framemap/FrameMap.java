@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -256,7 +256,7 @@ public abstract class FrameMap {
      * @param kind The kind of the spill slot to be reserved.
      * @return A spill slot denoting the reserved memory area.
      */
-    public StackSlot allocateSpillSlot(LIRKind kind) {
+    protected StackSlot allocateSpillSlot(LIRKind kind) {
         assert frameSize == -1 : "frame size must not yet be fixed";
         int size = spillSlotSize(kind);
         spillSize = NumUtil.roundUp(spillSize + size, size);
@@ -284,7 +284,7 @@ public abstract class FrameMap {
      *            collector could see garbage object values.
      * @return the first reserved stack slot (i.e., at the lowest address)
      */
-    public StackSlot allocateStackSlots(int slots, BitSet objects) {
+    protected StackSlot allocateStackSlots(int slots, BitSet objects) {
         assert frameSize == -1 : "frame size must not yet be fixed";
         if (slots == 0) {
             return null;
@@ -343,6 +343,18 @@ public abstract class FrameMap {
         } else if (isStackSlot(location)) {
             int offset = offsetForStackSlot(asStackSlot(location));
             refMap.setStackSlot(offset, kind);
+        } else {
+            assert isConstant(location);
+        }
+    }
+
+    public void clearReference(Value location, ReferenceMap refMap) {
+        LIRKind kind = location.getLIRKind();
+        if (isRegister(location)) {
+            refMap.clearRegister(asRegister(location).getReferenceMapIndex(), kind);
+        } else if (isStackSlot(location)) {
+            int offset = offsetForStackSlot(asStackSlot(location));
+            refMap.clearStackSlot(offset, kind);
         } else {
             assert isConstant(location);
         }
