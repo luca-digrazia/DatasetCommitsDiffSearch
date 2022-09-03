@@ -28,6 +28,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.Objects;
 import java.util.WeakHashMap;
 
 import com.oracle.truffle.api.Assumption;
@@ -78,13 +79,13 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
     public RootCallTarget createCallTarget(RootNode rootNode) {
         DefaultCallTarget target = new DefaultCallTarget(rootNode);
         rootNode.setCallTarget(target);
-        getTvmci().onLoad(target);
         callTargets.put(target, null);
         return target;
     }
 
     @Override
     public DirectCallNode createDirectCallNode(CallTarget target) {
+        Objects.requireNonNull(target);
         return new DefaultDirectCallNode(target);
     }
 
@@ -145,7 +146,6 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public Collection<RootCallTarget> getCallTargets() {
         return Collections.unmodifiableSet(callTargets.keySet());
