@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ * Copyright (C)  Tony Green, LitePal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ import android.content.Context;
  * But just remember make your own Application class inherited from
  * LitePalApplication instead of inheriting from Application directly. This can
  * make all things work without side effects. <br>
- * Besides if you don't want use the above way, you can also call the LitePalApplication.initialize(Context)
+ * Besides if you don't want use the above way, you can also call the LitePal.initialize(Context)
  * method to do the same job. Just remember call this method as early as possible, in Application's onCreate()
  * method will be fine.
  * 
@@ -44,7 +44,7 @@ public class LitePalApplication extends Application {
 	/**
 	 * Global application context.
 	 */
-	private static Context sContext;
+	static Context sContext;
 
 	/**
 	 * Construct of LitePalApplication. Initialize application context.
@@ -53,6 +53,12 @@ public class LitePalApplication extends Application {
 		sContext = this;
 	}
 
+    /**
+     * Deprecated. Use {@link LitePal#initialize(Context)} instead.
+     * @param context
+	 * 		Application context.
+     */
+	@Deprecated
     public static void initialize(Context context) {
         sContext = context;
     }
