@@ -31,9 +31,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.LIRInstruction.OperandFlag;
-import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
+import com.oracle.graal.lir.LIRInstruction.*;
 import com.oracle.graal.nodes.cfg.*;
 
 public final class LIRVerifier {
@@ -46,11 +44,11 @@ public final class LIRVerifier {
     private final BitSet[] blockLiveOut;
     private final Object[] variableDefinitions;
 
-    private BitSet liveOutFor(AbstractBlock<?> block) {
+    private BitSet liveOutFor(Block block) {
         return blockLiveOut[block.getId()];
     }
 
-    private void setLiveOutFor(AbstractBlock<?> block, BitSet liveOut) {
+    private void setLiveOutFor(Block block, BitSet liveOut) {
         blockLiveOut[block.getId()] = liveOut;
     }
 
@@ -98,7 +96,7 @@ public final class LIRVerifier {
     private BitSet curVariablesLive;
     private Value[] curRegistersLive;
 
-    private AbstractBlock<?> curBlock;
+    private Block curBlock;
     private Object curInstruction;
     private BitSet curRegistersDefined;
 
@@ -120,7 +118,7 @@ public final class LIRVerifier {
 
         int maxRegisterNum = maxRegisterNum();
         curRegistersDefined = new BitSet();
-        for (AbstractBlock<?> block : lir.linearScanOrder()) {
+        for (Block block : lir.linearScanOrder()) {
             curBlock = block;
             curVariablesLive = new BitSet();
             curRegistersLive = new Value[maxRegisterNum];
@@ -181,7 +179,7 @@ public final class LIRVerifier {
                 curRegistersDefined.set(regNum);
             }
 
-            if (beforeRegisterAllocation && !curRegistersLive[regNum].equals(value)) {
+            if (beforeRegisterAllocation && curRegistersLive[regNum] != value) {
                 TTY.println("block %s  instruction %s", curBlock, curInstruction);
                 TTY.println("live registers: %s", Arrays.toString(curRegistersLive));
                 TTY.println("ERROR: Use of fixed register %s that is not defined in this block", value);
@@ -232,17 +230,14 @@ public final class LIRVerifier {
         return value;
     }
 
-    // @formatter:off
     private static Value allowed(Object op, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
-        if ((isVariable(value) && flags.contains(OperandFlag.REG)) ||
-            (isRegister(value) && flags.contains(OperandFlag.REG)) ||
-            (isStackSlot(value) && flags.contains(OperandFlag.STACK)) ||
-            (isConstant(value) && flags.contains(OperandFlag.CONST) && mode != OperandMode.DEF) ||
-            (isIllegal(value) && flags.contains(OperandFlag.ILLEGAL))) {
+        if ((isVariable(value) && flags.contains(OperandFlag.REG)) || (isRegister(value) && flags.contains(OperandFlag.REG)) || (isStackSlot(value) && flags.contains(OperandFlag.STACK)) ||
+                        (isConstant(value) && flags.contains(OperandFlag.CONST) && mode != OperandMode.DEF) || (isIllegal(value) && flags.contains(OperandFlag.ILLEGAL))) {
             return value;
         }
-        throw new GraalInternalError("Invalid LIR%n  Instruction: %s%n  Mode: %s%n  Flags: %s%n  Unexpected value: %s %s",
-                        op, mode, flags, value.getClass().getSimpleName(), value);
+        TTY.println("instruction %s", op);
+        TTY.println("mode: %s  flags: %s", mode, flags);
+        TTY.println("Unexpected value: %s %s", value.getClass().getSimpleName(), value);
+        throw GraalInternalError.shouldNotReachHere();
     }
-    // @formatter:on
 }

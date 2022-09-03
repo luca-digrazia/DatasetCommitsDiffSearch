@@ -27,25 +27,26 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 
 /**
- * The name, signature and calling convention of a call from compiled code to the runtime.
- * The target of such a call may be a leaf stub or a call into the runtime code proper.
+ * The name, signature and calling convention of a call from compiled code to the runtime. The
+ * target of such a call may be a leaf stub or a call into the runtime code proper.
  */
-public interface RuntimeCallTarget {
+public interface RuntimeCallTarget extends InvokeTarget {
 
     /**
      * The name and signature of a runtime call.
      */
     public static class Descriptor {
+
         private final String name;
         private final boolean hasSideEffect;
-        private final Kind resultKind;
-        private final Kind[] argumentKinds;
+        private final Class resultType;
+        private final Class[] argumentTypes;
 
-        public Descriptor(String name, boolean hasSideEffect, Kind resultKind, Kind... args) {
+        public Descriptor(String name, boolean hasSideEffect, Class resultType, Class... argumentTypes) {
             this.name = name;
             this.hasSideEffect = hasSideEffect;
-            this.resultKind = resultKind;
-            this.argumentKinds = args;
+            this.resultType = resultType;
+            this.argumentTypes = argumentTypes;
         }
 
         /**
@@ -56,9 +57,8 @@ public interface RuntimeCallTarget {
         }
 
         /**
-         * Determines if this call changes state visible to other threads.
-         * Such calls denote boundaries across which deoptimization
-         * points cannot be moved.
+         * Determines if this call changes state visible to other threads. Such calls denote
+         * boundaries across which deoptimization points cannot be moved.
          */
         public boolean hasSideEffect() {
             return hasSideEffect;
@@ -67,15 +67,15 @@ public interface RuntimeCallTarget {
         /**
          * Gets the return kind of this runtime call.
          */
-        public Kind getResultKind() {
-            return resultKind;
+        public Class getResultType() {
+            return resultType;
         }
 
         /**
          * Gets the argument kinds of this runtime call.
          */
-        public Kind[] getArgumentKinds() {
-            return argumentKinds.clone();
+        public Class[] getArgumentTypes() {
+            return argumentTypes.clone();
         }
 
         @Override
@@ -87,7 +87,7 @@ public interface RuntimeCallTarget {
         public boolean equals(Object obj) {
             if (obj instanceof Descriptor) {
                 Descriptor nas = (Descriptor) obj;
-                return nas.name.equals(name) && nas.resultKind.equals(resultKind) && Arrays.equals(nas.argumentKinds, argumentKinds);
+                return nas.name.equals(name) && nas.resultType.equals(resultType) && Arrays.equals(nas.argumentTypes, argumentTypes);
             }
             return false;
         }
@@ -96,21 +96,30 @@ public interface RuntimeCallTarget {
         public String toString() {
             StringBuilder sb = new StringBuilder(name).append('(');
             String sep = "";
-            for (Kind arg : argumentKinds) {
-                sb.append(sep).append(arg);
+            for (Class arg : argumentTypes) {
+                sb.append(sep).append(arg.getSimpleName());
                 sep = ",";
             }
-            return sb.append(')').append(resultKind).toString();
+            return sb.append(')').append(resultType.getSimpleName()).toString();
         }
     }
 
     CallingConvention getCallingConvention();
 
     /**
-     * Returns the maximum absolute offset of PC relative call to this stub from any position in the code cache or -1
-     * when not applicable. Intended for determining the required size of address/offset fields.
+     * Returns the maximum absolute offset of PC relative call to this stub from any position in the
+     * code cache or -1 when not applicable. Intended for determining the required size of
+     * address/offset fields.
      */
     long getMaxCallTargetOffset();
 
     Descriptor getDescriptor();
+
+    /**
+     * Determines if the target routine destroys all registers.
+     * 
+     * @return {@code true} if the register allocator must save all live registers around a call to
+     *         this target
+     */
+    boolean destroysRegisters();
 }

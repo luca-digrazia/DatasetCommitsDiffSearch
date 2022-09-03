@@ -36,11 +36,6 @@ import com.oracle.graal.hotspot.stubs.*;
 public class HotSpotRuntimeCallTarget implements RuntimeCallTarget, InvokeTarget {
 
     /**
-     * Sentinel marker for a computed jump address.
-     */
-    public static final long JUMP_ADDRESS = 0xDEADDEADBEEFBEEFL;
-
-    /**
      * The descriptor of the stub. This is for informational purposes only.
      */
     public final Descriptor descriptor;
@@ -104,10 +99,10 @@ public class HotSpotRuntimeCallTarget implements RuntimeCallTarget, InvokeTarget
                 argumentLocations[i] = cc.getArgument(i);
             }
 
-            Set<Register> destroyedRegisters = stub.getDestroyedRegisters();
-            AllocatableValue[] temporaryLocations = new AllocatableValue[destroyedRegisters.size()];
+            Set<Register> definedRegisters = stub.getDefinedRegisters();
+            AllocatableValue[] temporaryLocations = new AllocatableValue[definedRegisters.size()];
             int i = 0;
-            for (Register reg : destroyedRegisters) {
+            for (Register reg : definedRegisters) {
                 temporaryLocations[i++] = reg.asValue();
             }
             // Update calling convention with temporaries
