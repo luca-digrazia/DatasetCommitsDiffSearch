@@ -58,12 +58,7 @@ import com.oracle.truffle.regex.tregex.util.DebugUtil;
 import com.oracle.truffle.regex.tregex.util.NFAExport;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 
-import java.util.logging.Level;
-
 import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import static com.oracle.truffle.regex.tregex.util.DebugUtil.LOG_AUTOMATON_SIZES;
-import static com.oracle.truffle.regex.tregex.util.DebugUtil.LOG_BAILOUT_MESSAGES;
-import static com.oracle.truffle.regex.tregex.util.DebugUtil.LOG_PHASES;
 
 /**
  * This class is responsible for compiling a single regex pattern. The compilation process is
@@ -72,7 +67,10 @@ import static com.oracle.truffle.regex.tregex.util.DebugUtil.LOG_PHASES;
  */
 final class TRegexCompilationRequest {
 
-    private final DebugUtil.Timer timer = shouldLogPhases() ? new DebugUtil.Timer() : null;
+    private DebugUtil.DebugLogger logBailout;
+    private DebugUtil.DebugLogger logPhases;
+    private DebugUtil.DebugLogger logSizes;
+    private final DebugUtil.Timer timer = DebugUtil.LOG_PHASES ? new DebugUtil.Timer() : null;
 
     private final TRegexCompiler tRegexCompiler;
     private final RegexLanguageOptions languageOptions;
@@ -96,10 +94,14 @@ final class TRegexCompilationRequest {
     TruffleObject compile() {
         try {
             CompiledRegex compiledRegex = compileInternal();
-            logAutomatonSizes(compiledRegex);
+            if (DebugUtil.LOG_AUTOMATON_SIZES) {
+                logAutomatonSizes(compiledRegex);
+            }
             return new CompiledRegexObject(compiledRegex);
         } catch (UnsupportedRegexException e) {
-            logAutomatonSizes(null);
+            if (DebugUtil.LOG_AUTOMATON_SIZES) {
+                logAutomatonSizes(null);
+            }
             e.setReason("TRegex: " + e.getReason());
             e.setRegex(source);
             throw e;
@@ -136,7 +138,7 @@ final class TRegexCompilationRequest {
                 debugTraceFinder();
             } catch (UnsupportedRegexException e) {
                 phaseEnd("TraceFinder NFA Bailout");
-                LOG_BAILOUT_MESSAGES.info(() -> "TraceFinder: " + e.getMessage() + ": " + source);
+                logBailout("TraceFinder: " + e.getMessage());
                 // handle with capture group aware DFA, bailout will always happen before
                 // assigning preCalculatedResults
             }
@@ -268,6 +270,27 @@ final class TRegexCompilationRequest {
                         nfaArg.getAst().getRoot().getMinPath());
     }
 
+    private void logPhase(String msg) {
+        if (logPhases == null) {
+            logPhases = new DebugUtil.DebugLogger("TRegex Phase: ", DebugUtil.LOG_PHASES);
+        }
+        logPhases.log(msg);
+    }
+
+    private void logBailout(String msg) {
+        if (logBailout == null) {
+            logBailout = new DebugUtil.DebugLogger("TRegex Bailout: ", DebugUtil.LOG_BAILOUT_MESSAGES);
+        }
+        logBailout.log(msg);
+    }
+
+    private void logSizes(String msg) {
+        if (logSizes == null) {
+            logSizes = new DebugUtil.DebugLogger("", DebugUtil.LOG_AUTOMATON_SIZES);
+        }
+        logSizes.log(msg);
+    }
+
     private void debugAST() {
         if (languageOptions.isDumpAutomata()) {
             ASTLaTexExportVisitor.exportLatex(ast, "./ast.tex", ASTLaTexExportVisitor.DrawPointers.LOOKBEHIND_ENTRIES);
@@ -298,25 +321,21 @@ final class TRegexCompilationRequest {
         }
     }
 
-    private static boolean shouldLogPhases() {
-        return LOG_PHASES.isLoggable(Level.INFO);
-    }
-
     private void phaseStart(String phase) {
-        if (shouldLogPhases()) {
-            LOG_PHASES.info(phase + " Start");
+        if (DebugUtil.LOG_PHASES) {
+            logPhase(phase + " Start");
             timer.start();
         }
     }
 
     private void phaseEnd(String phase) {
-        if (shouldLogPhases()) {
-            LOG_PHASES.info(phase + " End, elapsed: " + timer.elapsedToString());
+        if (DebugUtil.LOG_PHASES) {
+            logPhase(phase + " End, elapsed: " + timer.elapsedToString());
         }
     }
 
     private void logAutomatonSizes(CompiledRegex result) {
-        LOG_AUTOMATON_SIZES.info(() -> Json.obj(
+        logSizes(Json.obj(
                         Json.prop("pattern", source.getPattern()),
                         Json.prop("flags", source.getFlags()),
                         Json.prop("props", ast == null ? new RegexProperties() : ast.getProperties()),

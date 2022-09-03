@@ -25,15 +25,6 @@
 
 package com.oracle.truffle.regex.tregex.dfa;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.RegexLanguageOptions;
 import com.oracle.truffle.regex.RegexOptions;
@@ -70,6 +61,15 @@ import com.oracle.truffle.regex.tregex.util.MathUtil;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonConvertible;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
+
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 public final class DFAGenerator implements JsonConvertible {
 
@@ -504,18 +504,22 @@ public final class DFAGenerator implements JsonConvertible {
                 }
                 estimatedTransitionsCost += matchers[i].estimatedCost();
             }
+            if (matchers.length == 1 && matchers[0] == AnyMatcher.INSTANCE) {
+                matchers = AnyMatcher.INSTANCE_ARRAY;
+            }
 
             // Very conservative heuristic for whether we should use AllTransitionsInOneTreeMatcher.
             // TODO: Potential benefits of this should be further explored.
-            AllTransitionsInOneTreeMatcher allTransitionsInOneTreeMatcher = null;
             boolean useTreeTransitionMatcher = nCheckingTransitions > 1 && MathUtil.log2ceil(nRanges + 2) * 8 < estimatedTransitionsCost;
             if (useTreeTransitionMatcher) {
-                if (!getOptions().isRegressionTestMode()) {
-                    // in regression test mode, we compare results of regular matchers and
+                if (getOptions().isRegressionTestMode()) {
+                    // in regression test mode, we compare results of regular matchers and the
                     // AllTransitionsInOneTreeMatcher
-                    matchers = null;
+                    matchers = Arrays.copyOf(matchers, matchers.length + 1);
+                    matchers[matchers.length - 1] = createAllTransitionsInOneTreeMatcher(s);
+                } else {
+                    matchers = new CharMatcher[]{createAllTransitionsInOneTreeMatcher(s)};
                 }
-                allTransitionsInOneTreeMatcher = createAllTransitionsInOneTreeMatcher(s);
             }
 
             short[] successors = s.getNumberOfSuccessors() > 0 ? new short[s.getNumberOfSuccessors()] : EMPTY_SHORT_ARRAY;
@@ -559,16 +563,16 @@ public final class DFAGenerator implements JsonConvertible {
             }
             DFAStateNode stateNode;
             if (trackCaptureGroups) {
-                stateNode = new CGTrackingDFAStateNode(s.getId(), flags, loopOptimizationNode, successors, matchers, allTransitionsInOneTreeMatcher, cgTransitions, cgPrecedingTransitions,
+                stateNode = new CGTrackingDFAStateNode(s.getId(), flags, loopOptimizationNode, successors, matchers, cgTransitions, cgPrecedingTransitions,
                                 createCGFinalTransition(s.getAnchoredFinalStateTransition()),
                                 createCGFinalTransition(s.getUnAnchoredFinalStateTransition()));
             } else if (nfa.isTraceFinderNFA()) {
                 stateNode = new TraceFinderDFAStateNode(s.getId(), flags, loopOptimizationNode, successors, matchers,
-                                allTransitionsInOneTreeMatcher, s.getPreCalculatedUnAnchoredResult(), s.getPreCalculatedAnchoredResult());
+                                s.getPreCalculatedUnAnchoredResult(), s.getPreCalculatedAnchoredResult());
             } else if (forward) {
-                stateNode = new DFAStateNode(s.getId(), flags, loopOptimizationNode, successors, matchers, allTransitionsInOneTreeMatcher);
+                stateNode = new DFAStateNode(s.getId(), flags, loopOptimizationNode, successors, matchers);
             } else {
-                stateNode = new BackwardDFAStateNode(s.getId(), flags, loopOptimizationNode, successors, matchers, allTransitionsInOneTreeMatcher);
+                stateNode = new BackwardDFAStateNode(s.getId(), flags, loopOptimizationNode, successors, matchers);
             }
             ret[s.getId()] = stateNode;
         }

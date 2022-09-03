@@ -25,11 +25,11 @@
 package com.oracle.truffle.regex.tregex.dfa;
 
 import com.oracle.truffle.regex.UnsupportedRegexException;
-import com.oracle.truffle.regex.charset.CharSet;
 import com.oracle.truffle.regex.tregex.automaton.TransitionBuilder;
 import com.oracle.truffle.regex.tregex.buffer.ByteArrayBuffer;
 import com.oracle.truffle.regex.tregex.buffer.CompilationBuffer;
 import com.oracle.truffle.regex.tregex.buffer.ObjectArrayBuffer;
+import com.oracle.truffle.regex.tregex.matchers.MatcherBuilder;
 import com.oracle.truffle.regex.tregex.nfa.NFAStateTransition;
 import com.oracle.truffle.regex.tregex.nodes.DFACaptureGroupLazyTransitionNode;
 import com.oracle.truffle.regex.tregex.nodes.DFACaptureGroupPartialTransitionNode;
@@ -46,7 +46,7 @@ public class DFACaptureGroupTransitionBuilder extends DFAStateTransitionBuilder 
     private NFAStateSet requiredStates = null;
     private DFACaptureGroupLazyTransitionNode lazyTransition = null;
 
-    DFACaptureGroupTransitionBuilder(CharSet matcherBuilder, NFATransitionSet transitions, DFAGenerator dfaGen) {
+    DFACaptureGroupTransitionBuilder(MatcherBuilder matcherBuilder, NFATransitionSet transitions, DFAGenerator dfaGen) {
         super(matcherBuilder, transitions);
         this.dfaGen = dfaGen;
     }
@@ -57,7 +57,7 @@ public class DFACaptureGroupTransitionBuilder extends DFAStateTransitionBuilder 
     }
 
     @Override
-    public DFACaptureGroupTransitionBuilder createMerged(TransitionBuilder<NFATransitionSet> other, CharSet mergedMatcher) {
+    public DFACaptureGroupTransitionBuilder createMerged(TransitionBuilder<NFATransitionSet> other, MatcherBuilder mergedMatcher) {
         return new DFACaptureGroupTransitionBuilder(mergedMatcher, getTransitionSet().createMerged(other.getTransitionSet()), dfaGen);
     }
 
@@ -88,7 +88,7 @@ public class DFACaptureGroupTransitionBuilder extends DFAStateTransitionBuilder 
     private DFACaptureGroupPartialTransitionNode createPartialTransition(NFAStateSet targetStates, CompilationBuffer compilationBuffer) {
         int numberOfNFAStates = Math.max(getRequiredStates().size(), targetStates.size());
         PartialTransitionDebugInfo partialTransitionDebugInfo = null;
-        if (dfaGen.getEngineOptions().isDumpAutomata()) {
+        if (dfaGen.getLanguageOptions().isDumpAutomata()) {
             partialTransitionDebugInfo = new PartialTransitionDebugInfo(numberOfNFAStates);
         }
         dfaGen.updateMaxNumberOfNFAStatesInOneTransition(numberOfNFAStates);
@@ -103,7 +103,7 @@ public class DFACaptureGroupTransitionBuilder extends DFAStateTransitionBuilder 
             if (targetStates.contains(nfaTransition.getTarget())) {
                 int sourceIndex = getRequiredStates().getStateIndex(nfaTransition.getSource());
                 int targetIndex = targetStates.getStateIndex(nfaTransition.getTarget());
-                if (dfaGen.getEngineOptions().isDumpAutomata()) {
+                if (dfaGen.getLanguageOptions().isDumpAutomata()) {
                     partialTransitionDebugInfo.mapResultToNFATransition(targetIndex, nfaTransition);
                 }
                 assert !(nfaTransition.getTarget().isForwardFinalState()) || targetIndex == DFACaptureGroupPartialTransitionNode.FINAL_STATE_RESULT_INDEX;
@@ -135,7 +135,7 @@ public class DFACaptureGroupTransitionBuilder extends DFAStateTransitionBuilder 
         byte preReorderFinalStateResultIndex = (byte) newOrder[DFACaptureGroupPartialTransitionNode.FINAL_STATE_RESULT_INDEX];
         // important: don't change the order, because newOrderToSequenceOfSwaps() reuses
         // CompilationBuffer#getByteArrayBuffer()
-        byte[] byteArrayCopies = arrayCopies.length() == 0 ? DFACaptureGroupPartialTransitionNode.EMPTY_ARRAY_COPIES : arrayCopies.toArray();
+        byte[] byteArrayCopies = arrayCopies.size() == 0 ? DFACaptureGroupPartialTransitionNode.EMPTY_ARRAY_COPIES : arrayCopies.toArray();
         byte[] reorderSwaps = skipReorder() ? DFACaptureGroupPartialTransitionNode.EMPTY_REORDER_SWAPS : newOrderToSequenceOfSwaps(newOrder, compilationBuffer);
         DFACaptureGroupPartialTransitionNode dfaCaptureGroupPartialTransitionNode = DFACaptureGroupPartialTransitionNode.create(
                         dfaGen,
@@ -144,7 +144,7 @@ public class DFACaptureGroupTransitionBuilder extends DFAStateTransitionBuilder 
                         indexUpdates.toArray(DFACaptureGroupPartialTransitionNode.EMPTY_INDEX_UPDATES),
                         indexClears.toArray(DFACaptureGroupPartialTransitionNode.EMPTY_INDEX_CLEARS),
                         preReorderFinalStateResultIndex);
-        if (dfaGen.getEngineOptions().isDumpAutomata()) {
+        if (dfaGen.getLanguageOptions().isDumpAutomata()) {
             partialTransitionDebugInfo.node = dfaCaptureGroupPartialTransitionNode;
             dfaGen.registerCGPartialTransitionDebugInfo(partialTransitionDebugInfo);
         }
@@ -173,8 +173,8 @@ public class DFACaptureGroupTransitionBuilder extends DFAStateTransitionBuilder 
                 newOrder[swapSource] = swapSource;
             } while (swapTarget != i);
         }
-        assert swaps.length() / 2 < newOrder.length;
-        return swaps.length() == 0 ? DFACaptureGroupPartialTransitionNode.EMPTY_REORDER_SWAPS : swaps.toArray();
+        assert swaps.size() / 2 < newOrder.length;
+        return swaps.size() == 0 ? DFACaptureGroupPartialTransitionNode.EMPTY_REORDER_SWAPS : swaps.toArray();
     }
 
     public DFACaptureGroupLazyTransitionNode toLazyTransition(CompilationBuffer compilationBuffer) {
