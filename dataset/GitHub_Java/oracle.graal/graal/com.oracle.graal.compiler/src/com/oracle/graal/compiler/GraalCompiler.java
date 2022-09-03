@@ -22,6 +22,12 @@
  */
 package com.oracle.graal.compiler;
 
+import com.oracle.jvmci.code.CompilationResult;
+import com.oracle.jvmci.code.TargetDescription;
+import com.oracle.jvmci.code.RegisterConfig;
+import com.oracle.jvmci.code.CallingConvention;
+import com.oracle.jvmci.meta.*;
+
 import static com.oracle.graal.compiler.GraalCompiler.Options.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig.*;
@@ -29,14 +35,8 @@ import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionalit
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.code.CompilationResult.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.debug.Debug.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.options.*;
-import jdk.internal.jvmci.options.OptionValue.*;
-
+import com.oracle.jvmci.code.CompilationResult.ConstantReference;
+import com.oracle.jvmci.code.CompilationResult.DataPatch;
 import com.oracle.graal.compiler.LIRGenerationPhase.LIRGenerationContext;
 import com.oracle.graal.compiler.common.alloc.*;
 import com.oracle.graal.compiler.common.cfg.*;
@@ -58,6 +58,10 @@ import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.debug.Debug.Scope;
+import com.oracle.jvmci.options.*;
+import com.oracle.jvmci.options.OptionValue.OverrideScope;
 
 /**
  * Static methods for orchestrating the compilation of a {@linkplain StructuredGraph graph}.
@@ -91,6 +95,7 @@ public class GraalCompiler {
         public final PhaseSuite<HighTierContext> graphBuilderSuite;
         public final OptimisticOptimizations optimisticOpts;
         public final ProfilingInfo profilingInfo;
+        public final SpeculationLog speculationLog;
         public final Suites suites;
         public final LIRSuites lirSuites;
         public final T compilationResult;
@@ -107,14 +112,15 @@ public class GraalCompiler {
          * @param graphBuilderSuite
          * @param optimisticOpts
          * @param profilingInfo
+         * @param speculationLog
          * @param suites
          * @param lirSuites
          * @param compilationResult
          * @param factory
          */
         public Request(StructuredGraph graph, CallingConvention cc, ResolvedJavaMethod installedCodeOwner, Providers providers, Backend backend, TargetDescription target,
-                        PhaseSuite<HighTierContext> graphBuilderSuite, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, Suites suites, LIRSuites lirSuites, T compilationResult,
-                        CompilationResultBuilderFactory factory) {
+                        PhaseSuite<HighTierContext> graphBuilderSuite, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, SpeculationLog speculationLog, Suites suites,
+                        LIRSuites lirSuites, T compilationResult, CompilationResultBuilderFactory factory) {
             this.graph = graph;
             this.cc = cc;
             this.installedCodeOwner = installedCodeOwner;
@@ -124,6 +130,7 @@ public class GraalCompiler {
             this.graphBuilderSuite = graphBuilderSuite;
             this.optimisticOpts = optimisticOpts;
             this.profilingInfo = profilingInfo;
+            this.speculationLog = speculationLog;
             this.suites = suites;
             this.lirSuites = lirSuites;
             this.compilationResult = compilationResult;
@@ -150,9 +157,10 @@ public class GraalCompiler {
      * @return the result of the compilation
      */
     public static <T extends CompilationResult> T compileGraph(StructuredGraph graph, CallingConvention cc, ResolvedJavaMethod installedCodeOwner, Providers providers, Backend backend,
-                    TargetDescription target, PhaseSuite<HighTierContext> graphBuilderSuite, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, Suites suites, LIRSuites lirSuites,
-                    T compilationResult, CompilationResultBuilderFactory factory) {
-        return compile(new Request<>(graph, cc, installedCodeOwner, providers, backend, target, graphBuilderSuite, optimisticOpts, profilingInfo, suites, lirSuites, compilationResult, factory));
+                    TargetDescription target, PhaseSuite<HighTierContext> graphBuilderSuite, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, SpeculationLog speculationLog,
+                    Suites suites, LIRSuites lirSuites, T compilationResult, CompilationResultBuilderFactory factory) {
+        return compile(new Request<>(graph, cc, installedCodeOwner, providers, backend, target, graphBuilderSuite, optimisticOpts, profilingInfo, speculationLog, suites, lirSuites, compilationResult,
+                        factory));
     }
 
     /**
@@ -163,7 +171,7 @@ public class GraalCompiler {
     public static <T extends CompilationResult> T compile(Request<T> r) {
         assert !r.graph.isFrozen();
         try (Scope s0 = Debug.scope("GraalCompiler", r.graph, r.providers.getCodeCache())) {
-            SchedulePhase schedule = emitFrontEnd(r.providers, r.target, r.graph, r.graphBuilderSuite, r.optimisticOpts, r.profilingInfo, r.suites);
+            SchedulePhase schedule = emitFrontEnd(r.providers, r.target, r.graph, r.graphBuilderSuite, r.optimisticOpts, r.profilingInfo, r.speculationLog, r.suites);
             emitBackEnd(r.graph, null, r.cc, r.installedCodeOwner, r.backend, r.target, r.compilationResult, r.factory, schedule, null, r.lirSuites);
         } catch (Throwable e) {
             throw Debug.handle(e);
@@ -183,9 +191,13 @@ public class GraalCompiler {
      * Builds the graph, optimizes it.
      */
     public static SchedulePhase emitFrontEnd(Providers providers, TargetDescription target, StructuredGraph graph, PhaseSuite<HighTierContext> graphBuilderSuite,
-                    OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, Suites suites) {
+                    OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, SpeculationLog speculationLog, Suites suites) {
         try (Scope s = Debug.scope("FrontEnd"); DebugCloseable a = FrontEnd.start()) {
-            HighTierContext highTierContext = new HighTierContext(providers, graphBuilderSuite, optimisticOpts);
+            if (speculationLog != null) {
+                speculationLog.collectFailedSpeculations();
+            }
+
+            HighTierContext highTierContext = new HighTierContext(providers, graphBuilderSuite, optimisticOpts, speculationLog);
             if (graph.start().next() == null) {
                 graphBuilderSuite.apply(graph, highTierContext);
                 new DeadCodeEliminationPhase(Optional).apply(graph);
@@ -196,7 +208,7 @@ public class GraalCompiler {
             suites.getHighTier().apply(graph, highTierContext);
             graph.maybeCompress();
 
-            MidTierContext midTierContext = new MidTierContext(providers, target, optimisticOpts, profilingInfo);
+            MidTierContext midTierContext = new MidTierContext(providers, target, optimisticOpts, profilingInfo, speculationLog);
             suites.getMidTier().apply(graph, midTierContext);
             graph.maybeCompress();
 

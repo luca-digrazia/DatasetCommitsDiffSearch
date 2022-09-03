@@ -22,9 +22,12 @@
  */
 package com.oracle.graal.replacements.amd64;
 
-import jdk.internal.jvmci.amd64.*;
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
+import com.oracle.jvmci.amd64.*;
+import com.oracle.jvmci.code.ForeignCallsProvider;
+import com.oracle.jvmci.meta.ResolvedJavaMethod;
+import com.oracle.jvmci.meta.Kind;
+import com.oracle.jvmci.meta.LocationIdentity;
+
 import static com.oracle.graal.compiler.target.Backend.*;
 import static com.oracle.graal.replacements.amd64.AMD64MathIntrinsicNode.Operation.*;
 import sun.misc.*;
@@ -37,7 +40,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.StandardGraphBuilderPlugins.*;
 
 public class AMD64GraphBuilderPlugins {
 
@@ -133,12 +135,6 @@ public class AMD64GraphBuilderPlugins {
                     }
                 });
             }
-        }
-
-        for (Kind kind : new Kind[]{Kind.Char, Kind.Short, Kind.Int, Kind.Long}) {
-            Class<?> javaClass = kind.toJavaClass();
-            r.registerOptional3("get" + kind.name() + "Unaligned", Receiver.class, Object.class, long.class, new UnsafeGetPlugin(kind, false));
-            r.registerOptional4("put" + kind.name() + "Unaligned", Receiver.class, Object.class, long.class, javaClass, new UnsafePutPlugin(kind, false));
         }
     }
 }
