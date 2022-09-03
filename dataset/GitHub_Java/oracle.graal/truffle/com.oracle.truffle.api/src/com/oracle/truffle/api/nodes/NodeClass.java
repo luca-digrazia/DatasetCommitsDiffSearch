@@ -26,9 +26,7 @@ package com.oracle.truffle.api.nodes;
 
 import java.security.AccessController;
 import java.security.PrivilegedAction;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 
 /**
  * Information about a {@link Node} class. A single instance of this class is allocated for every
@@ -67,53 +65,35 @@ public abstract class NodeClass {
     /** @since 0.8 or earlier */
     @SuppressWarnings("deprecation")
     @Deprecated
-    public NodeFieldAccessor getNodeClassField() {
-        return null;
-    }
+    public abstract NodeFieldAccessor getNodeClassField();
 
     /** @since 0.8 or earlier */
     @SuppressWarnings("deprecation")
     @Deprecated
-    public NodeFieldAccessor[] getCloneableFields() {
-        return null;
-    }
+    public abstract NodeFieldAccessor[] getCloneableFields();
 
     /** @since 0.8 or earlier */
     @SuppressWarnings("deprecation")
     @Deprecated
-    public NodeFieldAccessor[] getFields() {
-        return null;
-    }
+    public abstract NodeFieldAccessor[] getFields();
 
     /** @since 0.8 or earlier */
     @SuppressWarnings("deprecation")
     @Deprecated
-    public NodeFieldAccessor getParentField() {
-        return null;
-    }
+    public abstract NodeFieldAccessor getParentField();
 
     /** @since 0.8 or earlier */
     @SuppressWarnings("deprecation")
     @Deprecated
-    public NodeFieldAccessor[] getChildFields() {
-        return null;
-    }
+    public abstract NodeFieldAccessor[] getChildFields();
 
     /** @since 0.8 or earlier */
     @SuppressWarnings("deprecation")
     @Deprecated
-    public NodeFieldAccessor[] getChildrenFields() {
-        return null;
-    }
+    public abstract NodeFieldAccessor[] getChildrenFields();
 
     /** @since 0.8 or earlier */
-    public Iterator<Node> makeIterator(Node node) {
-        List<Object> arr = new ArrayList<>();
-        for (Object field : getNodeFields()) {
-            arr.add(field);
-        }
-        return new NodeIterator(this, node, arr.toArray());
-    }
+    public abstract Iterator<Node> makeIterator(Node node);
 
     /**
      * The {@link Class} this <code>NodeClass</code> has been {@link #NodeClass(java.lang.Class)

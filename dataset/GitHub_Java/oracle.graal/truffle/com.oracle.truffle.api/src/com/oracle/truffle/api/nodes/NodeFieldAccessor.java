@@ -72,7 +72,7 @@ public abstract class NodeFieldAccessor {
         DATA
     }
 
-    private static final boolean USE_UNSAFE = Boolean.parseBoolean(System.getProperty("truffle.unsafe", "true"));
+    private static final boolean USE_UNSAFE = Boolean.getBoolean("truffle.unsafe");
 
     private final NodeFieldKind kind;
     private final Class<?> declaringClass;
