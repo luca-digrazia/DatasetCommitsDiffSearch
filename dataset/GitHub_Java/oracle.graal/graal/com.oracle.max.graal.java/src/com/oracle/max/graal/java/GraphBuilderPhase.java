@@ -34,12 +34,13 @@ import com.oracle.max.cri.ri.RiType.Representation;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.phases.*;
+import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.java.BciBlockMapping.Block;
-import com.oracle.max.graal.java.BciBlockMapping.DeoptBlock;
-import com.oracle.max.graal.java.BciBlockMapping.ExceptionBlock;
+import com.oracle.max.graal.java.BlockMap.Block;
+import com.oracle.max.graal.java.BlockMap.DeoptBlock;
+import com.oracle.max.graal.java.BlockMap.ExceptionBlock;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.DeoptimizeNode.DeoptAction;
 import com.oracle.max.graal.nodes.PhiNode.PhiType;
@@ -72,7 +73,6 @@ public final class GraphBuilderPhase extends Phase {
     private RiConstantPool constantPool;
     private RiExceptionHandler[] exceptionHandlers;
     private RiResolvedMethod method;
-    private RiProfilingInfo profilingInfo;
 
     private BytecodeStream stream;           // the bytecode stream
     private final LogStream log;
@@ -117,7 +117,6 @@ public final class GraphBuilderPhase extends Phase {
     @Override
     protected void run(StructuredGraph graph) {
         method = graph.method();
-        profilingInfo = method.profilingInfo();
         assert method.code() != null : "method must contain bytecodes: " + method;
         this.stream = new BytecodeStream(method.code());
         this.constantPool = method.getConstantPool();
@@ -137,8 +136,8 @@ public final class GraphBuilderPhase extends Phase {
         return getName() + " " + CiUtil.format("%H.%n(%p):%r", method);
     }
 
-    private BciBlockMapping createBlockMap() {
-        BciBlockMapping map = new BciBlockMapping(method, config.useBranchPrediction());
+    private BlockMap createBlockMap() {
+        BlockMap map = new BlockMap(method, config.useBranchPrediction());
         map.build();
 
 //        if (currentContext.isObserved()) {
@@ -156,7 +155,7 @@ public final class GraphBuilderPhase extends Phase {
         }
 
         // compute the block map, setup exception handlers and get the entrypoint(s)
-        BciBlockMapping blockMap = createBlockMap();
+        BlockMap blockMap = createBlockMap();
         this.canTrapBitSet = blockMap.canTrap;
 
         exceptionHandlers = blockMap.exceptionHandlers();
@@ -323,7 +322,7 @@ public final class GraphBuilderPhase extends Phase {
         assert bci == FrameState.BEFORE_BCI || bci == bci() : "invalid bci";
 
         if (GraalOptions.UseExceptionProbability && method.invocationCount() > GraalOptions.MatureInvocationCount) {
-            if (bci != FrameState.BEFORE_BCI && exceptionObject == null && !profilingInfo.getExceptionSeen(bci)) {
+            if (bci != FrameState.BEFORE_BCI && exceptionObject == null && method.exceptionProbability(bci) == 0) {
                 return null;
             }
         }
@@ -604,7 +603,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private void ifNode(ValueNode x, Condition cond, ValueNode y) {
         assert !x.isDeleted() && !y.isDeleted();
-        double probability = profilingInfo.getBranchTakenProbability(bci());
+        double probability = method.branchProbability(bci());
         if (probability < 0) {
             Debug.log("missing probability in %s at bci %d", method, bci());
             probability = 0.5;
@@ -698,21 +697,16 @@ public final class GraphBuilderPhase extends Phase {
             if (uniqueSubtype != null) {
                 return new RiResolvedType[] {uniqueSubtype};
             } else {
-                RiTypeProfile typeProfile = profilingInfo.getTypeProfile(bci());
-                if (typeProfile != null) {
-                    double notRecordedTypes = typeProfile.getNotRecordedProbability();
-                    RiResolvedType[] types = typeProfile.getTypes();
-
-                    if (notRecordedTypes == 0 && types != null && types.length > 0 && types.length <= maxHints) {
-                        RiResolvedType[] hints = new RiResolvedType[types.length];
-                        int hintCount = 0;
-                        for (RiResolvedType hint : types) {
-                            if (hint.isSubtypeOf(type)) {
-                                hints[hintCount++] = hint;
-                            }
+                RiTypeProfile typeProfile = method.typeProfile(bci());
+                if (typeProfile != null && typeProfile.types != null && typeProfile.types.length > 0 && typeProfile.morphism <= maxHints) {
+                    RiResolvedType[] hints = new RiResolvedType[typeProfile.types.length];
+                    int hintCount = 0;
+                    for (RiResolvedType hint : typeProfile.types) {
+                        if (hint.isSubtypeOf(type)) {
+                            hints[hintCount++] = hint;
                         }
-                        return Arrays.copyOf(hints, Math.min(maxHints, hintCount));
                     }
+                    return Arrays.copyOf(hints, Math.min(maxHints, hintCount));
                 }
                 return EMPTY_TYPE_ARRAY;
             }
@@ -1192,7 +1186,7 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private double[] switchProbability(int numberOfCases, int bci) {
-        double[] prob = profilingInfo.getSwitchProbabilities(bci);
+        double[] prob = method.switchProbability(bci);
         if (prob != null) {
             assert prob.length == numberOfCases;
         } else {
@@ -1461,23 +1455,6 @@ public final class GraphBuilderPhase extends Phase {
         }
     }
 
-    private static boolean isBlockEnd(Node n) {
-        return trueSuccessorCount(n) > 1 || n instanceof ReturnNode || n instanceof UnwindNode || n instanceof DeoptimizeNode;
-    }
-
-    private static int trueSuccessorCount(Node n) {
-        if (n == null) {
-            return 0;
-        }
-        int i = 0;
-        for (Node s : n.successors()) {
-            if (Util.isFixed(s)) {
-                i++;
-            }
-        }
-        return i;
-    }
-
     private void iterateBytecodesForBlock(Block block) {
         assert frameState != null;
 
@@ -1494,7 +1471,7 @@ public final class GraphBuilderPhase extends Phase {
             traceInstruction(bci, opcode, bci == block.startBci);
             processBytecode(bci, opcode);
 
-            if (lastInstr == null || isBlockEnd(lastInstr) || lastInstr.next() != null) {
+            if (lastInstr == null || IdentifyBlocksPhase.isBlockEnd(lastInstr) || lastInstr.next() != null) {
                 break;
             }
 

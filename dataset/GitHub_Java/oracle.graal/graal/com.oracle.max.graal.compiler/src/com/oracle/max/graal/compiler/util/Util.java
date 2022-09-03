@@ -22,19 +22,18 @@
  */
 package com.oracle.max.graal.compiler.util;
 
+import java.lang.reflect.*;
 import java.util.*;
 
-import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.ir.*;
-import com.sun.cri.ci.*;
-import com.sun.cri.ri.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
+import com.oracle.max.criutils.*;
+import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.nodes.*;
+import com.oracle.max.graal.nodes.calc.*;
 
 /**
  * The {@code Util} class contains a motley collection of utility methods used throughout the compiler.
- *
- * @author Ben L. Titzer
- * @author Doug Simon
  */
 public class Util {
 
@@ -44,19 +43,19 @@ public class Util {
     public static final char SEPERATOR_CHARACTER = '-';
 
     public static RuntimeException unimplemented() {
-        throw new InternalError("unimplemented");
+        throw new GraalInternalError("unimplemented");
     }
 
-    public static RuntimeException unimplemented(String msg) {
-        throw new InternalError("unimplemented:" + msg);
+    public static RuntimeException unimplemented(String msg, Object... args) {
+        throw new GraalInternalError("unimplemented: " + msg, args);
     }
 
     public static RuntimeException shouldNotReachHere() {
-        throw new InternalError("should not reach here");
+        throw new GraalInternalError("should not reach here");
     }
 
-    public static RuntimeException shouldNotReachHere(String msg) {
-        throw new InternalError("Should not reach here: " + msg);
+    public static RuntimeException shouldNotReachHere(String msg, Object... args) {
+        throw new GraalInternalError("should not reach here: " + msg, args);
     }
 
     public static <T> boolean replaceInList(T a, T b, List<T> list) {
@@ -84,7 +83,7 @@ public class Util {
      * Statically cast an object to an arbitrary Object type. Dynamically checked.
      */
     @SuppressWarnings("unchecked")
-    public static <T> T uncheckedCast(Class<T> type, Object object) {
+    public static <T> T uncheckedCast(@SuppressWarnings("unused") Class<T> type, Object object) {
         return (T) object;
     }
 
@@ -287,23 +286,6 @@ public class Util {
         }
     }
 
-    public static CiKind[] signatureToKinds(RiSignature signature, CiKind receiverKind) {
-        int args = signature.argumentCount(false);
-        CiKind[] result;
-        int i = 0;
-        if (receiverKind != null) {
-            result = new CiKind[args + 1];
-            result[0] = receiverKind;
-            i = 1;
-        } else {
-            result = new CiKind[args];
-        }
-        for (int j = 0; j < args; j++) {
-            result[i + j] = signature.argumentKindAt(j);
-        }
-        return result;
-    }
-
     public static boolean isShiftCount(int x) {
         return 0 <= x && x < 32;
     }
@@ -366,42 +348,13 @@ public class Util {
     }
 
     /**
-     * Determines if the kinds of two given IR nodes are equal at the {@linkplain #archKind(CiKind) architecture}
-     * level in the context of the {@linkplain C1XCompilation#compilation()} compilation.
-     */
-    public static boolean archKindsEqual(Value i, Value other) {
-        return archKindsEqual(i.kind, other.kind);
-    }
-
-    /**
-     * Determines if two given kinds are equal at the {@linkplain #archKind(CiKind) architecture} level
-     * in the context of the {@linkplain C1XCompilation#compilation()} compilation.
-     */
-    public static boolean archKindsEqual(CiKind k1, CiKind k2) {
-        C1XCompilation compilation = C1XCompilation.compilation();
-        assert compilation != null : "missing compilation context";
-        return compilation.archKindsEqual(k1, k2);
-    }
-
-    /**
-     * Translates a given kind to a {@linkplain C1XCompilation#archKind(CiKind) canonical architecture}
-     * kind in the context of the {@linkplain C1XCompilation#compilation() current} compilation.
-     */
-    public static CiKind archKind(CiKind kind) {
-        C1XCompilation compilation = C1XCompilation.compilation();
-        assert compilation != null : "missing compilation context";
-        return compilation.archKind(kind);
-    }
-
-
-    /**
      * Checks that two instructions are equivalent, optionally comparing constants.
      * @param x the first instruction
      * @param y the second instruction
      * @param compareConstants {@code true} if equivalent constants should be considered equivalent
      * @return {@code true} if the instructions are equivalent; {@code false} otherwise
      */
-    public static boolean equivalent(Instruction x, Instruction y, boolean compareConstants) {
+    public static boolean equivalent(FixedWithNextNode x, FixedWithNextNode y, boolean compareConstants) {
         if (x == y) {
             return true;
         }
@@ -413,15 +366,15 @@ public class Util {
         return false;
     }
 
-    /**
-     * Converts a given instruction to a value string. The representation of an instruction as
-     * a value is formed by concatenating the {@linkplain com.sun.cri.ci.CiKind#typeChar character} denoting its
-     * {@linkplain Value#kind kind} and its {@linkplain Value#id()}. For example, {@code "i13"}.
-     *
-     * @param value the instruction to convert to a value string. If {@code value == null}, then "-" is returned.
-     * @return the instruction representation as a string
-     */
-    public static String valueString(Value value) {
-        return (value == null) ? "-" : ("" + value.kind.typeChar + value.id());
+    public static boolean isFixed(Node n) {
+        return n instanceof FixedNode;
+    }
+
+    public static boolean isFloating(Node n) {
+        return n instanceof FloatingNode;
+    }
+
+    public static boolean isFinalClass(RiResolvedType type) {
+        return Modifier.isFinal(type.accessFlags()) || (type.isArrayClass() && Modifier.isFinal(type.componentType().accessFlags()));
     }
 }
