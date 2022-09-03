@@ -237,12 +237,13 @@ public class PartialEvaluator {
                 ValueNode arg = arguments.get(local.index());
                 if (arg.isConstant()) {
                     Constant constant = arg.asConstant();
-                    for (Node usage : local.usages()) {
+                    ConstantNode constantNode = ConstantNode.forConstant(constant, phaseContext.getMetaAccess(), graphCopy);
+                    local.replaceAndDelete(constantNode);
+                    for (Node usage : constantNode.usages()) {
                         if (usage instanceof Canonicalizable) {
                             modifiedNodes.add(usage);
                         }
                     }
-                    local.replaceAndDelete(ConstantNode.forConstant(constant, phaseContext.getMetaAccess(), graphCopy));
                 }
             }
             Debug.scope("TruffleUnrollLoop", targetMethod, new Runnable() {

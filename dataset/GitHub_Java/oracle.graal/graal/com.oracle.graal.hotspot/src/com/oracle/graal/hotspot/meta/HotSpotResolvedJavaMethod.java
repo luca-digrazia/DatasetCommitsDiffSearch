@@ -448,7 +448,7 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     }
 
     /**
-     * Returns the offset of this method into the v-table. The method must have a v-table entry as
+     * Returns the offset of this method into the v-table. The method must have a v-table entry has
      * indicated by {@link #isInVirtualMethodTable()}, otherwise an exception is thrown.
      * 
      * @return the offset of this method into the v-table
@@ -457,19 +457,12 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         if (!isInVirtualMethodTable() || !holder.isInitialized()) {
             throw new GraalInternalError("%s does not have a vtable entry", this);
         }
-        HotSpotVMConfig config = runtime().getConfig();
-        final int vtableIndex = getVtableIndex();
-        return config.instanceKlassVtableStartOffset + vtableIndex * config.vtableEntrySize + config.vtableEntryMethodOffset;
+        return runtime().getCompilerToVM().getVtableEntryOffset(metaspaceMethod);
     }
 
     @Override
     public boolean isInVirtualMethodTable() {
-        return getVtableIndex() >= 0;
-    }
-
-    private int getVtableIndex() {
-        HotSpotVMConfig config = runtime().getConfig();
-        return unsafe.getInt(metaspaceMethod + config.methodVtableIndexOffset);
+        return runtime().getCompilerToVM().hasVtableEntry(metaspaceMethod);
     }
 
     public void setCurrentTask(CompilationTask task) {

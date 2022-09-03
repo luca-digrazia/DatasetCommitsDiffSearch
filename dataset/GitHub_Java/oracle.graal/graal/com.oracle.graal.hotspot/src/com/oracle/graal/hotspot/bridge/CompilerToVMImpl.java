@@ -76,6 +76,9 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native JavaType lookupType(String name, HotSpotResolvedObjectType accessingClass, boolean eagerResolve);
 
     @Override
+    public native int constantPoolLength(HotSpotResolvedObjectType pool);
+
+    @Override
     public native Object lookupConstantInPool(HotSpotResolvedObjectType pool, int cpi);
 
     @Override
@@ -142,6 +145,12 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native Object executeCompiledMethodVarargs(Object[] args, HotSpotInstalledCode hotspotInstalledCode);
 
     @Override
+    public native int getVtableEntryOffset(long metaspaceMethod);
+
+    @Override
+    public native boolean hasVtableEntry(long metaspaceMethod);
+
+    @Override
     public native long[] getDeoptedLeafGraphIds();
 
     @Override
@@ -175,11 +184,6 @@ public class CompilerToVMImpl implements CompilerToVM {
     public Object executeCompiledMethod(Object arg1, Object arg2, Object arg3, HotSpotInstalledCode hotspotInstalledCode) throws InvalidInstalledCodeException {
         return executeCompiledMethodIntrinsic(arg1, arg2, arg3, hotspotInstalledCode);
     }
-
-    public synchronized native void notifyCompilationStatistics(int id, HotSpotResolvedJavaMethod method, boolean osr, int processedBytecodes, long time, long timeUnitsPerSecond,
-                    HotSpotInstalledCode installedCode);
-
-    public native void resetCompilationStatistics();
 
     /**
      * Direct call to the given nmethod with three object arguments and an object return value. This
