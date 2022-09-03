@@ -50,7 +50,7 @@ class CFGPrinter extends CompilationPrinter {
 
     protected TargetDescription target;
     protected LIR lir;
-    protected NodeLIRBuilder nodeLirGenerator;
+    protected LIRGenerator lirGenerator;
     protected ControlFlowGraph cfg;
     protected SchedulePhase schedule;
 
@@ -159,7 +159,7 @@ class CFGPrinter extends CompilationPrinter {
     }
 
     private void scheduleInputs(Node node, Block nodeBlock) {
-        if (node instanceof ValuePhiNode) {
+        if (node instanceof PhiNode) {
             PhiNode phi = (PhiNode) node;
             assert nodeBlock.getBeginNode() == phi.merge();
             for (Block pred : nodeBlock.getPredecessors()) {
@@ -289,7 +289,7 @@ class CFGPrinter extends CompilationPrinter {
         assert !printedNodes.isMarked(node);
         printedNodes.mark(node);
 
-        if (!(node instanceof ValuePhiNode)) {
+        if (!(node instanceof PhiNode)) {
             for (Node input : node.inputs()) {
                 if (!inFixedSchedule(input) && !printedNodes.isMarked(input)) {
                     printNode(input, true);
@@ -309,8 +309,8 @@ class CFGPrinter extends CompilationPrinter {
         }
         out.print("tid ").print(nodeToString(node)).println(COLUMN_END);
 
-        if (nodeLirGenerator != null) {
-            Value operand = nodeLirGenerator.getNodeOperands().get(node);
+        if (lirGenerator != null) {
+            Value operand = lirGenerator.getNodeOperands().get(node);
             if (operand != null) {
                 out.print("result ").print(operand.toString()).println(COLUMN_END);
             }
@@ -414,8 +414,8 @@ class CFGPrinter extends CompilationPrinter {
 
     private String stateValueToString(ValueNode value) {
         String result = nodeToString(value);
-        if (nodeLirGenerator != null && nodeLirGenerator.getNodeOperands() != null && value != null) {
-            Value operand = nodeLirGenerator.getNodeOperands().get(value);
+        if (lirGenerator != null && lirGenerator.getNodeOperands() != null && value != null) {
+            Value operand = lirGenerator.getNodeOperands().get(value);
             if (operand != null) {
                 result += ": " + operand;
             }

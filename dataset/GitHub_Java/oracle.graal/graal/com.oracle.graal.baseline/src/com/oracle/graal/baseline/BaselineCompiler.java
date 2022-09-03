@@ -57,7 +57,7 @@ import com.oracle.graal.nodes.java.*;
  * The {@code GraphBuilder} class parses the bytecode of a method and builds the IR graph.
  */
 @SuppressWarnings("all")
-public class BaselineCompiler implements BytecodeParser<BciBlock> {
+public class BaselineCompiler {
 
     public BaselineCompiler(GraphBuilderConfiguration graphBuilderConfig, MetaAccessProvider metaAccess) {
         this.graphBuilderConfig = graphBuilderConfig;
@@ -83,7 +83,6 @@ public class BaselineCompiler implements BytecodeParser<BciBlock> {
 
     private final GraphBuilderConfiguration graphBuilderConfig;
     private BciBlock[] loopHeaders;
-    private BytecodeParseHelper<Value> parserHelper;
 
     /**
      * Meters the number of actual bytecodes parsed.
@@ -108,7 +107,6 @@ public class BaselineCompiler implements BytecodeParser<BciBlock> {
         TTY.Filter filter = new TTY.Filter(PrintFilter.getValue(), method);
 
         frameState = new LIRFrameStateBuilder(method);
-        parserHelper = new BytecodeParseHelper<>(frameState);
 
         // build blocks and LIR instructions
         try {
@@ -143,6 +141,8 @@ public class BaselineCompiler implements BytecodeParser<BciBlock> {
             }
         }
 
+        // calculate loops and dominators used for some steps..
+
         if (isSynchronized(method.getModifiers())) {
             throw GraalInternalError.unimplemented("Handle synchronized methods");
         }
@@ -173,16 +173,22 @@ public class BaselineCompiler implements BytecodeParser<BciBlock> {
         TargetDescription target = backend.getTarget();
         CallingConvention cc = CodeUtil.getCallingConvention(backend.getProviders().getCodeCache(), CallingConvention.Type.JavaCallee, method, false);
         this.lirGenRes = backend.newLIRGenerationResult(lir, frameMap, null);
-        this.lirGen = backend.newLIRGenerator(cc, lirGenRes);
+        this.lirGen = backend.newLIRGenerator(null, cc, lirGenRes);
 
         try (Scope ds = Debug.scope("BackEnd", lir)) {
             try (Scope s = Debug.scope("LIRGen", lirGen)) {
+
+                lirGen.emitPrologue(method);
 
                 // possibly add all the arguments to slots in the local variable array
 
                 for (BciBlock block : blockMap.blocks) {
 
-                    // lirGen.doBlock(block, method, this);
+                    lirGen.doBlockStart(block);
+
+                    processBlock(block);
+
+                    lirGen.doBlockEnd(block);
                 }
                 // indent.outdent();
 
@@ -192,8 +198,7 @@ public class BaselineCompiler implements BytecodeParser<BciBlock> {
                 throw Debug.handle(e);
             }
 
-            // try (Scope s = Debug.scope("Allocator", nodeLirGen)) {
-            try (Scope s = Debug.scope("Allocator")) {
+            try (Scope s = Debug.scope("Allocator", lirGen)) {
 
                 if (backend.shouldAllocateRegisters()) {
                     new LinearScan(target, lir, frameMap).allocate();
@@ -215,11 +220,11 @@ public class BaselineCompiler implements BytecodeParser<BciBlock> {
     }
 
     private void loadLocal(int index, Kind kind) {
-        parserHelper.loadLocal(index, kind);
+        throw GraalInternalError.unimplemented();
     }
 
     private void storeLocal(Kind kind, int index) {
-        parserHelper.storeLocal(kind, index);
+        throw GraalInternalError.unimplemented();
     }
 
     /**
@@ -505,11 +510,11 @@ public class BaselineCompiler implements BytecodeParser<BciBlock> {
         throw GraalInternalError.unimplemented();
     }
 
-    public void processBlock(BciBlock block) {
-        try (Indent indent = Debug.logAndIndent("Parsing block %s  firstInstruction: %s  loopHeader: %b", block, block.firstInstruction, block.isLoopHeader)) {
-            currentBlock = block;
-            iterateBytecodesForBlock(block);
-        }
+    private void processBlock(BciBlock block) {
+        Indent indent = Debug.logAndIndent("Parsing block %s  firstInstruction: %s  loopHeader: %b", block, block.firstInstruction, block.isLoopHeader);
+        currentBlock = block;
+        iterateBytecodesForBlock(block);
+        indent.outdent();
     }
 
     private void createExceptionDispatch(ExceptionDispatchBlock block) {
@@ -717,12 +722,12 @@ public class BaselineCompiler implements BytecodeParser<BciBlock> {
             case RET            : genRet(stream.readLocalIndex()); break;
             case TABLESWITCH    : genSwitch(new BytecodeTableSwitch(stream(), bci())); break;
             case LOOKUPSWITCH   : genSwitch(new BytecodeLookupSwitch(stream(), bci())); break;
-            case IRETURN        : genReturn(frameState.ipop()); break;
-            case LRETURN        : genReturn(frameState.lpop()); break;
-            case FRETURN        : genReturn(frameState.fpop()); break;
-            case DRETURN        : genReturn(frameState.dpop()); break;
-            case ARETURN        : genReturn(frameState.apop()); break;
-            case RETURN         : genReturn(null); break;
+//            case IRETURN        : genReturn(frameState.ipop()); break;
+//            case LRETURN        : genReturn(frameState.lpop()); break;
+//            case FRETURN        : genReturn(frameState.fpop()); break;
+//            case DRETURN        : genReturn(frameState.dpop()); break;
+//            case ARETURN        : genReturn(frameState.apop()); break;
+//            case RETURN         : genReturn(null); break;
             case GETSTATIC      : cpi = stream.readCPI(); genGetStatic(lookupField(cpi, opcode)); break;
             case PUTSTATIC      : cpi = stream.readCPI(); genPutStatic(lookupField(cpi, opcode)); break;
             case GETFIELD       : cpi = stream.readCPI(); genGetField(lookupField(cpi, opcode)); break;
@@ -771,31 +776,11 @@ public class BaselineCompiler implements BytecodeParser<BciBlock> {
             if (!currentBlock.jsrScope.isEmpty()) {
                 sb.append(' ').append(currentBlock.jsrScope);
             }
-            Debug.log("%s", sb);
+            Debug.log(sb.toString());
         }
     }
 
     private void genArrayLength() {
         throw GraalInternalError.unimplemented();
-    }
-
-    private void genReturn(Value x) {
-        // frameState.setRethrowException(false);
-        frameState.clearStack();
-        // if (graphBuilderConfig.eagerInfopointMode()) {
-        // append(new InfopointNode(InfopointReason.METHOD_END, frameState.create(bci())));
-        // }
-
-        // synchronizedEpilogue(FrameState.AFTER_BCI, x);
-        // if (frameState.lockDepth() != 0) {
-        // throw new BailoutException("unbalanced monitors");
-        // }
-
-        // lirGen.visitReturn(x);
-        throw GraalInternalError.unimplemented();
-    }
-
-    public void setParameter(int i, Variable emitMove) {
-        frameState.storeLocal(i, emitMove);
     }
 }
