@@ -36,7 +36,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.test.*;
 
 public class InliningTest extends GraalCompilerTest {
@@ -237,12 +236,11 @@ public class InliningTest extends GraalCompilerTest {
                 StructuredGraph graph = eagerInfopointMode ? parseDebug(method) : parse(method);
                 PhasePlan phasePlan = getDefaultPhasePlan(eagerInfopointMode);
                 Assumptions assumptions = new Assumptions(true);
-                HighTierContext context = new HighTierContext(runtime(), assumptions, replacements, null, phasePlan, OptimisticOptimizations.ALL);
                 Debug.dump(graph, "Graph");
-                new CanonicalizerPhase(true).apply(graph, context);
-                new InliningPhase().apply(graph, context);
+                new CanonicalizerPhase.Instance(runtime(), assumptions, true).apply(graph);
+                new InliningPhase(runtime(), null, replacements, assumptions, null, phasePlan, OptimisticOptimizations.ALL).apply(graph);
                 Debug.dump(graph, "Graph");
-                new CanonicalizerPhase(true).apply(graph, context);
+                new CanonicalizerPhase.Instance(runtime(), assumptions, true).apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
                 return graph;
             }
