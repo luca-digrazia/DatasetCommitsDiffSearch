@@ -26,6 +26,7 @@ package com.oracle.truffle.regex.tregex.parser;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.regex.RegexLanguageOptions;
 import com.oracle.truffle.regex.RegexFlags;
 import com.oracle.truffle.regex.RegexOptions;
 import com.oracle.truffle.regex.RegexSource;
@@ -56,10 +57,14 @@ import com.oracle.truffle.regex.tregex.parser.ast.visitors.InitIDVisitor;
 import com.oracle.truffle.regex.tregex.parser.ast.visitors.MarkLookBehindEntriesVisitor;
 import com.oracle.truffle.regex.tregex.parser.ast.visitors.SetSourceSectionVisitor;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+
+import static com.oracle.truffle.regex.tregex.util.DebugUtil.LOG_INTERNAL_ERRORS;
 
 public final class RegexParser {
 
@@ -102,7 +107,7 @@ public final class RegexParser {
     private final RegexAST ast;
     private final RegexSource source;
     private final RegexFlags flags;
-    private final RegexOptions options;
+    private final RegexLanguageOptions contextOptions;
     private final RegexLexer lexer;
     private final RegexProperties properties;
     private final Counter.ThresholdCounter groupCount;
@@ -115,26 +120,36 @@ public final class RegexParser {
     private Term curTerm;
 
     @TruffleBoundary
-    public RegexParser(RegexSource source, RegexOptions options) throws RegexSyntaxException {
+    public RegexParser(RegexSource source, RegexOptions options, RegexLanguageOptions contextOptions) throws RegexSyntaxException {
         this.source = source;
         this.flags = RegexFlags.parseFlags(source.getFlags());
-        this.options = options;
-        this.lexer = new RegexLexer(source, flags, options);
+        this.contextOptions = contextOptions;
+        this.lexer = new RegexLexer(source, flags, options, contextOptions);
         this.ast = new RegexAST(source, flags, options);
         this.properties = ast.getProperties();
         this.groupCount = ast.getGroupCount();
         this.copyVisitor = new CopyVisitor(ast);
         this.deleteVisitor = new DeleteVisitor(ast);
-        this.setSourceSectionVisitor = options.isDumpAutomata() ? new SetSourceSectionVisitor() : null;
+        this.setSourceSectionVisitor = contextOptions.isDumpAutomata() ? new SetSourceSectionVisitor() : null;
     }
 
     private static Group parseRootLess(String pattern) throws RegexSyntaxException {
-        return new RegexParser(new RegexSource(pattern), RegexOptions.DEFAULT).parse(false);
+        try {
+            return new RegexParser(new RegexSource(pattern), RegexOptions.DEFAULT, RegexLanguageOptions.DEFAULT).parse(false);
+        } catch (Throwable e) {
+            LOG_INTERNAL_ERRORS.severe(() -> {
+                StringWriter buffer = new StringWriter();
+                PrintWriter writer = new PrintWriter(buffer);
+                e.printStackTrace(writer);
+                return buffer.toString();
+            });
+            throw e;
+        }
     }
 
     @TruffleBoundary
     public static void validate(RegexSource source) throws RegexSyntaxException {
-        new RegexParser(source, RegexOptions.DEFAULT).validate();
+        new RegexParser(source, RegexOptions.DEFAULT, RegexLanguageOptions.DEFAULT).validate();
     }
 
     @TruffleBoundary
@@ -223,7 +238,7 @@ public final class RegexParser {
             setComplexLookAround();
         }
         curSequence = curGroup.addSequence(ast);
-        if (options.isDumpAutomata()) {
+        if (contextOptions.isDumpAutomata()) {
             if (token != null) {
                 SourceSection src = token.getSourceSection();
                 // set source section to empty string, it will be updated by the Sequence object
@@ -450,7 +465,7 @@ public final class RegexParser {
 
     private void substitute(Token token, Group substitution) {
         Group copy = substitution.copy(ast, true);
-        if (options.isDumpAutomata()) {
+        if (contextOptions.isDumpAutomata()) {
             setSourceSectionVisitor.run(copy, token.getSourceSection());
         }
         addTerm(copy);
@@ -461,7 +476,7 @@ public final class RegexParser {
     private Group parse(boolean rootCapture) throws RegexSyntaxException {
         RegexASTRootNode rootParent = ast.createRootNode();
         Group root = createGroup(null, false, rootCapture, rootParent);
-        if (options.isDumpAutomata()) {
+        if (contextOptions.isDumpAutomata()) {
             root.setSourceSectionBegin(ast.getSource().getSource().createSection(0, 1));
             root.setSourceSectionEnd(ast.getSource().getSource().createSection(ast.getSource().getPattern().length() + 1, 1));
         }
@@ -612,7 +627,7 @@ public final class RegexParser {
                 CharacterClass curCC = (CharacterClass) curSequence.getFirstTerm();
                 prevCC.setMatcherBuilder(prevCC.getMatcherBuilder().union(curCC.getMatcherBuilder()));
                 curSequence.removeLastTerm();
-                if (options.isDumpAutomata()) {
+                if (contextOptions.isDumpAutomata()) {
                     // set source section to cover both char classes and the "|" in between
                     SourceSection prevCCSrc = prevCC.getSourceSection();
                     prevCC.setSourceSection(prevCCSrc.getSource().createSection(
