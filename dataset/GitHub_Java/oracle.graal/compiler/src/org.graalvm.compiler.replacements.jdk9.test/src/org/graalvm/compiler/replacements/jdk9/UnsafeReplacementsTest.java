@@ -26,8 +26,6 @@ import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import org.graalvm.compiler.api.test.Graal;
-import org.graalvm.compiler.core.phases.HighTier;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.replacements.test.MethodSubstitutionTest;
 import org.graalvm.compiler.runtime.RuntimeProvider;
 import org.graalvm.compiler.test.AddExports;
@@ -321,7 +319,7 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
 
     @Test
     public void testFieldInstance() {
-        test(new OptionValues(getInitialOptions(), HighTier.Options.Inline, false), "fieldInstance");
+        test("fieldInstance");
     }
 
     public static void array() {
@@ -330,7 +328,7 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
 
     @Test
     public void testArray() {
-        test(new OptionValues(getInitialOptions(), HighTier.Options.Inline, false), "array");
+        test("array");
     }
 
     public static void fieldStatic() {
@@ -339,7 +337,7 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
 
     @Test
     public void testFieldStatic() {
-        test(new OptionValues(getInitialOptions(), HighTier.Options.Inline, false), "fieldStatic");
+        test("fieldStatic");
     }
 
     public static class JdkInternalMiscUnsafeAccessTestBoolean {
@@ -382,7 +380,6 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
 
         boolean v;
 
-        @BytecodeParserForceInline
         public static void testFieldInstance() {
             JdkInternalMiscUnsafeAccessTestBoolean t = new JdkInternalMiscUnsafeAccessTestBoolean();
             for (int c = 0; c < ITERATIONS; c++) {
@@ -405,14 +402,60 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
             }
         }
 
-        public static void assertEquals(Object seen, Object expected, String message) {
+        public static void assertEquals(boolean seen, boolean expected, String message) {
             if (seen != expected) {
                 throw new AssertionError(message + " - seen: " + seen + ", expected: " + expected);
             }
         }
 
-        @BytecodeParserForceInline
         public static void testAccess(Object base, long offset) {
+            // Plain
+            {
+                unsafe.putBoolean(base, offset, true);
+                boolean x = unsafe.getBoolean(base, offset);
+                assertEquals(x, true, "set boolean value");
+            }
+
+            // Volatile
+            {
+                unsafe.putBooleanVolatile(base, offset, false);
+                boolean x = unsafe.getBooleanVolatile(base, offset);
+                assertEquals(x, false, "putVolatile boolean value");
+            }
+
+
+            // Lazy
+            {
+                unsafe.putBooleanRelease(base, offset, true);
+                boolean x = unsafe.getBooleanAcquire(base, offset);
+                assertEquals(x, true, "putRelease boolean value");
+            }
+
+            // Opaque
+            {
+                unsafe.putBooleanOpaque(base, offset, false);
+                boolean x = unsafe.getBooleanOpaque(base, offset);
+                assertEquals(x, false, "putOpaque boolean value");
+            }
+
+
+            unsafe.putBoolean(base, offset, true);
+
+            // Compare
+            {
+                boolean r = unsafe.compareAndSetBoolean(base, offset, true, false);
+                assertEquals(r, true, "success compareAndSet boolean");
+                boolean x = unsafe.getBoolean(base, offset);
+                assertEquals(x, false, "success compareAndSet boolean value");
+            }
+
+            {
+                boolean r = unsafe.compareAndSetBoolean(base, offset, true, false);
+                assertEquals(r, false, "failing compareAndSet boolean");
+                boolean x = unsafe.getBoolean(base, offset);
+                assertEquals(x, false, "failing compareAndSet boolean value");
+            }
+
             // Advanced compare
             {
                 boolean r = unsafe.compareAndExchangeBoolean(base, offset, false, true);
