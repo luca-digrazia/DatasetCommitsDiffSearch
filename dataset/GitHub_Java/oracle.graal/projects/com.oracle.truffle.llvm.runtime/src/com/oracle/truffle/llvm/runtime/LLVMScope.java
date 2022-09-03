@@ -60,8 +60,10 @@ public final class LLVMScope implements TruffleObject {
 
     public static synchronized LLVMScope createGlobalScope(LLVMContext context) {
         LLVMScope scope = new LLVMScope(null);
-        scope.lookupOrCreateFunction(context, "<zero function>", true,
-                        idx -> LLVMFunctionDescriptor.createDescriptor(context, "default", "<zero function>", new FunctionType(MetaType.UNKNOWN, new Type[0], false), idx));
+        LLVMFunctionDescriptor zeroFunction = scope.lookupOrCreateFunction(context, "<zero function>", true,
+                        idx -> LLVMFunctionDescriptor.createDescriptor(context, "<zero function>", new FunctionType(MetaType.UNKNOWN, new Type[0], false), idx));
+        long ptr = zeroFunction.getFunctionPointer();
+        assert ptr == 0;
         return scope;
     }
 
@@ -85,6 +87,11 @@ public final class LLVMScope implements TruffleObject {
     @TruffleBoundary
     public synchronized boolean functionExists(String name) {
         return functions.containsKey(name) || (parent != null && parent.functionExists(name));
+    }
+
+    @TruffleBoundary
+    public synchronized boolean globalExists(String name) {
+        return globalVariableRegistry.exists(name) || (parent != null && parent.globalExists(name));
     }
 
     @TruffleBoundary
@@ -186,6 +193,7 @@ public final class LLVMScope implements TruffleObject {
                 List<String> keys = scope.functions.keySet().stream().map(s -> s.length() > 0 && s.charAt(0) == '@' ? s.substring(1) : s).collect(Collectors.toList());
                 return JavaInterop.asTruffleObject(keys.toArray(new String[keys.size()]));
             }
+
         }
 
         @Resolve(message = "READ")
@@ -201,6 +209,8 @@ public final class LLVMScope implements TruffleObject {
                 }
                 return null;
             }
+
         }
     }
+
 }
