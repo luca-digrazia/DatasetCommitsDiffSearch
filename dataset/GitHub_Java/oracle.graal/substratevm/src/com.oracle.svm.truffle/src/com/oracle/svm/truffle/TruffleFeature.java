@@ -72,15 +72,12 @@ import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.Registration;
 import org.graalvm.compiler.nodes.spi.Replacements;
 import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
-import org.graalvm.compiler.truffle.compiler.SharedTruffleCompilerOptions;
 import org.graalvm.compiler.truffle.compiler.nodes.asserts.NeverPartOfCompilationNode;
 import org.graalvm.compiler.truffle.compiler.substitutions.KnownTruffleTypes;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.OptimizedCompilationProfile;
-import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
 import org.graalvm.compiler.truffle.runtime.TruffleCallBoundary;
 import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
@@ -113,7 +110,6 @@ import com.oracle.svm.hosted.FeatureImpl.BeforeAnalysisAccessImpl;
 import com.oracle.svm.hosted.FeatureImpl.BeforeCompilationAccessImpl;
 import com.oracle.svm.hosted.code.InliningUtilities;
 import com.oracle.svm.hosted.meta.HostedType;
-import com.oracle.svm.hosted.option.RuntimeOptionFeature;
 import com.oracle.svm.truffle.api.SubstrateOptimizedCallTarget;
 import com.oracle.svm.truffle.api.SubstratePartialEvaluator;
 import com.oracle.svm.truffle.api.SubstrateTruffleCompiler;
@@ -212,7 +208,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         invokeStaticMethod("com.oracle.truffle.polyglot.LanguageCache", "initializeNativeImageState", Collections.singletonList(ClassLoader.class), imageClassLoader);
         invokeStaticMethod("com.oracle.truffle.polyglot.InstrumentCache", "initializeNativeImageState", Collections.singletonList(ClassLoader.class), imageClassLoader);
         invokeStaticMethod("com.oracle.truffle.api.impl.TruffleLocator", "initializeNativeImageState", Collections.emptyList());
-        invokeStaticMethod("com.oracle.truffle.api.impl.HomeFinder", "initializeNativeImageState", Collections.emptyList());
     }
 
     public static void removeTruffleLanguage(String mimeType) {
@@ -269,8 +264,8 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
 
     private void safeLoadFileDetector(Class<? extends FileTypeDetector> detector) {
         try {
-            ImageSingletons.lookup(FilesSupport.class).addFileTypeDetector(detector.getDeclaredConstructor().newInstance());
-        } catch (Exception ex) {
+            ImageSingletons.lookup(FilesSupport.class).addFileTypeDetector(detector.newInstance());
+        } catch (InstantiationException | IllegalAccessException ex) {
             throw VMError.shouldNotReachHere(ex);
         }
     }
@@ -291,7 +286,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         invokeStaticMethod("org.graalvm.polyglot.Engine$ImplHolder", "resetPreInitializedEngine", Collections.emptyList());
         invokeStaticMethod("com.oracle.truffle.api.impl.TruffleLocator", "resetNativeImageState", Collections.emptyList());
         invokeStaticMethod("com.oracle.truffle.api.interop.Message", "resetNativeImageState", Collections.emptyList());
-        invokeStaticMethod("com.oracle.truffle.api.impl.HomeFinder", "resetNativeImageState", Collections.emptyList());
     }
 
     public static boolean useTruffleCompiler() {
@@ -372,8 +366,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
             registerKnownTruffleFields(config, partialEvaluator.getKnownTruffleTypes());
             support.registerInterpreterEntryMethodsAsCompiled(partialEvaluator, access);
 
-            registerTruffleOptions(config);
-
             GraphBuilderConfiguration graphBuilderConfig = partialEvaluator.getConfigForParsing();
 
             if (Options.TruffleInlineDuringParsing.getValue()) {
@@ -420,20 +412,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
             }
         }
         firstAnalysisRun = true;
-    }
-
-    /**
-     * The {@link SharedTruffleRuntimeOptions} are initialized by values assigned to
-     * {@link SharedTruffleCompilerOptions}. Fields of the latter must be registered as as accessed
-     * so that the {@link RuntimeOptionFeature} will pick them up to make the options settable at
-     * runtime.
-     */
-    private static void registerTruffleOptions(BeforeAnalysisAccessImpl config) {
-        for (Field field : SharedTruffleCompilerOptions.class.getDeclaredFields()) {
-            if (OptionKey.class.isAssignableFrom(field.getType())) {
-                config.registerAsAccessed(field);
-            }
-        }
     }
 
     static class TruffleParsingInlineInvokePlugin implements InlineInvokePlugin {
