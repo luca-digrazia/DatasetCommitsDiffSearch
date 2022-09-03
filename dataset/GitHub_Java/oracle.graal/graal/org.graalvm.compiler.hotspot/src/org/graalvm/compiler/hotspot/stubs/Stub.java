@@ -48,7 +48,6 @@ import org.graalvm.compiler.lir.phases.LIRSuites;
 import org.graalvm.compiler.lir.phases.PostAllocationOptimizationPhase.PostAllocationOptimizationContext;
 import org.graalvm.compiler.lir.profiling.MoveProfilingPhase;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.PhaseSuite;
 import org.graalvm.compiler.phases.tiers.Suites;
@@ -117,7 +116,6 @@ public abstract class Stub {
         return true;
     }
 
-    protected final OptionValues options;
     protected final HotSpotProviders providers;
 
     /**
@@ -125,9 +123,8 @@ public abstract class Stub {
      *
      * @param linkage linkage details for a call to the stub
      */
-    public Stub(OptionValues options, HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
+    public Stub(HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
         this.linkage = linkage;
-        this.options = options;
         this.providers = providers;
         stubs.add(this);
     }
@@ -180,7 +177,6 @@ public abstract class Stub {
         if (code == null) {
             try (Scope d = Debug.sandbox("CompilingStub", DebugScope.getConfig(), providers.getCodeCache(), debugScopeContext())) {
                 CodeCacheProvider codeCache = providers.getCodeCache();
-
                 CompilationResult compResult = buildCompilationResult(backend);
                 try (Scope s = Debug.scope("CodeInstall", compResult)) {
                     assert destroyedCallerRegisters != null;
@@ -202,7 +198,7 @@ public abstract class Stub {
 
     @SuppressWarnings("try")
     private CompilationResult buildCompilationResult(final Backend backend) {
-        CompilationResult compResult = new CompilationResult(toString(), GeneratePIC.getValue(options));
+        CompilationResult compResult = new CompilationResult(toString(), GeneratePIC.getValue());
         final StructuredGraph graph = getGraph(getStubCompilationId());
 
         // Stubs cannot be recompiled so they cannot be compiled with assumptions
@@ -278,12 +274,12 @@ public abstract class Stub {
     }
 
     protected Suites createSuites() {
-        Suites defaultSuites = providers.getSuites().getDefaultSuites(options);
+        Suites defaultSuites = providers.getSuites().getDefaultSuites();
         return new Suites(new PhaseSuite<>(), defaultSuites.getMidTier(), defaultSuites.getLowTier());
     }
 
     protected LIRSuites createLIRSuites() {
-        LIRSuites lirSuites = new LIRSuites(providers.getSuites().getDefaultLIRSuites(options));
+        LIRSuites lirSuites = new LIRSuites(providers.getSuites().getDefaultLIRSuites());
         ListIterator<LIRPhase<PostAllocationOptimizationContext>> moveProfiling = lirSuites.getPostAllocationOptimizationStage().findPhase(MoveProfilingPhase.class);
         if (moveProfiling != null) {
             moveProfiling.remove();
