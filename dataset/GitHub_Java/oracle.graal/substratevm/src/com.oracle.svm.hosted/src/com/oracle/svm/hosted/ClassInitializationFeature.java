@@ -106,7 +106,7 @@ public final class ClassInitializationFeature implements Feature, RuntimeClassIn
      */
     private UnsupportedFeatures unsupportedFeatures;
 
-    public static ClassInitializationFeature singleton() {
+    private static ClassInitializationFeature singleton() {
         return (ClassInitializationFeature) ImageSingletons.lookup(RuntimeClassInitializationSupport.class);
     }
 
@@ -114,24 +114,24 @@ public final class ClassInitializationFeature implements Feature, RuntimeClassIn
      * Returns true if the provided class should be initialized at runtime, i.e., has
      * {@link InitKind#RERUN} or {@link InitKind#DELAY}.
      */
-    public boolean shouldInitializeAtRuntime(ResolvedJavaType type) {
+    public static boolean shouldInitializeAtRuntime(ResolvedJavaType type) {
         AnalysisType aType = toAnalysisType(type);
-        return computeInitKindAndMaybeInitializeClass(aType.getJavaClass()) != InitKind.EAGER;
+        return singleton().computeInitKindAndMaybeInitializeClass(aType.getJavaClass()) != InitKind.EAGER;
     }
 
     /**
      * Initializes the class during image building, unless initialization must be delayed to
      * runtime.
      */
-    public void maybeInitializeHosted(ResolvedJavaType type) {
-        computeInitKindAndMaybeInitializeClass(toAnalysisType(type).getJavaClass());
+    public static void maybeInitializeHosted(ResolvedJavaType type) {
+        singleton().computeInitKindAndMaybeInitializeClass(toAnalysisType(type).getJavaClass());
     }
 
     /**
      * Initializes the class during image building, and reports an error if the user requested to
      * delay initialization to runtime.
      */
-    public void forceInitializeHosted(ResolvedJavaType type) {
+    public static void forceInitializeHosted(ResolvedJavaType type) {
         forceInitializeHosted(toAnalysisType(type).getJavaClass());
     }
 
@@ -139,8 +139,8 @@ public final class ClassInitializationFeature implements Feature, RuntimeClassIn
      * Initializes the class during image building, and reports an error if the user requested to
      * delay initialization to runtime.
      */
-    public void forceInitializeHosted(Class<?> clazz) {
-        InitKind initKind = computeInitKindAndMaybeInitializeClass(clazz);
+    public static void forceInitializeHosted(Class<?> clazz) {
+        InitKind initKind = singleton().computeInitKindAndMaybeInitializeClass(clazz);
         if (initKind == InitKind.DELAY) {
             throw UserError.abort("Cannot delay running the class initializer because class must be initialized for internal purposes: " + clazz.getTypeName());
         }
@@ -239,7 +239,7 @@ public final class ClassInitializationFeature implements Feature, RuntimeClassIn
         }
     }
 
-    private ClassInitializationInfo buildClassInitializationInfo(DuringAnalysisAccessImpl access, AnalysisType type, DynamicHub hub) {
+    private static ClassInitializationInfo buildClassInitializationInfo(DuringAnalysisAccessImpl access, AnalysisType type, DynamicHub hub) {
         ClassInitializationInfo info;
         if (shouldInitializeAtRuntime(type)) {
             AnalysisMethod classInitializer = type.getClassInitializer();
