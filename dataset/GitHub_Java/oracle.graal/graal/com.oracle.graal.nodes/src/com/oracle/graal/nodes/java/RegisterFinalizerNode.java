@@ -22,45 +22,28 @@
  */
 package com.oracle.graal.nodes.java;
 
-import static com.oracle.graal.nodeinfo.InputType.State;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_20;
-import static com.oracle.graal.nodes.java.ForeignCallDescriptors.REGISTER_FINALIZER;
+import static com.oracle.graal.nodes.java.ForeignCallDescriptors.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.meta.Assumptions.*;
 
-import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
-import com.oracle.graal.compiler.common.type.ObjectStamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.AbstractStateSplit;
-import com.oracle.graal.nodes.DeoptimizingNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
-
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.Assumptions.AssumptionResult;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * This node is used to perform the finalizer registration at the end of the java.lang.Object
  * constructor.
  */
-// @formatter:off
-@NodeInfo(cycles = CYCLES_UNKNOWN,
-          cyclesRationale = "We cannot estimate the time of a runtime call.",
-          size = SIZE_20,
-          sizeRationale = "Rough estimation for register handling & calling")
-// @formatter:on
+@NodeInfo
 public final class RegisterFinalizerNode extends AbstractStateSplit implements Canonicalizable.Unary<ValueNode>, LIRLowerable, Virtualizable, DeoptimizingNode.DeoptAfter {
 
     public static final NodeClass<RegisterFinalizerNode> TYPE = NodeClass.create(RegisterFinalizerNode.class);
-    @OptionalInput(State) FrameState deoptState;
+    @OptionalInput(InputType.State) FrameState deoptState;
     @Input ValueNode value;
 
     public RegisterFinalizerNode(ValueNode value) {
@@ -68,7 +51,6 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements C
         this.value = value;
     }
 
-    @Override
     public ValueNode getValue() {
         return value;
     }
@@ -92,8 +74,10 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements C
             return objectStamp.type().hasFinalizer();
         } else if (objectStamp.type() != null) {
             AssumptionResult<Boolean> result = objectStamp.type().hasFinalizableSubclass();
-            if (result.canRecordTo(assumptions)) {
-                result.recordTo(assumptions);
+            if (result.isAssumptionFree()) {
+                return result.getResult();
+            } else if (assumptions != null) {
+                assumptions.record(result);
                 return result.getResult();
             }
         }
