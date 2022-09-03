@@ -1670,7 +1670,7 @@ class AsmFactory {
         statements.add(write);
     }
 
-    void createTernaryOperation(String operation, AsmOperand a, AsmOperand b, AsmOperand c) {
+    public void createTernaryOperation(String operation, AsmOperand a, AsmOperand b, AsmOperand c) {
         AsmOperand dst = c;
         LLVMExpressionNode srcA;
         LLVMExpressionNode srcB;
