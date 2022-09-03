@@ -22,7 +22,6 @@
  */
 package org.graalvm.compiler.printer;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
@@ -33,8 +32,14 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.Signature;
+import org.graalvm.compiler.graph.NodeSourcePosition;
+import org.graalvm.compiler.nodeinfo.InputType;
 
-public abstract class AbstractGraphPrinter<Graph, Node, NodeClass, Edges, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition, InputType> implements Closeable {
+public abstract class AbstractGraphPrinter<Graph, Node, NodeClass, Edges, Block> {
     private static final Charset UTF8 = Charset.forName("UTF-8");
 
     private static final int CONSTANT_POOL_MAX_SIZE = 8000;
@@ -95,36 +100,35 @@ public abstract class AbstractGraphPrinter<Graph, Node, NodeClass, Edges, Block,
     }
 
     @SuppressWarnings("all")
-    public final void print(Graph graph, Map<? extends Object, ? extends Object> properties, int id, String format, Object... args) throws IOException {
+    public final void print(Graph graph, Map<Object, Object> properties, int id, String format, Object... args) throws IOException {
         writeByte(BEGIN_GRAPH);
         if (versionMajor >= 3) {
             writeInt(id);
             writeString(format);
             writeInt(args.length);
             for (Object a : args) {
-                writePropertyObject(graph, a);
+                writePropertyObject(a);
             }
         } else {
-            writePoolObject(formatTitle(graph, id, format, args));
+            writePoolObject(formatTitle(id, format, args));
         }
         writeGraph(graph, properties);
         flush();
     }
 
-    public final void beginGroup(Graph noGraph, String name, String shortName, ResolvedJavaMethod method, int bci, Map<? extends Object, ? extends Object> properties) throws IOException {
+    public final void beginGroup(String name, String shortName, ResolvedJavaMethod method, int bci, Map<Object, Object> properties) throws IOException {
         writeByte(BEGIN_GROUP);
         writePoolObject(name);
         writePoolObject(shortName);
         writePoolObject(method);
         writeInt(bci);
-        writeProperties(noGraph, properties);
+        writeProperties(properties);
     }
 
     public final void endGroup() throws IOException {
         writeByte(CLOSE_GROUP);
     }
 
-    @Override
     public final void close() {
         try {
             flush();
@@ -134,22 +138,13 @@ public abstract class AbstractGraphPrinter<Graph, Node, NodeClass, Edges, Block,
         }
     }
 
-    protected abstract Graph findGraph(Graph current, Object obj);
+    protected abstract Graph findGraph(Object obj);
 
     protected abstract ResolvedJavaMethod findMethod(Object obj);
 
     protected abstract NodeClass findNodeClass(Object obj);
 
-    /** Find a Java class. The returned object must be acceptable
-     * by {@link #findJavaTypeName(java.lang.Object)} and return valid
-     * name for the class.
-     *
-     * @param clazz node class object
-     * @return object representing the class, for example {@link Class}
-     */
-    protected abstract Object findJavaClass(NodeClass clazz);
-
-    protected abstract Object findEnumClass(Object enumValue);
+    protected abstract Class<?> findJavaClass(NodeClass clazz);
 
     protected abstract String findNameTemplate(NodeClass clazz);
 
@@ -169,15 +164,15 @@ public abstract class AbstractGraphPrinter<Graph, Node, NodeClass, Edges, Block,
 
     protected abstract void findNodeProperties(Node node, Map<Object, Object> props, Graph info);
 
-    protected abstract Collection<Node> findBlockNodes(Graph info, Block block);
+    protected abstract List<Node> findBlockNodes(Graph info, Block block);
 
     protected abstract int findBlockId(Block sux);
 
-    protected abstract Collection<Block> findBlocks(Graph graph);
+    protected abstract List<Block> findBlocks(Graph graph);
 
-    protected abstract Collection<Block> findBlockSuccessors(Block block);
+    protected abstract List<Block> findBlockSuccessors(Block block);
 
-    protected abstract String formatTitle(Graph graph, int id, String format, Object... args);
+    protected abstract String formatTitle(int id, String format, Object... args);
 
     protected abstract int findSize(Edges edges);
 
@@ -187,53 +182,9 @@ public abstract class AbstractGraphPrinter<Graph, Node, NodeClass, Edges, Block,
 
     protected abstract InputType findType(Edges edges, int i);
 
-    protected abstract Node findNode(Graph graph, Node node, Edges edges, int i);
+    protected abstract Node findNode(Node node, Edges edges, int i);
 
-    protected abstract Collection<Node> findNodes(Graph graph, Node node, Edges edges, int i);
-
-    protected abstract int findEnumOrdinal(Object obj);
-
-    protected abstract String[] findEnumTypeValues(Object clazz);
-
-    protected abstract String findJavaTypeName(Object obj);
-
-    protected abstract byte[] findMethodCode(ResolvedJavaMethod method);
-
-    protected abstract int findMethodModifiers(ResolvedJavaMethod method);
-
-    protected abstract Signature findMethodSignature(ResolvedJavaMethod method);
-
-    protected abstract String findMethodName(ResolvedJavaMethod method);
-
-    protected abstract Object findMethodDeclaringClass(ResolvedJavaMethod method);
-
-    protected abstract int findFieldModifiers(ResolvedJavaField field);
-
-    protected abstract String findFieldTypeName(ResolvedJavaField field);
-
-    protected abstract String findFieldName(ResolvedJavaField field);
-
-    protected abstract Object findFieldDeclaringClass(ResolvedJavaField field);
-
-    protected abstract ResolvedJavaField findJavaField(Object object);
-
-    protected abstract Signature findSignature(Object object);
-
-    protected abstract int findSignatureParameterCount(Signature signature);
-
-    protected abstract String findSignatureParameterTypeName(Signature signature, int index);
-
-    protected abstract String findSignatureReturnTypeName(Signature signature);
-
-    protected abstract NodeSourcePosition findNodeSourcePosition(Object object);
-
-    protected abstract ResolvedJavaMethod findNodeSourcePositionMethod(NodeSourcePosition pos);
-
-    protected abstract NodeSourcePosition findNodeSourcePositionCaller(NodeSourcePosition pos);
-
-    protected abstract int findNodeSourcePositionBCI(NodeSourcePosition pos);
-
-    protected abstract StackTraceElement findMethodStackTraceElement(ResolvedJavaMethod method, int bci, NodeSourcePosition pos);
+    protected abstract List<Node> findNodes(Node node, Edges edges, int i);
 
     private void writeVersion() throws IOException {
         writeBytesRaw(MAGIC_BYTES);
@@ -352,15 +303,15 @@ public abstract class AbstractGraphPrinter<Graph, Node, NodeClass, Edges, Block,
         if (id == null) {
             addPoolEntry(object);
         } else {
-            if (object instanceof Enum<?> || findEnumOrdinal(object) >= 0) {
+            if (object instanceof Enum<?>) {
                 writeByte(POOL_ENUM);
-            } else if (object instanceof Class<?> || findJavaTypeName(object) != null) {
+            } else if (object instanceof Class<?> || object instanceof JavaType) {
                 writeByte(POOL_CLASS);
-            } else if (findJavaField(object) != null) {
+            } else if (object instanceof ResolvedJavaField) {
                 writeByte(POOL_FIELD);
-            } else if (findSignature(object) != null) {
+            } else if (object instanceof Signature) {
                 writeByte(POOL_SIGNATURE);
-            } else if (versionMajor >= 4 && findNodeSourcePosition(object) != null) {
+            } else if (versionMajor >= 4 && object instanceof NodeSourcePosition) {
                 writeByte(POOL_NODE_SOURCE_POSITION);
             } else {
                 if (findNodeClass(object) != null) {
@@ -375,8 +326,15 @@ public abstract class AbstractGraphPrinter<Graph, Node, NodeClass, Edges, Block,
         }
     }
 
-    private void writeGraph(Graph graph, Map<? extends Object, ? extends Object> properties) throws IOException {
-        writeProperties(graph, properties);
+    private static String getClassName(Class<?> klass) {
+        if (!klass.isArray()) {
+            return klass.getName();
+        }
+        return getClassName(klass.getComponentType()) + "[]";
+    }
+
+    private void writeGraph(Graph graph, Map<Object, Object> properties) throws IOException {
+        writeProperties(properties);
         writeNodes(graph);
         writeBlocks(findBlocks(graph), graph);
     }
@@ -384,39 +342,31 @@ public abstract class AbstractGraphPrinter<Graph, Node, NodeClass, Edges, Block,
     private void writeNodes(Graph info) throws IOException {
         Map<Object, Object> props = new HashMap<>();
 
-        final int size = findNodesCount(info);
-        writeInt(size);
-        int cnt = 0;
+        writeInt(findNodesCount(info));
+
         for (Node node : findNodes(info)) {
             NodeClass nodeClass = findNodeClass(node);
-            if (nodeClass == null) {
-                throw new IOException("No class for " + node);
-            }
             findNodeProperties(node, props, info);
 
             writeInt(findNodeId(node));
             writePoolObject(nodeClass);
             writeByte(hasPredecessor(node) ? 1 : 0);
-            writeProperties(info, props);
-            writeEdges(info, node, true);
-            writeEdges(info, node, false);
+            writeProperties(props);
+            writeEdges(node, true);
+            writeEdges(node, false);
 
             props.clear();
-            cnt++;
-        }
-        if (size != cnt) {
-            throw new IOException("Expecting " + size + " nodes, but found " + cnt);
         }
     }
 
-    private void writeEdges(Graph graph, Node node, boolean dumpInputs) throws IOException {
+    private void writeEdges(Node node, boolean dumpInputs) throws IOException {
         Edges edges = findEdges(node, dumpInputs);
         int size = findSize(edges);
         for (int i = 0; i < size; i++) {
             if (isDirect(edges, i)) {
-                writeNodeRef(findNode(graph, node, edges, i));
+                writeNodeRef(findNode(node, edges, i));
             } else {
-                Collection<Node> list = findNodes(graph, node, edges, i);
+                List<Node> list = findNodes(node, edges, i);
                 if (list == null) {
                     writeShort((char) 0);
                 } else {
@@ -435,10 +385,10 @@ public abstract class AbstractGraphPrinter<Graph, Node, NodeClass, Edges, Block,
         writeInt(findNodeId(node));
     }
 
-    private void writeBlocks(Collection<Block> blocks, Graph info) throws IOException {
+    private void writeBlocks(List<Block> blocks, Graph info) throws IOException {
         if (blocks != null) {
             for (Block block : blocks) {
-                Collection<Node> nodes = findBlockNodes(info, block);
+                List<Node> nodes = findBlockNodes(info, block);
                 if (nodes == null) {
                     writeInt(0);
                     return;
@@ -446,7 +396,7 @@ public abstract class AbstractGraphPrinter<Graph, Node, NodeClass, Edges, Block,
             }
             writeInt(blocks.size());
             for (Block block : blocks) {
-                Collection<Node> nodes = findBlockNodes(info, block);
+                List<Node> nodes = findBlockNodes(info, block);
                 List<Node> extraNodes = new LinkedList<>();
                 writeInt(findBlockId(block));
                 for (Node node : nodes) {
@@ -460,7 +410,7 @@ public abstract class AbstractGraphPrinter<Graph, Node, NodeClass, Edges, Block,
                 for (Node node : extraNodes) {
                     writeInt(findNodeId(node));
                 }
-                final Collection<Block> successors = findBlockSuccessors(block);
+                final List<Block> successors = findBlockSuccessors(block);
                 writeInt(successors.size());
                 for (Block sux : successors) {
                     writeInt(findBlockId(sux));
@@ -486,69 +436,73 @@ public abstract class AbstractGraphPrinter<Graph, Node, NodeClass, Edges, Block,
 
     @SuppressWarnings("all")
     private void addPoolEntry(Object object) throws IOException {
-        ResolvedJavaField field;
-        String typeName;
-        Signature signature;
-        NodeSourcePosition pos;
-        int enumOrdinal;
         char index = constantPool.add(object);
         writeByte(POOL_NEW);
         writeShort(index);
-        if ((typeName = findJavaTypeName(object)) != null) {
+        if (object instanceof Class<?>) {
+            Class<?> klass = (Class<?>) object;
             writeByte(POOL_CLASS);
-            writeString(typeName);
-            String[] enumValueNames = findEnumTypeValues(object);
-            if (enumValueNames != null) {
+            writeString(getClassName(klass));
+            if (klass.isEnum()) {
                 writeByte(ENUM_KLASS);
-                writeInt(enumValueNames.length);
-                for (String o : enumValueNames) {
-                    writePoolObject(o);
+                Object[] enumConstants = klass.getEnumConstants();
+                writeInt(enumConstants.length);
+                for (Object o : enumConstants) {
+                    writePoolObject(((Enum<?>) o).name());
                 }
             } else {
                 writeByte(KLASS);
             }
-        } else if ((enumOrdinal = findEnumOrdinal(object)) >= 0) {
+        } else if (object instanceof Enum<?>) {
             writeByte(POOL_ENUM);
-            writePoolObject(findEnumClass(object));
-            writeInt(enumOrdinal);
-        } else if ((field = findJavaField(object)) != null) {
+            writePoolObject(object.getClass());
+            writeInt(((Enum<?>) object).ordinal());
+        } else if (object instanceof JavaType) {
+            JavaType type = (JavaType) object;
+            writeByte(POOL_CLASS);
+            writeString(type.toJavaName());
+            writeByte(KLASS);
+        } else if (object instanceof ResolvedJavaField) {
             writeByte(POOL_FIELD);
-            writePoolObject(findFieldDeclaringClass(field));
-            writePoolObject(findFieldName(field));
-            writePoolObject(findFieldTypeName(field));
-            writeInt(findFieldModifiers(field));
-        } else if ((signature = findSignature(object)) != null) {
+            ResolvedJavaField field = ((ResolvedJavaField) object);
+            writePoolObject(field.getDeclaringClass());
+            writePoolObject(field.getName());
+            writePoolObject(field.getType().getName());
+            writeInt(field.getModifiers());
+        } else if (object instanceof Signature) {
             writeByte(POOL_SIGNATURE);
-            int args = findSignatureParameterCount(signature);
+            Signature signature = ((Signature) object);
+            int args = signature.getParameterCount(false);
             writeShort((char) args);
             for (int i = 0; i < args; i++) {
-                writePoolObject(findSignatureParameterTypeName(signature, i));
+                writePoolObject(signature.getParameterType(i, null).getName());
             }
-            writePoolObject(findSignatureReturnTypeName(signature));
-        } else if (versionMajor >= 4 && (pos = findNodeSourcePosition(object)) != null) {
+            writePoolObject(signature.getReturnType(null).getName());
+        } else if (versionMajor >= 4 && object instanceof NodeSourcePosition) {
             writeByte(POOL_NODE_SOURCE_POSITION);
-            ResolvedJavaMethod method = findNodeSourcePositionMethod(pos);
+            NodeSourcePosition pos = (NodeSourcePosition) object;
+            ResolvedJavaMethod method = pos.getMethod();
             writePoolObject(method);
-            final int bci = findNodeSourcePositionBCI(pos);
+            final int bci = pos.getBCI();
             writeInt(bci);
-            StackTraceElement ste = findMethodStackTraceElement(method, bci, pos);
+            StackTraceElement ste = method.asStackTraceElement(bci);
             if (ste != null) {
                 writePoolObject(ste.getFileName());
                 writeInt(ste.getLineNumber());
             } else {
                 writePoolObject(null);
             }
-            writePoolObject(findNodeSourcePositionCaller(pos));
+            writePoolObject(pos.getCaller());
         } else {
             NodeClass nodeClass = findNodeClass(object);
             if (nodeClass != null) {
                 writeByte(POOL_NODE_CLASS);
-                final Object clazz = findJavaClass(nodeClass);
+                final Class<?> clazz = findJavaClass(nodeClass);
                 if (versionMajor >= 3) {
                     writePoolObject(clazz);
                     writeString(findNameTemplate(nodeClass));
                 } else {
-                    writeString(((Class<?>) clazz).getSimpleName());
+                    writeString(clazz.getSimpleName());
                     String nameTemplate = findNameTemplate(nodeClass);
                     writeString(nameTemplate);
                 }
@@ -563,15 +517,15 @@ public abstract class AbstractGraphPrinter<Graph, Node, NodeClass, Edges, Block,
                 return;
             }
             writeByte(POOL_METHOD);
-            writePoolObject(findMethodDeclaringClass(method));
-            writePoolObject(findMethodName(method));
-            writePoolObject(findMethodSignature(method));
-            writeInt(findMethodModifiers(method));
-            writeBytes(findMethodCode(method));
+            writePoolObject(method.getDeclaringClass());
+            writePoolObject(method.getName());
+            writePoolObject(method.getSignature());
+            writeInt(method.getModifiers());
+            writeBytes(method.getCode());
         }
     }
 
-    private void writePropertyObject(Graph graph, Object obj) throws IOException {
+    private void writePropertyObject(Object obj) throws IOException {
         if (obj instanceof Integer) {
             writeByte(PROPERTY_INT);
             writeInt(((Integer) obj).intValue());
@@ -615,7 +569,7 @@ public abstract class AbstractGraphPrinter<Graph, Node, NodeClass, Edges, Block,
                 }
             }
         } else {
-            Graph g = findGraph(graph, obj);
+            Graph g = findGraph(obj);
             if (g == null) {
                 writeByte(PROPERTY_POOL);
                 writePoolObject(obj);
@@ -626,23 +580,17 @@ public abstract class AbstractGraphPrinter<Graph, Node, NodeClass, Edges, Block,
         }
     }
 
-    private void writeProperties(Graph graph, Map<? extends Object, ? extends Object> props) throws IOException {
+    private void writeProperties(Map<Object, Object> props) throws IOException {
         if (props == null) {
             writeShort((char) 0);
             return;
         }
-        final int size = props.size();
         // properties
-        writeShort((char) size);
-        int cnt = 0;
-        for (Map.Entry<? extends Object, ? extends Object> entry : props.entrySet()) {
+        writeShort((char) props.size());
+        for (Map.Entry<Object, Object> entry : props.entrySet()) {
             String key = entry.getKey().toString();
             writePoolObject(key);
-            writePropertyObject(graph, entry.getValue());
-            cnt++;
-        }
-        if (size != cnt) {
-            throw new IOException("Expecting " + size + " properties, but found only " + cnt);
+            writePropertyObject(entry.getValue());
         }
     }
 

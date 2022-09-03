@@ -22,6 +22,7 @@
  */
 package org.graalvm.compiler.truffle;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
@@ -46,10 +47,14 @@ public class TruffleTreeDebugConfigCustomizer implements DebugConfigCustomizer {
     @Override
     public void customize(DebugConfig config) {
         OptionValues options = config.getOptions();
-        if (GraalDebugConfig.Options.PrintGraphFile.getValue(options)) {
-            config.dumpHandlers().add(createFilePrinter(options));
-        } else {
-            config.dumpHandlers().add(createNetworkPrinter(options));
+        try {
+            if (GraalDebugConfig.Options.PrintGraphFile.getValue(options)) {
+                config.dumpHandlers().add(createFilePrinter(options));
+            } else {
+                config.dumpHandlers().add(createNetworkPrinter(options));
+            }
+        } catch (IOException ex) {
+            ex.printStackTrace();
         }
     }
 
@@ -58,12 +63,12 @@ public class TruffleTreeDebugConfigCustomizer implements DebugConfigCustomizer {
         return UniquePathUtilities.getPath(options, PrintGraphFileName, DumpPath, PrintBinaryGraphs.getValue(options) ? "bgv" : "gv.xml");
     }
 
-    private static TruffleTreeDumpHandler createFilePrinter(OptionValues options) {
+    private static TruffleTreeDumpHandler createFilePrinter(OptionValues options) throws IOException {
         Path path = getFilePrinterPath(options);
         return new TruffleTreeDumpHandler(() -> FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW), options);
     }
 
-    private static TruffleTreeDumpHandler createNetworkPrinter(OptionValues options) {
+    private static TruffleTreeDumpHandler createNetworkPrinter(OptionValues options) throws IOException {
         String host = PrintGraphHost.getValue(options);
         int port = PrintBinaryGraphs.getValue(options) ? PrintBinaryGraphPort.getValue(options) : PrintXmlGraphPort.getValue(options);
         return new TruffleTreeDumpHandler(() -> SocketChannel.open(new InetSocketAddress(host, port)), options);
