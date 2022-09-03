@@ -25,21 +25,21 @@ package com.oracle.graal.nodes.java;
 import java.lang.reflect.*;
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 /**
  * The base class of all instructions that access fields.
  */
-public abstract class AccessFieldNode extends FixedWithNextNode implements Lowerable {
+public abstract class AccessFieldNode extends AbstractStateSplit implements Lowerable {
 
     @Input private ValueNode object;
 
-    protected final ResolvedJavaField field;
+    protected final RiResolvedField field;
     private final long leafGraphId;
 
     public ValueNode object() {
@@ -48,10 +48,12 @@ public abstract class AccessFieldNode extends FixedWithNextNode implements Lower
 
     /**
      * Constructs a new access field object.
+     * @param kind the result kind of the access
      * @param object the instruction producing the receiver object
      * @param field the compiler interface representation of the field
+     * @param graph
      */
-    public AccessFieldNode(Stamp stamp, ValueNode object, ResolvedJavaField field, long leafGraphId) {
+    public AccessFieldNode(Stamp stamp, ValueNode object, RiResolvedField field, long leafGraphId) {
         super(stamp);
         this.object = object;
         this.field = field;
@@ -63,7 +65,7 @@ public abstract class AccessFieldNode extends FixedWithNextNode implements Lower
      * Gets the compiler interface field for this field access.
      * @return the compiler interface field for this field access
      */
-    public ResolvedJavaField field() {
+    public RiResolvedField field() {
         return field;
     }
 
@@ -95,7 +97,7 @@ public abstract class AccessFieldNode extends FixedWithNextNode implements Lower
     @Override
     public Map<Object, Object> getDebugProperties() {
         Map<Object, Object> debugProperties = super.getDebugProperties();
-        debugProperties.put("field", CodeUtil.format("%h.%n", field));
+        debugProperties.put("field", CiUtil.format("%h.%n", field));
         return debugProperties;
     }
 
