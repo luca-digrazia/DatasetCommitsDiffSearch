@@ -52,7 +52,7 @@ public class HostedField implements ReadableJavaField, SharedField, Comparable<H
 
     private final JavaTypeProfile typeProfile;
 
-    private static final int LOC_UNMATERIALIZED_STATIC_CONSTANT = -10;
+    private static final int LOC_CONSTANT_STATIC_FIELD = -10;
 
     public HostedField(HostedUniverse universe, HostedMetaAccess metaAccess, AnalysisField wrapped, HostedType holder, HostedType type, JavaTypeProfile typeProfile) {
         this.universe = universe;
@@ -74,14 +74,14 @@ public class HostedField implements ReadableJavaField, SharedField, Comparable<H
         this.location = location;
     }
 
-    protected void setUnmaterializedStaticConstant() {
-        assert this.location == LOC_UNINITIALIZED && isStatic();
-        this.location = LOC_UNMATERIALIZED_STATIC_CONSTANT;
+    protected void setConstantValue() {
+        assert this.location == LOC_UNINITIALIZED;
+        this.location = LOC_CONSTANT_STATIC_FIELD;
     }
 
     public JavaConstant getConstantValue() {
-        if (isStatic() && allowConstantFolding()) {
-            return readValue(null);
+        if (location == LOC_CONSTANT_STATIC_FIELD) {
+            return universe.getConstantReflectionProvider().readFieldValue(wrapped, null);
         } else {
             return null;
         }
@@ -144,21 +144,29 @@ public class HostedField implements ReadableJavaField, SharedField, Comparable<H
 
     @Override
     public JavaConstant readValue(JavaConstant receiver) {
-        JavaConstant wrappedReceiver;
-        if (receiver != null && SubstrateObjectConstant.asObject(receiver) instanceof Class) {
-            /* Manual object replacement from java.lang.Class to DynamicHub. */
-            wrappedReceiver = SubstrateObjectConstant.forObject(metaAccess.lookupJavaType((Class<?>) SubstrateObjectConstant.asObject(receiver)).getHub());
+        JavaConstant result;
+        if (location == LOC_CONSTANT_STATIC_FIELD) {
+            return getConstantValue();
         } else {
-            wrappedReceiver = receiver;
+            JavaConstant wrappedReceiver;
+            if (receiver != null && SubstrateObjectConstant.asObject(receiver) instanceof Class) {
+                /* Manual object replacement from java.lang.Class to DynamicHub. */
+                wrappedReceiver = SubstrateObjectConstant.forObject(metaAccess.lookupJavaType((Class<?>) SubstrateObjectConstant.asObject(receiver)).getHub());
+            } else {
+                wrappedReceiver = receiver;
+            }
+            result = universe.lookup(universe.getConstantReflectionProvider().readFieldValue(wrapped, wrappedReceiver));
         }
-        return universe.lookup(universe.getConstantReflectionProvider().readFieldValue(wrapped, wrappedReceiver));
+
+        return result;
     }
 
     @Override
     public boolean allowConstantFolding() {
-        if (location == LOC_UNMATERIALIZED_STATIC_CONSTANT) {
+        if (location == LOC_CONSTANT_STATIC_FIELD) {
             return true;
         } else if (!wrapped.isWritten()) {
+            assert !Modifier.isStatic(getModifiers()) : "should have constantValue in this case";
             return true;
         } else if (Modifier.isFinal(getModifiers()) && !Modifier.isStatic(getModifiers())) {
             /*
