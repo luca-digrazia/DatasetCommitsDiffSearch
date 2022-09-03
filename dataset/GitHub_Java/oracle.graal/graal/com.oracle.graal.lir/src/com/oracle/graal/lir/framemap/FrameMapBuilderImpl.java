@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,17 +22,35 @@
  */
 package com.oracle.graal.lir.framemap;
 
-import java.util.*;
+import static com.oracle.graal.lir.LIRValueUtil.isVirtualStackSlot;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.lir.gen.*;
+import java.util.ArrayList;
+import java.util.BitSet;
+import java.util.EnumSet;
+import java.util.List;
+
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.lir.InstructionValueConsumer;
+import com.oracle.graal.lir.LIR;
+import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.LIRInstruction.OperandFlag;
+import com.oracle.graal.lir.LIRInstruction.OperandMode;
+import com.oracle.graal.lir.VirtualStackSlot;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.Value;
 
 /**
  * A FrameMapBuilder that records allocation.
  */
-public class FrameMapBuilderImpl implements FrameMapBuilder {
+public class FrameMapBuilderImpl extends FrameMapBuilderTool {
 
     private final RegisterConfig registerConfig;
     private final CodeCacheProvider codeCache;
@@ -51,50 +69,57 @@ public class FrameMapBuilderImpl implements FrameMapBuilder {
         this.numStackSlots = 0;
     }
 
+    @Override
     public VirtualStackSlot allocateSpillSlot(LIRKind kind) {
         SimpleVirtualStackSlot slot = new SimpleVirtualStackSlot(numStackSlots++, kind);
         stackSlots.add(slot);
         return slot;
     }
 
+    @Override
     public VirtualStackSlot allocateStackSlots(int slots, BitSet objects, List<VirtualStackSlot> outObjectStackSlots) {
         if (slots == 0) {
             return null;
         }
         if (outObjectStackSlots != null) {
-            throw GraalInternalError.unimplemented();
+            throw JVMCIError.unimplemented();
         }
-        VirtualStackSlotRange slot = new VirtualStackSlotRange(numStackSlots++, slots, objects);
+        VirtualStackSlotRange slot = new VirtualStackSlotRange(numStackSlots++, slots, objects, frameMap.getTarget().getLIRKind(JavaKind.Object));
         stackSlots.add(slot);
         return slot;
     }
 
+    @Override
     public RegisterConfig getRegisterConfig() {
         return registerConfig;
     }
 
+    @Override
     public CodeCacheProvider getCodeCache() {
         return codeCache;
     }
 
+    @Override
     public FrameMap getFrameMap() {
         return frameMap;
     }
 
-    /**
-     * Returns the number of {@link VirtualStackSlot}s created by this {@link FrameMapBuilder}. Can
-     * be used as an upper bound for an array indexed by {@link VirtualStackSlot#getId()}.
-     */
+    @Override
     public int getNumberOfStackSlots() {
         return numStackSlots;
     }
 
+    @Override
     public void callsMethod(CallingConvention cc) {
         calls.add(cc);
     }
 
-    public FrameMap buildFrameMap(LIRGenerationResult res, StackSlotAllocator allocator) {
-        allocator.allocateStackSlots(this, res);
+    @Override
+    @SuppressWarnings("try")
+    public FrameMap buildFrameMap(LIRGenerationResult res) {
+        if (Debug.isEnabled()) {
+            verifyStackSlotAllocation(res);
+        }
         for (CallingConvention cc : calls) {
             frameMap.callsMethod(cc);
         }
@@ -102,7 +127,25 @@ public class FrameMapBuilderImpl implements FrameMapBuilder {
         return frameMap;
     }
 
-    List<VirtualStackSlot> getStackSlots() {
+    private static void verifyStackSlotAllocation(LIRGenerationResult res) {
+        LIR lir = res.getLIR();
+        InstructionValueConsumer verifySlots = (LIRInstruction op, Value value, OperandMode mode, EnumSet<OperandFlag> flags) -> {
+            assert !isVirtualStackSlot(value) : String.format("Instruction %s contains a virtual stack slot %s", op, value);
+        };
+        for (AbstractBlockBase<?> block : lir.getControlFlowGraph().getBlocks()) {
+            lir.getLIRforBlock(block).forEach(op -> {
+                op.visitEachInput(verifySlots);
+                op.visitEachAlive(verifySlots);
+                op.visitEachState(verifySlots);
+
+                op.visitEachTemp(verifySlots);
+                op.visitEachOutput(verifySlots);
+            });
+        }
+    }
+
+    @Override
+    public List<VirtualStackSlot> getStackSlots() {
         return stackSlots;
     }
 
