@@ -39,25 +39,10 @@ import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.source.*;
 
 /**
- * <em>Virtual machine</em> for Truffle based languages. Term virtual machine is a bit overloaded,
- * so don't think of <em>Java virtual machine</em> here - while we are running and using
- * {@link TruffleVM} inside of a <em>JVM</em> there can be multiple instances (some would say
- * tenants) of {@link TruffleVM} running next to each other in a single <em>JVM</em> with a complete
- * mutual isolation. There is 1:N mapping between <em>JVM</em> and {@link TruffleVM}.
- * <p>
- * It would not be correct to think of a {@link TruffleVM} as a runtime for a single Truffle
- * language (Ruby, Python, R, C, JavaScript, etc.) either. {@link TruffleVM} can host as many of
- * Truffle languages as {@link Registration registered on a classpath} of your <em>JVM</em>
- * application. {@link TruffleVM} orchestrates these languages, manages exchange of objects and
- * calls among them. While it may happen that there is just one activated language inside of a
- * {@link TruffleVM}, the greatest strength of {@link TruffleVM} is in inter-operability between all
- * Truffle languages. There is 1:N mapping between {@link TruffleVM} and {@link TruffleLanguage
- * Truffle language implementations}.
- * <p>
- * Use {@link #newVM()} to create new isolated virtual machine ready for execution of various
- * languages. All the languages in a single virtual machine see each other exported global symbols
- * and can cooperate. Use {@link #newVM()} multiple times to create different, isolated virtual
- * machines completely separated from each other.
+ * Virtual machine for Truffle based languages. Use {@link #newVM()} to create new isolated virtual
+ * machine ready for execution of various languages. All the languages in a single virtual machine
+ * see each other exported global symbols and can cooperate. Use {@link #newVM()} multiple times to
+ * create different, isolated virtual machines completely separated from each other.
  * <p>
  * Once instantiated use {@link #eval(java.net.URI)} with a reference to a file or URL or directly
  * pass code snippet into the virtual machine via {@link #eval(java.lang.String, java.lang.String)}.
@@ -79,6 +64,7 @@ public final class TruffleVM {
     private final Writer err;
     private final Writer out;
     private final EventConsumer<?>[] handlers;
+    private final Map<String, Object> globals;
     private Debugger debugger;
 
     /**
@@ -91,6 +77,7 @@ public final class TruffleVM {
         this.out = null;
         this.langs = null;
         this.handlers = null;
+        this.globals = null;
     }
 
     /**
@@ -100,12 +87,13 @@ public final class TruffleVM {
      * @param err stderr
      * @param in stdin
      */
-    private TruffleVM(Writer out, Writer err, Reader in, EventConsumer<?>[] handlers) {
+    private TruffleVM(Map<String, Object> globals, Writer out, Writer err, Reader in, EventConsumer<?>[] handlers) {
         this.out = out;
         this.err = err;
         this.in = in;
         this.handlers = handlers;
         this.initThread = Thread.currentThread();
+        this.globals = new HashMap<>(globals);
         this.langs = new HashMap<>();
         Enumeration<URL> en;
         try {
@@ -188,7 +176,8 @@ public final class TruffleVM {
         private Writer out;
         private Writer err;
         private Reader in;
-        private List<EventConsumer<?>> handlers = new ArrayList<>();
+        private final List<EventConsumer<?>> handlers = new ArrayList<>();
+        private final Map<String, Object> globals = new HashMap<>();
 
         Builder() {
         }
@@ -243,6 +232,25 @@ public final class TruffleVM {
         }
 
         /**
+         * Adds global named symbol into the configuration of to-be-built {@link TruffleVM}. This
+         * symbol will be accessible to all languages via {@link Env#importSymbol(java.lang.String)}
+         * and will take precedence over
+         * {@link TruffleLanguage#findExportedSymbol(java.lang.Object, java.lang.String, boolean)
+         * symbols exported by languages itself}. Repeated use of <code>globalSymbol</code> is
+         * possible; later definition of the same name overrides the previous one.
+         * 
+         * @param name name of the symbol to register
+         * @param obj value of the object - expected to be primitive wrapper, {@link String} or
+         *            <code>TruffleObject</code> for mutual inter-operability
+         * @return instance of this builder
+         * @see TruffleVM#findGlobalSymbol(java.lang.String)
+         */
+        public Builder globalSymbol(String name, Object obj) {
+            globals.put(name, obj);
+            return this;
+        }
+
+        /**
          * Creates the {@link TruffleVM Truffle virtual machine}. The configuration is taken from
          * values passed into configuration methods in this class.
          *
@@ -258,7 +266,7 @@ public final class TruffleVM {
             if (in == null) {
                 in = new InputStreamReader(System.in);
             }
-            return new TruffleVM(out, err, in, handlers.toArray(new EventConsumer[0]));
+            return new TruffleVM(globals, out, err, in, handlers.toArray(new EventConsumer[0]));
         }
     }
 
@@ -378,15 +386,17 @@ public final class TruffleVM {
     public Symbol findGlobalSymbol(String globalName) {
         checkThread();
         TruffleLanguage<?> lang = null;
-        Object obj = null;
+        Object obj = globals.get(globalName);
         Object global = null;
-        for (Language dl : langs.values()) {
-            TruffleLanguage<?> l = dl.getImpl();
-            obj = SPI.findExportedSymbol(dl.env, globalName, true);
-            if (obj != null) {
-                lang = l;
-                global = SPI.languageGlobal(dl.env);
-                break;
+        if (obj == null) {
+            for (Language dl : langs.values()) {
+                TruffleLanguage<?> l = dl.getImpl();
+                obj = SPI.findExportedSymbol(dl.env, globalName, true);
+                if (obj != null) {
+                    lang = l;
+                    global = SPI.languageGlobal(dl.env);
+                    break;
+                }
             }
         }
         if (obj == null) {
@@ -612,6 +622,10 @@ public final class TruffleVM {
     private static class SPIAccessor extends Accessor {
         @Override
         public Object importSymbol(TruffleVM vm, TruffleLanguage<?> ownLang, String globalName) {
+            Object g = vm.globals.get(globalName);
+            if (g != null) {
+                return g;
+            }
             Set<Language> uniqueLang = new LinkedHashSet<>(vm.langs.values());
             for (Language dl : uniqueLang) {
                 TruffleLanguage<?> l = dl.getImpl();

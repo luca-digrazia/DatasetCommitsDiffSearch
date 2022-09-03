@@ -22,22 +22,23 @@
  */
 package com.oracle.truffle.api.test.vm;
 
-import com.oracle.truffle.api.source.Source;
+import static org.junit.Assert.*;
+
+import java.io.*;
+
+import org.junit.*;
+
 import static com.oracle.truffle.api.test.vm.ImplicitExplicitExportTest.L3;
 import com.oracle.truffle.api.vm.*;
-import java.io.*;
-import java.util.concurrent.Executors;
-import org.junit.*;
-import static org.junit.Assert.*;
 
 public class GlobalSymbolTest {
     @Test
     public void globalSymbolFoundByLanguage() throws IOException {
-        TruffleVM vm = TruffleVM.newVM().globalSymbol("ahoj", "42").executor(Executors.newSingleThreadExecutor()).build();
+        TruffleVM vm = TruffleVM.newVM().globalSymbol("ahoj", "42").build();
         // @formatter:off
-        Object ret = vm.eval(
-            Source.fromText("return=ahoj", "Return").withMimeType(L3)
-        ).get();
+        Object ret = vm.eval(L3,
+            "return=ahoj"
+        );
         // @formatter:on
         assertEquals("42", ret);
     }
@@ -47,6 +48,6 @@ public class GlobalSymbolTest {
         TruffleVM vm = TruffleVM.newVM().globalSymbol("ahoj", "42").build();
         TruffleVM.Symbol ret = vm.findGlobalSymbol("ahoj");
         assertNotNull("Symbol found", ret);
-        assertEquals("42", ret.get());
+        assertEquals("42", ret.invoke(null));
     }
 }
