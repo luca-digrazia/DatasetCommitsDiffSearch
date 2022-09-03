@@ -116,7 +116,6 @@ public final class GraalOptions {
     // Debug settings:
     public static boolean Debug                              = true;
     public static boolean DebugReplacements                  = ____;
-    public static boolean BootstrapReplacements              = ____;
     public static boolean PerThreadDebugValues               = ____;
     public static boolean SummarizeDebugValues               = ____;
     public static boolean SummarizePerPhase                  = ____;
@@ -204,6 +203,8 @@ public final class GraalOptions {
     public static boolean OptEliminatePartiallyRedundantGuards = true;
     public static boolean OptFilterProfiledTypes             = true;
     public static boolean OptDevirtualizeInvokesOptimistically = true;
+    public static boolean OptPushThroughPi                   = true;
+
 
     // Intrinsification settings
     public static boolean IntrinsifyObjectClone              = ____;
