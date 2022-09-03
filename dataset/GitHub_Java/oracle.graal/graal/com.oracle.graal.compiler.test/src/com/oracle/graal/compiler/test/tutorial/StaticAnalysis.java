@@ -24,6 +24,7 @@ package com.oracle.graal.compiler.test.tutorial;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
@@ -32,7 +33,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
@@ -210,7 +210,7 @@ public class StaticAnalysis {
                  * Build the Graal graph for the method using the bytecode parser provided by Graal.
                  */
 
-                StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO);
+                StructuredGraph graph = new StructuredGraph(method);
                 /*
                  * Support for graph dumping, IGV uses this information to show the method name of a
                  * graph.
@@ -236,8 +236,9 @@ public class StaticAnalysis {
                      * wrong.
                      */
                     OptimisticOptimizations optimisticOpts = OptimisticOptimizations.NONE;
+                    Assumptions assumptions = new Assumptions(false);
 
-                    GraphBuilderPhase.Instance graphBuilder = new GraphBuilderPhase.Instance(metaAccess, stampProvider, null, graphBuilderConfig, optimisticOpts);
+                    GraphBuilderPhase.Instance graphBuilder = new GraphBuilderPhase.Instance(metaAccess, stampProvider, assumptions, null, graphBuilderConfig, optimisticOpts);
                     graphBuilder.apply(graph);
                 } catch (Throwable ex) {
                     Debug.handle(ex);

@@ -30,7 +30,6 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.internal.*;
@@ -60,7 +59,6 @@ import com.oracle.graal.truffle.nodes.frame.NewFrameNode.VirtualOnlyInstanceNode
 import com.oracle.graal.truffle.phases.*;
 import com.oracle.graal.virtual.phases.ea.*;
 import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.*;
 
 /**
@@ -177,27 +175,12 @@ public class PartialEvaluator {
         }
     }
 
-    private class InlineInvokePlugin implements GraphBuilderPlugins.InlineInvokePlugin {
-
-        public boolean shouldInlineInvoke(ResolvedJavaMethod method, int depth) {
-            return method.getAnnotation(TruffleBoundary.class) != null;
-        }
-
-    }
-
     @SuppressWarnings("unused")
     private void fastPartialEvaluation(OptimizedCallTarget callTarget, Assumptions assumptions, StructuredGraph graph, PhaseContext baseContext, HighTierContext tierContext) {
         GraphBuilderConfiguration newConfig = configForRoot.copy();
         newConfig.setLoadFieldPlugin(new InterceptLoadFieldPlugin());
         newConfig.setParameterPlugin(new InterceptReceiverPlugin(callTarget));
-        newConfig.setInlineInvokePlugin(new InlineInvokePlugin());
-        DefaultGraphBuilderPlugins plugins = new DefaultGraphBuilderPlugins();
-        Iterable<GraphBuilderPluginsProvider> sl = Services.load(GraphBuilderPluginsProvider.class);
-        for (GraphBuilderPluginsProvider p : sl) {
-            p.registerPlugins(providers.getMetaAccess(), plugins);
-        }
-        new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), new Assumptions(false), providers.getConstantReflection(), newConfig, plugins,
-                        TruffleCompilerImpl.Optimizations).apply(graph);
+        new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), new Assumptions(false), providers.getConstantReflection(), newConfig, TruffleCompilerImpl.Optimizations).apply(graph);
         Debug.dump(graph, "After FastPE");
     }
 

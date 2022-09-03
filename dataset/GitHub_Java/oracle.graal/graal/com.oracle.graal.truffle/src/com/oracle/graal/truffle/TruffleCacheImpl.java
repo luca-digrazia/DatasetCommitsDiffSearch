@@ -25,6 +25,7 @@ package com.oracle.graal.truffle;
 import java.util.*;
 import java.util.Map.Entry;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
@@ -34,7 +35,6 @@ import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
@@ -60,7 +60,7 @@ public class TruffleCacheImpl implements TruffleCache {
 
     private final HashMap<List<Object>, StructuredGraph> cache = new HashMap<>();
     private final HashMap<List<Object>, Long> lastUsed = new HashMap<>();
-    private final StructuredGraph markerGraph = new StructuredGraph(AllowAssumptions.NO);
+    private final StructuredGraph markerGraph = new StructuredGraph();
 
     private final ResolvedJavaType stringBuilderClass;
     private final ResolvedJavaType runtimeExceptionClass;
@@ -119,11 +119,11 @@ public class TruffleCacheImpl implements TruffleCache {
             lookupExceedsMaxSize();
         }
 
-        StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO);
-        PhaseContext phaseContext = new PhaseContext(providers);
+        StructuredGraph graph;
+        PhaseContext phaseContext = new PhaseContext(providers, new Assumptions(false));
         try (Scope s = Debug.scope("TruffleCache", providers.getMetaAccess(), method)) {
 
-            graph = parseGraph(graph, phaseContext);
+            graph = parseGraph(method, phaseContext);
             if (graph == null) {
                 return null;
             }
@@ -268,8 +268,9 @@ public class TruffleCacheImpl implements TruffleCache {
         canonicalizer.applyIncremental(graph, phaseContext, canonicalizerUsages);
     }
 
-    protected StructuredGraph parseGraph(StructuredGraph graph, final PhaseContext phaseContext) {
-        new GraphBuilderPhase.Instance(phaseContext.getMetaAccess(), phaseContext.getStampProvider(), null, config, optimisticOptimizations).apply(graph);
+    protected StructuredGraph parseGraph(final ResolvedJavaMethod method, final PhaseContext phaseContext) {
+        final StructuredGraph graph = new StructuredGraph(method);
+        new GraphBuilderPhase.Instance(phaseContext.getMetaAccess(), phaseContext.getStampProvider(), phaseContext.getAssumptions(), null, config, optimisticOptimizations).apply(graph);
         return graph;
     }
 
