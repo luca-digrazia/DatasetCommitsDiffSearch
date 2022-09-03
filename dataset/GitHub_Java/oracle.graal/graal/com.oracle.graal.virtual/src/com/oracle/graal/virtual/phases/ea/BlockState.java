@@ -22,36 +22,107 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import static com.oracle.graal.virtual.phases.ea.PartialEscapeAnalysisPhase.*;
-
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.Virtualizable.EscapeState;
 import com.oracle.graal.nodes.virtual.*;
-import com.oracle.graal.phases.graph.ReentrantBlockIterator.MergeableBlockState;
-import com.oracle.graal.virtual.nodes.*;
 
-class BlockState extends MergeableBlockState<BlockState> {
+public class BlockState {
 
-    private final HashMap<VirtualObjectNode, ObjectState> objectStates = new HashMap<>();
-    private final HashMap<ValueNode, VirtualObjectNode> objectAliases = new HashMap<>();
-    private final HashMap<ValueNode, ValueNode> scalarAliases = new HashMap<>();
+    protected final IdentityHashMap<VirtualObjectNode, ObjectState> objectStates = new IdentityHashMap<>();
+    protected final IdentityHashMap<ValueNode, VirtualObjectNode> objectAliases;
+    protected final IdentityHashMap<ValueNode, ValueNode> scalarAliases;
+    final HashMap<ReadCacheEntry, ValueNode> readCache;
+
+    static class ReadCacheEntry {
+
+        public final ResolvedJavaField identity;
+        public final ValueNode object;
+
+        public ReadCacheEntry(ResolvedJavaField identity, ValueNode object) {
+            this.identity = identity;
+            this.object = object;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = 31 + ((identity == null) ? 0 : identity.hashCode());
+            return 31 * result + ((object == null) ? 0 : object.hashCode());
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            ReadCacheEntry other = (ReadCacheEntry) obj;
+            return identity == other.identity && object == other.object;
+        }
+
+        @Override
+        public String toString() {
+            return object + ":" + identity;
+        }
+    }
 
     public BlockState() {
+        objectAliases = new IdentityHashMap<>();
+        scalarAliases = new IdentityHashMap<>();
+        readCache = new HashMap<>();
     }
 
     public BlockState(BlockState other) {
         for (Map.Entry<VirtualObjectNode, ObjectState> entry : other.objectStates.entrySet()) {
             objectStates.put(entry.getKey(), entry.getValue().cloneState());
         }
-        for (Map.Entry<ValueNode, VirtualObjectNode> entry : other.objectAliases.entrySet()) {
-            objectAliases.put(entry.getKey(), entry.getValue());
+        objectAliases = new IdentityHashMap<>(other.objectAliases);
+        scalarAliases = new IdentityHashMap<>(other.scalarAliases);
+        readCache = new HashMap<>(other.readCache);
+    }
+
+    public void addReadCache(ValueNode object, ResolvedJavaField identity, ValueNode value) {
+        ValueNode cacheObject;
+        ObjectState obj = getObjectState(object);
+        if (obj != null) {
+            assert !obj.isVirtual();
+            cacheObject = obj.getMaterializedValue();
+        } else {
+            cacheObject = object;
         }
-        for (Map.Entry<ValueNode, ValueNode> entry : other.scalarAliases.entrySet()) {
-            scalarAliases.put(entry.getKey(), entry.getValue());
+        readCache.put(new ReadCacheEntry(identity, cacheObject), value);
+    }
+
+    public ValueNode getReadCache(ValueNode object, ResolvedJavaField identity) {
+        ValueNode cacheObject;
+        ObjectState obj = getObjectState(object);
+        if (obj != null) {
+            assert !obj.isVirtual();
+            cacheObject = obj.getMaterializedValue();
+        } else {
+            cacheObject = object;
+        }
+        ValueNode cacheValue = readCache.get(new ReadCacheEntry(identity, cacheObject));
+        obj = getObjectState(cacheValue);
+        if (obj != null) {
+            assert !obj.isVirtual();
+            cacheValue = obj.getMaterializedValue();
+        } else {
+            cacheValue = getScalarAlias(cacheValue);
+        }
+        return cacheValue;
+    }
+
+    public void killReadCache() {
+        readCache.clear();
+    }
+
+    public void killReadCache(ResolvedJavaField identity) {
+        Iterator<Map.Entry<ReadCacheEntry, ValueNode>> iter = readCache.entrySet().iterator();
+        while (iter.hasNext()) {
+            Map.Entry<ReadCacheEntry, ValueNode> entry = iter.next();
+            if (entry.getKey().identity == identity) {
+                iter.remove();
+            }
         }
     }
 
@@ -69,66 +140,69 @@ class BlockState extends MergeableBlockState<BlockState> {
         return object == null ? null : getObjectState(object);
     }
 
-    @Override
     public BlockState cloneState() {
         return new BlockState(this);
     }
 
-    public void materializeBefore(FixedNode fixed, VirtualObjectNode virtual, GraphEffectList materializeEffects) {
-        HashSet<VirtualObjectNode> deferred = new HashSet<>();
-        GraphEffectList deferredStores = new GraphEffectList();
-        materializeChangedBefore(fixed, virtual, deferred, deferredStores, materializeEffects);
-        materializeEffects.addAll(deferredStores);
+    public BlockState cloneEmptyState() {
+        return new BlockState();
     }
 
-    private void materializeChangedBefore(FixedNode fixed, VirtualObjectNode virtual, HashSet<VirtualObjectNode> deferred, GraphEffectList deferredStores, GraphEffectList materializeEffects) {
-        trace("materializing %s at %s", virtual, fixed);
+    public void materializeBefore(FixedNode fixed, VirtualObjectNode virtual, EscapeState state, GraphEffectList materializeEffects) {
+        PartialEscapeClosure.METRIC_MATERIALIZATIONS.increment();
+        List<AllocatedObjectNode> objects = new ArrayList<>(2);
+        List<ValueNode> values = new ArrayList<>(8);
+        List<int[]> locks = new ArrayList<>(2);
+        List<ValueNode> otherAllocations = new ArrayList<>(2);
+        materializeWithCommit(fixed, virtual, objects, locks, values, otherAllocations, state);
+
+        materializeEffects.addMaterializationBefore(fixed, objects, locks, values, otherAllocations);
+    }
+
+    private void materializeWithCommit(FixedNode fixed, VirtualObjectNode virtual, List<AllocatedObjectNode> objects, List<int[]> locks, List<ValueNode> values, List<ValueNode> otherAllocations,
+                    EscapeState state) {
+        VirtualUtil.trace("materializing %s", virtual);
         ObjectState obj = getObjectState(virtual);
-        if (obj.getLockCount() > 0 && obj.virtual.type().isArrayClass()) {
-            throw new BailoutException("array materialized with lock");
-        }
 
-        MaterializeObjectNode materialize = new MaterializeObjectNode(virtual, obj.getLockCount() > 0);
-        ValueNode[] values = new ValueNode[obj.getEntries().length];
-        materialize.setProbability(fixed.probability());
-        ValueNode[] fieldState = obj.getEntries();
-        obj.setMaterializedValue(materialize);
-        deferred.add(virtual);
-        for (int i = 0; i < fieldState.length; i++) {
-            ObjectState valueObj = getObjectState(fieldState[i]);
-            if (valueObj != null) {
-                if (valueObj.isVirtual()) {
-                    materializeChangedBefore(fixed, valueObj.virtual, deferred, deferredStores, materializeEffects);
-                }
-                if (deferred.contains(valueObj.virtual)) {
-                    Kind fieldKind;
-                    CyclicMaterializeStoreNode store;
-                    if (virtual instanceof VirtualArrayNode) {
-                        store = new CyclicMaterializeStoreNode(materialize, valueObj.getMaterializedValue(), i);
-                        fieldKind = ((VirtualArrayNode) virtual).componentType().getKind();
-                    } else {
-                        VirtualInstanceNode instanceObject = (VirtualInstanceNode) virtual;
-                        store = new CyclicMaterializeStoreNode(materialize, valueObj.getMaterializedValue(), instanceObject.field(i));
-                        fieldKind = instanceObject.field(i).getType().getKind();
-                    }
-                    deferredStores.addFixedNodeBefore(store, fixed);
-                    values[i] = ConstantNode.defaultForKind(fieldKind, fixed.graph());
-                } else {
-                    values[i] = valueObj.getMaterializedValue();
-                }
-            } else {
-                values[i] = fieldState[i];
+        ValueNode[] entries = obj.getEntries();
+        ValueNode representation = virtual.getMaterializedRepresentation(fixed, entries, obj.getLocks());
+        obj.escape(representation, state);
+        if (representation instanceof AllocatedObjectNode) {
+            objects.add((AllocatedObjectNode) representation);
+            locks.add(obj.getLocks());
+            int pos = values.size();
+            while (values.size() < pos + entries.length) {
+                values.add(null);
             }
+            for (int i = 0; i < entries.length; i++) {
+                ObjectState entryObj = getObjectState(entries[i]);
+                if (entryObj != null) {
+                    if (entryObj.isVirtual()) {
+                        materializeWithCommit(fixed, entryObj.getVirtualObject(), objects, locks, values, otherAllocations, state);
+                    }
+                    values.set(pos + i, entryObj.getMaterializedValue());
+                } else {
+                    values.set(pos + i, entries[i]);
+                }
+            }
+            if (virtual instanceof VirtualInstanceNode) {
+                VirtualInstanceNode instance = (VirtualInstanceNode) virtual;
+                for (int i = 0; i < entries.length; i++) {
+                    readCache.put(new ReadCacheEntry(instance.field(i), representation), values.get(pos + i));
+                }
+            }
+        } else {
+            otherAllocations.add(representation);
+            assert obj.getLocks().length == 0;
         }
-        deferred.remove(virtual);
-
-        materializeEffects.addMaterialization(materialize, fixed, values);
     }
 
     void addAndMarkAlias(VirtualObjectNode virtual, ValueNode node, NodeBitMap usages) {
         objectAliases.put(node, virtual);
-        for (Node usage : node.usages()) {
-            markVirtualUsages(usage, usages);
+        if (node.isAlive()) {
+            for (Node usage : node.usages()) {
+                markVirtualUsages(usage, usages);
+            }
         }
     }
 
@@ -160,41 +234,73 @@ class BlockState extends MergeableBlockState<BlockState> {
         return objectStates.values();
     }
 
-    public Iterable<VirtualObjectNode> getVirtualObjects() {
+    public Collection<VirtualObjectNode> getVirtualObjects() {
         return objectAliases.values();
     }
 
     @Override
     public String toString() {
-        return objectStates.toString();
+        return objectStates + " " + readCache;
     }
 
-    public static BlockState meetAliases(List<BlockState> states) {
-        BlockState newState = new BlockState();
-
-        newState.objectAliases.putAll(states.get(0).objectAliases);
+    public void meetAliases(List<? extends BlockState> states) {
+        objectAliases.putAll(states.get(0).objectAliases);
+        scalarAliases.putAll(states.get(0).scalarAliases);
         for (int i = 1; i < states.size(); i++) {
             BlockState state = states.get(i);
-            for (Map.Entry<ValueNode, VirtualObjectNode> entry : states.get(0).objectAliases.entrySet()) {
-                if (state.objectAliases.containsKey(entry.getKey())) {
-                    assert state.objectAliases.get(entry.getKey()) == entry.getValue();
-                } else {
-                    newState.objectAliases.remove(entry.getKey());
-                }
-            }
+            meetMaps(objectAliases, state.objectAliases);
+            meetMaps(scalarAliases, state.scalarAliases);
         }
-
-        newState.scalarAliases.putAll(states.get(0).scalarAliases);
-        for (int i = 1; i < states.size(); i++) {
-            BlockState state = states.get(i);
-            for (Map.Entry<ValueNode, ValueNode> entry : states.get(0).scalarAliases.entrySet()) {
-                if (state.scalarAliases.containsKey(entry.getKey())) {
-                    assert state.scalarAliases.get(entry.getKey()) == entry.getValue();
-                } else {
-                    newState.scalarAliases.remove(entry.getKey());
-                }
-            }
-        }
-        return newState;
     }
+
+    public Map<ReadCacheEntry, ValueNode> getReadCache() {
+        return readCache;
+    }
+
+    public boolean equivalentTo(BlockState other) {
+        if (this == other) {
+            return true;
+        }
+        boolean objectAliasesEqual = compareMaps(objectAliases, other.objectAliases);
+        boolean objectStatesEqual = compareMaps(objectStates, other.objectStates);
+        boolean readCacheEqual = compareMapsNoSize(readCache, other.readCache);
+        boolean scalarAliasesEqual = scalarAliases.equals(other.scalarAliases);
+        return objectAliasesEqual && objectStatesEqual && readCacheEqual && scalarAliasesEqual;
+    }
+
+    protected static <K, V> boolean compareMaps(Map<K, V> left, Map<K, V> right) {
+        if (left.size() != right.size()) {
+            return false;
+        }
+        return compareMapsNoSize(left, right);
+    }
+
+    protected static <K, V> boolean compareMapsNoSize(Map<K, V> left, Map<K, V> right) {
+        if (left == right) {
+            return true;
+        }
+        for (Map.Entry<K, V> entry : right.entrySet()) {
+            K key = entry.getKey();
+            V value = entry.getValue();
+            assert value != null;
+            V otherValue = left.get(key);
+            if (otherValue != value && !value.equals(otherValue)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    protected static <U, V> void meetMaps(Map<U, V> target, Map<U, V> source) {
+        Iterator<Map.Entry<U, V>> iter = target.entrySet().iterator();
+        while (iter.hasNext()) {
+            Map.Entry<U, V> entry = iter.next();
+            if (source.containsKey(entry.getKey())) {
+                assert source.get(entry.getKey()) == entry.getValue();
+            } else {
+                iter.remove();
+            }
+        }
+    }
+
 }
