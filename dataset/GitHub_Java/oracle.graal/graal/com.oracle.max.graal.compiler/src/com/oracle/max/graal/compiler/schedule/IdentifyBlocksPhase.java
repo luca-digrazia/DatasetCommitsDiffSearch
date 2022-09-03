@@ -133,19 +133,18 @@ public class IdentifyBlocksPhase extends Phase {
             if (n != null) {
                 if (n instanceof EndNode || n instanceof Return || n instanceof Unwind || n instanceof LoopEnd || n instanceof Deoptimize) {
                     Block block = null;
-                    Node currentNode = n;
-                    while (nodeToBlock.get(currentNode) == null) {
-                        if (block != null && IdentifyBlocksPhase.trueSuccessorCount(currentNode) > 1) {
+                    while (nodeToBlock.get(n) == null) {
+                        if (block != null && IdentifyBlocksPhase.trueSuccessorCount(n) > 1) {
                             // We are at a split node => start a new block.
                             block = null;
                         }
-                        block = assignBlockNew(currentNode, block);
-                        if (currentNode.predecessors().size() == 0) {
+                        block = assignBlockNew(n, block);
+                        if (n.predecessors().size() == 0) {
                             // Either dead code or at a merge node => stop iteration.
                             break;
                         }
-                        assert currentNode.predecessors().size() == 1 : "preds: " + currentNode;
-                        currentNode = currentNode.predecessors().get(0);
+                        assert n.predecessors().size() == 1 : "preds: " + n;
+                        n = n.predecessors().get(0);
                     }
                 }
             }
@@ -312,7 +311,7 @@ public class IdentifyBlocksPhase extends Phase {
                 }
             } else if (usage instanceof LoopCounter) {
                 LoopCounter counter = (LoopCounter) usage;
-                if (n == counter.init()) {
+                if (n == counter.init() || n == counter.stride()) {
                     LoopBegin loopBegin = counter.loopBegin();
                     Block mergeBlock = nodeToBlock.get(loopBegin);
                     block = getCommonDominator(block, mergeBlock.dominator());
