@@ -22,11 +22,8 @@
  */
 package com.oracle.graal.compiler;
 
-import jdk.internal.jvmci.service.ServiceProvider;
-
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugInitializationPropertyProvider;
-import com.oracle.graal.debug.GraalDebugConfig;
+import com.oracle.graal.debug.*;
+import jdk.internal.jvmci.service.*;
 
 /**
  * Sets system properties used in the initialization of {@link Debug} based on the values specified
@@ -40,13 +37,13 @@ public class GraalDebugInitializationPropertyProvider implements DebugInitializa
         if (GraalDebugConfig.areDebugScopePatternsEnabled()) {
             System.setProperty(Debug.Initialization.INITIALIZER_PROPERTY_NAME, "true");
         }
-        if ("".equals(GraalDebugConfig.Options.Meter.getValue())) {
+        if ("".equals(GraalDebugConfig.Meter.getValue())) {
             System.setProperty(Debug.ENABLE_UNSCOPED_METRICS_PROPERTY_NAME, "true");
         }
-        if ("".equals(GraalDebugConfig.Options.Time.getValue())) {
+        if ("".equals(GraalDebugConfig.Time.getValue())) {
             System.setProperty(Debug.ENABLE_UNSCOPED_TIMERS_PROPERTY_NAME, "true");
         }
-        if ("".equals(GraalDebugConfig.Options.TrackMemUse.getValue())) {
+        if ("".equals(GraalDebugConfig.TrackMemUse.getValue())) {
             System.setProperty(Debug.ENABLE_UNSCOPED_MEM_USE_TRACKERS_PROPERTY_NAME, "true");
         }
     }
