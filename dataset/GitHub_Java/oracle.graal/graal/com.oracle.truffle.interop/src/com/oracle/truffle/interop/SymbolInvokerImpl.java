@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,15 +24,19 @@
  */
 package com.oracle.truffle.interop;
 
-import java.io.*;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrument.*;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.impl.SymbolInvoker;
+import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.interop.messages.Execute;
+import com.oracle.truffle.interop.messages.Receiver;
+import com.oracle.truffle.interop.node.ForeignObjectAccessNode;
 
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.impl.*;
-import com.oracle.truffle.api.interop.*;
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.interop.messages.*;
-import com.oracle.truffle.interop.node.*;
+import java.io.IOException;
 
 public final class SymbolInvokerImpl extends SymbolInvoker {
     static final FrameDescriptor UNUSED_FRAMEDESCRIPTOR = new FrameDescriptor();
@@ -54,6 +58,11 @@ public final class SymbolInvokerImpl extends SymbolInvoker {
             this.foreignAccess = foreignAccess;
             this.function = function;
             this.args = args;
+        }
+
+        @Override
+        public void applyInstrumentation() {
+            Probe.applyASTProbers(foreignAccess);
         }
 
         @Override
