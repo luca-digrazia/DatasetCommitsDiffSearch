@@ -40,11 +40,11 @@ import com.oracle.truffle.dsl.processor.parser.*;
 class AnnotationProcessor<M extends Template> {
 
     private final AbstractParser<M> parser;
-    private final CodeTypeElementFactory<M> factory;
+    private final AbstractCompilationUnitFactory<M> factory;
 
     private final Set<String> processedElements = new HashSet<>();
 
-    public AnnotationProcessor(AbstractParser<M> parser, CodeTypeElementFactory<M> factory) {
+    public AnnotationProcessor(AbstractParser<M> parser, AbstractCompilationUnitFactory<M> factory) {
         this.parser = parser;
         this.factory = factory;
     }
@@ -77,15 +77,7 @@ class AnnotationProcessor<M extends Template> {
             context.registerTemplate(type, model);
 
             if (model != null) {
-                CodeTypeElement unit;
-                try {
-                    unit = factory.create(ProcessorContext.getInstance(), model);
-                } catch (Throwable e) {
-                    throw new RuntimeException(String.format("Failed to write code for %s. Parserdump:%s.", ElementUtils.getQualifiedName(type), model.dump()));
-                }
-                if (unit == null) {
-                    return;
-                }
+                CodeCompilationUnit unit = factory.process(null, model);
                 unit.setGeneratorAnnotationMirror(model.getTemplateTypeAnnotation());
                 unit.setGeneratorElement(model.getTemplateType());
 
@@ -100,4 +92,5 @@ class AnnotationProcessor<M extends Template> {
             }
         }
     }
+
 }

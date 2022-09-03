@@ -57,7 +57,6 @@ public final class CodeWriter extends AbstractCodeWriter {
         if (comment != null) {
             writeLn(comment);
         }
-        writeLn("// CheckStyle: start generated");
     }
 
 }
