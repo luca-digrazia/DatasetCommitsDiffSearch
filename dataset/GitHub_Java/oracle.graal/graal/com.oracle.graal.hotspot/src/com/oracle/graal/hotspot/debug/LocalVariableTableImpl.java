@@ -22,53 +22,47 @@
  */
 package com.oracle.graal.hotspot.debug;
 
+import java.util.*;
+
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.meta.*;
 
-public class LocalImpl implements Local {
+public class LocalVariableTableImpl implements LocalVariableTable {
 
-    private final String name;
-    private final int bciStart;
-    private final int bciEnd;
-    private final int slot;
-    private final ResolvedJavaType resolvedType;
+    private final Local[] locals;
 
-    public LocalImpl(String name, String type, HotSpotResolvedObjectType holder, int bciStart, int bciEnd, int slot) {
-        this.name = name;
-        this.bciStart = bciStart;
-        this.bciEnd = bciEnd;
-        this.slot = slot;
-        JavaType t = HotSpotGraalRuntime.getInstance().lookupType(type, holder, true);
-        if (t instanceof ResolvedJavaType) {
-            this.resolvedType = (ResolvedJavaType) HotSpotGraalRuntime.getInstance().lookupType(type, holder, false);
-        } else {
-            throw new AssertionError(t.getClass() + " is not a ResolvedJavaType");
+    public LocalVariableTableImpl(Local[] locals) {
+        this.locals = locals;
+    }
+
+    @Override
+    public Local getLocal(int slot, int bci) {
+        Local result = null;
+        for (Local local : locals) {
+            if (local.getSlot() == slot && local.getStartBCI() <= bci && local.getEndBCI() >= bci) {
+                if (result == null) {
+                    result = local;
+                } else {
+                    throw new IllegalStateException("Locals overlap!");
+                }
+            }
         }
+        return result;
     }
 
     @Override
-    public int getStartBCI() {
-        return bciStart;
+    public Local[] getLocals() {
+        return locals;
     }
 
     @Override
-    public int getEndBCI() {
-        return bciEnd;
+    public Local[] getLocalsAt(int bci) {
+        List<Local> result = new ArrayList<>();
+        for (Local l : locals) {
+            if (l.getStartBCI() <= bci && bci <= l.getEndBCI()) {
+                result.add(l);
+            }
+        }
+        return result.toArray(new Local[result.size()]);
     }
 
-    @Override
-    public String getName() {
-        return name;
-    }
-
-    @Override
-    public ResolvedJavaType getType() {
-        return resolvedType;
-    }
-
-    @Override
-    public int getSlot() {
-        return slot;
-    }
 }

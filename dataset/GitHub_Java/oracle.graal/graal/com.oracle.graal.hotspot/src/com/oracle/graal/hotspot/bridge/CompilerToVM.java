@@ -152,7 +152,7 @@ public interface CompilerToVM {
      *            not null
      * @return the outcome of the installation as a {@link CodeInstallResult}.
      */
-    CodeInstallResult installCode(HotSpotCompilationResult compResult, HotSpotInstalledCode code, HotSpotCodeInfo info, boolean[] triggeredDeoptimizations);
+    CodeInstallResult installCode(HotSpotCompilationResult compResult, HotSpotInstalledCode code, HotSpotCodeInfo info);
 
     void initializeConfiguration(HotSpotVMConfig config);
 
