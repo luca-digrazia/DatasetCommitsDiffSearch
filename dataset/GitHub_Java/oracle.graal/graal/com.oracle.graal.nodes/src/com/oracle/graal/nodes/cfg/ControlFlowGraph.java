@@ -173,7 +173,6 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
                 // First time we see this block: push all successors.
                 for (Node suxNode : block.getEndNode().cfgSuccessors()) {
                     Block suxBlock = blockFor(suxNode);
-                    assert suxBlock != null : suxNode;
                     if (suxBlock.getId() == BLOCK_ID_INITIAL) {
                         stack.add(suxBlock);
                     }
@@ -201,7 +200,6 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
     }
 
     // Connect blocks (including loop backward edges), but ignoring dead code (blocks with id < 0).
-    // Predecessors need to be in the order expected when iterating phi inputs.
     private void connectBlocks() {
         for (Block block : reversePostOrder) {
             List<Block> predecessors = new ArrayList<>(1);
@@ -223,7 +221,7 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
             if (block.getBeginNode() instanceof LoopBeginNode) {
                 LoopBeginNode loopBegin = (LoopBeginNode) block.getBeginNode();
                 probability *= loopBegin.loopFrequency();
-                for (LoopEndNode predNode : loopBegin.orderedLoopEnds()) {
+                for (LoopEndNode predNode : loopBegin.loopEnds()) {
                     Block predBlock = nodeToBlock.get(predNode);
                     assert predBlock != null : predNode;
                     if (predBlock.getId() >= 0) {
