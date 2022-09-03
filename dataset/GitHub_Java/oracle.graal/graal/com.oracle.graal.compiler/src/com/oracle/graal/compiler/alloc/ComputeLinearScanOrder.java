@@ -27,6 +27,7 @@ import java.util.*;
 
 import com.oracle.max.criutils.*;
 import com.oracle.graal.compiler.*;
+import com.oracle.graal.compiler.util.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
@@ -38,17 +39,17 @@ public final class ComputeLinearScanOrder {
     List<Block> linearScanOrder; // the resulting list of blocks in correct order
     List<Block> codeEmittingOrder;
 
-    final BitMap visitedBlocks; // used for recursive processing of blocks
-    final BitMap activeBlocks; // used for recursive processing of blocks
-    final BitMap dominatorBlocks; // temporary BitMap used for computation of dominator
+    final BitSet visitedBlocks; // used for recursive processing of blocks
+    final BitSet activeBlocks; // used for recursive processing of blocks
+    final BitSet dominatorBlocks; // temporary BitMap used for computation of dominator
     final int[] forwardBranches; // number of incoming forward branches for each block
     final List<Block> workList; // temporary list (used in markLoops and computeOrder)
     final Block[] loopHeaders;
 
     // accessors for visitedBlocks and activeBlocks
     void initVisited() {
-        activeBlocks.clearAll();
-        visitedBlocks.clearAll();
+        activeBlocks.clear();
+        visitedBlocks.clear();
     }
 
     boolean isVisited(Block b) {
@@ -91,9 +92,9 @@ public final class ComputeLinearScanOrder {
     public ComputeLinearScanOrder(int maxBlockId, int loopCount, Block startBlock) {
         loopHeaders = new Block[loopCount];
 
-        visitedBlocks = new BitMap(maxBlockId);
-        activeBlocks = new BitMap(maxBlockId);
-        dominatorBlocks = new BitMap(maxBlockId);
+        visitedBlocks = new BitSet(maxBlockId);
+        activeBlocks = new BitSet(maxBlockId);
+        dominatorBlocks = new BitSet(maxBlockId);
         forwardBranches = new int[maxBlockId];
         workList = new ArrayList<>(8);
 
@@ -304,13 +305,27 @@ public final class ComputeLinearScanOrder {
             Block cur = workList.remove(workList.size() - 1);
             appendBlock(cur);
 
-            int i;
-            int numSux = cur.numberOfSux();
-            // changed loop order to get "intuitive" order of if- and else-blocks
-            for (i = 0; i < numSux; i++) {
-                Block sux = cur.suxAt(i);
-                if (readyForProcessing(sux)) {
-                    sortIntoWorkList(sux);
+            Node endNode = cur.getEndNode();
+            if (endNode instanceof ControlSplitNode) {
+                // Sort the successors according to their probabilities:
+                final ControlSplitNode split = (ControlSplitNode) endNode;
+                Integer[] indexes = Util.createSortedPermutation(split.blockSuccessorCount(), new Comparator<Integer>() {
+                    @Override
+                    public int compare(Integer o1, Integer o2) {
+                        return split.probability(o1) < split.probability(o2) ? 1 : split.probability(o1) > split.probability(o2) ? -1 : 0;
+                    }
+                });
+                for (int index : indexes) {
+                    Block sux = cur.getSuccessors().get(indexes[index]);
+                    if (readyForProcessing(sux)) {
+                        sortIntoWorkList(sux);
+                    }
+                }
+            } else {
+                for (Block sux : cur.getSuccessors()) {
+                    if (readyForProcessing(sux)) {
+                        sortIntoWorkList(sux);
+                    }
                 }
             }
         } while (workList.size() > 0);
