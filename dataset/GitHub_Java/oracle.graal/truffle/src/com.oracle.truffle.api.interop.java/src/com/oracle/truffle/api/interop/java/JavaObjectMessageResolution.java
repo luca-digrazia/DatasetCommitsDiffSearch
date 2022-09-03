@@ -446,24 +446,30 @@ class JavaObjectMessageResolution {
     @Resolve(message = "KEY_INFO")
     abstract static class KeyInfoNode extends Node {
 
+        private static final int READABLE = KeyInfo.newBuilder().setReadable(true).build();
+        private static final int READABLE_WRITABLE = KeyInfo.newBuilder().setReadable(true).setWritable(true).build();
+        private static final int READABLE_WRITABLE_INVOCABLE = KeyInfo.newBuilder().setReadable(true).setWritable(true).setInvocable(true).build();
+        private static final int READABLE_WRITABLE_INVOCABLE_INTERNAL = KeyInfo.newBuilder().setReadable(true).setWritable(true).setInvocable(true).setInternal(true).build();
+
         @TruffleBoundary
         public int access(JavaObject receiver, Number index) {
             int i = index.intValue();
-            if (i != index.doubleValue() || i < 0) {
-                return KeyInfo.NONE;
+            if (i != index.doubleValue()) {
+                // No non-integer indexes
+                return 0;
+            }
+            if (i < 0) {
+                return 0;
             }
             if (receiver.isArray()) {
                 int length = Array.getLength(receiver.obj);
                 if (i < length) {
-                    return KeyInfo.READABLE | KeyInfo.MODIFIABLE;
+                    return READABLE_WRITABLE;
                 }
             } else if (receiver.obj instanceof List) {
                 int length = ((List<?>) receiver.obj).size();
                 if (i < length) {
-                    return KeyInfo.READABLE | KeyInfo.MODIFIABLE | KeyInfo.REMOVABLE;
-                } else if (i == length) {
-                    // we can append to an array list
-                    return KeyInfo.INSERTABLE;
+                    return READABLE_WRITABLE;
                 }
             }
             return 0;
@@ -475,22 +481,22 @@ class JavaObjectMessageResolution {
                 throw UnsupportedMessageException.raise(Message.KEY_INFO);
             }
             if (TruffleOptions.AOT) {
-                return KeyInfo.NONE;
+                return 0;
             }
             if (JavaInteropReflect.isField(receiver, name)) {
-                return KeyInfo.READABLE | KeyInfo.MODIFIABLE;
+                return READABLE_WRITABLE;
             }
             if (JavaInteropReflect.isMethod(receiver, name)) {
                 if (JavaInteropReflect.isInternalMethod(receiver, name)) {
-                    return KeyInfo.READABLE | KeyInfo.MODIFIABLE | KeyInfo.INVOCABLE | KeyInfo.INTERNAL;
+                    return READABLE_WRITABLE_INVOCABLE_INTERNAL;
                 } else {
-                    return KeyInfo.READABLE | KeyInfo.MODIFIABLE | KeyInfo.INVOCABLE;
+                    return READABLE_WRITABLE_INVOCABLE;
                 }
             }
             if (JavaInteropReflect.isMemberType(receiver, name)) {
-                return KeyInfo.READABLE;
+                return READABLE;
             }
-            return KeyInfo.NONE;
+            return 0;
         }
     }
 
