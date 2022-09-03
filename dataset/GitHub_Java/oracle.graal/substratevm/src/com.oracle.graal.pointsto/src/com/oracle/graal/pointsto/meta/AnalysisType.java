@@ -43,11 +43,11 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
-import org.graalvm.util.GuardedAnnotationAccess;
 import org.graalvm.word.WordBase;
 
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.BigBang.ConstantObjectsProfiler;
+import com.oracle.graal.pointsto.api.AnnotationAccess;
 import com.oracle.graal.pointsto.api.DefaultUnsafePartition;
 import com.oracle.graal.pointsto.api.PointstoOptions;
 import com.oracle.graal.pointsto.api.UnsafePartitionKind;
@@ -890,17 +890,17 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
 
     @Override
     public Annotation[] getAnnotations() {
-        return GuardedAnnotationAccess.getAnnotations(wrapped);
+        return AnnotationAccess.getAnnotations(wrapped);
     }
 
     @Override
     public Annotation[] getDeclaredAnnotations() {
-        return GuardedAnnotationAccess.getDeclaredAnnotations(wrapped);
+        return AnnotationAccess.getDeclaredAnnotations(wrapped);
     }
 
     @Override
     public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
-        return GuardedAnnotationAccess.getAnnotation(wrapped, annotationClass);
+        return AnnotationAccess.getAnnotation(wrapped, annotationClass);
     }
 
     @Override
@@ -937,14 +937,7 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
 
     @Override
     public AnalysisType getEnclosingType() {
-        ResolvedJavaType wrappedEnclosingType;
-        try {
-            wrappedEnclosingType = wrapped.getEnclosingType();
-        } catch (NoClassDefFoundError e) {
-            /* Ignore NoClassDefFoundError thrown by enclosing type resolution. */
-            return null;
-        }
-        return universe.lookup(wrappedEnclosingType);
+        return universe.lookup(wrapped.getEnclosingType());
     }
 
     @Override
@@ -964,11 +957,8 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
 
     @Override
     public boolean isLinked() {
-        /*
-         * If the wrapped type is referencing some missing types verification may fail and the type
-         * will not be linked.
-         */
-        return wrapped.isLinked();
+        assert wrapped.isLinked();
+        return true;
     }
 
     @Override

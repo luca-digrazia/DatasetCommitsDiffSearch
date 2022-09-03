@@ -24,16 +24,16 @@
  */
 package com.oracle.graal.pointsto.meta;
 
+import static jdk.vm.ci.common.JVMCIError.shouldNotReachHere;
+
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.graalvm.util.GuardedAnnotationAccess;
-
+import com.oracle.graal.pointsto.api.AnnotationAccess;
 import com.oracle.graal.pointsto.api.DefaultUnsafePartition;
 import com.oracle.graal.pointsto.api.HostVM;
 import com.oracle.graal.pointsto.api.PointstoOptions;
@@ -41,14 +41,13 @@ import com.oracle.graal.pointsto.api.UnsafePartitionKind;
 import com.oracle.graal.pointsto.flow.FieldSinkTypeFlow;
 import com.oracle.graal.pointsto.flow.FieldTypeFlow;
 import com.oracle.graal.pointsto.flow.MethodTypeFlow;
-import com.oracle.graal.pointsto.infrastructure.OriginalFieldProvider;
 import com.oracle.graal.pointsto.typestate.TypeState;
 
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
-public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
+public class AnalysisField implements ResolvedJavaField {
 
     private final int id;
 
@@ -90,12 +89,9 @@ public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
     private final AnalysisType declaringClass;
     private final AnalysisType fieldType;
 
-    private final AnalysisUniverse universe;
-
     public AnalysisField(AnalysisUniverse universe, ResolvedJavaField wrappedField) {
         assert !wrappedField.isInternal();
 
-        this.universe = universe;
         this.position = -1;
         this.isUnsafeAccessed = new AtomicBoolean();
         this.unsafeFrozenTypeState = new AtomicBoolean();
@@ -207,7 +203,7 @@ public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
 //        }
 //        return fieldCanBeNull;
 //    }
-    //@formatter:on
+    //@formatter: on
 
     public FieldTypeFlow getInitialInstanceFieldFlow() {
         return initialInstanceFieldFlow;
@@ -264,6 +260,10 @@ public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
 
     public void registerAsUnsafeAccessed(UnsafePartitionKind partitionKind) {
 
+        if (isStatic()) {
+            throw shouldNotReachHere("Unsafe access of static fields is not supported.");
+        }
+
         /*
          * A field can potentially be registered as unsafe accessed multiple times. This is
          * especially true for the Graal nodes because FieldsOffsetsFeature.registerFields iterates
@@ -277,21 +277,16 @@ public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
             /*
              * The atomic boolean ensures that the field is registered as unsafe accessed with its
              * declaring class only once. However, at the end of this call the registration might
-             * still be in progress. The first thread that calls this methods enters the if and
-             * starts the registration, the next threads return right away, while the registration
+             * still be in progress. The first thread that calls this methods enters the if and starts
+             * the registration, the next threads return right away, while the registration
              * might still be in progress.
              */
 
             registerAsWritten(null);
 
-            if (isStatic()) {
-                /* Register the static field as unsafe accessed with the analysis universe. */
-                universe.registerUnsafeAccessedStaticField(this);
-            } else {
-                /* Register the instance field as unsafe accessed on the declaring type. */
-                AnalysisType declaringType = getDeclaringClass();
-                declaringType.registerUnsafeAccessedField(this, partitionKind);
-            }
+            /* Register the field as unsafe accessed on the declaring type. */
+            AnalysisType declaringType = getDeclaringClass();
+            declaringType.registerUnsafeAccessedField(this, partitionKind);
         }
 
     }
@@ -391,17 +386,17 @@ public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
 
     @Override
     public Annotation[] getAnnotations() {
-        return GuardedAnnotationAccess.getAnnotations(wrapped);
+        return AnnotationAccess.getAnnotations(wrapped);
     }
 
     @Override
     public Annotation[] getDeclaredAnnotations() {
-        return GuardedAnnotationAccess.getDeclaredAnnotations(wrapped);
+        return AnnotationAccess.getDeclaredAnnotations(wrapped);
     }
 
     @Override
     public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
-        return GuardedAnnotationAccess.getAnnotation(wrapped, annotationClass);
+        return AnnotationAccess.getAnnotation(wrapped, annotationClass);
     }
 
     @Override
@@ -415,10 +410,5 @@ public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
 
     public boolean isUsedInComparison() {
         return isUsedInComparison;
-    }
-
-    @Override
-    public Field getJavaField() {
-        return OriginalFieldProvider.getJavaField(getDeclaringClass().universe.getOriginalSnippetReflection(), wrapped);
     }
 }

@@ -40,7 +40,7 @@ import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.meta.ReadableJavaField;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.hosted.ClassInitializationSupport;
+import com.oracle.svm.hosted.ClassInitializationFeature;
 import com.oracle.svm.hosted.SVMHost;
 
 import jdk.vm.ci.meta.Constant;
@@ -55,12 +55,12 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 public class AnalysisConstantReflectionProvider extends SharedConstantReflectionProvider {
     private final AnalysisUniverse universe;
     private final ConstantReflectionProvider originalConstantReflection;
-    private final ClassInitializationSupport classInitializationSupport;
+    private final ClassInitializationFeature classInitializationFeature;
 
-    public AnalysisConstantReflectionProvider(AnalysisUniverse universe, ConstantReflectionProvider originalConstantReflection, ClassInitializationSupport classInitializationSupport) {
+    public AnalysisConstantReflectionProvider(AnalysisUniverse universe, ConstantReflectionProvider originalConstantReflection) {
         this.universe = universe;
         this.originalConstantReflection = originalConstantReflection;
-        this.classInitializationSupport = classInitializationSupport;
+        this.classInitializationFeature = ClassInitializationFeature.singleton();
     }
 
     @Override
@@ -78,7 +78,7 @@ public class AnalysisConstantReflectionProvider extends SharedConstantReflection
     }
 
     public JavaConstant readValue(AnalysisField field, JavaConstant receiver) {
-        if (classInitializationSupport.shouldInitializeAtRuntime(field.getDeclaringClass())) {
+        if (classInitializationFeature.shouldInitializeAtRuntime(field.getDeclaringClass())) {
             if (field.isStatic()) {
                 /*
                  * Static fields of classes that are initialized at run time have the default
@@ -142,9 +142,12 @@ public class AnalysisConstantReflectionProvider extends SharedConstantReflection
                  */
                 return JavaConstant.TRUE;
             }
-            /* For the user-provided filter, match substitution target names to avoid confusion. */
-            String className = field.getDeclaringClass().toJavaName();
-            return JavaConstant.forBoolean(!SubstrateOptions.getRuntimeAssertionsForClass(className));
+            if (SubstrateOptions.RuntimeAssertions.getValue()) {
+                // For the user-provided filter, match substitution target names to avoid confusion
+                String className = field.getDeclaringClass().toJavaName();
+                return JavaConstant.forBoolean(!SubstrateOptions.getRuntimeAssertionsFilter().test(className));
+            }
+            return JavaConstant.TRUE;
         }
         return value;
     }

@@ -38,7 +38,6 @@ import com.oracle.graal.pointsto.meta.AnalysisUniverse;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.graal.code.SubstrateBackend;
 import com.oracle.svm.core.graal.meta.SubstrateReplacements;
-import com.oracle.svm.hosted.ClassInitializationSupport;
 import com.oracle.svm.hosted.SVMHost;
 import com.oracle.svm.hosted.ameta.AnalysisConstantFieldProvider;
 import com.oracle.svm.hosted.ameta.AnalysisConstantReflectionProvider;
@@ -52,25 +51,22 @@ public class SubstrateRuntimeConfigurationBuilder extends SharedRuntimeConfigura
 
     private final AnalysisUniverse aUniverse;
     private final ConstantReflectionProvider originalReflectionProvider;
-    private final ClassInitializationSupport classInitializationSupport;
 
     public SubstrateRuntimeConfigurationBuilder(OptionValues options, SVMHost hostVM, AnalysisUniverse aUniverse, MetaAccessProvider metaAccess,
-                    ConstantReflectionProvider originalReflectionProvider, Function<Providers, SubstrateBackend> backendProvider,
-                    ClassInitializationSupport classInitializationSupport) {
+                    ConstantReflectionProvider originalReflectionProvider, Function<Providers, SubstrateBackend> backendProvider) {
         super(options, hostVM, metaAccess, backendProvider);
         this.aUniverse = aUniverse;
         this.originalReflectionProvider = originalReflectionProvider;
-        this.classInitializationSupport = classInitializationSupport;
     }
 
     @Override
     protected ConstantReflectionProvider createConstantReflectionProvider(Providers p) {
-        return new AnalysisConstantReflectionProvider(aUniverse, originalReflectionProvider, classInitializationSupport);
+        return new AnalysisConstantReflectionProvider(aUniverse, originalReflectionProvider);
     }
 
     @Override
     protected ConstantFieldProvider createConstantFieldProvider(Providers p) {
-        return new AnalysisConstantFieldProvider(aUniverse, p.getMetaAccess(), (AnalysisConstantReflectionProvider) p.getConstantReflection(), classInitializationSupport);
+        return new AnalysisConstantFieldProvider(aUniverse, p.getMetaAccess(), (AnalysisConstantReflectionProvider) p.getConstantReflection());
     }
 
     @Override

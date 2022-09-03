@@ -42,7 +42,7 @@ import org.graalvm.compiler.java.BytecodeParser.BytecodeParserError;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 
-import org.graalvm.util.GuardedAnnotationAccess;
+import com.oracle.graal.pointsto.api.AnnotationAccess;
 import com.oracle.graal.pointsto.api.PointstoOptions;
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatureException;
 import com.oracle.graal.pointsto.flow.InvokeTypeFlow;
@@ -325,11 +325,18 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider {
 
     @Override
     public int getMaxLocals() {
+        if (isNative()) {
+            return getSignature().getParameterCount(!Modifier.isStatic(getModifiers())) * 2;
+        }
         return wrapped.getMaxLocals();
     }
 
     @Override
     public int getMaxStackSize() {
+        if (isNative()) {
+            // At most we have a double-slot return value.
+            return 2;
+        }
         return wrapped.getMaxStackSize();
     }
 
@@ -407,17 +414,17 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider {
 
     @Override
     public Annotation[] getAnnotations() {
-        return GuardedAnnotationAccess.getAnnotations(wrapped);
+        return AnnotationAccess.getAnnotations(wrapped);
     }
 
     @Override
     public Annotation[] getDeclaredAnnotations() {
-        return GuardedAnnotationAccess.getDeclaredAnnotations(wrapped);
+        return AnnotationAccess.getDeclaredAnnotations(wrapped);
     }
 
     @Override
     public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
-        return GuardedAnnotationAccess.getAnnotation(wrapped, annotationClass);
+        return AnnotationAccess.getAnnotation(wrapped, annotationClass);
     }
 
     @Override
