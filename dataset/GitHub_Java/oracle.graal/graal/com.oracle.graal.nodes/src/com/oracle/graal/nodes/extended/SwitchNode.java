@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -37,8 +37,7 @@ import com.oracle.graal.nodes.*;
 @NodeInfo
 public abstract class SwitchNode extends ControlSplitNode {
 
-    public static final NodeClass TYPE = NodeClass.get(SwitchNode.class);
-    @Successor protected NodeSuccessorList<AbstractBeginNode> successors;
+    @Successor protected NodeSuccessorList<BeginNode> successors;
     @Input protected ValueNode value;
 
     // do not change the contents of these arrays:
@@ -51,8 +50,8 @@ public abstract class SwitchNode extends ControlSplitNode {
      * @param value the instruction that provides the value to be switched over
      * @param successors the list of successors of this switch
      */
-    protected SwitchNode(NodeClass c, ValueNode value, AbstractBeginNode[] successors, int[] keySuccessors, double[] keyProbabilities) {
-        super(c, StampFactory.forVoid());
+    public SwitchNode(ValueNode value, BeginNode[] successors, int[] keySuccessors, double[] keyProbabilities) {
+        super(StampFactory.forVoid());
         assert value.stamp().getStackKind().isNumericInteger() || value.stamp() instanceof AbstractPointerStamp : value.stamp() + " key not supported by SwitchNode";
         assert keySuccessors.length == keyProbabilities.length;
         this.successors = new NodeSuccessorList<>(this, successors);
@@ -73,7 +72,7 @@ public abstract class SwitchNode extends ControlSplitNode {
     }
 
     @Override
-    public double probability(AbstractBeginNode successor) {
+    public double probability(BeginNode successor) {
         double sum = 0;
         for (int i = 0; i < keySuccessors.length; i++) {
             if (successors.get(keySuccessors[i]) == successor) {
@@ -118,7 +117,7 @@ public abstract class SwitchNode extends ControlSplitNode {
     /**
      * Returns the successor for the key at the given index.
      */
-    public AbstractBeginNode keySuccessor(int i) {
+    public BeginNode keySuccessor(int i) {
         return successors.get(keySuccessors[i]);
     }
 
@@ -136,11 +135,11 @@ public abstract class SwitchNode extends ControlSplitNode {
         return keySuccessors[keySuccessors.length - 1];
     }
 
-    public AbstractBeginNode blockSuccessor(int i) {
+    public BeginNode blockSuccessor(int i) {
         return successors.get(i);
     }
 
-    public void setBlockSuccessor(int i, AbstractBeginNode s) {
+    public void setBlockSuccessor(int i, BeginNode s) {
         successors.set(i, s);
     }
 
@@ -153,7 +152,7 @@ public abstract class SwitchNode extends ControlSplitNode {
      *
      * @return the default successor
      */
-    public AbstractBeginNode defaultSuccessor() {
+    public BeginNode defaultSuccessor() {
         if (defaultSuccessorIndex() == -1) {
             throw new GraalInternalError("unexpected");
         }
