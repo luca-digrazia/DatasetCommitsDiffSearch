@@ -26,7 +26,7 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.nfi.types.NativeSimpleType;
 
-public final class Utils {
+public class Utils {
 
     public static NativeSimpleType kindToType(JavaKind kind, boolean javaToNative) {
         switch (kind) {
