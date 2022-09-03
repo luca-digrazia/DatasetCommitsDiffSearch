@@ -31,6 +31,7 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
+import org.graalvm.compiler.phases.common.DominatorConditionalEliminationPhase;
 import org.graalvm.compiler.phases.common.LoweringPhase;
 import org.graalvm.compiler.phases.tiers.PhaseContext;
 
@@ -63,6 +64,8 @@ public class ConditionalEliminationTest10 extends ConditionalEliminationTestBase
         StructuredGraph graph = parseEager("testSnippet", AllowAssumptions.YES);
         PhaseContext context = new PhaseContext(getProviders());
         new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
+        Assert.assertEquals(2, graph.getNodes().filter(GuardNode.class).count());
+        DominatorConditionalEliminationPhase.create(true).apply(graph, context);
         Assert.assertEquals(1, graph.getNodes().filter(GuardNode.class).count());
     }
 }

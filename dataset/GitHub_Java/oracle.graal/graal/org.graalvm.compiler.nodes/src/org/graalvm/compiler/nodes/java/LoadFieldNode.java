@@ -48,7 +48,6 @@ import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 
@@ -109,15 +108,15 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
      */
     public ConstantNode asConstant(CanonicalizerTool tool, ValueNode forObject) {
         if (isStatic()) {
-            return ConstantFoldUtil.tryConstantFold(tool.getConstantFieldProvider(), tool.getConstantReflection(), tool.getMetaAccess(), field(), null, getOptions());
+            return ConstantFoldUtil.tryConstantFold(tool.getConstantFieldProvider(), tool.getConstantReflection(), tool.getMetaAccess(), field(), null);
         } else if (forObject.isConstant() && !forObject.isNullConstant()) {
-            return ConstantFoldUtil.tryConstantFold(tool.getConstantFieldProvider(), tool.getConstantReflection(), tool.getMetaAccess(), field(), forObject.asJavaConstant(), getOptions());
+            return ConstantFoldUtil.tryConstantFold(tool.getConstantFieldProvider(), tool.getConstantReflection(), tool.getMetaAccess(), field(), forObject.asJavaConstant());
         }
         return null;
     }
 
     public ConstantNode asConstant(CanonicalizerTool tool, JavaConstant constant) {
-        return ConstantFoldUtil.tryConstantFold(tool.getConstantFieldProvider(), tool.getConstantReflection(), tool.getMetaAccess(), field(), constant, getOptions());
+        return ConstantFoldUtil.tryConstantFold(tool.getConstantFieldProvider(), tool.getConstantReflection(), tool.getMetaAccess(), field(), constant);
     }
 
     private PhiNode asPhi(CanonicalizerTool tool, ValueNode forObject) {
@@ -125,8 +124,7 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
             PhiNode phi = (PhiNode) forObject;
             ConstantNode[] constantNodes = new ConstantNode[phi.valueCount()];
             for (int i = 0; i < phi.valueCount(); i++) {
-                ConstantNode constant = ConstantFoldUtil.tryConstantFold(tool.getConstantFieldProvider(), tool.getConstantReflection(), tool.getMetaAccess(), field(), phi.valueAt(i).asJavaConstant(),
-                                getOptions());
+                ConstantNode constant = ConstantFoldUtil.tryConstantFold(tool.getConstantFieldProvider(), tool.getConstantReflection(), tool.getMetaAccess(), field(), phi.valueAt(i).asJavaConstant());
                 if (constant == null) {
                     return null;
                 }
@@ -143,13 +141,7 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
         if (alias instanceof VirtualObjectNode) {
             int fieldIndex = ((VirtualInstanceNode) alias).fieldIndex(field());
             if (fieldIndex != -1) {
-                ValueNode entry = tool.getEntry((VirtualObjectNode) alias, fieldIndex);
-                if (stamp.isCompatible(entry.stamp())) {
-                    tool.replaceWith(entry);
-                } else {
-                    assert stamp().getStackKind() == JavaKind.Int && (entry.stamp().getStackKind() == JavaKind.Long || entry.getStackKind() == JavaKind.Double ||
-                                    entry.getStackKind() == JavaKind.Illegal) : "Can only allow different stack kind two slot marker writes on one stot fields.";
-                }
+                tool.replaceWith(tool.getEntry((VirtualObjectNode) alias, fieldIndex));
             }
         }
     }
