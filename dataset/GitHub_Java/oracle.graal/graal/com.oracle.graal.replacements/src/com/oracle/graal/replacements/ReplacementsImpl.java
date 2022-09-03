@@ -24,10 +24,8 @@ package com.oracle.graal.replacements;
 
 import static com.oracle.graal.compiler.common.GraalOptions.DeoptALot;
 import static com.oracle.graal.compiler.common.GraalOptions.OptCanonicalizer;
-import static com.oracle.graal.compiler.common.GraalOptions.UseSnippetGraphCache;
 import static com.oracle.graal.java.BytecodeParserOptions.InlineDuringParsing;
 import static com.oracle.graal.java.BytecodeParserOptions.InlineIntrinsicsDuringParsing;
-import static com.oracle.graal.nodes.StructuredGraph.NO_PROFILING_INFO;
 import static com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_AFTER_PARSING;
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.Required;
 import static java.lang.String.format;
@@ -57,6 +55,8 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Signature;
+import jdk.vm.ci.options.OptionValue;
+import jdk.vm.ci.options.OptionValue.OverrideScope;
 import sun.misc.Launcher;
 
 import com.oracle.graal.api.replacements.ClassSubstitution;
@@ -92,8 +92,6 @@ import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins
 import com.oracle.graal.nodes.java.MethodCallTargetNode;
 import com.oracle.graal.nodes.spi.Replacements;
 import com.oracle.graal.nodes.spi.StampProvider;
-import com.oracle.graal.options.OptionValue;
-import com.oracle.graal.options.OptionValue.OverrideScope;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
 import com.oracle.graal.phases.common.ConvertDeoptimizeToGuardPhase;
@@ -320,6 +318,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
         this.snippetTemplateCache = CollectionsFactory.newMap();
     }
 
+    private static final boolean UseSnippetGraphCache = Boolean.parseBoolean(System.getProperty("graal.useSnippetGraphCache", "true"));
     private static final DebugTimer SnippetPreparationTime = Debug.timer("SnippetPreparationTime");
 
     /**
@@ -349,12 +348,12 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
         assert method.getAnnotation(Snippet.class) != null : "Snippet must be annotated with @" + Snippet.class.getSimpleName();
         assert method.hasBytecodes() : "Snippet must not be abstract or native";
 
-        StructuredGraph graph = UseSnippetGraphCache.getValue() ? graphs.get(method) : null;
+        StructuredGraph graph = UseSnippetGraphCache ? graphs.get(method) : null;
         if (graph == null) {
             try (DebugCloseable a = SnippetPreparationTime.start()) {
                 StructuredGraph newGraph = makeGraph(method, args, recursiveEntry);
                 Debug.metric("SnippetNodeCount[%#s]", method).add(newGraph.getNodeCount());
-                if (!UseSnippetGraphCache.getValue() || args != null) {
+                if (!UseSnippetGraphCache || args != null) {
                     return newGraph;
                 }
                 graphs.putIfAbsent(method, newGraph);
@@ -607,7 +606,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
         protected StructuredGraph buildInitialGraph(final ResolvedJavaMethod methodToParse, Object[] args) {
             // Replacements cannot have optimistic assumptions since they have
             // to be valid for the entire run of the VM.
-            final StructuredGraph graph = new StructuredGraph(methodToParse, AllowAssumptions.NO, NO_PROFILING_INFO);
+            final StructuredGraph graph = new StructuredGraph(methodToParse, AllowAssumptions.NO);
 
             // They are not user code so they do not participate in unsafe access tracking
             graph.disableUnsafeAccessTracking();
