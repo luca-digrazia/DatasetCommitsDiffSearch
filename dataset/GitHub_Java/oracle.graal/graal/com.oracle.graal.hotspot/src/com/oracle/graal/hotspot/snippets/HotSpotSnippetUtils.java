@@ -43,10 +43,6 @@ import com.oracle.graal.word.*;
  */
 public class HotSpotSnippetUtils {
 
-    public static final Object ANY_LOCATION = LocationNode.ANY_LOCATION;
-    public static final Object UNKNOWN_LOCATION = LocationNode.UNKNOWN_LOCATION;
-    public static final Object FINAL_LOCATION = LocationNode.FINAL_LOCATION;
-
     public static HotSpotVMConfig config() {
         return HotSpotGraalRuntime.getInstance().getConfig();
     }
@@ -56,47 +52,14 @@ public class HotSpotSnippetUtils {
         return config().verifyOops;
     }
 
-    public static final Object TLAB_TOP_LOCATION = LocationNode.createLocation("TlabTop");
-
     @Fold
     public static int threadTlabTopOffset() {
         return config().threadTlabTopOffset;
     }
 
-    public static final Object TLAB_END_LOCATION = LocationNode.createLocation("TlabEnd");
-
     @Fold
-    private static int threadTlabEndOffset() {
+    public static int threadTlabEndOffset() {
         return config().threadTlabEndOffset;
-    }
-
-    public static final Object TLAB_START_LOCATION = LocationNode.createLocation("TlabStart");
-
-    @Fold
-    private static int threadTlabStartOffset() {
-        return config().threadTlabStartOffset;
-    }
-
-    public static Word readTlabTop(Word thread) {
-        return thread.readWord(threadTlabTopOffset(), TLAB_TOP_LOCATION);
-    }
-
-    public static Word readTlabEnd(Word thread) {
-        return thread.readWord(threadTlabEndOffset(), TLAB_END_LOCATION);
-    }
-
-    public static Word readTlabStart(Word thread) {
-        return thread.readWord(threadTlabStartOffset(), TLAB_START_LOCATION);
-    }
-
-    public static void writeTlabTop(Word thread, Word top) {
-        thread.writeWord(threadTlabTopOffset(), top, TLAB_TOP_LOCATION);
-    }
-
-    public static void initializeTlab(Word thread, Word start, Word end) {
-        thread.writeWord(threadTlabStartOffset(), start, TLAB_START_LOCATION);
-        thread.writeWord(threadTlabTopOffset(), start, TLAB_TOP_LOCATION);
-        thread.writeWord(threadTlabEndOffset(), end, TLAB_END_LOCATION);
     }
 
     @Fold
@@ -139,8 +102,6 @@ public class HotSpotSnippetUtils {
         return Unsafe.getUnsafe().pageSize();
     }
 
-    public static final Object PROTOTYPE_MARK_WORD_LOCATION = LocationNode.createLocation("PrototypeMarkWord");
-
     @Fold
     public static int prototypeMarkWordOffset() {
         return config().prototypeMarkWordOffset;
@@ -157,12 +118,8 @@ public class HotSpotSnippetUtils {
     }
 
     @Fold
-    private static int klassLayoutHelperOffset() {
+    public static int klassLayoutHelperOffset() {
         return config().klassLayoutHelperOffset;
-    }
-
-    public static int readLayoutHelper(Word klass) {
-        return klass.readInt(klassLayoutHelperOffset(), FINAL_LOCATION);
     }
 
     @Fold
@@ -180,23 +137,9 @@ public class HotSpotSnippetUtils {
         return config().klassSuperKlassOffset;
     }
 
-    public static final Object MARK_WORD_LOCATION = LocationNode.createLocation("MarkWord");
-
     @Fold
     public static int markOffset() {
         return config().markOffset;
-    }
-
-    public static final Object HUB_LOCATION = LocationNode.createLocation("Hub");
-
-    @Fold
-    private static int hubOffset() {
-        return config().hubOffset;
-    }
-
-    public static void initializeObjectHeader(Word memory, Word markWord, Word hub) {
-        memory.writeWord(markOffset(), markWord, MARK_WORD_LOCATION);
-        memory.writeWord(hubOffset(), hub, HUB_LOCATION);
     }
 
     @Fold
@@ -245,6 +188,11 @@ public class HotSpotSnippetUtils {
     }
 
     @Fold
+    public static int hubOffset() {
+        return config().hubOffset;
+    }
+
+    @Fold
     public static int metaspaceArrayLengthOffset() {
         return config().metaspaceArrayLengthOffset;
     }
@@ -284,21 +232,15 @@ public class HotSpotSnippetUtils {
         return config().superCheckOffsetOffset;
     }
 
-    public static final Object SECONDARY_SUPER_CACHE_LOCATION = LocationNode.createLocation("SecondarySuperCache");
-
     @Fold
     public static int secondarySuperCacheOffset() {
         return config().secondarySuperCacheOffset;
     }
 
-    public static final Object SECONDARY_SUPERS_LOCATION = LocationNode.createLocation("SecondarySupers");
-
     @Fold
     public static int secondarySupersOffset() {
         return config().secondarySupersOffset;
     }
-
-    public static final Object DISPLACED_MARK_WORD_LOCATION = LocationNode.createLocation("DisplacedMarkWord");
 
     @Fold
     public static int lockDisplacedMarkOffset() {
@@ -366,16 +308,9 @@ public class HotSpotSnippetUtils {
         return CodeUtil.log2(wordSize());
     }
 
-    public static final Object CLASS_STATE_LOCATION = LocationNode.createLocation("ClassState");
-
     @Fold
     public static int klassStateOffset() {
         return config().klassStateOffset;
-    }
-
-    @Fold
-    public static int klassStateFullyInitialized() {
-        return config().klassStateFullyInitialized;
     }
 
     @Fold
@@ -398,18 +333,19 @@ public class HotSpotSnippetUtils {
         return config().klassInstanceSizeOffset;
     }
 
-    public static final Object HEAP_TOP_LOCATION = LocationNode.createLocation("HeapTop");
-
     @Fold
     public static long heapTopAddress() {
         return config().heapTopAddress;
     }
 
-    public static final Object HEAP_END_LOCATION = LocationNode.createLocation("HeapEnd");
-
     @Fold
     public static long heapEndAddress() {
         return config().heapEndAddress;
+    }
+
+    @Fold
+    public static int threadTlabStartOffset() {
+        return config().threadTlabStartOffset;
     }
 
     @Fold
@@ -427,42 +363,35 @@ public class HotSpotSnippetUtils {
         return config().tlabAlignmentReserve;
     }
 
-    public static final Object TLAB_SIZE_LOCATION = LocationNode.createLocation("TlabSize");
-
     @Fold
     public static int threadTlabSizeOffset() {
         return config().threadTlabSizeOffset;
     }
-
-    public static final Object TLAB_THREAD_ALLOCATED_BYTES_LOCATION = LocationNode.createLocation("TlabThreadAllocatedBytes");
 
     @Fold
     public static int threadAllocatedBytesOffset() {
         return config().threadAllocatedBytesOffset;
     }
 
-    public static final Object TLAB_REFILL_WASTE_LIMIT_LOCATION = LocationNode.createLocation("RefillWasteLimit");
+    @Fold
+    public static int klassStateFullyInitialized() {
+        return config().klassStateFullyInitialized;
+    }
 
     @Fold
     public static int tlabRefillWasteLimitOffset() {
         return config().tlabRefillWasteLimitOffset;
     }
 
-    public static final Object TLAB_NOF_REFILLS_LOCATION = LocationNode.createLocation("TlabNOfRefills");
-
     @Fold
     public static int tlabNumberOfRefillsOffset() {
         return config().tlabNumberOfRefillsOffset;
     }
 
-    public static final Object TLAB_FAST_REFILL_WASTE_LOCATION = LocationNode.createLocation("TlabFastRefillWaste");
-
     @Fold
     public static int tlabFastRefillWasteOffset() {
         return config().tlabFastRefillWasteOffset;
     }
-
-    public static final Object TLAB_SLOW_ALLOCATIONS_LOCATION = LocationNode.createLocation("TlabSlowAllocations");
 
     @Fold
     public static int tlabSlowAllocationsOffset() {

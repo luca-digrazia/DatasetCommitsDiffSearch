@@ -35,7 +35,6 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.Opcode;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.nodes.spi.*;
 
 /**
  * Emits a safepoint poll.
@@ -46,32 +45,30 @@ public class AMD64SafepointOp extends AMD64LIRInstruction {
     private static final Unsafe unsafe = Unsafe.getUnsafe();
 
     @State protected LIRFrameState state;
-    @Temp({OperandFlag.REG}) private AllocatableValue temp;
 
     private final HotSpotVMConfig config;
 
-    public AMD64SafepointOp(LIRFrameState state, HotSpotVMConfig config, LIRGeneratorTool tool) {
+    public AMD64SafepointOp(LIRFrameState state, HotSpotVMConfig config) {
         this.state = state;
         this.config = config;
-        temp = tool.newVariable(tool.target().wordKind);
     }
 
     @Override
     public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler asm) {
+        Register scratch = tasm.frameMap.registerConfig.getScratchRegister();
         int pos = asm.codeBuffer.position();
         int offset = SafepointPollOffset % unsafe.pageSize();
-        RegisterValue scratch = (RegisterValue) temp;
         if (config.isPollingPageFar) {
-            asm.movq(scratch.getRegister(), config.safepointPollingAddress + offset);
+            asm.movq(scratch, config.safepointPollingAddress + offset);
             tasm.recordMark(Marks.MARK_POLL_FAR);
             tasm.recordSafepoint(pos, state);
-            asm.movq(scratch.getRegister(), new AMD64Address(tasm.target.wordKind, scratch));
+            asm.movq(scratch, new AMD64Address(tasm.target.wordKind, scratch.asValue()));
         } else {
             tasm.recordMark(Marks.MARK_POLL_NEAR);
             tasm.recordSafepoint(pos, state);
             // The C++ code transforms the polling page offset into an RIP displacement
             // to the real address at that offset in the polling page.
-            asm.movq(scratch.getRegister(), new AMD64Address(tasm.target.wordKind, rip.asValue(), offset));
+            asm.movq(scratch, new AMD64Address(tasm.target.wordKind, rip.asValue(), offset));
         }
     }
 }
