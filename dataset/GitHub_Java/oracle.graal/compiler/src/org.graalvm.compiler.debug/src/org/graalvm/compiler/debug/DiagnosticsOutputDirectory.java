@@ -84,10 +84,7 @@ public class DiagnosticsOutputDirectory {
                 }
             }
         }
-        if (CLOSED.equals(path)) {
-            TTY.println("Warning: Graal diagnostic directory already closed");
-        }
-        return path;
+        return CLOSED.equals(path) ? null : path;
     }
 
     /**
