@@ -46,7 +46,7 @@ public abstract class NodeList<T extends Node> extends AbstractList<T> implement
     }
 
     protected NodeList(T[] elements) {
-        if (elements == null || elements.length == 0) {
+        if (elements == null) {
             this.size = 0;
             this.nodes = EMPTY_NODE_ARRAY;
             this.initialSize = 0;
@@ -257,7 +257,7 @@ public abstract class NodeList<T extends Node> extends AbstractList<T> implement
     }
 
     @Override
-    public void snapshotTo(Collection<T> to) {
+    public void snapshotTo(List<T> to) {
         for (int i = 0; i < size; i++) {
             to.add(get(i));
         }
