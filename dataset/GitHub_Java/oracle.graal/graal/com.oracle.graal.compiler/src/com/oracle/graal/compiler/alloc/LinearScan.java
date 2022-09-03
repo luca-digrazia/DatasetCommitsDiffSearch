@@ -2009,7 +2009,7 @@ public final class LinearScan {
                                 assert firstSpillChild.from() < splitChild.from();
                             }
                             // iterate all blocks where the interval has use positions
-                            for (AbstractBlock<?> splitBlock : blocksForInterval(splitChild)) {
+                            for (AbstractBlock<?> splitBlock : blocksForSplitChild(splitChild)) {
                                 if (dominates(defBlock, splitBlock)) {
                                     Debug.log("Split interval %s, block %s", splitChild, splitBlock);
                                     if (spillBlock == null) {
@@ -2065,14 +2065,14 @@ public final class LinearScan {
     }
 
     /**
-     * Iterate over all {@link AbstractBlock blocks} of an interval.
+     * Iterate over all {@link AbstractBlock blocks} of an interval with an use position.
      */
-    private class IntervalBlockIterator implements Iterator<AbstractBlock<?>> {
+    private class UseBlockIterator implements Iterator<AbstractBlock<?>> {
 
         Range range;
         AbstractBlock<?> block;
 
-        public IntervalBlockIterator(Interval interval) {
+        public UseBlockIterator(Interval interval) {
             range = interval.first();
             block = blockForId(range.from);
         }
@@ -2101,10 +2101,10 @@ public final class LinearScan {
         }
     }
 
-    private Iterable<AbstractBlock<?>> blocksForInterval(Interval interval) {
+    private Iterable<AbstractBlock<?>> blocksForSplitChild(Interval interval) {
         return new Iterable<AbstractBlock<?>>() {
             public Iterator<AbstractBlock<?>> iterator() {
-                return new IntervalBlockIterator(interval);
+                return new UseBlockIterator(interval);
             }
         };
     }
