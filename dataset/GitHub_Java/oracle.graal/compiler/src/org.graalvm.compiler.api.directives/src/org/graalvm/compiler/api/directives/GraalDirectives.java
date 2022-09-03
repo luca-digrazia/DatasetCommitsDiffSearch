@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -69,30 +67,6 @@ public final class GraalDirectives {
      * A call to this method will never be duplicated by control flow optimizations in the compiler.
      */
     public static void controlFlowAnchor() {
-    }
-
-    /**
-     * A call to this method will assume a stable dimension array if t is a constant array and i a
-     * constant integer.
-     */
-    public static <T> T assumeStableDimension(T t, @SuppressWarnings("unused") int i) {
-        return t;
-    }
-
-    /**
-     * A call to this method will force the compiler to assume this instruction has a visible memory
-     * effect killing all memory locations.
-     */
-    public static void sideEffect() {
-
-    }
-
-    /**
-     * A call to this method will force the compiler to assume this instruction has a visible memory
-     * effect killing all memory locations.
-     */
-    public static int sideEffect(@SuppressWarnings("unused") int a) {
-        return 0;
     }
 
     /**
