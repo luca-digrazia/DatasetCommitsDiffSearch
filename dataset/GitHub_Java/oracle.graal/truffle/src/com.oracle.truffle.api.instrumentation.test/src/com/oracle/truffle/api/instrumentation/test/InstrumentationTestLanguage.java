@@ -589,7 +589,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Context>
                 if (callNode == null) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
                     Context context = getRootNode().getLanguage(InstrumentationTestLanguage.class).getContextReference().get();
-                    CallTarget target = context.callFunctions.callTargets.get(identifier);
+                    CallTarget target = context.callTargets.get(identifier);
                     callNode = insert(Truffle.getRuntime().createDirectCallNode(target));
                 }
                 Object retval = callNode.call(new Object[0]);
@@ -617,17 +617,19 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Context>
 
     private static class WasteTime extends InstrumentedNode {
 
+        public static int state = 0;
+        private int wasteCount = 100_000;
+
         WasteTime(BaseNode[] children) {
             super(children);
         }
 
         @Override
         public Object execute(VirtualFrame frame) {
-            try {
-                Thread.sleep(1);
-            } catch (InterruptedException e) {
+            for (int i = 0; i < wasteCount; i++) {
+                state++;
             }
-            return null;
+            return state;
         }
     }
 
