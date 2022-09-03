@@ -22,12 +22,16 @@
  */
 package com.oracle.graal.phases.common;
 
+import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
+import static jdk.vm.ci.meta.DeoptimizationReason.UnreachedCode;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 import com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph;
@@ -39,7 +43,6 @@ import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Or;
 import com.oracle.graal.compiler.common.type.IntegerStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.compiler.common.type.TypeReference;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.graph.Node;
@@ -59,6 +62,7 @@ import com.oracle.graal.nodes.IfNode;
 import com.oracle.graal.nodes.LogicNode;
 import com.oracle.graal.nodes.LoopExitNode;
 import com.oracle.graal.nodes.ParameterNode;
+import com.oracle.graal.nodes.PiNode;
 import com.oracle.graal.nodes.ShortCircuitOrNode;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.UnaryOpLogicNode;
@@ -74,6 +78,7 @@ import com.oracle.graal.nodes.extended.GuardingNode;
 import com.oracle.graal.nodes.extended.IntegerSwitchNode;
 import com.oracle.graal.nodes.extended.LoadHubNode;
 import com.oracle.graal.nodes.extended.ValueAnchorNode;
+import com.oracle.graal.nodes.java.CheckCastNode;
 import com.oracle.graal.nodes.java.TypeSwitchNode;
 import com.oracle.graal.nodes.spi.NodeWithState;
 import com.oracle.graal.nodes.util.GraphUtil;
@@ -116,7 +121,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
                 for (Block b : cfg.getBlocks()) {
                     ArrayList<FixedNode> curNodes = new ArrayList<>();
                     for (FixedNode node : b.getNodes()) {
-                        if (node instanceof AbstractBeginNode || node instanceof FixedGuardNode || node instanceof ConditionAnchorNode || node instanceof IfNode) {
+                        if (node instanceof AbstractBeginNode || node instanceof FixedGuardNode || node instanceof CheckCastNode || node instanceof ConditionAnchorNode || node instanceof IfNode) {
                             curNodes.add(node);
                         }
                     }
@@ -239,6 +244,28 @@ public class DominatorConditionalEliminationPhase extends Phase {
                 });
             }
 
+            protected void processCheckCast(CheckCastNode node) {
+                for (InfoElement infoElement : getInfoElements(node.object())) {
+                    TriState result = node.tryFold(infoElement.getStamp());
+                    if (result.isKnown()) {
+                        if (rewireGuards(infoElement.getGuard(), result.toBoolean(), (guard, checkCastResult) -> {
+                            if (checkCastResult) {
+                                PiNode piNode = node.graph().unique(new PiNode(node.object(), node.stamp(), guard));
+                                GraphUtil.unlinkFixedNode(node);
+                                node.replaceAtUsagesAndDelete(piNode);
+                            } else {
+                                DeoptimizeNode deopt = node.graph().add(new DeoptimizeNode(InvalidateReprofile, UnreachedCode));
+                                node.replaceAtPredecessor(deopt);
+                                GraphUtil.killCFG(node);
+                            }
+                            return true;
+                        })) {
+                            return;
+                        }
+                    }
+                }
+            }
+
             @Override
             public void preprocess() {
                 Debug.log("[Pre Processing block %s]", block);
@@ -280,6 +307,8 @@ public class DominatorConditionalEliminationPhase extends Phase {
                     processFixedGuard((FixedGuardNode) node);
                 } else if (node instanceof GuardNode) {
                     processGuard((GuardNode) node);
+                } else if (node instanceof CheckCastNode) {
+                    processCheckCast((CheckCastNode) node);
                 } else if (node instanceof ConditionAnchorNode) {
                     processConditionAnchor((ConditionAnchorNode) node);
                 } else if (node instanceof IfNode) {
@@ -444,7 +473,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
                          * limit it to the original node and constants.
                          */
                         InputFilter v = new InputFilter(original);
-                        thisGuard.getCondition().applyInputs(v);
+                        thisGuard.getCondition().acceptInputs(v);
                         if (v.ok && foldGuard(thisGuard, pending.guard, rewireGuardFunction)) {
                             return true;
                         }
@@ -719,9 +748,9 @@ public class DominatorConditionalEliminationPhase extends Phase {
                     for (int i = 0; i < typeSwitch.keyCount(); i++) {
                         if (typeSwitch.keySuccessor(i) == predecessor) {
                             if (stamp == null) {
-                                stamp = StampFactory.objectNonNull(TypeReference.createExactTrusted(typeSwitch.typeAt(i)));
+                                stamp = StampFactory.exactNonNull(typeSwitch.typeAt(i));
                             } else {
-                                stamp = stamp.meet(StampFactory.objectNonNull(TypeReference.createExactTrusted(typeSwitch.typeAt(i))));
+                                stamp = stamp.meet(StampFactory.exactNonNull(typeSwitch.typeAt(i)));
                             }
                         }
                     }
@@ -765,7 +794,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
     /**
      * Checks for safe nodes when moving pending tests up.
      */
-    static class InputFilter extends Node.EdgeVisitor {
+    static class InputFilter implements BiConsumer<Node, Node> {
         boolean ok;
         private ValueNode value;
 
@@ -774,22 +803,20 @@ public class DominatorConditionalEliminationPhase extends Phase {
             this.ok = true;
         }
 
-        @Override
-        public Node apply(Node node, Node curNode) {
+        public void accept(Node node, Node curNode) {
             if (!(curNode instanceof ValueNode)) {
                 ok = false;
-                return curNode;
+                return;
             }
             ValueNode curValue = (ValueNode) curNode;
             if (curValue.isConstant() || curValue == value || curValue instanceof ParameterNode) {
-                return curNode;
+                return;
             }
             if (curValue instanceof BinaryNode || curValue instanceof UnaryNode) {
-                curValue.applyInputs(this);
+                curValue.acceptInputs(this);
             } else {
                 ok = false;
             }
-            return curNode;
         }
     }
 
