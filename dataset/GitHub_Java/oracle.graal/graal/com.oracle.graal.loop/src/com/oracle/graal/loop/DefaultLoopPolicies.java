@@ -37,17 +37,20 @@ import com.oracle.graal.nodes.ControlSplitNode;
 import com.oracle.graal.nodes.DeoptimizeNode;
 import com.oracle.graal.nodes.FixedNode;
 import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.FrameState;
 import com.oracle.graal.nodes.LoopBeginNode;
 import com.oracle.graal.nodes.MergeNode;
 import com.oracle.graal.nodes.VirtualState;
 import com.oracle.graal.nodes.VirtualState.VirtualClosure;
 import com.oracle.graal.nodes.cfg.Block;
 import com.oracle.graal.nodes.cfg.ControlFlowGraph;
+import com.oracle.graal.nodes.debug.ControlFlowAnchorNode;
 import com.oracle.graal.nodes.java.TypeSwitchNode;
 import com.oracle.graal.options.Option;
 import com.oracle.graal.options.OptionType;
 import com.oracle.graal.options.OptionValue;
 
+import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.MetaAccessProvider;
 
 public class DefaultLoopPolicies implements LoopPolicies {
@@ -65,7 +68,18 @@ public class DefaultLoopPolicies implements LoopPolicies {
         double entryProbability = cfg.blockFor(loopBegin.forwardEnd()).probability();
         if (entryProbability > MinimumPeelProbability.getValue() && loop.size() + loopBegin.graph().getNodeCount() < MaximumDesiredSize.getValue()) {
             // check whether we're allowed to peel this loop
-            return loop.canDuplicateLoop();
+            for (Node node : loop.inside().nodes()) {
+                if (node instanceof ControlFlowAnchorNode) {
+                    return false;
+                }
+                if (node instanceof FrameState) {
+                    FrameState frameState = (FrameState) node;
+                    if (frameState.bci == BytecodeFrame.AFTER_EXCEPTION_BCI || frameState.bci == BytecodeFrame.UNWIND_BCI) {
+                        return false;
+                    }
+                }
+            }
+            return true;
         } else {
             return false;
         }
@@ -83,7 +97,18 @@ public class DefaultLoopPolicies implements LoopPolicies {
         int size = Math.max(1, loop.size() - 1 - loop.loopBegin().phis().count());
         if (maxTrips <= FullUnrollMaxIterations.getValue() && size * (maxTrips - 1) <= maxNodes) {
             // check whether we're allowed to unroll this loop
-            return loop.canDuplicateLoop();
+            for (Node node : loop.inside().nodes()) {
+                if (node instanceof ControlFlowAnchorNode) {
+                    return false;
+                }
+                if (node instanceof FrameState) {
+                    FrameState frameState = (FrameState) node;
+                    if (frameState.bci == BytecodeFrame.AFTER_EXCEPTION_BCI || frameState.bci == BytecodeFrame.UNWIND_BCI) {
+                        return false;
+                    }
+                }
+            }
+            return true;
         } else {
             return false;
         }
@@ -159,8 +184,19 @@ public class DefaultLoopPolicies implements LoopPolicies {
         Debug.log("shouldUnswitch(%s, %s) : delta=%d (%.2f%% inside of branches), max=%d, f=%.2f, phis=%d -> %b", loop, controlSplits, actualDiff, (double) (inBranchTotal) / loopTotal * 100, maxDiff,
                         loopFrequency, phis, actualDiff <= maxDiff);
         if (actualDiff <= maxDiff) {
-            // check whether we're allowed to unswitch this loop
-            return loop.canDuplicateLoop();
+            // check whether we're allowed to unswtich this loop
+            for (Node node : loop.inside().nodes()) {
+                if (node instanceof ControlFlowAnchorNode) {
+                    return false;
+                }
+                if (node instanceof FrameState) {
+                    FrameState frameState = (FrameState) node;
+                    if (frameState.bci == BytecodeFrame.AFTER_EXCEPTION_BCI || frameState.bci == BytecodeFrame.UNWIND_BCI) {
+                        return false;
+                    }
+                }
+            }
+            return true;
         } else {
             return false;
         }

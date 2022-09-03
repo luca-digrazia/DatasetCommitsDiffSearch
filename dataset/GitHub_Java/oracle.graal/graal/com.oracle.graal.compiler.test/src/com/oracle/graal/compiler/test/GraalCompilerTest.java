@@ -184,7 +184,9 @@ public abstract class GraalCompilerTest extends GraalTest {
     protected Suites createSuites() {
         Suites ret = backend.getSuites().getDefaultSuites().copy();
         ListIterator<BasePhase<? super HighTierContext>> iter = ret.getHighTier().findPhase(ConvertDeoptimizeToGuardPhase.class, true);
-        if (iter == null) {
+        if (iter != null) {
+            // the ComputeLoopFrequenciesPhase will be inserted before LoopFullUnrollPhase
+        } else {
             /*
              * in the economy configuration, we don't have the ConvertDeoptimizeToGuard phase, so we
              * just select the first CanonicalizerPhase in HighTier
