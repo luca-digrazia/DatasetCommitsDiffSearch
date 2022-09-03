@@ -41,7 +41,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
 import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.types.LLVMFunction;
 
 /**
  * Manages Sulong functions and intrinsified native functions.
@@ -57,7 +57,7 @@ public class LLVMFunctionRegistry {
     }
 
     /**
-     * Maps a function index (see {@link LLVMFunctionDescriptor#getFunctionIndex()} to a call target.
+     * Maps a function index (see {@link LLVMFunction#getFunctionIndex()} to a call target.
      */
     @CompilationFinal private RootCallTarget[] functionPtrCallTargetMap;
 
@@ -68,7 +68,7 @@ public class LLVMFunctionRegistry {
      * @param function the function
      * @return the call target, <code>null</code> if not found.
      */
-    public RootCallTarget lookup(LLVMFunctionDescriptor function) {
+    public RootCallTarget lookup(LLVMFunction function) {
         int functionIndex = function.getFunctionIndex();
         if (functionIndex >= 0 && functionIndex < functionPtrCallTargetMap.length) {
             RootCallTarget result = functionPtrCallTargetMap[functionIndex];
@@ -78,17 +78,17 @@ public class LLVMFunctionRegistry {
         }
     }
 
-    public void register(Map<LLVMFunctionDescriptor, RootCallTarget> functionCallTargets) {
-        functionPtrCallTargetMap = new RootCallTarget[LLVMFunctionDescriptor.getNumberRegisteredFunctions() + intrinsics.size()];
+    public void register(Map<LLVMFunction, RootCallTarget> functionCallTargets) {
+        functionPtrCallTargetMap = new RootCallTarget[LLVMFunction.getNumberRegisteredFunctions() + intrinsics.size()];
         registerIntrinsics();
-        for (LLVMFunctionDescriptor func : functionCallTargets.keySet()) {
+        for (LLVMFunction func : functionCallTargets.keySet()) {
             functionPtrCallTargetMap[func.getFunctionIndex()] = functionCallTargets.get(func);
         }
     }
 
     private void registerIntrinsics() {
         for (String intrinsicFunction : intrinsics.keySet()) {
-            LLVMFunctionDescriptor function = LLVMFunctionDescriptor.createFromName(intrinsicFunction);
+            LLVMFunction function = LLVMFunction.createFromName(intrinsicFunction);
             NodeFactory<? extends LLVMNode> nodeFactory = intrinsics.get(intrinsicFunction);
             List<Class<? extends Node>> executionSignature = nodeFactory.getExecutionSignature();
             int nrArguments = executionSignature.size();
@@ -103,7 +103,7 @@ public class LLVMFunctionRegistry {
         }
     }
 
-    private void addToFunctionMap(LLVMFunctionDescriptor function, RootCallTarget callTarget) {
+    private void addToFunctionMap(LLVMFunction function, RootCallTarget callTarget) {
         assert functionPtrCallTargetMap[function.getFunctionIndex()] == null;
         functionPtrCallTargetMap[function.getFunctionIndex()] = callTarget;
     }
