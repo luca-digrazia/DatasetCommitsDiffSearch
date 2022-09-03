@@ -170,7 +170,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
                 } else {
                     asm.decrementq(rsp, frameSize);
                 }
-                if (ZapStackOnMethodEntry.getValue(crb.getOptions())) {
+                if (ZapStackOnMethodEntry.getValue()) {
                     final int intSize = 4;
                     for (int i = 0; i < frameSize / intSize; ++i) {
                         asm.movl(new AMD64Address(rsp, i * intSize), 0xC1C1C1C1);
@@ -208,7 +208,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
         HotSpotLIRGenerationResult gen = (HotSpotLIRGenerationResult) lirGenRen;
         LIR lir = gen.getLIR();
         assert gen.getDeoptimizationRescueSlot() == null || frameMap.frameNeedsAllocating() : "method that can deoptimize must have a frame";
-        boolean omitFrame = CanOmitFrame.getValue(lir.getOptions()) && !frameMap.frameNeedsAllocating() && !lir.hasArgInCallerFrame() && !gen.hasForeignCall();
+        boolean omitFrame = CanOmitFrame.getValue() && !frameMap.frameNeedsAllocating() && !lir.hasArgInCallerFrame() && !gen.hasForeignCall();
 
         Stub stub = gen.getStub();
         Assembler masm = createAssembler(frameMap);
@@ -267,10 +267,15 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
 
             if (config.useCompressedClassPointers) {
                 Register register = r10;
-                AMD64HotSpotMove.decodeKlassPointer(asm, register, providers.getRegisters().getHeapBaseRegister(), src, config.getKlassEncoding());
-                if (config.narrowKlassBase != 0) {
-                    // The heap base register was destroyed above, so restore it
-                    asm.movq(providers.getRegisters().getHeapBaseRegister(), config.narrowOopBase);
+                AMD64HotSpotMove.decodeKlassPointer(crb, asm, register, providers.getRegisters().getHeapBaseRegister(), src, config);
+                if (GeneratePIC.getValue()) {
+                    asm.movq(providers.getRegisters().getHeapBaseRegister(), asm.getPlaceholder(-1));
+                    crb.recordMark(config.MARKID_NARROW_OOP_BASE_ADDRESS);
+                } else {
+                    if (config.narrowKlassBase != 0) {
+                        // The heap base register was destroyed above, so restore it
+                        asm.movq(providers.getRegisters().getHeapBaseRegister(), config.narrowOopBase);
+                    }
                 }
                 asm.cmpq(inlineCacheKlass, register);
             } else {
@@ -284,7 +289,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
         asm.bind(verifiedEntry);
         crb.recordMark(config.MARKID_VERIFIED_ENTRY);
 
-        if (GeneratePIC.getValue(crb.getOptions())) {
+        if (GeneratePIC.getValue()) {
             // Check for method state
             HotSpotFrameContext frameContext = (HotSpotFrameContext) crb.frameContext;
             if (!frameContext.isStub) {
@@ -329,9 +334,9 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend {
     }
 
     @Override
-    public RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig, String[] allocationRestrictedTo) {
+    public RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
-        return new AMD64HotSpotRegisterAllocationConfig(registerConfigNonNull, allocationRestrictedTo);
+        return new AMD64HotSpotRegisterAllocationConfig(registerConfigNonNull);
     }
 
     @Override
