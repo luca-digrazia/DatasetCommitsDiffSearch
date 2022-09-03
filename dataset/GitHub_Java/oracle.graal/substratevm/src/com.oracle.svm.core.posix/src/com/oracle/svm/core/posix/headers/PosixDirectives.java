@@ -44,7 +44,6 @@ public class PosixDirectives implements CContext.Directives {
                     "<langinfo.h>",
                     "<limits.h>",
                     "<locale.h>",
-                    "<net/ethernet.h>",
                     "<net/if.h>",
                     "<netdb.h>",
                     "<netinet/in.h>",
@@ -83,8 +82,7 @@ public class PosixDirectives implements CContext.Directives {
                     "<sys/event.h>",
                     "<mach/mach_time.h>",
                     "<mach-o/dyld.h>",
-                    "<netinet6/in6_var.h>",
-                    "<net/if_dl.h>"
+                    "<netinet6/in6_var.h>"
     };
 
     private static final String[] linuxLibs = new String[]{
