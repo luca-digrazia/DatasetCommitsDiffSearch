@@ -86,6 +86,8 @@ public final class GraalOptions {
     // profiling information
     @Option(help = "")
     public static final OptionValue<Integer> DeoptsToDisableOptimisticOptimization = new OptionValue<>(40);
+    @Option(help = "")
+    public static final OptionValue<Integer> MatureProfilingInformationThreshold = new OptionValue<>(100);
 
     // comilation queue
     @Option(help = "")
