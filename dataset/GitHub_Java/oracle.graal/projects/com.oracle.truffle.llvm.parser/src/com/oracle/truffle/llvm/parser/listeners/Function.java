@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -638,7 +638,7 @@ public final class Function implements ParserListener {
         final boolean addExtractValue = i >= args.length - 1;
         final boolean isWeak = addExtractValue || (args[++i] != 0);
 
-        final AggregateType type = findCmpxchgResultType(((PointerType) ptrType).getPointeeType());
+        final Type type = findCmpxchgResultType(((PointerType) ptrType).getPointeeType());
 
         emit(CompareExchangeInstruction.fromSymbols(scope.getSymbols(), type, ptr, cmp, replace, isVolatile, successOrdering, synchronizationScope, failureOrdering, isWeak));
 
@@ -654,14 +654,14 @@ public final class Function implements ParserListener {
     private static final int CMPXCHG_TYPE_ELEMENTTYPE = 0;
     private static final int CMPXCHG_TYPE_BOOLTYPE = 1;
 
-    private AggregateType findCmpxchgResultType(Type elementType) {
+    private Type findCmpxchgResultType(Type elementType) {
         // cmpxchg is the only instruction that does not directly reference its return type in the
         // type table
         for (Type t : types) {
             if (t != null && t instanceof StructureType) {
                 final Type[] elts = ((StructureType) t).getElementTypes();
                 if (elts.length == CMPXCHG_TYPE_LENGTH && elementType == elts[CMPXCHG_TYPE_ELEMENTTYPE] && PrimitiveType.I1 == elts[CMPXCHG_TYPE_BOOLTYPE]) {
-                    return (AggregateType) t;
+                    return t;
                 }
             }
         }

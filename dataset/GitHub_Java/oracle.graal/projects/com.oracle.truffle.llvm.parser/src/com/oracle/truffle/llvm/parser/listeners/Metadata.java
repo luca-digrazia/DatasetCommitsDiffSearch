@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -190,12 +190,9 @@ public final class Metadata implements ParserListener {
                 break;
             }
 
-            case NAMESPACE: {
-                final MDNamespace namespace = MDNamespace.create38(args, metadata);
-                metadata.registerExportedScope(namespace);
-                metadata.add(namespace);
+            case NAMESPACE:
+                metadata.add(MDNamespace.create38(args, metadata));
                 break;
-            }
 
             case GLOBAL_VAR:
                 metadata.add(MDGlobalVariable.create38(args, metadata));
@@ -236,12 +233,9 @@ public final class Metadata implements ParserListener {
                 metadata.add(MDImportedEntity.create38(args, metadata));
                 break;
 
-            case MODULE: {
-                final MDModule module = MDModule.create38(args, metadata);
-                metadata.registerExportedScope(module);
-                metadata.add(module);
+            case MODULE:
+                metadata.add(MDModule.create38(args, metadata));
                 break;
-            }
 
             case MACRO:
                 metadata.add(MDMacro.create38(args, metadata));
