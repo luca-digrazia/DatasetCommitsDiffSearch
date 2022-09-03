@@ -38,9 +38,8 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue.CustomFieldValueComputer
 import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
-import com.oracle.svm.core.annotate.TargetElement;
-import com.oracle.svm.core.jdk.JDK8OrEarlier;
 import com.oracle.svm.core.util.VMError;
+import com.oracle.svm.reflect.hosted.DeclaredAnnotationsComputer.ExecutableDeclaredAnnotationsComputer;
 import com.oracle.svm.reflect.hosted.ReflectionFeature;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -58,26 +57,24 @@ public final class Target_java_lang_reflect_Executable {
         }
     }
 
-    /**
-     * The declaredAnnotations field doesn't need a value recomputation. Its value is pre-loaded in
-     * the {@link com.oracle.svm.reflect.hosted.ReflectionMetadataFeature}.
-     */
-    @Alias //
+    public static final class ParameterComputer implements CustomFieldValueComputer {
+
+        @Override
+        public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
+            Executable executable = (Executable) receiver;
+            return executable.getParameters();
+        }
+    }
+
+    @Alias @RecomputeFieldValue(kind = Kind.Custom, declClass = ExecutableDeclaredAnnotationsComputer.class) //
     Map<Class<? extends Annotation>, Annotation> declaredAnnotations;
 
     @Inject @RecomputeFieldValue(kind = Kind.Custom, declClass = ParameterAnnotationsComputer.class) //
     Annotation[][] parameterAnnotations;
-
-    /**
-     * The parameters field doesn't need a value recomputation. Its value is pre-loaded in the
-     * {@link com.oracle.svm.reflect.hosted.ReflectionMetadataFeature}.
-     */
-    @Alias //
+    @Inject @RecomputeFieldValue(kind = Kind.Custom, declClass = ParameterComputer.class) //
     Parameter[] parameters;
 
     @Alias
-    @Alias //
-    @TargetElement(onlyWith = JDK8OrEarlier.class)
     native Target_java_lang_reflect_Executable getRoot();
 
     @Substitute
@@ -108,6 +105,7 @@ public final class Target_java_lang_reflect_Executable {
     }
 
     @Substitute
+    @SuppressWarnings("unused")
     private Parameter[] privateGetParameters() {
         Target_java_lang_reflect_Executable holder = getRoot();
         if (holder == null) {
