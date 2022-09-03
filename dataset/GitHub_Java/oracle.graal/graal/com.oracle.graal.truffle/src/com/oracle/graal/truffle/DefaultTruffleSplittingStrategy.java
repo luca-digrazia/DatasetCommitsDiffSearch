@@ -36,7 +36,6 @@ public final class DefaultTruffleSplittingStrategy implements TruffleSplittingSt
         this.call = call;
     }
 
-    @Override
     public void beforeCall(Object[] arguments) {
         if (call.getCallCount() == 2) {
             if (shouldSplit()) {
@@ -45,7 +44,6 @@ public final class DefaultTruffleSplittingStrategy implements TruffleSplittingSt
         }
     }
 
-    @Override
     public void forceSplitting() {
         if (!canSplit()) {
             return;
