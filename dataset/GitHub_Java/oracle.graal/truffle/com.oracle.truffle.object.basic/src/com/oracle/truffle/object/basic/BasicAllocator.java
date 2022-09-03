@@ -47,12 +47,12 @@ import com.oracle.truffle.object.basic.BasicLocations.ObjectArrayLocation;
 
 abstract class BasicAllocator extends ShapeImpl.BaseAllocator {
 
-    BasicAllocator(LayoutImpl layout) {
+    public BasicAllocator(LayoutImpl layout) {
         super(layout);
         advance(((BasicLayout) layout).getPrimitiveArrayLocation());
     }
 
-    BasicAllocator(ShapeImpl shape) {
+    public BasicAllocator(ShapeImpl shape) {
         super(shape);
     }
 

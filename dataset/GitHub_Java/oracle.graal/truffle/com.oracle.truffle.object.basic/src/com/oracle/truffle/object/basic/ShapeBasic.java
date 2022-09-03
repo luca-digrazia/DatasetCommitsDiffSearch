@@ -22,15 +22,18 @@
  */
 package com.oracle.truffle.object.basic;
 
-import com.oracle.truffle.api.object.*;
-import com.oracle.truffle.object.*;
+import com.oracle.truffle.api.object.Layout;
+import com.oracle.truffle.api.object.ObjectType;
+import com.oracle.truffle.object.PropertyMap;
+import com.oracle.truffle.object.ShapeImpl;
+import com.oracle.truffle.object.Transition;
 
 public final class ShapeBasic extends ShapeImpl {
-    public ShapeBasic(Layout layout, Object sharedData, ObjectType operations, int id) {
-        super(layout, operations, sharedData, id);
+    ShapeBasic(Layout layout, Object sharedData, ObjectType objectType, int id) {
+        super(layout, objectType, sharedData, id);
     }
 
-    public ShapeBasic(Layout layout, Object sharedData, ShapeImpl parent, ObjectType objectType, PropertyMap propertyMap, Transition transition, Allocator allocator, int id) {
+    ShapeBasic(Layout layout, Object sharedData, ShapeImpl parent, ObjectType objectType, PropertyMap propertyMap, Transition transition, Allocator allocator, int id) {
         super(layout, parent, objectType, sharedData, propertyMap, transition, allocator, id);
     }
 
@@ -38,10 +41,5 @@ public final class ShapeBasic extends ShapeImpl {
     @Override
     protected ShapeImpl createShape(Layout layout, Object sharedData, ShapeImpl parent, ObjectType objectType, PropertyMap propertyMap, Transition transition, Allocator allocator, int id) {
         return new ShapeBasic(layout, sharedData, parent, objectType, propertyMap, transition, allocator, id);
-    }
-
-    @Override
-    public ShapeImpl replaceProperty(Property oldProperty, Property newProperty) {
-        return directReplaceProperty(oldProperty, newProperty);
     }
 }

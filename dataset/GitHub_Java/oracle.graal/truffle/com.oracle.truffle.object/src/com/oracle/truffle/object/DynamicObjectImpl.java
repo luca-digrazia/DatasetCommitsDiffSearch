@@ -130,6 +130,10 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
         Shape currentShape = getShape();
         assert oldShape != newShape : "Wrong old shape assumption?";
         assert newShape != currentShape : "Redundant shape change? shape=" + currentShape;
+        // assert oldShape == currentShape || (oldShape.getLastProperty() == ((EnterpriseLayout)
+        // oldShape.getLayout()).getPrimitiveArrayProperty() && oldShape.getParent() ==
+        // currentShape) : "Out-of-order shape change?" + "\nparentShape=" + currentShape +
+        // "\noldShape=" + oldShape + "\nnewShape=" + newShape;
         return true;
     }
 
@@ -149,7 +153,11 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
 
     protected abstract DynamicObject cloneWithShape(Shape currentShape);
 
-    protected abstract void reshape(ShapeImpl newShape);
+    void reshapeAfterDelete(final Shape newShape, final Shape deletedParentShape) {
+        DynamicObject original = this.cloneWithShape(getShape());
+        setShapeAndResize(newShape);
+        copyProperties(original, deletedParentShape);
+    }
 
     public final void copyProperties(DynamicObject fromObject, Shape ancestor) {
         ShapeImpl fromShape = (ShapeImpl) fromObject.getShape();
@@ -177,9 +185,9 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
     }
 
     @TruffleBoundary
-    public boolean changeFlags(Object key, int newFlags) {
+    public boolean changeFlags(Object id, int newFlags) {
         Shape oldShape = getShape();
-        Property existing = oldShape.getProperty(key);
+        Property existing = oldShape.getProperty(id);
         if (existing != null) {
             if (existing.getFlags() != newFlags) {
                 Property newProperty = existing.copyWithFlags(newFlags);
@@ -217,8 +225,8 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
 
     @Override
     @TruffleBoundary
-    public Object get(Object key, Object defaultValue) {
-        Property existing = getShape().getProperty(key);
+    public Object get(Object id, Object defaultValue) {
+        Property existing = getShape().getProperty(id);
         if (existing != null) {
             return existing.get(this, false);
         } else {
@@ -228,8 +236,8 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
 
     @Override
     @TruffleBoundary
-    public boolean set(Object key, Object value) {
-        Property existing = getShape().getProperty(key);
+    public boolean set(Object id, Object value) {
+        Property existing = getShape().getProperty(id);
         if (existing != null) {
             existing.setGeneric(this, value, null);
             return true;
@@ -240,24 +248,36 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
 
     @Override
     @TruffleBoundary
-    public void define(Object key, Object value, int flags) {
-        define(key, value, flags, LayoutStrategy.DEFAULT_LAYOUT_FACTORY);
+    public void define(Object id, Object value, int flags) {
+        define(id, value, flags, ShapeImpl.DEFAULT_LAYOUT_FACTORY);
     }
 
     @Override
     @TruffleBoundary
-    public void define(Object key, Object value, int flags, LocationFactory locationFactory) {
+    public void define(Object id, Object value, int flags, LocationFactory locationFactory) {
         ShapeImpl oldShape = getShape();
-        oldShape.getLayout().getStrategy().objectDefineProperty(this, key, value, flags, locationFactory, oldShape);
+        ShapeImpl newShape = oldShape.defineProperty(id, value, flags, locationFactory);
+        if (updateShape()) {
+            oldShape = getShape();
+        }
+        Property property = newShape.getProperty(id);
+
+        if (oldShape == newShape) {
+            property.setSafe(this, value, oldShape);
+        } else {
+            property.setSafe(this, value, oldShape, newShape);
+        }
     }
 
     @Override
     @TruffleBoundary
-    public boolean delete(Object key) {
+    public boolean delete(Object id) {
         ShapeImpl oldShape = getShape();
-        Property existing = oldShape.getProperty(key);
+        Property existing = oldShape.getProperty(id);
         if (existing != null) {
-            oldShape.getLayout().getStrategy().objectRemoveProperty(this, existing, oldShape);
+            ShapeImpl newShape = oldShape.removeProperty(existing);
+            this.reshapeAfterDelete(newShape, ShapeImpl.findCommonAncestor(oldShape, newShape));
+            // TODO ancestor should be the parent of found property's shape
             return true;
         } else {
             return false;
