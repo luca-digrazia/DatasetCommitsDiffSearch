@@ -34,7 +34,6 @@ import com.oracle.graal.nodes.util.*;
 /**
  * Compares two arrays with the same length.
  */
-@NodeInfo
 public class ArrayEqualsNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable, Virtualizable, MemoryAccess {
 
     /** {@link Kind} of the arrays to compare. */
