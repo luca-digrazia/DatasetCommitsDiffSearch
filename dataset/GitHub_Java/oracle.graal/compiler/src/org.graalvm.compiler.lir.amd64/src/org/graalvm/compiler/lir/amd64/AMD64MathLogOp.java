@@ -39,6 +39,8 @@ import static jdk.vm.ci.amd64.AMD64.xmm4;
 import static jdk.vm.ci.amd64.AMD64.xmm5;
 import static jdk.vm.ci.amd64.AMD64.xmm6;
 import static jdk.vm.ci.amd64.AMD64.xmm7;
+import static org.graalvm.compiler.lir.amd64.AMD64HotSpotHelper.pointerConstant;
+import static org.graalvm.compiler.lir.amd64.AMD64HotSpotHelper.recordExternalAddress;
 
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.asm.amd64.AMD64Address;
@@ -50,13 +52,13 @@ import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
 
 import jdk.vm.ci.amd64.AMD64;
 
-public final class AMD64MathLogOp extends AMD64MathIntrinsicUnaryOp {
+public class AMD64MathLogOp extends AMD64MathStubUnaryOp {
 
     public static final LIRInstructionClass<AMD64MathLogOp> TYPE = LIRInstructionClass.create(AMD64MathLogOp.class);
 
     public AMD64MathLogOp() {
         super(TYPE, /* GPR */ rax, rcx, rdx, r8, r11,
-                        /* XMM */ xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7);
+                        /* XMM */ xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7);
     }
 
     /******************************************************************************/
@@ -269,18 +271,18 @@ public final class AMD64MathLogOp extends AMD64MathIntrinsicUnaryOp {
         masm.subl(rax, rcx);
         masm.cvtsi2sdl(xmm7, rax);
         masm.mulsd(xmm1, xmm0);
-        masm.movq(xmm6, recordExternalAddress(crb, log2));             // 0xfefa3800, 0x3fa62e42
-        masm.movdqu(xmm3, recordExternalAddress(crb, coeff));          // 0x92492492, 0x3fc24924,
-                                                                       // 0x00000000, 0xbfd00000
+        masm.movq(xmm6, recordExternalAddress(crb, log2));      // 0xfefa3800, 0x3fa62e42
+        masm.movdqu(xmm3, recordExternalAddress(crb, coeff));   // 0x92492492, 0x3fc24924,
+                                                                // 0x00000000, 0xbfd00000
         masm.subsd(xmm5, xmm2);
         masm.andl(rdx, 16711680);
         masm.shrl(rdx, 12);
         masm.movdqu(xmm0, new AMD64Address(r11, rdx, AMD64Address.Scale.Times1));
-        masm.movdqu(xmm4, recordExternalAddress(crb, coeff16));        // 0x3d6fb175, 0xbfc5555e,
-                                                                       // 0x55555555, 0x3fd55555
+        masm.movdqu(xmm4, recordExternalAddress(crb, coeff16)); // 0x3d6fb175, 0xbfc5555e,
+                                                                // 0x55555555, 0x3fd55555
         masm.addsd(xmm1, xmm5);
-        masm.movdqu(xmm2, recordExternalAddress(crb, coeff32));        // 0x9999999a, 0x3fc99999,
-                                                                       // 0x00000000, 0xbfe00000
+        masm.movdqu(xmm2, recordExternalAddress(crb, coeff32)); // 0x9999999a, 0x3fc99999,
+                                                                // 0x00000000, 0xbfe00000
         masm.mulsd(xmm6, xmm7);
         if (masm.supports(AMD64.CPUFeature.SSE3)) {
             masm.movddup(xmm5, xmm1);
@@ -288,7 +290,7 @@ public final class AMD64MathLogOp extends AMD64MathIntrinsicUnaryOp {
             masm.movdqu(xmm5, xmm1);
             masm.movlhps(xmm5, xmm5);
         }
-        masm.mulsd(xmm7, recordExternalAddress(crb, log28));           // 0x93c76730, 0x3ceef357
+        masm.mulsd(xmm7, recordExternalAddress(crb, log28));    // 0x93c76730, 0x3ceef357
         masm.mulsd(xmm3, xmm1);
         masm.addsd(xmm0, xmm6);
         masm.mulpd(xmm4, xmm5);
