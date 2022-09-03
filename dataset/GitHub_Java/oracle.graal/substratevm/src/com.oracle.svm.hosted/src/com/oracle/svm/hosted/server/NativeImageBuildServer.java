@@ -39,21 +39,17 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.URLClassLoader;
-import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.ResourceBundle;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -87,16 +83,15 @@ public final class NativeImageBuildServer {
     private static final int TIMEOUT_MINUTES = 240;
     private static final String SOCKET_CHARSET = "UTF-8";
     private static final String SUBSTRATEVM_VERSION_PROPERTY = "substratevm.version";
-    private static final int SERVER_THREAD_POOL_SIZE = 4;
+    private static final int SERVER_THREAD_POOL_SIZE = 2;
     private static final int FAILED_EXIT_STATUS = -1;
-    private static Set<ImageBuildTask> tasks = Collections.synchronizedSet(new HashSet<>());
 
     private boolean terminated;
     private final int port;
-    private PrintStream logOutput;
+    private PrintStream out;
 
     /*
-     * This is done as System.err and System.logOutput are replaced by reference during analysis.
+     * This is done as System.err and System.out are replaced by reference during analysis.
      */
     private final StreamingJSONOutputStream outJSONStream = new StreamingJSONOutputStream(ServerCommand.WRITE_OUT, null);
     private final StreamingJSONOutputStream errorJSONStream = new StreamingJSONOutputStream(ServerCommand.WRITE_ERR, null);
@@ -108,10 +103,10 @@ public final class NativeImageBuildServer {
     private Instant lastKeepAliveAction = Instant.now();
     private ThreadPoolExecutor threadPoolExecutor;
 
-    private NativeImageBuildServer(int port, PrintStream logOutput) {
+    private NativeImageBuildServer(int port, PrintStream out) {
         this.port = port;
-        this.logOutput = logOutput;
-        threadPoolExecutor = new ThreadPoolExecutor(SERVER_THREAD_POOL_SIZE, SERVER_THREAD_POOL_SIZE, Long.MAX_VALUE, TimeUnit.DAYS, new LinkedBlockingQueue<>());
+        this.out = out;
+        initThreadPool();
 
         /*
          * Set the right classloader in the process reaper
@@ -133,9 +128,13 @@ public final class NativeImageBuildServer {
         }
     }
 
+    private void initThreadPool() {
+        threadPoolExecutor = new ThreadPoolExecutor(SERVER_THREAD_POOL_SIZE, SERVER_THREAD_POOL_SIZE, Long.MAX_VALUE, TimeUnit.DAYS, new LinkedBlockingQueue<>());
+    }
+
     private void log(String commandLine, Object... args) {
-        logOutput.printf(commandLine, args);
-        logOutput.flush();
+        out.printf(commandLine, args);
+        out.flush();
     }
 
     private static void printUsageAndExit() {
@@ -225,26 +224,19 @@ public final class NativeImageBuildServer {
         } catch (SocketTimeoutException ste) {
             log("Compilation server timed out. Shutting down...\n");
         } catch (SocketException se) {
-            log("Terminated: " + se.getMessage() + "\n");
             if (!terminated) {
                 log("Server error: " + se.getMessage() + "\n");
             }
         } catch (IOException e) {
-            log("IOException in the socket operation.", e);
+            throw VMError.shouldNotReachHere(e);
         } finally {
             log("Shutting down server...\n");
-            try {
-                Thread.sleep(10000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
             threadPoolExecutor.shutdownNow();
         }
     }
 
     private void closeServerSocket(ServerSocket serverSocket) {
         try {
-            log("Terminating...");
             terminated = true;
             serverSocket.close();
         } catch (IOException e) {
@@ -259,8 +251,8 @@ public final class NativeImageBuildServer {
             try {
                 return processCommand(socket, input.readLine());
             } catch (Throwable t) {
-                log("Execution failed: " + t + "\n");
-                t.printStackTrace(logOutput);
+                log("Execution failed: " + t.getMessage() + "\n");
+                t.printStackTrace();
                 sendExitStatus(output, 1);
             }
         } catch (IOException ioe) {
@@ -295,58 +287,46 @@ public final class NativeImageBuildServer {
                 return false;
             case GET_VERSION:
                 log("Received 'version' request. Responding with " + System.getProperty(SUBSTRATEVM_VERSION_PROPERTY) + ".\n");
-                SubstrateServerMessage.send(new SubstrateServerMessage(serverCommand.command, System.getProperty(SUBSTRATEVM_VERSION_PROPERTY).getBytes()), output);
+                SubstrateServerMessage.send(new SubstrateServerMessage(serverCommand.command, System.getProperty(SUBSTRATEVM_VERSION_PROPERTY)), output);
                 return Instant.now().isBefore(lastKeepAliveAction.plus(Duration.ofMinutes(TIMEOUT_MINUTES)));
             case BUILD_IMAGE:
-                try {
-                    long activeTasks = activeBuildTasks.incrementAndGet();
-                    if (activeTasks > 1) {
-                        String message = "Can not build image: tasks are already running in the server.\n";
-                        log(message);
-                        sendError(output, message);
-                        sendExitStatus(output, -1);
-                    } else {
-                        log("Starting compilation for request:\n%s\n", serverCommand.payloadString());
-                        final ArrayList<String> arguments = new ArrayList<>(Arrays.asList(serverCommand.payloadString().split("\\s+?")));
-
-                        errorJSONStream.writingInterrupted(false);
-                        errorJSONStream.setOriginal(socket.getOutputStream());
-                        outJSONStream.writingInterrupted(false);
-                        outJSONStream.setOriginal(socket.getOutputStream());
-
-                        int exitStatus = withJVMContext(
+                if (activeBuildTasks.incrementAndGet() > 1) {
+                    String message = "Can not build image: tasks are already running in the server.\n";
+                    log(message);
+                    sendError(output, message);
+                    sendExitStatus(output, -1);
+                    activeBuildTasks.decrementAndGet();
+                } else {
+                    log("Starting compilation for request:\n%s\n", serverCommand.payload);
+                    final ArrayList<String> arguments = new ArrayList<>(Arrays.asList(serverCommand.payload.split("\\s+?")));
+                    errorJSONStream.setOriginal(socket.getOutputStream());
+                    outJSONStream.setOriginal(socket.getOutputStream());
+                    int exitStatus = 0;
+                    boolean success = false;
+                    try {
+                        exitStatus = withJVMContext(
                                         serverStdout,
                                         serverStderr,
                                         () -> executeCompilation(arguments));
-                        sendExitStatus(output, exitStatus);
+                        success = true;
                         log("Image building completed.\n");
-
                         lastKeepAliveAction = Instant.now();
+                    } finally {
+                        activeBuildTasks.decrementAndGet();
+                        if (success) {
+                            /*
+                             * Unexpected failures are handled outside. We don't want to send exit
+                             * status twice.
+                             */
+                            sendExitStatus(output, exitStatus);
+                        }
                     }
-                } finally {
-                    activeBuildTasks.decrementAndGet();
                 }
                 return true;
             case ABORT_BUILD:
-                log("Received 'abort' request. Interrupting all image build tasks.\n");
-                /*
-                 * Busy wait for all writing to complete, otherwise JSON messages are malformed.
-                 */
-                errorJSONStream.writingInterrupted(true);
-                outJSONStream.writingInterrupted(true);
-
-                // Checkstyle: stop
-                // noinspection StatementWithEmptyBody
-                while (errorJSONStream.isWriting() || outJSONStream.isWriting()) {
-                }
-                // Checkstyle: start
-
-                outJSONStream.flush();
-                errorJSONStream.flush();
-                for (ImageBuildTask task : tasks) {
-                    threadPoolExecutor.submit(task::interruptBuild);
-                }
-                sendExitStatus(output, 0);
+                log("Abort request submitted: " + serverCommand.payload + "\n");
+                threadPoolExecutor.shutdownNow();
+                initThreadPool();
                 return true;
             default:
                 log("Invalid command: " + serverCommand.command);
@@ -357,7 +337,7 @@ public final class NativeImageBuildServer {
 
     private static void sendExitStatus(OutputStreamWriter output, int exitStatus) {
         try {
-            SubstrateServerMessage.send(new SubstrateServerMessage(ServerCommand.SEND_STATUS, ByteBuffer.allocate(4).putInt(exitStatus).array()), output);
+            SubstrateServerMessage.send(new SubstrateServerMessage(ServerCommand.SEND_STATUS, Integer.toString(exitStatus)), output);
         } catch (IOException e) {
             throw VMError.shouldNotReachHere(e);
         }
@@ -365,7 +345,7 @@ public final class NativeImageBuildServer {
 
     private static void sendError(OutputStreamWriter output, String message) {
         try {
-            SubstrateServerMessage.send(new SubstrateServerMessage(ServerCommand.WRITE_ERR, message.getBytes()), output);
+            SubstrateServerMessage.send(new SubstrateServerMessage(ServerCommand.WRITE_ERR, message), output);
         } catch (IOException e) {
             throw VMError.shouldNotReachHere(e);
         }
@@ -378,12 +358,7 @@ public final class NativeImageBuildServer {
         try {
             imageClassLoader = NativeImageGeneratorRunner.installURLClassLoader(classpath);
             final ImageBuildTask task = loadCompilationTask(arguments, imageClassLoader);
-            try {
-                tasks.add(task);
-                return task.build(arguments.toArray(new String[arguments.size()]), classpath, imageClassLoader);
-            } finally {
-                tasks.remove(task);
-            }
+            return task.build(arguments.toArray(new String[arguments.size()]), classpath, imageClassLoader);
         } finally {
             Thread.currentThread().setContextClassLoader(applicationClassLoader);
         }
@@ -393,11 +368,11 @@ public final class NativeImageBuildServer {
         Properties previousProperties = (Properties) System.getProperties().clone();
         PrintStream previousOut = System.out;
         PrintStream previousErr = System.err;
-
         System.setOut(out);
         System.setErr(err);
         ResourceBundle.clearCache();
         try {
+            verifyConsistentcyOf("substratevm.version", previousProperties);
             return body.get();
         } catch (Throwable t) {
             t.printStackTrace();
@@ -486,6 +461,17 @@ public final class NativeImageBuildServer {
 
     private static void resetResourceBundle() {
         withGlobalStaticField("java.util.ResourceBundle", "cacheList", list -> ((ConcurrentHashMap<?, ?>) list.get(null)).clear());
+    }
+
+    private static void verifyConsistentcyOf(String key, Properties previousProperties) {
+        if (!previousProperties.containsKey(key)) {
+            previousProperties.setProperty(key, System.getProperty(key));
+        }
+        if (!previousProperties.getProperty(key).equals(System.getProperty(key))) {
+            throw UserError.abort("attempted to change `" + key + "` from " +
+                            previousProperties.getProperty(key) + " to " + System.getProperty(key) + "." +
+                            "To use the desired property value restart the image build server with the new value provided.");
+        }
     }
 
     private static ImageBuildTask loadCompilationTask(ArrayList<String> arguments, ClassLoader classLoader) {
