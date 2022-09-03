@@ -42,17 +42,8 @@ public final class TimerImpl extends DebugValue implements DebugTimer {
      */
     private static ThreadLocal<AbstractTimer> currentTimer = new ThreadLocal<>();
 
-    private final DebugValue flat;
-
     public TimerImpl(String name, boolean conditional) {
-        super(name + "_Accm", conditional);
-        this.flat = new DebugValue(name + "_Flat", conditional) {
-
-            @Override
-            public String toString(long value) {
-                return valueToString(value);
-            }
-        };
+        super(name, conditional);
     }
 
     @Override
@@ -107,8 +98,7 @@ public final class TimerImpl extends DebugValue implements DebugTimer {
             }
             currentTimer.set(parent);
             long flatTime = timeSpan - nestedTimeToSubtract;
-            TimerImpl.this.addToCurrentValue(timeSpan);
-            flat.addToCurrentValue(flatTime);
+            TimerImpl.this.addToCurrentValue(flatTime);
         }
 
         protected abstract long currentTime();
