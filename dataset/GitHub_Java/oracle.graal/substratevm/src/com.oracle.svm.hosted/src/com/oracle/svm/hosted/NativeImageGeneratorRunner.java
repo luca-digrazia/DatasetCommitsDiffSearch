@@ -33,6 +33,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -48,7 +49,6 @@ import java.util.stream.Stream;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.printer.GraalDebugHandlersFactory;
-import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CCharPointerPointer;
 
@@ -99,18 +99,18 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
             timer.scheduleAtFixedRate(timerTask, 0, 1000);
 
         }
-        NativeImageClassLoader nativeImageClassLoader = installNativeImageClassLoader(classpath);
+        URLClassLoader bootImageClassLoader = installURLClassLoader(classpath);
 
-        int exitStatus = new NativeImageGeneratorRunner().build(arguments.toArray(new String[arguments.size()]), classpath, nativeImageClassLoader);
+        int exitStatus = new NativeImageGeneratorRunner().build(arguments.toArray(new String[arguments.size()]), classpath, bootImageClassLoader);
         System.exit(exitStatus == 0 ? 0 : 1);
     }
 
-    public static NativeImageClassLoader installNativeImageClassLoader(String[] classpath) {
-        NativeImageClassLoader nativeImageClassLoader;
+    public static URLClassLoader installURLClassLoader(String[] classpath) {
+        URLClassLoader bootImageClassLoader;
         ClassLoader applicationClassLoader = Thread.currentThread().getContextClassLoader();
-        nativeImageClassLoader = new NativeImageClassLoader(verifyClassPathAndConvertToURLs(classpath), applicationClassLoader);
-        Thread.currentThread().setContextClassLoader(nativeImageClassLoader);
-        return nativeImageClassLoader;
+        bootImageClassLoader = new URLClassLoader(verifyClassPathAndConvertToURLs(classpath), applicationClassLoader);
+        Thread.currentThread().setContextClassLoader(bootImageClassLoader);
+        return bootImageClassLoader;
     }
 
     public static String[] extractImageClassPath(List<String> arguments) {
@@ -151,11 +151,6 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
                 throw UserError.abort("Invalid classpath element '" + v + "'. Make sure that all paths provided with '" + IMAGE_CLASSPATH_PREFIX + "' are correct.");
             }
         }).toArray(URL[]::new);
-    }
-
-    /** Unless the check should be ignored, check that I am running on JDK-8. */
-    public static boolean isValidJavaVersion() {
-        return (Boolean.getBoolean("substratevm.IgnoreGraalVersionCheck") || GraalServices.Java8OrEarlier);
     }
 
     private static void reportToolUserError(String msg) {
@@ -320,10 +315,6 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
     }
 
     public static boolean verifyValidJavaVersionAndPlatform() {
-        if (!isValidJavaVersion()) {
-            reportToolUserError("supports only Java 1.8 with an update version 40+. Detected Java version is: " + getJavaVersion());
-            return false;
-        }
         if (!isValidArchitecture()) {
             reportToolUserError("runs only on architecture AMD64. Detected architecture: " + GraalAccess.getOriginalTarget().arch.getClass().getSimpleName());
         }
@@ -368,8 +359,8 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
     }
 
     @Override
-    public int build(String[] args, String[] classpath, ClassLoader imageClassLoader) {
-        return buildImage(args, classpath, imageClassLoader);
+    public int build(String[] args, String[] classpath, ClassLoader compilationClassLoader) {
+        return buildImage(args, classpath, compilationClassLoader);
     }
 
     @Override
