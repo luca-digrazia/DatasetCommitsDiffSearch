@@ -25,10 +25,9 @@ package com.oracle.graal.compiler.aarch64;
 import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
 import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
 
-import java.util.function.Function;
-
 import com.oracle.graal.asm.NumUtil;
 import com.oracle.graal.asm.aarch64.AArch64Address.AddressingMode;
+import com.oracle.graal.asm.aarch64.AArch64Assembler;
 import com.oracle.graal.asm.aarch64.AArch64Assembler.ConditionFlag;
 import com.oracle.graal.asm.aarch64.AArch64Assembler.ExtendType;
 import com.oracle.graal.compiler.common.calc.Condition;
@@ -46,7 +45,6 @@ import com.oracle.graal.lir.aarch64.AArch64Compare;
 import com.oracle.graal.lir.aarch64.AArch64ControlFlow;
 import com.oracle.graal.lir.aarch64.AArch64ControlFlow.BranchOp;
 import com.oracle.graal.lir.aarch64.AArch64ControlFlow.CondMoveOp;
-import com.oracle.graal.lir.aarch64.AArch64ControlFlow.StrategySwitchOp;
 import com.oracle.graal.lir.aarch64.AArch64Move;
 import com.oracle.graal.lir.aarch64.AArch64Move.CompareAndSwap;
 import com.oracle.graal.lir.aarch64.AArch64Move.MembarOp;
@@ -190,7 +188,7 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
 
     @Override
     public void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, LIRKind cmpKind, double overflowProbability) {
-        append(new AArch64ControlFlow.BranchOp(ConditionFlag.VS, overflow, noOverflow, overflowProbability));
+        append(new AArch64ControlFlow.BranchOp(AArch64Assembler.ConditionFlag.VS, overflow, noOverflow, overflowProbability));
     }
 
     /**
@@ -206,7 +204,7 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
     public void emitIntegerTestBranch(Value left, Value right, LabelRef trueDestination, LabelRef falseDestination, double trueSuccessorProbability) {
         assert ((AArch64Kind) left.getPlatformKind()).isInteger() && left.getPlatformKind() == right.getPlatformKind();
         ((AArch64ArithmeticLIRGenerator) getArithmetic()).emitBinary(LIRKind.combine(left, right), AArch64ArithmeticOp.ANDS, true, left, right);
-        append(new AArch64ControlFlow.BranchOp(ConditionFlag.EQ, trueDestination, falseDestination, trueSuccessorProbability));
+        append(new AArch64ControlFlow.BranchOp(AArch64Assembler.ConditionFlag.EQ, trueDestination, falseDestination, trueSuccessorProbability));
     }
 
     /**
@@ -245,7 +243,7 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
         append(new BranchOp(cmpCondition, trueDestination, falseDestination, trueDestinationProbability));
     }
 
-    private static ConditionFlag toConditionFlag(boolean isInt, Condition cond, boolean unorderedIsTrue) {
+    private static AArch64Assembler.ConditionFlag toConditionFlag(boolean isInt, Condition cond, boolean unorderedIsTrue) {
         return isInt ? toIntConditionFlag(cond) : toFloatConditionFlag(cond, unorderedIsTrue);
     }
 
@@ -254,20 +252,20 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
      * ConditionFlag. Note: This is only correct if the emitCompare code for floats has correctly
      * handled the case of 'EQ && unorderedIsTrue', respectively 'NE && !unorderedIsTrue'!
      */
-    private static ConditionFlag toFloatConditionFlag(Condition cond, boolean unorderedIsTrue) {
+    private static AArch64Assembler.ConditionFlag toFloatConditionFlag(Condition cond, boolean unorderedIsTrue) {
         switch (cond) {
             case LT:
-                return unorderedIsTrue ? ConditionFlag.LT : ConditionFlag.LO;
+                return unorderedIsTrue ? AArch64Assembler.ConditionFlag.LT : AArch64Assembler.ConditionFlag.LO;
             case LE:
-                return unorderedIsTrue ? ConditionFlag.LE : ConditionFlag.LS;
+                return unorderedIsTrue ? AArch64Assembler.ConditionFlag.LE : AArch64Assembler.ConditionFlag.LS;
             case GE:
-                return unorderedIsTrue ? ConditionFlag.PL : ConditionFlag.GE;
+                return unorderedIsTrue ? AArch64Assembler.ConditionFlag.PL : AArch64Assembler.ConditionFlag.GE;
             case GT:
-                return unorderedIsTrue ? ConditionFlag.HI : ConditionFlag.GT;
+                return unorderedIsTrue ? AArch64Assembler.ConditionFlag.HI : AArch64Assembler.ConditionFlag.GT;
             case EQ:
-                return ConditionFlag.EQ;
+                return AArch64Assembler.ConditionFlag.EQ;
             case NE:
-                return ConditionFlag.NE;
+                return AArch64Assembler.ConditionFlag.NE;
             default:
                 throw JVMCIError.shouldNotReachHere();
         }
@@ -276,28 +274,28 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
     /**
      * Takes a Condition and returns the correct Aarch64 specific ConditionFlag.
      */
-    private static ConditionFlag toIntConditionFlag(Condition cond) {
+    private static AArch64Assembler.ConditionFlag toIntConditionFlag(Condition cond) {
         switch (cond) {
             case EQ:
-                return ConditionFlag.EQ;
+                return AArch64Assembler.ConditionFlag.EQ;
             case NE:
-                return ConditionFlag.NE;
+                return AArch64Assembler.ConditionFlag.NE;
             case LT:
-                return ConditionFlag.LT;
+                return AArch64Assembler.ConditionFlag.LT;
             case LE:
-                return ConditionFlag.LE;
+                return AArch64Assembler.ConditionFlag.LE;
             case GT:
-                return ConditionFlag.GT;
+                return AArch64Assembler.ConditionFlag.GT;
             case GE:
-                return ConditionFlag.GE;
+                return AArch64Assembler.ConditionFlag.GE;
             case AE:
-                return ConditionFlag.HS;
+                return AArch64Assembler.ConditionFlag.HS;
             case BE:
-                return ConditionFlag.LS;
+                return AArch64Assembler.ConditionFlag.LS;
             case AT:
-                return ConditionFlag.HI;
+                return AArch64Assembler.ConditionFlag.HI;
             case BT:
-                return ConditionFlag.LO;
+                return AArch64Assembler.ConditionFlag.LO;
             default:
                 throw JVMCIError.shouldNotReachHere();
         }
@@ -382,18 +380,13 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
         assert ((AArch64Kind) trueValue.getPlatformKind()).isInteger() && ((AArch64Kind) falseValue.getPlatformKind()).isInteger();
         ((AArch64ArithmeticLIRGenerator) getArithmetic()).emitBinary(trueValue.getLIRKind(), AArch64ArithmeticOp.ANDS, true, left, right);
         Variable result = newVariable(trueValue.getLIRKind());
-        append(new CondMoveOp(result, ConditionFlag.EQ, load(trueValue), load(falseValue)));
+        append(new CondMoveOp(result, AArch64Assembler.ConditionFlag.EQ, load(trueValue), load(falseValue)));
         return result;
     }
 
     @Override
     public void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget) {
-        append(createStrategySwitchOp(strategy, keyTargets, defaultTarget, key, newVariable(key.getLIRKind()), AArch64LIRGenerator::toIntConditionFlag));
-    }
-
-    protected StrategySwitchOp createStrategySwitchOp(SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Variable key, AllocatableValue scratchValue,
-                    Function<Condition, ConditionFlag> converter) {
-        return new StrategySwitchOp(strategy, keyTargets, defaultTarget, key, scratchValue, converter);
+        append(new AArch64ControlFlow.StrategySwitchOp(strategy, keyTargets, defaultTarget, key, newVariable(key.getLIRKind()), AArch64LIRGenerator::toIntConditionFlag));
     }
 
     @Override
