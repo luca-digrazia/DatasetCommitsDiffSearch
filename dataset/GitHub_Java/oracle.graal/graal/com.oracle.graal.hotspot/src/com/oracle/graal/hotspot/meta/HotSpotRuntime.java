@@ -30,12 +30,12 @@ import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.api.meta.Value.*;
 import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.*;
+import static com.oracle.graal.hotspot.snippets.SystemSubstitutions.*;
 import static com.oracle.graal.java.GraphBuilderPhase.RuntimeCalls.*;
 import static com.oracle.graal.nodes.java.RegisterFinalizerNode.*;
-import static com.oracle.graal.replacements.Log.*;
-import static com.oracle.graal.replacements.MathSubstitutionsX86.*;
-import com.oracle.graal.replacements.*;
+import static com.oracle.graal.snippets.Log.*;
+import static com.oracle.graal.snippets.MathSubstitutionsX86.*;
+
 import java.lang.reflect.*;
 import java.util.*;
 
@@ -57,7 +57,7 @@ import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.bridge.CompilerToVM.CodeInstallResult;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.phases.*;
-import com.oracle.graal.hotspot.replacements.*;
+import com.oracle.graal.hotspot.snippets.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
@@ -69,12 +69,13 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.printer.*;
+import com.oracle.graal.snippets.*;
 import com.oracle.graal.word.*;
 
 /**
  * HotSpot implementation of {@link GraalCodeCacheProvider}.
  */
-public abstract class HotSpotRuntime implements GraalCodeCacheProvider, DisassemblerProvider, BytecodeDisassemblerProvider {
+public abstract class HotSpotRuntime implements GraalCodeCacheProvider, SnippetProvider, DisassemblerProvider, BytecodeDisassemblerProvider {
 
     public final HotSpotVMConfig config;
 
@@ -318,7 +319,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
 
     protected abstract RegisterConfig createRegisterConfig(boolean globalStubConfig);
 
-    public void installReplacements(Backend backend, ReplacementsInstaller installer, Assumptions assumptions) {
+    public void installSnippets(Backend backend, SnippetInstaller installer, Assumptions assumptions) {
         if (GraalOptions.IntrinsifyObjectMethods) {
             installer.installSubstitutions(ObjectSubstitutions.class);
         }
@@ -645,7 +646,8 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                         graph.addBeforeFixed(cas, writeBarrierPre);
                         graph.addAfterFixed(cas, writeBarrierPost);
                     } else {
-                        graph.addAfterFixed(cas, graph.add(new FieldWriteBarrier(cas.object())));
+                        FieldWriteBarrier writeBarrier = graph.add(new FieldWriteBarrier(cas.object()));
+                        graph.addAfterFixed(cas, writeBarrier);
                     }
                 } else {
                     // This may be an array store so use an array write barrier
@@ -654,7 +656,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                         graph.addBeforeFixed(cas, writeBarrierPre);
                         graph.addAfterFixed(cas, graph.add(new WriteBarrierPost(cas.object(), cas.newValue(), location, true)));
                     } else {
-                        graph.addAfterFixed(cas, graph.add(new ArrayWriteBarrier(cas.object(), location)));
+                        graph.addAfterFixed(cas, graph.add(new ArrayWriteBarrier(cas.object(), (IndexedLocationNode) location)));
                     }
                 }
             }
@@ -669,6 +671,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         } else if (n instanceof StoreIndexedNode) {
             StoreIndexedNode storeIndexed = (StoreIndexedNode) n;
             ValueNode boundsCheck = createBoundsCheck(storeIndexed, tool);
+
             Kind elementKind = storeIndexed.elementKind();
             LocationNode arrayLocation = createArrayLocation(graph, elementKind, storeIndexed.index());
             ValueNode value = storeIndexed.value();
@@ -705,7 +708,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                     WriteBarrierPost writeBarrierPost = graph.add(new WriteBarrierPost(array, value, arrayLocation, true));
                     graph.addAfterFixed(memoryWrite, writeBarrierPost);
                 } else {
-                    graph.addAfterFixed(memoryWrite, graph.add(new ArrayWriteBarrier(array, arrayLocation)));
+                    graph.addAfterFixed(memoryWrite, graph.add(new ArrayWriteBarrier(array, (IndexedLocationNode) arrayLocation)));
                 }
             }
         } else if (n instanceof UnsafeLoadNode) {
@@ -734,7 +737,8 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                         graph.addBeforeFixed(write, graph.add(writeBarrierPre));
                         graph.addAfterFixed(write, graph.add(new WriteBarrierPost(object, write.value(), location, false)));
                     } else {
-                        graph.addAfterFixed(write, graph.add(new FieldWriteBarrier(object)));
+                        FieldWriteBarrier writeBarrier = graph.add(new FieldWriteBarrier(object));
+                        graph.addAfterFixed(write, writeBarrier);
                     }
                 } else {
                     // This may be an array store so use an array write barrier
@@ -743,7 +747,8 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                         graph.addBeforeFixed(write, writeBarrierPre);
                         graph.addAfterFixed(write, graph.add(new WriteBarrierPost(object, write.value(), location, true)));
                     } else {
-                        graph.addAfterFixed(write, graph.add(new ArrayWriteBarrier(object, location)));
+                        ArrayWriteBarrier writeBarrier = graph.add(new ArrayWriteBarrier(object, location));
+                        graph.addAfterFixed(write, writeBarrier);
                     }
                 }
             }

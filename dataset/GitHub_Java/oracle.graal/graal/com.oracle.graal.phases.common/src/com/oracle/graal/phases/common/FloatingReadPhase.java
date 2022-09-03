@@ -146,7 +146,7 @@ public class FloatingReadPhase extends Phase {
             StructuredGraph graph = (StructuredGraph) accessNode.graph();
             assert accessNode.getNullCheck() == false;
             Object locationIdentity = accessNode.location().locationIdentity();
-            if (locationIdentity != LocationNode.ANY_LOCATION) {
+            if (locationIdentity != LocationNode.UNKNOWN_LOCATION) {
                 ValueNode lastLocationAccess = state.getLastLocationAccess(locationIdentity);
                 FloatingAccessNode floatingNode = accessNode.asFloatingNode(lastLocationAccess);
                 floatingNode.setNullCheck(accessNode.getNullCheck());
@@ -186,7 +186,7 @@ public class FloatingReadPhase extends Phase {
                         } else if (merged == null) {
                             merged = last;
                         } else {
-                            PhiNode phi = merge.graph().add(new PhiNode(PhiType.Memory, merge, key));
+                            PhiNode phi = merge.graph().add(new PhiNode(PhiType.Memory, merge));
                             for (int j = 0; j < mergedStatesCount; j++) {
                                 phi.addInput(merged);
                             }
@@ -232,7 +232,7 @@ public class FloatingReadPhase extends Phase {
 
             Map<Object, PhiNode> phis = new HashMap<>();
             for (Object location : modifiedLocations) {
-                PhiNode phi = loop.graph().add(new PhiNode(PhiType.Memory, loop, location));
+                PhiNode phi = loop.graph().add(new PhiNode(PhiType.Memory, loop));
                 phi.addInput(initialState.getLastLocationAccess(location));
                 phis.put(location, phi);
                 initialState.lastMemorySnapshot.put(location, phi);
@@ -254,7 +254,7 @@ public class FloatingReadPhase extends Phase {
                 for (Object location : modifiedLocations) {
                     ValueNode lastAccessAtExit = state.lastMemorySnapshot.get(location);
                     if (lastAccessAtExit != null) {
-                        state.lastMemorySnapshot.put(location, ProxyNode.forMemory(lastAccessAtExit, exit, location, (StructuredGraph) loop.graph()));
+                        state.lastMemorySnapshot.put(location, loop.graph().add(new ProxyNode(lastAccessAtExit, exit, PhiType.Memory)));
                     }
                 }
             }

@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -34,7 +32,6 @@ public final class WriteBarrierPost extends FixedWithNextNode implements Lowerab
     @Input private ValueNode object;
     @Input private ValueNode value;
     @Input private LocationNode location;
-    @Input private ValueNode length;
     private final boolean precise;
 
     public ValueNode getObject() {
@@ -43,10 +40,6 @@ public final class WriteBarrierPost extends FixedWithNextNode implements Lowerab
 
     public ValueNode getValue() {
         return value;
-    }
-
-    public ValueNode getLength() {
-        return length;
     }
 
     public LocationNode getLocation() {
@@ -63,33 +56,9 @@ public final class WriteBarrierPost extends FixedWithNextNode implements Lowerab
         this.value = value;
         this.location = location;
         this.precise = precise;
-        this.length = null;
-
     }
 
-    public WriteBarrierPost(ValueNode array, ValueNode value, ValueNode index, ValueNode length) {
-        super(StampFactory.forVoid());
-        this.object = array;
-        this.location = IndexedLocationNode.create(LocationNode.getArrayLocation(Kind.Object), Kind.Object, arrayBaseOffset(Kind.Object), index, array.graph(), arrayIndexScale(Kind.Object));
-        this.length = length;
-        this.value = value;
-        this.precise = true;
-    }
-
-    @Override
     public void lower(LoweringTool generator) {
-        if (getLength() == null) {
-            generator.getRuntime().lower(this, generator);
-        } else {
-            StructuredGraph graph = (StructuredGraph) this.graph();
-            if (useG1GC()) {
-                graph.replaceFixedWithFixed(this, graph().add(new WriteBarrierPost(getObject(), getValue(), getLocation(), usePrecise())));
-            } else {
-                graph.replaceFixedWithFixed(this, graph().add(new ArrayWriteBarrier(getObject(), getLocation())));
-            }
-        }
+        generator.getRuntime().lower(this, generator);
     }
-
-    @NodeIntrinsic
-    public static native void arrayCopyWriteBarrier(Object array, Object value, int index, int length);
 }
