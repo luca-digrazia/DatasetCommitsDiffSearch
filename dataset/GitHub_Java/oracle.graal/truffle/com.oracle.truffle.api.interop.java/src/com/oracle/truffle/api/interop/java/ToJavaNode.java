@@ -388,7 +388,7 @@ abstract class ToJavaNode extends Node {
     }
 
     @TruffleBoundary
-    static Object toPrimitive(Object value, Class<?> requestedType) {
+    private static Object toPrimitive(Object value, Class<?> requestedType) {
         Object attr;
         if (value instanceof TruffleObject) {
             if (!Boolean.TRUE.equals(binaryMessage(Message.IS_BOXED, value))) {

@@ -35,8 +35,6 @@ import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
-import java.lang.reflect.GenericArrayType;
-import java.lang.reflect.Type;
 
 @MessageResolution(receiverType = JavaFunctionObject.class, language = JavaInteropLanguage.class)
 class JavaFunctionMessageResolution {
@@ -72,7 +70,7 @@ class JavaFunctionMessageResolution {
             @ExplodeLoop
             Object execute(VirtualFrame frame, Method method, Object obj, Object[] args) {
                 Object[] convertedArguments = new Object[toJava.length];
-                TypeAndClass[] types = getTypes(method, toJava.length);
+                Class<?>[] types = getTypes(method, toJava.length);
                 for (int i = 0; i < toJava.length; i++) {
                     convertedArguments[i] = toJava[i].execute(frame, args[i], types[i]);
                 }
@@ -80,28 +78,21 @@ class JavaFunctionMessageResolution {
             }
 
             @TruffleBoundary
-            private static TypeAndClass[] getTypes(Method method, int expectedTypeCount) {
-                Type[] argumentTypes = method.getGenericParameterTypes();
-                Class<?>[] argumentClasses = method.getParameterTypes();
+            private static Class<?>[] getTypes(Method method, int expectedTypeCount) {
+                Class<?>[] argumentTypes = method.getParameterTypes();
                 if (method.isVarArgs()) {
-                    TypeAndClass[] types = new TypeAndClass[expectedTypeCount];
+                    Class<?>[] types = new Class<?>[expectedTypeCount];
                     for (int i = 0; i < expectedTypeCount; i++) {
                         if (i < argumentTypes.length - 1) {
-                            types[i] = new TypeAndClass(argumentTypes[i], argumentClasses[i]);
+                            types[i] = argumentTypes[i];
                         } else {
-                            final GenericArrayType arrayType = (GenericArrayType) argumentTypes[argumentTypes.length - 1];
-                            final Class<?> arrayClazz = argumentClasses[argumentClasses.length - 1];
-                            types[i] = new TypeAndClass(arrayType.getGenericComponentType(), arrayClazz.getComponentType());
+                            types[i] = argumentTypes[argumentTypes.length - 1].getComponentType();
                         }
                     }
                     return types;
                 } else {
                     assert expectedTypeCount == argumentTypes.length;
-                    TypeAndClass[] types = new TypeAndClass[expectedTypeCount];
-                    for (int i = 0; i < expectedTypeCount; i++) {
-                        types[i] = new TypeAndClass(argumentTypes[i], argumentClasses[i]);
-                    }
-                    return types;
+                    return argumentTypes;
                 }
             }
 
