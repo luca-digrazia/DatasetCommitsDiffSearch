@@ -599,23 +599,6 @@ public abstract class Source {
         }
 
         @Override
-        public int hashCode() {
-            return path.hashCode();
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (obj instanceof FileSource) {
-                FileSource other = (FileSource) obj;
-                return path.equals(other.path);
-            }
-            return false;
-        }
-
-        @Override
         protected void reset() {
             this.code = null;
         }
