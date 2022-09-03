@@ -124,18 +124,6 @@ public class CompilationTask {
         return request.getEntryBCI();
     }
 
-    /**
-     * @return the compilation id plus a trailing '%' is the compilation is an OSR to match
-     *         PrintCompilation style output
-     */
-    public String getIdString() {
-        if (getEntryBCI() != JVMCICompiler.INVOCATION_ENTRY_BCI) {
-            return getId() + "%";
-        } else {
-            return Integer.toString(getId());
-        }
-    }
-
     public HotSpotInstalledCode getInstalledCode() {
         return installedCode;
     }
@@ -190,7 +178,7 @@ public class CompilationTask {
                 allocatedBytesBefore = 0L;
             }
 
-            try (Scope s = Debug.scope("Compiling", new DebugDumpScope(getIdString(), true))) {
+            try (Scope s = Debug.scope("Compiling", new DebugDumpScope(String.valueOf(getId()), true))) {
                 // Begin the compilation event.
                 compilationEvent.begin();
                 /*
@@ -323,7 +311,7 @@ public class CompilationTask {
     private void installMethod(final CompilationResult compResult) {
         final CodeCacheProvider codeCache = jvmciRuntime.getHostJVMCIBackend().getCodeCache();
         installedCode = null;
-        try (Scope s = Debug.scope("CodeInstall", new DebugDumpScope(getIdString(), true), codeCache, getMethod())) {
+        try (Scope s = Debug.scope("CodeInstall", new DebugDumpScope(String.valueOf(getId()), true), codeCache, getMethod())) {
             HotSpotCompiledCode compiledCode = HotSpotCompiledCodeBuilder.createCompiledCode(request.getMethod(), request, compResult);
             installedCode = (HotSpotInstalledCode) codeCache.installCode(request.getMethod(), compiledCode, null, request.getMethod().getSpeculationLog(), installAsDefault);
         } catch (Throwable e) {
