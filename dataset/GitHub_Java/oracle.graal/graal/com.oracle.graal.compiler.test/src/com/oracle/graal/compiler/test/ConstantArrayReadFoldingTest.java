@@ -38,7 +38,7 @@ public class ConstantArrayReadFoldingTest extends GraalCompilerTest {
         public final double ceiling;
         public double weight;
 
-        E(double ceiling) {
+        private E(double ceiling) {
             this.ceiling = ceiling;
         }
     }
