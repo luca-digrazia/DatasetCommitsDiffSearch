@@ -157,10 +157,6 @@ public class CheckGraalInvariants extends GraalCompilerTest {
                 if (className.equals("org.graalvm.compiler.serviceprovider.GraalServices$Lazy")) {
                     return false;
                 }
-            } else {
-                if (className.equals("jdk.vm.ci.services.JVMCIClassLoaderFactory")) {
-                    return false;
-                }
             }
             return true;
         }
