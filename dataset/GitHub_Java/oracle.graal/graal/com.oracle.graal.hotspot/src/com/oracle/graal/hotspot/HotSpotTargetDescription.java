@@ -22,10 +22,7 @@
  */
 package com.oracle.graal.hotspot;
 
-import com.oracle.jvmci.code.TargetDescription;
-import com.oracle.jvmci.code.Architecture;
-import com.oracle.jvmci.code.ReferenceMap;
-import com.oracle.jvmci.hotspot.*;
+import com.oracle.graal.api.code.*;
 
 public class HotSpotTargetDescription extends TargetDescription {
 
@@ -35,6 +32,6 @@ public class HotSpotTargetDescription extends TargetDescription {
 
     @Override
     public ReferenceMap createReferenceMap(boolean hasRegisters, int stackSlotCount) {
-        return new HotSpotReferenceMap(this);
+        return new HotSpotReferenceMap(hasRegisters ? arch.getRegisterReferenceMapSize() : 0, stackSlotCount, this);
     }
 }
