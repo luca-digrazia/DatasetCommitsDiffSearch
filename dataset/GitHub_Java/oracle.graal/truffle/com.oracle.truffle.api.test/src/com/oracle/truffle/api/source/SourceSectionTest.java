@@ -39,7 +39,6 @@ public class SourceSectionTest {
 
     private final Source longSource = Source.newBuilder("01234\n67\n9\n").name("long").mimeType("content/unknown").build();
 
-    @Test
     public void emptySourceTest0() {
         SourceSection section = emptySource.createSection("test", 0, 0);
         assertNotNull(section);
