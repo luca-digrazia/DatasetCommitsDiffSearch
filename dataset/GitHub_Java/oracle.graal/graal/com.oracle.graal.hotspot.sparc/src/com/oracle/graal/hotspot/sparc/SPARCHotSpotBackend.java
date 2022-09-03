@@ -175,7 +175,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
 
     @Override
     protected Assembler createAssembler(FrameMap frameMap) {
-        return new SPARCMacroAssembler(getTarget(), frameMap.getRegisterConfig());
+        return new SPARCMacroAssembler(getTarget(), frameMap.registerConfig);
     }
 
     @Override
@@ -211,7 +211,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         stuffDelayedControlTransfers(lir);
         SPARCMacroAssembler masm = (SPARCMacroAssembler) crb.asm;
         FrameMap frameMap = crb.frameMap;
-        RegisterConfig regConfig = frameMap.getRegisterConfig();
+        RegisterConfig regConfig = frameMap.registerConfig;
         HotSpotVMConfig config = getRuntime().getConfig();
         Label unverifiedStub = installedCodeOwner == null || installedCodeOwner.isStatic() ? null : new Label();
 

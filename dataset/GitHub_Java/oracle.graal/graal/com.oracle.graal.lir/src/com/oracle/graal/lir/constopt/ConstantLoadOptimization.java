@@ -45,11 +45,11 @@ import com.oracle.graal.options.*;
  * a constant, which is potentially scheduled into a block with high probability, with one or more
  * definitions in blocks with a lower probability.
  */
-public final class ConstantLoadOptimization {
+public class ConstantLoadOptimization {
 
     public static class Options {
         // @formatter:off
-        @Option(help = "Enable constant load optimization.", type = OptionType.Debug)
+        @Option(help = "Enable constant load optimization.")
         public static final OptionValue<Boolean> ConstantLoadOptimization = new OptionValue<>(true);
         // @formatter:on
     }
@@ -282,7 +282,7 @@ public final class ConstantLoadOptimization {
         }
     }
 
-    private void insertLoad(JavaConstant constant, LIRKind kind, AbstractBlock<?> block, List<UseEntry> usages) {
+    private void insertLoad(Constant constant, LIRKind kind, AbstractBlock<?> block, List<UseEntry> usages) {
         assert usages != null && usages.size() > 0 : String.format("No usages %s %s %s", constant, block, usages);
         // create variable
         Variable variable = lirGen.newVariable(kind);
