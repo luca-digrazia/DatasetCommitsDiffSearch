@@ -489,8 +489,7 @@ public class GraphDecoder {
                  */
                 LoopScope outerScope = loopScope.outer;
                 int nextIterationNumber = outerScope.nextIterations.isEmpty() ? outerScope.loopIteration + 1 : outerScope.nextIterations.getLast().loopIteration + 1;
-                successorAddScope = new LoopScope(methodScope, outerScope.outer, outerScope.loopDepth, nextIterationNumber, outerScope.loopBeginOrderId,
-                                outerScope.initialCreatedNodes == null ? null : Arrays.copyOf(outerScope.initialCreatedNodes, outerScope.initialCreatedNodes.length),
+                successorAddScope = new LoopScope(methodScope, outerScope.outer, outerScope.loopDepth, nextIterationNumber, outerScope.loopBeginOrderId, outerScope.initialCreatedNodes,
                                 Arrays.copyOf(loopScope.initialCreatedNodes, loopScope.initialCreatedNodes.length), outerScope.nextIterations, outerScope.iterationStates);
                 checkLoopExplosionIteration(methodScope, successorAddScope);
 
@@ -737,8 +736,7 @@ public class GraphDecoder {
         assert methodScope.loopExplosion != LoopExplosionKind.NONE;
         if (methodScope.loopExplosion != LoopExplosionKind.FULL_UNROLL || loopScope.nextIterations.isEmpty()) {
             int nextIterationNumber = loopScope.nextIterations.isEmpty() ? loopScope.loopIteration + 1 : loopScope.nextIterations.getLast().loopIteration + 1;
-            LoopScope nextIterationScope = new LoopScope(methodScope, loopScope.outer, loopScope.loopDepth, nextIterationNumber, loopScope.loopBeginOrderId,
-                            Arrays.copyOf(loopScope.initialCreatedNodes, loopScope.initialCreatedNodes.length),
+            LoopScope nextIterationScope = new LoopScope(methodScope, loopScope.outer, loopScope.loopDepth, nextIterationNumber, loopScope.loopBeginOrderId, loopScope.initialCreatedNodes,
                             Arrays.copyOf(loopScope.initialCreatedNodes, loopScope.initialCreatedNodes.length), loopScope.nextIterations, loopScope.iterationStates);
             checkLoopExplosionIteration(methodScope, nextIterationScope);
             loopScope.nextIterations.addLast(nextIterationScope);

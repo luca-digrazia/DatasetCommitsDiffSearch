@@ -55,17 +55,17 @@ public final class SignExtendNode extends IntegerConvertNode<SignExtend, Narrow>
         super(TYPE, ArithmeticOpTable::getSignExtend, ArithmeticOpTable::getNarrow, inputBits, resultBits, input);
     }
 
-    public static ValueNode create(ValueNode input, int resultBits, NodeView view) {
-        return create(input, PrimitiveStamp.getBits(input.stamp(view)), resultBits, view);
+    public static ValueNode create(ValueNode input, int resultBits) {
+        return create(input, PrimitiveStamp.getBits(input.stamp(NodeView.DEFAULT)), resultBits);
     }
 
-    public static ValueNode create(ValueNode input, int inputBits, int resultBits, NodeView view) {
-        IntegerConvertOp<SignExtend> signExtend = ArithmeticOpTable.forStamp(input.stamp(view)).getSignExtend();
-        ValueNode synonym = findSynonym(signExtend, input, inputBits, resultBits, signExtend.foldStamp(inputBits, resultBits, input.stamp(view)));
+    public static ValueNode create(ValueNode input, int inputBits, int resultBits) {
+        IntegerConvertOp<SignExtend> signExtend = ArithmeticOpTable.forStamp(input.stamp(NodeView.DEFAULT)).getSignExtend();
+        ValueNode synonym = findSynonym(signExtend, input, inputBits, resultBits, signExtend.foldStamp(inputBits, resultBits, input.stamp(NodeView.DEFAULT)));
         if (synonym != null) {
             return synonym;
         }
-        return canonical(null, input, inputBits, resultBits, view);
+        return canonical(null, input, inputBits, resultBits);
     }
 
     @Override
@@ -75,36 +75,35 @@ public final class SignExtendNode extends IntegerConvertNode<SignExtend, Narrow>
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        NodeView view = NodeView.from(tool);
         ValueNode ret = super.canonical(tool, forValue);
         if (ret != this) {
             return ret;
         }
 
-        return canonical(this, forValue, getInputBits(), getResultBits(), view);
+        return canonical(this, forValue, getInputBits(), getResultBits());
     }
 
-    private static ValueNode canonical(SignExtendNode self, ValueNode forValue, int inputBits, int resultBits, NodeView view) {
+    private static ValueNode canonical(SignExtendNode self, ValueNode forValue, int inputBits, int resultBits) {
         if (forValue instanceof SignExtendNode) {
             // sxxx -(sign-extend)-> ssss sxxx -(sign-extend)-> ssssssss sssssxxx
             // ==> sxxx -(sign-extend)-> ssssssss sssssxxx
             SignExtendNode other = (SignExtendNode) forValue;
-            return SignExtendNode.create(other.getValue(), other.getInputBits(), resultBits, view);
+            return SignExtendNode.create(other.getValue(), other.getInputBits(), resultBits);
         } else if (forValue instanceof ZeroExtendNode) {
             ZeroExtendNode other = (ZeroExtendNode) forValue;
             if (other.getResultBits() > other.getInputBits()) {
                 // sxxx -(zero-extend)-> 0000 sxxx -(sign-extend)-> 00000000 0000sxxx
                 // ==> sxxx -(zero-extend)-> 00000000 0000sxxx
-                return ZeroExtendNode.create(other.getValue(), other.getInputBits(), resultBits, view);
+                return ZeroExtendNode.create(other.getValue(), other.getInputBits(), resultBits);
             }
         }
 
-        if (forValue.stamp(view) instanceof IntegerStamp) {
-            IntegerStamp inputStamp = (IntegerStamp) forValue.stamp(view);
+        if (forValue.stamp(NodeView.DEFAULT) instanceof IntegerStamp) {
+            IntegerStamp inputStamp = (IntegerStamp) forValue.stamp(NodeView.DEFAULT);
             if ((inputStamp.upMask() & (1L << (inputBits - 1))) == 0L) {
                 // 0xxx -(sign-extend)-> 0000 0xxx
                 // ==> 0xxx -(zero-extend)-> 0000 0xxx
-                return ZeroExtendNode.create(forValue, inputBits, resultBits, view);
+                return ZeroExtendNode.create(forValue, inputBits, resultBits);
             }
         }
 

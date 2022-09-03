@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -121,10 +119,9 @@ public class StampTool {
     }
 
     public static Stamp stampForTrailingZeros(IntegerStamp valueStamp) {
-        int bits = valueStamp.getBits();
-        long mask = CodeUtil.mask(bits);
-        int min = Math.min(Long.numberOfTrailingZeros(valueStamp.upMask() & mask), bits);
-        int max = Math.min(Long.numberOfTrailingZeros(valueStamp.downMask() & mask), bits);
+        long mask = CodeUtil.mask(valueStamp.getBits());
+        int min = Long.numberOfTrailingZeros(valueStamp.upMask() & mask);
+        int max = Long.numberOfTrailingZeros(valueStamp.downMask() & mask);
         return StampFactory.forInteger(JavaKind.Int, min, max);
     }
 

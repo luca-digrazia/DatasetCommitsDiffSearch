@@ -69,9 +69,9 @@ public final class GetClassNode extends FloatingNode implements Lowerable, Canon
         tool.getLowerer().lower(this, tool);
     }
 
-    public static ValueNode tryFold(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, NodeView view, ValueNode object) {
-        if (metaAccess != null && object != null && object.stamp(view) instanceof ObjectStamp) {
-            ObjectStamp objectStamp = (ObjectStamp) object.stamp(view);
+    public static ValueNode tryFold(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ValueNode object) {
+        if (metaAccess != null && object != null && object.stamp(NodeView.DEFAULT) instanceof ObjectStamp) {
+            ObjectStamp objectStamp = (ObjectStamp) object.stamp(NodeView.DEFAULT);
             if (objectStamp.isExactType()) {
                 return ConstantNode.forConstant(constantReflection.asJavaClass(objectStamp.type()), metaAccess);
             }
@@ -81,8 +81,7 @@ public final class GetClassNode extends FloatingNode implements Lowerable, Canon
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        NodeView view = NodeView.from(tool);
-        ValueNode folded = tryFold(tool.getMetaAccess(), tool.getConstantReflection(), view, getObject());
+        ValueNode folded = tryFold(tool.getMetaAccess(), tool.getConstantReflection(), getObject());
         return folded == null ? this : folded;
     }
 

@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,11 +23,11 @@
 package org.graalvm.compiler.hotspot.replacements.arraycopy;
 
 import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
-import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfigBase.INJECTED_METAACCESS;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.KLASS_SUPER_CHECK_OFFSET_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.OBJ_ARRAY_KLASS_ELEMENT_KLASS_LOCATION;
+import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.arrayBaseOffset;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.arrayClassElementOffset;
-import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.getArrayBaseOffset;
+import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.arrayIndexScale;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadHub;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.readLayoutHelper;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.superCheckOffsetOffset;
@@ -42,7 +40,6 @@ import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.probabil
 import java.lang.reflect.Method;
 import java.util.EnumMap;
 
-import org.graalvm.collections.UnmodifiableEconomicMap;
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.api.replacements.Snippet;
@@ -51,7 +48,6 @@ import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
-import org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil;
 import org.graalvm.compiler.hotspot.word.KlassPointer;
 import org.graalvm.compiler.nodes.CallTargetNode;
 import org.graalvm.compiler.nodes.DeoptimizeNode;
@@ -80,6 +76,7 @@ import org.graalvm.compiler.replacements.Snippets;
 import org.graalvm.compiler.replacements.nodes.BasicArrayCopyNode;
 import org.graalvm.compiler.replacements.nodes.ExplodeLoopNode;
 import org.graalvm.compiler.word.Word;
+import org.graalvm.util.UnmodifiableEconomicMap;
 import org.graalvm.word.LocationIdentity;
 import org.graalvm.word.WordFactory;
 
@@ -180,8 +177,8 @@ public class ArrayCopySnippets implements Snippets {
     }
 
     private static void unrolledArraycopyWork(Object nonNullSrc, int srcPos, Object nonNullDest, int destPos, int length, JavaKind elementKind) {
-        int scale = HotSpotReplacementsUtil.arrayIndexScale(INJECTED_METAACCESS, elementKind);
-        int arrayBaseOffset = getArrayBaseOffset(INJECTED_METAACCESS, elementKind);
+        int scale = arrayIndexScale(elementKind);
+        int arrayBaseOffset = arrayBaseOffset(elementKind);
         LocationIdentity arrayLocation = getArrayLocation(elementKind);
 
         long sourceOffset = arrayBaseOffset + (long) srcPos * scale;
@@ -527,7 +524,7 @@ public class ArrayCopySnippets implements Snippets {
          */
         private void instantiate(Arguments args, BasicArrayCopyNode arraycopy) {
             StructuredGraph graph = arraycopy.graph();
-            SnippetTemplate template = template(arraycopy, args);
+            SnippetTemplate template = template(graph.getDebug(), args);
             UnmodifiableEconomicMap<Node, Node> replacements = template.instantiate(providers.getMetaAccess(), arraycopy, SnippetTemplate.DEFAULT_REPLACER, args, false);
             for (Node originalNode : replacements.getKeys()) {
                 if (originalNode instanceof Invoke) {
@@ -539,7 +536,7 @@ public class ArrayCopySnippets implements Snippets {
                         throw new GraalError("unexpected invoke %s in snippet", call.targetMethod());
                     }
                     // Here we need to fix the bci of the invoke
-                    InvokeNode newInvoke = graph.add(new InvokeNode(invoke.callTarget(), arraycopy.getBci(), invoke.getLocationIdentity()));
+                    InvokeNode newInvoke = graph.add(new InvokeNode(invoke.callTarget(), arraycopy.getBci()));
                     if (arraycopy.stateDuring() != null) {
                         newInvoke.setStateDuring(arraycopy.stateDuring());
                     } else {

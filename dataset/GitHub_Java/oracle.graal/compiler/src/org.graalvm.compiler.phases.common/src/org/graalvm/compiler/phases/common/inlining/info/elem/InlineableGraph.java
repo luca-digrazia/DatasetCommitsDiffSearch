@@ -66,8 +66,8 @@ public class InlineableGraph implements Inlineable {
 
     private FixedNodeProbabilityCache probabilites = new FixedNodeProbabilityCache();
 
-    public InlineableGraph(final ResolvedJavaMethod method, final Invoke invoke, final HighTierContext context, CanonicalizerPhase canonicalizer, boolean trackNodeSourcePosition) {
-        StructuredGraph original = getOriginalGraph(method, context, canonicalizer, invoke.asNode().graph(), invoke.bci(), trackNodeSourcePosition);
+    public InlineableGraph(final ResolvedJavaMethod method, final Invoke invoke, final HighTierContext context, CanonicalizerPhase canonicalizer) {
+        StructuredGraph original = getOriginalGraph(method, context, canonicalizer, invoke.asNode().graph(), invoke.bci());
         // TODO copying the graph is only necessary if it is modified or if it contains any invokes
         this.graph = (StructuredGraph) original.copy(invoke.asNode().getDebug());
         specializeGraphToArguments(invoke, context, canonicalizer);
@@ -78,13 +78,12 @@ public class InlineableGraph implements Inlineable {
      * The graph thus obtained is returned, ie the caller is responsible for cloning before
      * modification.
      */
-    private static StructuredGraph getOriginalGraph(final ResolvedJavaMethod method, final HighTierContext context, CanonicalizerPhase canonicalizer, StructuredGraph caller, int callerBci,
-                    boolean trackNodeSourcePosition) {
-        StructuredGraph result = InliningUtil.getIntrinsicGraph(context.getReplacements(), method, callerBci, trackNodeSourcePosition, null);
+    private static StructuredGraph getOriginalGraph(final ResolvedJavaMethod method, final HighTierContext context, CanonicalizerPhase canonicalizer, StructuredGraph caller, int callerBci) {
+        StructuredGraph result = InliningUtil.getIntrinsicGraph(context.getReplacements(), method, callerBci);
         if (result != null) {
             return result;
         }
-        return parseBytecodes(method, context, canonicalizer, caller, trackNodeSourcePosition);
+        return parseBytecodes(method, context, canonicalizer, caller);
     }
 
     /**
@@ -194,10 +193,9 @@ public class InlineableGraph implements Inlineable {
      * </p>
      */
     @SuppressWarnings("try")
-    private static StructuredGraph parseBytecodes(ResolvedJavaMethod method, HighTierContext context, CanonicalizerPhase canonicalizer, StructuredGraph caller, boolean trackNodeSourcePosition) {
+    private static StructuredGraph parseBytecodes(ResolvedJavaMethod method, HighTierContext context, CanonicalizerPhase canonicalizer, StructuredGraph caller) {
         DebugContext debug = caller.getDebug();
-        StructuredGraph newGraph = new StructuredGraph.Builder(caller.getOptions(), debug, AllowAssumptions.ifNonNull(caller.getAssumptions())).method(method).trackNodeSourcePosition(
-                        trackNodeSourcePosition).build();
+        StructuredGraph newGraph = new StructuredGraph.Builder(caller.getOptions(), debug, AllowAssumptions.ifNonNull(caller.getAssumptions())).method(method).build();
         try (DebugContext.Scope s = debug.scope("InlineGraph", newGraph)) {
             if (!caller.isUnsafeAccessTrackingEnabled()) {
                 newGraph.disableUnsafeAccessTracking();

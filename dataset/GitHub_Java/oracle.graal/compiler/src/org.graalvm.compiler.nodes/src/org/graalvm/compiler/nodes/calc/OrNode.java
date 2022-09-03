@@ -51,28 +51,27 @@ public final class OrNode extends BinaryArithmeticNode<Or> implements BinaryComm
         super(TYPE, ArithmeticOpTable::getOr, x, y);
     }
 
-    public static ValueNode create(ValueNode x, ValueNode y, NodeView view) {
+    public static ValueNode create(ValueNode x, ValueNode y) {
         BinaryOp<Or> op = ArithmeticOpTable.forStamp(x.stamp(NodeView.DEFAULT)).getOr();
         Stamp stamp = op.foldStamp(x.stamp(NodeView.DEFAULT), y.stamp(NodeView.DEFAULT));
         ConstantNode tryConstantFold = tryConstantFold(op, x, y, stamp);
         if (tryConstantFold != null) {
             return tryConstantFold;
         }
-        return canonical(null, op, stamp, x, y, view);
+        return canonical(null, op, stamp, x, y);
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        NodeView view = NodeView.from(tool);
         ValueNode ret = super.canonical(tool, forX, forY);
         if (ret != this) {
             return ret;
         }
 
-        return canonical(this, getOp(forX, forY), stamp(NodeView.DEFAULT), forX, forY, view);
+        return canonical(this, getOp(forX, forY), stamp(NodeView.DEFAULT), forX, forY);
     }
 
-    private static ValueNode canonical(OrNode self, BinaryOp<Or> op, Stamp stamp, ValueNode forX, ValueNode forY, NodeView view) {
+    private static ValueNode canonical(OrNode self, BinaryOp<Or> op, Stamp stamp, ValueNode forX, ValueNode forY) {
         if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY)) {
             return forX;
         }
@@ -92,10 +91,10 @@ public final class OrNode extends BinaryArithmeticNode<Or> implements BinaryComm
                     return ConstantNode.forIntegerStamp(stamp, mask);
                 }
             }
-            return reassociate(self != null ? self : (OrNode) new OrNode(forX, forY).maybeCommuteInputs(), ValueNode.isConstantPredicate(), forX, forY, view);
+            return reassociate(self != null ? self : (OrNode) new OrNode(forX, forY).maybeCommuteInputs(), ValueNode.isConstantPredicate(), forX, forY);
         }
         if (forX instanceof NotNode && forY instanceof NotNode) {
-            return new NotNode(AndNode.create(((NotNode) forX).getValue(), ((NotNode) forY).getValue(), view));
+            return new NotNode(AndNode.create(((NotNode) forX).getValue(), ((NotNode) forY).getValue()));
         }
         return self != null ? self : new OrNode(forX, forY).maybeCommuteInputs();
     }

@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -78,11 +76,16 @@ public class DynamicNewInstanceNode extends AbstractNewObjectNode implements Can
                 return this;
             }
             ResolvedJavaType type = tool.getConstantReflection().asJavaType(clazz.asConstant());
-            if (type != null && !throwsInstantiationException(type, tool.getMetaAccess()) && tool.getMetaAccessExtensionProvider().canConstantFoldDynamicAllocation(type)) {
-                return new NewInstanceNode(type, fillContents(), stateBefore());
+            if (type != null && type.isInitialized() && !throwsInstantiationException(type, tool.getMetaAccess())) {
+                return createNewInstanceNode(type);
             }
         }
         return this;
+    }
+
+    /** Hook for subclasses to instantiate a subclass of {@link NewInstanceNode}. */
+    protected NewInstanceNode createNewInstanceNode(ResolvedJavaType type) {
+        return new NewInstanceNode(type, fillContents(), stateBefore());
     }
 
     public static boolean throwsInstantiationException(Class<?> type, Class<?> classClass) {

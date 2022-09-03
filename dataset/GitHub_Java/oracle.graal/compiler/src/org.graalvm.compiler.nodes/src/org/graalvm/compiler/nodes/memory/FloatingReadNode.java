@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -53,17 +51,17 @@ import org.graalvm.word.LocationIdentity;
 public final class FloatingReadNode extends FloatingAccessNode implements LIRLowerableAccess, Canonicalizable {
     public static final NodeClass<FloatingReadNode> TYPE = NodeClass.create(FloatingReadNode.class);
 
-    @OptionalInput(Memory) MemoryKill lastLocationAccess;
+    @OptionalInput(Memory) MemoryNode lastLocationAccess;
 
-    public FloatingReadNode(AddressNode address, LocationIdentity location, MemoryKill lastLocationAccess, Stamp stamp) {
+    public FloatingReadNode(AddressNode address, LocationIdentity location, MemoryNode lastLocationAccess, Stamp stamp) {
         this(address, location, lastLocationAccess, stamp, null, BarrierType.NONE);
     }
 
-    public FloatingReadNode(AddressNode address, LocationIdentity location, MemoryKill lastLocationAccess, Stamp stamp, GuardingNode guard) {
+    public FloatingReadNode(AddressNode address, LocationIdentity location, MemoryNode lastLocationAccess, Stamp stamp, GuardingNode guard) {
         this(address, location, lastLocationAccess, stamp, guard, BarrierType.NONE);
     }
 
-    public FloatingReadNode(AddressNode address, LocationIdentity location, MemoryKill lastLocationAccess, Stamp stamp, GuardingNode guard, BarrierType barrierType) {
+    public FloatingReadNode(AddressNode address, LocationIdentity location, MemoryNode lastLocationAccess, Stamp stamp, GuardingNode guard, BarrierType barrierType) {
         super(TYPE, address, location, stamp, guard, barrierType);
         this.lastLocationAccess = lastLocationAccess;
 
@@ -73,12 +71,12 @@ public final class FloatingReadNode extends FloatingAccessNode implements LIRLow
     }
 
     @Override
-    public MemoryKill getLastLocationAccess() {
+    public MemoryNode getLastLocationAccess() {
         return lastLocationAccess;
     }
 
     @Override
-    public void setLastLocationAccess(MemoryKill newlla) {
+    public void setLastLocationAccess(MemoryNode newlla) {
         updateUsages(ValueNodeUtil.asNode(lastLocationAccess), ValueNodeUtil.asNode(newlla));
         lastLocationAccess = newlla;
     }
@@ -97,7 +95,7 @@ public final class FloatingReadNode extends FloatingAccessNode implements LIRLow
         }
         if (tool.canonicalizeReads() && getAddress().hasMoreThanOneUsage() && lastLocationAccess instanceof WriteNode) {
             WriteNode write = (WriteNode) lastLocationAccess;
-            if (write.getAddress() == getAddress() && write.getAccessStamp(NodeView.DEFAULT).isCompatible(getAccessStamp(NodeView.DEFAULT))) {
+            if (write.getAddress() == getAddress() && write.getAccessStamp().isCompatible(getAccessStamp())) {
                 // Same memory location with no intervening write
                 return write.value();
             }
@@ -117,13 +115,13 @@ public final class FloatingReadNode extends FloatingAccessNode implements LIRLow
 
     @Override
     public boolean verify() {
-        MemoryKill lla = getLastLocationAccess();
+        MemoryNode lla = getLastLocationAccess();
         assert lla != null || getLocationIdentity().isImmutable() : "lastLocationAccess of " + this + " shouldn't be null for mutable location identity " + getLocationIdentity();
         return super.verify();
     }
 
     @Override
-    public Stamp getAccessStamp(NodeView view) {
-        return stamp(view);
+    public Stamp getAccessStamp() {
+        return stamp(NodeView.DEFAULT);
     }
 }

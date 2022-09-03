@@ -61,23 +61,22 @@ public final class IntegerLessThanNode extends IntegerLowerThanNode {
         assert !y.getStackKind().isNumericFloat() && y.getStackKind() != JavaKind.Object;
     }
 
-    public static LogicNode create(ValueNode x, ValueNode y, NodeView view) {
-        return OP.create(x, y, view);
+    public static LogicNode create(ValueNode x, ValueNode y) {
+        return OP.create(x, y);
     }
 
     public static LogicNode create(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
-                    ValueNode x, ValueNode y, NodeView view) {
-        LogicNode value = OP.canonical(constantReflection, metaAccess, options, smallestCompareWidth, OP.getCondition(), false, x, y, view);
+                    ValueNode x, ValueNode y) {
+        LogicNode value = OP.canonical(constantReflection, metaAccess, options, smallestCompareWidth, OP.getCondition(), false, x, y);
         if (value != null) {
             return value;
         }
-        return create(x, y, view);
+        return create(x, y);
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        NodeView view = NodeView.from(tool);
-        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), OP.getCondition(), false, forX, forY, view);
+        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), OP.getCondition(), false, forX, forY);
         if (value != null) {
             return value;
         }
@@ -100,11 +99,11 @@ public final class IntegerLessThanNode extends IntegerLowerThanNode {
 
     public static class LessThanOp extends LowerOp {
         @Override
-        protected CompareNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue, NodeView view) {
-            if (newX.stamp(view) instanceof FloatStamp && newY.stamp(view) instanceof FloatStamp) {
+        protected CompareNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue) {
+            if (newX.stamp(NodeView.DEFAULT) instanceof FloatStamp && newY.stamp(NodeView.DEFAULT) instanceof FloatStamp) {
                 return new FloatLessThanNode(newX, newY, unorderedIsTrue); // TODO: Is the last arg
                                                                            // supposed to be true?
-            } else if (newX.stamp(view) instanceof IntegerStamp && newY.stamp(view) instanceof IntegerStamp) {
+            } else if (newX.stamp(NodeView.DEFAULT) instanceof IntegerStamp && newY.stamp(NodeView.DEFAULT) instanceof IntegerStamp) {
                 return new IntegerLessThanNode(newX, newY);
             }
             throw GraalError.shouldNotReachHere();
@@ -112,7 +111,7 @@ public final class IntegerLessThanNode extends IntegerLowerThanNode {
 
         @Override
         protected LogicNode optimizeNormalizeCompare(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
-                        Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored, NodeView view) {
+                        Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
             PrimitiveConstant primitive = (PrimitiveConstant) constant;
             /* @formatter:off
              * a NC b < c  (not mirrored)
@@ -140,18 +139,18 @@ public final class IntegerLessThanNode extends IntegerLowerThanNode {
 
             if (cst == 0) {
                 if (normalizeNode.getX().getStackKind() == JavaKind.Double || normalizeNode.getX().getStackKind() == JavaKind.Float) {
-                    return FloatLessThanNode.create(constantReflection, metaAccess, options, smallestCompareWidth, a, b, mirrored ^ normalizeNode.isUnorderedLess, view);
+                    return FloatLessThanNode.create(constantReflection, metaAccess, options, smallestCompareWidth, a, b, mirrored ^ normalizeNode.isUnorderedLess);
                 } else {
-                    return IntegerLessThanNode.create(constantReflection, metaAccess, options, smallestCompareWidth, a, b, view);
+                    return IntegerLessThanNode.create(constantReflection, metaAccess, options, smallestCompareWidth, a, b);
                 }
             } else if (cst == 1) {
                 // a <= b <=> !(a > b)
                 LogicNode compare;
                 if (normalizeNode.getX().getStackKind() == JavaKind.Double || normalizeNode.getX().getStackKind() == JavaKind.Float) {
                     // since we negate, we have to reverse the unordered result
-                    compare = FloatLessThanNode.create(constantReflection, metaAccess, options, smallestCompareWidth, b, a, mirrored == normalizeNode.isUnorderedLess, view);
+                    compare = FloatLessThanNode.create(constantReflection, metaAccess, options, smallestCompareWidth, b, a, mirrored == normalizeNode.isUnorderedLess);
                 } else {
-                    compare = IntegerLessThanNode.create(constantReflection, metaAccess, options, smallestCompareWidth, b, a, view);
+                    compare = IntegerLessThanNode.create(constantReflection, metaAccess, options, smallestCompareWidth, b, a);
                 }
                 return LogicNegationNode.create(compare);
             } else if (cst <= -1) {
@@ -163,13 +162,13 @@ public final class IntegerLessThanNode extends IntegerLowerThanNode {
         }
 
         @Override
-        protected LogicNode findSynonym(ValueNode forX, ValueNode forY, NodeView view) {
-            LogicNode result = super.findSynonym(forX, forY, view);
+        protected LogicNode findSynonym(ValueNode forX, ValueNode forY) {
+            LogicNode result = super.findSynonym(forX, forY);
             if (result != null) {
                 return result;
             }
-            if (forX.stamp(view) instanceof IntegerStamp && forY.stamp(view) instanceof IntegerStamp) {
-                if (IntegerStamp.sameSign((IntegerStamp) forX.stamp(view), (IntegerStamp) forY.stamp(view))) {
+            if (forX.stamp(NodeView.DEFAULT) instanceof IntegerStamp && forY.stamp(NodeView.DEFAULT) instanceof IntegerStamp) {
+                if (IntegerStamp.sameSign((IntegerStamp) forX.stamp(NodeView.DEFAULT), (IntegerStamp) forY.stamp(NodeView.DEFAULT))) {
                     return new IntegerBelowNode(forX, forY);
                 }
             }
@@ -190,8 +189,8 @@ public final class IntegerLessThanNode extends IntegerLowerThanNode {
                 }
                 if (xx != null) {
                     assert yy != null;
-                    IntegerStamp xStamp = (IntegerStamp) sub.getX().stamp(view);
-                    IntegerStamp yStamp = (IntegerStamp) sub.getY().stamp(view);
+                    IntegerStamp xStamp = (IntegerStamp) sub.getX().stamp(NodeView.DEFAULT);
+                    IntegerStamp yStamp = (IntegerStamp) sub.getY().stamp(NodeView.DEFAULT);
                     long minValue = CodeUtil.minValue(xStamp.getBits());
                     long maxValue = CodeUtil.maxValue(xStamp.getBits());
 
@@ -205,10 +204,10 @@ public final class IntegerLessThanNode extends IntegerLowerThanNode {
                 }
             }
 
-            if (forX.stamp(view) instanceof IntegerStamp) {
-                assert forY.stamp(view) instanceof IntegerStamp;
-                int bits = ((IntegerStamp) forX.stamp(view)).getBits();
-                assert ((IntegerStamp) forY.stamp(view)).getBits() == bits;
+            if (forX.stamp(NodeView.DEFAULT) instanceof IntegerStamp) {
+                assert forY.stamp(NodeView.DEFAULT) instanceof IntegerStamp;
+                int bits = ((IntegerStamp) forX.stamp(NodeView.DEFAULT)).getBits();
+                assert ((IntegerStamp) forY.stamp(NodeView.DEFAULT)).getBits() == bits;
                 long min = OP.minValue(bits);
                 long xResidue = 0;
                 ValueNode left = null;
@@ -242,12 +241,12 @@ public final class IntegerLessThanNode extends IntegerLowerThanNode {
                             if (left == null) {
                                 left = ConstantNode.forIntegerBits(bits, leftCst.asLong() - min);
                             } else if (xResidue != 0) {
-                                left = AddNode.create(left, ConstantNode.forIntegerBits(bits, xResidue), view);
+                                left = AddNode.create(left, ConstantNode.forIntegerBits(bits, xResidue));
                             }
                             if (right == null) {
                                 right = ConstantNode.forIntegerBits(bits, rightCst.asLong() - min);
                             } else if (yResidue != 0) {
-                                right = AddNode.create(right, ConstantNode.forIntegerBits(bits, yResidue), view);
+                                right = AddNode.create(right, ConstantNode.forIntegerBits(bits, yResidue));
                             }
                             return new IntegerBelowNode(left, right);
                         }

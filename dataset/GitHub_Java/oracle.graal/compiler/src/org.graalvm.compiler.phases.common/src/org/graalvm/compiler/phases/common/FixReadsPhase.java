@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,8 +22,6 @@
  */
 package org.graalvm.compiler.phases.common;
 
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.MapCursor;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.cfg.BlockMap;
 import org.graalvm.compiler.core.common.type.FloatStamp;
@@ -60,7 +56,6 @@ import org.graalvm.compiler.nodes.calc.UnaryNode;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph.RecursiveVisitor;
-import org.graalvm.compiler.nodes.extended.GuardingNode;
 import org.graalvm.compiler.nodes.extended.IntegerSwitchNode;
 import org.graalvm.compiler.nodes.memory.FixedAccessNode;
 import org.graalvm.compiler.nodes.memory.FloatingAccessNode;
@@ -75,6 +70,8 @@ import org.graalvm.compiler.phases.schedule.SchedulePhase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase.SchedulingStrategy;
 import org.graalvm.compiler.phases.tiers.LowTierContext;
 import org.graalvm.compiler.phases.tiers.PhaseContext;
+import org.graalvm.util.EconomicMap;
+import org.graalvm.util.MapCursor;
 
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -115,11 +112,6 @@ public class FixReadsPhase extends BasePhase<LowTierContext> {
             } else if (node instanceof FloatingAccessNode) {
                 FloatingAccessNode floatingAccessNode = (FloatingAccessNode) node;
                 floatingAccessNode.setLastLocationAccess(null);
-                GuardingNode guard = floatingAccessNode.getGuard();
-                if (guard != null) {
-                    floatingAccessNode.setGuard(null);
-                    GraphUtil.tryKillUnused(guard.asNode());
-                }
                 FixedAccessNode fixedAccess = floatingAccessNode.asFixedNode();
                 replaceCurrent(fixedAccess);
             } else if (node instanceof PiNode) {

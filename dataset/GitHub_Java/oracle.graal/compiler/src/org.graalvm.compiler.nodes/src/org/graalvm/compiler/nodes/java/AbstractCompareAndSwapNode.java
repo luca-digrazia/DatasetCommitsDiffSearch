@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,7 +25,6 @@ package org.graalvm.compiler.nodes.java;
 import static org.graalvm.compiler.nodeinfo.InputType.Memory;
 import static org.graalvm.compiler.nodeinfo.InputType.State;
 
-import jdk.vm.ci.code.MemoryBarriers;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.InputType;
@@ -38,7 +35,7 @@ import org.graalvm.compiler.nodes.StateSplit;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.memory.FixedAccessNode;
 import org.graalvm.compiler.nodes.memory.LIRLowerableAccess;
-import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
+import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.word.LocationIdentity;
 
@@ -46,13 +43,11 @@ import org.graalvm.word.LocationIdentity;
  * Low-level atomic compare-and-swap operation.
  */
 @NodeInfo(allowedUsageTypes = {InputType.Value, Memory})
-public abstract class AbstractCompareAndSwapNode extends FixedAccessNode implements StateSplit, LIRLowerableAccess, SingleMemoryKill {
+public abstract class AbstractCompareAndSwapNode extends FixedAccessNode implements StateSplit, LIRLowerableAccess, MemoryCheckpoint.Single {
     public static final NodeClass<AbstractCompareAndSwapNode> TYPE = NodeClass.create(AbstractCompareAndSwapNode.class);
-    protected static final int DEFAULT_MEMORY_BARRIER = MemoryBarriers.LOAD_LOAD | MemoryBarriers.LOAD_STORE | MemoryBarriers.STORE_LOAD | MemoryBarriers.STORE_STORE;
     @Input ValueNode expectedValue;
     @Input ValueNode newValue;
     @OptionalInput(State) FrameState stateAfter;
-    protected final int memoryBarrier;
 
     @Override
     public FrameState stateAfter() {
@@ -79,17 +74,12 @@ public abstract class AbstractCompareAndSwapNode extends FixedAccessNode impleme
         return newValue;
     }
 
-    public final int getMemoryBarrier() {
-        return memoryBarrier;
-    }
-
     public AbstractCompareAndSwapNode(NodeClass<? extends AbstractCompareAndSwapNode> c, AddressNode address, LocationIdentity location, ValueNode expectedValue, ValueNode newValue,
-                    BarrierType barrierType, Stamp stamp, int memoryBarrier) {
+                    BarrierType barrierType, Stamp stamp) {
         super(c, address, location, stamp, barrierType);
         assert expectedValue.getStackKind() == newValue.getStackKind();
         this.expectedValue = expectedValue;
         this.newValue = newValue;
-        this.memoryBarrier = memoryBarrier;
     }
 
     @Override
@@ -98,12 +88,7 @@ public abstract class AbstractCompareAndSwapNode extends FixedAccessNode impleme
     }
 
     @Override
-    public Stamp getAccessStamp(NodeView view) {
-        return expectedValue.stamp(view).meet(newValue.stamp(view)).unrestricted();
-    }
-
-    @Override
-    public LocationIdentity getKilledLocationIdentity() {
-        return getLocationIdentity();
+    public Stamp getAccessStamp() {
+        return expectedValue.stamp(NodeView.DEFAULT).meet(newValue.stamp(NodeView.DEFAULT)).unrestricted();
     }
 }

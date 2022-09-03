@@ -57,13 +57,13 @@ public final class NarrowNode extends IntegerConvertNode<Narrow, SignExtend> {
         super(TYPE, ArithmeticOpTable::getNarrow, ArithmeticOpTable::getSignExtend, inputBits, resultBits, input);
     }
 
-    public static ValueNode create(ValueNode input, int resultBits, NodeView view) {
-        return create(input, PrimitiveStamp.getBits(input.stamp(view)), resultBits, view);
+    public static ValueNode create(ValueNode input, int resultBits) {
+        return create(input, PrimitiveStamp.getBits(input.stamp(NodeView.DEFAULT)), resultBits);
     }
 
-    public static ValueNode create(ValueNode input, int inputBits, int resultBits, NodeView view) {
-        IntegerConvertOp<Narrow> signExtend = ArithmeticOpTable.forStamp(input.stamp(view)).getNarrow();
-        ValueNode synonym = findSynonym(signExtend, input, inputBits, resultBits, signExtend.foldStamp(inputBits, resultBits, input.stamp(view)));
+    public static ValueNode create(ValueNode input, int inputBits, int resultBits) {
+        IntegerConvertOp<Narrow> signExtend = ArithmeticOpTable.forStamp(input.stamp(NodeView.DEFAULT)).getNarrow();
+        ValueNode synonym = findSynonym(signExtend, input, inputBits, resultBits, signExtend.foldStamp(inputBits, resultBits, input.stamp(NodeView.DEFAULT)));
         if (synonym != null) {
             return synonym;
         } else {
@@ -78,7 +78,6 @@ public final class NarrowNode extends IntegerConvertNode<Narrow, SignExtend> {
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        NodeView view = NodeView.from(tool);
         ValueNode ret = super.canonical(tool, forValue);
         if (ret != this) {
             return ret;
@@ -110,7 +109,7 @@ public final class NarrowNode extends IntegerConvertNode<Narrow, SignExtend> {
                 if (other instanceof SignExtendNode) {
                     // sxxx -(sign-extend)-> ssssssss sssssxxx -(narrow)-> sssssxxx
                     // ==> sxxx -(sign-extend)-> sssssxxx
-                    return SignExtendNode.create(other.getValue(), other.getInputBits(), getResultBits(), view);
+                    return SignExtendNode.create(other.getValue(), other.getInputBits(), getResultBits());
                 } else if (other instanceof ZeroExtendNode) {
                     // xxxx -(zero-extend)-> 00000000 00000xxx -(narrow)-> 0000xxxx
                     // ==> xxxx -(zero-extend)-> 0000xxxx
@@ -119,13 +118,13 @@ public final class NarrowNode extends IntegerConvertNode<Narrow, SignExtend> {
             }
         } else if (forValue instanceof AndNode) {
             AndNode andNode = (AndNode) forValue;
-            IntegerStamp yStamp = (IntegerStamp) andNode.getY().stamp(view);
-            IntegerStamp xStamp = (IntegerStamp) andNode.getX().stamp(view);
+            IntegerStamp yStamp = (IntegerStamp) andNode.getY().stamp(NodeView.DEFAULT);
+            IntegerStamp xStamp = (IntegerStamp) andNode.getX().stamp(NodeView.DEFAULT);
             long relevantMask = CodeUtil.mask(this.getResultBits());
             if ((relevantMask & yStamp.downMask()) == relevantMask) {
-                return create(andNode.getX(), this.getResultBits(), view);
+                return create(andNode.getX(), this.getResultBits());
             } else if ((relevantMask & xStamp.downMask()) == relevantMask) {
-                return create(andNode.getY(), this.getResultBits(), view);
+                return create(andNode.getY(), this.getResultBits());
             }
         }
 

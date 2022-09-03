@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2009, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -206,7 +204,9 @@ public abstract class PhiNode extends FloatingNode implements Canonicalizable {
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
+
         if (isLoopPhi()) {
+
             int valueCount = valueCount();
             assert valueCount >= 2;
             int i;
@@ -245,11 +245,4 @@ public abstract class PhiNode extends FloatingNode implements Canonicalizable {
     public boolean isLoopPhi() {
         return merge() instanceof LoopBeginNode;
     }
-
-    /**
-     * Create a phi of the same kind on the given merge.
-     *
-     * @param newMerge the merge to use for the newly created phi
-     */
-    public abstract PhiNode patchPhi(AbstractMergeNode newMerge);
 }

@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2009, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -29,19 +27,16 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.TypeReference;
-import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
-import org.graalvm.compiler.nodes.BeginNode;
 import org.graalvm.compiler.nodes.BeginStateSplitNode;
+import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
 import org.graalvm.compiler.nodes.KillingBeginNode;
-import org.graalvm.compiler.nodes.MultiKillingBeginNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.nodes.memory.MultiMemoryKill;
-import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
+import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
 import org.graalvm.compiler.nodes.spi.Lowerable;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.word.LocationIdentity;
@@ -55,7 +50,7 @@ import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_8;
  * throw instruction or implicit exception).
  */
 @NodeInfo(allowedUsageTypes = Memory, cycles = CYCLES_8, size = SIZE_8)
-public final class ExceptionObjectNode extends BeginStateSplitNode implements Lowerable, SingleMemoryKill {
+public final class ExceptionObjectNode extends BeginStateSplitNode implements Lowerable, MemoryCheckpoint.Single {
     public static final NodeClass<ExceptionObjectNode> TYPE = NodeClass.create(ExceptionObjectNode.class);
 
     public ExceptionObjectNode(MetaAccessProvider metaAccess) {
@@ -63,7 +58,7 @@ public final class ExceptionObjectNode extends BeginStateSplitNode implements Lo
     }
 
     @Override
-    public LocationIdentity getKilledLocationIdentity() {
+    public LocationIdentity getLocationIdentity() {
         return LocationIdentity.any();
     }
 
@@ -83,22 +78,12 @@ public final class ExceptionObjectNode extends BeginStateSplitNode implements Lo
              * Now the lowering to BeginNode+LoadExceptionNode can be performed, since no more
              * deopts can float in between the begin node and the load exception node.
              */
-            Node predecessor = predecessor();
-            AbstractBeginNode entry;
-            if (predecessor instanceof SingleMemoryKill) {
-                LocationIdentity locationsKilledByPredecessor = ((SingleMemoryKill) predecessor).getKilledLocationIdentity();
-                entry = graph().add(KillingBeginNode.create(locationsKilledByPredecessor));
-            } else if (predecessor instanceof MultiMemoryKill) {
-                LocationIdentity[] locationsKilledByPredecessor = ((MultiMemoryKill) predecessor).getKilledLocationIdentities();
-                entry = graph().add(MultiKillingBeginNode.create(locationsKilledByPredecessor));
-            } else {
-                entry = graph().add(new BeginNode());
-            }
-
+            LocationIdentity locationsKilledByInvoke = ((InvokeWithExceptionNode) predecessor()).getLocationIdentity();
+            AbstractBeginNode entry = graph().add(KillingBeginNode.create(locationsKilledByInvoke));
             LoadExceptionObjectNode loadException = graph().add(new LoadExceptionObjectNode(stamp(NodeView.DEFAULT)));
 
             loadException.setStateAfter(stateAfter());
-            replaceAtUsages(loadException, InputType.Value);
+            replaceAtUsages(InputType.Value, loadException);
             graph().replaceFixedWithFixed(this, entry);
             entry.graph().addAfterFixed(entry, loadException);
 

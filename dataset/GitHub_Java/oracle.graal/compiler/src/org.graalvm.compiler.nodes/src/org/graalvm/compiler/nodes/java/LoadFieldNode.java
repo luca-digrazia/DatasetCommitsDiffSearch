@@ -99,8 +99,7 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forObject) {
-        NodeView view = NodeView.from(tool);
-        if (tool.allUsagesAvailable() && hasNoUsages() && !isVolatile() && (isStatic() || StampTool.isPointerNonNull(forObject.stamp(view)))) {
+        if (tool.allUsagesAvailable() && hasNoUsages() && !isVolatile() && (isStatic() || StampTool.isPointerNonNull(forObject.stamp(NodeView.DEFAULT)))) {
             return null;
         }
         return canonical(this, StampPair.create(stamp, uncheckedStamp), forObject, field, tool.getConstantFieldProvider(),

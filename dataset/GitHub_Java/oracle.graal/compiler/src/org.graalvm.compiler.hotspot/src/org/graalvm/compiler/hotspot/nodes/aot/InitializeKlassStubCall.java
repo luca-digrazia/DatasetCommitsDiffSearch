@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -29,8 +27,8 @@ import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_16;
 
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.nodes.spi.Canonicalizable;
-import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
+import org.graalvm.compiler.graph.spi.Canonicalizable;
+import org.graalvm.compiler.graph.spi.CanonicalizerTool;
 import org.graalvm.compiler.hotspot.HotSpotLIRGenerator;
 import org.graalvm.compiler.hotspot.word.KlassPointer;
 import org.graalvm.compiler.lir.LIRFrameState;
@@ -41,11 +39,10 @@ import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.memory.AbstractMemoryCheckpoint;
-import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
+import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
 import org.graalvm.compiler.nodes.spi.LIRLowerable;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
-import org.graalvm.compiler.word.Word;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.hotspot.HotSpotMetaspaceConstant;
@@ -56,7 +53,7 @@ import jdk.vm.ci.meta.Value;
  * A call to the VM via a regular stub.
  */
 @NodeInfo(allowedUsageTypes = {InputType.Memory}, cycles = CYCLES_UNKNOWN, size = SIZE_16)
-public class InitializeKlassStubCall extends AbstractMemoryCheckpoint implements LIRLowerable, Canonicalizable, DeoptimizingNode.DeoptBefore, SingleMemoryKill {
+public class InitializeKlassStubCall extends AbstractMemoryCheckpoint implements LIRLowerable, Canonicalizable, DeoptimizingNode.DeoptBefore, MemoryCheckpoint.Single {
     public static final NodeClass<InitializeKlassStubCall> TYPE = NodeClass.create(InitializeKlassStubCall.class);
 
     @OptionalInput protected ValueNode value;
@@ -71,7 +68,7 @@ public class InitializeKlassStubCall extends AbstractMemoryCheckpoint implements
     }
 
     @NodeIntrinsic
-    public static native KlassPointer initializeKlass(KlassPointer value, Word string);
+    public static native KlassPointer initializeKlass(KlassPointer value, Object string);
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
@@ -98,7 +95,7 @@ public class InitializeKlassStubCall extends AbstractMemoryCheckpoint implements
     }
 
     @Override
-    public LocationIdentity getKilledLocationIdentity() {
+    public LocationIdentity getLocationIdentity() {
         return LocationIdentity.any();
     }
 

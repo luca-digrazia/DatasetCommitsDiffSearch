@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -35,20 +33,17 @@ import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.spi.CanonicalizerTool;
-import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.AddNode;
-import org.graalvm.compiler.nodes.extended.AnchoringNode;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.SpeculationLog.SpeculationReason;
 
 /**
  * Node representing an exact integer addition that will throw an {@link ArithmeticException} in
@@ -58,14 +53,10 @@ import jdk.vm.ci.meta.SpeculationLog.SpeculationReason;
 public final class IntegerAddExactNode extends AddNode implements IntegerExactArithmeticNode {
     public static final NodeClass<IntegerAddExactNode> TYPE = NodeClass.create(IntegerAddExactNode.class);
 
-    @OptionalInput(InputType.Anchor) protected AnchoringNode anchor;
-    protected final SpeculationReason speculation;
-
-    public IntegerAddExactNode(ValueNode x, ValueNode y, SpeculationReason speculation) {
+    public IntegerAddExactNode(ValueNode x, ValueNode y) {
         super(TYPE, x, y);
         setStamp(x.stamp(NodeView.DEFAULT).unrestricted());
         assert x.stamp(NodeView.DEFAULT).isCompatible(y.stamp(NodeView.DEFAULT)) && x.stamp(NodeView.DEFAULT) instanceof IntegerStamp;
-        this.speculation = speculation;
     }
 
     @Override
@@ -129,7 +120,7 @@ public final class IntegerAddExactNode extends AddNode implements IntegerExactAr
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
         if (forX.isConstant() && !forY.isConstant()) {
-            return new IntegerAddExactNode(forY, forX, speculation).canonical(tool);
+            return new IntegerAddExactNode(forY, forX).canonical(tool);
         }
         if (forX.isConstant()) {
             ConstantNode constantNode = canonicalXconstant(forX, forY);
@@ -170,22 +161,6 @@ public final class IntegerAddExactNode extends AddNode implements IntegerExactAr
     @Override
     public IntegerExactArithmeticSplitNode createSplit(AbstractBeginNode next, AbstractBeginNode deopt) {
         return graph().add(new IntegerAddExactSplitNode(stamp(NodeView.DEFAULT), getX(), getY(), next, deopt));
-    }
-
-    @Override
-    public SpeculationReason getSpeculation() {
-        return speculation;
-    }
-
-    @Override
-    public AnchoringNode getAnchor() {
-        return anchor;
-    }
-
-    @Override
-    public void setAnchor(AnchoringNode x) {
-        updateUsagesInterface(this.anchor, x);
-        this.anchor = x;
     }
 
     @Override

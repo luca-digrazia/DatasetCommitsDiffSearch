@@ -50,8 +50,7 @@ public final class IntegerAddExactSplitNode extends IntegerExactArithmeticSplitN
 
     @Override
     public void simplify(SimplifierTool tool) {
-        NodeView view = NodeView.from(tool);
-        if (!IntegerStamp.addCanOverflow((IntegerStamp) x.stamp(view), (IntegerStamp) y.stamp(view))) {
+        if (!IntegerStamp.addCanOverflow((IntegerStamp) x.stamp(NodeView.DEFAULT), (IntegerStamp) y.stamp(NodeView.DEFAULT))) {
             tool.deleteBranch(overflowSuccessor);
             tool.addToWorkList(next);
             AddNode replacement = graph().unique(new AddNode(x, y));

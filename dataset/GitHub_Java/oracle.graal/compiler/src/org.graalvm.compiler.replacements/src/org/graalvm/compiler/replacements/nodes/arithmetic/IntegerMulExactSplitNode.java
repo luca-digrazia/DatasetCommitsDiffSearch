@@ -52,8 +52,7 @@ public final class IntegerMulExactSplitNode extends IntegerExactArithmeticSplitN
 
     @Override
     public void simplify(SimplifierTool tool) {
-        NodeView view = NodeView.from(tool);
-        if (!IntegerStamp.multiplicationCanOverflow((IntegerStamp) x.stamp(view), (IntegerStamp) y.stamp(view))) {
+        if (!IntegerStamp.multiplicationCanOverflow((IntegerStamp) x.stamp(NodeView.DEFAULT), (IntegerStamp) y.stamp(NodeView.DEFAULT))) {
             tool.deleteBranch(overflowSuccessor);
             tool.addToWorkList(next);
             MulNode replacement = graph().unique(new MulNode(x, y));

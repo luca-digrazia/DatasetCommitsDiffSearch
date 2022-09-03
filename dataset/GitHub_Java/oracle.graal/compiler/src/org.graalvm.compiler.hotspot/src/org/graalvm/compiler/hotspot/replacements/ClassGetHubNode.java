@@ -25,7 +25,10 @@ package org.graalvm.compiler.hotspot.replacements;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_1;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_1;
 
-import org.graalvm.compiler.core.common.calc.CanonicalCondition;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+
+import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
@@ -53,9 +56,7 @@ import org.graalvm.word.LocationIdentity;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
@@ -168,8 +169,8 @@ public final class ClassGetHubNode extends FloatingNode implements Lowerable, Ca
     }
 
     @Override
-    public boolean preservesOrder(CanonicalCondition op, Constant value, ConstantReflectionProvider constantReflection) {
-        assert op == CanonicalCondition.EQ;
+    public boolean preservesOrder(Condition op, Constant value, ConstantReflectionProvider constantReflection) {
+        assert op == Condition.EQ || op == Condition.NE;
         ResolvedJavaType exactType = constantReflection.asJavaType(value);
         return !exactType.isPrimitive();
     }

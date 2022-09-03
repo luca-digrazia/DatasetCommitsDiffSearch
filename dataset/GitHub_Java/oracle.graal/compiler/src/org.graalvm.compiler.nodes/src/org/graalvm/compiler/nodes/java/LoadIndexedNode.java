@@ -37,7 +37,6 @@ import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.extended.GuardingNode;
 import org.graalvm.compiler.nodes.spi.Virtualizable;
 import org.graalvm.compiler.nodes.spi.VirtualizerTool;
 import org.graalvm.compiler.nodes.type.StampTool;
@@ -66,21 +65,20 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
      * @param index the instruction producing the index
      * @param elementKind the element type
      */
-    public LoadIndexedNode(Assumptions assumptions, ValueNode array, ValueNode index, GuardingNode boundsCheck, JavaKind elementKind) {
-        this(TYPE, createStamp(assumptions, array, elementKind), array, index, boundsCheck, elementKind);
+    public LoadIndexedNode(Assumptions assumptions, ValueNode array, ValueNode index, JavaKind elementKind) {
+        this(TYPE, createStamp(assumptions, array, elementKind), array, index, elementKind);
     }
 
-    public static ValueNode create(Assumptions assumptions, ValueNode array, ValueNode index, GuardingNode boundsCheck, JavaKind elementKind, MetaAccessProvider metaAccess,
-                    ConstantReflectionProvider constantReflection) {
+    public static ValueNode create(Assumptions assumptions, ValueNode array, ValueNode index, JavaKind elementKind, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection) {
         ValueNode constant = tryConstantFold(array, index, metaAccess, constantReflection);
         if (constant != null) {
             return constant;
         }
-        return new LoadIndexedNode(assumptions, array, index, boundsCheck, elementKind);
+        return new LoadIndexedNode(assumptions, array, index, elementKind);
     }
 
-    protected LoadIndexedNode(NodeClass<? extends LoadIndexedNode> c, Stamp stamp, ValueNode array, ValueNode index, GuardingNode boundsCheck, JavaKind elementKind) {
-        super(c, stamp, array, index, boundsCheck, elementKind);
+    protected LoadIndexedNode(NodeClass<? extends LoadIndexedNode> c, Stamp stamp, ValueNode array, ValueNode index, JavaKind elementKind) {
+        super(c, stamp, array, index, elementKind);
     }
 
     private static Stamp createStamp(Assumptions assumptions, ValueNode array, JavaKind kind) {

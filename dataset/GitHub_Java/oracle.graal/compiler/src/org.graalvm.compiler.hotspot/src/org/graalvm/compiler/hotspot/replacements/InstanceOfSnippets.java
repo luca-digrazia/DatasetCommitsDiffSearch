@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -30,7 +28,6 @@ import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.PRIMARY_SUPERS_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.SECONDARY_SUPER_CACHE_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadHubIntrinsic;
-import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadHubOrNullIntrinsic;
 import static org.graalvm.compiler.hotspot.replacements.HotspotSnippetsOptions.TypeCheckMaxHints;
 import static org.graalvm.compiler.hotspot.replacements.HotspotSnippetsOptions.TypeCheckMinProfileHitProbability;
 import static org.graalvm.compiler.hotspot.replacements.TypeCheckSnippetUtils.checkSecondarySubType;
@@ -137,7 +134,12 @@ public class InstanceOfSnippets implements Snippets {
      */
     @Snippet
     public static Object instanceofExact(Object object, KlassPointer exactHub, Object trueValue, Object falseValue, @ConstantParameter Counters counters) {
-        KlassPointer objectHub = loadHubOrNullIntrinsic(object);
+        if (probability(NOT_FREQUENT_PROBABILITY, object == null)) {
+            counters.isNull.inc();
+            return falseValue;
+        }
+        GuardingNode anchorNode = SnippetAnchorNode.anchor();
+        KlassPointer objectHub = loadHubIntrinsic(PiNode.piCastNonNull(object, anchorNode));
         if (probability(LIKELY_PROBABILITY, objectHub.notEqual(exactHub))) {
             counters.exactMiss.inc();
             return falseValue;

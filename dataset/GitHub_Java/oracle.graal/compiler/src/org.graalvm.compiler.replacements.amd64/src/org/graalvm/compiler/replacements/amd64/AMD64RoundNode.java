@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,8 +22,8 @@
  */
 package org.graalvm.compiler.replacements.amd64;
 
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
+import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_1;
+
 import org.graalvm.compiler.core.common.type.FloatStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.debug.GraalError;
@@ -42,7 +40,8 @@ import org.graalvm.compiler.nodes.calc.UnaryNode;
 import org.graalvm.compiler.nodes.spi.ArithmeticLIRLowerable;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 
-import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_1;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
 
 /**
  * Round floating-point value.
@@ -67,7 +66,7 @@ public final class AMD64RoundNode extends UnaryNode implements ArithmeticLIRLowe
             case UP:
                 return Math.ceil(input);
             case TRUNCATE:
-                return input < 0.0 ? Math.ceil(input) : Math.floor(input);
+                return (long) input;
             default:
                 throw GraalError.unimplemented("unimplemented RoundingMode " + mode);
         }

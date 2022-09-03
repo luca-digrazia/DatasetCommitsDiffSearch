@@ -25,7 +25,6 @@ package org.graalvm.compiler.core.amd64;
 
 import org.graalvm.compiler.asm.amd64.AMD64Address.Scale;
 import org.graalvm.compiler.core.common.LIRKind;
-import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.spi.Simplifiable;
 import org.graalvm.compiler.graph.spi.SimplifierTool;
@@ -73,7 +72,7 @@ public class AMD64AddressNode extends AddressNode implements Simplifiable, LIRLo
     }
 
     public void canonicalizeIndex(SimplifierTool tool) {
-        if (index instanceof AddNode && ((IntegerStamp) index.stamp(NodeView.DEFAULT)).getBits() == 64) {
+        if (index instanceof AddNode) {
             AddNode add = (AddNode) index;
             ValueNode valX = add.getX();
             if (valX instanceof PhiNode) {

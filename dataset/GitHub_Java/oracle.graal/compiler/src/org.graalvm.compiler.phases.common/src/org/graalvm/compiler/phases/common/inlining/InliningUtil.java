@@ -33,11 +33,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.EconomicSet;
-import org.graalvm.collections.Equivalence;
-import org.graalvm.collections.UnmodifiableEconomicMap;
-import org.graalvm.collections.UnmodifiableMapCursor;
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.type.Stamp;
@@ -68,7 +63,6 @@ import org.graalvm.compiler.nodes.FixedGuardNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.FrameState;
-import org.graalvm.compiler.nodes.InliningLog;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.InvokeNode;
 import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
@@ -98,6 +92,11 @@ import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.phases.common.inlining.info.InlineInfo;
 import org.graalvm.compiler.phases.common.util.HashSetNodeEventListener;
 import org.graalvm.compiler.phases.util.ValueMergeUtil;
+import org.graalvm.util.EconomicMap;
+import org.graalvm.util.EconomicSet;
+import org.graalvm.util.Equivalence;
+import org.graalvm.util.UnmodifiableEconomicMap;
+import org.graalvm.util.UnmodifiableMapCursor;
 
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.Assumptions;
@@ -280,21 +279,6 @@ public class InliningUtil extends ValueMergeUtil {
      */
     @SuppressWarnings("try")
     public static UnmodifiableEconomicMap<Node, Node> inline(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck, ResolvedJavaMethod inlineeMethod) {
-        return inline(invoke, inlineGraph, receiverNullCheck, inlineeMethod, "", "");
-    }
-
-    /**
-     * Performs an actual inlining, thereby replacing the given invoke with the given inlineGraph.
-     *
-     * @param invoke the invoke that will be replaced
-     * @param inlineGraph the graph that the invoke will be replaced with
-     * @param receiverNullCheck true if a null check needs to be generated for non-static inlinings,
-     *            false if no such check is required
-     * @param inlineeMethod the actual method being inlined. Maybe be null for snippets.
-     * @param reason the reason for inlining, used in tracing
-     * @param phase the phase that invoked inlining
-     */
-    public static UnmodifiableEconomicMap<Node, Node> inline(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck, ResolvedJavaMethod inlineeMethod, String reason, String phase) {
         FixedNode invokeNode = invoke.asNode();
         StructuredGraph graph = invokeNode.graph();
         final NodeInputList<ValueNode> parameters = invoke.callTarget().arguments();
@@ -355,15 +339,7 @@ public class InliningUtil extends ValueMergeUtil {
         assert invokeNode.successors().first() != null : invoke;
         assert invokeNode.predecessor() != null;
 
-        // Do not update the inlining log when adding the duplicates.
-        // Instead, attach the inlining log of the child graph to the current inlining log.
-        EconomicMap<Node, Node> duplicates;
-        try (InliningLog.UpdateScope ignored = graph.getInliningLog().createUpdateScope((oldNode, newNode) -> { })) {
-            duplicates = graph.addDuplicates(nodes, inlineGraph, inlineGraph.getNodeCount(), localReplacement);
-        }
-        if (GraalOptions.TraceInlining.getValue(graph.getOptions()).isTracing()) {
-            graph.getInliningLog().addDecision(invoke, true, reason, phase, duplicates, inlineGraph.getInliningLog());
-        }
+        EconomicMap<Node, Node> duplicates = graph.addDuplicates(nodes, inlineGraph, inlineGraph.getNodeCount(), localReplacement);
 
         FrameState stateAfter = invoke.stateAfter();
         assert stateAfter == null || stateAfter.isAlive();
@@ -433,14 +409,9 @@ public class InliningUtil extends ValueMergeUtil {
         return inlineForCanonicalization(invoke, inlineGraph, receiverNullCheck, inlineeMethod, null);
     }
 
-    public static EconomicSet<Node> inlineForCanonicalization(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck, ResolvedJavaMethod inlineeMethod,
-                    Consumer<UnmodifiableEconomicMap<Node, Node>> duplicatesConsumer) {
-        return inlineForCanonicalization(invoke, inlineGraph, receiverNullCheck, inlineeMethod, duplicatesConsumer, "", "");
-    }
-
     @SuppressWarnings("try")
     public static EconomicSet<Node> inlineForCanonicalization(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck, ResolvedJavaMethod inlineeMethod,
-                    Consumer<UnmodifiableEconomicMap<Node, Node>> duplicatesConsumer, String reason, String phase) {
+                    Consumer<UnmodifiableEconomicMap<Node, Node>> duplicatesConsumer) {
         HashSetNodeEventListener listener = new HashSetNodeEventListener();
         /*
          * This code relies on the fact that Graph.addDuplicates doesn't trigger the
@@ -448,7 +419,7 @@ public class InliningUtil extends ValueMergeUtil {
          * the graph into the current graph.
          */
         try (NodeEventScope nes = invoke.asNode().graph().trackNodeEvents(listener)) {
-            UnmodifiableEconomicMap<Node, Node> duplicates = InliningUtil.inline(invoke, inlineGraph, receiverNullCheck, inlineeMethod, reason, phase);
+            UnmodifiableEconomicMap<Node, Node> duplicates = InliningUtil.inline(invoke, inlineGraph, receiverNullCheck, inlineeMethod);
             if (duplicatesConsumer != null) {
                 duplicatesConsumer.accept(duplicates);
             }

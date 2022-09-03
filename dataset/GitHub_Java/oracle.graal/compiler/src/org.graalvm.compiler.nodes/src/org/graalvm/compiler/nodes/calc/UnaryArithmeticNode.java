@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,7 +22,8 @@
  */
 package org.graalvm.compiler.nodes.calc;
 
-import static org.graalvm.compiler.nodes.calc.BinaryArithmeticNode.getArithmeticOpTable;
+import java.io.Serializable;
+import java.util.function.Function;
 
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable.UnaryOp;
@@ -43,14 +42,18 @@ public abstract class UnaryArithmeticNode<OP> extends UnaryNode implements Arith
 
     @SuppressWarnings("rawtypes") public static final NodeClass<UnaryArithmeticNode> TYPE = NodeClass.create(UnaryArithmeticNode.class);
 
-    protected UnaryArithmeticNode(NodeClass<? extends UnaryArithmeticNode<OP>> c, UnaryOp<OP> opForStampComputation, ValueNode value) {
-        super(c, opForStampComputation.foldStamp(value.stamp(NodeView.DEFAULT)), value);
+    protected interface SerializableUnaryFunction<T> extends Function<ArithmeticOpTable, UnaryOp<T>>, Serializable {
     }
 
-    protected abstract UnaryOp<OP> getOp(ArithmeticOpTable table);
+    protected final SerializableUnaryFunction<OP> getOp;
+
+    protected UnaryArithmeticNode(NodeClass<? extends UnaryArithmeticNode<OP>> c, SerializableUnaryFunction<OP> getOp, ValueNode value) {
+        super(c, getOp.apply(ArithmeticOpTable.forStamp(value.stamp(NodeView.DEFAULT))).foldStamp(value.stamp(NodeView.DEFAULT)), value);
+        this.getOp = getOp;
+    }
 
     protected final UnaryOp<OP> getOp(ValueNode forValue) {
-        return getOp(getArithmeticOpTable(forValue));
+        return getOp.apply(ArithmeticOpTable.forStamp(forValue.stamp(NodeView.DEFAULT)));
     }
 
     @Override

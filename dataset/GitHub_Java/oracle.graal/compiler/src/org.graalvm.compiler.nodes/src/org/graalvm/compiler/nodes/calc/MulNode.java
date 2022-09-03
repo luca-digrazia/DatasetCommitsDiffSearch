@@ -57,14 +57,14 @@ public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArit
         super(c, ArithmeticOpTable::getMul, x, y);
     }
 
-    public static ValueNode create(ValueNode x, ValueNode y, NodeView view) {
-        BinaryOp<Mul> op = ArithmeticOpTable.forStamp(x.stamp(view)).getMul();
-        Stamp stamp = op.foldStamp(x.stamp(view), y.stamp(view));
+    public static ValueNode create(ValueNode x, ValueNode y) {
+        BinaryOp<Mul> op = ArithmeticOpTable.forStamp(x.stamp(NodeView.DEFAULT)).getMul();
+        Stamp stamp = op.foldStamp(x.stamp(NodeView.DEFAULT), y.stamp(NodeView.DEFAULT));
         ConstantNode tryConstantFold = tryConstantFold(op, x, y, stamp);
         if (tryConstantFold != null) {
             return tryConstantFold;
         }
-        return canonical(null, op, stamp, x, y, view);
+        return canonical(null, op, stamp, x, y);
     }
 
     @Override
@@ -84,11 +84,10 @@ public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArit
             return new MulNode(forY, forX);
         }
         BinaryOp<Mul> op = getOp(forX, forY);
-        NodeView view = NodeView.from(tool);
-        return canonical(this, op, stamp(view), forX, forY, view);
+        return canonical(this, op, stamp(NodeView.DEFAULT), forX, forY);
     }
 
-    private static ValueNode canonical(MulNode self, BinaryOp<Mul> op, Stamp stamp, ValueNode forX, ValueNode forY, NodeView view) {
+    private static ValueNode canonical(MulNode self, BinaryOp<Mul> op, Stamp stamp, ValueNode forX, ValueNode forY) {
         if (forY.isConstant()) {
             Constant c = forY.asConstant();
             if (op.isNeutral(c)) {
@@ -97,7 +96,7 @@ public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArit
 
             if (c instanceof PrimitiveConstant && ((PrimitiveConstant) c).getJavaKind().isNumericInteger()) {
                 long i = ((PrimitiveConstant) c).asLong();
-                ValueNode result = canonical(stamp, forX, i, view);
+                ValueNode result = canonical(stamp, forX, i);
                 if (result != null) {
                     return result;
                 }
@@ -105,26 +104,26 @@ public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArit
 
             if (op.isAssociative()) {
                 // canonicalize expressions like "(a * 1) * 2"
-                return reassociate(self != null ? self : (MulNode) new MulNode(forX, forY).maybeCommuteInputs(), ValueNode.isConstantPredicate(), forX, forY, view);
+                return reassociate(self != null ? self : (MulNode) new MulNode(forX, forY).maybeCommuteInputs(), ValueNode.isConstantPredicate(), forX, forY);
             }
         }
         return self != null ? self : new MulNode(forX, forY).maybeCommuteInputs();
     }
 
-    public static ValueNode canonical(Stamp stamp, ValueNode forX, long i, NodeView view) {
+    public static ValueNode canonical(Stamp stamp, ValueNode forX, long i) {
         if (i == 0) {
             return ConstantNode.forIntegerStamp(stamp, 0);
         } else if (i == 1) {
             return forX;
         } else if (i == -1) {
-            return NegateNode.create(forX, view);
+            return NegateNode.create(forX);
         } else if (i > 0) {
             if (CodeUtil.isPowerOf2(i)) {
                 return new LeftShiftNode(forX, ConstantNode.forInt(CodeUtil.log2(i)));
             } else if (CodeUtil.isPowerOf2(i - 1)) {
-                return AddNode.create(new LeftShiftNode(forX, ConstantNode.forInt(CodeUtil.log2(i - 1))), forX, view);
+                return AddNode.create(new LeftShiftNode(forX, ConstantNode.forInt(CodeUtil.log2(i - 1))), forX);
             } else if (CodeUtil.isPowerOf2(i + 1)) {
-                return SubNode.create(new LeftShiftNode(forX, ConstantNode.forInt(CodeUtil.log2(i + 1))), forX, view);
+                return SubNode.create(new LeftShiftNode(forX, ConstantNode.forInt(CodeUtil.log2(i + 1))), forX);
             } else {
                 int bitCount = Long.bitCount(i);
                 long highestBitValue = Long.highestOneBit(i);
@@ -134,7 +133,7 @@ public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArit
                     assert highestBitValue > 0 && lowerBitValue > 0;
                     ValueNode left = new LeftShiftNode(forX, ConstantNode.forInt(CodeUtil.log2(highestBitValue)));
                     ValueNode right = lowerBitValue == 1 ? forX : new LeftShiftNode(forX, ConstantNode.forInt(CodeUtil.log2(lowerBitValue)));
-                    return AddNode.create(left, right, view);
+                    return AddNode.create(left, right);
                 } else {
                     // e.g., 0b1111_1101
                     int shiftToRoundUpToPowerOf2 = CodeUtil.log2(highestBitValue) + 1;
@@ -143,13 +142,13 @@ public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArit
                         assert CodeUtil.log2(subValue) >= 1;
                         ValueNode left = new LeftShiftNode(forX, ConstantNode.forInt(shiftToRoundUpToPowerOf2));
                         ValueNode right = new LeftShiftNode(forX, ConstantNode.forInt(CodeUtil.log2(subValue)));
-                        return SubNode.create(left, right, view);
+                        return SubNode.create(left, right);
                     }
                 }
             }
         } else if (i < 0) {
             if (CodeUtil.isPowerOf2(-i)) {
-                return NegateNode.create(LeftShiftNode.create(forX, ConstantNode.forInt(CodeUtil.log2(-i))), view);
+                return NegateNode.create(LeftShiftNode.create(forX, ConstantNode.forInt(CodeUtil.log2(-i))));
             }
         }
         return null;

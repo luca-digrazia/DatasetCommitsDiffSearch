@@ -23,7 +23,6 @@
 package org.graalvm.compiler.nodes.calc;
 
 import org.graalvm.compiler.core.common.type.IntegerStamp;
-import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
@@ -40,7 +39,7 @@ public class UnsignedDivNode extends IntegerDivRemNode implements LIRLowerable {
 
     public static final NodeClass<UnsignedDivNode> TYPE = NodeClass.create(UnsignedDivNode.class);
 
-    protected UnsignedDivNode(ValueNode x, ValueNode y) {
+    public UnsignedDivNode(ValueNode x, ValueNode y) {
         this(TYPE, x, y);
     }
 
@@ -48,25 +47,15 @@ public class UnsignedDivNode extends IntegerDivRemNode implements LIRLowerable {
         super(c, x.stamp(NodeView.DEFAULT).unrestricted(), Op.DIV, Type.UNSIGNED, x, y);
     }
 
-    public static ValueNode create(ValueNode x, ValueNode y, NodeView view) {
-        Stamp stamp = x.stamp(view).unrestricted();
-        return canonical(null, x, y, stamp, view);
-    }
-
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        NodeView view = NodeView.from(tool);
-        return canonical(this, forX, forY, stamp(view), view);
-    }
-
-    private static ValueNode canonical(UnsignedDivNode self, ValueNode forX, ValueNode forY, Stamp stamp, NodeView view) {
-        int bits = ((IntegerStamp) stamp).getBits();
+        int bits = ((IntegerStamp) stamp(NodeView.DEFAULT)).getBits();
         if (forX.isConstant() && forY.isConstant()) {
             long yConst = CodeUtil.zeroExtend(forY.asJavaConstant().asLong(), bits);
             if (yConst == 0) {
-                return self != null ? self : new UnsignedDivNode(forX, forY); // this will trap, cannot canonicalize
+                return this; // this will trap, cannot canonicalize
             }
-            return ConstantNode.forIntegerStamp(stamp, Long.divideUnsigned(CodeUtil.zeroExtend(forX.asJavaConstant().asLong(), bits), yConst));
+            return ConstantNode.forIntegerStamp(stamp(NodeView.DEFAULT), Long.divideUnsigned(CodeUtil.zeroExtend(forX.asJavaConstant().asLong(), bits), yConst));
         } else if (forY.isConstant()) {
             long c = CodeUtil.zeroExtend(forY.asJavaConstant().asLong(), bits);
             if (c == 1) {
@@ -76,7 +65,7 @@ public class UnsignedDivNode extends IntegerDivRemNode implements LIRLowerable {
                 return new UnsignedRightShiftNode(forX, ConstantNode.forInt(CodeUtil.log2(c)));
             }
         }
-        return self != null ? self : new UnsignedDivNode(forX, forY);
+        return this;
     }
 
     @Override

@@ -22,11 +22,11 @@
  */
 package org.graalvm.compiler.hotspot.test;
 
-import jdk.vm.ci.aarch64.AArch64;
-import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
+import static org.graalvm.compiler.core.common.GraalOptions.ImmutableCode;
+import static org.graalvm.compiler.nodes.ConstantNode.getConstantNodes;
+
 import org.graalvm.compiler.core.common.type.Stamp;
+import org.graalvm.compiler.core.test.GraalCompilerTest;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.hotspot.nodes.type.KlassPointerStamp;
 import org.graalvm.compiler.nodes.ConstantNode;
@@ -42,8 +42,10 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
-import static org.graalvm.compiler.core.common.GraalOptions.ImmutableCode;
-import static org.graalvm.compiler.nodes.ConstantNode.getConstantNodes;
+import jdk.vm.ci.aarch64.AArch64;
+import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
 
 /**
  * use
@@ -54,7 +56,7 @@ import static org.graalvm.compiler.nodes.ConstantNode.getConstantNodes;
  *
  * to print disassembly.
  */
-public class AheadOfTimeCompilationTest extends HotSpotGraalCompilerTest {
+public class AheadOfTimeCompilationTest extends GraalCompilerTest {
 
     public static final Object STATICFINALOBJECT = new Object();
     public static final String STATICFINALSTRING = "test string";
@@ -75,8 +77,7 @@ public class AheadOfTimeCompilationTest extends HotSpotGraalCompilerTest {
         assertDeepEquals(1, getConstantNodes(result).count());
         Stamp constantStamp = getConstantNodes(result).first().stamp(NodeView.DEFAULT);
         Assert.assertTrue(constantStamp.toString(), constantStamp instanceof KlassPointerStamp);
-        int expected = runtime().getVMConfig().classMirrorIsHandle ? 3 : 2;
-        assertDeepEquals(expected, result.getNodes().filter(ReadNode.class).count());
+        assertDeepEquals(2, result.getNodes().filter(ReadNode.class).count());
     }
 
     @Test
@@ -99,8 +100,8 @@ public class AheadOfTimeCompilationTest extends HotSpotGraalCompilerTest {
         assertDeepEquals(1, filter.count());
         HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) getMetaAccess().lookupJavaType(AheadOfTimeCompilationTest.class);
         assertDeepEquals(type.klass(), filter.first().asConstant());
-        int expected = runtime().getVMConfig().classMirrorIsHandle ? 2 : 1;
-        assertDeepEquals(expected, result.getNodes().filter(ReadNode.class).count());
+
+        assertDeepEquals(1, result.getNodes().filter(ReadNode.class).count());
     }
 
     @Test
@@ -126,8 +127,8 @@ public class AheadOfTimeCompilationTest extends HotSpotGraalCompilerTest {
         assertDeepEquals(1, filter.count());
         Stamp constantStamp = filter.first().stamp(NodeView.DEFAULT);
         Assert.assertTrue(constantStamp instanceof KlassPointerStamp);
-        int expected = runtime().getVMConfig().classMirrorIsHandle ? 3 : 2;
-        assertDeepEquals(expected, result.getNodes().filter(ReadNode.class).count());
+
+        assertDeepEquals(2, result.getNodes().filter(ReadNode.class).count());
     }
 
     @Test

@@ -189,7 +189,7 @@ public class LoopEx {
             if (!binary.isAssociative()) {
                 continue;
             }
-            ValueNode result = BinaryArithmeticNode.reassociate(binary, invariant, binary.getX(), binary.getY(), NodeView.DEFAULT);
+            ValueNode result = BinaryArithmeticNode.reassociate(binary, invariant, binary.getX(), binary.getY());
             if (result != binary) {
                 if (!result.isAlive()) {
                     assert !result.isDeleted();

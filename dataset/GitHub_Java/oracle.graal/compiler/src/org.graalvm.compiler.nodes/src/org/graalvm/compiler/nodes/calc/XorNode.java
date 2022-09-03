@@ -52,14 +52,14 @@ public final class XorNode extends BinaryArithmeticNode<Xor> implements BinaryCo
         assert x.stamp(NodeView.DEFAULT).isCompatible(y.stamp(NodeView.DEFAULT));
     }
 
-    public static ValueNode create(ValueNode x, ValueNode y, NodeView view) {
+    public static ValueNode create(ValueNode x, ValueNode y) {
         BinaryOp<Xor> op = ArithmeticOpTable.forStamp(x.stamp(NodeView.DEFAULT)).getXor();
         Stamp stamp = op.foldStamp(x.stamp(NodeView.DEFAULT), y.stamp(NodeView.DEFAULT));
         ConstantNode tryConstantFold = tryConstantFold(op, x, y, stamp);
         if (tryConstantFold != null) {
             return tryConstantFold;
         }
-        return canonical(null, op, stamp, x, y, view);
+        return canonical(null, op, stamp, x, y);
     }
 
     @Override
@@ -69,11 +69,10 @@ public final class XorNode extends BinaryArithmeticNode<Xor> implements BinaryCo
             return ret;
         }
 
-        NodeView view = NodeView.from(tool);
-        return canonical(this, getOp(forX, forY), stamp(NodeView.DEFAULT), forX, forY, view);
+        return canonical(this, getOp(forX, forY), stamp(NodeView.DEFAULT), forX, forY);
     }
 
-    private static ValueNode canonical(XorNode self, BinaryOp<Xor> op, Stamp stamp, ValueNode forX, ValueNode forY, NodeView view) {
+    private static ValueNode canonical(XorNode self, BinaryOp<Xor> op, Stamp stamp, ValueNode forX, ValueNode forY) {
         if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY)) {
             return ConstantNode.forPrimitive(stamp, op.getZero(forX.stamp(NodeView.DEFAULT)));
         }
@@ -93,7 +92,7 @@ public final class XorNode extends BinaryArithmeticNode<Xor> implements BinaryCo
                     return new NotNode(forX);
                 }
             }
-            return reassociate(self != null ? self : (XorNode) new XorNode(forX, forY).maybeCommuteInputs(), ValueNode.isConstantPredicate(), forX, forY, view);
+            return reassociate(self != null ? self : (XorNode) new XorNode(forX, forY).maybeCommuteInputs(), ValueNode.isConstantPredicate(), forX, forY);
         }
         return self != null ? self : new XorNode(forX, forY).maybeCommuteInputs();
     }

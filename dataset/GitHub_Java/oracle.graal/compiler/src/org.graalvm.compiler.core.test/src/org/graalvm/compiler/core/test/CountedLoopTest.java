@@ -264,7 +264,7 @@ public class CountedLoopTest extends GraalCompilerTest {
     }
 
     @Override
-    protected boolean checkHighTierGraph(StructuredGraph graph) {
+    protected boolean checkMidTierGraph(StructuredGraph graph) {
         LoopsData loops = new LoopsData(graph);
         loops.detectedCountedLoops();
         for (IVPropertyNode node : graph.getNodes().filter(IVPropertyNode.class)) {

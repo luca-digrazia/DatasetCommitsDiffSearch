@@ -63,12 +63,12 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         assert y.stamp(NodeView.DEFAULT) instanceof AbstractObjectStamp;
     }
 
-    public static LogicNode create(ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection, NodeView view) {
+    public static LogicNode create(ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection) {
         LogicNode result = CompareNode.tryConstantFold(Condition.EQ, x, y, constantReflection, false);
         if (result != null) {
             return result;
         } else {
-            result = findSynonym(x, y, view);
+            result = findSynonym(x, y);
             if (result != null) {
                 return result;
             }
@@ -76,18 +76,17 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         }
     }
 
-    public static LogicNode create(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, ValueNode x, ValueNode y, NodeView view) {
-        LogicNode result = OP.canonical(constantReflection, metaAccess, options, null, Condition.EQ, false, x, y, view);
+    public static LogicNode create(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, ValueNode x, ValueNode y) {
+        LogicNode result = OP.canonical(constantReflection, metaAccess, options, null, Condition.EQ, false, x, y);
         if (result != null) {
             return result;
         }
-        return create(x, y, constantReflection, view);
+        return create(x, y, constantReflection);
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        NodeView view = NodeView.from(tool);
-        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), Condition.EQ, false, forX, forY, view);
+        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), Condition.EQ, false, forX, forY);
         if (value != null) {
             return value;
         }
@@ -98,25 +97,25 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
 
         @Override
         protected LogicNode canonicalizeSymmetricConstant(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
-                        Condition condition, Constant constant, ValueNode nonConstant, boolean mirrored, boolean unorderedIsTrue, NodeView view) {
+                        Condition condition, Constant constant, ValueNode nonConstant, boolean mirrored, boolean unorderedIsTrue) {
             ResolvedJavaType type = constantReflection.asJavaType(constant);
             if (type != null && nonConstant instanceof GetClassNode) {
                 GetClassNode getClassNode = (GetClassNode) nonConstant;
                 ValueNode object = getClassNode.getObject();
-                assert ((ObjectStamp) object.stamp(view)).nonNull();
+                assert ((ObjectStamp) object.stamp(NodeView.DEFAULT)).nonNull();
                 if (!type.isPrimitive() && (type.isConcrete() || type.isArray())) {
                     return InstanceOfNode.create(TypeReference.createExactTrusted(type), object);
                 }
                 return LogicConstantNode.forBoolean(false);
             }
-            return super.canonicalizeSymmetricConstant(constantReflection, metaAccess, options, smallestCompareWidth, condition, constant, nonConstant, mirrored, unorderedIsTrue, view);
+            return super.canonicalizeSymmetricConstant(constantReflection, metaAccess, options, smallestCompareWidth, condition, constant, nonConstant, mirrored, unorderedIsTrue);
         }
 
         @Override
-        protected CompareNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue, NodeView view) {
-            if (newX.stamp(view) instanceof ObjectStamp && newY.stamp(view) instanceof ObjectStamp) {
+        protected CompareNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue) {
+            if (newX.stamp(NodeView.DEFAULT) instanceof ObjectStamp && newY.stamp(NodeView.DEFAULT) instanceof ObjectStamp) {
                 return new ObjectEqualsNode(newX, newY);
-            } else if (newX.stamp(view) instanceof AbstractPointerStamp && newY.stamp(view) instanceof AbstractPointerStamp) {
+            } else if (newX.stamp(NodeView.DEFAULT) instanceof AbstractPointerStamp && newY.stamp(NodeView.DEFAULT) instanceof AbstractPointerStamp) {
                 return new PointerEqualsNode(newX, newY);
             }
             throw GraalError.shouldNotReachHere();

@@ -22,12 +22,7 @@
  */
 package org.graalvm.compiler.loop;
 
-import java.util.ArrayDeque;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.Iterator;
-
-import org.graalvm.collections.EconomicMap;
+import jdk.vm.ci.meta.TriState;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.graph.Graph.DuplicationReplacement;
@@ -57,8 +52,12 @@ import org.graalvm.compiler.nodes.java.MonitorEnterNode;
 import org.graalvm.compiler.nodes.spi.NodeWithState;
 import org.graalvm.compiler.nodes.virtual.CommitAllocationNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
+import org.graalvm.util.EconomicMap;
 
-import jdk.vm.ci.meta.TriState;
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.Iterator;
 
 public abstract class LoopFragment {
 
@@ -263,20 +262,6 @@ public abstract class LoopFragment {
             this.usages = n.usages().iterator();
             this.isLoopNode = loopNodes.isMarked(n);
         }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (!(obj instanceof WorkListEntry)) {
-                return false;
-            }
-            WorkListEntry other = (WorkListEntry) obj;
-            return this.n == other.n;
-        }
-
-        @Override
-        public int hashCode() {
-            return n.hashCode();
-        }
     }
 
     static TriState isLoopNode(Node n, NodeBitMap loopNodes, NodeBitMap nonLoopNodes) {
@@ -307,17 +292,11 @@ public abstract class LoopFragment {
         return TriState.UNKNOWN;
     }
 
-    private static void pushWorkList(Deque<WorkListEntry> workList, Node node, NodeBitMap loopNodes) {
-        WorkListEntry entry = new WorkListEntry(node, loopNodes);
-        assert !workList.contains(entry) : "node " + node + " added to worklist twice";
-        workList.push(entry);
-    }
-
     private static void markFloating(Deque<WorkListEntry> workList, Node start, NodeBitMap loopNodes, NodeBitMap nonLoopNodes) {
         if (isLoopNode(start, loopNodes, nonLoopNodes).isKnown()) {
             return;
         }
-        pushWorkList(workList, start, loopNodes);
+        workList.push(new WorkListEntry(start, loopNodes));
         while (!workList.isEmpty()) {
             WorkListEntry currentEntry = workList.peek();
             if (currentEntry.usages.hasNext()) {
@@ -328,7 +307,7 @@ public abstract class LoopFragment {
                         currentEntry.isLoopNode = true;
                     }
                 } else {
-                    pushWorkList(workList, current, loopNodes);
+                    workList.push(new WorkListEntry(current, loopNodes));
                 }
             } else {
                 workList.pop();

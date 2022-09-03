@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -60,29 +58,24 @@ public class WriteNode extends AbstractWriteNode implements LIRLowerableAccess, 
     }
 
     @Override
-    public Stamp getAccessStamp(NodeView view) {
-        return value().stamp(view);
+    public boolean canNullCheck() {
+        return true;
     }
 
     @Override
-    public boolean canNullCheck() {
-        return true;
+    public Stamp getAccessStamp() {
+        return value().stamp(NodeView.DEFAULT);
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (tool.canonicalizeReads() && hasExactlyOneUsage() && next() instanceof WriteNode) {
             WriteNode write = (WriteNode) next();
-            if (write.lastLocationAccess == this && write.getAddress() == getAddress() && getAccessStamp(NodeView.DEFAULT).isCompatible(write.getAccessStamp(NodeView.DEFAULT))) {
+            if (write.lastLocationAccess == this && write.getAddress() == getAddress() && getAccessStamp().isCompatible(write.getAccessStamp())) {
                 write.setLastLocationAccess(getLastLocationAccess());
                 return write;
             }
         }
         return this;
-    }
-
-    @Override
-    public LocationIdentity getKilledLocationIdentity() {
-        return getLocationIdentity();
     }
 }

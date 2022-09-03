@@ -57,8 +57,8 @@ public class PointerEqualsNode extends CompareNode implements BinaryCommutative<
         this(TYPE, x, y);
     }
 
-    public static LogicNode create(ValueNode x, ValueNode y, NodeView view) {
-        LogicNode result = findSynonym(x, y, view);
+    public static LogicNode create(ValueNode x, ValueNode y) {
+        LogicNode result = findSynonym(x, y);
         if (result != null) {
             return result;
         }
@@ -73,8 +73,7 @@ public class PointerEqualsNode extends CompareNode implements BinaryCommutative<
 
     @Override
     public Node canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        NodeView view = NodeView.from(tool);
-        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), Condition.EQ, false, forX, forY, view);
+        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), Condition.EQ, false, forX, forY);
         if (value != null) {
             return value;
         }
@@ -113,31 +112,31 @@ public class PointerEqualsNode extends CompareNode implements BinaryCommutative<
 
         @Override
         public LogicNode canonical(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth, Condition condition,
-                        boolean unorderedIsTrue, ValueNode forX, ValueNode forY, NodeView view) {
-            LogicNode result = findSynonym(forX, forY, view);
+                        boolean unorderedIsTrue, ValueNode forX, ValueNode forY) {
+            LogicNode result = findSynonym(forX, forY);
             if (result != null) {
                 return result;
             }
             if (isAlwaysFailingVirtualDispatchTest(condition, forX, forY)) {
                 return LogicConstantNode.contradiction();
             }
-            return super.canonical(constantReflection, metaAccess, options, smallestCompareWidth, condition, unorderedIsTrue, forX, forY, view);
+            return super.canonical(constantReflection, metaAccess, options, smallestCompareWidth, condition, unorderedIsTrue, forX, forY);
         }
 
         @Override
-        protected CompareNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue, NodeView view) {
+        protected CompareNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue) {
             return new PointerEqualsNode(newX, newY);
         }
     }
 
-    public static LogicNode findSynonym(ValueNode forX, ValueNode forY, NodeView view) {
+    public static LogicNode findSynonym(ValueNode forX, ValueNode forY) {
         if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY)) {
             return LogicConstantNode.tautology();
-        } else if (forX.stamp(view).alwaysDistinct(forY.stamp(view))) {
+        } else if (forX.stamp(NodeView.DEFAULT).alwaysDistinct(forY.stamp(NodeView.DEFAULT))) {
             return LogicConstantNode.contradiction();
-        } else if (((AbstractPointerStamp) forX.stamp(view)).alwaysNull()) {
+        } else if (((AbstractPointerStamp) forX.stamp(NodeView.DEFAULT)).alwaysNull()) {
             return IsNullNode.create(forY);
-        } else if (((AbstractPointerStamp) forY.stamp(view)).alwaysNull()) {
+        } else if (((AbstractPointerStamp) forY.stamp(NodeView.DEFAULT)).alwaysNull()) {
             return IsNullNode.create(forX);
         } else {
             return null;

@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -63,6 +61,15 @@ public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable, 
         return canonicalized(null, forValue);
     }
 
+    public static LogicNode tryCanonicalize(ValueNode forValue) {
+        if (StampTool.isPointerAlwaysNull(forValue)) {
+            return LogicConstantNode.tautology();
+        } else if (StampTool.isPointerNonNull(forValue)) {
+            return LogicConstantNode.contradiction();
+        }
+        return null;
+    }
+
     @Override
     public void generate(NodeLIRBuilderTool gen) {
         // Nothing to do.
@@ -80,33 +87,28 @@ public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable, 
         return canonicalized(this, forValue);
     }
 
-    private static LogicNode canonicalized(IsNullNode node, ValueNode forValue) {
-        ValueNode value = forValue;
-        while (true) {
-            if (StampTool.isPointerAlwaysNull(value)) {
-                return LogicConstantNode.tautology();
-            } else if (StampTool.isPointerNonNull(value)) {
-                return LogicConstantNode.contradiction();
-            }
-
-            if (value instanceof PiNode) {
-                value = GraphUtil.skipPi(value);
-                continue;
-            }
-
-            if (value instanceof ConvertNode) {
-                ConvertNode convertNode = (ConvertNode) value;
-                if (convertNode.mayNullCheckSkipConversion()) {
-                    value = convertNode.getValue();
-                    continue;
-                }
-            }
-
-            /*
-             * If we are at original node, just return it. Otherwise create a new node.
-             */
-            return (node != null && value == forValue) ? node : new IsNullNode(value);
+    private static LogicNode canonicalized(IsNullNode isNullNode, ValueNode forValue) {
+        IsNullNode self = isNullNode;
+        LogicNode result = tryCanonicalize(forValue);
+        if (result != null) {
+            return result;
         }
+
+        if (forValue instanceof PiNode) {
+            return IsNullNode.create(GraphUtil.skipPi(forValue));
+        }
+
+        if (forValue instanceof ConvertNode) {
+            ConvertNode convertNode = (ConvertNode) forValue;
+            if (convertNode.mayNullCheckSkipConversion()) {
+                return IsNullNode.create(convertNode.getValue());
+            }
+        }
+
+        if (self == null) {
+            self = new IsNullNode(GraphUtil.skipPi(forValue));
+        }
+        return self;
     }
 
     @Override

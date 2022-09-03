@@ -62,7 +62,7 @@ public abstract class BasicObjectCloneNode extends MacroStateSplitNode implement
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(stamp.improveWith(computeStamp(getObject())));
+        return updateStamp(computeStamp(getObject()));
     }
 
     protected Stamp computeStamp(ValueNode object) {

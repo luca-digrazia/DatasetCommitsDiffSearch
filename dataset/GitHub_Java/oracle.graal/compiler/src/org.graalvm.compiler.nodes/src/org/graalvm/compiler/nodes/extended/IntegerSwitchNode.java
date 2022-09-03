@@ -136,7 +136,6 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
 
     @Override
     public void simplify(SimplifierTool tool) {
-        NodeView view = NodeView.from(tool);
         if (blockSuccessorCount() == 1) {
             tool.addToWorkList(defaultSuccessor());
             graph().removeSplitPropagate(this, defaultSuccessor());
@@ -144,7 +143,7 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
             killOtherSuccessors(tool, successorIndexAtKey(value().asJavaConstant().asInt()));
         } else if (tryOptimizeEnumSwitch(tool)) {
             return;
-        } else if (tryRemoveUnreachableKeys(tool, value().stamp(view))) {
+        } else if (tryRemoveUnreachableKeys(tool, value().stamp(NodeView.DEFAULT))) {
             return;
         }
     }

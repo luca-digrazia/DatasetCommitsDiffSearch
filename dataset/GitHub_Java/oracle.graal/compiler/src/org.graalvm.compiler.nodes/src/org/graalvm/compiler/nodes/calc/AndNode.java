@@ -52,14 +52,14 @@ public final class AndNode extends BinaryArithmeticNode<And> implements Narrowab
         super(TYPE, ArithmeticOpTable::getAnd, x, y);
     }
 
-    public static ValueNode create(ValueNode x, ValueNode y, NodeView view) {
+    public static ValueNode create(ValueNode x, ValueNode y) {
         BinaryOp<And> op = ArithmeticOpTable.forStamp(x.stamp(NodeView.DEFAULT)).getAnd();
         Stamp stamp = op.foldStamp(x.stamp(NodeView.DEFAULT), y.stamp(NodeView.DEFAULT));
         ConstantNode tryConstantFold = tryConstantFold(op, x, y, stamp);
         if (tryConstantFold != null) {
             return tryConstantFold;
         }
-        return canonical(null, op, stamp, x, y, view);
+        return canonical(null, op, stamp, x, y);
     }
 
     @Override
@@ -69,11 +69,10 @@ public final class AndNode extends BinaryArithmeticNode<And> implements Narrowab
             return ret;
         }
 
-        NodeView view = NodeView.from(tool);
-        return canonical(this, getOp(forX, forY), stamp(NodeView.DEFAULT), forX, forY, view);
+        return canonical(this, getOp(forX, forY), stamp(NodeView.DEFAULT), forX, forY);
     }
 
-    private static ValueNode canonical(AndNode self, BinaryOp<And> op, Stamp stamp, ValueNode forX, ValueNode forY, NodeView view) {
+    private static ValueNode canonical(AndNode self, BinaryOp<And> op, Stamp stamp, ValueNode forX, ValueNode forY) {
         if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY)) {
             return forX;
         }
@@ -105,10 +104,10 @@ public final class AndNode extends BinaryArithmeticNode<And> implements Narrowab
                 }
             }
 
-            return reassociate(self != null ? self : (AndNode) new AndNode(forX, forY).maybeCommuteInputs(), ValueNode.isConstantPredicate(), forX, forY, view);
+            return reassociate(self != null ? self : (AndNode) new AndNode(forX, forY).maybeCommuteInputs(), ValueNode.isConstantPredicate(), forX, forY);
         }
         if (forX instanceof NotNode && forY instanceof NotNode) {
-            return new NotNode(OrNode.create(((NotNode) forX).getValue(), ((NotNode) forY).getValue(), view));
+            return new NotNode(OrNode.create(((NotNode) forX).getValue(), ((NotNode) forY).getValue()));
         }
         return self != null ? self : new AndNode(forX, forY).maybeCommuteInputs();
     }

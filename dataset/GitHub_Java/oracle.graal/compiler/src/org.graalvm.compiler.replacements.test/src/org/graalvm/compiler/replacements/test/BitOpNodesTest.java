@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -40,7 +38,6 @@ import org.graalvm.compiler.phases.common.inlining.InliningPhase;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.replacements.nodes.BitScanReverseNode;
 
-import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.meta.JavaKind;
@@ -62,45 +59,6 @@ public class BitOpNodesTest extends GraalCompilerTest {
      * Tests for BitCountNode canonicalizations.
      */
 
-    /**
-     * Determines if the current VM context supports intrinsics for the {@code bitCount} methods in
-     * {@link Integer} and {@link Long}.
-     */
-    public static boolean isBitCountIntrinsicSupported(Architecture arch) {
-        if (arch instanceof AMD64) {
-            AMD64 amd64 = (AMD64) arch;
-            return amd64.getFeatures().contains(AMD64.CPUFeature.POPCNT);
-        } else {
-            return arch instanceof SPARC || arch instanceof AArch64;
-        }
-    }
-
-    /**
-     * Determines if the current VM context supports intrinsics for the {@code numberOfLeadingZeros}
-     * methods in {@link Integer} and {@link Long}.
-     */
-    public static boolean isNumberLeadingZerosIntrinsicSupported(Architecture arch) {
-        if (arch instanceof AMD64) {
-            AMD64 amd64 = (AMD64) arch;
-            return amd64.getFeatures().contains(AMD64.CPUFeature.LZCNT) && amd64.getFlags().contains(AMD64.Flag.UseCountLeadingZerosInstruction);
-        } else {
-            return arch instanceof SPARC || arch instanceof AArch64;
-        }
-    }
-
-    /**
-     * Determines if the current VM context supports intrinsics for the
-     * {@code numberOfTrailingZeros} methods in {@link Integer} and {@link Long}.
-     */
-    public static boolean isNumberTrailingZerosIntrinsicSupported(Architecture arch) {
-        if (arch instanceof AMD64) {
-            AMD64 amd64 = (AMD64) arch;
-            return amd64.getFeatures().contains(AMD64.CPUFeature.BMI1) && amd64.getFlags().contains(AMD64.Flag.UseCountTrailingZerosInstruction);
-        } else {
-            return arch instanceof SPARC || arch instanceof AArch64;
-        }
-    }
-
     public static int bitCountIntConstantSnippet() {
         return Integer.bitCount(INT_CONSTANT_1) + Integer.bitCount(INT_CONSTANT_2) + Integer.bitCount(INT_CONSTANT_3);
     }
@@ -121,7 +79,10 @@ public class BitOpNodesTest extends GraalCompilerTest {
 
     @Test
     public void testBitCountInt() {
-        Assume.assumeTrue(isBitCountIntrinsicSupported(getBackend().getTarget().arch));
+        Architecture arch = getBackend().getTarget().arch;
+        boolean isAmd64WithPopCount = arch instanceof AMD64 && ((AMD64) arch).getFeatures().contains(AMD64.CPUFeature.POPCNT);
+        boolean isSparc = arch instanceof SPARC;
+        Assume.assumeTrue("Only works on hardware with popcnt at the moment", isAmd64WithPopCount || isSparc);
         ValueNode result = parseAndInline("bitCountIntSnippet");
         Assert.assertEquals(StampFactory.forInteger(JavaKind.Int, 8, 24), result.stamp(NodeView.DEFAULT));
     }
@@ -132,7 +93,10 @@ public class BitOpNodesTest extends GraalCompilerTest {
 
     @Test
     public void testBitCountIntEmpty() {
-        Assume.assumeTrue(isBitCountIntrinsicSupported(getBackend().getTarget().arch));
+        Architecture arch = getBackend().getTarget().arch;
+        boolean isAmd64WithPopCount = arch instanceof AMD64 && ((AMD64) arch).getFeatures().contains(AMD64.CPUFeature.POPCNT);
+        boolean isSparc = arch instanceof SPARC;
+        Assume.assumeTrue("Only works on hardware with popcnt at the moment", isAmd64WithPopCount || isSparc);
         ValueNode result = parseAndInline("bitCountIntEmptySnippet");
         Assert.assertEquals(StampFactory.forInteger(JavaKind.Int, 0, 24), result.stamp(NodeView.DEFAULT));
     }
@@ -149,7 +113,10 @@ public class BitOpNodesTest extends GraalCompilerTest {
 
     @Test
     public void testBitCountLong() {
-        Assume.assumeTrue(isBitCountIntrinsicSupported(getBackend().getTarget().arch));
+        Architecture arch = getBackend().getTarget().arch;
+        boolean isAmd64WithPopCount = arch instanceof AMD64 && ((AMD64) arch).getFeatures().contains(AMD64.CPUFeature.POPCNT);
+        boolean isSparc = arch instanceof SPARC;
+        Assume.assumeTrue("Only works on hardware with popcnt at the moment", isAmd64WithPopCount || isSparc);
         ValueNode result = parseAndInline("bitCountLongSnippet");
         Assert.assertEquals(StampFactory.forInteger(JavaKind.Int, 8, 40), result.stamp(NodeView.DEFAULT));
     }
@@ -160,7 +127,10 @@ public class BitOpNodesTest extends GraalCompilerTest {
 
     @Test
     public void testBitCountLongEmpty() {
-        Assume.assumeTrue(isBitCountIntrinsicSupported(getBackend().getTarget().arch));
+        Architecture arch = getBackend().getTarget().arch;
+        boolean isAmd64WithPopCount = arch instanceof AMD64 && ((AMD64) arch).getFeatures().contains(AMD64.CPUFeature.POPCNT);
+        boolean isSparc = arch instanceof SPARC;
+        Assume.assumeTrue("Only works on hardware with popcnt at the moment", isAmd64WithPopCount || isSparc);
         ValueNode result = parseAndInline("bitCountLongEmptySnippet");
         Assert.assertEquals(StampFactory.forInteger(JavaKind.Int, 0, 40), result.stamp(NodeView.DEFAULT));
     }
