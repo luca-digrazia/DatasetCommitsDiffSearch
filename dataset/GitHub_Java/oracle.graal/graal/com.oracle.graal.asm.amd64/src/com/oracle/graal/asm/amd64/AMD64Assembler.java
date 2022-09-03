@@ -2287,11 +2287,7 @@ public class AMD64Assembler extends AbstractAssembler {
         subq(dst, imm32, false);
     }
 
-    public final void subqWide(Register dst, int imm32) {
-        subq(dst, imm32, true);
-    }
-
-    private void subq(Register dst, int imm32, boolean force32Imm) {
+    public final void subq(Register dst, int imm32, boolean force32Imm) {
         prefixqAndEncode(dst.encoding);
         emitArith(0x81, 0xE8, dst, imm32, force32Imm);
     }
