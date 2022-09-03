@@ -57,12 +57,9 @@ import jdk.vm.ci.code.InstalledCode;
 
 public class SubstrateTruffleCompiler extends TruffleCompilerImpl {
 
-    private final String compilerConfigurationName;
-
     @Platforms(Platform.HOSTED_ONLY.class)
     public SubstrateTruffleCompiler(TruffleCompilerRuntime runtime, Plugins plugins, Suites suites, LIRSuites lirSuites, Backend backend, SnippetReflectionProvider snippetReflection) {
         super(runtime, plugins, suites, lirSuites, backend, null, null, null, snippetReflection);
-        compilerConfigurationName = GraalConfiguration.instance().getCompilerConfigurationName();
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
@@ -78,7 +75,7 @@ public class SubstrateTruffleCompiler extends TruffleCompilerImpl {
 
     @Override
     public String getCompilerConfigurationName() {
-        return compilerConfigurationName;
+        return GraalConfiguration.instance().getCompilerConfigurationName();
     }
 
     @Override

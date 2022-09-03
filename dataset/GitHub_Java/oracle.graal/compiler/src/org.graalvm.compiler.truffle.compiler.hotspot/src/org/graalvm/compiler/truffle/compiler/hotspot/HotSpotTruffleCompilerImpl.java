@@ -24,16 +24,17 @@
  */
 package org.graalvm.compiler.truffle.compiler.hotspot;
 
-import static org.graalvm.compiler.core.GraalCompiler.compileGraph;
-import static org.graalvm.compiler.debug.DebugOptions.DebugStubsAndSnippets;
-import static org.graalvm.compiler.hotspot.meta.HotSpotSuitesProvider.withNodeSourcePosition;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.getOptions;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Map;
-
+import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.CompiledCode;
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
+import jdk.vm.ci.hotspot.HotSpotCompilationRequest;
+import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
+import jdk.vm.ci.hotspot.HotSpotNmethod;
+import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.runtime.JVMCICompiler;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.CompilationWrapper.ExceptionAction;
@@ -77,17 +78,15 @@ import org.graalvm.compiler.truffle.common.hotspot.HotSpotTruffleCompiler;
 import org.graalvm.compiler.truffle.common.hotspot.HotSpotTruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.compiler.TruffleCompilerImpl;
 
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.CompiledCode;
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
-import jdk.vm.ci.hotspot.HotSpotCompilationRequest;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
-import jdk.vm.ci.hotspot.HotSpotNmethod;
-import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.runtime.JVMCICompiler;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Map;
+
+import static org.graalvm.compiler.core.GraalCompiler.compileGraph;
+import static org.graalvm.compiler.debug.DebugOptions.DebugStubsAndSnippets;
+import static org.graalvm.compiler.hotspot.meta.HotSpotSuitesProvider.withNodeSourcePosition;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.getOptions;
 
 public final class HotSpotTruffleCompilerImpl extends TruffleCompilerImpl implements HotSpotTruffleCompiler {
 
@@ -189,7 +188,7 @@ public final class HotSpotTruffleCompilerImpl extends TruffleCompilerImpl implem
                 CompilationResult compResult = compileTruffleCallBoundaryMethod(method, compilationId, debug);
                 CodeCacheProvider codeCache = lastTierProviders.getCodeCache();
                 try (DebugContext.Scope s = debug.scope("CodeInstall", codeCache, method, compResult)) {
-                    CompiledCode compiledCode = HotSpotCompiledCodeBuilder.createCompiledCode(codeCache, method, compilationId.getRequest(), compResult, getOptions());
+                    CompiledCode compiledCode = HotSpotCompiledCodeBuilder.createCompiledCode(codeCache, method, compilationId.getRequest(), compResult);
                     codeCache.setDefaultCode(method, compiledCode);
                 } catch (Throwable e) {
                     throw debug.handle(e);
