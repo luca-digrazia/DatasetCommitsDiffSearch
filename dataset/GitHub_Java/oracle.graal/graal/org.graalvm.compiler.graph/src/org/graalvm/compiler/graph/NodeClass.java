@@ -941,10 +941,6 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
         return this.leafId;
     }
 
-    public NodeClass<? super T> getSuperNodeClass() {
-        return superNodeClass;
-    }
-
     public long inputsIteration() {
         return inputsIteration;
     }
