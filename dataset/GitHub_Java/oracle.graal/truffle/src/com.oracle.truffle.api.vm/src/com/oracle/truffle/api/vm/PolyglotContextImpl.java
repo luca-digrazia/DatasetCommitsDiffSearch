@@ -68,6 +68,7 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
     volatile CountDownLatch closingLatch;
     final AtomicInteger enteredCount = new AtomicInteger();
     final PolyglotEngineImpl engine;
+    final Thread initThread;
     @CompilationFinal(dimensions = 1) final PolyglotLanguageContextImpl[] contexts;
 
     final OutputStream out;
@@ -80,7 +81,7 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
     private final FinalIntMap languageIndexMap = new FinalIntMap();
 
     final Map<Object, CallTarget> javaInteropCache;
-    final Set<String> allowedPublicLanguages;
+    final PolyglotLanguageImpl singlePublicLanguage;
     final Map<String, String[]> applicationArguments;
 
     PolyglotContextImpl(PolyglotEngineImpl engine, final OutputStream out,
@@ -88,7 +89,7 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
                     InputStream in,
                     Map<String, String> options,
                     Map<String, String[]> applicationArguments,
-                    Set<String> allowedPublicLanguages) {
+                    PolyglotLanguageImpl singlePublicLanguage) {
         super(engine.impl);
         this.applicationArguments = applicationArguments;
 
@@ -103,9 +104,11 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
             this.err = INSTRUMENT.createDelegatingOutput(err, engine.err);
         }
         this.in = in == null ? engine.in : in;
+
         this.options = options;
-        this.allowedPublicLanguages = allowedPublicLanguages;
+        this.singlePublicLanguage = singlePublicLanguage;
         this.engine = engine;
+        this.initThread = Thread.currentThread();
         this.javaInteropCache = new HashMap<>();
         Collection<PolyglotLanguageImpl> languages = engine.idToLanguage.values();
         this.contexts = new PolyglotLanguageContextImpl[languages.size()];
@@ -376,9 +379,6 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
         closeImpl(cancelIfExecuting);
         if (cancelIfExecuting) {
             engine.getCancelHandler().waitForClosing(this);
-        }
-        if (engine.boundEngine) {
-            engine.ensureClosed(cancelIfExecuting, false);
         }
     }
 
