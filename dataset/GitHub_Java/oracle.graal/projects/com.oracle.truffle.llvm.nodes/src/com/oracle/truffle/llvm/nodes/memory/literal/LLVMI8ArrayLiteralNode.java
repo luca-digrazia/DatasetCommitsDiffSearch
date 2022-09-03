@@ -57,7 +57,7 @@ public abstract class LLVMI8ArrayLiteralNode extends LLVMExpressionNode {
 
     @Specialization
     protected LLVMAddress write(VirtualFrame frame, LLVMGlobal global,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
+                    @Cached(value = "toNative()") LLVMToNativeNode globalAccess,
                     @Cached("getLLVMMemory()") LLVMMemory memory) {
         return writeI8(frame, globalAccess.executeWithTarget(frame, global), memory);
     }

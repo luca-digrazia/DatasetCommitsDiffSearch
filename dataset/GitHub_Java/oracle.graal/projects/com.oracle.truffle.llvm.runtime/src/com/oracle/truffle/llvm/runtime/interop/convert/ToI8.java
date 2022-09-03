@@ -112,13 +112,13 @@ abstract class ToI8 extends ForeignToLLVM {
 
     @Specialization
     protected byte fromLLVMFunctionDescriptor(VirtualFrame frame, LLVMFunctionDescriptor fd,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
+                    @Cached("toNative()") LLVMToNativeNode toNative) {
         return (byte) toNative.executeWithTarget(frame, fd).getVal();
     }
 
     @Specialization
     protected byte fromSharedDescriptor(VirtualFrame frame, LLVMSharedGlobalVariable shared,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode access) {
+                    @Cached("toNative()") LLVMToNativeNode access) {
         return (byte) access.executeWithTarget(frame, shared.getDescriptor()).getVal();
     }
 

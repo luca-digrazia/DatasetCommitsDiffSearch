@@ -31,8 +31,8 @@ package com.oracle.truffle.llvm.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
 import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
-import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeIntArrayAccess;
 
 @ValueType
 public final class LLVMVirtualAllocationAddress {
@@ -67,59 +67,59 @@ public final class LLVMVirtualAllocationAddress {
         return new LLVMVirtualAllocationAddress(this.object, this.offset + value);
     }
 
-    public void writeI1(UnsafeArrayAccess memory, boolean value) {
+    public void writeI1(UnsafeIntArrayAccess memory, boolean value) {
         memory.writeI1(object, offset, value);
     }
 
-    public boolean getI1(UnsafeArrayAccess memory) {
+    public boolean getI1(UnsafeIntArrayAccess memory) {
         return memory.getI1(object, offset);
     }
 
-    public void writeI8(UnsafeArrayAccess memory, byte value) {
+    public void writeI8(UnsafeIntArrayAccess memory, byte value) {
         memory.writeI8(object, offset, value);
     }
 
-    public byte getI8(UnsafeArrayAccess memory) {
+    public byte getI8(UnsafeIntArrayAccess memory) {
         return memory.getI8(object, offset);
     }
 
-    public void writeI16(UnsafeArrayAccess memory, short value) {
+    public void writeI16(UnsafeIntArrayAccess memory, short value) {
         memory.writeI16(object, offset, value);
     }
 
-    public short getI16(UnsafeArrayAccess memory) {
+    public short getI16(UnsafeIntArrayAccess memory) {
         return memory.getI16(object, offset);
     }
 
-    public void writeI32(UnsafeArrayAccess memory, int value) {
+    public void writeI32(UnsafeIntArrayAccess memory, int value) {
         memory.writeI32(object, offset, value);
     }
 
-    public int getI32(UnsafeArrayAccess memory) {
+    public int getI32(UnsafeIntArrayAccess memory) {
         return memory.getI32(object, offset);
     }
 
-    public void writeI64(UnsafeArrayAccess memory, long value) {
+    public void writeI64(UnsafeIntArrayAccess memory, long value) {
         memory.writeI64(object, offset, value);
     }
 
-    public long getI64(UnsafeArrayAccess memory) {
+    public long getI64(UnsafeIntArrayAccess memory) {
         return memory.getI64(object, offset);
     }
 
-    public void writeFloat(UnsafeArrayAccess memory, float value) {
+    public void writeFloat(UnsafeIntArrayAccess memory, float value) {
         memory.writeFloat(object, offset, value);
     }
 
-    public float getFloat(UnsafeArrayAccess memory) {
+    public float getFloat(UnsafeIntArrayAccess memory) {
         return memory.getFloat(object, offset);
     }
 
-    public void writeDouble(UnsafeArrayAccess memory, double value) {
+    public void writeDouble(UnsafeIntArrayAccess memory, double value) {
         memory.writeDouble(object, offset, value);
     }
 
-    public double getDouble(UnsafeArrayAccess memory) {
+    public double getDouble(UnsafeIntArrayAccess memory) {
         return memory.getDouble(object, offset);
     }
 
@@ -127,7 +127,7 @@ public final class LLVMVirtualAllocationAddress {
         return new LLVMVirtualAllocationAddress(this.object, this.offset);
     }
 
-    public static final class LLVMVirtualAllocationAddressTruffleObject implements LLVMInternalTruffleObject {
+    public static final class LLVMVirtualAllocationAddressTruffleObject implements TruffleObject {
         private final LLVMVirtualAllocationAddress object;
 
         public LLVMVirtualAllocationAddressTruffleObject(LLVMVirtualAllocationAddress object) {

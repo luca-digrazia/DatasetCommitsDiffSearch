@@ -101,13 +101,13 @@ abstract class ToDouble extends ForeignToLLVM {
 
     @Specialization
     protected double fromLLVMFunctionDescriptor(VirtualFrame frame, LLVMFunctionDescriptor fd,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
+                    @Cached("toNative()") LLVMToNativeNode toNative) {
         return toNative.executeWithTarget(frame, fd).getVal();
     }
 
     @Specialization
     protected double fromSharedDescriptor(VirtualFrame frame, LLVMSharedGlobalVariable shared,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode access) {
+                    @Cached("toNative()") LLVMToNativeNode access) {
         return access.executeWithTarget(frame, shared.getDescriptor()).getVal();
     }
 

@@ -31,27 +31,23 @@ package com.oracle.truffle.llvm.nodes.asm.syscall;
 
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
 
-public abstract class LLVMAMD64SyscallUnameNode extends LLVMSyscallOperationNode {
-
-    @Override
-    public final String getName() {
-        return "uname";
+public abstract class LLVMAMD64SyscallUnameNode extends LLVMAMD64SyscallOperationNode {
+    public LLVMAMD64SyscallUnameNode() {
+        super("uname");
     }
 
     @Specialization
-    protected long doOp(@SuppressWarnings("unused") VirtualFrame frame, LLVMAddress name,
+    protected long doOp(LLVMAddress name,
                     @Cached("getLLVMMemory()") LLVMMemory memory) {
         return LLVMInfo.uname(memory, name);
     }
 
     @Specialization
-    protected long doOp(VirtualFrame frame, long name,
+    protected long doOp(long name,
                     @Cached("getLLVMMemory()") LLVMMemory memory) {
-        return doOp(frame, LLVMAddress.fromLong(name), memory);
+        return doOp(LLVMAddress.fromLong(name), memory);
     }
 }

@@ -106,7 +106,7 @@ abstract class ToI16 extends ForeignToLLVM {
 
     @Specialization
     protected short fromLLVMFunctionDescriptor(VirtualFrame frame, LLVMFunctionDescriptor fd,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
+                    @Cached("toNative()") LLVMToNativeNode toNative) {
         return (short) toNative.executeWithTarget(frame, fd).getVal();
     }
 
@@ -117,7 +117,7 @@ abstract class ToI16 extends ForeignToLLVM {
 
     @Specialization
     protected short fromSharedDescriptor(VirtualFrame frame, LLVMSharedGlobalVariable shared,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode access) {
+                    @Cached("toNative()") LLVMToNativeNode access) {
         return (short) access.executeWithTarget(frame, shared.getDescriptor()).getVal();
     }
 

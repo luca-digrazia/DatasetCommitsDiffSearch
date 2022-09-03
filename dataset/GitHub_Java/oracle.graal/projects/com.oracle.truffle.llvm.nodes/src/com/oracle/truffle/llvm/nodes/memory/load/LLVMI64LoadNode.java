@@ -65,7 +65,7 @@ public abstract class LLVMI64LoadNode extends LLVMLoadNode {
     @Specialization
     protected long doI64(VirtualFrame frame, LLVMGlobal addr,
                     @Cached("createRead()") LLVMGlobalReadNode globalAccess,
-                    @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
+                    @Cached("toNative()") LLVMToNativeNode toNative) {
         return toNative.executeWithTarget(frame, globalAccess.get(addr)).getVal();
     }
 

@@ -29,10 +29,11 @@
  */
 package com.oracle.truffle.llvm.runtime.memory;
 
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 
 public abstract class LLVMAllocateStringNode extends LLVMNode {
 
-    public abstract Object executeWithTarget(String string);
+    public abstract Object executeWithTarget(VirtualFrame frame, String string);
 
 }

@@ -43,11 +43,10 @@ import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNodeGen;
 
 public final class LLVMLandingpadNode extends LLVMExpressionNode {
 
-    @Child private LLVMToNativeNode allocateLandingPadValue;
+    @Child private LLVMExpressionNode allocateLandingPadValue;
     @Child private LLVMNativeFunctions.SulongGetUnwindHeaderNode getUnwindHeader;
     @Child private LLVMNativeFunctions.SulongGetExceptionTypeNode getExceptionType;
     @Children private final LandingpadEntryNode[] entries;
@@ -56,7 +55,7 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
 
     public LLVMLandingpadNode(LLVMExpressionNode allocateLandingPadValue, FrameSlot exceptionSlot, boolean cleanup,
                     LandingpadEntryNode[] entries) {
-        this.allocateLandingPadValue = LLVMToNativeNodeGen.create(allocateLandingPadValue);
+        this.allocateLandingPadValue = allocateLandingPadValue;
         this.exceptionSlot = exceptionSlot;
         this.cleanup = cleanup;
         this.entries = entries;
@@ -82,6 +81,7 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
         return getExceptionType;
     }
 
+    @Child private LLVMToNativeNode toNative = LLVMToNativeNode.toNative();
     @CompilationFinal private LLVMMemory memory;
 
     private LLVMMemory getMemory() {
@@ -104,7 +104,7 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
             if (clauseId == 0 && !cleanup) {
                 throw exception;
             } else {
-                LLVMAddress executeLLVMAddress = allocateLandingPadValue.executeGeneric(frame);
+                LLVMAddress executeLLVMAddress = toNative.executeWithTarget(frame, allocateLandingPadValue.executeGeneric(frame));
                 LLVMAddress pair0 = executeLLVMAddress;
                 getMemory().putAddress(pair0, unwindHeader);
                 getMemory().putI32(executeLLVMAddress.getVal() + LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES, clauseId);
@@ -140,11 +140,13 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
 
     public static final class LandingpadCatchEntryNode extends LandingpadEntryNode {
 
-        @Child private LLVMToNativeNode catchType;
+        @Child private LLVMExpressionNode catchType;
+        @Child private LLVMToNativeNode forceToLLVMcatchType;
         @Child private LLVMNativeFunctions.SulongCanCatchNode canCatch;
 
         public LandingpadCatchEntryNode(LLVMExpressionNode catchType) {
-            this.catchType = LLVMToNativeNodeGen.create(catchType);
+            this.catchType = catchType;
+            this.forceToLLVMcatchType = LLVMToNativeNode.toNative();
         }
 
         public LLVMNativeFunctions.SulongCanCatchNode getCanCatch() {
@@ -159,7 +161,7 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
 
         @Override
         public int getIdentifier(VirtualFrame frame, LLVMAddress exceptionInfo, LLVMAddress thrownTypeID) {
-            LLVMAddress catchAddress = catchType.executeGeneric(frame);
+            LLVMAddress catchAddress = forceToLLVMcatchType.executeWithTarget(frame, catchType.executeGeneric(frame));
             if (catchAddress.getVal() == 0) {
                 /*
                  * If ExcType is null, any exception matches, so the landing pad should always be
@@ -176,11 +178,13 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
 
     public static final class LandingpadFilterEntryNode extends LandingpadEntryNode {
 
-        @Children private final LLVMToNativeNode[] filterTypes;
+        @Children private final LLVMExpressionNode[] filterTypes;
+        @Children private final LLVMToNativeNode[] forceToLLVMfilterTypes;
         @Child private LLVMNativeFunctions.SulongCanCatchNode canCatch;
 
         public LandingpadFilterEntryNode(LLVMExpressionNode[] filterTypes) {
-            this.filterTypes = getForceLLVMAddressNodes(filterTypes);
+            this.filterTypes = filterTypes;
+            this.forceToLLVMfilterTypes = getForceLLVMAddressNodes(filterTypes.length);
         }
 
         public LLVMNativeFunctions.SulongCanCatchNode getCanCatch() {
@@ -209,7 +213,7 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
              * types in the list
              */
             for (int i = 0; i < filterTypes.length; i++) {
-                LLVMAddress filterAddress = filterTypes[i].executeGeneric(frame);
+                LLVMAddress filterAddress = forceToLLVMfilterTypes[i].executeWithTarget(frame, filterTypes[i].executeGeneric(frame));
                 if (filterAddress.getVal() == 0) {
                     /*
                      * If ExcType is null, any exception matches, so the landing pad should always
@@ -225,10 +229,10 @@ public final class LLVMLandingpadNode extends LLVMExpressionNode {
         }
     }
 
-    private static LLVMToNativeNode[] getForceLLVMAddressNodes(LLVMExpressionNode[] nodes) {
-        LLVMToNativeNode[] forceToLLVM = new LLVMToNativeNode[nodes.length];
-        for (int i = 0; i < nodes.length; i++) {
-            forceToLLVM[i] = LLVMToNativeNodeGen.create(nodes[i]);
+    private static LLVMToNativeNode[] getForceLLVMAddressNodes(int size) {
+        LLVMToNativeNode[] forceToLLVM = new LLVMToNativeNode[size];
+        for (int i = 0; i < size; i++) {
+            forceToLLVM[i] = LLVMToNativeNode.toNative();
         }
         return forceToLLVM;
     }

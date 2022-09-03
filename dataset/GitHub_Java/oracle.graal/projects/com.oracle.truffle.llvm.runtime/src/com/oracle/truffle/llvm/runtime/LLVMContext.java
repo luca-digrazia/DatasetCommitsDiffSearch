@@ -266,11 +266,11 @@ public final class LLVMContext {
         return type.getSize(targetDataLayout);
     }
 
-    public int getBytePadding(long offset, Type type) {
+    public int getBytePadding(int offset, Type type) {
         return Type.getPadding(offset, type, targetDataLayout);
     }
 
-    public long getIndexOffset(long index, AggregateType type) {
+    public int getIndexOffset(int index, AggregateType type) {
         return type.getOffsetOf(index, targetDataLayout);
     }
 
