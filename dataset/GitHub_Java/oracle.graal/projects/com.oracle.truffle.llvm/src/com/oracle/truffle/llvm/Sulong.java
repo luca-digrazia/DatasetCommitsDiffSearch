@@ -36,7 +36,8 @@ import java.util.ServiceLoader;
 
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
-import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Engine;
+import org.graalvm.polyglot.PolyglotContext;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -98,7 +99,7 @@ public final class Sulong extends LLVMLanguage {
 
     @Override
     protected boolean isObjectOfLanguage(Object object) {
-        return false; // TODO
+        throw new AssertionError();
     }
 
     @Override
@@ -118,13 +119,15 @@ public final class Sulong extends LLVMLanguage {
     }
 
     public static int executeMain(File file, String[] args) throws Exception {
-        org.graalvm.polyglot.Source source = org.graalvm.polyglot.Source.newBuilder(LLVMLanguage.NAME, file).build();
-        Context context = Context.newBuilder().arguments(LLVMLanguage.NAME, args).build();
+        org.graalvm.polyglot.Source source = org.graalvm.polyglot.Source.newBuilder(file).build();
+        Engine engine = Engine.newBuilder().build();
+        PolyglotContext polyglotContext = engine.newPolyglotContextBuilder().setArguments(LLVMLanguage.NAME, args).build();
         int result;
         try {
-            result = context.eval(source).asInt();
+            result = polyglotContext.eval(LLVMLanguage.NAME, source).asInt();
         } finally {
-            context.close();
+            polyglotContext.close();
+            engine.close();
         }
         return result;
     }
