@@ -85,14 +85,13 @@ public final class StructureType extends AggregateType {
     }
 
     @Override
-    public Type getElementType(long index) {
-        assert index == (int) index;
-        return types[(int) index];
+    public Type getElementType(int index) {
+        return types[index];
     }
 
     @Override
     public int getAlignment(DataSpecConverter targetDataLayout) {
-        return isPacked ? 1 : getLargestAlignment(targetDataLayout);
+        return getLargestAlignment(targetDataLayout);
     }
 
     @Override
@@ -107,7 +106,7 @@ public final class StructureType extends AggregateType {
 
         int padding = 0;
         if (!isPacked && sumByte != 0) {
-            padding = Type.getPadding(sumByte, getAlignment(targetDataLayout));
+            padding = Type.getPadding(sumByte, getLargestAlignment(targetDataLayout));
         }
 
         return sumByte + padding;
@@ -121,7 +120,7 @@ public final class StructureType extends AggregateType {
     }
 
     @Override
-    public long getOffsetOf(long index, DataSpecConverter targetDataLayout) {
+    public int getOffsetOf(int index, DataSpecConverter targetDataLayout) {
         int offset = 0;
         for (int i = 0; i < index; i++) {
             final Type elementType = types[i];
@@ -131,8 +130,7 @@ public final class StructureType extends AggregateType {
             offset += elementType.getSize(targetDataLayout);
         }
         if (!isPacked && getSize(targetDataLayout) > offset) {
-            assert index == (int) index;
-            offset += Type.getPadding(offset, types[(int) index], targetDataLayout);
+            offset += Type.getPadding(offset, types[index], targetDataLayout);
         }
         return offset;
     }
@@ -189,4 +187,5 @@ public final class StructureType extends AggregateType {
         }
         return true;
     }
+
 }
