@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -34,27 +34,27 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-public abstract class LLVMAMD64RegisterToLongNode extends Node {
+public abstract class LLVMAMD64RegisterToLongNode extends LLVMNode {
     public abstract long execute(VirtualFrame frame, FrameSlot slot);
 
-    @Specialization(guards = "isLong(slot)")
+    @Specialization(guards = "isLong(frame, slot)")
     protected long readLong(VirtualFrame frame, FrameSlot slot) {
         return FrameUtil.getLongSafe(frame, slot);
     }
 
-    @Specialization(guards = "isAddress(slot)")
+    @Specialization(guards = "isAddress(frame, slot)")
     protected long readAddress(VirtualFrame frame, FrameSlot slot) {
-        return ((LLVMAddress) FrameUtil.getObjectSafe(frame, slot)).getVal();
+        return LLVMNativePointer.cast(FrameUtil.getObjectSafe(frame, slot)).asNative();
     }
 
-    protected boolean isLong(FrameSlot slot) {
-        return slot.getKind() == FrameSlotKind.Long;
+    protected boolean isLong(VirtualFrame frame, FrameSlot slot) {
+        return frame.getFrameDescriptor().getFrameSlotKind(slot) == FrameSlotKind.Long;
     }
 
-    protected boolean isAddress(FrameSlot slot) {
-        return slot.getKind() == FrameSlotKind.Object;
+    protected boolean isAddress(VirtualFrame frame, FrameSlot slot) {
+        return frame.getFrameDescriptor().getFrameSlotKind(slot) == FrameSlotKind.Object;
     }
 }

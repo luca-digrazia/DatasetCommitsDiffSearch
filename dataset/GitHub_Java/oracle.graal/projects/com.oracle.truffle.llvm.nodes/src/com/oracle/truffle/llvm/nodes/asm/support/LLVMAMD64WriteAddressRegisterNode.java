@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -36,12 +36,13 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-@NodeChild("value")
+@NodeChild(value = "value", type = LLVMExpressionNode.class)
 @NodeField(name = "slot", type = FrameSlot.class)
-public abstract class LLVMAMD64WriteAddressRegisterNode extends LLVMExpressionNode {
+public abstract class LLVMAMD64WriteAddressRegisterNode extends LLVMStatementNode {
 
     public LLVMAMD64WriteAddressRegisterNode(LLVMSourceLocation source) {
         this.source = source;
@@ -52,38 +53,33 @@ public abstract class LLVMAMD64WriteAddressRegisterNode extends LLVMExpressionNo
     private final LLVMSourceLocation source;
 
     @Specialization
-    protected Object doI8(VirtualFrame frame, byte value) {
-        getSlot().setKind(FrameSlotKind.Long);
+    protected void doI8(VirtualFrame frame, byte value) {
+        frame.getFrameDescriptor().setFrameSlotKind(getSlot(), FrameSlotKind.Long);
         frame.setLong(getSlot(), value);
-        return null;
     }
 
     @Specialization
-    protected Object doI16(VirtualFrame frame, short value) {
-        getSlot().setKind(FrameSlotKind.Long);
+    protected void doI16(VirtualFrame frame, short value) {
+        frame.getFrameDescriptor().setFrameSlotKind(getSlot(), FrameSlotKind.Long);
         frame.setLong(getSlot(), value);
-        return null;
     }
 
     @Specialization
-    protected Object doI32(VirtualFrame frame, int value) {
-        getSlot().setKind(FrameSlotKind.Long);
+    protected void doI32(VirtualFrame frame, int value) {
+        frame.getFrameDescriptor().setFrameSlotKind(getSlot(), FrameSlotKind.Long);
         frame.setLong(getSlot(), value);
-        return null;
     }
 
     @Specialization
-    protected Object doI64(VirtualFrame frame, long value) {
-        getSlot().setKind(FrameSlotKind.Long);
+    protected void doI64(VirtualFrame frame, long value) {
+        frame.getFrameDescriptor().setFrameSlotKind(getSlot(), FrameSlotKind.Long);
         frame.setLong(getSlot(), value);
-        return null;
     }
 
     @Specialization
-    protected Object doAddress(VirtualFrame frame, LLVMAddress value) {
-        getSlot().setKind(FrameSlotKind.Object);
+    protected void doAddress(VirtualFrame frame, LLVMPointer value) {
+        frame.getFrameDescriptor().setFrameSlotKind(getSlot(), FrameSlotKind.Object);
         frame.setObject(getSlot(), value);
-        return null;
     }
 
     @Override
