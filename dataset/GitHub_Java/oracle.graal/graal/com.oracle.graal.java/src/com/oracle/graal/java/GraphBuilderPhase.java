@@ -38,11 +38,15 @@ import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.Node.ValueNumberable;
+import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
 import com.oracle.graal.java.BciBlockMapping.ExceptionDispatchBlock;
 import com.oracle.graal.java.BciBlockMapping.LocalLiveness;
-import com.oracle.graal.java.GraphBuilderPlugins.*;
+import com.oracle.graal.java.GraphBuilderPlugins.InlineInvokePlugin;
+import com.oracle.graal.java.GraphBuilderPlugins.InvocationPlugin;
+import com.oracle.graal.java.GraphBuilderPlugins.LoopExplosionPlugin;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.calc.*;
@@ -170,12 +174,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
         }
 
-        private static class ExplodedLoopContext {
-            private BciBlock header;
-            private int targetPeelIteration;
-            private int peelIteration;
-        }
-
         public class BytecodeParser extends AbstractBytecodeParser<ValueNode, HIRFrameStateBuilder> implements GraphBuilderContext {
 
             private BciBlock[] loopHeaders;
@@ -198,8 +196,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             private FixedWithNextNode lastInstr;                 // the last instruction added
             private final boolean explodeLoops;
-            private Stack<ExplodedLoopContext> explodeLoopsContext;
-            private int nextPeelIteration = 1;
 
             public BytecodeParser(MetaAccessProvider metaAccess, ResolvedJavaMethod method, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, int entryBCI) {
                 super(metaAccess, method, graphBuilderConfig, optimisticOpts);
@@ -276,18 +272,15 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     }
 
                     currentBlock = blockMap.startBlock;
-                    blockMap.startBlock.setEntryState(0, frameState);
-                    if (blockMap.startBlock.isLoopHeader && !explodeLoops) {
+                    blockMap.startBlock.entryState = frameState;
+                    if (blockMap.startBlock.isLoopHeader) {
                         appendGoto(createTarget(blockMap.startBlock, frameState));
                     } else {
-                        blockMap.startBlock.setFirstInstruction(0, lastInstr);
+                        blockMap.startBlock.firstInstruction = lastInstr;
                     }
 
-                    int index = 0;
-                    BciBlock[] blocks = blockMap.getBlocks();
-                    while (index < blocks.length) {
-                        BciBlock block = blocks[index];
-                        index = iterateBlock(blocks, block);
+                    for (BciBlock block : blockMap.getBlocks()) {
+                        processBlock(this, block);
                     }
                     processBlock(this, returnBlock);
                     processBlock(this, unwindBlock);
@@ -295,50 +288,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     Debug.dump(currentGraph, "After bytecode parsing");
 
                 }
-            }
-
-            private int iterateBlock(BciBlock[] blocks, BciBlock block) {
-                if (block.isLoopHeader && this.explodeLoops) {
-                    return iterateExplodedLoopHeader(blocks, block);
-                } else {
-                    processBlock(this, block);
-                    return block.getId() + 1;
-                }
-            }
-
-            private int iterateExplodedLoopHeader(BciBlock[] blocks, BciBlock header) {
-                if (explodeLoopsContext == null) {
-                    explodeLoopsContext = new Stack<>();
-                }
-
-                ExplodedLoopContext context = new ExplodedLoopContext();
-                context.header = header;
-                context.peelIteration = this.getCurrentDimension();
-                context.targetPeelIteration = -1;
-                explodeLoopsContext.push(context);
-                Debug.dump(currentGraph, "before loop explosion " + context.peelIteration);
-
-                while (true) {
-
-                    processBlock(this, header);
-                    for (int j = header.getId() + 1; j <= header.loopEnd; ++j) {
-                        BciBlock block = blocks[j];
-                        iterateBlock(blocks, block);
-                    }
-
-                    if (context.targetPeelIteration != -1) {
-                        // We were reaching the backedge during explosion. Explode further.
-                        Debug.dump(currentGraph, "Before loop explosion " + context.targetPeelIteration);
-                        context.peelIteration = context.targetPeelIteration;
-                        context.targetPeelIteration = -1;
-                    } else {
-                        // We did not reach the backedge. Exit.
-                        Debug.dump(currentGraph, "after loop explosion " + context.peelIteration);
-                        break;
-                    }
-                }
-                explodeLoopsContext.pop();
-                return header.loopEnd + 1;
             }
 
             private BciBlock returnBlock(int bci) {
@@ -503,7 +452,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             @Override
             protected ValueNode genLoadIndexed(ValueNode array, ValueNode index, Kind kind) {
-                return LoadIndexedNode.create(array, index, kind, metaAccess, constantReflectionProvider);
+                return new LoadIndexedNode(array, index, kind);
             }
 
             @Override
@@ -513,7 +462,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             @Override
             protected ValueNode genIntegerAdd(Kind kind, ValueNode x, ValueNode y) {
-                return AddNode.create(x, y);
+                return new AddNode(x, y);
             }
 
             @Override
@@ -639,7 +588,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             @Override
             protected ValueNode genIntegerLessThan(ValueNode x, ValueNode y) {
-                return IntegerLessThanNode.create(x, y, constantReflectionProvider);
+                return new IntegerLessThanNode(x, y);
             }
 
             @Override
@@ -711,7 +660,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             protected void emitBoundsCheck(ValueNode index, ValueNode length) {
                 AbstractBeginNode trueSucc = currentGraph.add(new BeginNode());
                 BytecodeExceptionNode exception = currentGraph.add(new BytecodeExceptionNode(metaAccess, ArrayIndexOutOfBoundsException.class, index));
-                append(new IfNode(currentGraph.unique(IntegerBelowNode.create(index, length, constantReflectionProvider)), trueSucc, exception, 0.99));
+                append(new IfNode(currentGraph.unique(new IntegerBelowNode(index, length)), trueSucc, exception, 0.99));
                 lastInstr = trueSucc;
 
                 exception.setStateAfter(frameState.create(bci()));
@@ -720,7 +669,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             @Override
             protected ValueNode genArrayLength(ValueNode x) {
-                return ArrayLengthNode.create(x, constantReflectionProvider);
+                return new ArrayLengthNode(x);
             }
 
             @Override
@@ -855,14 +804,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 }
 
                 if (graphBuilderPlugins != null) {
-                    InvocationPlugin plugin = graphBuilderPlugins.lookupInvocation(targetMethod);
-                    if (plugin != null) {
-                        int beforeStackSize = frameState.stackSize;
-                        if (plugin.apply(this, args)) {
-                            assert beforeStackSize + resultType.getSlotCount() == frameState.stackSize;
-                            return;
-                        }
-                        assert beforeStackSize == frameState.stackSize;
+                    if (tryUsingInvocationPlugin(args, targetMethod, resultType)) {
+                        return;
                     }
                 }
 
@@ -885,6 +828,36 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     invoke.setNext(beginNode);
                     lastInstr = beginNode;
                 }
+            }
+
+            private boolean tryUsingInvocationPlugin(ValueNode[] args, ResolvedJavaMethod targetMethod, Kind resultType) {
+                InvocationPlugin plugin = graphBuilderPlugins.lookupInvocation(targetMethod);
+                if (plugin != null) {
+                    int beforeStackSize = frameState.stackSize;
+                    boolean needsNullCheck = !targetMethod.isStatic() && !StampTool.isPointerNonNull(args[0].stamp());
+                    int nodeCount = currentGraph.getNodeCount();
+                    Mark mark = needsNullCheck ? currentGraph.getMark() : null;
+                    if (InvocationPlugin.execute(this, plugin, args)) {
+                        assert beforeStackSize + resultType.getSlotCount() == frameState.stackSize : "plugin manipulated the stack incorrectly";
+                        assert !needsNullCheck || containsNullCheckOf(currentGraph.getNewNodes(mark), args[0]) : "plugin needs to null check the receiver of " + targetMethod + ": " + args[0];
+                        return true;
+                    }
+                    assert nodeCount == currentGraph.getNodeCount() : "plugin that returns false must not create new nodes";
+                    assert beforeStackSize == frameState.stackSize : "plugin that returns false must modify the stack";
+                }
+                return false;
+            }
+
+            private boolean containsNullCheckOf(NodeIterable<Node> nodes, Node value) {
+                for (Node n : nodes) {
+                    if (n instanceof GuardingPiNode) {
+                        GuardingPiNode pi = (GuardingPiNode) n;
+                        if (pi.condition() instanceof IsNullNode) {
+                            return ((IsNullNode) pi.condition()).getValue() == value;
+                        }
+                    }
+                }
+                return false;
             }
 
             private void parseAndInlineCallee(ResolvedJavaMethod targetMethod, ValueNode[] args) {
@@ -1085,7 +1058,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
 
             private Target checkLoopExit(FixedNode target, BciBlock targetBlock, HIRFrameStateBuilder state) {
-                if (currentBlock != null && !explodeLoops) {
+                if (currentBlock != null) {
                     long exits = currentBlock.loops & ~targetBlock.loops;
                     if (exits != 0) {
                         LoopExitNode firstLoopExit = null;
@@ -1116,7 +1089,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                         }
                         HIRFrameStateBuilder newState = state.copy();
                         for (BciBlock loop : exitLoops) {
-                            LoopBeginNode loopBegin = (LoopBeginNode) loop.getFirstInstruction(this.getCurrentDimension());
+                            LoopBeginNode loopBegin = (LoopBeginNode) loop.firstInstruction;
                             LoopExitNode loopExit = currentGraph.add(new LoopExitNode(loopBegin));
                             if (lastLoopExit != null) {
                                 lastLoopExit.setNext(loopExit);
@@ -1126,7 +1099,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                             }
                             lastLoopExit = loopExit;
                             Debug.log("Target %s (%s) Exits %s, scanning framestates...", targetBlock, target, loop);
-                            newState.insertLoopProxies(loopExit, (HIRFrameStateBuilder) loop.getEntryState(this.getCurrentDimension()));
+                            newState.insertLoopProxies(loopExit, (HIRFrameStateBuilder) loop.entryState);
                             loopExit.setStateAfter(newState.create(bci));
                         }
 
@@ -1151,88 +1124,53 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 assert block != null && state != null;
                 assert !block.isExceptionEntry || state.stackSize() == 1;
 
-                int operatingDimension = this.getCurrentDimension();
-                if (this.explodeLoops && this.explodeLoopsContext != null && !this.explodeLoopsContext.isEmpty()) {
-                    int i;
-                    for (i = explodeLoopsContext.size() - 1; i >= 0; --i) {
-                        ExplodedLoopContext context = explodeLoopsContext.elementAt(i);
-                        if (context.header == block) {
-
-                            // We have a hit on our current explosion context loop begin.
-                            if (context.targetPeelIteration == -1) {
-                                // This is the first hit => allocate a new dimension and at the same
-                                // time mark the context loop begin as hit during the current
-                                // iteration.
-                                context.targetPeelIteration = nextPeelIteration++;
-                                if (nextPeelIteration > GraalOptions.MaximumLoopExplosionCount.getValue()) {
-                                    throw new BailoutException("too many loop explosion interations - does the explosion not terminate?");
-                                }
-                            }
-
-                            // Operate on the target dimension.
-                            operatingDimension = context.targetPeelIteration;
-                            break;
-                        } else if (block.getId() > context.header.getId() && block.getId() <= context.header.loopEnd) {
-                            // We hit the range of this context.
-                            operatingDimension = context.peelIteration;
-                            break;
-                        }
-                    }
-
-                    if (i == -1) {
-                        // I did not find a dimension.
-                        operatingDimension = 0;
-                    }
-                }
-
-                if (block.getFirstInstruction(operatingDimension) == null) {
+                if (block.firstInstruction == null) {
                     /*
                      * This is the first time we see this block as a branch target. Create and
                      * return a placeholder that later can be replaced with a MergeNode when we see
                      * this block again.
                      */
                     FixedNode targetNode;
-                    block.setFirstInstruction(operatingDimension, currentGraph.add(new BeginNode()));
-                    targetNode = block.getFirstInstruction(operatingDimension);
+                    block.firstInstruction = currentGraph.add(new BeginNode());
+                    targetNode = block.firstInstruction;
                     Target target = checkLoopExit(targetNode, block, state);
                     FixedNode result = target.fixed;
-                    AbstractFrameStateBuilder<?, ?> entryState = target.state == state ? state.copy() : target.state;
-                    block.setEntryState(operatingDimension, entryState);
-                    entryState.clearNonLiveLocals(block, liveness, true);
+                    block.entryState = target.state == state ? state.copy() : target.state;
+                    block.entryState.clearNonLiveLocals(block, liveness, true);
 
                     Debug.log("createTarget %s: first visit, result: %s", block, targetNode);
                     return result;
                 }
 
                 // We already saw this block before, so we have to merge states.
-                if (!((HIRFrameStateBuilder) block.getEntryState(operatingDimension)).isCompatibleWith(state)) {
+                if (!((HIRFrameStateBuilder) block.entryState).isCompatibleWith(state)) {
                     throw new BailoutException("stacks do not match; bytecodes would not verify");
                 }
 
-                if (block.getFirstInstruction(operatingDimension) instanceof LoopBeginNode) {
-                    assert this.explodeLoops || (block.isLoopHeader && currentBlock.getId() >= block.getId()) : "must be backward branch";
+                if (block.firstInstruction instanceof LoopBeginNode) {
+                    assert block.isLoopHeader && currentBlock.getId() >= block.getId() : "must be backward branch";
                     /*
                      * Backward loop edge. We need to create a special LoopEndNode and merge with
                      * the loop begin node created before.
                      */
-                    LoopBeginNode loopBegin = (LoopBeginNode) block.getFirstInstruction(operatingDimension);
+                    LoopBeginNode loopBegin = (LoopBeginNode) block.firstInstruction;
                     Target target = checkLoopExit(currentGraph.add(new LoopEndNode(loopBegin)), block, state);
                     FixedNode result = target.fixed;
-                    ((HIRFrameStateBuilder) block.getEntryState(operatingDimension)).merge(loopBegin, target.state);
+                    ((HIRFrameStateBuilder) block.entryState).merge(loopBegin, target.state);
 
                     Debug.log("createTarget %s: merging backward branch to loop header %s, result: %s", block, loopBegin, result);
                     return result;
                 }
                 assert currentBlock == null || currentBlock.getId() < block.getId() : "must not be backward branch";
-                assert block.getFirstInstruction(operatingDimension).next() == null : "bytecodes already parsed for block";
+                assert block.firstInstruction.next() == null : "bytecodes already parsed for block";
 
-                if (block.getFirstInstruction(operatingDimension) instanceof AbstractBeginNode && !(block.getFirstInstruction(operatingDimension) instanceof AbstractMergeNode)) {
+                if (block.firstInstruction instanceof AbstractBeginNode && !(block.firstInstruction instanceof AbstractMergeNode)) {
                     /*
                      * This is the second time we see this block. Create the actual MergeNode and
                      * the End Node for the already existing edge. For simplicity, we leave the
                      * placeholder in the graph and just append the new nodes after the placeholder.
                      */
-                    AbstractBeginNode placeholder = (AbstractBeginNode) block.getFirstInstruction(operatingDimension);
+                    AbstractBeginNode placeholder = (AbstractBeginNode) block.firstInstruction;
 
                     // The EndNode for the already existing edge.
                     AbstractEndNode end = currentGraph.add(new EndNode());
@@ -1250,16 +1188,16 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     mergeNode.addForwardEnd(end);
                     mergeNode.setNext(next);
 
-                    block.setFirstInstruction(operatingDimension, mergeNode);
+                    block.firstInstruction = mergeNode;
                 }
 
-                AbstractMergeNode mergeNode = (AbstractMergeNode) block.getFirstInstruction(operatingDimension);
+                AbstractMergeNode mergeNode = (AbstractMergeNode) block.firstInstruction;
 
                 // The EndNode for the newly merged edge.
                 AbstractEndNode newEnd = currentGraph.add(new EndNode());
                 Target target = checkLoopExit(newEnd, block, state);
                 FixedNode result = target.fixed;
-                ((HIRFrameStateBuilder) block.getEntryState(operatingDimension)).merge(mergeNode, target.state);
+                ((HIRFrameStateBuilder) block.entryState).merge(mergeNode, target.state);
                 mergeNode.addForwardEnd(newEnd);
 
                 Debug.log("createTarget %s: merging state, result: %s", block, result);
@@ -1289,14 +1227,14 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             protected void processBlock(BytecodeParser parser, BciBlock block) {
                 // Ignore blocks that have no predecessors by the time their bytecodes are parsed
-                if (block == null || block.getFirstInstruction(this.getCurrentDimension()) == null) {
+                if (block == null || block.firstInstruction == null) {
                     Debug.log("Ignoring block %s", block);
                     return;
                 }
-                try (Indent indent = Debug.logAndIndent("Parsing block %s  firstInstruction: %s  loopHeader: %b", block, block.getFirstInstruction(this.getCurrentDimension()), block.isLoopHeader)) {
+                try (Indent indent = Debug.logAndIndent("Parsing block %s  firstInstruction: %s  loopHeader: %b", block, block.firstInstruction, block.isLoopHeader)) {
 
-                    lastInstr = block.getFirstInstruction(this.getCurrentDimension());
-                    frameState = (HIRFrameStateBuilder) block.getEntryState(this.getCurrentDimension());
+                    lastInstr = block.firstInstruction;
+                    frameState = (HIRFrameStateBuilder) block.entryState;
                     parser.setCurrentFrameState(frameState);
                     currentBlock = block;
 
@@ -1431,7 +1369,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             @Override
             protected void iterateBytecodesForBlock(BciBlock block) {
-                if (block.isLoopHeader && !explodeLoops) {
+                if (block.isLoopHeader) {
                     // Create the loop header block, which later will merge the backward branches of
                     // the loop.
                     AbstractEndNode preLoopEnd = currentGraph.add(new EndNode());
@@ -1450,12 +1388,12 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                      * merge to the loop header. This ensures that the loop header has exactly one
                      * non-loop predecessor.
                      */
-                    block.setFirstInstruction(this.getCurrentDimension(), loopBegin);
+                    block.firstInstruction = loopBegin;
                     /*
                      * We need to preserve the frame state builder of the loop header so that we can
                      * merge values for phi functions, so make a copy of it.
                      */
-                    block.setEntryState(this.getCurrentDimension(), frameState.copy());
+                    block.entryState = frameState.copy();
 
                     Debug.log("  created loop header %s", loopBegin);
                 }
@@ -1634,13 +1572,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 frameState.push(kind, value);
             }
 
-            private int getCurrentDimension() {
-                if (this.explodeLoopsContext == null || this.explodeLoopsContext.isEmpty()) {
-                    return 0;
-                } else {
-                    return this.explodeLoopsContext.peek().peelIteration;
-                }
-            }
         }
     }
 }
