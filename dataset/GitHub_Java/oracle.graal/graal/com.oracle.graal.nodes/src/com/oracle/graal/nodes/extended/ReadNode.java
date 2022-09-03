@@ -107,16 +107,15 @@ public final class ReadNode extends FloatableAccessNode implements Node.Iterable
         if (location() instanceof ConstantLocationNode) {
             long displacement = ((ConstantLocationNode) location()).getDisplacement();
             if (parent.stamp() instanceof ObjectStamp) {
-                ObjectStamp piStamp = (ObjectStamp) parent.stamp();
+                ObjectStamp piStamp = parent.objectStamp();
                 ResolvedJavaType receiverType = piStamp.type();
                 if (receiverType != null) {
                     ResolvedJavaField field = receiverType.findInstanceFieldWithOffset(displacement);
 
-                    if (field != null && parent.object().stamp() instanceof ObjectStamp) {
+                    if (field != null) {
                         ResolvedJavaType declaringClass = field.getDeclaringClass();
-                        ObjectStamp piValueStamp = (ObjectStamp) parent.object().stamp();
-                        ResolvedJavaType piValueType = ObjectStamp.typeOrNull(piValueStamp);
-                        if (piValueType != null && declaringClass.isAssignableFrom(piValueType) && declaringClass != receiverType) {
+                        if (declaringClass.isAssignableFrom(receiverType) && declaringClass != receiverType) {
+                            ObjectStamp piValueStamp = parent.object().objectStamp();
                             if (piStamp.nonNull() == piValueStamp.nonNull() && piStamp.alwaysNull() == piValueStamp.alwaysNull()) {
                                 replaceFirstInput(parent, parent.object());
                                 return true;
