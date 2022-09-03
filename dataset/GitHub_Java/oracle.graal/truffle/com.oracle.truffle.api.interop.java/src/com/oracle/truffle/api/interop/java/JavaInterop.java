@@ -273,16 +273,15 @@ public final class JavaInterop {
     }
 
     static Object toJava(Object ret, Method method) {
-        Class<?> retType = method.getReturnType();
-        Object primitiveRet = toPrimitive(ret, retType);
-        if (primitiveRet != null) {
-            return primitiveRet;
+        if (isPrimitive(ret)) {
+            return ret;
         }
         if (ret instanceof TruffleObject) {
             if (Boolean.TRUE.equals(message(Message.IS_NULL, ret))) {
                 return null;
             }
         }
+        Class<?> retType = method.getReturnType();
         if (retType.isInstance(ret)) {
             return ret;
         }
@@ -398,9 +397,8 @@ public final class JavaInterop {
                     ret = message(Message.createInvoke(args.length), obj, callArgs.toArray());
                 } catch (IllegalArgumentException ex) {
                     val = message(Message.READ, obj, name);
-                    Object primitiveVal = toPrimitive(val, method.getReturnType());
-                    if (primitiveVal != null) {
-                        return primitiveVal;
+                    if (isPrimitive(val)) {
+                        return val;
                     }
                     TruffleObject attr = (TruffleObject) val;
                     if (Boolean.FALSE.equals(message(Message.IS_EXECUTABLE, attr))) {
@@ -409,7 +407,8 @@ public final class JavaInterop {
                         }
                         throw new IllegalArgumentException(attr + " cannot be invoked with " + args.length + " parameters");
                     }
-                    List<Object> callArgs = new ArrayList<>(args.length);
+                    List<Object> callArgs = new ArrayList<>(args.length + 1);
+                    callArgs.add(attr);
                     callArgs.addAll(Arrays.asList(args));
                     ret = message(Message.createExecute(callArgs.size()), attr, callArgs.toArray());
                 }
@@ -421,62 +420,22 @@ public final class JavaInterop {
     }
 
     static boolean isPrimitive(Object attr) {
-        return toPrimitive(attr, null) != null;
-    }
-
-    static Object toPrimitive(Object value, Class<?> requestedType) {
-        Object attr;
-        if (value instanceof TruffleObject) {
-            if (!Boolean.TRUE.equals(message(Message.IS_BOXED, value))) {
-                return null;
-            }
-            attr = message(Message.UNBOX, value);
-        } else {
-            attr = value;
+        if (attr instanceof TruffleObject) {
+            return false;
         }
         if (attr instanceof Number) {
-            if (requestedType == null) {
-                return attr;
-            }
-            Number n = (Number) attr;
-            if (requestedType == byte.class || requestedType == Byte.class) {
-                return n.byteValue();
-            }
-            if (requestedType == short.class || requestedType == Short.class) {
-                return n.shortValue();
-            }
-            if (requestedType == int.class || requestedType == Integer.class) {
-                return n.intValue();
-            }
-            if (requestedType == long.class || requestedType == Long.class) {
-                return n.longValue();
-            }
-            if (requestedType == float.class || requestedType == Float.class) {
-                return n.floatValue();
-            }
-            if (requestedType == double.class || requestedType == Double.class) {
-                return n.doubleValue();
-            }
-            if (requestedType == char.class || requestedType == Character.class) {
-                return (char) n.intValue();
-            }
-            return n;
+            return true;
         }
         if (attr instanceof String) {
-            if (requestedType == char.class || requestedType == Character.class) {
-                if (((String) attr).length() == 1) {
-                    return ((String) attr).charAt(0);
-                }
-            }
-            return attr;
+            return true;
         }
         if (attr instanceof Character) {
-            return attr;
+            return true;
         }
         if (attr instanceof Boolean) {
-            return attr;
+            return true;
         }
-        return null;
+        return false;
     }
 
     static Object message(final Message m, Object receiver, Object... arr) {

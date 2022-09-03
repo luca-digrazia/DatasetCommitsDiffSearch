@@ -50,7 +50,6 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.sl.SLLanguage;
 import com.oracle.truffle.sl.nodes.call.SLDispatchNode;
@@ -83,14 +82,14 @@ final class SLFunctionForeignAccess implements ForeignAccess.Factory {
         } else if (Message.IS_BOXED.equals(tree)) {
             return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(false));
         } else {
-            throw UnsupportedMessageException.raise(tree);
+            throw new IllegalArgumentException(tree.toString() + " not supported");
         }
     }
 
     private static class SLForeignCallerRootNode extends RootNode {
         @Child private SLDispatchNode dispatch = SLDispatchNodeGen.create();
 
-        SLForeignCallerRootNode() {
+        public SLForeignCallerRootNode() {
             super(SLLanguage.class, null, null);
         }
 
@@ -108,7 +107,7 @@ final class SLFunctionForeignAccess implements ForeignAccess.Factory {
     }
 
     private static class SLForeignNullCheckNode extends RootNode {
-        SLForeignNullCheckNode() {
+        public SLForeignNullCheckNode() {
             super(SLLanguage.class, null, null);
         }
 
@@ -120,7 +119,7 @@ final class SLFunctionForeignAccess implements ForeignAccess.Factory {
     }
 
     private static class SLForeignExecutableCheckNode extends RootNode {
-        SLForeignExecutableCheckNode() {
+        public SLForeignExecutableCheckNode() {
             super(SLLanguage.class, null, null);
         }
 

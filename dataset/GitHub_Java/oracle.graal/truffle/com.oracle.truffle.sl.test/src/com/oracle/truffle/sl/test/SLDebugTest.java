@@ -215,7 +215,7 @@ public class SLDebugTest {
         run(null);
     }
 
-    void assertLine(int line) {
+    private void assertLine(int line) {
         assertNotNull(suspendedEvent);
         final SourceSection expLoc = factorial.createSection("Line " + line, line);
         final SourceSection sourceLoc = suspendedEvent.getNode().getEncapsulatingSourceSection();
