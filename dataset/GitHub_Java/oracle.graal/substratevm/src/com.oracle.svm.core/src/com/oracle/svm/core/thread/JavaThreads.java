@@ -198,15 +198,10 @@ public abstract class JavaThreads {
         boolean isDaemon = true;
 
         final Thread thread = JavaThreads.fromTarget(new Target_java_lang_Thread(null, null, isDaemon));
-        if (!assignJavaThread(isolateThread, thread, true)) {
+        if (!assignJavaThread(isolateThread, thread)) {
             return currentThread.get(isolateThread);
         }
         return thread;
-    }
-
-    /** Signal that a thread was started by calling Thread.start(). */
-    public void signalNonDaemonThreadStart() {
-        nonDaemonThreads.incrementAndGet();
     }
 
     /**
@@ -219,32 +214,28 @@ public abstract class JavaThreads {
      */
     public boolean assignJavaThread(String name, ThreadGroup group, boolean asDaemon) {
         final Thread thread = JavaThreads.fromTarget(new Target_java_lang_Thread(name, group, asDaemon));
-        return assignJavaThread(KnownIntrinsics.currentVMThread(), thread, true);
+        return assignJavaThread(KnownIntrinsics.currentVMThread(), thread);
     }
 
     /**
      * Assign a {@link Thread} object to the current thread, which must have already been attached
      * {@link VMThreads} as an {@link IsolateThread}.
-     *
-     * The manuallyStarted parameter is true if this thread was started directly by calling
-     * assignJavaThread(Thread). It is false when the thread is started using
-     * PosixJavaThreads.pthreadStartRoutine, e.g., called from PosixJavaThreads.start0.
      * 
      * @return true if successful; false if a {@link Thread} object has already been assigned.
      */
-    public boolean assignJavaThread(Thread thread, boolean manuallyStarted) {
-        return assignJavaThread(KnownIntrinsics.currentVMThread(), thread, manuallyStarted);
+    public boolean assignJavaThread(Thread thread) {
+        return assignJavaThread(KnownIntrinsics.currentVMThread(), thread);
     }
 
     @NeverInline("Truffle compilation must not inline this method")
-    private static boolean assignJavaThread(IsolateThread isolateThread, Thread thread, boolean manuallyStarted) {
+    private static boolean assignJavaThread(IsolateThread isolateThread, Thread thread) {
         if (!currentThread.compareAndSet(isolateThread, null, thread)) {
             return false;
         }
         ThreadGroup group = thread.getThreadGroup();
         toTarget(group).addUnstarted();
         toTarget(group).add(thread);
-        if (!thread.isDaemon() && manuallyStarted) {
+        if (!thread.isDaemon()) {
             assert isolateThread.equal(KnownIntrinsics.currentVMThread()) : "Non-daemon threads must call this method themselves, or they can detach incompletely in a race";
             singleton().nonDaemonThreads.incrementAndGet();
         }
@@ -264,7 +255,8 @@ public abstract class JavaThreads {
             return true;
         }
         /* Tell all the threads that the VM is being torn down. */
-        return tearDownIsolateThreads();
+        final boolean result = tearDownIsolateThreads();
+        return result;
     }
 
     private static void detachParkEvent(AtomicReference<ParkEvent> ref) {
