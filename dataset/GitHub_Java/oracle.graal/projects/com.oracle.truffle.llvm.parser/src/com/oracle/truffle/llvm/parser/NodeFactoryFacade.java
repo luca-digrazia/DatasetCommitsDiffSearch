@@ -30,7 +30,7 @@
 package com.oracle.truffle.llvm.parser;
 
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 
 import org.eclipse.emf.ecore.EObject;
 
@@ -40,9 +40,11 @@ import com.intel.llvm.ireditor.lLVM_IR.Type;
 import com.intel.llvm.ireditor.types.ResolvedType;
 import com.intel.llvm.ireditor.types.ResolvedVectorType;
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
@@ -52,6 +54,7 @@ import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMFloatComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMIntegerComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionType;
+import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunction.LLVMRuntimeType;
 
@@ -99,6 +102,22 @@ public interface NodeFactoryFacade {
     LLVMNode createNonVoidRet(LLVMExpressionNode retValue, ResolvedType resolvedType);
 
     LLVMExpressionNode createFunctionArgNode(int argIndex, LLVMBaseType paramType);
+
+    /**
+     * Creates a function argument read node.
+     *
+     * @param argIndex the index from where to read the argument
+     * @param clazz the expected class of the argument
+     * @return an argument node
+     */
+    LLVMNode createFunctionArgNode(int argIndex, Class<? extends Node> clazz);
+
+    /**
+     * Returns the index of the first argument of the formal parameter list.
+     *
+     * @return the index
+     */
+    int getArgStartIndex();
 
     LLVMNode createFunctionCall(LLVMExpressionNode functionNode, LLVMExpressionNode[] argNodes, LLVMBaseType llvmType);
 
@@ -244,13 +263,6 @@ public interface NodeFactoryFacade {
     RootNode createFunctionStartNode(LLVMExpressionNode functionBodyNode, LLVMNode[] beforeFunction, LLVMNode[] afterFunction, FrameDescriptor frameDescriptor, String functionName);
 
     /**
-     * Returns the index of the first argument of the formal parameter list.
-     *
-     * @return the index
-     */
-    Optional<Integer> getArgStartIndex();
-
-    /**
      * Creates an inline assembler instruction.
      *
      * @param asmExpression
@@ -260,5 +272,14 @@ public interface NodeFactoryFacade {
      * @return an inline assembler node
      */
     LLVMNode createInlineAssemblerExpression(String asmExpression, String asmFlags, LLVMExpressionNode[] args, LLVMBaseType retType);
+
+    /**
+     * Gets factories that provide substitutions for (standard library) functions. The substitutions
+     * are installed when a function is called the first time.
+     *
+     * @param optimizationConfig
+     * @return a map of function names that map to node factories
+     */
+    Map<String, NodeFactory<? extends LLVMNode>> getFunctionSubstitutionFactories(LLVMOptimizationConfiguration optimizationConfig);
 
 }
