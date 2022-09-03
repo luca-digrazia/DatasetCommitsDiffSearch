@@ -23,15 +23,11 @@
 
 package com.oracle.truffle.espresso.intrinsics;
 
+import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.runtime.Utils;
-
-import java.io.IOException;
-
-import static com.oracle.truffle.espresso.meta.Meta.meta;
 
 @EspressoIntrinsics
 public class Target_java_lang_Thread {
@@ -39,54 +35,74 @@ public class Target_java_lang_Thread {
     // TODO(peterssen): Remove single thread shim, support real threads.
     @Intrinsic
     public static @Type(Thread.class) StaticObject currentThread() {
-        EspressoContext context = Utils.getContext();
+        EspressoContext context = EspressoLanguage.getCurrentContext();
         if (context.getMainThread() == null) {
             Meta meta = context.getMeta();
             Meta.Klass threadGroupKlass = meta.knownKlass(ThreadGroup.class);
             Meta.Klass threadKlass = meta.knownKlass(Thread.class);
+
             StaticObject mainThread = threadKlass.metaNew().fields(
+                            Meta.Field.set("group", threadGroupKlass.allocateInstance()),
+                            Meta.Field.set("name", meta.toGuest("mainThread")),
                             Meta.Field.set("priority", 5),
-                            Meta.Field.set("group", threadGroupKlass.allocateInstance())).getInstance();
+                            // Lock object used by NIO.
+                            Meta.Field.set("blockerLock", meta.OBJECT.allocateInstance())).getInstance();
+
             context.setMainThread(mainThread);
         }
         return context.getMainThread();
     }
 
+    @SuppressWarnings("unused")
     @Intrinsic(hasReceiver = true)
     public static void setPriority0(@Type(Thread.class) StaticObject self, int newPriority) {
         /* nop */ }
 
+    @SuppressWarnings("unused")
     @Intrinsic(hasReceiver = true)
     public static void setDaemon(@Type(Thread.class) StaticObject self, boolean on) {
         /* nop */ }
 
+    @SuppressWarnings("unused")
     @Intrinsic(hasReceiver = true)
     public static boolean isAlive(@Type(Thread.class) StaticObject self) {
         return false;
     }
 
+    @SuppressWarnings("unused")
     @Intrinsic
     public static void registerNatives() {
         /* nop */ }
 
+    @SuppressWarnings("unused")
     @Intrinsic(hasReceiver = true)
     public static void start0(@Type(Thread.class) StaticObject self) {
         /* nop */ }
 
+    @SuppressWarnings("unused")
     @Intrinsic(hasReceiver = true)
     public static boolean isInterrupted(@Type(Thread.class) StaticObject self, boolean ClearInterrupted) {
         return false;
     }
 
     @Intrinsic
+    public static boolean holdsLock(Object object) {
+        if (!EspressoOptions.RUNNING_ON_SVM) {
+            // Sane behavior on HotSpot.
+            return Thread.holdsLock(object);
+        }
+        // TODO(peterssen): On SVM we incorrectly hold all locks since this method is usually used
+        // to ensure that locks are hold.
+        return true;
+    }
+
+    @Intrinsic
     public static void sleep(long millis) {
         try {
             Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Meta meta = Utils.getContext().getMeta();
-            StaticObject ex = meta.exceptionKlass(InterruptedException.class).allocateInstance();
-            meta(ex).method("<init>", void.class).invokeDirect();
-            throw new EspressoException(ex);
+        } catch (InterruptedException | IllegalArgumentException e) {
+            Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+            throw meta.throwEx(e.getClass(), e.getMessage());
         }
     }
 }
