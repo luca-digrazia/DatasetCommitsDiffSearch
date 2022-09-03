@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,49 +22,14 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import java.util.*;
-
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.hotspot.stubs.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
-import com.oracle.graal.lir.framemap.*;
-import com.oracle.graal.lir.gen.*;
 
-public class SPARCHotSpotLIRGenerationResult extends LIRGenerationResultBase {
+public interface SPARCHotSpotLIRGenerationResult extends LIRGenerationResult {
 
-    /**
-     * The slot reserved for storing the original return address when a frame is marked for
-     * deoptimization. The return address slot in the callee is overwritten with the address of a
-     * deoptimization stub.
-     */
-    private StackSlot deoptimizationRescueSlot;
-    private final Object stub;
+    StackSlot getDeoptimizationRescueSlot();
 
-    /**
-     * Map from debug infos that need to be updated with callee save information to the operations
-     * that provide the information.
-     */
-    private Map<LIRFrameState, SaveRegistersOp> calleeSaveInfo = new HashMap<>();
+    Stub getStub();
 
-    public SPARCHotSpotLIRGenerationResult(String compilationUnitName, LIR lir, FrameMapBuilder frameMapBuilder, Object stub) {
-        super(compilationUnitName, lir, frameMapBuilder);
-        this.stub = stub;
-    }
-
-    StackSlot getDeoptimizationRescueSlot() {
-        return deoptimizationRescueSlot;
-    }
-
-    public final void setDeoptimizationRescueSlot(StackSlot stackSlot) {
-        this.deoptimizationRescueSlot = stackSlot;
-    }
-
-    Stub getStub() {
-        return (Stub) stub;
-    }
-
-    Map<LIRFrameState, SaveRegistersOp> getCalleeSaveInfo() {
-        return calleeSaveInfo;
-    }
 }

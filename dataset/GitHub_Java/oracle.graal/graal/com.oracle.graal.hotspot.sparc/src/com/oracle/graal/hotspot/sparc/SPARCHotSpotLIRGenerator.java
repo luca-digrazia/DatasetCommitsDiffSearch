@@ -48,7 +48,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 
-public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSpotLIRGenerator {
+public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSpotLIRGenerator, SPARCHotSpotLIRGenerationResult {
 
     private final HotSpotVMConfig config;
     private final Object stub;
@@ -69,7 +69,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
      * deoptimization. The return address slot in the callee is overwritten with the address of a
      * deoptimization stub.
      */
-    StackSlot deoptimizationRescueSlot;
+    private StackSlot deoptimizationRescueSlot;
 
     @Override
     protected DebugInfoBuilder createDebugInfoBuilder(NodeMap<Value> nodeOperands) {
@@ -88,7 +88,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         return stub != null;
     }
 
-    Stub getStub() {
+    public Stub getStub() {
         return (Stub) stub;
     }
 
@@ -124,8 +124,8 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
 
     @Override
     public void visitDirectCompareAndSwap(DirectCompareAndSwapNode x) {
-        Kind kind = x.newValue().getKind();
-        assert kind == x.expectedValue().getKind();
+        Kind kind = x.newValue().kind();
+        assert kind == x.expectedValue().kind();
 
         Variable address = load(operand(x.object()));
         Value offset = operand(x.offset());
@@ -145,7 +145,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
 
         append(new CompareAndSwapOp(address, cmpValue, newValue));
 
-        Variable result = newVariable(x.getKind());
+        Variable result = newVariable(x.kind());
         emitMove(result, newValue);
         setResult(x, result);
     }
@@ -323,5 +323,9 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     public void emitPrefetchAllocate(ValueNode address, ValueNode distance) {
         SPARCAddressValue addr = emitAddress(operand(address), 0, loadNonConst(operand(distance)), 1);
         append(new SPARCPrefetchOp(addr, config.allocatePrefetchInstr));
+    }
+
+    public StackSlot getDeoptimizationRescueSlot() {
+        return deoptimizationRescueSlot;
     }
 }
