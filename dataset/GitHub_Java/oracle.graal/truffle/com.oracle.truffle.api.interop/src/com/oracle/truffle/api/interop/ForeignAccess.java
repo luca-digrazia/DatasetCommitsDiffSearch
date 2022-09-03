@@ -262,15 +262,6 @@ public final class ForeignAccess {
         CallTarget accessInvoke(int argumentsLength);
 
         /**
-         * Handles {@link Message#createNew(int)} messages.
-         * 
-         * @param argumentsLength number of parameters the messages has been created for
-         * @return call target to handle the message or <code>null</code> if this message is not
-         *         supported
-         */
-        CallTarget accessNew(int argumentsLength);
-
-        /**
          * Handles request for access to a message not known in version 1.0.
          *
          * @param unknown the message
@@ -301,12 +292,10 @@ public final class ForeignAccess {
         public CallTarget accessMessage(Message msg) {
             if (msg instanceof KnownMessage) {
                 switch (msg.hashCode()) {
-                    case Execute.EXECUTE:
-                        return factory.accessExecute(((Execute) msg).getArity());
-                    case Execute.INVOKE:
+                    case Execute.HASH1:
                         return factory.accessInvoke(((Execute) msg).getArity());
-                    case Execute.NEW:
-                        return factory.accessNew(((Execute) msg).getArity());
+                    case Execute.HASH2:
+                        return factory.accessExecute(((Execute) msg).getArity());
                     case GetSize.HASH:
                         return factory.accessGetSize();
                     case HasSize.HASH:
