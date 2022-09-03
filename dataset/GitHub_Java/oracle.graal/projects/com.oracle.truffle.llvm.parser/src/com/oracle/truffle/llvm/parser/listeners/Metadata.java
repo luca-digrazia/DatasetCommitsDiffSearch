@@ -72,7 +72,7 @@ import com.oracle.truffle.llvm.parser.metadata.MDTypedValue;
 import com.oracle.truffle.llvm.parser.metadata.MDValue;
 import com.oracle.truffle.llvm.parser.metadata.MetadataList;
 import com.oracle.truffle.llvm.parser.metadata.ParseUtil;
-import com.oracle.truffle.llvm.parser.model.IRScope;
+import com.oracle.truffle.llvm.parser.model.generators.SymbolGenerator;
 import com.oracle.truffle.llvm.parser.records.DwTagRecord;
 import com.oracle.truffle.llvm.parser.records.MetadataRecord;
 import com.oracle.truffle.llvm.runtime.types.MetaType;
@@ -87,7 +87,7 @@ public final class Metadata implements ParserListener {
             return MDSymbolReference.VOID;
 
         } else {
-            return new MDSymbolReference(argType, () -> container.getSymbols().getOrNull((int) val));
+            return new MDSymbolReference(argType, () -> generator.getSymbols().getOrNull((int) val));
         }
     }
 
@@ -102,20 +102,20 @@ public final class Metadata implements ParserListener {
 
         } else {
             // this is a reference to an entry in the symbol table
-            return new MDSymbolReference(argType, () -> container.getSymbols().getOrNull((int) val));
+            return new MDSymbolReference(argType, () -> generator.getSymbols().getOrNull((int) val));
         }
     }
 
-    private final IRScope container;
+    private final SymbolGenerator generator;
 
     protected final Types types;
 
     protected final MetadataList metadata;
 
-    Metadata(Types types, IRScope container) {
+    Metadata(Types types, SymbolGenerator generator) {
         this.types = types;
-        this.container = container;
-        metadata = container.getMetadata();
+        this.generator = generator;
+        metadata = generator.getMetadata();
     }
 
     // https://github.com/llvm-mirror/llvm/blob/release_38/include/llvm/Bitcode/LLVMBitCodes.h#L191
@@ -187,7 +187,7 @@ public final class Metadata implements ParserListener {
                 break;
 
             case SUBPROGRAM:
-                metadata.add(MDSubprogram.create38(args, metadata));
+                metadata.add(MDSubprogram.create38(args, metadata, this::getSymbolReference));
                 break;
 
             case SUBROUTINE_TYPE:
@@ -273,11 +273,11 @@ public final class Metadata implements ParserListener {
 
             case GLOBAL_DECL_ATTACHMENT: {
                 int i = 0;
-                final int globalIndex = (int) args[i++];
+                final long globalIndex = args[i++];
                 while (i < args.length) {
                     final MDKind attachmentKind = metadata.getKind(args[i++]);
-                    final MDReference attachment = metadata.getMDRef(args[i++]);
-                    container.attachSymbolMetadata(globalIndex, new MDAttachment(attachmentKind, attachment));
+                    final MDReference attachment = metadata.getMDRefOrNullRef(args[i++]);
+                    metadata.addGlobalAttachment(globalIndex, new MDAttachment(attachmentKind, attachment));
                 }
                 break;
             }
@@ -297,7 +297,7 @@ public final class Metadata implements ParserListener {
         final MDString nameStringNode = (MDString) metadata.removeLast();
         final MDNamedNode node = new MDNamedNode(nameStringNode.getString());
         for (long arg : args) {
-            node.add(metadata.getMDRef(arg));
+            node.add(metadata.getMDRefOrNullRef(arg));
         }
         metadata.addNamed(node);
     }
@@ -313,10 +313,19 @@ public final class Metadata implements ParserListener {
             final MDReference md = metadata.getMDRef(args[i + 1]);
             final MDAttachment attachment = new MDAttachment(kind, md);
             if (offset != 0) {
-                container.attachSymbolMetadata((int) args[0], attachment);
+                metadata.addAttachment(args[0], attachment);
             } else {
-                container.attachMetadata(attachment);
+                metadata.addAttachment(attachment);
             }
+        }
+    }
+
+    private MDSymbolReference getSymbolReference(long index) {
+        if (index > 0) {
+            return new MDSymbolReference(types.get(index), () -> generator.getSymbols().getOrNull((int) index));
+
+        } else {
+            return MDSymbolReference.VOID;
         }
     }
 
