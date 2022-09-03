@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.api.meta;
 
-import com.sun.javafx.collections.MappingChange.Map;
-
 /**
  * Represents a platform-specific low-level type for values.
  */
@@ -31,44 +29,7 @@ public interface PlatformKind {
 
     String name();
 
-    JavaConstant getDefaultValue();
-
-    public interface Key {
-
-    }
-
-    public class EnumKey implements Key {
-        @SuppressWarnings("rawtypes") private final Enum e;
-
-        @SuppressWarnings("rawtypes")
-        public EnumKey(Enum e) {
-            this.e = e;
-        }
-
-        @Override
-        public int hashCode() {
-            return e.ordinal() ^ e.name().hashCode();
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (obj == this) {
-                return true;
-            }
-            if (obj instanceof EnumKey) {
-                EnumKey that = (EnumKey) obj;
-                return this.e == that.e;
-            }
-            return false;
-        }
-    }
-
-    /**
-     * Gets a value associated with this object that can be used as a stable key in a {@link Map}.
-     * The {@link Object#hashCode()} implementation of the returned value should be stable between
-     * VM executions.
-     */
-    Key getKey();
+    Constant getDefaultValue();
 
     default int getVectorLength() {
         return 1;

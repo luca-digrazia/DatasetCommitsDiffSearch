@@ -137,9 +137,6 @@ public final class Register implements Comparable<Register> {
         return registerCategory;
     }
 
-    /**
-     * Get the start index of this register in the {@link ReferenceMap}.
-     */
     public int getReferenceMapIndex() {
         return (encoding << registerCategory.referenceMapShift) + registerCategory.referenceMapOffset;
     }

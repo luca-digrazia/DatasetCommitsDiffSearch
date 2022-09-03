@@ -417,7 +417,7 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
         return builder -> {
             LIRKind writeKind = getLIRGeneratorTool().getLIRKind(root.value().stamp());
             Value address = root.location().generateAddress(builder, getLIRGeneratorTool(), operand(root.object()));
-            Value v = operand(narrow.getValue());
+            Value v = operand(narrow.getInput());
             getLIRGeneratorTool().emitStore(writeKind, address, v, state(root));
             return null;
         };

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,31 +25,28 @@ package com.oracle.graal.api.code;
 import com.oracle.graal.api.meta.*;
 
 /**
- * Denotes a register that stores a value of a fixed kind. There is exactly one (canonical) instance of {@code
- * CiRegisterValue} for each ({@link Register}, {@link Kind}) pair. Use {@link Register#asValue(Kind)} to
- * retrieve the canonical {@link RegisterValue} instance for a given (register,kind) pair.
+ * Denotes a register that stores a value of a fixed kind. There is exactly one (canonical) instance
+ * of {@link RegisterValue} for each ({@link Register}, {@link Kind}) pair. Use
+ * {@link Register#asValue(LIRKind)} to retrieve the canonical {@link RegisterValue} instance for a
+ * given (register,kind) pair.
  */
-public final class RegisterValue extends Value {
+public final class RegisterValue extends AllocatableValue {
+
     private static final long serialVersionUID = 7999341472196897163L;
 
     private final Register reg;
 
     /**
-     * Should only be called from {@link Register#CiRegister} to ensure canonicalization.
+     * Should only be called from {@link Register#Register} to ensure canonicalization.
      */
-    protected RegisterValue(Kind kind, Register register) {
+    protected RegisterValue(LIRKind kind, Register register) {
         super(kind);
         this.reg = register;
     }
 
     @Override
-    public int hashCode() {
-        return (getRegister().number << 4) ^ kind.ordinal();
-    }
-
-    @Override
     public String toString() {
-        return getRegister().name + kindSuffix();
+        return getRegister().name + getKindSuffix();
     }
 
     /**
@@ -57,5 +54,19 @@ public final class RegisterValue extends Value {
      */
     public Register getRegister() {
         return reg;
+    }
+
+    @Override
+    public int hashCode() {
+        return 29 * super.hashCode() + reg.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof RegisterValue) {
+            RegisterValue other = (RegisterValue) obj;
+            return super.equals(obj) && reg.equals(other.reg);
+        }
+        return false;
     }
 }

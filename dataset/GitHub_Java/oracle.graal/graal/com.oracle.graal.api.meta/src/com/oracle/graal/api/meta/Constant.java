@@ -28,7 +28,9 @@ package com.oracle.graal.api.meta;
  * {@code Constant} instances that represent frequently used constant values, such as
  * {@link #NULL_OBJECT}.
  */
-public interface Constant extends Value {
+public abstract class Constant extends Value {
+
+    private static final long serialVersionUID = -6355452536852663986L;
 
     /*
      * Using a larger cache for integers leads to only a slight increase in cache hit ratio which is
@@ -48,19 +50,23 @@ public interface Constant extends Value {
     public static final Constant TRUE = new PrimitiveConstant(Kind.Boolean, 1L);
     public static final Constant FALSE = new PrimitiveConstant(Kind.Boolean, 0L);
 
+    protected Constant(LIRKind kind) {
+        super(kind);
+    }
+
     /**
      * Checks whether this constant is null.
      *
      * @return {@code true} if this constant is the null constant
      */
-    boolean isNull();
+    public abstract boolean isNull();
 
     /**
      * Checks whether this constant is non-null.
      *
      * @return {@code true} if this constant is a primitive, or an object constant that is not null
      */
-    default boolean isNonNull() {
+    public final boolean isNonNull() {
         return !isNull();
     }
 
@@ -69,16 +75,14 @@ public interface Constant extends Value {
      *
      * @return {@code true} if this constant is the default value for its kind
      */
-    boolean isDefaultForKind();
+    public abstract boolean isDefaultForKind();
 
     /**
      * Returns the value of this constant as a boxed Java value.
      *
      * @return the value of this constant
      */
-    default Object asBoxedPrimitive() {
-        throw new IllegalArgumentException();
-    }
+    public abstract Object asBoxedPrimitive();
 
     /**
      * Returns the primitive int value this constant represents. The constant must have a
@@ -86,9 +90,7 @@ public interface Constant extends Value {
      *
      * @return the constant value
      */
-    default int asInt() {
-        throw new IllegalArgumentException();
-    }
+    public abstract int asInt();
 
     /**
      * Returns the primitive boolean value this constant represents. The constant must have kind
@@ -96,9 +98,7 @@ public interface Constant extends Value {
      *
      * @return the constant value
      */
-    default boolean asBoolean() {
-        throw new IllegalArgumentException();
-    }
+    public abstract boolean asBoolean();
 
     /**
      * Returns the primitive long value this constant represents. The constant must have kind
@@ -106,9 +106,7 @@ public interface Constant extends Value {
      *
      * @return the constant value
      */
-    default long asLong() {
-        throw new IllegalArgumentException();
-    }
+    public abstract long asLong();
 
     /**
      * Returns the primitive float value this constant represents. The constant must have kind
@@ -116,9 +114,7 @@ public interface Constant extends Value {
      *
      * @return the constant value
      */
-    default float asFloat() {
-        throw new IllegalArgumentException();
-    }
+    public abstract float asFloat();
 
     /**
      * Returns the primitive double value this constant represents. The constant must have kind
@@ -126,15 +122,22 @@ public interface Constant extends Value {
      *
      * @return the constant value
      */
-    default double asDouble() {
-        throw new IllegalArgumentException();
-    }
+    public abstract double asDouble();
 
-    default String toValueString() {
+    public String toValueString() {
         if (getKind() == Kind.Illegal) {
             return "illegal";
         } else {
             return getKind().format(asBoxedPrimitive());
+        }
+    }
+
+    @Override
+    public String toString() {
+        if (getKind() == Kind.Illegal) {
+            return "illegal";
+        } else {
+            return getKind().getJavaName() + "[" + toValueString() + "]";
         }
     }
 
@@ -252,12 +255,6 @@ public interface Constant extends Value {
      */
     public static Constant forIntegerKind(Kind kind, long i) {
         switch (kind) {
-            case Byte:
-                return new PrimitiveConstant(kind, (byte) i);
-            case Short:
-                return new PrimitiveConstant(kind, (short) i);
-            case Char:
-                return new PrimitiveConstant(kind, (char) i);
             case Int:
                 return new PrimitiveConstant(kind, (int) i);
             case Long:
@@ -272,19 +269,10 @@ public interface Constant extends Value {
      */
     public static Constant forPrimitiveInt(int bits, long i) {
         assert bits <= 64;
-        switch (bits) {
-            case 1:
-                return forBoolean(i != 0);
-            case 8:
-                return forByte((byte) i);
-            case 16:
-                return forShort((short) i);
-            case 32:
-                return forInt((int) i);
-            case 64:
-                return forLong(i);
-            default:
-                throw new IllegalArgumentException("unsupported integer width: " + bits);
+        if (bits > 32) {
+            return new PrimitiveConstant(Kind.Long, i);
+        } else {
+            return new PrimitiveConstant(Kind.Int, (int) i);
         }
     }
 
