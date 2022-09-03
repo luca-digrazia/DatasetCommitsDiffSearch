@@ -202,10 +202,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
 
             boolean inlined = false;
             for (InlinableCallSiteInfo inlinableCallSite : inlinableCallSites) {
-                if (!policy.isWorthInlining(inlinableCallSite)) {
-                    break;
-                }
-                if (inlinableCallSite.getCallSite().inline(target)) {
+                if (policy.isWorthInlining(inlinableCallSite) && inlinableCallSite.getCallSite().inline(target)) {
                     if (TraceTruffleInlining.getValue()) {
                         printCallSiteInfo(policy, inlinableCallSite, "inlined");
                     }
@@ -270,11 +267,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
 
                     @Override
                     public int compare(InlinableCallSiteInfo cs1, InlinableCallSiteInfo cs2) {
-                        int result = (isWorthInlining(cs2) ? 1 : 0) - (isWorthInlining(cs1) ? 1 : 0);
-                        if (result == 0) {
-                            return Double.compare(metric(cs2), metric(cs1));
-                        }
-                        return result;
+                        return Double.compare(metric(cs2), metric(cs1));
                     }
                 });
             }
