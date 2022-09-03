@@ -38,7 +38,7 @@ import java.util.TreeSet;
 
 import jline.console.ConsoleReader;
 
-import com.oracle.truffle.api.KillException;
+import com.oracle.truffle.api.QuitException;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.tools.debug.shell.REPLClient;
 import com.oracle.truffle.tools.debug.shell.REPLMessage;
@@ -143,8 +143,6 @@ public class SimpleREPLClient implements REPLClient {
      */
     private Source selectedSource = null;
 
-    private boolean quitting; // User has requested to "Quit"
-
     public SimpleREPLClient(REPLServer replServer) {
         this.replServer = replServer;
         this.writer = System.out;
@@ -172,7 +170,7 @@ public class SimpleREPLClient implements REPLClient {
         addCommand(REPLRemoteCommand.FRAME_CMD);
         addCommand(helpCommand);
         addCommand(infoCommand);
-        addCommand(killCommand);
+        addCommand(REPLRemoteCommand.KILL_CMD);
         addCommand(listCommand);
         addCommand(REPLRemoteCommand.LOAD_CMD);
         addCommand(REPLRemoteCommand.LOAD_STEP_INTO_CMD);
@@ -207,9 +205,12 @@ public class SimpleREPLClient implements REPLClient {
     public void start() {
 
         this.clientContext = new ClientContextImpl(null, null);
-        showWelcome();
-        clientContext.startContextSession();
-        clientContext.displayReply("Goodbye");
+        try {
+            showWelcome();
+            clientContext.startContextSession();
+        } catch (QuitException ex) {
+            clientContext.displayReply("Goodbye");
+        }
     }
 
     private void showWelcome() {
@@ -504,12 +505,6 @@ public class SimpleREPLClient implements REPLClient {
 
             while (true) {
                 try {
-                    if (quitting) {
-                        if (level == 0) {
-                            return;
-                        }
-                        killCommand.execute(new String[0]);
-                    }
                     String[] args;
                     String line = reader.readLine(currentPrompt).trim();
                     if (line.startsWith("eval ")) {
@@ -537,13 +532,6 @@ public class SimpleREPLClient implements REPLClient {
                         clientContext.displayFailReply("Unrecognized command \"" + cmd + "\"");
                         continue;
                     }
-                    if (command == quitCommand) {
-                        if (level == 0) {
-                            return;
-                        }
-                        quitting = true;
-                        command = killCommand;
-                    }
                     if (command instanceof REPLLocalCommand) {
                         if (traceMessagesOption.getBool()) {
                             traceMessage("Executing local: " + command.getCommand());
@@ -564,6 +552,7 @@ public class SimpleREPLClient implements REPLClient {
                         if (path != null && !path.isEmpty()) {
                             selectSource(path);
                         }
+
                     } else {
                         assert false; // Should not happen.
                     }
@@ -994,19 +983,6 @@ public class SimpleREPLClient implements REPLClient {
         }
     };
 
-    private final REPLLocalCommand killCommand = new REPLLocalCommand("kill", null, "Stop program execution") {
-
-        @Override
-        void execute(String[] args) {
-            if (clientContext.level() == 0) {
-                clientContext.displayFailReply("no active execution");
-            } else {
-                clientContext.displayReply(clientContext.currentPrompt + " killed");
-                throw new KillException();
-            }
-        }
-    };
-
     private final REPLCommand listCommand = new REPLLocalCommand("list", null, "Display selected source file") {
 
         final String[] help = {"list:  list <listsize> lines of selected file (see option \"listsize\")", "list all: list all lines", "list <n>: list <listsize> lines centered around line <n>"};
@@ -1080,8 +1056,10 @@ public class SimpleREPLClient implements REPLClient {
     private final REPLCommand quitCommand = new REPLRemoteCommand("quit", "q", "Quit execution and REPL") {
 
         @Override
-        protected REPLMessage createRequest(REPLClientContext context, String[] args) {
-            return null;
+        public REPLMessage createRequest(REPLClientContext context, String[] args) {
+            final REPLMessage request = new REPLMessage();
+            request.put(REPLMessage.OP, REPLMessage.QUIT);
+            return request;
         }
 
     };
