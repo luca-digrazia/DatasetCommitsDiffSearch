@@ -27,11 +27,15 @@ import java.util.*;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
+import com.sun.cri.ci.*;
 
-public class LoopBegin extends Merge{
+public class LoopBegin extends StateSplit implements PhiPoint{
+
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
+
     public LoopBegin(Graph graph) {
-        super(graph);
-        this.addEnd(new EndNode(graph));
+        super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     public LoopEnd loopEnd() {
@@ -69,53 +73,37 @@ public class LoopBegin extends Merge{
     }
 
     @Override
-    public int phiPredecessorCount() {
+    public int phiPointPredecessorCount() {
         return 2;
     }
 
     @Override
-    public int phiPredecessorIndex(Node pred) {
-        if (pred == forwardEdge()) {
+    public int phiPointPredecessorIndex(Node pred) {
+        Node singlePredecessor = this.singlePredecessor();
+        if (pred == singlePredecessor) {
             return 0;
         } else if (pred == this.loopEnd()) {
             return 1;
+        } else if (singlePredecessor instanceof Placeholder) {
+            singlePredecessor = singlePredecessor.singlePredecessor();
+            if (pred == singlePredecessor) {
+                return 0;
+            }
         }
-        throw Util.shouldNotReachHere("unknown pred : " + pred + "(sp=" + forwardEdge() + ", le=" + this.loopEnd() + ")");
+        throw Util.shouldNotReachHere("unknown pred : " + pred + "(sp=" + singlePredecessor + ", le=" + this.loopEnd() + ")");
+    }
+
+    @Override
+    public Node asNode() {
+        return this;
+    }
+
+    @Override
+    public Collection<Phi> phis() {
+        return Util.filter(this.usages(), Phi.class);
     }
 
     public Collection<LoopCounter> counters() {
         return Util.filter(this.usages(), LoopCounter.class);
-    }
-
-    @Override
-    public List<Node> phiPredecessors() {
-        return Arrays.asList(new Node[]{this.forwardEdge(), this.loopEnd()});
-    }
-
-    public EndNode forwardEdge() {
-        return this.endAt(0);
-    }
-
-    @Override
-    public boolean verify() {
-        assertTrue(loopEnd() != null);
-        assertTrue(forwardEdge() != null);
-        return true;
-    }
-
-    @Override
-    public String toString() {
-        return "LoopBegin: " + super.toString();
-    }
-
-    @Override
-    public Iterable< ? extends Node> dataUsages() {
-        final Iterator< ? extends Node> dataUsages = super.dataUsages().iterator();
-        return new Iterable<Node>() {
-            @Override
-            public Iterator<Node> iterator() {
-                return new StateSplit.FilteringIterator(dataUsages, LoopBegin.class);
-            }
-        };
     }
 }

@@ -22,6 +22,8 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import java.util.*;
+
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.compiler.value.*;
@@ -33,7 +35,7 @@ import com.sun.cri.ci.*;
  * about the basic block, including the successor and
  * predecessor blocks, exception handlers, liveness information, etc.
  */
-public class Merge extends StateSplit {
+public class Merge extends StateSplit implements PhiPoint{
 
     private static final int INPUT_COUNT = 0;
 
@@ -160,7 +162,7 @@ public class Merge extends StateSplit {
         boolean hasPhisOnStack = false;
 
         //if (end() != null && end().stateAfter() != null) {
-            FrameState state = stateAfter();
+            FrameState state = stateBefore();
 
             int i = 0;
             while (!hasPhisOnStack && i < state.stackSize()) {
@@ -213,8 +215,8 @@ public class Merge extends StateSplit {
             out.println();
             out.println("Stack:");
             int j = 0;
-            while (j < stateAfter().stackSize()) {
-                Value value = stateAfter().stackAt(j);
+            while (j < stateBefore().stackSize()) {
+                Value value = stateBefore().stackAt(j);
                 if (value != null) {
                     out.println(stateString(j, value));
                     j += value.kind.sizeInSlots();
@@ -290,10 +292,29 @@ public class Merge extends StateSplit {
         for (Node usage : usages()) {
             if (usage instanceof Phi) {
                 Phi phi = (Phi) usage;
-                if (!phi.isDead()) {
-                    phi.removeInput(predIndex);
-                }
+                phi.removeInput(predIndex);
             }
         }
+    }
+
+    @Override
+    public int phiPointPredecessorCount() {
+        return endCount();
+    }
+
+    @Override
+    public int phiPointPredecessorIndex(Node pred) {
+        EndNode end = (EndNode) pred;
+        return endIndex(end);
+    }
+
+    @Override
+    public Node asNode() {
+        return this;
+    }
+
+    @Override
+    public Collection<Phi> phis() {
+        return Util.filter(this.usages(), Phi.class);
     }
 }

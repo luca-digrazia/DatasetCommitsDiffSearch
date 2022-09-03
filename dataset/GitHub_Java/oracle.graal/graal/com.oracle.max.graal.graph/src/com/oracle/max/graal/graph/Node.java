@@ -53,6 +53,11 @@ public abstract class Node {
     public List<Node> predecessors() {
         return Collections.unmodifiableList(predecessors);
     }
+    
+    public Node singlePredecessor(){
+        assert predecessors.size() == 1;
+        return predecessors.get(0);
+    }
 
     public List<Node> usages() {
         return Collections.unmodifiableList(usages);
@@ -83,14 +88,14 @@ public abstract class Node {
     }
 
     public Node replace(Node other) {
-        assert !isDeleted() && (other == null || !other.isDeleted()) : "id: " + id() + ", other: " + other;
+        assert !isDeleted() && (other == null || !other.isDeleted());
         assert other == null || other.graph == graph;
         for (Node usage : usages) {
             usage.inputs.replaceFirstOccurrence(this, other);
         }
         int z = 0;
         for (Node predecessor : predecessors) {
-            for (int i = 0; i < predecessor.successors.size(); i++) {
+            for (int i=0; i<predecessor.successors.size(); i++) {
                 if (predecessor.successors.get(i) == this) {
                     predecessor.successors.silentSet(i, other);
                 }
@@ -104,7 +109,6 @@ public abstract class Node {
         usages.clear();
         predecessors.clear();
         delete();
-        assert other == null || other.verify();
         return other;
     }
 
@@ -123,15 +127,9 @@ public abstract class Node {
         predecessors.clear();
     }
 
-    public void unsafeDelete() {
-        graph.unregister(this);
-        id = DeletedID;
-        assert isDeleted();
-    }
-
     public void delete() {
         assert !isDeleted();
-        assert checkDeletion() : "Could not delete " + this + " (usages: " + this.usages() + ", predecessors: " + this.predecessors() + ")";
+        assert checkDeletion() : "Could not delete " + this;
 
         for (int i = 0; i < inputs.size(); ++i) {
             inputs.set(i, Null);
@@ -140,7 +138,10 @@ public abstract class Node {
             successors.set(i, Null);
         }
         assert predecessors().size() == 0 && usages().size() == 0;
-        unsafeDelete();
+        // make sure its not connected. pred usages
+        graph.unregister(this);
+        id = DeletedID;
+        assert isDeleted();
     }
 
     private boolean checkDeletion() {
@@ -203,24 +204,5 @@ public abstract class Node {
     @Override
     public String toString() {
         return this.getClass().getSimpleName() + "-" + this.id();
-    }
-
-    public boolean verify() {
-        return true;
-    }
-
-    public final void assertTrue(boolean cond) {
-        assert cond || assertionFailure("");
-    }
-
-    public final void assertTrue(boolean cond, String message) {
-        assert cond || assertionFailure(message);
-    }
-
-    public final boolean assertionFailure(String message) {
-        for (VerificationListener l : Graph.verificationListeners) {
-            l.verificationFailed(this, message);
-        }
-        return true;
     }
 }

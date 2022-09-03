@@ -402,7 +402,7 @@ public class Util {
      * @param compareConstants {@code true} if equivalent constants should be considered equivalent
      * @return {@code true} if the instructions are equivalent; {@code false} otherwise
      */
-    public static boolean equivalent(FixedNodeWithNext x, FixedNodeWithNext y, boolean compareConstants) {
+    public static boolean equivalent(Instruction x, Instruction y, boolean compareConstants) {
         if (x == y) {
             return true;
         }
@@ -427,7 +427,7 @@ public class Util {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T extends Node> Collection<T> filter(Iterable<Node> nodes, Class<T> clazz) {
+    public static <T extends Node> Collection<T> filter(Collection<Node> nodes, Class<T> clazz) {
         ArrayList<T> phis = new ArrayList<T>();
         for (Node node : nodes) {
             if (clazz.isInstance(node)) {
