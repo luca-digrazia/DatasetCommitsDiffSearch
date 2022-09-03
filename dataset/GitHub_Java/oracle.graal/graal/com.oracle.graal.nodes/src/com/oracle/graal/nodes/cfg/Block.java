@@ -30,6 +30,7 @@ import com.oracle.graal.nodes.*;
 
 public final class Block extends AbstractBlockBase<Block> {
 
+    public static final int DISTANCED_DOMINATOR_CACHE = 5;
     protected final AbstractBeginNode beginNode;
 
     protected FixedNode endNode;
@@ -176,10 +177,28 @@ public final class Block extends AbstractBlockBase<Block> {
         this.probability = probability;
     }
 
+    public Block getDistancedDominatorCache() {
+        Block result = this.distancedDominatorCache;
+        if (result == null) {
+            Block current = this;
+            for (int i = 0; i < DISTANCED_DOMINATOR_CACHE; ++i) {
+                current = current.getDominator();
+            }
+            distancedDominatorCache = current;
+            return current;
+        } else {
+            return result;
+        }
+    }
+
     @Override
     public Block getDominator(int distance) {
         Block result = this;
-        for (int i = 0; i < distance; ++i) {
+        int i = 0;
+        for (; i < distance - (DISTANCED_DOMINATOR_CACHE - 1); i += DISTANCED_DOMINATOR_CACHE) {
+            result = result.getDistancedDominatorCache();
+        }
+        for (; i < distance; ++i) {
             result = result.getDominator();
         }
         return result;
