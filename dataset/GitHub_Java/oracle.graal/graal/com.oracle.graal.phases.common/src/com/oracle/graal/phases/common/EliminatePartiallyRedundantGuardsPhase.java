@@ -38,16 +38,6 @@ public class EliminatePartiallyRedundantGuardsPhase extends Phase {
 
     private static final DebugMetric metricPRGuardsEliminatedAtMerge = Debug.metric("PRGuardsEliminatedAtMerge");
     private static final DebugMetric metricPRGuardsEliminatedAtSplit = Debug.metric("PRGuardsEliminatedAtSplit");
-    private static final DebugMetric metricPRGuardsDifferentGraphId = Debug.metric("PRGuardsDifferentGraphId");
-
-    private final boolean eliminateAtSplit;
-    private final boolean eliminateAtMerge;
-
-    public EliminatePartiallyRedundantGuardsPhase(boolean eliminateAtSplit, boolean eliminateAtMerge) {
-        assert eliminateAtMerge || eliminateAtSplit;
-        this.eliminateAtSplit = eliminateAtSplit;
-        this.eliminateAtMerge = eliminateAtMerge;
-    }
 
     private static class Condition {
         final BooleanNode conditionNode;
@@ -95,15 +85,11 @@ public class EliminatePartiallyRedundantGuardsPhase extends Phase {
         boolean hits;
         do {
             hits = false;
-            if (eliminateAtMerge) {
-                for (MergeNode merge : graph.getNodes(MergeNode.class)) {
-                    hits |= eliminateAtMerge(merge);
-                }
+            for (MergeNode merge : graph.getNodes(MergeNode.class)) {
+                hits |= eliminateAtMerge(merge);
             }
-            if (eliminateAtSplit) {
-                for (ControlSplitNode controlSplit : graph.getNodes().filter(ControlSplitNode.class)) {
-                    hits |= eliminateAtControlSplit(controlSplit);
-                }
+            for (ControlSplitNode controlSplit : graph.getNodes().filter(ControlSplitNode.class)) {
+                hits |= eliminateAtControlSplit(controlSplit);
             }
         } while(hits);
     }
@@ -188,9 +174,7 @@ public class EliminatePartiallyRedundantGuardsPhase extends Phase {
                 if (leafGraphId == -1) {
                     leafGraphId = guard.getLeafGraphId();
                 } else if (leafGraphId != guard.getLeafGraphId()) {
-                    metricPRGuardsDifferentGraphId.increment();
                     leafGraphId = -1;
-                    break;
                 }
             }
             if (leafGraphId < 0) {
