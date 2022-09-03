@@ -183,32 +183,13 @@ public final class TypeDescriptor {
      * @since 0.30
      */
     public boolean isAssignable(final TypeDescriptor fromType) {
-        return impl.isAssignable(impl, fromType.impl);
-    }
-
-    /**
-     * Checks if this {@link TypeDescriptor} represent an union type.
-     *
-     * @return true if this type represents an union type
-     * @since 0.30
-     */
-    public boolean isUnion() {
-        return impl.getClass() == UnionImpl.class;
-    }
-
-    /**
-     * Checks if this {@link TypeDescriptor} represent an intersection type.
-     *
-     * @return true if this type represents an intersection type
-     * @since 0.30
-     */
-    public boolean isIntersection() {
-        return impl.getClass() == IntersectionImpl.class;
+        final TypeDescriptorImpl narrowedImpl = impl.narrow(impl, fromType.impl);
+        return fromType.impl.equals(narrowedImpl);
     }
 
     /**
      * Creates a new union type. The union type is any of the given types.
-     *
+     * 
      * @param types the types to include in the union
      * @return the union type containing the given types
      * @since 0.30
@@ -234,21 +215,15 @@ public final class TypeDescriptor {
     }
 
     private static TypeDescriptorImpl unionImpl(Collection<? extends TypeDescriptorImpl> typeImpls) {
-        final Collection<TypeDescriptorImpl> subtypes = new HashSet<>();
-        for (TypeDescriptorImpl typeImpl : typeImpls) {
-            if (typeImpl.getClass() == UnionImpl.class) {
-                subtypes.addAll(((UnionImpl) typeImpl).types);
-            } else {
-                subtypes.add(typeImpl);
-            }
-        }
         final Set<TypeDescriptorImpl> impls = new HashSet<>();
         final Set<ArrayImpl> arrays = new HashSet<>();
-        for (TypeDescriptorImpl part : subtypes) {
-            if (part instanceof ArrayImpl) {
-                arrays.add((ArrayImpl) part);
-            } else {
-                impls.add(part);
+        for (TypeDescriptorImpl typeImpl : typeImpls) {
+            for (TypeDescriptorImpl part : typeImpl.explode()) {
+                if (part instanceof ArrayImpl) {
+                    arrays.add((ArrayImpl) part);
+                } else {
+                    impls.add(part);
+                }
             }
         }
         switch (arrays.size()) {
@@ -275,7 +250,7 @@ public final class TypeDescriptor {
 
     /**
      * Creates a new intersection type. The intersection type is all of the given types.
-     *
+     * 
      * @param types the types to include in the intersection
      * @return the intersection type containing the given types
      * @since 0.30
@@ -302,9 +277,9 @@ public final class TypeDescriptor {
 
     /**
      * Normalization of a newly created {@link IntersectionImpl}.
-     *
+     * 
      * @param typeImpls the intersection components
-     * @return new {@link TypeDescriptorImpl} may not be a {@link IntersectionImpl}
+     * @return new {@link TypeDescriptor} may not be a {@link IntersectionImpl}
      */
     private static TypeDescriptorImpl intersectionImpl(final Collection<? extends TypeDescriptorImpl> typeImpls) {
         final Set<UnionImpl> unions = new HashSet<>();
@@ -338,7 +313,7 @@ public final class TypeDescriptor {
      * Collects all disjunctive normal form components. Computes cartesian product of unions
      * appended by tail types. The components have also reduced arrays and executables. If there is
      * a generic ARRAY (EXECUTABLE) the other arrays (executables) are removed.
-     *
+     * 
      * @param unions the union types
      * @param tail the non union types
      * @param collector the result collector
@@ -351,8 +326,7 @@ public final class TypeDescriptor {
                     final Collection<? super TypeDescriptorImpl> collector) {
         if (currentIndex == indexes.length) {
             final Set<TypeDescriptorImpl> currentComponent = new HashSet<>();
-            boolean wca = false;
-            boolean wce = false;
+            boolean wca = false, wce = false;
             for (int i = 0; i < unionTypes.length; i++) {
                 TypeDescriptorImpl component = unionTypes[i][indexes[i]];
                 if (component.equals(ARRAY.impl)) {
@@ -401,7 +375,7 @@ public final class TypeDescriptor {
      * @since 0.30
      */
     public static TypeDescriptor array(TypeDescriptor componentType) {
-        return componentType == null || componentType.isAssignable(ANY) ? ARRAY : new TypeDescriptor(new ArrayImpl(componentType.impl));
+        return componentType == null || ANY.impl.equals(ANY.impl.narrow(ANY.impl, componentType.impl)) ? ARRAY : new TypeDescriptor(new ArrayImpl(componentType.impl));
     }
 
     /**
@@ -414,7 +388,7 @@ public final class TypeDescriptor {
      */
     public static TypeDescriptor executable(TypeDescriptor returnType, TypeDescriptor... parameterTypes) {
         Objects.requireNonNull(parameterTypes, "Parameter types cannot be null");
-        if ((returnType == null || returnType.isAssignable(ANY)) && parameterTypes.length == 0) {
+        if ((returnType == null || ANY.impl.equals(ANY.impl.narrow(ANY.impl, returnType.impl))) && parameterTypes.length == 0) {
             return EXECUTABLE;
         }
         final TypeDescriptorImpl retImpl = returnType == null ? null : returnType.impl;
@@ -520,7 +494,9 @@ public final class TypeDescriptor {
 
     private abstract static class TypeDescriptorImpl {
 
-        abstract boolean isAssignable(TypeDescriptorImpl origType, TypeDescriptorImpl byType);
+        abstract TypeDescriptorImpl narrow(TypeDescriptorImpl origType, TypeDescriptorImpl byType);
+
+        abstract Set<? extends TypeDescriptorImpl> explode();
 
         TypeDescriptorImpl other(TypeDescriptorImpl td1, TypeDescriptorImpl td2) {
             if (td1 == this) {
@@ -542,13 +518,18 @@ public final class TypeDescriptor {
         }
 
         @Override
-        boolean isAssignable(final TypeDescriptorImpl origType, final TypeDescriptorImpl byType) {
+        TypeDescriptorImpl narrow(final TypeDescriptorImpl origType, final TypeDescriptorImpl byType) {
             final TypeDescriptorImpl other = other(origType, byType);
             if (other.getClass() == PrimitiveImpl.class) {
-                return kind == ((PrimitiveImpl) other).kind;
+                return kind == ((PrimitiveImpl) other).kind ? this : null;
             } else {
-                return other.isAssignable(origType, byType);
+                return other.narrow(origType, byType) != null ? byType : null;
             }
+        }
+
+        @Override
+        Set<? extends TypeDescriptorImpl> explode() {
+            return Collections.singleton(this);
         }
 
         @Override
@@ -584,35 +565,51 @@ public final class TypeDescriptor {
         }
 
         @Override
-        boolean isAssignable(final TypeDescriptorImpl origType, final TypeDescriptorImpl byType) {
+        TypeDescriptorImpl narrow(final TypeDescriptorImpl origType, final TypeDescriptorImpl byType) {
             final TypeDescriptorImpl other = other(origType, byType);
             final Class<? extends TypeDescriptorImpl> otherClz = other.getClass();
             if (otherClz == PrimitiveImpl.class) {
-                return false;
+                return null;
             }
             if (otherClz == ExecutableImpl.class) {
                 ExecutableImpl otherExecutable = (ExecutableImpl) other;
-                if (retType != null && (otherExecutable.retType == null || !retType.isAssignable(retType, otherExecutable.retType))) {
-                    return false;
+                final TypeDescriptorImpl narrowedRetType;
+                if (retType == null) {
+                    narrowedRetType = otherExecutable.retType;
+                } else {
+                    narrowedRetType = otherExecutable.retType == null ? null : retType.narrow(retType, otherExecutable.retType);
+                    if (narrowedRetType == null) {
+                        return null;
+                    }
                 }
-                if (!otherExecutable.paramTypes.isEmpty()) {
+                final List<? extends TypeDescriptorImpl> narrowedParamTypes;
+                if (otherExecutable.paramTypes.isEmpty()) {
+                    narrowedParamTypes = otherExecutable.paramTypes;
+                } else {
                     if (paramTypes.size() < otherExecutable.paramTypes.size()) {
-                        return false;
+                        return null;
                     }
                     final List<TypeDescriptorImpl> npts = new ArrayList<>(paramTypes.size());
                     for (int i = 0; i < otherExecutable.paramTypes.size(); i++) {
                         final TypeDescriptorImpl pt = paramTypes.get(i);
                         final TypeDescriptorImpl opt = otherExecutable.paramTypes.get(i);
-                        if (!opt.isAssignable(opt, pt)) {
-                            return false;
+                        final TypeDescriptorImpl npt = opt.narrow(opt, pt);
+                        if (!pt.equals(npt)) {
+                            return null;
                         }
                         npts.add(opt);
                     }
+                    narrowedParamTypes = npts;
                 }
-                return true;
+                return new ExecutableImpl(narrowedRetType, narrowedParamTypes);
             } else {
-                return other.isAssignable(origType, byType);
+                return other.narrow(origType, byType);
             }
+        }
+
+        @Override
+        Set<? extends TypeDescriptorImpl> explode() {
+            return Collections.singleton(this);
         }
 
         @Override
@@ -663,24 +660,38 @@ public final class TypeDescriptor {
         }
 
         @Override
-        boolean isAssignable(final TypeDescriptorImpl origType, final TypeDescriptorImpl byType) {
+        TypeDescriptorImpl narrow(final TypeDescriptorImpl origType, final TypeDescriptorImpl byType) {
             final TypeDescriptorImpl other = other(origType, byType);
             final Class<? extends TypeDescriptorImpl> otherClz = other.getClass();
             if (otherClz == PrimitiveImpl.class || otherClz == ExecutableImpl.class) {
-                return false;
+                return null;
             } else if (otherClz == ArrayImpl.class) {
                 final ArrayImpl origArray = (ArrayImpl) origType;
                 final ArrayImpl byArray = (ArrayImpl) byType;
                 if (origArray.contentType == null) {
-                    return true;
+                    return byType;
                 } else if (byArray.contentType == null) {
-                    return false;
+                    return null;
                 } else {
-                    return origArray.contentType.isAssignable(origArray.contentType, byArray.contentType);
+                    final TypeDescriptorImpl narrowedContentType = origArray.contentType.narrow(origArray.contentType, byArray.contentType);
+                    if (narrowedContentType == null) {
+                        return null;
+                    } else if (narrowedContentType == origArray.contentType) {
+                        return origArray;
+                    } else if (narrowedContentType == byArray.contentType) {
+                        return byArray;
+                    } else {
+                        return new ArrayImpl(narrowedContentType);
+                    }
                 }
             } else {
-                return other.isAssignable(origType, byType);
+                return other.narrow(origType, byType);
             }
+        }
+
+        @Override
+        Set<? extends TypeDescriptorImpl> explode() {
+            return Collections.singleton(this);
         }
 
         @Override
@@ -720,18 +731,19 @@ public final class TypeDescriptor {
         }
 
         @Override
-        boolean isAssignable(TypeDescriptorImpl origType, TypeDescriptorImpl byType) {
+        TypeDescriptorImpl narrow(TypeDescriptorImpl origType, TypeDescriptorImpl byType) {
             final TypeDescriptorImpl other = other(origType, byType);
             final Class<? extends TypeDescriptorImpl> otherClz = other.getClass();
             if (otherClz == PrimitiveImpl.class || otherClz == ArrayImpl.class || otherClz == ExecutableImpl.class) {
                 if (other == origType) {
                     for (TypeDescriptorImpl type : types) {
-                        if (other.isAssignable(other, type)) {
-                            return true;
+                        final TypeDescriptorImpl narrowed = other.narrow(other, type);
+                        if (narrowed != null) {
+                            return byType;
                         }
                     }
                 }
-                return false;
+                return null;
             } else if (otherClz == IntersectionImpl.class) {
                 final IntersectionImpl origIntersection = (IntersectionImpl) origType;
                 final IntersectionImpl byIntersection = (IntersectionImpl) byType;
@@ -742,36 +754,43 @@ public final class TypeDescriptor {
                         boolean included = false;
                         for (TypeDescriptorImpl bySubType : byIntersection.types) {
                             if (bySubType.getClass() == ArrayImpl.class) {
-                                if (subType.isAssignable(subType, bySubType)) {
+                                final TypeDescriptorImpl narrowedArray = subType.narrow(subType, bySubType);
+                                if (narrowedArray != null) {
                                     included = true;
                                     break;
                                 }
                             }
                         }
                         if (!included) {
-                            return false;
+                            return null;
                         }
                     } else if (subType.getClass() == ExecutableImpl.class) {
                         boolean included = false;
                         for (TypeDescriptorImpl bySubType : byIntersection.types) {
                             if (bySubType.getClass() == ExecutableImpl.class) {
-                                if (subType.isAssignable(subType, bySubType)) {
+                                final TypeDescriptorImpl narrowedExec = subType.narrow(subType, bySubType);
+                                if (narrowedExec != null) {
                                     included = true;
                                     break;
                                 }
                             }
                         }
                         if (!included) {
-                            return false;
+                            return null;
                         }
                     } else {
-                        return false;
+                        return null;
                     }
                 }
-                return true;
+                return byType;
             } else {
-                return other.isAssignable(origType, byType);
+                return other.narrow(origType, byType);
             }
+        }
+
+        @Override
+        Set<? extends TypeDescriptorImpl> explode() {
+            return Collections.singleton(this);
         }
 
         @Override
@@ -804,34 +823,35 @@ public final class TypeDescriptor {
         }
 
         @Override
-        boolean isAssignable(final TypeDescriptorImpl origType, TypeDescriptorImpl byType) {
+        TypeDescriptorImpl narrow(final TypeDescriptorImpl origType, TypeDescriptorImpl byType) {
             final TypeDescriptorImpl other = other(origType, byType);
             final Class<? extends TypeDescriptorImpl> otherClz = other.getClass();
             if (otherClz == PrimitiveImpl.class || otherClz == ArrayImpl.class || otherClz == ExecutableImpl.class) {
                 if (other == byType) {
                     for (TypeDescriptorImpl type : types) {
-                        if (type.isAssignable(type, other)) {
-                            return true;
+                        final TypeDescriptorImpl narrowed = type.narrow(type, other);
+                        if (narrowed != null) {
+                            return narrowed;
                         }
                     }
                 }
-                return false;
+                return null;
             } else if (otherClz == IntersectionImpl.class) {
                 if (other == byType) {
                     final UnionImpl origUnion = (UnionImpl) origType;
                     final IntersectionImpl byIntersection = (IntersectionImpl) byType;
                     for (TypeDescriptorImpl intersectionSubType : byIntersection.types) {
                         if (origUnion.types.contains(intersectionSubType)) {
-                            return true;
+                            return byType;
                         }
                         for (TypeDescriptorImpl unionSubType : origUnion.types) {
-                            if (unionSubType.isAssignable(unionSubType, intersectionSubType)) {
-                                return true;
+                            if (unionSubType.narrow(unionSubType, intersectionSubType) != null) {
+                                return byType;
                             }
                         }
                     }
                 }
-                return false;
+                return null;
             } else if (otherClz == UnionImpl.class) {
                 final UnionImpl origUnion = (UnionImpl) origType;
                 final UnionImpl byUnion = (UnionImpl) byType;
@@ -841,17 +861,34 @@ public final class TypeDescriptor {
                         copy.add(type);
                     } else if (type.getClass() == ArrayImpl.class || type.getClass() == ExecutableImpl.class || type.getClass() == IntersectionImpl.class) {
                         for (TypeDescriptorImpl filteredType : byUnion.types) {
-                            if (type.isAssignable(type, filteredType)) {
-                                copy.add(filteredType);
+                            final TypeDescriptorImpl narrowed = type.narrow(type, filteredType);
+                            if (narrowed != null) {
+                                copy.add(narrowed);
                                 break;
                             }
                         }
                     }
                 }
-                return byUnion.types.equals(copy);
+                final int copySize = copy.size();
+                if (copySize == 0) {
+                    return null;
+                } else if (copySize == origUnion.types.size()) {
+                    return origUnion;
+                } else if (copySize == byUnion.types.size()) {
+                    return byUnion;
+                } else if (copySize == 1) {
+                    return copy.iterator().next();
+                } else {
+                    return new UnionImpl(copy);
+                }
             } else {
-                return other.isAssignable(origType, byType);
+                return other.narrow(origType, byType);
             }
+        }
+
+        @Override
+        Set<? extends TypeDescriptorImpl> explode() {
+            return types;
         }
 
         @Override

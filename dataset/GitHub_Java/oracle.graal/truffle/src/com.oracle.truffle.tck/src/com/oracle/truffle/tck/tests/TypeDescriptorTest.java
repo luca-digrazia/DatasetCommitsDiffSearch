@@ -41,8 +41,7 @@ public class TypeDescriptorTest {
                     TypeDescriptor.NULL,
                     TypeDescriptor.NUMBER,
                     TypeDescriptor.OBJECT,
-                    TypeDescriptor.STRING,
-                    TypeDescriptor.EXECUTABLE,
+                    TypeDescriptor.STRING
     };
 
     @Test
@@ -170,7 +169,6 @@ public class TypeDescriptorTest {
         Collections.addAll(eds, exeAnyAny, exeAnyNoArgs, exeAnyStr, exeAnyStrNum, exeStrNoArgs, exeStrStr, exeAnyUnionUnion);
         final List<TypeDescriptor> otherTypes = new ArrayList<>();
         Collections.addAll(otherTypes, PREDEFINED);
-        otherTypes.remove(TypeDescriptor.EXECUTABLE);
         otherTypes.add(TypeDescriptor.array(TypeDescriptor.BOOLEAN));
         otherTypes.add(TypeDescriptor.union(TypeDescriptor.BOOLEAN, TypeDescriptor.NUMBER));
         for (TypeDescriptor td : otherTypes) {
@@ -253,30 +251,9 @@ public class TypeDescriptorTest {
         Assert.assertTrue(TypeDescriptor.ANY.isAssignable(TypeDescriptor.EXECUTABLE));
         Assert.assertFalse(TypeDescriptor.executable(TypeDescriptor.ANY).isAssignable(TypeDescriptor.ANY));
         Assert.assertTrue(TypeDescriptor.ANY.isAssignable(TypeDescriptor.executable(TypeDescriptor.ANY)));
-        Assert.assertTrue(TypeDescriptor.ANY.isAssignable(TypeDescriptor.executable(TypeDescriptor.ANY, TypeDescriptor.STRING, TypeDescriptor.NUMBER)));
+        Assert.assertFalse(TypeDescriptor.ANY.isAssignable(TypeDescriptor.executable(TypeDescriptor.ANY, TypeDescriptor.STRING, TypeDescriptor.NUMBER)));
         Assert.assertTrue(TypeDescriptor.EXECUTABLE.isAssignable(TypeDescriptor.executable(TypeDescriptor.ANY)));
         Assert.assertTrue(TypeDescriptor.executable(TypeDescriptor.ANY).isAssignable(TypeDescriptor.EXECUTABLE));
-        for (TypeDescriptor td : PREDEFINED) {
-            Assert.assertTrue(TypeDescriptor.ANY.isAssignable(td));
-            Assert.assertFalse(td.isAssignable(TypeDescriptor.ANY));
-        }
-        Assert.assertTrue(TypeDescriptor.ANY.isAssignable(TypeDescriptor.ANY));
-        final TypeDescriptor union = TypeDescriptor.union(PREDEFINED);
-        Assert.assertTrue(TypeDescriptor.ANY.isAssignable(union));
-        Assert.assertFalse(union.isAssignable(TypeDescriptor.ANY));
-        final TypeDescriptor unionWithAny = TypeDescriptor.union(union, TypeDescriptor.ANY);
-        Assert.assertTrue(unionWithAny.isAssignable(TypeDescriptor.ANY));
-        final TypeDescriptor intersection = TypeDescriptor.intersection(PREDEFINED);
-        Assert.assertTrue(TypeDescriptor.ANY.isAssignable(intersection));
-        Assert.assertFalse(intersection.isAssignable(TypeDescriptor.ANY));
-        final TypeDescriptor arrayNum = TypeDescriptor.array(TypeDescriptor.NUMBER);
-        final TypeDescriptor arrayAny = TypeDescriptor.array(TypeDescriptor.ANY);
-        Assert.assertTrue(TypeDescriptor.ANY.isAssignable(arrayNum));
-        Assert.assertTrue(TypeDescriptor.ANY.isAssignable(arrayAny));
-        Assert.assertFalse(arrayNum.isAssignable(TypeDescriptor.ANY));
-        Assert.assertFalse(arrayAny.isAssignable(TypeDescriptor.ANY));
-        Assert.assertTrue(arrayAny.isAssignable(arrayNum));
-        Assert.assertFalse(arrayNum.isAssignable(arrayAny));
     }
 
     @Test
@@ -362,9 +339,5 @@ public class TypeDescriptorTest {
         Assert.assertTrue(arrAndArrNum.isAssignable(TypeDescriptor.array(TypeDescriptor.NUMBER)));
         Assert.assertTrue(TypeDescriptor.ARRAY.isAssignable(arrAndArrNum));
         Assert.assertFalse(TypeDescriptor.array(TypeDescriptor.NUMBER).isAssignable(arrAndArrNum));
-        final TypeDescriptor numAndStr = TypeDescriptor.intersection(TypeDescriptor.NUMBER, TypeDescriptor.STRING);
-        final TypeDescriptor numAndStrAndBool = TypeDescriptor.intersection(TypeDescriptor.NUMBER, TypeDescriptor.STRING, TypeDescriptor.BOOLEAN);
-        final TypeDescriptor numAndStrAndObj = TypeDescriptor.intersection(TypeDescriptor.NUMBER, TypeDescriptor.STRING, TypeDescriptor.OBJECT);
-        Assert.assertTrue(numAndStr.isAssignable(TypeDescriptor.union(numAndStrAndBool, numAndStrAndObj)));
     }
 }
