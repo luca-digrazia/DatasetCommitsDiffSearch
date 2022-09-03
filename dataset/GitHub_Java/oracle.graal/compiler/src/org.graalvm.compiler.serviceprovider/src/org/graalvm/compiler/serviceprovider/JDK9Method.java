@@ -94,6 +94,7 @@ public final class JDK9Method {
     /**
      * Invokes the static Module API method represented by this object.
      */
+    @SuppressWarnings("unchecked")
     public <T> T invokeStatic(Object... args) {
         checkAvailability();
         assert isStatic;
@@ -107,6 +108,7 @@ public final class JDK9Method {
     /**
      * Invokes the non-static Module API method represented by this object.
      */
+    @SuppressWarnings("unchecked")
     public <T> T invoke(Object receiver, Object... args) {
         checkAvailability();
         assert !isStatic;
