@@ -22,21 +22,18 @@
  */
 package com.oracle.graal.hotspot.replacements.arraycopy;
 
-import static jdk.vm.ci.meta.LocationIdentity.any;
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LocationIdentity;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
+import static jdk.internal.jvmci.meta.LocationIdentity.*;
 
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.NamedLocationIdentity;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.replacements.SnippetTemplate;
-import com.oracle.graal.replacements.nodes.BasicArrayCopyNode;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.replacements.*;
+import com.oracle.graal.replacements.nodes.*;
 
-@NodeInfo(allowedUsageTypes = InputType.Memory)
+@NodeInfo
 public final class ArrayCopySlowPathNode extends BasicArrayCopyNode {
 
     public static final NodeClass<ArrayCopySlowPathNode> TYPE = NodeClass.create(ArrayCopySlowPathNode.class);
@@ -48,7 +45,7 @@ public final class ArrayCopySlowPathNode extends BasicArrayCopyNode {
      */
     private final Object argument;
 
-    public ArrayCopySlowPathNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, JavaKind elementKind, SnippetTemplate.SnippetInfo snippet, Object argument) {
+    public ArrayCopySlowPathNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind, SnippetTemplate.SnippetInfo snippet, Object argument) {
         super(TYPE, src, srcPos, dest, destPos, length, elementKind, BytecodeFrame.INVALID_FRAMESTATE_BCI);
         assert StampTool.isPointerNonNull(src) && StampTool.isPointerNonNull(dest) : "must have been null checked";
         this.snippet = snippet;
@@ -56,7 +53,7 @@ public final class ArrayCopySlowPathNode extends BasicArrayCopyNode {
     }
 
     @NodeIntrinsic
-    public static native void arraycopy(Object nonNullSrc, int srcPos, Object nonNullDest, int destPos, int length, @ConstantNodeParameter JavaKind elementKind,
+    public static native void arraycopy(Object nonNullSrc, int srcPos, Object nonNullDest, int destPos, int length, @ConstantNodeParameter Kind elementKind,
                     @ConstantNodeParameter SnippetTemplate.SnippetInfo snippet, @ConstantNodeParameter Object argument);
 
     public SnippetTemplate.SnippetInfo getSnippet() {
