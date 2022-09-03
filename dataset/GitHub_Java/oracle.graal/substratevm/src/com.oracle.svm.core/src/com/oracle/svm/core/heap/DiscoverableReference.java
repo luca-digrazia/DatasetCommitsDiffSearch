@@ -30,7 +30,6 @@ import org.graalvm.word.WordFactory;
 import com.oracle.svm.core.UnsafeAccess;
 import com.oracle.svm.core.annotate.ExcludeFromReferenceMap;
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.VMError;
 
 /**
@@ -104,19 +103,14 @@ public class DiscoverableReference {
         ObjectAccess.writeObject(this, WordFactory.signed(RAW_REFERENT_OFFSET), value.toObject());
     }
 
-    /**
-     * Read access to the next field. Must use ObjectAccess to read the field because it is written
-     * with ObjectAccess only.
-     */
+    /** Read access to the next field. */
     public DiscoverableReference getNextDiscoverableReference() {
-        return KnownIntrinsics.convertUnknownValue(ObjectAccess.readObject(this, WordFactory.signed(NEXT_FIELD_OFFSET)), DiscoverableReference.class);
+        return next;
     }
 
-    /**
-     * Write access to the next field. Must use ObjectAccess to bypass the write barrier.
-     */
+    /** Write access to the next field. */
     private void setNextDiscoverableReference(DiscoverableReference newNext, boolean newIsDiscovered) {
-        ObjectAccess.writeObject(this, WordFactory.signed(NEXT_FIELD_OFFSET), newNext);
+        next = newNext;
         isDiscovered = newIsDiscovered;
     }
 
@@ -163,14 +157,18 @@ public class DiscoverableReference {
     private Object rawReferent;
 
     /**
-     * The offset of the fields for Pointer-level access to the field.
+     * The offset of the field {@link #rawReferent} for Pointer-level access to the field.
      */
-    private static final long RAW_REFERENT_OFFSET = getFieldOffset("rawReferent");
-    private static final long NEXT_FIELD_OFFSET = getFieldOffset("next");
+    private static final long RAW_REFERENT_OFFSET;
 
-    private static long getFieldOffset(String fieldName) {
+    static {
         try {
-            return UnsafeAccess.UNSAFE.objectFieldOffset(DiscoverableReference.class.getDeclaredField(fieldName));
+            /*
+             * This computes the offset on the hosting VM during native image generation. It is not
+             * yet the correct offset at run time. It will be automatically recomputed to the offset
+             * used at run time.
+             */
+            RAW_REFERENT_OFFSET = UnsafeAccess.UNSAFE.objectFieldOffset(DiscoverableReference.class.getDeclaredField("rawReferent"));
         } catch (NoSuchFieldException ex) {
             throw VMError.shouldNotReachHere(ex);
         }
@@ -184,9 +182,8 @@ public class DiscoverableReference {
      * promoted, but the next field has not yet been updated, so this == next fails.
      */
     private boolean isDiscovered;
-
     /** The next element in whichever list of DiscoverableReferences. */
-    @SuppressWarnings("unused") private DiscoverableReference next;
+    private DiscoverableReference next;
 
     /** For testing and debugging. */
     public static final class TestingBackDoor {
