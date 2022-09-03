@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -260,7 +260,7 @@ import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.BytecodePosition;
 import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.code.site.InfopointReason;
+import jdk.vm.ci.code.InfopointReason;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.ConstantPool;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
@@ -379,11 +379,11 @@ import com.oracle.graal.nodes.extended.IntegerSwitchNode;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
 import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin;
-import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo;
 import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.InvocationPluginReceiver;
 import com.oracle.graal.nodes.graphbuilderconf.NodePlugin;
+import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.InvocationPluginReceiver;
 import com.oracle.graal.nodes.java.ArrayLengthNode;
 import com.oracle.graal.nodes.java.CheckCastNode;
 import com.oracle.graal.nodes.java.ExceptionObjectNode;
@@ -444,7 +444,7 @@ public class BytecodeParser implements GraphBuilderContext {
          *
          * @param parser the parsing context of the intrinsic
          */
-        IntrinsicScope(BytecodeParser parser) {
+        public IntrinsicScope(BytecodeParser parser) {
             this.parser = parser;
             assert parser.parent == null;
             assert parser.bci() == 0;
@@ -457,7 +457,7 @@ public class BytecodeParser implements GraphBuilderContext {
          * @param parser the parsing context of the (non-intrinsic) method calling the intrinsic
          * @param args the arguments to the call
          */
-        IntrinsicScope(BytecodeParser parser, JavaKind[] argSlotKinds, ValueNode[] args) {
+        public IntrinsicScope(BytecodeParser parser, JavaKind[] argSlotKinds, ValueNode[] args) {
             assert !parser.parsingIntrinsic();
             this.parser = parser;
             mark = parser.getGraph().getMark();
@@ -533,7 +533,7 @@ public class BytecodeParser implements GraphBuilderContext {
         FixedNode fixed;
         FrameStateBuilder state;
 
-        Target(FixedNode fixed, FrameStateBuilder state) {
+        public Target(FixedNode fixed, FrameStateBuilder state) {
             this.fixed = fixed;
             this.state = state;
         }
@@ -1409,7 +1409,7 @@ public class BytecodeParser implements GraphBuilderContext {
         final int nodeCount;
         final Mark mark;
 
-        InvocationPluginAssertions(InvocationPlugin plugin, ValueNode[] args, ResolvedJavaMethod targetMethod, JavaKind resultType) {
+        public InvocationPluginAssertions(InvocationPlugin plugin, ValueNode[] args, ResolvedJavaMethod targetMethod, JavaKind resultType) {
             guarantee(assertionsEnabled(), "%s should only be loaded and instantiated if assertions are enabled", getClass().getSimpleName());
             this.plugin = plugin;
             this.targetMethod = targetMethod;
@@ -3243,7 +3243,7 @@ public class BytecodeParser implements GraphBuilderContext {
         final int blockIndex;
         int actualIndex;
 
-        SuccessorInfo(int blockSuccessorIndex) {
+        public SuccessorInfo(int blockSuccessorIndex) {
             this.blockIndex = blockSuccessorIndex;
             actualIndex = -1;
         }

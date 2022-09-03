@@ -184,7 +184,7 @@ public class PartialEvaluator {
 
         private final Object receiver;
 
-        InterceptReceiverPlugin(Object receiver) {
+        public InterceptReceiverPlugin(Object receiver) {
             this.receiver = receiver;
         }
 
@@ -202,7 +202,7 @@ public class PartialEvaluator {
         private OptimizedDirectCallNode lastDirectCallNode;
         private final ReplacementsImpl replacements;
 
-        PEInlineInvokePlugin(TruffleInlining inlining, ReplacementsImpl replacements) {
+        public PEInlineInvokePlugin(TruffleInlining inlining, ReplacementsImpl replacements) {
             this.inlining = new ArrayDeque<>();
             this.inlining.push(inlining);
             this.replacements = replacements;
@@ -259,7 +259,7 @@ public class PartialEvaluator {
         private final InvocationPlugins invocationPlugins;
         private final LoopExplosionPlugin loopExplosionPlugin;
 
-        ParsingInlineInvokePlugin(ReplacementsImpl replacements, InvocationPlugins invocationPlugins, LoopExplosionPlugin loopExplosionPlugin) {
+        public ParsingInlineInvokePlugin(ReplacementsImpl replacements, InvocationPlugins invocationPlugins, LoopExplosionPlugin loopExplosionPlugin) {
             this.replacements = replacements;
             this.invocationPlugins = invocationPlugins;
             this.loopExplosionPlugin = loopExplosionPlugin;
