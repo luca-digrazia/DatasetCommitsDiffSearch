@@ -32,24 +32,23 @@ import static jdk.vm.ci.code.ValueUtil.isRegister;
 import static jdk.vm.ci.code.ValueUtil.isStackSlot;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 
-import com.oracle.graal.compiler.common.LIRKind;
-import com.oracle.graal.compiler.common.util.Util;
-import com.oracle.graal.debug.GraalError;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.Variable;
-import com.oracle.graal.lir.alloc.trace.lsra.TraceLinearScanPhase.TraceLinearScan;
-
+import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.LIRKind;
 import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.meta.ValueKind;
+
+import com.oracle.graal.compiler.common.util.Util;
+import com.oracle.graal.debug.TTY;
+import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.Variable;
 
 /**
  * Represents an interval in the {@linkplain TraceLinearScan linear scan register allocator}.
@@ -309,25 +308,34 @@ final class TraceInterval extends IntervalHint {
     private AllocatableValue spillSlot;
 
     /**
+     * The kind of this interval.
+     */
+    private LIRKind kind;
+
+    /**
      * The start of the range, inclusive.
      */
-    private int intFrom;
+    public int intFrom;
 
     /**
      * The end of the range, exclusive.
      */
-    private int intTo;
+    public int intTo;
 
     /**
      * List of (use-positions, register-priorities) pairs, sorted by use-positions.
      */
-    private int[] usePosListArray;
-    private int usePosListSize;
+    private UsePosList usePosList;
 
     /**
      * Link to next interval in a sorted list of intervals that ends with {@link #EndMarker}.
      */
     TraceInterval next;
+
+    /**
+     * The linear-scan state of this interval.
+     */
+    State state;
 
     /**
      * The interval from which this one is derived. If this is a {@linkplain #isSplitParent() split
@@ -381,8 +389,8 @@ final class TraceInterval extends IntervalHint {
     void assignLocation(AllocatableValue newLocation) {
         if (isRegister(newLocation)) {
             assert this.location == null : "cannot re-assign location for " + this;
-            if (newLocation.getValueKind().equals(LIRKind.Illegal) && !kind().equals(LIRKind.Illegal)) {
-                this.location = asRegister(newLocation).asValue(kind());
+            if (newLocation.getLIRKind().equals(LIRKind.Illegal) && !kind.equals(LIRKind.Illegal)) {
+                this.location = asRegister(newLocation).asValue(kind);
                 return;
             }
         } else if (isIllegal(newLocation)) {
@@ -390,8 +398,8 @@ final class TraceInterval extends IntervalHint {
         } else {
             assert this.location == null || isRegister(this.location) || (isVirtualStackSlot(this.location) && isStackSlot(newLocation)) : "cannot re-assign location for " + this;
             assert isStackSlotValue(newLocation);
-            assert !newLocation.getValueKind().equals(LIRKind.Illegal);
-            assert newLocation.getValueKind().equals(this.kind());
+            assert !newLocation.getLIRKind().equals(LIRKind.Illegal);
+            assert newLocation.getLIRKind().equals(this.kind);
         }
         this.location = newLocation;
     }
@@ -405,8 +413,14 @@ final class TraceInterval extends IntervalHint {
         return location;
     }
 
-    public ValueKind<?> kind() {
-        return operand.getValueKind();
+    public LIRKind kind() {
+        assert !isRegister(operand) : "cannot access type for fixed interval";
+        return kind;
+    }
+
+    public void setKind(LIRKind kind) {
+        assert isRegister(operand) || this.kind().equals(LIRKind.Illegal) || this.kind().equals(kind) : "overwriting existing type";
+        this.kind = kind;
     }
 
     public boolean isEmpty() {
@@ -433,7 +447,7 @@ final class TraceInterval extends IntervalHint {
     }
 
     int numUsePositions() {
-        return numUsePos();
+        return usePosList.size();
     }
 
     public void setLocationHint(IntervalHint interval) {
@@ -515,6 +529,10 @@ final class TraceInterval extends IntervalHint {
         return spillSt == SpillState.StartInMemory || (spillSt == SpillState.SpillStore && opId > spillDefinitionPos() && !canMaterialize());
     }
 
+    void removeFirstUsePos() {
+        usePosList.removeLowestUsePos();
+    }
+
     // test intersection
     boolean intersects(TraceInterval i) {
         return intersectsAt(i) != -1;
@@ -552,9 +570,10 @@ final class TraceInterval extends IntervalHint {
         } else {
             assert isIllegal(operand) || isVariable(operand);
         }
+        this.kind = LIRKind.Illegal;
         this.intFrom = Integer.MAX_VALUE;
         this.intTo = Integer.MAX_VALUE;
-        this.usePosListArray = new int[4 * 2];
+        this.usePosList = new UsePosList(4);
         this.next = EndMarker;
         this.spillState = SpillState.NoDefinitionFound;
         this.spillDefinitionPos = -1;
@@ -694,18 +713,16 @@ final class TraceInterval extends IntervalHint {
                 TraceInterval lastChild = splitChildren.get(splitChildren.size() - 1);
                 msg.append(" (first = ").append(firstChild).append(", last = ").append(lastChild).append(")");
             }
-            throw new GraalError("Linear Scan Error: %s", msg);
+            throw new JVMCIError("Linear Scan Error: %s", msg);
         }
 
         if (!splitChildren.isEmpty()) {
             for (TraceInterval interval : splitChildren) {
                 if (interval != result && interval.from() <= opId && opId < interval.to() + toOffset) {
-                    /*
-                     * Should not happen: Try another compilation as it is very unlikely to happen
-                     * again.
-                     */
-                    throw new GraalError("two valid result intervals found for opId %d: %d and %d\n%s\n", opId, result.operandNumber, interval.operandNumber,
-                                    result.logString(), interval.logString());
+                    TTY.println(String.format("two valid result intervals found for opId %d: %d and %d", opId, result.operandNumber, interval.operandNumber));
+                    TTY.println(result.logString());
+                    TTY.println(interval.logString());
+                    throw new BailoutException("two valid result intervals found");
                 }
             }
         }
@@ -798,10 +815,10 @@ final class TraceInterval extends IntervalHint {
     int firstUsage(RegisterPriority minRegisterPriority) {
         assert isVariable(operand) : "cannot access use positions for fixed intervals";
 
-        for (int i = numUsePos() - 1; i >= 0; --i) {
-            RegisterPriority registerPriority = adaptPriority(getUsePosRegisterPriority(i));
+        for (int i = usePosList.size() - 1; i >= 0; --i) {
+            RegisterPriority registerPriority = adaptPriority(usePosList.registerPriority(i));
             if (registerPriority.greaterEqual(minRegisterPriority)) {
-                return getUsePos(i);
+                return usePosList.usePos(i);
             }
         }
         return Integer.MAX_VALUE;
@@ -810,9 +827,9 @@ final class TraceInterval extends IntervalHint {
     int nextUsage(RegisterPriority minRegisterPriority, int from) {
         assert isVariable(operand) : "cannot access use positions for fixed intervals";
 
-        for (int i = numUsePos() - 1; i >= 0; --i) {
-            int usePos = getUsePos(i);
-            if (usePos >= from && adaptPriority(getUsePosRegisterPriority(i)).greaterEqual(minRegisterPriority)) {
+        for (int i = usePosList.size() - 1; i >= 0; --i) {
+            int usePos = usePosList.usePos(i);
+            if (usePos >= from && adaptPriority(usePosList.registerPriority(i)).greaterEqual(minRegisterPriority)) {
                 return usePos;
             }
         }
@@ -822,9 +839,9 @@ final class TraceInterval extends IntervalHint {
     int nextUsageExact(RegisterPriority exactRegisterPriority, int from) {
         assert isVariable(operand) : "cannot access use positions for fixed intervals";
 
-        for (int i = numUsePos() - 1; i >= 0; --i) {
-            int usePos = getUsePos(i);
-            if (usePos >= from && adaptPriority(getUsePosRegisterPriority(i)) == exactRegisterPriority) {
+        for (int i = usePosList.size() - 1; i >= 0; --i) {
+            int usePos = usePosList.usePos(i);
+            if (usePos >= from && adaptPriority(usePosList.registerPriority(i)) == exactRegisterPriority) {
                 return usePos;
             }
         }
@@ -835,12 +852,12 @@ final class TraceInterval extends IntervalHint {
         assert isVariable(operand) : "cannot access use positions for fixed intervals";
 
         int prev = -1;
-        for (int i = numUsePos() - 1; i >= 0; --i) {
-            int usePos = getUsePos(i);
+        for (int i = usePosList.size() - 1; i >= 0; --i) {
+            int usePos = usePosList.usePos(i);
             if (usePos > from) {
                 return prev;
             }
-            if (adaptPriority(getUsePosRegisterPriority(i)).greaterEqual(minRegisterPriority)) {
+            if (adaptPriority(usePosList.registerPriority(i)).greaterEqual(minRegisterPriority)) {
                 prev = usePos;
             }
         }
@@ -853,22 +870,22 @@ final class TraceInterval extends IntervalHint {
         // do not add use positions for precolored intervals because they are never used
         if (registerPriority != RegisterPriority.None && isVariable(operand)) {
             if (DetailedAsserts.getValue()) {
-                for (int i = 0; i < numUsePos(); i++) {
-                    assert pos <= getUsePos(i) : "already added a use-position with lower position";
+                for (int i = 0; i < usePosList.size(); i++) {
+                    assert pos <= usePosList.usePos(i) : "already added a use-position with lower position";
                     if (i > 0) {
-                        assert getUsePos(i) < getUsePos(i - 1) : "not sorted descending";
+                        assert usePosList.usePos(i) < usePosList.usePos(i - 1) : "not sorted descending";
                     }
                 }
             }
 
             // Note: addUse is called in descending order, so list gets sorted
             // automatically by just appending new use positions
-            int len = numUsePos();
-            if (len == 0 || getUsePos(len - 1) > pos) {
-                usePosAdd(pos, registerPriority);
-            } else if (getUsePosRegisterPriority(len - 1).lessThan(registerPriority)) {
-                assert getUsePos(len - 1) == pos : "list not sorted correctly";
-                setUsePosRegisterPriority(len - 1, registerPriority);
+            int len = usePosList.size();
+            if (len == 0 || usePosList.usePos(len - 1) > pos) {
+                usePosList.add(pos, registerPriority);
+            } else if (usePosList.registerPriority(len - 1).lessThan(registerPriority)) {
+                assert usePosList.usePos(len - 1) == pos : "list not sorted correctly";
+                usePosList.setRegisterPriority(len - 1, registerPriority);
             }
         }
     }
@@ -888,6 +905,7 @@ final class TraceInterval extends IntervalHint {
         // allocate new interval
         TraceInterval parent = splitParent();
         TraceInterval result = allocator.createDerivedInterval(parent);
+        result.setKind(kind());
 
         result.splitParent = parent;
         result.setLocationHint(parent);
@@ -931,14 +949,14 @@ final class TraceInterval extends IntervalHint {
         intTo = splitPos;
 
         // split list of use positions
-        splitUsePosAt(result, splitPos);
+        result.usePosList = usePosList.splitAt(splitPos);
 
         if (DetailedAsserts.getValue()) {
-            for (int i = 0; i < numUsePos(); i++) {
-                assert getUsePos(i) < splitPos;
+            for (int i = 0; i < usePosList.size(); i++) {
+                assert usePosList.usePos(i) < splitPos;
             }
-            for (int i = 0; i < result.numUsePos(); i++) {
-                assert result.getUsePos(i) >= splitPos;
+            for (int i = 0; i < result.usePosList.size(); i++) {
+                assert result.usePosList.usePos(i) >= splitPos;
             }
         }
         return result;
@@ -962,6 +980,13 @@ final class TraceInterval extends IntervalHint {
         }
         String locationString = this.location == null ? "" : "@" + this.location;
         return operandNumber + ":" + operand + (isRegister(operand) ? "" : locationString) + "[" + from + "," + to + "]";
+    }
+
+    /**
+     * Gets the use position information for this interval.
+     */
+    public UsePosList usePosList() {
+        return usePosList;
     }
 
     /**
@@ -990,13 +1015,13 @@ final class TraceInterval extends IntervalHint {
 
         // print use positions
         int prev = -1;
-        for (int i = numUsePos() - 1; i >= 0; --i) {
-            assert prev < getUsePos(i) : "use positions not sorted";
-            if (i != numUsePos() - 1) {
+        for (int i = usePosList.size() - 1; i >= 0; --i) {
+            assert prev < usePosList.usePos(i) : "use positions not sorted";
+            if (i != usePosList.size() - 1) {
                 buf.append(", ");
             }
-            buf.append(getUsePos(i)).append(':').append(getUsePosRegisterPriority(i).shortName());
-            prev = getUsePos(i);
+            buf.append(usePosList.usePos(i)).append(':').append(usePosList.registerPriority(i).shortName());
+            prev = usePosList.usePos(i);
         }
         buf.append("} spill-state{").append(spillState()).append("}");
         if (canMaterialize()) {
@@ -1019,8 +1044,8 @@ final class TraceInterval extends IntervalHint {
 
     int currentFrom(int currentPosition) {
         assert isFixedInterval();
-        for (int i = 0; i < numUsePos(); i++) {
-            int usePos = getUsePos(i);
+        for (int i = 0; i < usePosList.size(); i++) {
+            int usePos = usePosList.usePos(i);
             if (usePos <= currentPosition && isDefinitionPosition(usePos)) {
                 return usePos;
             }
@@ -1035,8 +1060,8 @@ final class TraceInterval extends IntervalHint {
         int from = Integer.MAX_VALUE;
         int to = Integer.MIN_VALUE;
 
-        for (int i = 0; i < numUsePos(); i++) {
-            int usePos = getUsePos(i);
+        for (int i = 0; i < usePosList.size(); i++) {
+            int usePos = usePosList.usePos(i);
             if (isDefinitionPosition(usePos)) {
                 if (usePos <= currentPosition) {
                     from = usePos;
@@ -1059,110 +1084,6 @@ final class TraceInterval extends IntervalHint {
                 return -1;
             }
             return from;
-        }
-    }
-
-    /*
-     * UsePos
-     *
-     * List of use positions. Each entry in the list records the use position and register priority
-     * associated with the use position. The entries in the list are in descending order of use
-     * position.
-     *
-     */
-
-    /**
-     * Gets the use position at a specified index in this list.
-     *
-     * @param index the index of the entry for which the use position is returned
-     * @return the use position of entry {@code index} in this list
-     */
-    int getUsePos(int index) {
-        return intListGet(index << 1);
-    }
-
-    int numUsePos() {
-        return usePosListSize >> 1;
-    }
-
-    /**
-     * Gets the register priority for the use position at a specified index in this list.
-     *
-     * @param index the index of the entry for which the register priority is returned
-     * @return the register priority of entry {@code index} in this list
-     */
-    RegisterPriority getUsePosRegisterPriority(int index) {
-        return RegisterPriority.VALUES[intListGet((index << 1) + 1)];
-    }
-
-    void removeFirstUsePos() {
-        intListSetSize(usePosListSize - 2);
-    }
-
-    // internal
-
-    private void setUsePosRegisterPriority(int pos, RegisterPriority registerPriority) {
-        int index = (pos << 1) + 1;
-        int value = registerPriority.ordinal();
-        intListSet(index, value);
-    }
-
-    private void usePosAdd(int pos, RegisterPriority registerPriority) {
-        assert usePosListSize == 0 || getUsePos(numUsePos() - 1) > pos;
-        intListAdd(pos);
-        intListAdd(registerPriority.ordinal());
-    }
-
-    private void splitUsePosAt(TraceInterval result, int splitPos) {
-        int i = numUsePos() - 1;
-        int len = 0;
-        while (i >= 0 && getUsePos(i) < splitPos) {
-            --i;
-            len += 2;
-        }
-        int listSplitIndex = (i + 1) * 2;
-        int[] array = new int[len];
-        System.arraycopy(usePosListArray, listSplitIndex, array, 0, len);
-        if (listSplitIndex < usePosListSize) {
-            usePosListSize = listSplitIndex;
-        } else {
-            assert listSplitIndex == usePosListSize : "splitting cannot grow the use position array!";
-        }
-        result.usePosListArray = usePosListArray;
-        result.usePosListSize = usePosListSize;
-        usePosListArray = array;
-        usePosListSize = len;
-    }
-
-    // IntList
-
-    private int intListGet(int index) {
-        if (index >= usePosListSize) {
-            throw new IndexOutOfBoundsException("Index: " + index + ", Size: " + usePosListSize);
-        }
-        return usePosListArray[index];
-    }
-
-    private void intListSet(int index, int value) {
-        if (index >= usePosListSize) {
-            throw new IndexOutOfBoundsException("Index: " + index + ", Size: " + usePosListSize);
-        }
-        usePosListArray[index] = value;
-    }
-
-    private void intListAdd(int pos) {
-        if (usePosListSize == usePosListArray.length) {
-            int newSize = (usePosListSize * 3) / 2 + 1;
-            usePosListArray = Arrays.copyOf(usePosListArray, newSize);
-        }
-        usePosListArray[usePosListSize++] = pos;
-    }
-
-    private void intListSetSize(int newSize) {
-        if (newSize < usePosListSize) {
-            usePosListSize = newSize;
-        } else if (newSize > usePosListSize) {
-            usePosListArray = Arrays.copyOf(usePosListArray, newSize);
         }
     }
 }

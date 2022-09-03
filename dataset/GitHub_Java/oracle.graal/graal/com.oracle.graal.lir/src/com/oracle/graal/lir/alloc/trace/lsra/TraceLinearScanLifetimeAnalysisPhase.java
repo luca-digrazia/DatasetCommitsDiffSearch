@@ -50,7 +50,6 @@ import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.Indent;
 import com.oracle.graal.lir.InstructionValueConsumer;
 import com.oracle.graal.lir.LIR;
@@ -66,12 +65,13 @@ import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
 import com.oracle.graal.lir.ssi.SSIUtil;
 
-import jdk.vm.ci.code.RegisterArray;
+import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Value;
 
-public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanAllocationPhase {
+final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanAllocationPhase {
 
     @Override
     protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
@@ -82,7 +82,7 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
                         allocator.getRegisterAllocationConfig().getRegisterConfig().getCallerSaveRegisters()).analyze();
     }
 
-    public static final class Analyser {
+    static final class Analyser {
         private static final int DUMP_DURING_ANALYSIS_LEVEL = 4;
         private final IntervalData intervalData;
         private final TraceBuilderResult<?> traceBuilderResult;
@@ -91,10 +91,10 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
         private final LIR lir;
         private final boolean neverSpillConstants;
         private final MoveFactory spillMoveFactory;
-        private final RegisterArray callerSaveRegisters;
+        private final Register[] callerSaveRegisters;
 
-        public Analyser(IntervalData intervalData, TraceBuilderResult<?> traceBuilderResult, List<? extends AbstractBlockBase<?>> sortedBlocks, LIR lir, boolean neverSpillConstants,
-                        MoveFactory moveFactory, RegisterArray callerSaveRegisters) {
+        private Analyser(IntervalData intervalData, TraceBuilderResult<?> traceBuilderResult, List<? extends AbstractBlockBase<?>> sortedBlocks, LIR lir, boolean neverSpillConstants,
+                        MoveFactory moveFactory, Register[] callerSaveRegisters) {
             this.intervalData = intervalData;
             this.traceBuilderResult = traceBuilderResult;
             this.sortedBlocks = sortedBlocks;
@@ -112,11 +112,11 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
             return lir;
         }
 
-        private RegisterArray getCallerSavedRegisters() {
+        private Register[] getCallerSavedRegisters() {
             return callerSaveRegisters;
         }
 
-        public void analyze() {
+        private void analyze() {
             countInstructions();
             buildIntervals();
         }
@@ -188,7 +188,7 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
             try (Indent indent = Debug.logAndIndent("build intervals")) {
 
                 // create a list with all caller-save registers (cpu, fpu, xmm)
-                RegisterArray callerSaveRegs = getCallerSavedRegisters();
+                Register[] callerSaveRegs = getCallerSavedRegisters();
                 int instructionIndex = numInstructions;
 
                 // iterate all blocks in reverse order
@@ -302,7 +302,7 @@ public final class TraceLinearScanLifetimeAnalysisPhase extends TraceLinearScanA
                 setHint(label, to, from);
                 setSpillSlot(label, to, shadowedRegisterValue.getStackSlot());
             } else {
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
             }
         }
     }
