@@ -76,7 +76,13 @@ public final class REPLServer {
         }
     }
 
-    private static final String[] knownTags = {Debugger.HALT_TAG, Debugger.CALL_TAG};
+    private static String describeObject(Object obj) {
+        if (obj == null) {
+            return "null";
+        }
+        String name = obj.toString();
+        return name.substring(name.lastIndexOf('.') + 1);
+    }
 
     private static int nextBreakpointUID = 0;
 
@@ -87,9 +93,9 @@ public final class REPLServer {
     private SimpleREPLClient replClient = null;
     private String statusPrefix;
     private final Map<String, REPLHandler> handlerMap = new HashMap<>();
-    private ASTPrinter astPrinter = new REPLASTPrinter();
+    private ASTPrinter astPrinter = new InstrumentationUtils.ASTPrinter();
     private LocationPrinter locationPrinter = new InstrumentationUtils.LocationPrinter();
-    private REPLVisualizer visualizer = new REPLVisualizer();
+    private Visualizer visualizer = new Visualizer();
 
     /** Languages sorted by name. */
     private final TreeSet<Language> engineLanguages = new TreeSet<>(new Comparator<Language>() {
@@ -133,11 +139,11 @@ public final class REPLServer {
         @Override
         protected void on(SuspendedEvent ev) {
             if (TRACE) {
-                trace("BEGIN onSuspendedEvent()");
+                trace(" on %s", describeObject(ev));
             }
             REPLServer.this.haltedAt(ev);
             if (TRACE) {
-                trace("END onSuspendedEvent()");
+                trace("END on %s", describeObject(ev));
             }
         }
     };
@@ -146,13 +152,13 @@ public final class REPLServer {
         @Override
         protected void on(ExecutionEvent event) {
             if (TRACE) {
-                trace("BEGIN onExecutionEvent()");
+                trace("BEGIN on %s debugger=%s", describeObject(event), describeObject(db));
             }
             if (currentServerContext.steppingInto) {
                 event.prepareStepInto();
             }
             if (TRACE) {
-                trace("END onExecutionEvent()");
+                trace("END on %s debugger=%s", describeObject(event), describeObject(db));
             }
         }
     };
@@ -313,7 +319,7 @@ public final class REPLServer {
         /**
          * Get access to display methods appropriate to the language at halted node.
          */
-        REPLVisualizer getVisualizer() {
+        Visualizer getVisualizer() {
             return visualizer;
         }
 
@@ -379,7 +385,7 @@ public final class REPLServer {
                     event.prepareStepInto(1);
                 }
                 try {
-                    FrameInstance frame = frameNumber == 0 ? null : event.getStack().get(frameNumber);
+                    FrameInstance frame = frameNumber == 0 ? null : event.getStack().get(frameNumber - 1);
                     final Object result = event.eval(code, frame);
                     return (result instanceof Value) ? ((Value) result).get() : result;
                 } finally {
@@ -428,7 +434,7 @@ public final class REPLServer {
         }
 
         /**
-         * Access to the execution stack.
+         * Provides access to the execution stack, not counting the node/frame where halted.
          *
          * @return immutable list of stack elements
          */
@@ -698,7 +704,7 @@ public final class REPLServer {
         }
     }
 
-    static class REPLVisualizer {
+    static class Visualizer {
 
         /**
          * A short description of a source location in terms of source + line number.
@@ -781,29 +787,6 @@ public final class REPLServer {
                 }
             }
             return (result.length() < trim - 3 ? result : result.substring(0, trim - 4)) + "...";
-        }
-    }
-
-    private static class REPLASTPrinter extends InstrumentationUtils.ASTPrinter {
-
-        @Override
-        protected String displayTags(final Object node) {
-            if (node instanceof Node) {
-                final SourceSection sourceSection = ((Node) node).getSourceSection();
-                if (sourceSection != null) {
-                    final StringBuilder sb = new StringBuilder("[");
-                    String sep = "";
-                    for (String tag : knownTags) {
-                        if (sourceSection.hasTag(tag)) {
-                            sb.append(sep).append(tag);
-                            sep = ",";
-                        }
-                    }
-                    sb.append("]");
-                    return sb.toString();
-                }
-            }
-            return "";
         }
     }
 }
