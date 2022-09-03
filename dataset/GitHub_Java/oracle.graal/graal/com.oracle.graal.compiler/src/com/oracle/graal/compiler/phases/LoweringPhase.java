@@ -27,9 +27,7 @@ import com.oracle.graal.cri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 
 /**
@@ -38,11 +36,9 @@ import com.oracle.max.cri.ri.*;
 public class LoweringPhase extends Phase {
 
     private final GraalRuntime runtime;
-    private final CiAssumptions assumptions;
 
-    public LoweringPhase(GraalRuntime runtime, CiAssumptions assumptions) {
+    public LoweringPhase(GraalRuntime runtime) {
         this.runtime = runtime;
-        this.assumptions = assumptions;
     }
 
     @Override
@@ -71,19 +67,10 @@ public class LoweringPhase extends Phase {
                 // TODO (thomaswue): Document why this must not be called on floating nodes.
                 throw new UnsupportedOperationException();
             }
-
-            @Override
-            public CiAssumptions assumptions() {
-                return assumptions;
-            }
         };
         for (Node node : processed) {
-            if (node instanceof CheckCastNode) {
-                // This is a checkcast that was created while lowering some other node (e.g. StoreIndexed).
-                // This checkcast must now be LIR lowered.
-                // TODO (dnsimon) this is temp workaround that will be removed
-            } else if (node instanceof Lowerable) {
-                assert !(node instanceof FixedNode) || node.predecessor() == null : node;
+            if (node instanceof Lowerable) {
+                assert !(node instanceof FixedNode) || node.predecessor() == null;
                 ((Lowerable) node).lower(loweringTool);
             }
         }
@@ -147,11 +134,6 @@ public class LoweringPhase extends Phase {
                 activeGuards.grow();
                 activeGuards.mark(newGuard);
                 return newGuard;
-            }
-
-            @Override
-            public CiAssumptions assumptions() {
-                return assumptions;
             }
         };
 
