@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,39 +29,47 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm;
 
-import com.oracle.truffle.api.dsl.GenerateNodeFactory;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI8Node;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.memory.LLVMHeap;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemSetNode;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-@GenerateNodeFactory
-public abstract class LLVMMemSet extends LLVMNode {
+@NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class),
+                @NodeChild(type = LLVMExpressionNode.class)})
+public abstract class LLVMMemSet extends LLVMBuiltin {
 
-    @NodeChildren({@NodeChild(type = LLVMAddressNode.class), @NodeChild(type = LLVMI8Node.class), @NodeChild(type = LLVMI64Node.class), @NodeChild(type = LLVMI32Node.class),
-                    @NodeChild(type = LLVMI1Node.class)})
-    public abstract static class LLVMMemSetI64 extends LLVMMemSet {
-        @Specialization
-        public void executeVoid(LLVMAddress address, byte value, long length, int align, boolean isVolatile) {
-            LLVMHeap.memSet(address, value, length, align, isVolatile);
-        }
+    @Child private LLVMMemSetNode memSet;
+
+    public LLVMMemSet(LLVMMemSetNode memSet) {
+        this.memSet = memSet;
     }
 
-    @NodeChildren({@NodeChild(type = LLVMAddressNode.class), @NodeChild(type = LLVMI8Node.class), @NodeChild(type = LLVMI32Node.class), @NodeChild(type = LLVMI32Node.class),
-                    @NodeChild(type = LLVMI1Node.class)})
-    public abstract static class LLVMMemSetI32 extends LLVMMemSet {
-
-        @Specialization
-        public void executeVoid(LLVMAddress address, byte value, int length, int align, boolean isVolatile) {
-            LLVMHeap.memSet(address, value, length, align, isVolatile);
-        }
+    @SuppressWarnings("unused")
+    @Specialization
+    protected Object doOp(LLVMPointer address, byte value, int length, int align, boolean isVolatile) {
+        memSet.executeWithTarget(address, value, length);
+        return address;
     }
 
+    @SuppressWarnings("unused")
+    @Specialization
+    protected Object doOp(LLVMPointer address, byte value, long length, int align, boolean isVolatile) {
+        memSet.executeWithTarget(address, value, length);
+        return address;
+    }
+
+    @SuppressWarnings("unused")
+    @Specialization
+    protected Object doOp(LLVMVirtualAllocationAddress address, byte value, long length, int align, boolean isVolatile,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+        for (int i = 0; i < length; i++) {
+            address.writeI8(memory, value);
+        }
+        return address;
+    }
 }

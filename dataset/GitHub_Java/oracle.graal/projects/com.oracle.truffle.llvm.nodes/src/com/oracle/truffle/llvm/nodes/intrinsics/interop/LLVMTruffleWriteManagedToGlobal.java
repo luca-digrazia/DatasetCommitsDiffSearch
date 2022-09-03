@@ -30,48 +30,33 @@
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.FrameSlotKind;
-import com.oracle.truffle.api.frame.FrameSlotTypeException;
-import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
+import com.oracle.truffle.llvm.nodes.vars.LLVMReadNode.AttachInteropTypeNode;
+import com.oracle.truffle.llvm.nodes.vars.LLVMReadNodeFactory.AttachInteropTypeNodeGen;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
+/**
+ * Replaces a global variable with a different object. This does not change the value stored in the
+ * global, but it modifies the position of the global itself. This is an expensive operation, and it
+ * will only influence future lookups of the global variable address, so that existing pointers to
+ * the global variable will remain unchanged.
+ */
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
 public abstract class LLVMTruffleWriteManagedToGlobal extends LLVMIntrinsic {
-    @Specialization
-    protected LLVMTruffleObject doIntrinsic(LLVMGlobal address, LLVMTruffleObject value,
-                    @Cached("getContextReference()") ContextReference<LLVMContext> context) {
-        context.get().getGlobalFrame().setObject(address.getSlot(), value);
-        return value;
-    }
 
-    @Specialization
+    @Child AttachInteropTypeNode attachType = AttachInteropTypeNodeGen.create();
+
     @TruffleBoundary
-    protected LLVMTruffleObject doIntrinsic(LLVMTruffleObject address, LLVMTruffleObject value,
-                    @Cached("getContextReference()") ContextReference<LLVMContext> context) {
-        // TODO: (timfel) This is so slow :(
-        MaterializedFrame globalFrame = context.get().getGlobalFrame();
-        for (FrameSlot slot : globalFrame.getFrameDescriptor().getSlots()) {
-            if (slot.getKind() == FrameSlotKind.Object) {
-                try {
-                    if (globalFrame.getObject(slot) == address) {
-                        globalFrame.setObject(slot, value);
-                        return value;
-                    }
-                } catch (FrameSlotTypeException e) {
-                    throw new IllegalStateException();
-                }
-            }
-        }
-        throw new UnsupportedOperationException("target is not associated with the global frame");
+    @Specialization
+    protected Object write(LLVMPointer address, Object value) {
+        LLVMGlobal global = getContextReference().get().findGlobal(address);
+        Object newValue = attachType.execute(value, global.getInteropType());
+        global.setTarget(newValue);
+        return newValue;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,31 +29,31 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm;
 
-import com.oracle.truffle.api.dsl.GenerateNodeFactory;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.memory.LLVMHeap;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 public abstract class LLVMMemMove {
 
-    @GenerateNodeFactory
-    @NodeChildren({@NodeChild(type = LLVMAddressNode.class, value = "dest"), @NodeChild(type = LLVMAddressNode.class, value = "src"), @NodeChild(type = LLVMI64Node.class, value = "length"),
-                    @NodeChild(type = LLVMI32Node.class, value = "align"), @NodeChild(type = LLVMI1Node.class, value = "isVolatile")})
-    public abstract static class LLVMMemMoveI64 extends LLVMNode {
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class, value = "dest"), @NodeChild(type = LLVMExpressionNode.class, value = "src"),
+                    @NodeChild(type = LLVMExpressionNode.class, value = "length"),
+                    @NodeChild(type = LLVMExpressionNode.class, value = "align"), @NodeChild(type = LLVMExpressionNode.class, value = "isVolatile")})
+    public abstract static class LLVMMemMoveI64 extends LLVMBuiltin {
+
+        @Child private LLVMMemMoveNode memMove;
+
+        public LLVMMemMoveI64(LLVMMemMoveNode memMove) {
+            this.memMove = memMove;
+        }
 
         @SuppressWarnings("unused")
         @Specialization
-        public void executeVoid(LLVMAddress dest, LLVMAddress source, long length, int align, boolean isVolatile) {
-            LLVMHeap.memMove(dest, source, length);
+        protected Object doVoid(LLVMPointer dest, LLVMPointer source, long length, int align, boolean isVolatile) {
+            memMove.executeWithTarget(dest, source, length);
+            return null;
         }
-
     }
-
 }

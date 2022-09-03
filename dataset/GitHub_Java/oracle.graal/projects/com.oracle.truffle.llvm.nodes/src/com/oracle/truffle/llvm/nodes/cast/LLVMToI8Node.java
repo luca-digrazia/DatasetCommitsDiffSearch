@@ -29,11 +29,13 @@
  */
 package com.oracle.truffle.llvm.nodes.cast;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI64Node.LLVMBitcastToI64Node;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToI64Node.LLVMToI64BitNode;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
@@ -48,6 +50,12 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
 public abstract class LLVMToI8Node extends LLVMExpressionNode {
 
+    @Specialization
+    protected byte doI8(LLVMFunctionDescriptor from,
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
+        return (byte) toNative.executeWithTarget(from).asNative();
+    }
+
     @Child private ForeignToLLVM convert = ForeignToLLVM.create(ForeignToLLVMType.I8);
 
     @Specialization
@@ -61,21 +69,11 @@ public abstract class LLVMToI8Node extends LLVMExpressionNode {
         return (byte) convert.executeWithTarget(from.getValue());
     }
 
-    @Specialization
-    protected byte doI8(LLVMNativePointer from) {
-        return (byte) from.asNative();
-    }
-
-    public abstract static class LLVMSignedCastToI8Node extends LLVMToI8Node {
+    public abstract static class LLVMToI8NoZeroExtNode extends LLVMToI8Node {
 
         @Specialization
         protected byte doI8(boolean from) {
             return from ? (byte) -1 : 0;
-        }
-
-        @Specialization
-        protected byte doI8(byte from) {
-            return from;
         }
 
         @Specialization
@@ -112,12 +110,22 @@ public abstract class LLVMToI8Node extends LLVMExpressionNode {
         protected byte doI8(LLVM80BitFloat from) {
             return from.getByteValue();
         }
-    }
-
-    public abstract static class LLVMUnsignedCastToI8Node extends LLVMToI8Node {
 
         @Specialization
-        protected byte doI1(boolean from) {
+        protected byte doI8(LLVMNativePointer from) {
+            return (byte) from.asNative();
+        }
+
+        @Specialization
+        protected byte doI8(byte from) {
+            return from;
+        }
+    }
+
+    public abstract static class LLVMToI8ZeroExtNode extends LLVMToI8Node {
+
+        @Specialization
+        protected byte doI8(boolean from) {
             return (byte) (from ? 1 : 0);
         }
 
@@ -127,27 +135,12 @@ public abstract class LLVMToI8Node extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected byte doIVarBit(LLVMIVarBit from) {
+        protected byte doI8(LLVMIVarBit from) {
             return from.getZeroExtendedByteValue();
-        }
-
-        @Specialization
-        protected byte doFloat(float from) {
-            return (byte) from;
-        }
-
-        @Specialization
-        protected byte doFloat(double from) {
-            return (byte) from;
-        }
-
-        @Specialization
-        protected byte doLLVM80BitFloat(LLVM80BitFloat from) {
-            return from.getByteValue();
         }
     }
 
-    public abstract static class LLVMBitcastToI8Node extends LLVMToI8Node {
+    public abstract static class LLVMToI8BitNode extends LLVMToI8Node {
 
         @Specialization
         protected byte doI8(byte from) {
@@ -156,12 +149,15 @@ public abstract class LLVMToI8Node extends LLVMExpressionNode {
 
         @Specialization
         protected byte doI1Vector(LLVMI1Vector from) {
-            return (byte) LLVMBitcastToI64Node.castI1Vector(from, Byte.SIZE);
+            return (byte) LLVMToI64BitNode.castI1Vector(from, Byte.SIZE);
         }
 
         @Specialization
         protected byte doI8Vector(LLVMI8Vector from) {
-            assert from.getLength() == 1 : "invalid vector size";
+            if (from.getLength() != 1) {
+                CompilerDirectives.transferToInterpreter();
+                throw new AssertionError("invalid vector size!");
+            }
             return from.getValue(0);
         }
     }

@@ -162,11 +162,6 @@ public abstract class LLVMRetNode extends LLVMControlFlowNode implements Instrum
         protected Object doOp(long retResult) {
             return retResult;
         }
-
-        @Specialization
-        protected Object doOp(LLVMPointer retResult) {
-            return retResult;
-        }
     }
 
     @NodeChild(value = "retResult", type = LLVMExpressionNode.class)

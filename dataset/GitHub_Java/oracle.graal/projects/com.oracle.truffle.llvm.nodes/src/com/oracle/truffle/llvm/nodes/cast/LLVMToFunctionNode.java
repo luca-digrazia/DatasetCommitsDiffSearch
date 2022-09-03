@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,32 +29,61 @@
  */
 package com.oracle.truffle.llvm.nodes.cast;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMFunctionNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-public abstract class LLVMToFunctionNode extends LLVMFunctionNode {
+@NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
+public abstract class LLVMToFunctionNode extends LLVMExpressionNode {
 
-    @NodeChild(value = "fromNode", type = LLVMI64Node.class)
-    public abstract static class LLVMI64ToFunctionNode extends LLVMToFunctionNode {
+    @Child private ForeignToLLVM toLong = ForeignToLLVM.create(ForeignToLLVMType.I64);
 
-        @Specialization
-        public LLVMFunctionDescriptor executeI64(long from) {
-            return LLVMFunctionDescriptor.create((int) from);
-        }
+    @Specialization
+    protected LLVMNativePointer doLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
+        return LLVMNativePointer.create((long) toLong.executeWithTarget(from.getValue()));
     }
 
-    @NodeChild(value = "fromNode", type = LLVMAddressNode.class)
-    public abstract static class LLVMAddressToFunctionNode extends LLVMToFunctionNode {
-
-        @Specialization
-        public LLVMFunctionDescriptor executeI64(LLVMAddress from) {
-            return LLVMFunctionDescriptor.create((int) from.getVal());
-        }
+    @Specialization
+    protected LLVMNativePointer doI64(long from) {
+        return LLVMNativePointer.create(from);
     }
 
+    @Specialization
+    protected LLVMNativePointer doPointer(LLVMNativePointer from) {
+        return from;
+    }
+
+    @Child private Node isExecutable = Message.IS_EXECUTABLE.createNode();
+    @Child private Node isNull = Message.IS_NULL.createNode();
+
+    @Specialization
+    protected Object doManaged(LLVMManagedPointer from,
+                    @Cached("create()") LLVMAsForeignNode asForeign) {
+        TruffleObject foreign = asForeign.execute(from);
+        if (ForeignAccess.sendIsNull(isNull, foreign)) {
+            return LLVMNativePointer.createNull();
+        } else if (ForeignAccess.sendIsExecutable(isExecutable, foreign)) {
+            return from;
+        }
+        CompilerDirectives.transferToInterpreter();
+        throw new IllegalStateException("Not a function");
+    }
+
+    @Specialization
+    protected LLVMFunctionDescriptor doLLVMFunction(LLVMFunctionDescriptor from) {
+        return from;
+    }
 }

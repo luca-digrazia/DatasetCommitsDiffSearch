@@ -30,98 +30,57 @@
 package com.oracle.truffle.llvm.nodes.intrinsics.interop.typed;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.typed.LLVMTypeIDNodeFactory.ArrayNodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.typed.LLVMTypeIDNodeFactory.SizedArrayNodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.typed.LLVMTypeIDNodeFactory.StructNodeGen;
+import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-public abstract class LLVMTypeIDNode extends LLVMNode {
+@NodeChild(type = LLVMExpressionNode.class)
+public abstract class LLVMTypeIDNode extends LLVMExpressionNode {
 
-    public abstract LLVMInteropType.Structured execute(VirtualFrame frame);
-
-    public static LLVMTypeIDNode createStruct(LLVMExpressionNode child) {
-        return StructNodeGen.create(child);
+    public static LLVMTypeIDNode create(LLVMExpressionNode child) {
+        return LLVMTypeIDNodeGen.create(child);
     }
 
-    public static LLVMTypeIDNode createArray(LLVMExpressionNode child) {
-        return ArrayNodeGen.create(child);
-    }
+    @CompilationFinal private LLVMInteropType cachedType;
 
-    public static LLVMTypeIDNode createSizedArray(LLVMExpressionNode type, LLVMExpressionNode len) {
-        return SizedArrayNodeGen.create(type, len);
-    }
-
-    @NodeChild(type = LLVMExpressionNode.class)
-    abstract static class Struct extends LLVMTypeIDNode {
-
-        @Specialization
-        LLVMInteropType.Structured doGlobal(LLVMGlobal typeid) {
-            LLVMInteropType type = typeid.getInteropType();
-            if (type instanceof LLVMInteropType.Array) {
-                type = ((LLVMInteropType.Array) type).getElementType();
-                if (type instanceof LLVMInteropType.Structured) {
-                    return (LLVMInteropType.Structured) type;
-                }
+    protected final LLVMInteropType getType(LLVMPointer pointer) {
+        if (cachedType == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            LLVMGlobal global = getContextReference().get().findGlobal(pointer);
+            if (global == null) {
+                return null;
             }
-
-            CompilerDirectives.transferToInterpreter();
-            return fallback(typeid);
+            cachedType = global.getInteropType();
+        } else {
+            // the type this resolved to needs to stay the same
+            assert getContextReference().get().findGlobal(pointer).getInteropType() == cachedType;
         }
-
-        @Fallback
-        LLVMInteropType.Structured fallback(@SuppressWarnings("unused") Object typeid) {
-            CompilerDirectives.transferToInterpreter();
-            throw new AssertionError("don't call __polyglot_[as|from]_typed functions directly, use POLYGLOT_DECLARE_* macros");
-        }
+        return cachedType;
     }
 
-    @NodeChild(type = LLVMExpressionNode.class)
-    abstract static class Array extends LLVMTypeIDNode {
-
-        @Specialization
-        LLVMInteropType.Structured doGlobal(LLVMGlobal typeid) {
-            LLVMInteropType type = typeid.getInteropType();
-            if (type instanceof LLVMInteropType.Array) {
-                return (LLVMInteropType.Array) type;
+    @Specialization
+    LLVMInteropType.Structured doGlobal(LLVMPointer pointer) {
+        LLVMInteropType type = getType(pointer);
+        if (type instanceof LLVMInteropType.Array) {
+            type = ((LLVMInteropType.Array) type).getElementType();
+            if (type instanceof LLVMInteropType.Structured) {
+                return (LLVMInteropType.Structured) type;
             }
-
-            CompilerDirectives.transferToInterpreter();
-            return fallback(typeid);
         }
 
-        @Fallback
-        LLVMInteropType.Structured fallback(@SuppressWarnings("unused") Object typeid) {
-            CompilerDirectives.transferToInterpreter();
-            throw new AssertionError("don't call __polyglot_as_typed_array function directly, use POLYGLOT_DECLARE_* macros");
-        }
+        CompilerDirectives.transferToInterpreter();
+        return fallback(pointer);
     }
 
-    @NodeChild(value = "type", type = LLVMExpressionNode.class)
-    @NodeChild(value = "len", type = LLVMExpressionNode.class)
-    abstract static class SizedArray extends LLVMTypeIDNode {
-
-        @Specialization
-        LLVMInteropType.Structured doGlobal(LLVMGlobal typeid, long len) {
-            LLVMInteropType type = typeid.getInteropType();
-            if (type instanceof LLVMInteropType.Array) {
-                return ((LLVMInteropType.Array) type).resize(len);
-            }
-
-            CompilerDirectives.transferToInterpreter();
-            return fallback(typeid, len);
-        }
-
-        @Fallback
-        LLVMInteropType.Structured fallback(@SuppressWarnings("unused") Object typeid, @SuppressWarnings("unused") Object len) {
-            CompilerDirectives.transferToInterpreter();
-            throw new AssertionError("don't call __polyglot_from_typed_array function directly, use POLYGLOT_DECLARE_* macros");
-        }
+    @Fallback
+    LLVMInteropType.Structured fallback(@SuppressWarnings("unused") Object typeid) {
+        CompilerDirectives.transferToInterpreter();
+        throw new LLVMPolyglotException(this, "Don't call __polyglot_as_typeid function directly, use POLYGLOT_DECLARE_* macros.");
     }
 }
