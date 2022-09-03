@@ -28,7 +28,7 @@ import com.oracle.graal.lir.framemap.FrameMapBuilder;
 
 import jdk.vm.ci.code.CallingConvention;
 
-public class LIRGenerationResult {
+public abstract class LIRGenerationResult {
 
     private final LIR lir;
     private final FrameMapBuilder frameMapBuilder;
