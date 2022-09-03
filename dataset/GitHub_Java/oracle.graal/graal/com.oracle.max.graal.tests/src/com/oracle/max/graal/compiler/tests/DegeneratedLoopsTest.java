@@ -22,9 +22,13 @@
  */
 package com.oracle.max.graal.compiler.tests;
 
-import org.junit.*;
+import static com.oracle.max.graal.graph.iterators.NodePredicates.*;
+import junit.framework.*;
+
+import org.junit.Test;
 
 import com.oracle.max.graal.compiler.phases.*;
+import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 
@@ -37,6 +41,7 @@ public class DegeneratedLoopsTest extends GraphTest {
 
     private static final String REFERENCE_SNIPPET = "referenceSnippet";
 
+    @SuppressWarnings("all")
     public static int referenceSnippet(int a) {
         return 1;
     }
@@ -47,6 +52,8 @@ public class DegeneratedLoopsTest extends GraphTest {
     }
 
     private static class UnresolvedException extends RuntimeException {
+        private static final long serialVersionUID = 5215434338750728440L;
+
         static {
             if (true) {
                 throw new UnsupportedOperationException("this class may never be initialized");
@@ -54,6 +61,7 @@ public class DegeneratedLoopsTest extends GraphTest {
         }
     }
 
+    @SuppressWarnings("all")
     public static int test1Snippet(int a) {
         for (;;) {
             try {
@@ -71,21 +79,17 @@ public class DegeneratedLoopsTest extends GraphTest {
 
     private void test(String snippet) {
         StructuredGraph graph = parse(snippet);
-        print(graph);
+        Debug.dump(graph, "Graph");
         LocalNode local = graph.getNodes(LocalNode.class).iterator().next();
         ConstantNode constant = ConstantNode.forInt(0, graph);
-        for (Node n : local.usages().snapshot()) {
-            if (n instanceof FrameState) {
-                // Do not replace.
-            } else {
-                n.replaceFirstInput(local, constant);
-            }
+        for (Node n : local.usages().filter(isNotA(FrameState.class)).snapshot()) {
+            n.replaceFirstInput(local, constant);
         }
         for (Invoke invoke : graph.getInvokes()) {
             invoke.intrinsify(null);
         }
         new CanonicalizerPhase(null, runtime(), null).apply(graph);
-        StructuredGraph referenceGraph = parse(REFERENCE_SNIPPET); print(referenceGraph);
+        StructuredGraph referenceGraph = parse(REFERENCE_SNIPPET); Debug.dump(referenceGraph, "Graph");
         assertEquals(referenceGraph, graph);
     }
 }
