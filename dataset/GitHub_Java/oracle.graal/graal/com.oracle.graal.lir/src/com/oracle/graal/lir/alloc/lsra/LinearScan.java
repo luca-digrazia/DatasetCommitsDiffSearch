@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -40,7 +40,9 @@ import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterAttributes;
 import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.code.StackSlotValue;
 import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.code.VirtualStackSlot;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.LIRKind;
@@ -62,11 +64,10 @@ import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.ValueConsumer;
 import com.oracle.graal.lir.Variable;
-import com.oracle.graal.lir.VirtualStackSlot;
 import com.oracle.graal.lir.alloc.lsra.Interval.RegisterBinding;
 import com.oracle.graal.lir.framemap.FrameMapBuilder;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 import com.oracle.graal.lir.phases.AllocationPhase.AllocationContext;
 
 /**
@@ -124,7 +125,7 @@ public class LinearScan {
     private final RegisterAttributes[] registerAttributes;
     private final Register[] registers;
     private final RegisterAllocationConfig regAllocConfig;
-    private final MoveFactory moveFactory;
+    private final SpillMoveFactory moveFactory;
 
     private final BlockMap<BlockData> blockData;
 
@@ -172,8 +173,8 @@ public class LinearScan {
     private final int firstVariableNumber;
     private final boolean neverSpillConstants;
 
-    protected LinearScan(TargetDescription target, LIRGenerationResult res, MoveFactory spillMoveFactory, RegisterAllocationConfig regAllocConfig, List<? extends AbstractBlockBase<?>> sortedBlocks,
-                    boolean neverSpillConstants) {
+    protected LinearScan(TargetDescription target, LIRGenerationResult res, SpillMoveFactory spillMoveFactory, RegisterAllocationConfig regAllocConfig,
+                    List<? extends AbstractBlockBase<?>> sortedBlocks, boolean neverSpillConstants) {
         this.ir = res.getLIR();
         this.moveFactory = spillMoveFactory;
         this.frameMapBuilder = res.getFrameMapBuilder();
@@ -200,7 +201,7 @@ public class LinearScan {
         return result;
     }
 
-    public MoveFactory getSpillMoveFactory() {
+    public SpillMoveFactory getSpillMoveFactory() {
         return moveFactory;
     }
 
@@ -613,7 +614,7 @@ public class LinearScan {
         throw new BailoutException("LinearScan: interval is null");
     }
 
-    static AllocatableValue canonicalSpillOpr(Interval interval) {
+    static StackSlotValue canonicalSpillOpr(Interval interval) {
         assert interval.spillSlot() != null : "canonical spill slot not set";
         return interval.spillSlot();
     }
@@ -638,8 +639,8 @@ public class LinearScan {
     }
 
     @SuppressWarnings("try")
-    protected <B extends AbstractBlockBase<B>> void allocate(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, MoveFactory spillMoveFactory,
-                    RegisterAllocationConfig registerAllocationConfig) {
+    protected <B extends AbstractBlockBase<B>> void allocate(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
+                    SpillMoveFactory spillMoveFactory, RegisterAllocationConfig registerAllocationConfig) {
 
         /*
          * This is the point to enable debug logging for the whole register allocation.
@@ -722,7 +723,7 @@ public class LinearScan {
                 }
             }
         }
-        Debug.dump(1, new LinearScanIntervalDumper(Arrays.copyOf(intervals, intervalsSize)), label);
+        Debug.dump(new LinearScanIntervalDumper(Arrays.copyOf(intervals, intervalsSize)), label);
     }
 
     public void printLir(String label, @SuppressWarnings("unused") boolean hirValid) {
