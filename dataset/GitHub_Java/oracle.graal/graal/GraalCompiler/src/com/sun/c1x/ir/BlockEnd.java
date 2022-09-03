@@ -129,16 +129,13 @@ public abstract class BlockEnd extends Instruction {
      * @param oldSucc the old successor to replace
      * @param newSucc the new successor
      */
-    public int substituteSuccessor(BlockBegin oldSucc, BlockBegin newSucc) {
+    public void substituteSuccessor(BlockBegin oldSucc, BlockBegin newSucc) {
         assert newSucc != null;
-        int count = 0;
         for (int i = 0; i < blockSuccessorCount; i++) {
             if (blockSuccessor(i) == oldSucc) {
                 setBlockSuccessor(i, newSucc);
-                count++;
             }
         }
-        return count;
     }
 
     /**
