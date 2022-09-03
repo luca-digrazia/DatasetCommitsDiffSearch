@@ -81,11 +81,6 @@ public class FrameStateBuilder implements FrameStateAccess {
         this.locks = new ArrayList<Value>();
     }
 
-    @Override
-    public String toString() {
-        return String.format("FrameStateBuilder[stackSize=%d]", stackIndex);
-    }
-
     public void initializeFrom(FrameState other) {
         assert locals.length == other.localsSize() : "expected: " + locals.length + ", actual: " + other.localsSize();
         assert stack.length >= other.stackSize() : "expected: <=" + stack.length + ", actual: " + other.stackSize();
@@ -104,12 +99,12 @@ public class FrameStateBuilder implements FrameStateAccess {
     }
 
     public FrameState create(int bci) {
-        return new FrameState(method, bci, locals, stack, stackIndex, locks, false, graph);
+        return new FrameState(method, bci, locals, stack, stackIndex, locks, graph);
     }
 
     @Override
     public FrameState duplicateWithEmptyStack(int bci) {
-        FrameState frameState = new FrameState(method, bci, locals, new Value[0], 0, locks, false, graph);
+        FrameState frameState = new FrameState(method, bci, locals, new Value[0], 0, locks, graph);
         frameState.setOuterFrameState(outerFrameState());
         return frameState;
     }

@@ -275,7 +275,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     private static boolean jumpsToNextBlock(Node node) {
-        return node instanceof BlockEnd || node instanceof Anchor;
+        return node instanceof BlockEnd;
     }
 
     @Override
@@ -422,9 +422,6 @@ public abstract class LIRGenerator extends ValueVisitor {
 
         DeoptimizationStub stub = new DeoptimizationStub(DeoptAction.InvalidateReprofile, state);
         deoptimizationStubs.add(stub);
-
-        emitCompare(x.node());
-        //emitBranch(x.node(), stub.label)
         throw new RuntimeException();
         //lir.branch(x.condition.negate(), stub.label, stub.info);
     }
@@ -460,7 +457,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         // describing the state at the safepoint.
 
         moveToPhi();
-        lir.jump(getLIRBlock(x.next()));
+        lir.jump(getLIRBlock(x.defaultSuccessor()));
     }
 
     @Override
@@ -709,14 +706,10 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     @Override
-    public void visitFixedGuard(FixedGuard fixedGuard) {
-        Node comp = fixedGuard.node();
-        if (comp instanceof IsNonNull) {
-            IsNonNull x = (IsNonNull) comp;
-            CiValue value = load(x.object());
-            LIRDebugInfo info = stateFor(x);
-            lir.nullCheck(value, info);
-        }
+    public void visitNullCheck(FixedNullCheck x) {
+        CiValue value = load(x.object());
+        LIRDebugInfo info = stateFor(x);
+        lir.nullCheck(value, info);
     }
 
     @Override
@@ -1407,50 +1400,6 @@ public abstract class LIRGenerator extends ValueVisitor {
         // Moves all stack values into their phi position
         LIRBlock bb = currentBlock;
         if (bb.numberOfSux() == 1) {
-
-            Node lastNode = bb.lastInstruction();
-            if (lastNode instanceof Instruction || lastNode == lastNode.graph().start()) {
-                Node nextInstr = lastNode.successors().get(Instruction.SUCCESSOR_NEXT);
-                int nextSuccIndex = lastNode.successorTags()[Instruction.SUCCESSOR_NEXT];
-
-                if (lastNode instanceof LoopEnd) {
-                    LoopEnd loopEnd = (LoopEnd) lastNode;
-                    nextInstr = loopEnd.loopBegin();
-                    nextSuccIndex = loopEnd.loopBegin().predecessors().size() + 1;
-                }
-                if (nextInstr instanceof Merge) {
-                    Merge merge = (Merge) nextInstr;
-                    assert nextSuccIndex > 0 : "nextSuccIndex=" + nextSuccIndex + ", lastNode=" + lastNode + ", nextInstr=" + nextInstr + "; preds=" + nextInstr.predecessors() + "; predIndex=" + nextInstr.predecessorsIndex();
-
-                    PhiResolver resolver = new PhiResolver(this);
-                    for (Node n : merge.usages()) {
-                        if (n instanceof Phi) {
-                            Phi phi = (Phi) n;
-                            if (!phi.isDead()) {
-                                Value curVal = phi.valueAt(nextSuccIndex - 1);
-                                if (curVal != null && curVal != phi) {
-                                    if (curVal instanceof Phi) {
-                                        operandForPhi((Phi) curVal);
-                                    }
-                                    CiValue operand = curVal.operand();
-                                    if (operand.isIllegal()) {
-                                        assert curVal instanceof Constant || curVal instanceof Local : "these can be produced lazily" + curVal + "/" + phi;
-                                        operand = operandForInstruction(curVal);
-                                    }
-                                    resolver.move(operand, operandForPhi(phi));
-                                }
-                            }
-                        }
-                    }
-                    resolver.dispose();
-                }
-                return;
-            }
-
-            assert false : "lastNode=" + lastNode + " instr=" + bb.getInstructions();
-
-
-
             LIRBlock sux = bb.suxAt(0);
             assert sux.numberOfPreds() > 0 : "invalid CFG";
 

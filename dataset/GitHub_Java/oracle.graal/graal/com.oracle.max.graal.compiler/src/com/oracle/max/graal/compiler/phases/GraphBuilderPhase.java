@@ -193,8 +193,8 @@ public final class GraphBuilderPhase extends Phase {
         for (Node n : graph.getNodes()) {
             if (n instanceof Placeholder) {
                 Placeholder p = (Placeholder) n;
-                assert p.predecessors().size() == 1;
-                Node pred = p.predecessors().get(0);
+                assert p.blockPredecessors().size() == 1;
+                Node pred = p.blockPredecessors().get(0);
                 int predIndex = p.predecessorsIndex().get(0);
                 pred.successors().setAndClear(predIndex, p, 0);
                 p.delete();
@@ -694,9 +694,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private void genThrow(int bci) {
         Value exception = frameState.apop();
-        FixedGuard node = new FixedGuard(graph);
-        node.setNode(new IsNonNull(exception, graph));
-        append(node);
+        append(new FixedNullCheck(exception, graph));
 
         Instruction entry = handleException(exception, bci);
         if (entry != null) {
@@ -1123,6 +1121,8 @@ public final class GraphBuilderPhase extends Phase {
 
         if (block.firstInstruction == null) {
             if (block.isLoopHeader) {
+//                block.firstInstruction = new Merge(block.startBci, graph);
+
                 LoopBegin loopBegin = new LoopBegin(graph);
                 LoopEnd loopEnd = new LoopEnd(graph);
                 loopEnd.setLoopBegin(loopBegin);
@@ -1282,7 +1282,7 @@ public final class GraphBuilderPhase extends Phase {
             traceInstruction(bci, opcode, blockStart);
             processBytecode(bci, opcode);
 
-            if (IdentifyBlocksPhase.isBlockEnd(lastInstr) || lastInstr.next() != null) {
+            if (Schedule.isBlockEnd(lastInstr) || lastInstr.next() != null) {
                 break;
             }
 
