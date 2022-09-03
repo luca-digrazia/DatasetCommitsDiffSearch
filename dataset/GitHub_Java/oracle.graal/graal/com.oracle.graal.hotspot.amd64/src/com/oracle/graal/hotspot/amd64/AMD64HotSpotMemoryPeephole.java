@@ -77,15 +77,16 @@ public class AMD64HotSpotMemoryPeephole extends AMD64MemoryPeephole {
         }
     }
 
-    AMD64HotSpotMemoryPeephole(AMD64NodeLIRBuilder gen) {
+    AMD64HotSpotMemoryPeephole(AMD64NodeLIRGenerator gen) {
         super(gen);
     }
 
     @Override
     protected boolean emitCompareBranchMemory(ValueNode left, ValueNode right, Access access, Condition cond, boolean unorderedIsTrue, LabelRef trueLabel, LabelRef falseLabel,
                     double trueLabelProbability) {
+        assert left == access || right == access;
         if (HotSpotGraalRuntime.runtime().getConfig().useCompressedOops) {
-            ValueNode other = selectOtherInput(left, right, access);
+            ValueNode other = left == access ? right : left;
             Kind kind = access.nullCheckLocation().getValueKind();
 
             if (other.isConstant() && kind == Kind.Object && access.isCompressible()) {
