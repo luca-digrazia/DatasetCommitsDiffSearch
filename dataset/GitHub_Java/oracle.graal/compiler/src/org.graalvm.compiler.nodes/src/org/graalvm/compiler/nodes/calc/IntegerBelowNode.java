@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -82,24 +80,6 @@ public final class IntegerBelowNode extends IntegerLowerThanNode {
         protected CompareNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue, NodeView view) {
             assert newX.stamp(NodeView.DEFAULT) instanceof IntegerStamp && newY.stamp(NodeView.DEFAULT) instanceof IntegerStamp;
             return new IntegerBelowNode(newX, newY);
-        }
-
-        @Override
-        protected LogicNode findSynonym(ValueNode forX, ValueNode forY, NodeView view) {
-            LogicNode result = super.findSynonym(forX, forY, view);
-            if (result != null) {
-                return result;
-            }
-            if (forX.stamp(view) instanceof IntegerStamp) {
-                assert forY.stamp(view) instanceof IntegerStamp;
-                int bits = ((IntegerStamp) forX.stamp(view)).getBits();
-                assert ((IntegerStamp) forY.stamp(view)).getBits() == bits;
-                LogicNode logic = canonicalizeRangeFlip(forX, forY, bits, false, view);
-                if (logic != null) {
-                    return logic;
-                }
-            }
-            return null;
         }
 
         @Override
