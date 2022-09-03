@@ -139,6 +139,9 @@ public class TypeSystemTest extends GraalCompilerTest {
         if (a == Integer.class) {
             return 3;
         }
+        if (a == Double.class) {
+            return 4;
+        }
         return 5;
     }
 

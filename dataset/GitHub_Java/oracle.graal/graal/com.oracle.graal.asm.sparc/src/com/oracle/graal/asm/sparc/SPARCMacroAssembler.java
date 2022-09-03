@@ -33,13 +33,13 @@ import static jdk.vm.ci.sparc.SPARC.g0;
 import static jdk.vm.ci.sparc.SPARC.g3;
 import static jdk.vm.ci.sparc.SPARC.i7;
 import static jdk.vm.ci.sparc.SPARC.o7;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.sparc.SPARC.CPUFeature;
 
 import com.oracle.graal.asm.AbstractAddress;
 import com.oracle.graal.asm.Label;
-
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.sparc.SPARC.CPUFeature;
 
 public class SPARCMacroAssembler extends SPARCAssembler {
 
@@ -57,8 +57,8 @@ public class SPARCMacroAssembler extends SPARCAssembler {
      */
     private boolean immediateConstantLoad;
 
-    public SPARCMacroAssembler(TargetDescription target) {
-        super(target);
+    public SPARCMacroAssembler(TargetDescription target, RegisterConfig registerConfig) {
+        super(target, registerConfig);
     }
 
     /**
@@ -96,7 +96,7 @@ public class SPARCMacroAssembler extends SPARCAssembler {
     }
 
     @Override
-    public AbstractAddress getPlaceholder(int instructionStartPosition) {
+    public AbstractAddress getPlaceholder() {
         return Placeholder;
     }
 
@@ -285,7 +285,6 @@ public class SPARCMacroAssembler extends SPARCAssembler {
             return register;
         }
 
-        @Override
         public void close() {
             assert nextFreeScratchRegister > 0 : "Close called too often";
             nextFreeScratchRegister--;

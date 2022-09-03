@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,584 +22,330 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Add;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.And;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Fadds;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Faddd;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Fdivs;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Fdivd;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Fdtoi;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Fmuls;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Fmuld;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Fnegs;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Fnegd;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Fstoi;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Fsubs;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Fsubd;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Mulx;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Or;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Sdivx;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Sll;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Sllx;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Srl;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Srlx;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Sra;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Sub;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Xor;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.BPCC;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.CCR_V_SHIFT;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.CCR_XCC_SHIFT;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.FBPCC;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.isSimm13;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.ANNUL;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.NOT_ANNUL;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.PREDICT_TAKEN;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.Fcc0;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.Xcc;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.Equal;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.F_Ordered;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fcmpd;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.Opfs.Fcmps;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.CONST;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.HINT;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
+import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
+import static jdk.vm.ci.code.ValueUtil.asRegister;
+import static jdk.vm.ci.code.ValueUtil.isRegister;
+import static jdk.vm.ci.sparc.SPARC.g0;
+import static jdk.vm.ci.sparc.SPARCKind.DOUBLE;
+import static jdk.vm.ci.sparc.SPARCKind.SINGLE;
+import static jdk.vm.ci.sparc.SPARCKind.WORD;
+import static jdk.vm.ci.sparc.SPARCKind.XWORD;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.sparc.SPARC;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.graal.asm.Label;
 import com.oracle.graal.asm.sparc.SPARCAssembler;
-import com.oracle.graal.graph.GraalInternalError;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
 import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.asm.TargetMethodAssembler;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.lir.gen.LIRGeneratorTool;
 
-//@formatter:off
-public enum SPARCArithmetic {
-    // @formatter:off
-    IADD, ISUB, IMUL, IDIV, IDIVREM, IREM, IUDIV, IUREM, IAND, IOR, IXOR, ISHL, ISHR, IUSHR,
-    LADD, LSUB, LMUL, LDIV, LDIVREM, LREM, LUDIV, LUREM, LAND, LOR, LXOR, LSHL, LSHR, LUSHR,
-    FADD, FSUB, FMUL, FDIV, FREM, FAND, FOR, FXOR,
-    DADD, DSUB, DMUL, DDIV, DREM, DAND, DOR, DXOR,
-    INEG, LNEG, FNEG, DNEG,
-    I2L, L2I, I2B, I2C, I2S,
-    F2D, D2F,
-    I2F, I2D, F2I, D2I,
-    L2F, L2D, F2L, D2L,
-    MOV_I2F, MOV_L2D, MOV_F2I, MOV_D2L;
+public class SPARCArithmetic {
+    public static final class FloatConvertOp extends SPARCLIRInstruction {
+        public static final LIRInstructionClass<FloatConvertOp> TYPE = LIRInstructionClass.create(FloatConvertOp.class);
+        public static final SizeEstimate SIZE = SizeEstimate.create(5);
+
+        @Opcode private final FloatConvert opcode;
+        @Def({REG, HINT}) protected Value result;
+        @Use({REG}) protected Value x;
+
+        public enum FloatConvert {
+            F2I,
+            D2I,
+            F2L,
+            D2L
+        }
+
+        public FloatConvertOp(FloatConvert opcode, Value x, Value result) {
+            super(TYPE, SIZE);
+            this.opcode = opcode;
+            this.x = x;
+            this.result = result;
+        }
+
+        @Override
+        protected void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
+            Label notOrdered = new Label();
+            switch (opcode) {
+                case F2L:
+                    masm.fcmp(Fcc0, Fcmps, asRegister(x, SINGLE), asRegister(x, SINGLE));
+                    FBPCC.emit(masm, Fcc0, F_Ordered, ANNUL, PREDICT_TAKEN, notOrdered);
+                    masm.fstox(asRegister(x, SINGLE), asRegister(result, DOUBLE));
+                    masm.fxtod(asRegister(result), asRegister(result));
+                    masm.fsubd(asRegister(result, DOUBLE), asRegister(result, DOUBLE), asRegister(result, DOUBLE));
+                    masm.bind(notOrdered);
+                    break;
+                case F2I:
+                    masm.fcmp(Fcc0, Fcmps, asRegister(x, SINGLE), asRegister(x, SINGLE));
+                    FBPCC.emit(masm, Fcc0, F_Ordered, ANNUL, PREDICT_TAKEN, notOrdered);
+                    masm.fstoi(asRegister(x, SINGLE), asRegister(result, SINGLE));
+                    masm.fitos(asRegister(result, SINGLE), asRegister(result, SINGLE));
+                    masm.fsubs(asRegister(result, SINGLE), asRegister(result, SINGLE), asRegister(result, SINGLE));
+                    masm.bind(notOrdered);
+                    break;
+                case D2L:
+                    masm.fcmp(Fcc0, Fcmpd, asRegister(x, DOUBLE), asRegister(x, DOUBLE));
+                    FBPCC.emit(masm, Fcc0, F_Ordered, ANNUL, PREDICT_TAKEN, notOrdered);
+                    masm.fdtox(asRegister(x, DOUBLE), asRegister(result, DOUBLE));
+                    masm.fxtod(asRegister(result, DOUBLE), asRegister(result, DOUBLE));
+                    masm.fsubd(asRegister(result, DOUBLE), asRegister(result, DOUBLE), asRegister(result, DOUBLE));
+                    masm.bind(notOrdered);
+                    break;
+                case D2I:
+                    masm.fcmp(Fcc0, Fcmpd, asRegister(x, DOUBLE), asRegister(x, DOUBLE));
+                    FBPCC.emit(masm, Fcc0, F_Ordered, ANNUL, PREDICT_TAKEN, notOrdered);
+                    masm.fdtoi(asRegister(x, DOUBLE), asRegister(result, SINGLE));
+                    masm.fitos(asRegister(result, SINGLE), asRegister(result, SINGLE));
+                    masm.fsubs(asRegister(result, SINGLE), asRegister(result, SINGLE), asRegister(result, SINGLE));
+                    masm.bind(notOrdered);
+                    break;
+                default:
+                    throw JVMCIError.shouldNotReachHere("missing: " + opcode);
+            }
+        }
+    }
 
     /**
-     * Binary operation with single source/destination operand and one constant.
+     * Special LIR instruction as it requires a bunch of scratch registers.
      */
-    public static class BinaryRegConst extends SPARCLIRInstruction {
-        @Opcode private final SPARCArithmetic opcode;
-        @Def({REG, HINT}) protected AllocatableValue result;
-        @Use({REG, STACK}) protected AllocatableValue x;
-        protected Constant y;
+    public static final class RemOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
+        public static final LIRInstructionClass<RemOp> TYPE = LIRInstructionClass.create(RemOp.class);
+        public static final SizeEstimate SIZE = SizeEstimate.create(4);
 
-        public BinaryRegConst(SPARCArithmetic opcode, AllocatableValue result, AllocatableValue x, Constant y) {
+        @Opcode private final Rem opcode;
+        @Def({REG}) protected Value result;
+        @Alive({REG, CONST}) protected Value x;
+        @Alive({REG, CONST}) protected Value y;
+        @Temp({REG}) protected Value scratch1;
+        @Temp({REG}) protected Value scratch2;
+        @State protected LIRFrameState state;
+
+        public enum Rem {
+            IUREM,
+            LUREM
+        }
+
+        public RemOp(Rem opcode, Value result, Value x, Value y, Value scratch1, Value scratch2, LIRFrameState state) {
+            super(TYPE, SIZE);
             this.opcode = opcode;
+            this.result = result;
+            this.x = x;
+            this.y = y;
+            this.scratch1 = scratch1;
+            this.scratch2 = scratch2;
+            this.state = state;
+        }
+
+        @Override
+        public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
+            if (!isJavaConstant(x) && isJavaConstant(y)) {
+                assert isSimm13(crb.asIntConst(y));
+                assert !x.equals(scratch1);
+                assert !x.equals(scratch2);
+                assert !y.equals(scratch1);
+                switch (opcode) {
+                    case LUREM:
+                        crb.recordImplicitException(masm.position(), state);
+                        masm.udivx(asRegister(x, XWORD), crb.asIntConst(y), asRegister(scratch1, XWORD));
+                        masm.mulx(asRegister(scratch1, XWORD), crb.asIntConst(y), asRegister(scratch2, XWORD));
+                        getDelayedControlTransfer().emitControlTransfer(crb, masm);
+                        masm.sub(asRegister(x, XWORD), asRegister(scratch2, XWORD), asRegister(result, XWORD));
+                        break;
+                    case IUREM:
+                        JVMCIError.unimplemented();
+                        break;
+                    default:
+                        throw JVMCIError.shouldNotReachHere();
+                }
+            } else if (isRegister(x) && isRegister(y)) {
+                Value xLeft = x;
+                switch (opcode) {
+                    case LUREM:
+                        if (isJavaConstant(x)) {
+                            masm.setx(crb.asLongConst(x), asRegister(scratch2, XWORD), false);
+                            xLeft = scratch2;
+                        }
+                        assert !asRegister(xLeft, XWORD).equals(asRegister(scratch1, XWORD));
+                        assert !asRegister(y, XWORD).equals(asRegister(scratch1, XWORD));
+                        crb.recordImplicitException(masm.position(), state);
+                        masm.udivx(asRegister(xLeft, XWORD), asRegister(y, XWORD), asRegister(scratch1, XWORD));
+                        masm.mulx(asRegister(scratch1, XWORD), asRegister(y, XWORD), asRegister(scratch1, XWORD));
+                        getDelayedControlTransfer().emitControlTransfer(crb, masm);
+                        masm.sub(asRegister(xLeft, XWORD), asRegister(scratch1, XWORD), asRegister(result, XWORD));
+                        break;
+                    case IUREM:
+                        assert !asRegister(result, WORD).equals(asRegister(scratch1, WORD));
+                        assert !asRegister(result, WORD).equals(asRegister(scratch2, WORD));
+                        masm.srl(asRegister(x, WORD), 0, asRegister(scratch1, WORD));
+                        masm.srl(asRegister(y, WORD), 0, asRegister(result, WORD));
+                        crb.recordImplicitException(masm.position(), state);
+                        masm.udivx(asRegister(scratch1, WORD), asRegister(result, WORD), asRegister(scratch2, WORD));
+                        masm.mulx(asRegister(scratch2, WORD), asRegister(result, WORD), asRegister(result, WORD));
+                        getDelayedControlTransfer().emitControlTransfer(crb, masm);
+                        masm.sub(asRegister(scratch1, WORD), asRegister(result, WORD), asRegister(result, WORD));
+                        break;
+                    default:
+                        throw JVMCIError.shouldNotReachHere();
+                }
+            } else {
+                throw JVMCIError.shouldNotReachHere();
+            }
+        }
+    }
+
+    public static final class SPARCIMulccOp extends SPARCLIRInstruction {
+        public static final LIRInstructionClass<SPARCIMulccOp> TYPE = LIRInstructionClass.create(SPARCIMulccOp.class);
+        public static final SizeEstimate SIZE = SizeEstimate.create(10);
+        @Def({REG}) protected Value result;
+        @Alive({REG}) protected Value x;
+        @Alive({REG}) protected Value y;
+
+        public SPARCIMulccOp(Value result, Value x, Value y) {
+            super(TYPE, SIZE);
             this.result = result;
             this.x = x;
             this.y = y;
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
-            SPARCMove.move(tasm, masm, result, x);
-            emit(tasm, masm, opcode, result, y, null);
-        }
-
-        @Override
-        public void verify() {
-            super.verify();
-            verifyKind(opcode, result, x, y);
+        protected void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
+            try (ScratchRegister tmpScratch = masm.getScratchRegister()) {
+                Register tmp = tmpScratch.getRegister();
+                Register resultRegister = asRegister(result, WORD);
+                Register xRegister = asRegister(x, WORD);
+                Register yRegister = asRegister(y, WORD);
+                masm.sra(xRegister, 0, xRegister);
+                masm.sra(yRegister, 0, yRegister);
+                masm.mulx(xRegister, yRegister, resultRegister);
+                Label noOverflow = new Label();
+                masm.sra(resultRegister, 0, tmp);
+                masm.compareBranch(tmp, resultRegister, Equal, Xcc, noOverflow, PREDICT_TAKEN, null);
+                masm.wrccr(SPARC.g0, 1 << (SPARCAssembler.CCR_ICC_SHIFT + SPARCAssembler.CCR_V_SHIFT));
+                masm.bind(noOverflow);
+            }
         }
     }
 
     /**
-     * Unary operation with separate source and destination operand.
+     * Calculates the product and condition code for long multiplication of long values.
      */
-    public static class Unary2Op extends SPARCLIRInstruction {
+    public static final class SPARCLMulccOp extends SPARCLIRInstruction {
+        public static final LIRInstructionClass<SPARCLMulccOp> TYPE = LIRInstructionClass.create(SPARCLMulccOp.class);
+        public static final SizeEstimate SIZE = SizeEstimate.create(13);
 
-        @Opcode
-        private final SPARCArithmetic opcode;
-        @Def({ REG })
-        protected AllocatableValue result;
-        @Use({ REG, STACK })
-        protected AllocatableValue x;
+        @Def({REG}) protected Value result;
+        @Alive({REG}) protected Value x;
+        @Alive({REG}) protected Value y;
+        @Temp({REG}) protected Value scratch1;
+        @Temp({REG}) protected Value scratch2;
 
-        public Unary2Op(SPARCArithmetic opcode, AllocatableValue result, AllocatableValue x) {
-            this.opcode = opcode;
-            this.result = result;
-            this.x = x;
-        }
-
-        @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
-            SPARCMove.move(tasm, masm, result, x);
-            emit(tasm, masm, opcode, result, x, null);
-        }
-    }
-
-    /**
-     * Unary operation with single operand for source and destination.
-     */
-    public static class Unary1Op extends SPARCLIRInstruction {
-
-        @Opcode
-        private final SPARCArithmetic opcode;
-        @Def({ REG, HINT })
-        protected AllocatableValue result;
-        @Use({ REG, STACK })
-        protected AllocatableValue x;
-
-        public Unary1Op(SPARCArithmetic opcode, AllocatableValue result, AllocatableValue x) {
-            this.opcode = opcode;
-            this.result = result;
-            this.x = x;
-        }
-
-        @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
-            emit(masm, opcode, result);
-        }
-    }
-
-    public static class Op1Stack extends SPARCLIRInstruction {
-
-        @Opcode
-        private final SPARCArithmetic opcode;
-        @Def({ REG, HINT })
-        protected Value result;
-        @Use({ REG, STACK, CONST })
-        protected Value x;
-
-        public Op1Stack(SPARCArithmetic opcode, Value result, Value x) {
-            this.opcode = opcode;
-            this.result = result;
-            this.x = x;
-        }
-
-        @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
-            emit(tasm, masm, opcode, result, x, null);
-        }
-    }
-
-    public static class Op2Stack extends SPARCLIRInstruction {
-
-        @Opcode
-        private final SPARCArithmetic opcode;
-        @Def({ REG, HINT })
-        protected Value result;
-        @Use({ REG, STACK, CONST })
-        protected Value x;
-        @Alive({ REG, STACK, CONST })
-        protected Value y;
-
-        public Op2Stack(SPARCArithmetic opcode, Value result, Value x, Value y) {
-            this.opcode = opcode;
+        public SPARCLMulccOp(Value result, Value x, Value y, LIRGeneratorTool gen) {
+            super(TYPE, SIZE);
             this.result = result;
             this.x = x;
             this.y = y;
+            this.scratch1 = gen.newVariable(LIRKind.combine(x, y));
+            this.scratch2 = gen.newVariable(LIRKind.combine(x, y));
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
-            emit(tasm, masm, opcode, result, x, y, null);
-        }
+        public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
+            Label noOverflow = new Label();
+            masm.mulx(asRegister(x, XWORD), asRegister(y, XWORD), asRegister(result, XWORD));
 
-        @Override
-        public void verify() {
-            super.verify();
-            verifyKind(opcode, result, x, y);
+            // Calculate the upper 64 bit signed := (umulxhi product - (x{63}&y + y{63}&x))
+            masm.umulxhi(asRegister(x, XWORD), asRegister(y, XWORD), asRegister(scratch1, XWORD));
+            masm.srax(asRegister(x, XWORD), 63, asRegister(scratch2, XWORD));
+            masm.and(asRegister(scratch2, XWORD), asRegister(y, XWORD), asRegister(scratch2, XWORD));
+            masm.sub(asRegister(scratch1, XWORD), asRegister(scratch2, XWORD), asRegister(scratch1, XWORD));
+
+            masm.srax(asRegister(y, XWORD), 63, asRegister(scratch2, XWORD));
+            masm.and(asRegister(scratch2, XWORD), asRegister(x, XWORD), asRegister(scratch2, XWORD));
+            masm.sub(asRegister(scratch1, XWORD), asRegister(scratch2, XWORD), asRegister(scratch1, XWORD));
+
+            // Now construct the lower half and compare
+            masm.srax(asRegister(result, XWORD), 63, asRegister(scratch2, XWORD));
+            masm.cmp(asRegister(scratch1, XWORD), asRegister(scratch2, XWORD));
+            BPCC.emit(masm, Xcc, Equal, NOT_ANNUL, PREDICT_TAKEN, noOverflow);
+            masm.nop();
+            masm.wrccr(g0, 1 << (CCR_XCC_SHIFT + CCR_V_SHIFT));
+            masm.bind(noOverflow);
         }
     }
 
-    public static class Op2Reg extends SPARCLIRInstruction {
+    public static final class MulHighOp extends SPARCLIRInstruction {
+        public static final LIRInstructionClass<MulHighOp> TYPE = LIRInstructionClass.create(MulHighOp.class);
+        public static final SizeEstimate SIZE = SizeEstimate.create(4);
 
-        @Opcode
-        private final SPARCArithmetic opcode;
-        @Def({ REG, HINT })
-        protected Value result;
-        @Use({ REG, STACK, CONST })
-        protected Value x;
-        @Alive({ REG, CONST })
-        protected Value y;
+        @Opcode private final MulHigh opcode;
+        @Def({REG}) public AllocatableValue result;
+        @Alive({REG}) public AllocatableValue x;
+        @Alive({REG}) public AllocatableValue y;
+        @Temp({REG}) public AllocatableValue scratch;
 
-        public Op2Reg(SPARCArithmetic opcode, Value result, Value x, Value y) {
+        public enum MulHigh {
+            IMUL,
+            LMUL
+        }
+
+        public MulHighOp(MulHigh opcode, AllocatableValue x, AllocatableValue y, AllocatableValue result, AllocatableValue scratch) {
+            super(TYPE, SIZE);
             this.opcode = opcode;
-            this.result = result;
             this.x = x;
             this.y = y;
-        }
-
-        @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
-            emit(tasm, masm, opcode, result, x, y, null);
-        }
-
-        @Override
-        public void verify() {
-            super.verify();
-            verifyKind(opcode, result, x, y);
-        }
-    }
-
-    public static class ShiftOp extends SPARCLIRInstruction {
-
-        @Opcode
-        private final SPARCArithmetic opcode;
-        @Def({ REG, HINT })
-        protected Value result;
-        @Use({ REG, STACK, CONST })
-        protected Value x;
-        @Alive({ REG, CONST })
-        protected Value y;
-
-        public ShiftOp(SPARCArithmetic opcode, Value result, Value x, Value y) {
-            this.opcode = opcode;
+            this.scratch = scratch;
             this.result = result;
-            this.x = x;
-            this.y = y;
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
-            emit(tasm, masm, opcode, result, x, y, null);
-        }
-
-        @Override
-        public void verify() {
-            super.verify();
-            verifyKind(opcode, result, x, x);
-            assert y.getKind().getStackKind() == Kind.Int;
-        }
-    }
-
-    @SuppressWarnings("unused")
-    protected static void emit(SPARCAssembler masm, SPARCArithmetic opcode, Value result) {
-        switch (opcode) {
-        case L2I:
-            new And(masm, asIntReg(result), -1, asIntReg(result));
-            break;
-        case I2C:
-            new Sll(masm, asIntReg(result), 16, asIntReg(result));
-            new Srl(masm, asIntReg(result), 16, asIntReg(result));
-            break;
-        default:
-            throw GraalInternalError.shouldNotReachHere("missing: " + opcode);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static void emit(TargetMethodAssembler tasm, SPARCAssembler masm,
-            SPARCArithmetic opcode, Value dst, Value src1, Value src2, LIRFrameState info) {
-        int exceptionOffset = -1;
-        if (isConstant(src1)) {
+        public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
+            assert isRegister(x) && isRegister(y) && isRegister(result) && isRegister(scratch);
             switch (opcode) {
-            case ISUB:
-                assert isSimm13(tasm.asIntConst(src1));
-                new Add(masm, asIntReg(src2), -(tasm.asIntConst(src1)), asIntReg(dst));
-                break;
-            case IAND:
-                throw new InternalError("NYI");
-            case IDIV:
-                assert isSimm13(tasm.asIntConst(src1));
-                throw new InternalError("NYI");
-                // new Sdivx(masm, asIntReg(src1), asIntReg(src2),
-                // asIntReg(dst));
-            case FSUB:
-                throw new InternalError("NYI");
-            case FDIV:
-                throw new InternalError("NYI");
-            case DSUB:
-                throw new InternalError("NYI");
-            case DDIV:
-                throw new InternalError("NYI");
-            default:
-                throw GraalInternalError.shouldNotReachHere();
+                case IMUL:
+                    masm.sra(asRegister(x), 0, asRegister(x));
+                    masm.sra(asRegister(y), 0, asRegister(y));
+                    masm.mulx(asRegister(x, WORD), asRegister(y, WORD), asRegister(result, WORD));
+                    masm.srax(asRegister(result, WORD), 32, asRegister(result, WORD));
+                    break;
+                case LMUL:
+                    assert !asRegister(scratch, XWORD).equals(asRegister(result, XWORD));
+                    masm.umulxhi(asRegister(x, XWORD), asRegister(y, XWORD), asRegister(result, XWORD));
+
+                    masm.srlx(asRegister(x, XWORD), 63, asRegister(scratch, XWORD));
+                    masm.mulx(asRegister(scratch, XWORD), asRegister(y, XWORD), asRegister(scratch, XWORD));
+                    masm.sub(asRegister(result, XWORD), asRegister(scratch, XWORD), asRegister(result, XWORD));
+
+                    masm.srlx(asRegister(y, XWORD), 63, asRegister(scratch, XWORD));
+                    masm.mulx(asRegister(scratch, XWORD), asRegister(x, XWORD), asRegister(scratch, XWORD));
+                    masm.sub(asRegister(result, XWORD), asRegister(scratch, XWORD), asRegister(result, XWORD));
+                    break;
+                default:
+                    throw JVMCIError.shouldNotReachHere();
             }
-        } else if (isConstant(src2)) {
-            switch (opcode) {
-            case IADD:
-                assert isSimm13(tasm.asIntConst(src2));
-                new Add(masm, asIntReg(src1), tasm.asIntConst(src2), asIntReg(dst));
-                break;
-            case ISUB:
-                assert isSimm13(tasm.asIntConst(src2));
-                new Sub(masm, asIntReg(src1), tasm.asIntConst(src2), asIntReg(dst));
-                break;
-            case IMUL:
-                assert isSimm13(tasm.asIntConst(src2));
-                new Mulx(masm, asIntReg(src1), tasm.asIntConst(src2), asIntReg(dst));
-                break;
-            case IAND:
-                assert isSimm13(tasm.asIntConst(src2));
-                new And(masm, asIntReg(src1), tasm.asIntConst(src2), asIntReg(dst));
-                break;
-            case ISHL:
-                assert isSimm13(tasm.asIntConst(src2));
-                new Sll(masm, asIntReg(src1), tasm.asIntConst(src2), asIntReg(dst));
-                break;
-            case ISHR:
-                assert isSimm13(tasm.asIntConst(src2));
-                new Srl(masm, asIntReg(src1), tasm.asIntConst(src2), asIntReg(dst));
-                break;
-            case IUSHR:
-                assert isSimm13(tasm.asIntConst(src2));
-                new Sra(masm, asIntReg(src1), tasm.asIntConst(src2), asIntReg(dst));
-                break;
-            case IXOR:
-                assert isSimm13(tasm.asIntConst(src2));
-                new Xor(masm, asIntReg(src1), tasm.asIntConst(src2), asIntReg(dst));
-                break;
-            case LXOR:
-                assert isSimm13(tasm.asIntConst(src2));
-                new Add(masm, asLongReg(src1), tasm.asIntConst(src2), asLongReg(dst));
-                break;
-            case LUSHR:
-                throw new InternalError("NYI");
-            case FADD:
-                throw new InternalError("NYI");
-            case FMUL:
-                throw new InternalError("NYI");
-            case FDIV:
-                throw new InternalError("NYI");
-            case DADD:
-                throw new InternalError("NYI");
-            case DMUL:
-                throw new InternalError("NYI");
-            case DDIV:
-                throw new InternalError("NYI");
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-            }
-        } else {
-            switch (opcode) {
-            case IADD:
-                new Add(masm, asIntReg(src1), asIntReg(src2), asIntReg(dst));
-                break;
-            case ISUB:
-                new Sub(masm, asIntReg(src1), asIntReg(src2), asIntReg(dst));
-                break;
-            case IMUL:
-                new Mulx(masm, asIntReg(src1), asIntReg(src2), asIntReg(dst));
-                break;
-            case IDIV:
-                new Sdivx(masm, asIntReg(src1), asIntReg(src2), asIntReg(dst));
-                break;
-            case IAND:
-                new And(masm, asIntReg(src1), asIntReg(src2), asIntReg(dst));
-                break;
-            case IOR:
-                new Or(masm, asIntReg(src1), asIntReg(src2), asIntReg(dst));
-                break;
-            case IXOR:
-                new Xor(masm, asIntReg(src1), asIntReg(src2), asIntReg(dst));
-                break;
-            case ISHL:
-                new Sll(masm, asIntReg(src1), asIntReg(src2), asIntReg(dst));
-                break;
-            case ISHR:
-                new Srl(masm, asIntReg(src1), asIntReg(src2), asIntReg(dst));
-                break;
-            case IUSHR:
-                new Sra(masm, asIntReg(src1), asIntReg(src2), asIntReg(dst));
-                break;
-            case IREM:
-                throw new InternalError("NYI");
-            case LADD:
-                new Add(masm, asLongReg(src1), asLongReg(src2), asLongReg(dst));
-                break;
-            case LSUB:
-                new Sub(masm, asLongReg(src1), asLongReg(src2), asLongReg(dst));
-                break;
-            case LMUL:
-                new Mulx(masm, asLongReg(src1), asLongReg(src2), asLongReg(dst));
-                break;
-            case LDIV:
-                new Sdivx(masm, asLongReg(src1), asLongReg(src2),
-                        asLongReg(dst));
-                break;
-            case LAND:
-                new And(masm, asLongReg(src1), asLongReg(src2), asLongReg(dst));
-                break;
-            case LOR:
-                new Or(masm, asLongReg(src1), asLongReg(src2), asLongReg(dst));
-                break;
-            case LXOR:
-                new Xor(masm, asLongReg(src1), asLongReg(src2), asLongReg(dst));
-                break;
-            case LSHL:
-                new Sll(masm, asLongReg(src1), asLongReg(src2), asLongReg(dst));
-                break;
-            case LSHR:
-                new Srl(masm, asLongReg(src1), asLongReg(src2), asLongReg(dst));
-                break;
-            case LUSHR:
-                new Sra(masm, asLongReg(src1), asIntReg(src2), asLongReg(dst));
-                break;
-            case LDIVREM:
-            case LUDIV:
-            case LUREM:
-            case LREM:
-                throw new InternalError("NYI");
-            case FADD:
-                new Fadds(masm, asFloatReg(src1), asFloatReg(src2),
-                        asFloatReg(dst));
-                break;
-            case FSUB:
-                new Fsubs(masm, asFloatReg(src1), asFloatReg(src2),
-                        asFloatReg(dst));
-                break;
-            case FMUL:
-                new Fmuls(masm, asFloatReg(src1), asFloatReg(src2),
-                        asFloatReg(dst));
-                break;
-            case FDIV:
-                new Fdivs(masm, asFloatReg(src1), asFloatReg(src2),
-                        asFloatReg(dst));
-                break;
-            case FREM:
-                throw new InternalError("NYI");
-            case DADD:
-                new Faddd(masm, asDoubleReg(src1), asDoubleReg(src2),
-                        asDoubleReg(dst));
-                break;
-            case DSUB:
-                new Fsubd(masm, asDoubleReg(src1), asDoubleReg(src2),
-                        asDoubleReg(dst));
-                break;
-            case DMUL:
-                new Fmuld(masm, asDoubleReg(src1), asDoubleReg(src2),
-                        asDoubleReg(dst));
-                break;
-            case DDIV:
-                new Fdivd(masm, asDoubleReg(src1), asDoubleReg(src2),
-                        asDoubleReg(dst));
-                break;
-            case DREM:
-                throw new InternalError("NYI");
-            default:
-                throw GraalInternalError.shouldNotReachHere("missing: "
-                        + opcode);
-            }
-        }
-
-        if (info != null) {
-            assert exceptionOffset != -1;
-            tasm.recordImplicitException(exceptionOffset, info);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static void emit(TargetMethodAssembler tasm, SPARCAssembler masm,
-            SPARCArithmetic opcode, Value dst, Value src, LIRFrameState info) {
-        int exceptionOffset = -1;
-        if (isRegister(src)) {
-            switch (opcode) {
-            case I2L:
-                new Sra(masm, asIntReg(src), 0, asLongReg(dst));
-                break;
-            case I2B:
-                new Sll(masm, asIntReg(src), 24, asIntReg(src));
-                new Srl(masm, asIntReg(dst), 24, asIntReg(src));
-                break;
-            case I2F:
-                new Fstoi(masm, asIntReg(src), asFloatReg(dst));
-                break;
-            case I2D:
-                new Fdtoi(masm, asIntReg(src), asDoubleReg(dst));
-                break;
-            case FNEG:
-                new Fnegs(masm, asFloatReg(src), asFloatReg(dst));
-                break;
-            case DNEG:
-                new Fnegd(masm, asDoubleReg(src), asDoubleReg(dst));
-                break;
-            case LSHL:
-                new Sllx(masm, asLongReg(dst), asIntReg(src), asLongReg(dst));
-                break;
-            case LSHR:
-                new Srlx(masm, asLongReg(dst), asIntReg(src), asLongReg(dst));
-                break;
-            default:
-                throw GraalInternalError.shouldNotReachHere("missing: "
-                        + opcode);
-            }
-        } else if (isConstant(src)) {
-            switch (opcode) {
-            default:
-                throw GraalInternalError.shouldNotReachHere("missing: "
-                        + opcode);
-            }
-        } else {
-            switch (opcode) {
-            default:
-                throw GraalInternalError.shouldNotReachHere("missing: "
-                        + opcode);
-            }
-        }
-
-        if (info != null) {
-            assert exceptionOffset != -1;
-            tasm.recordImplicitException(exceptionOffset, info);
-        }
-    }
-
-    private static void verifyKind(SPARCArithmetic opcode, Value result, Value x, Value y) {
-        Kind rk;
-        Kind xk;
-        Kind yk;
-        Kind xsk;
-        Kind ysk;
-
-        switch (opcode) {
-        case IADD:
-        case ISUB:
-        case IMUL:
-        case IDIV:
-        case IREM:
-        case IAND:
-        case IOR:
-        case IXOR:
-        case ISHL:
-        case ISHR:
-        case IUSHR:
-            rk = result.getKind();
-            xsk = x.getKind().getStackKind();
-            ysk = y.getKind().getStackKind();
-
-            assert rk == Kind.Int && xsk == Kind.Int && ysk == Kind.Int;
-            break;
-        case LADD:
-        case LSUB:
-        case LMUL:
-        case LDIV:
-        case LREM:
-        case LAND:
-        case LOR:
-        case LXOR:
-        case LSHL:
-        case LSHR:
-        case LUSHR:
-            rk = result.getKind();
-            xk = x.getKind();
-            yk = y.getKind();
-
-            assert rk == Kind.Long && xk == Kind.Long && yk == Kind.Long;
-            break;
-        case FADD:
-        case FSUB:
-        case FMUL:
-        case FDIV:
-        case FREM:
-            rk = result.getKind();
-            xk = x.getKind();
-            yk = y.getKind();
-
-            assert rk == Kind.Float && xk == Kind.Float && yk == Kind.Float;
-            break;
-        case DADD:
-        case DSUB:
-        case DMUL:
-        case DDIV:
-        case DREM:
-            rk = result.getKind();
-            xk = x.getKind();
-            yk = y.getKind();
-
-            assert rk == Kind.Double && xk == Kind.Double && yk == Kind.Double;
-            break;
-        default:
-            throw new InternalError("NYI: " + opcode);
         }
     }
 }

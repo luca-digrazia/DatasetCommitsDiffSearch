@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,40 +22,59 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import com.oracle.graal.asm.sparc.SPARCAssembler.Bpa;
-import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Nop;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.JumpOp;
-import com.oracle.graal.lir.asm.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.BPCC;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.NOT_ANNUL;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.PREDICT_TAKEN;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.Xcc;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.Always;
 
-public class SPARCJumpOp extends JumpOp implements SPARCDelayedControlTransfer {
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.LabelRef;
+import com.oracle.graal.lir.StandardOp.JumpOp;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
+
+public final class SPARCJumpOp extends JumpOp implements SPARCDelayedControlTransfer, SPARCLIRInstructionMixin {
+    public static final LIRInstructionClass<SPARCJumpOp> TYPE = LIRInstructionClass.create(SPARCJumpOp.class);
+    public static final SizeEstimate SIZE = SizeEstimate.create(2);
+
     private boolean emitDone = false;
     private int delaySlotPosition = -1;
+    private final SPARCLIRInstructionMixinStore store;
 
     public SPARCJumpOp(LabelRef destination) {
-        super(destination);
+        super(TYPE, destination);
+        this.store = new SPARCLIRInstructionMixinStore(SIZE);
     }
 
     public void emitControlTransfer(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
         assert !emitDone;
         if (!crb.isSuccessorEdge(destination())) {
-            new Bpa(destination().label()).emit(masm);
+            BPCC.emit(masm, Xcc, Always, NOT_ANNUL, PREDICT_TAKEN, destination().label());
+            delaySlotPosition = masm.position();
         }
-        delaySlotPosition = masm.position();
         emitDone = true;
     }
 
     @Override
     public void emitCode(CompilationResultBuilder crb) {
-        if (!emitDone) {
-            SPARCMacroAssembler masm = (SPARCMacroAssembler) crb.asm;
-            if (!crb.isSuccessorEdge(destination())) {
-                new Bpa(destination().label()).emit(masm);
-                new Nop().emit(masm);
+        if (!crb.isSuccessorEdge(destination())) {
+            if (!emitDone) {
+                SPARCMacroAssembler masm = (SPARCMacroAssembler) crb.asm;
+                masm.jmp(destination().label());
+            } else {
+                int disp = crb.asm.position() - delaySlotPosition;
+                assert disp == 4 : disp;
             }
-        } else {
-            assert crb.asm.position() - delaySlotPosition == 4;
         }
+    }
+
+    public void resetState() {
+        delaySlotPosition = -1;
+        emitDone = false;
+    }
+
+    public SPARCLIRInstructionMixinStore getSPARCLIRInstructionStore() {
+        return store;
     }
 }

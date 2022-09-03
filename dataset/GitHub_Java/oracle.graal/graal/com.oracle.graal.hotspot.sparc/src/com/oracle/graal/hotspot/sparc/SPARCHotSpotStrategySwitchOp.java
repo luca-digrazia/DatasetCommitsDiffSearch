@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
+import static com.oracle.graal.asm.sparc.SPARCAssembler.BPCC;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.CBCOND;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.INSTRUCTION_SIZE;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.ANNUL;
@@ -52,7 +53,7 @@ import com.oracle.graal.lir.sparc.SPARCDelayedControlTransfer;
 final class SPARCHotSpotStrategySwitchOp extends SPARCControlFlow.StrategySwitchOp {
     public static final LIRInstructionClass<SPARCHotSpotStrategySwitchOp> TYPE = LIRInstructionClass.create(SPARCHotSpotStrategySwitchOp.class);
 
-    public SPARCHotSpotStrategySwitchOp(Value constantTableBase, SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Value key, Value scratch) {
+    SPARCHotSpotStrategySwitchOp(Value constantTableBase, SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Value key, Value scratch) {
         super(TYPE, constantTableBase, strategy, keyTargets, defaultTarget, key, scratch);
     }
 
@@ -75,14 +76,13 @@ final class SPARCHotSpotStrategySwitchOp extends SPARCControlFlow.StrategySwitch
 
                 Register scratchRegister = asRegister(scratch);
                 final int byteCount = constant.isCompressed() ? 4 : 8;
-                Runnable recordReference = () -> crb.recordDataReferenceInCode(constant, byteCount);
-                loadFromConstantTable(crb, masm, byteCount, asRegister(constantTableBase), scratchRegister, SPARCDelayedControlTransfer.DUMMY, recordReference);
+                loadFromConstantTable(crb, masm, byteCount, asRegister(constantTableBase), constant, scratchRegister, SPARCDelayedControlTransfer.DUMMY);
 
                 if (canUseShortBranch) {
                     CBCOND.emit(masm, conditionFlag, conditionCode == CC.Xcc, keyRegister, scratchRegister, target);
                 } else {
                     masm.cmp(keyRegister, scratchRegister);
-                    masm.bpcc(conditionFlag, ANNUL, target, conditionCode, PREDICT_TAKEN);
+                    BPCC.emit(masm, conditionCode, conditionFlag, ANNUL, PREDICT_TAKEN, target);
                     masm.nop();  // delay slot
                 }
             } else {

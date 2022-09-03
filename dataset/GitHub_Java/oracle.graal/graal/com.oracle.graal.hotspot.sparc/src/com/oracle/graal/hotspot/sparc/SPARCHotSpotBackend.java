@@ -31,6 +31,7 @@ import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.NotEqual;
 import static com.oracle.graal.compiler.common.GraalOptions.ZapStackOnMethodEntry;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
+import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
 import static jdk.vm.ci.sparc.SPARC.g0;
 import static jdk.vm.ci.sparc.SPARC.g5;
 import static jdk.vm.ci.sparc.SPARC.i0;
@@ -47,6 +48,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+
 import com.oracle.graal.asm.Assembler;
 import com.oracle.graal.asm.Label;
 import com.oracle.graal.asm.sparc.SPARCAddress;
@@ -60,12 +70,11 @@ import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.sparc.SPARCNodeMatchRules;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.hotspot.HotSpotDataBuilder;
 import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
 import com.oracle.graal.hotspot.HotSpotHostBackend;
 import com.oracle.graal.hotspot.HotSpotLIRGenerationResult;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.hotspot.meta.HotSpotForeignCallsProvider;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.hotspot.stubs.Stub;
@@ -92,14 +101,6 @@ import com.oracle.graal.lir.sparc.SPARCTailDelayedLIRInstruction;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
 /**
  * HotSpot SPARC specific backend.
  */
@@ -108,12 +109,12 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
     private static final SizeEstimateStatistics CONSTANT_ESTIMATED_STATS = new SizeEstimateStatistics("ESTIMATE");
     private static final SizeEstimateStatistics CONSTANT_ACTUAL_STATS = new SizeEstimateStatistics("ACTUAL");
 
-    public SPARCHotSpotBackend(GraalHotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, HotSpotProviders providers) {
+    public SPARCHotSpotBackend(HotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, HotSpotProviders providers) {
         super(config, runtime, providers);
     }
 
     private static class SizeEstimateStatistics {
-        private static final ConcurrentHashMap<String, DebugCounter> counters = new ConcurrentHashMap<>();
+        private static final ConcurrentHashMap<String, DebugMetric> metrics = new ConcurrentHashMap<>();
         private final String suffix;
 
         SizeEstimateStatistics(String suffix) {
@@ -123,7 +124,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
 
         public void add(Class<?> c, int count) {
             String name = SizeEstimateStatistics.class.getSimpleName() + "_" + c.getSimpleName() + "." + suffix;
-            DebugCounter m = counters.computeIfAbsent(name, (n) -> Debug.counter(n));
+            DebugMetric m = metrics.computeIfAbsent(name, (n) -> Debug.metric(n));
             m.add(count);
         }
     }
@@ -141,7 +142,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
 
     @Override
     public LIRGeneratorTool newLIRGenerator(LIRGenerationResult lirGenRes) {
-        return new SPARCHotSpotLIRGenerator(getProviders(), getRuntime().getVMConfig(), lirGenRes);
+        return new SPARCHotSpotLIRGenerator(getProviders(), config(), lirGenRes);
     }
 
     @Override
@@ -179,7 +180,6 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
             this.isStub = isStub;
         }
 
-        @Override
         public boolean hasFrame() {
             return true;
         }
@@ -220,7 +220,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
 
     @Override
     protected Assembler createAssembler(FrameMap frameMap) {
-        return new SPARCMacroAssembler(getTarget());
+        return new SPARCMacroAssembler(getTarget(), frameMap.getRegisterConfig());
     }
 
     @Override
@@ -311,6 +311,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         masm.setImmediateConstantLoad(canUseImmediateConstantLoad);
         FrameMap frameMap = crb.frameMap;
         RegisterConfig regConfig = frameMap.getRegisterConfig();
+        HotSpotVMConfig config = config();
         Label unverifiedStub = installedCodeOwner == null || installedCodeOwner.isStatic() ? null : new Label();
         for (int i = 0; i < 2; i++) {
             if (i > 0) {
@@ -323,7 +324,8 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
             if (unverifiedStub != null) {
                 crb.recordMark(config.MARKID_UNVERIFIED_ENTRY);
                 // We need to use JavaCall here because we haven't entered the frame yet.
-                CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCall, null, new JavaType[]{getProviders().getMetaAccess().lookupJavaType(Object.class)}, this);
+                CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCall, null, new JavaType[]{getProviders().getMetaAccess().lookupJavaType(Object.class)},
+                                getTarget());
                 Register inlineCacheKlass = g5; // see MacroAssembler::ic_call
 
                 try (ScratchRegister sc = masm.getScratchRegister()) {

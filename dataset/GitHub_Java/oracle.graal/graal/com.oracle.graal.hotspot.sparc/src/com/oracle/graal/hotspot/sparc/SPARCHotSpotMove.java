@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,93 +22,108 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.BPR;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.ANNUL;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.PREDICT_TAKEN;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.RCondition.Rc_z;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.ILLEGAL;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
+import static com.oracle.graal.lir.sparc.SPARCMove.loadFromConstantTable;
+import static jdk.vm.ci.code.ValueUtil.asRegister;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.ValueUtil;
+import jdk.vm.ci.hotspot.HotSpotConstant;
+import jdk.vm.ci.hotspot.HotSpotVMConfig.CompressEncoding;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Constant;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Annul;
-import com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict;
+import com.oracle.graal.asm.Label;
+import com.oracle.graal.asm.sparc.SPARCAddress;
 import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
 import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
-import com.oracle.graal.asm.sparc.SPARCAssembler.RCondition;
-import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.MoveOp;
-import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.sparc.*;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.StandardOp.LoadConstantOp;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.lir.sparc.SPARCDelayedControlTransfer;
+import com.oracle.graal.lir.sparc.SPARCLIRInstruction;
+import com.oracle.graal.lir.sparc.SPARCTailDelayedLIRInstruction;
 
 public class SPARCHotSpotMove {
 
-    public static final class HotSpotLoadConstantOp extends SPARCLIRInstruction implements MoveOp {
-        public static final LIRInstructionClass<HotSpotLoadConstantOp> TYPE = LIRInstructionClass.create(HotSpotLoadConstantOp.class);
+    public static class LoadHotSpotObjectConstantInline extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction, LoadConstantOp {
+        public static final LIRInstructionClass<LoadHotSpotObjectConstantInline> TYPE = LIRInstructionClass.create(LoadHotSpotObjectConstantInline.class);
 
-        @Def({REG}) private AllocatableValue result;
-        private final JavaConstant input;
+        public static final SizeEstimate SIZE = SizeEstimate.create(8);
+        private HotSpotConstant constant;
+        @Def({REG, STACK}) AllocatableValue result;
 
-        public HotSpotLoadConstantOp(AllocatableValue result, JavaConstant input) {
-            super(TYPE);
+        public LoadHotSpotObjectConstantInline(HotSpotConstant constant, AllocatableValue result) {
+            super(TYPE, SIZE);
+            this.constant = constant;
             this.result = result;
-            this.input = input;
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            assert isRegister(result);
-            if (HotSpotCompressedNullConstant.COMPRESSED_NULL.equals(input)) {
-                masm.mov(0, asRegister(result));
-            } else if (input instanceof HotSpotObjectConstant) {
-                boolean compressed = ((HotSpotObjectConstant) input).isCompressed();
-                if (crb.target.inlineObjects) {
-                    crb.recordInlineDataInCode(input);
-                    if (compressed) {
-                        masm.sethi(0xDEADDEAD >>> 10, asRegister(result));
-                        masm.add(asRegister(result), 0xAD & 0x3F, asRegister(result));
-                    } else {
-                        new SPARCMacroAssembler.Setx(0xDEADDEADDEADDEADL, asRegister(result), true).emit(masm);
-                    }
-                } else {
-                    GraalInternalError.unimplemented();
-                }
-            } else if (input instanceof HotSpotMetaspaceConstant) {
-                assert input.getKind() == Kind.Int || input.getKind() == Kind.Long;
-                boolean compressed = input.getKind() == Kind.Int;
-                boolean isImmutable = GraalOptions.ImmutableCode.getValue();
-                boolean generatePIC = GraalOptions.GeneratePIC.getValue();
-                crb.recordInlineDataInCode(input);
-                if (compressed) {
-                    if (isImmutable && generatePIC) {
-                        GraalInternalError.unimplemented();
-                    } else {
-                        new SPARCMacroAssembler.Setx(input.asInt(), asRegister(result), true).emit(masm);
-                    }
-                } else {
-                    if (isImmutable && generatePIC) {
-                        GraalInternalError.unimplemented();
-                    } else {
-                        new SPARCMacroAssembler.Setx(input.asLong(), asRegister(result), true).emit(masm);
-                    }
-                }
+        protected void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
+            crb.recordInlineDataInCode(constant);
+            if (constant.isCompressed()) {
+                masm.setw(0, asRegister(result), true);
             } else {
-                SPARCMove.move(crb, masm, result, input, SPARCDelayedControlTransfer.DUMMY);
+                masm.setx(0, asRegister(result), true);
             }
         }
 
-        public Value getInput() {
-            return input;
-        }
-
+        @Override
         public AllocatableValue getResult() {
             return result;
+        }
+
+        @Override
+        public Constant getConstant() {
+            return constant;
+        }
+    }
+
+    public static class LoadHotSpotObjectConstantFromTable extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
+        public static final LIRInstructionClass<LoadHotSpotObjectConstantFromTable> TYPE = LIRInstructionClass.create(LoadHotSpotObjectConstantFromTable.class);
+
+        public static final SizeEstimate SIZE = SizeEstimate.create(2, 8);
+        private final HotSpotConstant constant;
+        @Use({REG}) private AllocatableValue constantTableBase;
+        @Def({REG, STACK}) AllocatableValue result;
+
+        public LoadHotSpotObjectConstantFromTable(HotSpotConstant constant, AllocatableValue result, AllocatableValue constantTableBase) {
+            super(TYPE, SIZE);
+            this.constant = constant;
+            this.result = result;
+            this.constantTableBase = constantTableBase;
+        }
+
+        @Override
+        protected void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
+            try (ScratchRegister scratch = masm.getScratchRegister()) {
+                boolean isStack = ValueUtil.isStackSlot(result);
+                Register register;
+                if (isStack) {
+                    register = scratch.getRegister();
+                } else {
+                    register = asRegister(result);
+                }
+                int bytes = result.getPlatformKind().getSizeInBytes();
+                loadFromConstantTable(crb, masm, bytes, asRegister(constantTableBase), constant, register, SPARCDelayedControlTransfer.DUMMY);
+                if (isStack) {
+                    masm.st(register, (SPARCAddress) crb.asAddress(result), bytes);
+                }
+            }
         }
     }
 
     public static final class CompressPointer extends SPARCLIRInstruction {
         public static final LIRInstructionClass<CompressPointer> TYPE = LIRInstructionClass.create(CompressPointer.class);
+        public static final SizeEstimate SIZE = SizeEstimate.create(5);
 
         private final CompressEncoding encoding;
         private final boolean nonNull;
@@ -118,7 +133,7 @@ public class SPARCHotSpotMove {
         @Alive({REG, ILLEGAL}) protected AllocatableValue baseRegister;
 
         public CompressPointer(AllocatableValue result, AllocatableValue input, AllocatableValue baseRegister, CompressEncoding encoding, boolean nonNull) {
-            super(TYPE);
+            super(TYPE, SIZE);
             this.result = result;
             this.input = input;
             this.baseRegister = baseRegister;
@@ -128,26 +143,29 @@ public class SPARCHotSpotMove {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            SPARCMove.move(crb, masm, result, input, SPARCDelayedControlTransfer.DUMMY);
-
+            Register inputRegister = asRegister(input);
             Register resReg = asRegister(result);
             if (encoding.base != 0) {
                 Register baseReg = asRegister(baseRegister);
                 if (!nonNull) {
-                    masm.cmp(resReg, baseReg);
+                    masm.cmp(inputRegister, baseReg);
                     masm.movcc(ConditionFlag.Equal, CC.Xcc, baseReg, resReg);
+                    masm.sub(resReg, baseReg, resReg);
+                } else {
+                    masm.sub(inputRegister, baseReg, resReg);
                 }
-                masm.sub(resReg, baseReg, resReg);
-            }
-
-            if (encoding.shift != 0) {
-                masm.srlx(resReg, encoding.shift, resReg);
+                if (encoding.shift != 0) {
+                    masm.srlx(resReg, encoding.shift, resReg);
+                }
+            } else {
+                masm.srlx(inputRegister, encoding.shift, resReg);
             }
         }
     }
 
     public static final class UncompressPointer extends SPARCLIRInstruction {
         public static final LIRInstructionClass<UncompressPointer> TYPE = LIRInstructionClass.create(UncompressPointer.class);
+        public static final SizeEstimate SIZE = SizeEstimate.create(4);
 
         private final CompressEncoding encoding;
         private final boolean nonNull;
@@ -157,7 +175,7 @@ public class SPARCHotSpotMove {
         @Alive({REG, ILLEGAL}) protected AllocatableValue baseRegister;
 
         public UncompressPointer(AllocatableValue result, AllocatableValue input, AllocatableValue baseRegister, CompressEncoding encoding, boolean nonNull) {
-            super(TYPE);
+            super(TYPE, SIZE);
             this.result = result;
             this.input = input;
             this.baseRegister = baseRegister;
@@ -167,23 +185,23 @@ public class SPARCHotSpotMove {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            SPARCMove.move(crb, masm, result, input, SPARCDelayedControlTransfer.DUMMY);
-
+            Register inputRegister = asRegister(input);
             Register resReg = asRegister(result);
+            Register secondaryInput;
             if (encoding.shift != 0) {
-                masm.sllx(resReg, 32, resReg);
-                masm.srlx(resReg, 32 - encoding.shift, resReg);
+                masm.sll(inputRegister, encoding.shift, resReg);
+                secondaryInput = resReg;
+            } else {
+                secondaryInput = inputRegister;
             }
 
             if (encoding.base != 0) {
                 if (nonNull) {
-                    masm.add(resReg, asRegister(baseRegister), resReg);
+                    masm.add(secondaryInput, asRegister(baseRegister), resReg);
                 } else {
-                    masm.cmp(resReg, resReg);
-
                     Label done = new Label();
-                    masm.bpr(RCondition.Rc_nz, Annul.ANNUL, done, BranchPredict.PREDICT_TAKEN, resReg);
-                    masm.add(asRegister(baseRegister), resReg, resReg);
+                    BPR.emit(masm, Rc_z, ANNUL, PREDICT_TAKEN, secondaryInput, done);
+                    masm.add(asRegister(baseRegister), secondaryInput, resReg);
                     masm.bind(done);
                 }
             }
