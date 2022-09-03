@@ -95,7 +95,7 @@ public class HotSpotClassSubstitutions {
     }
 
     public static Class<?> readJavaMirror(KlassPointer klass) {
-        return PiNode.asNonNullClass(HubGetClassNode.readClass(klass));
+        return PiNode.asNonNullClass(klass.readObject(classMirrorOffset(), CLASS_MIRROR_LOCATION));
     }
 
     public static Class<?> getComponentType(final Class<?> thisObj) {
