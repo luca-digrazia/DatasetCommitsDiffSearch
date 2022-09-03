@@ -25,7 +25,7 @@
 
 package com.oracle.svm.core.log;
 
-import java.nio.charset.StandardCharsets;
+import java.io.FileDescriptor;
 
 import org.graalvm.compiler.core.common.calc.UnsignedMath;
 import org.graalvm.compiler.word.Word;
@@ -41,8 +41,6 @@ import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.RestrictHeapAccess;
-import com.oracle.svm.core.c.NonmovableArrays;
-import com.oracle.svm.core.heap.Heap;
 import com.oracle.svm.core.util.VMError;
 
 public class RealLog extends Log {
@@ -103,8 +101,6 @@ public class RealLog extends Log {
             rawString("null");
         } else if ((offset < 0) || (offset > value.length) || (length < 0) || ((offset + length) > value.length) || ((offset + length) < 0)) {
             rawString("OUT OF BOUNDS");
-        } else if (Heap.getHeap().isInImageHeap(value)) {
-            rawBytes(NonmovableArrays.addressOf(NonmovableArrays.fromImageHeap(value), offset), WordFactory.unsigned(length));
         } else {
             rawBytes(value, offset, length);
         }
@@ -170,11 +166,9 @@ public class RealLog extends Log {
         return this;
     }
 
-    private static final byte[] NEWLINE = System.lineSeparator().getBytes(StandardCharsets.US_ASCII);
-
     @Override
     public Log newline() {
-        string(NEWLINE);
+        character('\n');
         if (autoflush) {
             flush();
         }
@@ -399,6 +393,11 @@ public class RealLog extends Log {
     protected Log rawBytes(CCharPointer bytes, UnsignedWord length) {
         ImageSingletons.lookup(LogHandler.class).log(bytes, length);
         return this;
+    }
+
+    /* Allow subclasses to customize the file descriptor that we write to. */
+    protected FileDescriptor getOutputFile() {
+        return FileDescriptor.err;
     }
 
     private void rawString(String value) {
