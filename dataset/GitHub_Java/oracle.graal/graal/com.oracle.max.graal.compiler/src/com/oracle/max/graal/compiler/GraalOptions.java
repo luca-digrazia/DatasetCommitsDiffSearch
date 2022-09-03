@@ -44,7 +44,7 @@ public final class GraalOptions {
     public static boolean Intrinsify                         = true;
     public static boolean CacheGraphs                        = ____;
     public static boolean InlineWithTypeCheck                = ____;
-    public static int     MaximumInstructionCount            = 3000;
+    public static int     MaximumInstructionCount            = 37000;
     public static float   MaximumInlineRatio                 = 0.90f;
     public static int     MaximumInlineSize                  = 35;
     public static int     MaximumFreqInlineSize              = 200;
@@ -59,7 +59,6 @@ public final class GraalOptions {
     public static boolean EscapeAnalysis                     = ____;
     public static int     ForcedInlineEscapeWeight           = 0;
     public static int     MaximumEscapeAnalysisArrayLength   = 32;
-    public static boolean PrintEscapeAnalysis                = ____;
 
     // debugging settings
     public static boolean VerifyPointerMaps                  = ____;
@@ -156,5 +155,4 @@ public final class GraalOptions {
     public static boolean OptGVN                             = true;
     public static boolean OptCanonicalizer                   = true;
     public static boolean OptLoops                           = true;
-    public static boolean LoopPeeling                        = ____;
 }

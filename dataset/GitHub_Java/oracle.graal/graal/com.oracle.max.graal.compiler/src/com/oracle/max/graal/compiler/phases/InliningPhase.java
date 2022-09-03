@@ -78,7 +78,8 @@ public class InliningPhase extends Phase {
                 if (!invoke.isDeleted()) {
                     RiMethod code = inlineInvoke(invoke, iterations, ratio);
                     if (code != null) {
-                        if (graph.getNodeCount() > GraalOptions.MaximumInstructionCount) {
+                        inliningSize += code.codeSize();
+                        if (inliningSize > GraalOptions.MaximumInstructionCount) {
                             break;
                         }
 
@@ -92,6 +93,12 @@ public class InliningPhase extends Phase {
                         }
                     }
                 }
+            }
+            if (inliningSize > GraalOptions.MaximumInstructionCount) {
+                if (GraalOptions.TraceInlining) {
+                    TTY.println("inlining stopped: MaximumInstructionCount reached");
+                }
+                break;
             }
             if (newInvokes.isEmpty()) {
                 break;

@@ -93,6 +93,7 @@ public final class RegisterFinalizer extends StateSplit {
                 exactType = declaredType.exactType();
             }
 
+            GraalCompilation compilation = ((CompilerGraph) node.graph()).getCompilation();
             boolean needsCheck = true;
             if (exactType != null) {
                 // we have an exact type
@@ -100,7 +101,7 @@ public final class RegisterFinalizer extends StateSplit {
             } else {
                 // if either the declared type of receiver or the holder can be assumed to have no finalizers
                 if (declaredType != null && !declaredType.hasFinalizableSubclass()) {
-                    if (((CompilerGraph) node.graph()).assumptions().recordNoFinalizableSubclassAssumption(declaredType)) {
+                    if (compilation.recordNoFinalizableSubclassAssumption(declaredType)) {
                         needsCheck = false;
                     }
                 }
