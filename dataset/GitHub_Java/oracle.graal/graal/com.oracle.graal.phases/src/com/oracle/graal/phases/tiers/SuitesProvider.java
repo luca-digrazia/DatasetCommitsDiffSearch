@@ -22,32 +22,16 @@
  */
 package com.oracle.graal.phases.tiers;
 
-import com.oracle.graal.lir.phases.LIRSuites;
-import com.oracle.graal.phases.PhaseSuite;
-
-/**
- * Main interface providing access to suites used for compilation.
- */
-
 public interface SuitesProvider {
 
     /**
-     * Get the default phase suites of this compiler. This will take in account any options which
-     * enabled at the time of call, returning an appropriately constructed suite. The returned suite
-     * is immutable by default but {@link Suites#copy} can be used to create a customized version.
+     * Get the default phase suites of this compiler.
      */
     Suites getDefaultSuites();
 
     /**
-     * Get the default phase suite for creating new graphs.
+     * Create a new set of phase suites. Initially, the suites are the same as the
+     * {@link #getDefaultSuites default} suites.
      */
-    PhaseSuite<HighTierContext> getDefaultGraphBuilderSuite();
-
-    /**
-     * Get the default LIR phase suites of this compiler. This will take in account any options
-     * enabled active at the time of call, returning an appropriately constructed suite. The
-     * returned suite is immutable by default but {@link LIRSuites#copy} can be used to create a
-     * customized version.
-     */
-    LIRSuites getDefaultLIRSuites();
+    Suites createSuites();
 }
