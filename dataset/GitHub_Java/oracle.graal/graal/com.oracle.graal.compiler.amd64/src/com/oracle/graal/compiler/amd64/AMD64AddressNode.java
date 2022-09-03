@@ -23,8 +23,6 @@
 
 package com.oracle.graal.compiler.amd64;
 
-import jdk.internal.jvmci.meta.*;
-
 import com.oracle.graal.asm.amd64.AMD64Address.Scale;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.amd64.*;
@@ -32,6 +30,7 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * Represents an address of the form [base + index*scale + displacement]. Both base and index are
@@ -66,19 +65,7 @@ public class AMD64AddressNode extends AddressNode implements LIRLowerable {
         AllocatableValue baseValue = base == null ? Value.ILLEGAL : tool.asAllocatable(gen.operand(base));
         AllocatableValue indexValue = index == null ? Value.ILLEGAL : tool.asAllocatable(gen.operand(index));
 
-        AllocatableValue baseReference = LIRKind.derivedBaseFromValue(baseValue);
-        AllocatableValue indexReference;
-        if (scale.equals(Scale.Times1)) {
-            indexReference = LIRKind.derivedBaseFromValue(indexValue);
-        } else {
-            if (indexValue.getLIRKind().isValue()) {
-                indexReference = null;
-            } else {
-                indexReference = Value.ILLEGAL;
-            }
-        }
-
-        LIRKind kind = LIRKind.combineDerived(tool.getLIRKind(stamp()), baseReference, indexReference);
+        LIRKind kind = tool.getLIRKind(stamp());
         gen.setResult(this, new AMD64AddressValue(kind, baseValue, indexValue, scale, displacement));
     }
 

@@ -26,17 +26,9 @@ import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.*;
 import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64RMOp.*;
 import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.*;
 import static com.oracle.graal.hotspot.HotSpotBackend.*;
-import static jdk.internal.jvmci.amd64.AMD64.*;
+import static com.oracle.jvmci.amd64.AMD64.*;
 
 import java.util.*;
-
-import jdk.internal.jvmci.amd64.*;
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.hotspot.HotSpotVMConfig.*;
-import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.asm.amd64.AMD64Address.Scale;
 import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MIOp;
@@ -58,6 +50,13 @@ import com.oracle.graal.lir.amd64.AMD64Move.MoveFromRegOp;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
+import com.oracle.jvmci.amd64.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.hotspot.*;
+import com.oracle.jvmci.hotspot.HotSpotVMConfig.CompressEncoding;
+import com.oracle.jvmci.meta.*;
 
 /**
  * LIR generator specialized for AMD64 HotSpot.
@@ -96,7 +95,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         /**
          * The variable reserved for saving RBP.
          *
-         * This should be either allocated to RBP, or to {@link #reservedSlot}.
+         * This should be either allocated to RBP, or to reserved stack slot.
          */
         private final AllocatableValue rescueSlot;
 
@@ -317,10 +316,6 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         append(new AMD64RestoreRegistersOp(save.getSlots().clone(), save));
     }
 
-    /**
-     * Gets the {@link Stub} this generator is generating code for or {@code null} if a stub is not
-     * being generated.
-     */
     public Stub getStub() {
         return ((AMD64HotSpotLIRGenerationResult) getResult()).getStub();
     }
@@ -331,33 +326,36 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         boolean destroysRegisters = hotspotLinkage.destroysRegisters();
 
         AMD64SaveRegistersOp save = null;
-        Stub stub = getStub();
         if (destroysRegisters) {
-            if (stub != null && stub.preservesRegisters()) {
-                Register[] savedRegisters = getResult().getFrameMapBuilder().getRegisterConfig().getAllocatableRegisters();
-                save = emitSaveAllRegisters(savedRegisters, true);
+            if (getStub() != null) {
+                if (getStub().preservesRegisters()) {
+                    Register[] savedRegisters = getResult().getFrameMapBuilder().getRegisterConfig().getAllocatableRegisters();
+                    save = emitSaveAllRegisters(savedRegisters, true);
+                }
             }
         }
 
         Variable result;
-        LIRFrameState debugInfo = null;
+        LIRFrameState deoptInfo = null;
         if (hotspotLinkage.canDeoptimize()) {
-            debugInfo = state;
-            assert debugInfo != null || stub != null;
+            deoptInfo = state;
+            assert deoptInfo != null || getStub() != null;
+            assert hotspotLinkage.needsJavaFrameAnchor();
         }
 
         if (hotspotLinkage.needsJavaFrameAnchor()) {
             Register thread = getProviders().getRegisters().getThreadRegister();
             append(new AMD64HotSpotCRuntimeCallPrologueOp(config.threadLastJavaSpOffset(), thread));
-            result = super.emitForeignCall(hotspotLinkage, debugInfo, args);
+            result = super.emitForeignCall(hotspotLinkage, deoptInfo, args);
             append(new AMD64HotSpotCRuntimeCallEpilogueOp(config.threadLastJavaSpOffset(), config.threadLastJavaFpOffset(), thread));
         } else {
-            result = super.emitForeignCall(hotspotLinkage, debugInfo, args);
+            assert deoptInfo == null;
+            result = super.emitForeignCall(hotspotLinkage, null, args);
         }
 
         if (destroysRegisters) {
-            if (stub != null) {
-                if (stub.preservesRegisters()) {
+            if (getStub() != null) {
+                if (getStub().preservesRegisters()) {
                     AMD64HotSpotLIRGenerationResult generationResult = (AMD64HotSpotLIRGenerationResult) getResult();
                     assert !generationResult.getCalleeSaveInfo().containsKey(currentRuntimeCallInfo);
                     generationResult.getCalleeSaveInfo().put(currentRuntimeCallInfo, save);
