@@ -623,22 +623,12 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             return false;
         }
         VariableElement var = element.getParameters().get(0);
-        TypeElement enclosingType = Utils.findNearestEnclosingType(var);
-        if (Utils.typeEquals(var.asType(), enclosingType.asType())) {
-            return true;
-        }
-        List<TypeElement> types = Utils.getDirectSuperTypes(enclosingType);
-        for (TypeElement type : types) {
-            if (!(type instanceof CodeTypeElement)) {
-                // no copy constructors which are not generated types
-                return false;
-            }
+        TypeElement type = Utils.findNearestEnclosingType(var);
 
-            if (Utils.typeEquals(var.asType(), type.asType())) {
-                return true;
-            }
+        if (!Utils.typeEquals(var.asType(), type.asType())) {
+            return false;
         }
-        return false;
+        return true;
     }
 
     @Override
@@ -696,7 +686,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
                 createFactoryMethods(node, clazz, createVisibility);
 
-                if (node.isPolymorphic()) {
+                if (node.getPolymorphicDepth() > 1) {
                     PolymorphicNodeFactory generic = new PolymorphicNodeFactory(getContext(), generatedNode, true);
                     add(generic, node.getGenericPolymorphicSpecialization());
 
@@ -1089,7 +1079,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
             if (node.needsRewrites(context)) {
 
-                if (node.isPolymorphic()) {
+                if (node.getPolymorphicDepth() > 1) {
 
                     CodeVariableElement var = new CodeVariableElement(modifiers(PROTECTED), clazz.asType(), "next0");
                     var.getAnnotationMirrors().add(new CodeAnnotationMirror(getContext().getTruffleTypes().getChildAnnotation()));
@@ -1369,7 +1359,9 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
         private CodeExecutableElement createCopyConstructor(CodeTypeElement type, ExecutableElement superConstructor) {
             CodeExecutableElement method = new CodeExecutableElement(null, type.getSimpleName().toString());
             CodeTreeBuilder builder = method.createBuilder();
-            method.getParameters().add(new CodeVariableElement(type.asType(), "copy"));
+            if (!(superConstructor == null && type.getFields().isEmpty())) {
+                method.getParameters().add(new CodeVariableElement(type.asType(), "copy"));
+            }
 
             if (superConstructor != null) {
                 builder.startStatement().startSuperCall().string("copy").end().end();
@@ -1406,7 +1398,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 }
                 builder.end();
             }
-            if (getModel().getNode().isPolymorphic()) {
+            if (getModel().getNode().getPolymorphicDepth() > 1) {
                 builder.statement("this.next0 = adoptChild(copy.next0)");
             }
 
@@ -1562,7 +1554,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 builder.startIf().string("allowed").end().startBlock();
             }
 
-            if (!current.isGeneric() || !node.isPolymorphic()) {
+            if (!current.isGeneric() || node.getPolymorphicDepth() <= 1) {
                 // generic rewrite
                 builder.tree(createRewriteGeneric(builder, current));
             } else {
@@ -2183,7 +2175,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
             NodeData node = specialization.getNode();
 
-            if (node.needsRewrites(getContext()) && node.isPolymorphic()) {
+            if (node.needsRewrites(getContext()) && node.getPolymorphicDepth() > 1) {
                 createIsCompatible(clazz, specialization);
             }
 
@@ -2193,25 +2185,15 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
         protected void createConstructors(CodeTypeElement clazz) {
             TypeElement superTypeElement = Utils.fromTypeMirror(clazz.getSuperclass());
-            SpecializationData specialization = getModel();
-            NodeData node = specialization.getNode();
             for (ExecutableElement constructor : ElementFilter.constructorsIn(superTypeElement.getEnclosedElements())) {
-                if (specialization.isUninitialized()) {
-                    // ignore copy constructors for uninitialized if not polymorphic
-                    if (isCopyConstructor(constructor) && !node.isPolymorphic()) {
-                        continue;
-                    }
-                } else if (node.getUninitializedSpecialization() != null) {
-                    // ignore others than copy constructors for specialized nodes
-                    if (!isCopyConstructor(constructor)) {
-                        continue;
-                    }
+                if (getModel().getNode().getUninitializedSpecialization() != null && !getModel().isUninitialized() &&
+                                (constructor.getParameters().size() != 1 || constructor.getParameters().get(0).getSimpleName().toString().equals(baseClassName(getModel().getNode())))) {
+                    continue;
                 }
 
                 CodeExecutableElement superConstructor = createSuperConstructor(clazz, constructor);
-
                 if (superConstructor != null) {
-                    if (getModel().isGeneric() && node.isPolymorphic()) {
+                    if (getModel().isGeneric() && getModel().getNode().getPolymorphicDepth() > 1) {
                         CodeTree body = superConstructor.getBodyTree();
                         CodeTreeBuilder builder = superConstructor.createBuilder();
                         builder.tree(body);
