@@ -128,9 +128,7 @@ public class NodeData extends Template {
 
     public ExecutableTypeData findGenericExecutableType(ProcessorContext context) {
         List<ExecutableTypeData> types = findGenericExecutableTypes(context);
-        if (types.isEmpty()) {
-            return null;
-        } else if (types.size() == 1) {
+        if (types.size() == 1) {
             return types.get(0);
         } else if (types.size() == 2) {
             if (types.get(0).getType().isVoid()) {
