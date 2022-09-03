@@ -24,9 +24,9 @@ package com.oracle.graal.api.runtime;
 
 import java.util.*;
 
-import sun.reflect.*;
+import com.oracle.jvmci.runtime.*;
 
-import com.oracle.jvmci.service.*;
+import sun.reflect.*;
 
 /**
  * Access point for {@linkplain #getRuntime() retrieving} the single {@link GraalRuntime} instance.
@@ -36,12 +36,12 @@ public class Graal {
     private static final GraalRuntime runtime = initializeRuntime();
 
     private static GraalRuntime initializeRuntime() {
-        GraalRuntimeAccess access = Services.loadSingle(GraalRuntimeAccess.class, false);
-        if (access != null) {
-            GraalRuntime rt = access.getRuntime();
-            // The constant is patched in-situ by the build system
-            System.setProperty("graal.version", "@@graal.version@@".trim());
-            assert !System.getProperty("graal.version").startsWith("@@") && !System.getProperty("graal.version").endsWith("@@") : "Graal version string constant was not patched by build system";
+        GraalRuntime rt = null;
+        for (GraalRuntimeFactory factory : Services.load(GraalRuntimeFactory.class)) {
+            assert rt == null : String.format("Multiple %s implementations found: %s, %s", GraalRuntime.class.getName(), rt.getClass().getName(), factory.getRuntime().getClass().getName());
+            rt = factory.getRuntime();
+        }
+        if (rt != null) {
             return rt;
         }
         return new InvalidGraalRuntime();
