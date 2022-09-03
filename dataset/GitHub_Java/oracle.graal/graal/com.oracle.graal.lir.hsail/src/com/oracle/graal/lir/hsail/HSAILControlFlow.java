@@ -25,12 +25,10 @@ package com.oracle.graal.lir.hsail;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.hsail.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.BlockEndOp;
-import com.oracle.graal.lir.SwitchStrategy.BaseSwitchClosure;
+import com.oracle.graal.lir.StandardOp.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.calc.*;
 
@@ -48,7 +46,7 @@ public class HSAILControlFlow {
      * performing HSAIL code. Thus the execution path for both the TABLESWITCH and LOOKUPSWITCH
      * bytecodes go through this op.
      */
-    public static class StrategySwitchOp extends HSAILLIRInstruction implements BlockEndOp {
+    public static class SwitchOp extends HSAILLIRInstruction implements BlockEndOp {
         /**
          * The array of key constants used for the cases of this switch statement.
          */
@@ -63,19 +61,20 @@ public class HSAILControlFlow {
          */
         @Alive({REG}) protected Value key;
 
-        private final SwitchStrategy strategy;
-
         /**
-         * Constructor. Called from the HSAILLIRGenerator.emitStrategySwitch routine.
+         * Constructor. Called from the HSAILLIRGenerator.emitSequentialSwitch routine.
+         * 
+         * @param keyConstants
+         * @param keyTargets
+         * @param defaultTarget
+         * @param key
          */
-        public StrategySwitchOp(SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Value key) {
-            this.strategy = strategy;
-            this.keyConstants = strategy.keyConstants;
+        public SwitchOp(Constant[] keyConstants, LabelRef[] keyTargets, LabelRef defaultTarget, Value key) {
+            assert keyConstants.length == keyTargets.length;
+            this.keyConstants = keyConstants;
             this.keyTargets = keyTargets;
             this.defaultTarget = defaultTarget;
             this.key = key;
-            assert keyConstants.length == keyTargets.length;
-            assert keyConstants.length == strategy.keyProbabilities.length;
         }
 
         /**
@@ -90,24 +89,22 @@ public class HSAILControlFlow {
          * @param masm the HSAIL assembler
          */
         @Override
-        public void emitCode(CompilationResultBuilder crb, final HSAILAssembler masm) {
-            BaseSwitchClosure closure = new BaseSwitchClosure(crb, masm, keyTargets, defaultTarget) {
-                @Override
-                protected void conditionalJump(int index, Condition condition, Label target) {
-                    switch (key.getKind()) {
-                        case Int:
-                            // Generate cascading compare and branches for each case.
-                            masm.emitCompare(key, keyConstants[index], HSAILCompare.conditionToString(condition), false, false);
-                            masm.cbr(masm.nameOf(target));
-                            break;
-                        case Long:
-                        case Object:
-                        default:
-                            throw new GraalInternalError("switch only supported for int");
-                    }
+        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+            if (key.getKind() == Kind.Int) {
+                for (int i = 0; i < keyConstants.length; i++) {
+                    // Generate cascading compare and branches for each case.
+                    masm.emitCompare(key, keyConstants[i], "eq", false, false);
+                    masm.cbr(masm.nameOf(keyTargets[i].label()));
                 }
-            };
-            strategy.run(closure);
+                // Generate a jump for the default target if there is one.
+                if (defaultTarget != null && !defaultTarget.isCodeEmittingOrderSuccessorEdge(crb.getCurrentBlockIndex())) {
+                    masm.jmp(defaultTarget.label());
+                }
+
+            } else {
+                // Throw an exception if the key isn't of type int.
+                throw new GraalInternalError("Switch statments are only supported for int keys");
+            }
         }
     }
 

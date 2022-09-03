@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.LIRInstruction.StateProcedure;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.*;
@@ -141,6 +140,8 @@ public class LIR {
     public void emitCode(CompilationResultBuilder crb) {
         crb.frameContext.enter(crb);
 
+        // notifyBlocksOfSuccessors();
+
         int index = 0;
         for (Block b : codeEmittingOrder) {
             crb.setCurrentBlockIndex(index++);
@@ -188,55 +189,15 @@ public class LIR {
         return hasArgInCallerFrame;
     }
 
-    /**
-     * Gets the exception edge (if any) originating at a given operation.
-     */
-    public static LabelRef getExceptionEdge(LIRInstruction op) {
-        final LabelRef[] exceptionEdge = {null};
-        op.forEachState(new StateProcedure() {
-            @Override
-            protected void doState(LIRFrameState state) {
-                if (state.exceptionEdge != null) {
-                    assert exceptionEdge[0] == null;
-                    exceptionEdge[0] = state.exceptionEdge;
-                }
-            }
-        });
-        return exceptionEdge[0];
-    }
-
-    /**
-     * The maximum distance an operation with an {@linkplain #getExceptionEdge(LIRInstruction)
-     * exception edge} can be from the last instruction of a LIR block. The value of 2 is based on a
-     * non-void call operation that has an exception edge. Such a call op will have a move op after
-     * it to put the return value into the result variable.
-     * <p>
-     * The rationale for such a constant is to limit the search for an insertion point when adding
-     * move operations at the end of a block. Such moves must be inserted before all control flow
-     * instructions.
-     */
-    public static final int MAX_EXCEPTION_EDGE_OP_DISTANCE_FROM_END = 2;
-
     public static boolean verifyBlock(LIR lir, Block block) {
         List<LIRInstruction> ops = lir.lir(block);
         if (ops.size() == 0) {
-            return false;
+            return true;
         }
-        LIRInstruction opWithExceptionEdge = null;
-        int index = 0;
-        int lastIndex = ops.size() - 1;
-        for (LIRInstruction op : ops.subList(0, lastIndex)) {
+        for (LIRInstruction op : ops.subList(0, ops.size() - 1)) {
             assert !(op instanceof BlockEndOp) : op.getClass();
-            LabelRef exceptionEdge = getExceptionEdge(op);
-            if (exceptionEdge != null) {
-                assert opWithExceptionEdge == null : "multiple ops with an exception edge not allowed";
-                opWithExceptionEdge = op;
-                int distanceFromEnd = lastIndex - index;
-                assert distanceFromEnd <= MAX_EXCEPTION_EDGE_OP_DISTANCE_FROM_END;
-            }
-            index++;
         }
-        LIRInstruction end = ops.get(lastIndex);
+        LIRInstruction end = ops.get(ops.size() - 1);
         assert end instanceof BlockEndOp : end.getClass();
         return true;
     }
@@ -249,9 +210,7 @@ public class LIR {
             for (Block pred : block.getPredecessors()) {
                 assert blocks.contains(pred) : "missing predecessor from: " + block + "to: " + pred;
             }
-            if (!verifyBlock(lir, block)) {
-                return false;
-            }
+            verifyBlock(lir, block);
         }
         return true;
     }
