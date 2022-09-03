@@ -23,10 +23,12 @@
 package org.graalvm.compiler.options;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Formatter;
 import java.util.List;
 import java.util.ServiceLoader;
 
+import org.graalvm.util.CollectionsUtil;
 import org.graalvm.util.EconomicMap;
 import org.graalvm.util.MapCursor;
 
@@ -37,15 +39,35 @@ import org.graalvm.util.MapCursor;
 public class OptionsParser {
 
     /**
+     * Gets an iterable composed of the {@link ServiceLoader}s to be used when looking for
+     * {@link OptionDescriptors} providers.
+     */
+    public static Iterable<OptionDescriptors> getOptionsLoader() {
+        ServiceLoader<OptionDescriptors> graalLoader = ServiceLoader.load(OptionDescriptors.class, OptionDescriptors.class.getClassLoader());
+        boolean java8OrEarlier = System.getProperty("java.specification.version").compareTo("1.9") < 0;
+        if (java8OrEarlier) {
+            return graalLoader;
+        } else {
+            /*
+             * The Graal module (i.e., jdk.internal.vm.compiler) is loaded by the platform class
+             * loader on JDK 9. Other modules that extend Graal or are Graal dependencies (such as
+             * Truffle) are supplied via --module-path which means they are loaded by the app class
+             * loader. As such, we need to search the app class loader path as well.
+             */
+            ServiceLoader<OptionDescriptors> truffleLoader = ServiceLoader.load(OptionDescriptors.class, ClassLoader.getSystemClassLoader());
+            return CollectionsUtil.concat(graalLoader, truffleLoader);
+        }
+    }
+
+    /**
      * Parses a map representing assignments of values to options.
      *
      * @param optionSettings option settings (i.e., assignments of values to options)
      * @param values the object in which to store the parsed values
-     * @param loader the loader for {@linkplain #lookup(ServiceLoader, String) looking} up
-     *            {@link OptionDescriptor}s
+     * @param loader source of the available {@link OptionDescriptors}
      * @throws IllegalArgumentException if there's a problem parsing {@code option}
      */
-    public static void parseOptions(EconomicMap<String, String> optionSettings, EconomicMap<OptionKey<?>, Object> values, ServiceLoader<OptionDescriptors> loader) {
+    public static void parseOptions(EconomicMap<String, String> optionSettings, EconomicMap<OptionKey<?>, Object> values, Iterable<OptionDescriptors> loader) {
         if (optionSettings != null && !optionSettings.isEmpty()) {
             MapCursor<String, String> cursor = optionSettings.getEntries();
             while (cursor.advance()) {
@@ -70,12 +92,12 @@ public class OptionsParser {
     /**
      * Looks up an {@link OptionDescriptor} based on a given name.
      *
-     * @param loader provides the available {@link OptionDescriptor}s
+     * @param loader source of the available {@link OptionDescriptors}
      * @param name the name of the option to look up
      * @return the {@link OptionDescriptor} whose name equals {@code name} or null if not such
      *         descriptor is available
      */
-    private static OptionDescriptor lookup(ServiceLoader<OptionDescriptors> loader, String name) {
+    private static OptionDescriptor lookup(Iterable<OptionDescriptors> loader, String name) {
         for (OptionDescriptors optionDescriptors : loader) {
             OptionDescriptor desc = optionDescriptors.get(name);
             if (desc != null) {
@@ -91,11 +113,10 @@ public class OptionsParser {
      * @param name the option name
      * @param uncheckedValue the unchecked value for the option
      * @param values the object in which to store the parsed option and value
-     * @param loader the loader for {@linkplain #lookup(ServiceLoader, String) looking} up
-     *            {@link OptionDescriptor}s
+     * @param loader source of the available {@link OptionDescriptors}
      * @throws IllegalArgumentException if there's a problem parsing {@code option}
      */
-    static void parseOption(String name, Object uncheckedValue, EconomicMap<OptionKey<?>, Object> values, ServiceLoader<OptionDescriptors> loader) {
+    static void parseOption(String name, Object uncheckedValue, EconomicMap<OptionKey<?>, Object> values, Iterable<OptionDescriptors> loader) {
 
         OptionDescriptor desc = lookup(loader, name);
         if (desc == null) {
@@ -202,16 +223,32 @@ public class OptionsParser {
     /**
      * Returns the set of options that fuzzy match a given option name.
      */
-    private static List<OptionDescriptor> fuzzyMatch(ServiceLoader<OptionDescriptors> loader, String optionName) {
+    private static List<OptionDescriptor> fuzzyMatch(Iterable<OptionDescriptors> loader, String optionName) {
         List<OptionDescriptor> matches = new ArrayList<>();
         for (OptionDescriptors options : loader) {
-            for (OptionDescriptor option : options) {
-                float score = stringSimiliarity(option.getName(), optionName);
-                if (score >= FUZZY_MATCH_THRESHOLD) {
-                    matches.add(option);
-                }
-            }
+            collectFuzzyMatches(options, optionName, matches);
         }
         return matches;
+    }
+
+    /**
+     * Collects the set of options that fuzzy match a given option name. String similarity for fuzzy
+     * matching is based on Dice's coefficient.
+     *
+     * @param toSearch the set of option descriptors to search
+     * @param name the option name to search for
+     * @param matches the collection to which fuzzy matches of {@code name} will be added
+     * @return whether any fuzzy matches were found
+     */
+    public static boolean collectFuzzyMatches(Iterable<OptionDescriptor> toSearch, String name, Collection<OptionDescriptor> matches) {
+        boolean found = false;
+        for (OptionDescriptor option : toSearch) {
+            float score = stringSimiliarity(option.getName(), name);
+            if (score >= FUZZY_MATCH_THRESHOLD) {
+                found = true;
+                matches.add(option);
+            }
+        }
+        return found;
     }
 }
