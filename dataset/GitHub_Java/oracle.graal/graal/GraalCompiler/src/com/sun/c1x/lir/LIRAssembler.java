@@ -24,6 +24,7 @@ package com.sun.c1x.lir;
 
 import java.util.*;
 
+import com.oracle.max.asm.*;
 import com.sun.c1x.*;
 import com.sun.c1x.asm.*;
 import com.sun.c1x.debug.*;
@@ -31,7 +32,6 @@ import com.sun.c1x.gen.*;
 import com.sun.c1x.ir.*;
 import com.sun.c1x.lir.FrameMap.StackBlock;
 import com.sun.c1x.util.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ci.CiTargetMethod.Mark;
 import com.sun.cri.ri.*;
@@ -39,14 +39,11 @@ import com.sun.cri.xir.CiXirAssembler.XirMark;
 
 /**
  * The {@code LIRAssembler} class definition.
- *
- * @author Marcelo Cintra
- * @author Thomas Wuerthinger
- * @author Ben L. Titzer
  */
 public abstract class LIRAssembler {
 
     public final C1XCompilation compilation;
+    public final TargetMethodAssembler tasm;
     public final AbstractAssembler asm;
     public final FrameMap frameMap;
     public int registerRestoreEpilogueOffset = -1;
@@ -70,7 +67,8 @@ public abstract class LIRAssembler {
 
     public LIRAssembler(C1XCompilation compilation) {
         this.compilation = compilation;
-        this.asm = compilation.masm();
+        this.tasm = compilation.assembler();
+        this.asm = tasm.asm;
         this.frameMap = compilation.frameMap();
         this.branchTargetBlocks = new ArrayList<BlockBegin>();
         this.xirSlowPath = new ArrayList<SlowPath>();
@@ -98,35 +96,6 @@ public abstract class LIRAssembler {
 
     public abstract void emitTraps();
 
-    public void emitExceptionEntries() {
-        if (asm.exceptionInfoList == null) {
-            return;
-        }
-        for (ExceptionInfo ilist : asm.exceptionInfoList) {
-            List<ExceptionHandler> handlers = ilist.exceptionHandlers;
-
-            for (ExceptionHandler handler : handlers) {
-                assert handler.lirOpId() != -1 : "handler not processed by LinearScan";
-                assert handler.entryCode() == null || handler.entryCode().instructionsList().get(handler.entryCode().instructionsList().size() - 1).code == LIROpcode.Branch : "last operation must be branch";
-
-                if (handler.entryCodeOffset() == -1) {
-                    // entry code not emitted yet
-                    if (handler.entryCode() != null && handler.entryCode().instructionsList().size() > 1) {
-                        handler.setEntryCodeOffset(codePos());
-                        if (C1XOptions.CommentedAssembly) {
-                            asm.blockComment("Exception adapter block");
-                        }
-                        emitLirList(handler.entryCode());
-                    } else {
-                        handler.setEntryCodeOffset(handler.entryBlock().exceptionHandlerPco());
-                    }
-
-                    assert handler.entryCodeOffset() != -1 : "must be set now";
-                }
-            }
-        }
-    }
-
     public void emitCode(List<BlockBegin> hir) {
         if (C1XOptions.PrintLIR && !TTY.isSuppressed()) {
             LIRList.printLIR(hir);
@@ -144,12 +113,7 @@ public abstract class LIRAssembler {
             emitAlignment();
         }
 
-        // if this block is the start of an exception handler, record the
-        // PC offset of the first instruction for later construction of
-        // the ExceptionHandlerTable
-        if (block.checkBlockFlag(BlockBegin.BlockFlag.ExceptionEntry)) {
-            block.setExceptionHandlerPco(codePos());
-        }
+        block.setBlockEntryPco(codePos());
 
         if (C1XOptions.PrintLIRWithAssembly) {
             block.printWithoutPhis(TTY.out());
@@ -158,7 +122,7 @@ public abstract class LIRAssembler {
         assert block.lir() != null : "must have LIR";
         if (C1XOptions.CommentedAssembly) {
             String st = String.format(" block B%d [%d, %d]", block.blockID, block.bci(), block.end().bci());
-            asm.blockComment(st);
+            tasm.blockComment(st);
         }
 
         emitLirList(block.lir());
@@ -171,7 +135,7 @@ public abstract class LIRAssembler {
             if (C1XOptions.CommentedAssembly) {
                 // Only print out branches
                 if (op.code == LIROpcode.Branch) {
-                    asm.blockComment(op.toStringWithIdPrefix());
+                    tasm.blockComment(op.toStringWithIdPrefix());
                 }
             }
             if (C1XOptions.PrintLIRWithAssembly && !TTY.isSuppressed()) {
@@ -213,13 +177,6 @@ public abstract class LIRAssembler {
         return true;
     }
 
-    static FrameState stateBefore(Value ins) {
-        if (ins instanceof Instruction) {
-            return ((Instruction) ins).stateBefore();
-        }
-        return null;
-    }
-
     void emitCall(LIRCall op) {
         verifyOopMap(op.info);
 
@@ -228,15 +185,15 @@ public abstract class LIRAssembler {
                 emitCallAlignment(op.code);
                 // fall through
             case ConstDirectCall:
-               if (op.marks != null) {
-                    op.marks.put(XirMark.CALLSITE, asm.recordMark(null, new Mark[0]));
+                if (op.marks != null) {
+                    op.marks.put(XirMark.CALLSITE, tasm.recordMark(null, new Mark[0]));
                 }
                 emitDirectCall(op.target, op.info);
                 break;
             case IndirectCall:
                 emitCallAlignment(op.code);
                 if (op.marks != null) {
-                    op.marks.put(XirMark.CALLSITE, asm.recordMark(null, new Mark[0]));
+                    op.marks.put(XirMark.CALLSITE, tasm.recordMark(null, new Mark[0]));
                 }
                 emitIndirectCall(op.target, op.info, op.targetAddress());
                 break;
@@ -282,12 +239,7 @@ public abstract class LIRAssembler {
                 emitLea(op.operand(), op.result());
                 break;
             case NullCheck:
-                assert op.operand().isRegister();
-                if (C1XOptions.NullCheckUniquePc) {
-                    asm.nop();
-                }
-                asm.recordImplicitException(codePos(), op.info);
-                asm.nullCheck(op.operand().asRegister());
+                emitNullCheck(op.operand(), op.info);
                 break;
             case Lsb:
                 emitSignificantBitOp(false,  op.operand(), op.result());
@@ -295,7 +247,7 @@ public abstract class LIRAssembler {
             case Msb:
                 emitSignificantBitOp(true,  op.operand(), op.result());
                 break;
-           default:
+            default:
                 throw Util.shouldNotReachHere();
         }
     }
@@ -375,8 +327,7 @@ public abstract class LIRAssembler {
                 break;
 
             case Throw:
-            case Unwind:
-                emitThrow(op.operand1(), op.operand2(), op.info, op.code == LIROpcode.Unwind);
+                emitThrow(op.operand1(), op.operand2(), op.info);
                 break;
 
             default:
@@ -457,6 +408,8 @@ public abstract class LIRAssembler {
 
     protected abstract void emitLea(CiValue src, CiValue dst);
 
+    protected abstract void emitNullCheck(CiValue src, LIRDebugInfo info);
+
     protected abstract void emitNegate(LIRNegate negate);
 
     protected abstract void emitHere(CiValue dst, LIRDebugInfo info, boolean infoOnly);
@@ -473,7 +426,7 @@ public abstract class LIRAssembler {
 
     protected abstract void emitVolatileMove(CiValue inOpr, CiValue result, CiKind kind, LIRDebugInfo info);
 
-    protected abstract void emitThrow(CiValue inOpr1, CiValue inOpr2, LIRDebugInfo info, boolean unwind);
+    protected abstract void emitThrow(CiValue inOpr1, CiValue inOpr2, LIRDebugInfo info);
 
     protected abstract void emitLogicOp(LIROpcode code, CiValue inOpr1, CiValue inOpr2, CiValue dst);
 

@@ -44,6 +44,4 @@ public interface FrameStateAccess {
 
     FrameState duplicateWithEmptyStack(int bci);
 
-    void setValueAt(int j, Value v);
-
 }

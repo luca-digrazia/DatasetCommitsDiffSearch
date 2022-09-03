@@ -40,7 +40,7 @@ public final class Phi extends Value {
 
     @Override
     protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT + maxValues;
+        return super.inputCount() + INPUT_COUNT;
     }
 
     @Override
@@ -56,13 +56,11 @@ public final class Phi extends Value {
         return (BlockBegin) inputs().get(super.inputCount() + INPUT_BLOCK);
     }
 
-    public Value setBlock(Value n) {
+    public BlockBegin setBlock(Value n) {
         return (BlockBegin) inputs().set(super.inputCount() + INPUT_BLOCK, n);
     }
 
     private final int index;
-    private final int maxValues;
-    private int usedInputCount;
 
     /**
      * Create a new Phi for the specified join block and local variable (or operand stack) slot.
@@ -72,13 +70,7 @@ public final class Phi extends Value {
      * @param graph
      */
     public Phi(CiKind kind, BlockBegin block, int index, Graph graph) {
-        this(kind, block, index, 2, graph);
-    }
-
-    public Phi(CiKind kind, BlockBegin block, int index, int maxValues, Graph graph) {
-        super(kind, INPUT_COUNT + maxValues, SUCCESSOR_COUNT, graph);
-        usedInputCount = 1;
-        this.maxValues = maxValues;
+        super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.index = index;
         setBlock(block);
     }
@@ -124,7 +116,7 @@ public final class Phi extends Value {
      * @return the instruction that produced the value in the i'th predecessor
      */
     public Value inputAt(int i) {
-        return (Value) inputs().get(i + INPUT_COUNT);
+        return inputIn(block().blockPredecessors().get(i).stateAfter());
     }
 
     /**
@@ -145,7 +137,7 @@ public final class Phi extends Value {
      * @return the number of inputs in this phi
      */
     public int phiInputCount() {
-        return usedInputCount - 1;
+        return block().blockPredecessors().size();
     }
 
     @Override
@@ -169,22 +161,6 @@ public final class Phi extends Value {
     @Override
     public String shortName() {
         return "Phi: " + index + " (" + phiInputCount() + ")";
-    }
-
-    public Phi addInput(Value y) {
-        assert !this.isDeleted() && !y.isDeleted();
-        Phi phi = this;
-        if (usedInputCount == inputs().size()) {
-            phi = new Phi(kind, block(), index, maxValues * 2, graph());
-            for (int i = 0; i < phiInputCount(); ++i) {
-                phi.addInput(inputAt(i));
-            }
-            phi.addInput(y);
-            this.replace(phi);
-        } else {
-            phi.inputs().set(usedInputCount++, y);
-        }
-        return phi;
     }
 
 

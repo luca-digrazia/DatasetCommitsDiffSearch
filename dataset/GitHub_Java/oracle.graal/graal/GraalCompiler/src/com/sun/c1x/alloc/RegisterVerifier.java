@@ -26,6 +26,7 @@ import java.util.*;
 
 import com.sun.c1x.*;
 import com.sun.c1x.debug.*;
+import com.sun.c1x.ir.*;
 import com.sun.c1x.lir.*;
 import com.sun.c1x.util.*;
 import com.sun.cri.ci.*;
@@ -37,7 +38,7 @@ import com.sun.cri.ci.*;
 final class RegisterVerifier {
 
     LinearScan allocator;
-    List<LIRBlock> workList; // all blocks that must be processed
+    List<BlockBegin> workList; // all blocks that must be processed
     ArrayMap<Interval[]> savedStates; // saved information of previous check
 
     // simplified access to methods of LinearScan
@@ -55,15 +56,15 @@ final class RegisterVerifier {
     }
 
     // accessors
-    Interval[] stateForBlock(LIRBlock block) {
-        return savedStates.get(block.blockID());
+    Interval[] stateForBlock(BlockBegin block) {
+        return savedStates.get(block.blockID);
     }
 
-    void setStateForBlock(LIRBlock block, Interval[] savedState) {
-        savedStates.put(block.blockID(), savedState);
+    void setStateForBlock(BlockBegin block, Interval[] savedState) {
+        savedStates.put(block.blockID, savedState);
     }
 
-    void addToWorkList(LIRBlock block) {
+    void addToWorkList(BlockBegin block) {
         if (!workList.contains(block)) {
             workList.add(block);
         }
@@ -71,12 +72,12 @@ final class RegisterVerifier {
 
     RegisterVerifier(LinearScan allocator) {
         this.allocator = allocator;
-        workList = new ArrayList<LIRBlock>(16);
+        workList = new ArrayList<BlockBegin>(16);
         this.savedStates = new ArrayMap<Interval[]>();
 
     }
 
-    void verify(LIRBlock start) {
+    void verify(BlockBegin start) {
         // setup input registers (method arguments) for first block
         Interval[] inputState = new Interval[stateSize()];
         CiCallingConvention args = compilation().frameMap().incomingArguments();
@@ -94,17 +95,17 @@ final class RegisterVerifier {
 
         // main loop for verification
         do {
-            LIRBlock block = workList.get(0);
+            BlockBegin block = workList.get(0);
             workList.remove(0);
 
             processBlock(block);
         } while (!workList.isEmpty());
     }
 
-    private void processBlock(LIRBlock block) {
+    void processBlock(BlockBegin block) {
         if (C1XOptions.TraceLinearScanLevel >= 2) {
             TTY.println();
-            TTY.println("processBlock B%d", block.blockID());
+            TTY.println("processBlock B%d", block.blockID);
         }
 
         // must copy state because it is modified
@@ -128,12 +129,26 @@ final class RegisterVerifier {
         processOperations(block.lir(), inputState);
 
         // iterate all successors
-        for (LIRBlock succ : block.blockSuccessors()) {
+        for (BlockBegin succ : block.end().blockSuccessors()) {
             processSuccessor(succ, inputState);
         }
     }
 
-    private void processSuccessor(LIRBlock block, Interval[] inputState) {
+    void processXhandler(BlockBegin xhandler, Interval[] inputState) {
+        if (C1XOptions.TraceLinearScanLevel >= 2) {
+            TTY.println("processXhandler B%d", xhandler.blockID);
+        }
+
+        // must copy state because it is modified
+        inputState = copy(inputState);
+
+        if (xhandler.lir() != null) {
+            processOperations(xhandler.lir(), inputState);
+        }
+        processSuccessor(xhandler, inputState);
+    }
+
+    void processSuccessor(BlockBegin block, Interval[] inputState) {
         Interval[] savedState = stateForBlock(block);
 
         if (savedState != null) {
@@ -153,7 +168,7 @@ final class RegisterVerifier {
                         savedState[i] = null;
 
                         if (C1XOptions.TraceLinearScanLevel >= 4) {
-                            TTY.println("processSuccessor B%d: invalidating slot %d", block.blockID(), i);
+                            TTY.println("processSuccessor B%d: invalidating slot %d", block.blockID, i);
                         }
                     }
                 }
@@ -162,12 +177,12 @@ final class RegisterVerifier {
             if (savedStateCorrect) {
                 // already processed block with correct inputState
                 if (C1XOptions.TraceLinearScanLevel >= 2) {
-                    TTY.println("processSuccessor B%d: previous visit already correct", block.blockID());
+                    TTY.println("processSuccessor B%d: previous visit already correct", block.blockID);
                 }
             } else {
                 // must re-visit this block
                 if (C1XOptions.TraceLinearScanLevel >= 2) {
-                    TTY.println("processSuccessor B%d: must re-visit because input state changed", block.blockID());
+                    TTY.println("processSuccessor B%d: must re-visit because input state changed", block.blockID);
                 }
                 addToWorkList(block);
             }
@@ -175,7 +190,7 @@ final class RegisterVerifier {
         } else {
             // block was not processed before, so set initial inputState
             if (C1XOptions.TraceLinearScanLevel >= 2) {
-                TTY.println("processSuccessor B%d: initial visit", block.blockID());
+                TTY.println("processSuccessor B%d: initial visit", block.blockID);
             }
 
             setStateForBlock(block, copy(inputState));
@@ -242,6 +257,11 @@ final class RegisterVerifier {
                 for (CiRegister r : allocator.compilation.registerConfig.getCallerSaveRegisters()) {
                     statePut(inputState, r.asValue(), null);
                 }
+            }
+
+            // process xhandler before output and temp operands
+            if (op.exceptionEdge() != null) {
+                processXhandler(op.exceptionEdge(), inputState);
             }
 
             // set temp operands (some operations use temp operands also as output operands, so can't set them null)

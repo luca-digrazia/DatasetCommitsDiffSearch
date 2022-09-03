@@ -59,12 +59,12 @@ final class EdgeMoveOptimizer {
      *
      * @param blockList a list of blocks whose moves should be optimized
      */
-    public static void optimize(List<LIRBlock> blockList) {
+    public static void optimize(List<BlockBegin> blockList) {
         EdgeMoveOptimizer optimizer = new EdgeMoveOptimizer();
 
         // ignore the first block in the list (index 0 is not processed)
         for (int i = blockList.size() - 1; i >= 1; i--) {
-            LIRBlock block = blockList.get(i);
+            BlockBegin block = blockList.get(i);
 
             if (block.numberOfPreds() > 1) {
                 optimizer.optimizeMovesAtBlockEnd(block);
@@ -111,8 +111,8 @@ final class EdgeMoveOptimizer {
      * Moves the longest {@linkplain #same common} subsequence at the end all
      * predecessors of {@code block} to the start of {@code block}.
      */
-    private void optimizeMovesAtBlockEnd(LIRBlock block) {
-        if (block.isPredecessor(block)) {
+    private void optimizeMovesAtBlockEnd(BlockBegin block) {
+        if (block.isPredecessor(block.end())) {
             // currently we can't handle this correctly.
             return;
         }
@@ -125,9 +125,7 @@ final class EdgeMoveOptimizer {
 
         // setup a list with the LIR instructions of all predecessors
         for (int i = 0; i < numPreds; i++) {
-            LIRBlock pred = block.predAt(i);
-            assert pred != null;
-            assert pred.lir() != null;
+            BlockBegin pred = block.predAt(i).block();
             List<LIRInstruction> predInstructions = pred.lir().instructionsList();
 
             if (pred.numberOfSux() != 1) {
@@ -182,7 +180,7 @@ final class EdgeMoveOptimizer {
      * successors of {@code block} to the end of {@code block} just prior to the
      * branch instruction ending {@code block}.
      */
-    private void optimizeMovesAtBlockBegin(LIRBlock block) {
+    private void optimizeMovesAtBlockBegin(BlockBegin block) {
 
         edgeInstructionSeqences.clear();
         int numSux = block.numberOfSux();
@@ -222,7 +220,7 @@ final class EdgeMoveOptimizer {
 
         // setup a list with the lir-instructions of all successors
         for (int i = 0; i < numSux; i++) {
-            LIRBlock sux = block.suxAt(i);
+            BlockBegin sux = block.suxAt(i);
             List<LIRInstruction> suxInstructions = sux.lir().instructionsList();
 
             assert suxInstructions.get(0).code == LIROpcode.Label : "block must start with label";
@@ -232,7 +230,7 @@ final class EdgeMoveOptimizer {
                 // the same blocks.
                 return;
             }
-            assert sux.predAt(0) == block : "invalid control flow";
+            assert sux.predAt(0).block() == block : "invalid control flow";
 
             // ignore the label at the beginning of the block
             List<LIRInstruction> seq = suxInstructions.subList(1, suxInstructions.size());

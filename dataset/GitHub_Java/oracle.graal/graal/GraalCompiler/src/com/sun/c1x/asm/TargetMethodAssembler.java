@@ -64,7 +64,7 @@ public class TargetMethodAssembler {
         if (exceptionInfoList != null) {
             for (ExceptionInfo ei : exceptionInfoList) {
                 int codeOffset = ei.codeOffset;
-                targetMethod.recordExceptionHandler(codeOffset, -1, 0, ei.exceptionEdge.blockEntryPco, -1, null);
+                targetMethod.recordExceptionHandler(codeOffset, -1, 0, ei.exceptionEdge.lirBlock.blockEntryPco, -1, null);
             }
         }
 
@@ -140,11 +140,11 @@ public class TargetMethodAssembler {
 
     public void recordExceptionHandlers(int pcOffset, LIRDebugInfo info) {
         if (info != null) {
-            if (info.exceptionEdge() != null) {
+            if (info.exceptionEdge != null) {
                 if (exceptionInfoList == null) {
                     exceptionInfoList = new ArrayList<ExceptionInfo>(4);
                 }
-                exceptionInfoList.add(new ExceptionInfo(pcOffset, info.exceptionEdge(), info.state.bci));
+                exceptionInfoList.add(new ExceptionInfo(pcOffset, info.exceptionEdge, info.state.bci));
             }
         }
     }
@@ -155,7 +155,7 @@ public class TargetMethodAssembler {
             assert lastSafepointPos < pcOffset;
             lastSafepointPos = pcOffset;
             targetMethod.recordSafepoint(pcOffset, info.debugInfo());
-            assert info.exceptionEdge() == null;
+            recordExceptionHandlers(pcOffset, info);
         }
     }
 

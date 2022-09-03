@@ -22,13 +22,8 @@
  */
 package com.sun.c1x.lir;
 
-import java.util.*;
-
 import com.oracle.max.asm.*;
 import com.sun.c1x.alloc.*;
-import com.sun.c1x.debug.*;
-import com.sun.c1x.ir.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 
 /**
@@ -36,12 +31,11 @@ import com.sun.cri.ci.*;
  */
 public final class LIRBlock {
 
+    public LIRBlock() {
+    }
+
     public final Label label = new Label();
     private LIRList lir;
-    private final int blockID;
-    private List<Instruction> instructions = new ArrayList<Instruction>(4);
-    private List<LIRBlock> predecessors = new ArrayList<LIRBlock>();
-    private List<LIRBlock> successors = new ArrayList<LIRBlock>();
 
     /**
      * Bit map specifying which {@linkplain OperandPool operands} are live upon entry to this block.
@@ -72,38 +66,9 @@ public final class LIRBlock {
      */
     public CiBitMap liveKill;
 
-    private int firstLirInstructionID;
-    private int lastLirInstructionID;
+    public int firstLirInstructionID;
+    public int lastLirInstructionID;
     public int blockEntryPco;
-
-    public LIRBlock(int blockID) {
-        this.blockID = blockID;
-        loopIndex = -1;
-        linearScanNumber = blockID;
-    }
-
-    public List<Instruction> getInstructions() {
-        return instructions;
-    }
-
-    public int firstLirInstructionId() {
-        return firstLirInstructionID;
-    }
-
-    public void setFirstLirInstructionId(int firstLirInstructionId) {
-        this.firstLirInstructionID = firstLirInstructionId;
-    }
-
-    public int lastLirInstructionId() {
-        return lastLirInstructionID;
-    }
-
-    public void setLastLirInstructionId(int lastLirInstructionId) {
-        this.lastLirInstructionID = lastLirInstructionId;
-    }
-
-    public int loopDepth;
-    public int loopIndex;
 
     public LIRList lir() {
         return lir;
@@ -111,96 +76,5 @@ public final class LIRBlock {
 
     public void setLir(LIRList lir) {
         this.lir = lir;
-    }
-
-    public void setBlockEntryPco(int codePos) {
-        this.blockEntryPco = codePos;
-    }
-
-    public void printWithoutPhis(LogStream out) {
-        out.println("LIR Block " + blockID());
-    }
-
-    public int blockID() {
-        return blockID;
-    }
-
-    public int numberOfPreds() {
-        return predecessors.size();
-    }
-
-    public int numberOfSux() {
-        return successors.size();
-    }
-
-    public boolean isPredecessor(LIRBlock block) {
-        return predecessors.contains(block);
-    }
-
-    public LIRBlock predAt(int i) {
-        return predecessors.get(i);
-    }
-
-    public LIRBlock suxAt(int i) {
-        return successors.get(i);
-    }
-
-    public List<LIRBlock> blockSuccessors() {
-        return successors;
-    }
-
-    public List<LIRBlock> blockPredecessors() {
-        return predecessors;
-    }
-
-    public int loopDepth() {
-        // TODO(tw): Set correct loop depth.
-        return 0;
-    }
-
-    public int loopIndex() {
-        // TODO(tw): Set correct loop index.
-        return -1;
-    }
-
-    public Label label() {
-        return label;
-    }
-
-    private int linearScanNumber = -1;
-    private boolean linearScanLoopEnd;
-    private boolean linearScanLoopHeader;
-    private FrameState stateBefore;
-
-    public void setLinearScanNumber(int v) {
-        linearScanNumber = v;
-    }
-
-    public int linearScanNumber() {
-        return linearScanNumber;
-    }
-
-    public void setLinearScanLoopEnd() {
-        linearScanLoopEnd = true;
-    }
-
-    public boolean isLinearScanLoopEnd() {
-        return linearScanLoopEnd;
-    }
-
-    public void setLinearScanLoopHeader() {
-        this.linearScanLoopHeader = true;
-    }
-
-    public boolean isLinearScanLoopHeader() {
-        return linearScanLoopHeader;
-    }
-
-    public void setStateBefore(FrameState stateBefore) {
-        this.stateBefore = stateBefore;
-    }
-
-    public FrameState stateBefore() {
-        return stateBefore;
     }
 }

@@ -42,6 +42,8 @@ import com.sun.cri.ri.*;
  * Utility for printing the control flow graph of a method being compiled by C1X at various compilation phases.
  * The output format matches that produced by HotSpot so that it can then be fed to the
  * <a href="https://c1visualizer.dev.java.net/">C1 Visualizer</a>.
+ *
+ * @author Doug Simon
  */
 public class CFGPrinter {
     private static final String COLUMN_END = " <|@";
@@ -126,8 +128,8 @@ public class CFGPrinter {
         begin("block");
 
         out.print("name \"B").print(block.blockID).println('"');
-        out.print("from_bci -1");
-        out.print("to_bci -1");
+        out.print("from_bci ").println(block.bci());
+        out.print("to_bci ").println(block.end() == null ? -1 : block.end().bci());
 
         out.print("predecessors ");
         for (Instruction pred : block.blockPredecessors()) {
@@ -148,20 +150,42 @@ public class CFGPrinter {
         out.println();
 
         out.print("flags ");
+        if (block.isSubroutineEntry()) {
+            out.print("\"sr\" ");
+        }
+        if (block.isBackwardBranchTarget()) {
+            out.print("\"bb\" ");
+        }
+        if (block.isParserLoopHeader()) {
+            out.print("\"plh\" ");
+        }
+        if (block.isCriticalEdgeSplit()) {
+            out.print("\"ces\" ");
+        }
+        if (block.isLinearScanLoopHeader()) {
+            out.print("\"llh\" ");
+        }
+        if (block.isLinearScanLoopEnd()) {
+            out.print("\"lle\" ");
+        }
         out.println();
 
-        out.print("loop_index ").println(-1);
-        out.print("loop_depth ").println(-1);
+        if (block.dominator() != null) {
+            out.print("dominator \"B").print(block.dominator().blockID).println('"');
+        }
+        if (block.loopIndex() != -1) {
+            out.print("loop_index ").println(block.loopIndex());
+            out.print("loop_depth ").println(block.loopDepth());
+        }
 
         if (printHIR) {
             printState(block);
             printHIR(block);
         }
 
-        // TODO(tw): Add possibility to print LIR.
-        //if (printLIR) {
-        //    printLIR(block.lirBlock());
-        //}
+        if (printLIR) {
+            printLIR(block);
+        }
 
         end("block");
     }
@@ -466,7 +490,7 @@ public class CFGPrinter {
      *
      * @param block the block to print
      */
-    private void printLIR(LIRBlock block) {
+    private void printLIR(BlockBegin block) {
         LIRList lir = block.lir();
         if (lir != null) {
             begin("IR");
@@ -510,7 +534,7 @@ public class CFGPrinter {
      * @param i the instruction for which HIR will be printed
      */
     private void printInstructionHIR(Instruction i) {
-        out.print("bci ").print(-1).println(COLUMN_END);
+        out.print("bci ").print(i.bci()).println(COLUMN_END);
         if (i.operand().isLegal()) {
             out.print("result ").print(new CFGOperandFormatter(false).format(i.operand())).println(COLUMN_END);
         }
@@ -560,7 +584,7 @@ public class CFGPrinter {
         startBlock.iteratePreOrder(new BlockClosure() {
             public void apply(BlockBegin block) {
                 List<BlockBegin> successors = block.end() != null ? block.end().blockSuccessors() : new ArrayList<BlockBegin>(0);
-                printBlock(block, successors, null, printHIR, printLIR);
+                printBlock(block, successors, block.exceptionEdge(), printHIR, printLIR);
             }
         });
         end("cfg");

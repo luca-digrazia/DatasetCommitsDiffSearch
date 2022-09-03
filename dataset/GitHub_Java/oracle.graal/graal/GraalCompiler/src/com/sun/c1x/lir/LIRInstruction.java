@@ -27,7 +27,9 @@ import static com.sun.c1x.C1XCompilation.*;
 import java.util.*;
 
 import com.sun.c1x.*;
-import com.sun.c1x.lir.LIROperand.*;
+import com.sun.c1x.ir.*;
+import com.sun.c1x.lir.LIROperand.LIRAddressOperand;
+import com.sun.c1x.lir.LIROperand.LIRVariableOperand;
 import com.sun.cri.ci.*;
 
 /**
@@ -481,8 +483,8 @@ public abstract class LIRInstruction {
         }
     }
 
-    public final LIRBlock exceptionEdge() {
-        return (info == null) ? null : info.exceptionEdge;
+    public final BlockBegin exceptionEdge() {
+        return info.exceptionEdge;
     }
 
     @Override

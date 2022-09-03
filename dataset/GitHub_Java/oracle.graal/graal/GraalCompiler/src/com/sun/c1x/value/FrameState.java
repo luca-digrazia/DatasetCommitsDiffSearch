@@ -22,8 +22,6 @@
  */
 package com.sun.c1x.value;
 
-import static com.sun.c1x.value.ValueUtil.*;
-
 import java.util.*;
 
 import com.oracle.graal.graph.*;
@@ -32,11 +30,13 @@ import com.sun.c1x.debug.*;
 import com.sun.c1x.ir.*;
 import com.sun.cri.ci.*;
 
+import static com.sun.c1x.value.ValueUtil.*;
+
 /**
  * The {@code FrameState} class encapsulates the frame state (i.e. local variables and
  * operand stack) at a particular point in the abstract interpretation.
  */
-public final class FrameState extends Value implements FrameStateAccess {
+public class FrameState extends Value implements FrameStateAccess {
 
     protected final int localsSize;
 
@@ -225,7 +225,7 @@ public final class FrameState extends Value implements FrameStateAccess {
      * @param i the index into the locals
      * @return the instruction that produced the value for the specified local
      */
-    public Value localAt(int i) {
+    public final Value localAt(int i) {
         assert i < localsSize : "local variable index out of range: " + i;
         return (Value) inputs().get(i);
     }
@@ -236,7 +236,7 @@ public final class FrameState extends Value implements FrameStateAccess {
      * @param i the index into the stack, with {@code 0} being the bottom of the stack
      * @return the instruction at the specified position in the stack
      */
-    public Value stackAt(int i) {
+    public final Value stackAt(int i) {
         assert i >= 0 && i < (localsSize + stackSize);
         return (Value) inputs().get(localsSize + i);
     }
@@ -246,7 +246,7 @@ public final class FrameState extends Value implements FrameStateAccess {
      * @param i the index into the lock stack
      * @return the instruction which produced the object at the specified location in the lock stack
      */
-    public Value lockAt(int i) {
+    public final Value lockAt(int i) {
         assert i >= 0;
         return (Value) inputs().get(localsSize + stackSize + i);
     }
@@ -295,7 +295,7 @@ public final class FrameState extends Value implements FrameStateAccess {
      * @param i a value in the range {@code [0 .. valuesSize()]}
      * @return the value at index {@code i} which may be {@code null}
      */
-    public Value valueAt(int i) {
+    public final Value valueAt(int i) {
         assert i < (localsSize + stackSize);
         return (Value) inputs().get(i);
     }
@@ -308,7 +308,7 @@ public final class FrameState extends Value implements FrameStateAccess {
      *
      * @return the number of local variables in this frame
      */
-    public int valuesSize() {
+    public final int valuesSize() {
         return localsSize + stackSize;
     }
 
@@ -381,6 +381,27 @@ public final class FrameState extends Value implements FrameStateAccess {
     }
 
     /**
+     * Traverses all live {@linkplain Phi phis} of a given block in this frame state.
+     *
+     * @param block only phis {@linkplain Phi#block() associated} with this block are traversed
+     * @param proc the call back invoked for each live phi traversed
+     */
+    public final boolean forEachLivePhi(BlockBegin block, PhiProcedure proc) {
+        for (int i = 0; i < valuesSize(); i++) {
+            Value instr = valueAt(i);
+            if (instr instanceof Phi && !instr.isDeadPhi()) {
+                Phi phi = (Phi) instr;
+                if (block == null || phi.block() == block) {
+                    if (!proc.doPhi(phi)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
      * Checks whether this frame state has any {@linkplain Phi phi} statements.
      */
     public boolean hasPhis() {
@@ -405,7 +426,7 @@ public final class FrameState extends Value implements FrameStateAccess {
      *
      * @param proc the call back called to process each live value traversed
      */
-    public void forEachLiveStateValue(ValueProcedure proc) {
+    public final void forEachLiveStateValue(ValueProcedure proc) {
         for (int i = 0; i < valuesSize(); i++) {
             Value value = valueAt(i);
             if (value != null) {

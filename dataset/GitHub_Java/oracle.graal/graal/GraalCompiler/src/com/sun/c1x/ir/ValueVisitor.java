@@ -33,14 +33,14 @@ public abstract class ValueVisitor {
     // Checkstyle: stop
     public abstract void visitArithmeticOp(ArithmeticOp i);
     public abstract void visitArrayLength(ArrayLength i);
-    public abstract void visitMerge(Merge i);
+    public abstract void visitBlockBegin(BlockBegin i);
     public abstract void visitCheckCast(CheckCast i);
     public abstract void visitCompareOp(CompareOp i);
     public abstract void visitConstant(Constant i);
     public abstract void visitConvert(Convert i);
     public abstract void visitExceptionObject(ExceptionObject i);
     public abstract void visitFrameState(FrameState i);
-    public abstract void visitAnchor(Anchor i);
+    public abstract void visitGoto(Goto i);
     public abstract void visitIf(If i);
     public abstract void visitIfOp(IfOp i);
     public abstract void visitInstanceOf(InstanceOf i);

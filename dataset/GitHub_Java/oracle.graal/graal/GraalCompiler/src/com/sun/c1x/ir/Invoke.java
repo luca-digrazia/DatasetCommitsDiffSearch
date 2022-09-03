@@ -32,7 +32,7 @@ import com.sun.cri.ri.*;
 /**
  * The {@code Invoke} instruction represents all kinds of method calls.
  */
-public final class Invoke extends StateSplit implements ExceptionEdgeInstruction {
+public final class Invoke extends StateSplit {
 
     private final int argumentCount;
 
@@ -74,8 +74,8 @@ public final class Invoke extends StateSplit implements ExceptionEdgeInstruction
         return (BlockBegin) successors().get(super.successorCount() + SUCCESSOR_EXCEPTION_EDGE);
     }
 
-    public Instruction setExceptionEdge(Instruction n) {
-        return (Instruction) successors().set(super.successorCount() + SUCCESSOR_EXCEPTION_EDGE, n);
+    public BlockBegin setExceptionEdge(BlockBegin n) {
+        return (BlockBegin) successors().set(super.successorCount() + SUCCESSOR_EXCEPTION_EDGE, n);
     }
 
     public final int opcode;

@@ -25,13 +25,14 @@ package com.sun.c1x;
 
 import java.util.*;
 
-import com.oracle.graal.graph.*;
 import com.oracle.max.asm.*;
+import com.oracle.graal.graph.*;
 import com.sun.c1x.alloc.*;
 import com.sun.c1x.asm.*;
 import com.sun.c1x.gen.*;
-import com.sun.c1x.gen.LIRGenerator.*;
+import com.sun.c1x.gen.LIRGenerator.DeoptimizationStub;
 import com.sun.c1x.graph.*;
+import com.sun.c1x.ir.*;
 import com.sun.c1x.lir.*;
 import com.sun.c1x.observer.*;
 import com.sun.c1x.value.*;
@@ -166,6 +167,7 @@ public final class C1XCompilation {
      * @return the block map for the specified method
      */
     public BlockMap getBlockMap(RiMethod method) {
+        // PERF: cache the block map for methods that are compiled or inlined often
         BlockMap map = new BlockMap(method);
         map.build();
         if (compiler.isObserved()) {
@@ -244,8 +246,7 @@ public final class C1XCompilation {
             initFrameMap(hir.maxLocks());
 
             lirGenerator = compiler.backend.newLIRGenerator(this);
-
-            for (LIRBlock begin : hir.linearScanOrder()) {
+            for (BlockBegin begin : hir.linearScanOrder()) {
                 lirGenerator.doBlock(begin);
             }
 
@@ -282,7 +283,7 @@ public final class C1XCompilation {
             }
 
             if (compiler.isObserved()) {
-                compiler.fireCompilationEvent(new CompilationEvent(this, "After code generation", hir.getHIRStartBlock(), false, true, targetMethod));
+                compiler.fireCompilationEvent(new CompilationEvent(this, "After code generation", hir.startBlock, false, true, targetMethod));
             }
 
             if (C1XOptions.PrintTimers) {

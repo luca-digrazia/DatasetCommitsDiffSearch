@@ -22,6 +22,8 @@
  */
 package com.sun.c1x.lir;
 
+import java.util.*;
+
 import com.sun.c1x.*;
 import com.sun.c1x.ir.*;
 import com.sun.c1x.value.*;

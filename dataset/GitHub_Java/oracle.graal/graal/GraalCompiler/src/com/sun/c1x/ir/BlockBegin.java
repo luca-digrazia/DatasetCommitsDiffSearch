@@ -25,6 +25,7 @@ package com.sun.c1x.ir;
 import java.util.*;
 
 import com.oracle.graal.graph.*;
+import com.oracle.max.asm.*;
 import com.sun.c1x.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.lir.*;
@@ -73,30 +74,45 @@ public final class BlockBegin extends StateSplit {
         successors().set(super.successorCount() + SUCCESSOR_END, end);
     }
 
+    private static final List<BlockBegin> NO_HANDLERS = Collections.emptyList();
+
+    /**
+     * An enumeration of flags for block entries indicating various things.
+     */
+    public enum BlockFlag {
+        StandardEntry,
+        SubroutineEntry,
+        BackwardBranchTarget,
+        IsOnWorkList,
+        WasVisited,
+        DefaultExceptionHandler,
+        ParserLoopHeader,
+        CriticalEdgeSplit,
+        LinearScanLoopHeader,
+        LinearScanLoopEnd;
+
+        public final int mask = 1 << ordinal();
+    }
+
     /**
      * A unique id used in tracing.
      */
     public final int blockID;
 
+    /**
+     * Denotes the current set of {@link BlockBegin.BlockFlag} settings.
+     */
+    private int blockFlags;
+
     private int depthFirstNumber;
     private int linearScanNumber;
+    private int loopDepth;
+    private int loopIndex;
+
+    private BlockBegin dominator;
 
     // LIR block
     public LIRBlock lirBlock;
-
-    public void setLIRBlock(LIRBlock block) {
-        this.lirBlock = block;
-    }
-
-    public LIRBlock lirBlock() {
-        return lirBlock;
-    }
-
-    /**
-     * Index of bytecode that generated this node when appended in a basic block.
-     * Negative values indicate special cases.
-     */
-    private int bci;
 
     /**
      * Constructs a new BlockBegin at the specified bytecode index.
@@ -107,8 +123,10 @@ public final class BlockBegin extends StateSplit {
     public BlockBegin(int bci, int blockID, Graph graph) {
         super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.blockID = blockID;
+        depthFirstNumber = -1;
         linearScanNumber = -1;
-        this.bci = bci;
+        loopIndex = -1;
+        setBCI(bci);
     }
 
     /**
@@ -125,6 +143,30 @@ public final class BlockBegin extends StateSplit {
     }
 
     /**
+     * Gets the dominator of this block.
+     * @return the dominator block
+     */
+    public BlockBegin dominator() {
+        return dominator;
+    }
+
+    /**
+     * Sets the dominator block for this block.
+     * @param dominator the dominator for this block
+     */
+    public void setDominator(BlockBegin dominator) {
+        this.dominator = dominator;
+    }
+
+    /**
+     * Gets the depth first traversal number of this block.
+     * @return the depth first number
+     */
+    public int depthFirstNumber() {
+        return depthFirstNumber;
+    }
+
+    /**
      * Gets the linear scan number of this block.
      * @return the linear scan number
      */
@@ -132,8 +174,66 @@ public final class BlockBegin extends StateSplit {
         return linearScanNumber;
     }
 
+    /**
+     * Gets the loop depth of this block.
+     * @return the loop depth
+     */
+    public int loopDepth() {
+        return loopDepth;
+    }
+
+    /**
+     * Gets the loop index of this block.
+     * @return the loop index
+     */
+    public int loopIndex() {
+        return loopIndex;
+    }
+
+    public void setDepthFirstNumber(int depthFirstNumber) {
+        assert depthFirstNumber >= 0;
+        this.depthFirstNumber = depthFirstNumber;
+    }
+
     public void setLinearScanNumber(int linearScanNumber) {
         this.linearScanNumber = linearScanNumber;
+    }
+
+    public void setLoopDepth(int loopDepth) {
+        this.loopDepth = loopDepth;
+    }
+
+    public void setLoopIndex(int loopIndex) {
+        this.loopIndex = loopIndex;
+    }
+
+    /**
+     * Set a flag on this block.
+     * @param flag the flag to set
+     */
+    public void setBlockFlag(BlockFlag flag) {
+        blockFlags |= flag.mask;
+    }
+
+    /**
+     * Clear a flag on this block.
+     * @param flag the flag to clear
+     */
+    public void clearBlockFlag(BlockFlag flag) {
+        blockFlags &= ~flag.mask;
+    }
+
+    public void copyBlockFlag(BlockBegin other, BlockFlag flag) {
+        setBlockFlag(flag, other.checkBlockFlag(flag));
+    }
+
+    /**
+     * Check whether this block has the specified flag set.
+     * @param flag the flag to test
+     * @return {@code true} if this block has the flag
+     */
+    public boolean checkBlockFlag(BlockFlag flag) {
+        return (blockFlags & flag.mask) != 0;
     }
 
     /**
@@ -162,8 +262,10 @@ public final class BlockBegin extends StateSplit {
             Instruction inst = block;
             ArrayList<BlockBegin> excBlocks = new ArrayList<BlockBegin>();
             while (inst != null) {
-                if (inst instanceof ExceptionEdgeInstruction) {
-                    excBlocks.add(((ExceptionEdgeInstruction) inst).exceptionEdge());
+                if (inst instanceof Invoke) {
+                    excBlocks.add(((Invoke) inst).exceptionEdge());
+                } else if (inst instanceof Throw) {
+                    excBlocks.add(((Throw) inst).exceptionEdge());
                 }
                 inst = inst.next();
             }
@@ -204,14 +306,6 @@ public final class BlockBegin extends StateSplit {
         }
     }
 
-    /**
-     * Gets the bytecode index of this instruction.
-     * @return the bytecode index of this instruction
-     */
-    public int bci() {
-        return bci;
-    }
-
     private void iterate(IdentityHashMap<BlockBegin, BlockBegin> mark, BlockClosure closure) {
         if (!mark.containsKey(this)) {
             mark.put(this, this);
@@ -235,6 +329,9 @@ public final class BlockBegin extends StateSplit {
                 iterateReverse(mark, closure, excBlocks);
             }
 
+//            if (exceptionHandlerBlocks != null) {
+//                iterateReverse(mark, closure, exceptionHandlerBlocks);
+//            }
             assert e != null : "block must have block end";
             iterateReverse(mark, closure, e.blockSuccessors());
         }
@@ -251,15 +348,34 @@ public final class BlockBegin extends StateSplit {
         v.visitBlockBegin(this);
     }
 
-    public void mergeOrClone(FrameStateAccess newState, RiMethod method, boolean loopHeader) {
+    public void mergeOrClone(FrameStateAccess newState, RiMethod method) {
         FrameState existingState = stateBefore();
 
         if (existingState == null) {
+            // this is the first state for the block
+            if (wasVisited()) {
+                // this can happen for complex jsr/ret patterns; just bail out
+                throw new CiBailout("jsr/ret too complex");
+            }
+
             // copy state because it is modified
             FrameState duplicate = newState.duplicate(bci());
+            assert duplicate.bci == bci() : "duplicate.bci=" + duplicate.bci + " my bci=" + bci();
+
+            if (C1XOptions.UseStackMapTableLiveness && method != null) {
+                // if a liveness map is available, use it to invalidate dead locals
+                CiBitMap[] livenessMap = method.livenessMap();
+                if (livenessMap != null && bci() >= 0) {
+                    assert bci() < livenessMap.length;
+                    CiBitMap liveness = livenessMap[bci()];
+                    if (liveness != null) {
+                        invalidateDeadLocals(duplicate, liveness);
+                    }
+                }
+            }
 
             // if the block is a loop header, insert all necessary phis
-            if (loopHeader) {
+            if (isParserLoopHeader()) {
                 insertLoopPhis(duplicate);
             }
 
@@ -273,7 +389,25 @@ public final class BlockBegin extends StateSplit {
             assert existingState.localsSize() == newState.localsSize();
             assert existingState.stackSize() == newState.stackSize();
 
+            if (wasVisited() && !isParserLoopHeader()) {
+                throw new CiBailout("jsr/ret too complicated");
+            }
+
             existingState.merge(this, newState);
+        }
+    }
+
+    private void invalidateDeadLocals(FrameState newState, CiBitMap liveness) {
+        int max = newState.localsSize();
+        assert max <= liveness.size();
+        for (int i = 0; i < max; i++) {
+            Value x = newState.localAt(i);
+            if (x != null) {
+                if (!liveness.get(i)) {
+                    // invalidate the local if it is not live
+                    newState.invalidateLocal(i);
+                }
+            }
         }
     }
 
@@ -292,6 +426,84 @@ public final class BlockBegin extends StateSplit {
         }
     }
 
+    public boolean isBackwardBranchTarget() {
+        return checkBlockFlag(BlockFlag.BackwardBranchTarget);
+    }
+
+    public void setBackwardBranchTarget(boolean value) {
+        setBlockFlag(BlockFlag.BackwardBranchTarget, value);
+    }
+
+    public boolean isCriticalEdgeSplit() {
+        return checkBlockFlag(BlockFlag.CriticalEdgeSplit);
+    }
+
+    public void setCriticalEdgeSplit(boolean value) {
+        setBlockFlag(BlockFlag.CriticalEdgeSplit, value);
+    }
+
+    public boolean isSubroutineEntry() {
+        return checkBlockFlag(BlockFlag.SubroutineEntry);
+    }
+
+    public void setSubroutineEntry() {
+        setBlockFlag(BlockFlag.SubroutineEntry);
+    }
+
+    public boolean isOnWorkList() {
+        return checkBlockFlag(BlockFlag.IsOnWorkList);
+    }
+
+    public void setOnWorkList(boolean value) {
+        setBlockFlag(BlockFlag.IsOnWorkList, value);
+    }
+
+    public boolean wasVisited() {
+        return checkBlockFlag(BlockFlag.WasVisited);
+    }
+
+    public void setWasVisited(boolean value) {
+        setBlockFlag(BlockFlag.WasVisited, value);
+    }
+
+    public boolean isParserLoopHeader() {
+        return checkBlockFlag(BlockFlag.ParserLoopHeader);
+    }
+
+    public void setParserLoopHeader(boolean value) {
+        setBlockFlag(BlockFlag.ParserLoopHeader, value);
+    }
+
+    public boolean isLinearScanLoopHeader() {
+        return checkBlockFlag(BlockFlag.LinearScanLoopHeader);
+    }
+
+    public void setLinearScanLoopHeader(boolean value) {
+        setBlockFlag(BlockFlag.LinearScanLoopHeader, value);
+    }
+
+    public boolean isLinearScanLoopEnd() {
+        return checkBlockFlag(BlockFlag.LinearScanLoopEnd);
+    }
+
+    public void setLinearScanLoopEnd(boolean value) {
+        setBlockFlag(BlockFlag.LinearScanLoopEnd, value);
+    }
+
+    private void setBlockFlag(BlockFlag flag, boolean value) {
+        if (value) {
+            setBlockFlag(flag);
+        } else {
+            clearBlockFlag(flag);
+        }
+    }
+
+    public void copyBlockFlags(BlockBegin other) {
+        copyBlockFlag(other, BlockBegin.BlockFlag.ParserLoopHeader);
+        copyBlockFlag(other, BlockBegin.BlockFlag.SubroutineEntry);
+        copyBlockFlag(other, BlockBegin.BlockFlag.WasVisited);
+    }
+
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder();
@@ -299,7 +511,19 @@ public final class BlockBegin extends StateSplit {
         builder.append(blockID);
         builder.append(",");
         builder.append(depthFirstNumber);
+        builder.append(" @ ");
+        builder.append(bci());
         builder.append(" [");
+        boolean hasFlag = false;
+        for (BlockFlag f : BlockFlag.values()) {
+            if (checkBlockFlag(f)) {
+                if (hasFlag) {
+                    builder.append(' ');
+                }
+                builder.append(f.name());
+                hasFlag = true;
+            }
+        }
 
         builder.append("]");
         if (end() != null) {
@@ -347,8 +571,58 @@ public final class BlockBegin extends StateSplit {
         }
     }
 
+    /**
+     * @return the label associated with the block, used by the LIR
+     */
+    public Label label() {
+        return lirBlock().label;
+    }
+
+    public void setLir(LIRList lir) {
+        lirBlock().setLir(lir);
+    }
+
+    public LIRList lir() {
+        return lirBlock().lir();
+    }
+
+    public LIRBlock lirBlock() {
+        if (lirBlock == null) {
+            lirBlock = new LIRBlock();
+        }
+        return lirBlock;
+    }
+
+    public int blockEntryPco() {
+        return lirBlock == null ? 0 : lirBlock.blockEntryPco;
+    }
+
+    public void setBlockEntryPco(int codeOffset) {
+        lirBlock().blockEntryPco = codeOffset;
+    }
+
     public Instruction predAt(int j) {
         return (Instruction) predecessors().get(j);
+    }
+
+    public int firstLirInstructionId() {
+        return lirBlock.firstLirInstructionID;
+    }
+
+    public void setFirstLirInstructionId(int firstLirInstructionId) {
+        lirBlock.firstLirInstructionID = firstLirInstructionId;
+    }
+
+    public int lastLirInstructionId() {
+        return lirBlock.lastLirInstructionID;
+    }
+
+    public void setLastLirInstructionId(int lastLirInstructionId) {
+        lirBlock.lastLirInstructionID = lastLirInstructionId;
+    }
+
+    public boolean isPredecessor(Instruction block) {
+        return predecessors().contains(block);
     }
 
     public void printWithoutPhis(LogStream out) {
@@ -358,12 +632,24 @@ public final class BlockBegin extends StateSplit {
 
         // print flags
         StringBuilder sb = new StringBuilder(8);
+        if (isSubroutineEntry()) {
+            sb.append('s');
+        }
+        if (isParserLoopHeader()) {
+            sb.append("LH");
+        }
+        if (isBackwardBranchTarget()) {
+            sb.append('b');
+        }
+        if (wasVisited()) {
+            sb.append('V');
+        }
         if (sb.length() != 0) {
             out.print('(').print(sb.toString()).print(')');
         }
 
         // print block bci range
-        out.print('[').print(-1).print(", ").print(-1).print(']');
+        out.print('[').print(bci()).print(", ").print(end == null ? -1 : end.bci()).print(']');
 
         // print block successors
         if (end != null && end.blockSuccessors().size() > 0) {
@@ -371,6 +657,11 @@ public final class BlockBegin extends StateSplit {
             for (BlockBegin successor : end.blockSuccessors()) {
                 out.print(" B").print(successor.blockID);
             }
+        }
+
+        // print dominator block
+        if (dominator() != null) {
+            out.print(" dom B").print(dominator().blockID);
         }
 
         // print predecessors
@@ -455,6 +746,8 @@ public final class BlockBegin extends StateSplit {
 
     }
 
+
+
     /**
      * Determines if a given instruction is a phi whose {@linkplain Phi#block() join block} is a given block.
      *
@@ -522,9 +815,20 @@ public final class BlockBegin extends StateSplit {
             }
         }
         for (Instruction x = next(); x != null; x = x.next()) {
-            if (x instanceof ExceptionEdgeInstruction && ((ExceptionEdgeInstruction) x).exceptionEdge() != null) {
-                closure.apply(((ExceptionEdgeInstruction) x).exceptionEdge());
+            if (x instanceof Invoke && ((Invoke) x).exceptionEdge() != null) {
+                closure.apply(((Invoke) x).exceptionEdge());
+            } else if (x instanceof Throw && ((Throw) x).exceptionEdge() != null) {
+                closure.apply(((Throw) x).exceptionEdge());
             }
         }
     }
+
+    public void verifyPredecessors() {
+        for (int i = 0; i < numberOfPreds(); i++) {
+            predAt(i);
+        }
+
+    }
+
+
 }

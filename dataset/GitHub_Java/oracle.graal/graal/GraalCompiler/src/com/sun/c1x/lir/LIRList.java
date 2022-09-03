@@ -24,9 +24,9 @@ package com.sun.c1x.lir;
 
 import java.util.*;
 
+import com.oracle.max.asm.*;
 import com.sun.c1x.*;
 import com.sun.c1x.alloc.*;
-import com.sun.c1x.asm.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.gen.*;
 import com.sun.c1x.globalstub.*;
@@ -41,10 +41,6 @@ import com.sun.cri.xir.*;
 /**
  * This class represents a list of LIR instructions and contains factory methods for creating and appending LIR
  * instructions to this list.
- *
- * @author Marcelo Cintra
- * @author Thomas Wuerthinger
- * @author Ben L. Titzer
  */
 public final class LIRList {
 
@@ -191,10 +187,6 @@ public final class LIRList {
 
     public void throwException(CiValue exceptionPC, CiValue exceptionOop, LIRDebugInfo info) {
         append(new LIROp2(LIROpcode.Throw, exceptionPC, exceptionOop, CiValue.IllegalValue, info, CiKind.Illegal, true));
-    }
-
-    public void unwindException(CiValue exceptionPC, CiValue exceptionOop, LIRDebugInfo info) {
-        append(new LIROp2(LIROpcode.Unwind, exceptionPC, exceptionOop, CiValue.IllegalValue, info));
     }
 
     public void compareTo(CiValue left, CiValue right, CiValue dst) {
@@ -419,15 +411,6 @@ public final class LIRList {
         TTY.print("B%d ", x.blockID);
 
         // print flags
-        if (x.checkBlockFlag(BlockBegin.BlockFlag.StandardEntry)) {
-            TTY.print("std ");
-        }
-        if (x.checkBlockFlag(BlockBegin.BlockFlag.OsrEntry)) {
-            TTY.print("osr ");
-        }
-        if (x.checkBlockFlag(BlockBegin.BlockFlag.ExceptionEntry)) {
-            TTY.print("ex ");
-        }
         if (x.checkBlockFlag(BlockBegin.BlockFlag.SubroutineEntry)) {
             TTY.print("jsr ");
         }
@@ -448,7 +431,7 @@ public final class LIRList {
         if (x.numberOfPreds() > 0) {
             TTY.print("preds: ");
             for (int i = 0; i < x.numberOfPreds(); i++) {
-                TTY.print("B%d ", x.predAt(i).blockID);
+                TTY.print("B%d ", x.predAt(i).block().blockID);
             }
         }
 
@@ -456,14 +439,6 @@ public final class LIRList {
             TTY.print("sux: ");
             for (int i = 0; i < x.numberOfSux(); i++) {
                 TTY.print("B%d ", x.suxAt(i).blockID);
-            }
-        }
-
-        // print exception handlers
-        if (x.numberOfExceptionHandlers() > 0) {
-            TTY.print("xhandler: ");
-            for (int i = 0; i < x.numberOfExceptionHandlers(); i++) {
-                TTY.print("B%d ", x.exceptionHandlerAt(i).blockID);
             }
         }
 

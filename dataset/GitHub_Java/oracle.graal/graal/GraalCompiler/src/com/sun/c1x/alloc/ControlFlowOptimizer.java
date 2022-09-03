@@ -33,6 +33,8 @@ import com.sun.cri.ci.*;
 
 /**
  * This class performs basic optimizations on the control flow graph after LIR generation.
+ *
+ * @author Thomas Wuerthinger
  */
 final class ControlFlowOptimizer {
 
@@ -42,7 +44,7 @@ final class ControlFlowOptimizer {
      */
     public static void optimize(IR ir) {
         ControlFlowOptimizer optimizer = new ControlFlowOptimizer(ir);
-        List<LIRBlock> code = ir.linearScanOrder();
+        List<BlockBegin> code = ir.linearScanOrder();
         optimizer.reorderShortLoops(code);
         optimizer.deleteEmptyBlocks(code);
         optimizer.deleteUnnecessaryJumps(code);
@@ -55,7 +57,7 @@ final class ControlFlowOptimizer {
         this.ir = ir;
     }
 
-    private void reorderShortLoop(List<LIRBlock> code, LIRBlock headerBlock, int headerIdx) {
+    private void reorderShortLoop(List<BlockBegin> code, BlockBegin headerBlock, int headerIdx) {
         int i = headerIdx + 1;
         int maxEnd = Math.min(headerIdx + C1XOptions.MaximumShortLoopSize, code.size());
         while (i < maxEnd && code.get(i).loopDepth() >= headerBlock.loopDepth()) {
@@ -64,7 +66,7 @@ final class ControlFlowOptimizer {
 
         if (i == code.size() || code.get(i).loopDepth() < headerBlock.loopDepth()) {
             int endIdx = i - 1;
-            LIRBlock endBlock = code.get(endIdx);
+            BlockBegin endBlock = code.get(endIdx);
 
             if (endBlock.numberOfSux() == 1 && endBlock.suxAt(0) == headerBlock) {
                 // short loop from headerIdx to endIdx found . reorder blocks such that
@@ -74,15 +76,20 @@ final class ControlFlowOptimizer {
                     code.set(j, code.get(j + 1));
                 }
                 code.set(endIdx, headerBlock);
+
+                // correct the flags so that any loop alignment occurs in the right place.
+                assert code.get(endIdx).checkBlockFlag(BlockBegin.BlockFlag.BackwardBranchTarget) : "must be backward branch target";
+                code.get(endIdx).clearBlockFlag(BlockBegin.BlockFlag.BackwardBranchTarget);
+                code.get(headerIdx).setBlockFlag(BlockBegin.BlockFlag.BackwardBranchTarget);
             }
         }
     }
 
-    private void reorderShortLoops(List<LIRBlock> code) {
+    private void reorderShortLoops(List<BlockBegin> code) {
         for (int i = code.size() - 1; i >= 0; i--) {
-            LIRBlock block = code.get(i);
+            BlockBegin block = code.get(i);
 
-            if (block.isLinearScanLoopHeader()) {
+            if (block.checkBlockFlag(BlockBegin.BlockFlag.LinearScanLoopHeader)) {
                 reorderShortLoop(code, block, i);
             }
         }
@@ -92,7 +99,7 @@ final class ControlFlowOptimizer {
 
     // only blocks with exactly one successor can be deleted. Such blocks
     // must always end with an unconditional branch to this successor
-    private boolean canDeleteBlock(LIRBlock block) {
+    private boolean canDeleteBlock(BlockBegin block) {
         if (block.numberOfSux() != 1 ||
             block == ir.startBlock ||
             block.suxAt(0) == block) {
@@ -112,20 +119,25 @@ final class ControlFlowOptimizer {
         return instructions.size() == 2 && instructions.get(instructions.size() - 1).info == null;
     }
 
-    private void deleteEmptyBlocks(List<LIRBlock> code) {
+    private void deleteEmptyBlocks(List<BlockBegin> code) {
         int oldPos = 0;
         int newPos = 0;
         int numBlocks = code.size();
 
         while (oldPos < numBlocks) {
-            LIRBlock block = code.get(oldPos);
+            BlockBegin block = code.get(oldPos);
 
             if (canDeleteBlock(block)) {
-                LIRBlock newTarget = block.suxAt(0);
+                BlockBegin newTarget = block.suxAt(0);
+
+                // propagate backward branch target flag for correct code alignment
+                if (block.checkBlockFlag(BlockBegin.BlockFlag.BackwardBranchTarget)) {
+                    newTarget.setBlockFlag(BlockBegin.BlockFlag.BackwardBranchTarget);
+                }
 
                 // update the block references in any branching LIR instructions
-                for (LIRBlock pred : block.blockPredecessors()) {
-                    for (LIRInstruction instr : pred.lir().instructionsList()) {
+                for (Instruction pred : block.blockPredecessors()) {
+                    for (LIRInstruction instr : pred.block().lir().instructionsList()) {
                         if (instr instanceof LIRBranch) {
                             ((LIRBranch) instr).substitute(block, newTarget);
                         } else if (instr instanceof LIRTableSwitch) {
@@ -135,7 +147,7 @@ final class ControlFlowOptimizer {
                 }
 
                 // adjust successor and predecessor lists
-                block.replaceWith(newTarget);
+                ir.replaceBlock(block, newTarget);
                 C1XMetrics.BlocksDeleted++;
             } else {
                 // adjust position of this block in the block list if blocks before
@@ -147,16 +159,15 @@ final class ControlFlowOptimizer {
             }
             oldPos++;
         }
-        assert verify(code);
         Util.truncate(code, newPos);
 
         assert verify(code);
     }
 
-    private void deleteUnnecessaryJumps(List<LIRBlock> code) {
+    private void deleteUnnecessaryJumps(List<BlockBegin> code) {
         // skip the last block because there a branch is always necessary
         for (int i = code.size() - 2; i >= 0; i--) {
-            LIRBlock block = code.get(i);
+            BlockBegin block = code.get(i);
             List<LIRInstruction> instructions = block.lir().instructionsList();
 
             LIRInstruction lastOp = instructions.get(instructions.size() - 1);
@@ -193,9 +204,9 @@ final class ControlFlowOptimizer {
         assert verify(code);
     }
 
-    private void deleteJumpsToReturn(List<LIRBlock> code) {
+    private void deleteJumpsToReturn(List<BlockBegin> code) {
         for (int i = code.size() - 1; i >= 0; i--) {
-            LIRBlock block = code.get(i);
+            BlockBegin block = code.get(i);
             List<LIRInstruction> curInstructions = block.lir().instructionsList();
             LIRInstruction curLastOp = curInstructions.get(curInstructions.size() - 1);
 
@@ -215,7 +226,7 @@ final class ControlFlowOptimizer {
                 CiValue returnOpr = ((LIROp1) curLastOp).operand();
 
                 for (int j = block.numberOfPreds() - 1; j >= 0; j--) {
-                    LIRBlock pred = block.predAt(j);
+                    BlockBegin pred = block.predAt(j).block();
                     List<LIRInstruction> predInstructions = pred.lir().instructionsList();
                     LIRInstruction predLastOp = predInstructions.get(predInstructions.size() - 1);
 
@@ -234,8 +245,8 @@ final class ControlFlowOptimizer {
         }
     }
 
-    private boolean verify(List<LIRBlock> code) {
-        for (LIRBlock block : code) {
+    private boolean verify(List<BlockBegin> code) {
+        for (BlockBegin block : code) {
             List<LIRInstruction> instructions = block.lir().instructionsList();
 
             for (LIRInstruction instr : instructions) {
@@ -246,12 +257,12 @@ final class ControlFlowOptimizer {
                 }
             }
 
-            for (LIRBlock sux : block.blockSuccessors()) {
+            for (BlockBegin sux : block.end().blockSuccessors()) {
                 assert code.contains(sux) : "missing successor from: " + block + "to: " + sux;
             }
 
-            for (LIRBlock pred : block.blockPredecessors()) {
-                assert code.contains(pred) : "missing predecessor from: " + block + "to: " + pred;
+            for (Instruction pred : block.blockPredecessors()) {
+                assert code.contains(pred.block()) : "missing predecessor from: " + block + "to: " + pred.block();
             }
         }
 
