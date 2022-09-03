@@ -57,7 +57,6 @@ public final class InspectorInstrument extends TruffleInstrument {
 
     private static final int DEFAULT_PORT = 9229;
     private static final HostAndPort DEFAULT_ADDRESS = new HostAndPort(null, DEFAULT_PORT);
-    private Server server;
     private ConnectionWatcher connectionWatcher;
 
     static final OptionType<HostAndPort> ADDRESS_OR_BOOLEAN = new OptionType<>("[[host:]port]", DEFAULT_ADDRESS, (address) -> {
@@ -103,11 +102,12 @@ public final class InspectorInstrument extends TruffleInstrument {
     protected void onCreate(Env env) {
         OptionValues options = env.getOptions();
         if (options.hasSetOptions()) {
+            Server server = new Server(env);
             HostAndPort hostAndPort = options.get(Inspect);
             connectionWatcher = new ConnectionWatcher();
             try {
                 InetSocketAddress socketAddress = hostAndPort.createSocket(options.get(Remote));
-                server = new Server(env, "Main Context", socketAddress, options.get(Suspend), options.get(WaitAttached), options.get(HideErrors), options.get(Path), connectionWatcher);
+                server.start("Main Context", socketAddress, options.get(Suspend), options.get(WaitAttached), options.get(HideErrors), options.get(Path), connectionWatcher);
             } catch (IOException e) {
                 throw new InspectorIOException(hostAndPort.getHostPort(options.get(Remote)), e);
             }
@@ -121,7 +121,6 @@ public final class InspectorInstrument extends TruffleInstrument {
             info.println("Waiting for the debugger to disconnect...");
             info.flush();
             connectionWatcher.waitForClose();
-            server.close();
         }
     }
 
@@ -198,14 +197,19 @@ public final class InspectorInstrument extends TruffleInstrument {
         }
     }
 
-    private static final class Server {
+    static final class Server {
 
-        private WebSocketServer wss;
-        private final String wsspath;
+        private final Env env;
+        private volatile WebSocketServer wss;
 
-        Server(Env env, String contextName, InetSocketAddress socketAdress, boolean debugBreak, boolean waitAttached, boolean hideErrors, String path, ConnectionWatcher connectionWatcher)
+        Server(Env env) {
+            this.env = env;
+        }
+
+        String start(String contextName, InetSocketAddress socketAdress, boolean debugBreak, boolean waitAttached, boolean hideErrors, String path, ConnectionWatcher connectionWatcher)
                         throws IOException {
             PrintWriter info = new PrintWriter(env.err());
+            String wsspath;
             if (path == null || path.isEmpty()) {
                 wsspath = "/" + Long.toHexString(System.identityHashCode(env)) + "-" + Long.toHexString(System.nanoTime() ^ System.identityHashCode(env));
             } else {
@@ -264,6 +268,7 @@ public final class InspectorInstrument extends TruffleInstrument {
                     execEnter.get().dispose();
                 }
             }
+            return address;
         }
 
         private static final String ADDRESS_PREFIX = "chrome-devtools://devtools/bundled/js_app.html?ws=";
@@ -274,9 +279,13 @@ public final class InspectorInstrument extends TruffleInstrument {
 
         public void close() {
             if (wss != null) {
-                wss.close(wsspath);
+                wss.stop();
                 wss = null;
             }
+        }
+
+        public boolean isRunning() {
+            return wss != null;
         }
     }
 }

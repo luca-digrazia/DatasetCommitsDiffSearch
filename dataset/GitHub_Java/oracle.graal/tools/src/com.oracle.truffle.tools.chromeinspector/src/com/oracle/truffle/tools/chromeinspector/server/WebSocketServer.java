@@ -37,9 +37,7 @@ import java.io.PushbackInputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import fi.iki.elonen.NanoHTTPD;
 import fi.iki.elonen.NanoWSD;
@@ -62,22 +60,31 @@ import com.oracle.truffle.tools.chromeinspector.domains.RuntimeDomain;
  */
 public final class WebSocketServer extends NanoWSD {
 
+    private static final Map<String, TruffleExecutionContext> SESSIONS = new HashMap<>();
+    private static final Map<String, Boolean> DEBUG_BRK = new HashMap<>();
     private static final Map<InetSocketAddress, WebSocketServer> SERVERS = new HashMap<>();
 
-    private final Map<String, ServerPathSession> sessions = new HashMap<>();
+    private final String path;
     private final PrintStream log;
+    private final ConnectionWatcher connectionWatcher;
 
-    private WebSocketServer(InetSocketAddress isa, PrintStream log) {
+    private WebSocketServer(InetSocketAddress isa, String path, PrintStream log, ConnectionWatcher connectionWatcher) {
         super(isa.getHostName(), isa.getPort());
+        this.path = path;
         this.log = log;
         if (log != null) {
             log.println("New WebSocketServer at " + isa);
             log.flush();
         }
+        this.connectionWatcher = connectionWatcher;
     }
 
     public static WebSocketServer get(InetSocketAddress isa, String path,
                     TruffleExecutionContext context, boolean debugBrk, ConnectionWatcher connectionWatcher) throws IOException {
+        synchronized (SESSIONS) {
+            SESSIONS.put(path, context);
+            DEBUG_BRK.put(path, debugBrk);
+        }
         WebSocketServer wss;
         synchronized (SERVERS) {
             wss = SERVERS.get(isa);
@@ -95,13 +102,9 @@ public final class WebSocketServer extends NanoWSD {
                         }
                     }
                 }
-                wss = new WebSocketServer(isa, traceLog);
+                wss = new WebSocketServer(isa, path, traceLog, connectionWatcher);
                 wss.start(Integer.MAX_VALUE);
-                SERVERS.put(isa, wss);
             }
-        }
-        synchronized (wss.sessions) {
-            wss.sessions.put(path, new ServerPathSession(context, debugBrk, connectionWatcher));
         }
         return wss;
     }
@@ -118,21 +121,17 @@ public final class WebSocketServer extends NanoWSD {
                 responseJson = version.toString();
             }
             if ("/json".equals(uri)) {
+                JSONObject info = new JSONObject();
+                info.put("description", "GraalVM");
+                info.put("faviconUrl", "https://assets-cdn.github.com/images/icons/emoji/unicode/1f680.png");
+                String ws = getHostname() + ":" + getListeningPort() + path;
+                info.put("devtoolsFrontendUrl", "chrome-devtools://devtools/bundled/js_app.html?ws=" + ws);
+                info.put("id", path.substring(1));
+                info.put("title", "GraalVM");
+                info.put("type", "node");
+                info.put("webSocketDebuggerUrl", "ws://" + ws);
                 JSONArray json = new JSONArray();
-                synchronized (sessions) {
-                    for (String path : sessions.keySet()) {
-                        JSONObject info = new JSONObject();
-                        info.put("description", "GraalVM");
-                        info.put("faviconUrl", "https://assets-cdn.github.com/images/icons/emoji/unicode/1f680.png");
-                        String ws = getHostname() + ":" + getListeningPort() + path;
-                        info.put("devtoolsFrontendUrl", "chrome-devtools://devtools/bundled/js_app.html?ws=" + ws);
-                        info.put("id", path.substring(1));
-                        info.put("title", "GraalVM");
-                        info.put("type", "node");
-                        info.put("webSocketDebuggerUrl", "ws://" + ws);
-                        json.put(info);
-                    }
-                }
+                json.put(info);
                 responseJson = json.toString();
             }
             if (log != null) {
@@ -152,23 +151,19 @@ public final class WebSocketServer extends NanoWSD {
     @Override
     protected NanoWSD.WebSocket openWebSocket(NanoHTTPD.IHTTPSession handshake) {
         String descriptor = handshake.getUri();
-        ServerPathSession session;
-        synchronized (sessions) {
-            session = sessions.get(descriptor);
-        }
+        TruffleExecutionContext context = SESSIONS.get(descriptor);
         if (log != null) {
-            log.println("CLIENT ws connection opened, resource = " + descriptor + ", context = " + session);
+            log.println("CLIENT ws connection opened, resource = " + descriptor + ", context = " + context);
             log.flush();
         }
-        if (session != null) {
+        if (context != null) {
             // Do the initial break for the first time only, do not break on reconnect
-            boolean debugBreak = Boolean.TRUE.equals(session.getDebugBrkAndReset());
-            TruffleExecutionContext context = session.getContext();
+            boolean debugBreak = Boolean.TRUE.equals(DEBUG_BRK.remove(descriptor));
             RuntimeDomain runtime = new TruffleRuntime(context);
             DebuggerDomain debugger = new TruffleDebugger(context, debugBreak);
-            ProfilerDomain profiler = new TruffleProfiler(context, session.getConnectionWatcher());
+            ProfilerDomain profiler = new TruffleProfiler(context, connectionWatcher);
             InspectServerSession iss = new InspectServerSession(runtime, debugger, profiler, context);
-            return new InspectWebSocket(handshake, iss, session.getConnectionWatcher(), log);
+            return new InspectWebSocket(handshake, iss, log);
         } else {
             return new ClosedWebSocket(handshake);
         }
@@ -202,69 +197,15 @@ public final class WebSocketServer extends NanoWSD {
         return new ClientHandler(pbInputStream, finalAccept);
     }
 
-    /**
-     * Close the web socket server on the specific path. No web socket connection is active on the
-     * path already, this is called after the {@link ConnectionWatcher#waitForClose()} is done.
-     */
-    public void close(String wspath) {
-        synchronized (sessions) {
-            sessions.remove(wspath);
-            if (sessions.isEmpty()) {
-                stop();
-            }
-        }
-    }
-
-    @Override
-    public void stop() {
-        super.stop();
-        synchronized (SERVERS) {
-            Iterator<Map.Entry<InetSocketAddress, WebSocketServer>> entries = SERVERS.entrySet().iterator();
-            while (entries.hasNext()) {
-                if (entries.next().getValue() == this) {
-                    entries.remove();
-                    break;
-                }
-            }
-        }
-    }
-
-    private static class ServerPathSession {
-
-        private final TruffleExecutionContext context;
-        private final AtomicBoolean debugBrk;
-        private final ConnectionWatcher connectionWatcher;
-
-        ServerPathSession(TruffleExecutionContext context, boolean debugBrk, ConnectionWatcher connectionWatcher) {
-            this.context = context;
-            this.debugBrk = new AtomicBoolean(debugBrk);
-            this.connectionWatcher = connectionWatcher;
-        }
-
-        TruffleExecutionContext getContext() {
-            return context;
-        }
-
-        boolean getDebugBrkAndReset() {
-            return debugBrk.getAndSet(false);
-        }
-
-        ConnectionWatcher getConnectionWatcher() {
-            return connectionWatcher;
-        }
-    }
-
     private class InspectWebSocket extends NanoWSD.WebSocket {
 
         private final InspectServerSession iss;
-        private final ConnectionWatcher connectionWatcher;
         private final PrintStream log;
 
         InspectWebSocket(NanoHTTPD.IHTTPSession handshake, InspectServerSession iss,
-                        ConnectionWatcher connectionWatcher, PrintStream log) {
+                        PrintStream log) {
             super(handshake);
             this.iss = iss;
-            this.connectionWatcher = connectionWatcher;
             this.log = log;
         }
 
