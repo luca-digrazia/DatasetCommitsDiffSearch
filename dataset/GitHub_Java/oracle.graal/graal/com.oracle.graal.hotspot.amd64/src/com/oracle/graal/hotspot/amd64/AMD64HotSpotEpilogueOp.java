@@ -53,7 +53,7 @@ abstract class AMD64HotSpotEpilogueOp extends AMD64LIRInstruction {
             masm.movq(rbp, (AMD64Address) tasm.asAddress(savedRbp));
         } else {
             Register framePointer = asRegister(savedRbp);
-            if (!framePointer.equals(rbp)) {
+            if (framePointer != rbp) {
                 masm.movq(rbp, framePointer);
             }
         }
