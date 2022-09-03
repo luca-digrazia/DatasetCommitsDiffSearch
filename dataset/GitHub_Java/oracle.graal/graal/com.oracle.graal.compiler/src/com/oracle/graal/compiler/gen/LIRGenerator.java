@@ -40,6 +40,7 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
+import com.oracle.graal.lir.StandardOp.ParametersOp;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.calc.*;
@@ -404,7 +405,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     }
 
     public void emitIncomingValues(Value[] params) {
-        ((LabelOp) lir.lir(currentBlock).get(0)).setIncomingValues(params);
+        append(new ParametersOp(params));
     }
 
     @Override

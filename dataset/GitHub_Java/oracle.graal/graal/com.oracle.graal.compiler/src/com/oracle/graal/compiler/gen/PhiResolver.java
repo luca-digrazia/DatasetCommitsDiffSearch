@@ -32,7 +32,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 
 /**
- * Converts {@link ValuePhiNode} instructions into moves.
+ * Converts {@link PhiNode} instructions into moves.
  * 
  * Resolves cycles:
  * 
