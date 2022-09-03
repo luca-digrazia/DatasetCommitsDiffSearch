@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -40,24 +40,24 @@ import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.Register.RegisterCategory;
-import jdk.vm.ci.meta.JavaField;
-import jdk.vm.ci.meta.JavaMethod;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.LocationIdentity;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.BailoutException;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.code.Register.RegisterCategory;
+import jdk.internal.jvmci.meta.JavaField;
+import jdk.internal.jvmci.meta.JavaMethod;
+import jdk.internal.jvmci.meta.JavaType;
+import jdk.internal.jvmci.meta.LIRKind;
+import jdk.internal.jvmci.meta.LocationIdentity;
+import jdk.internal.jvmci.meta.MetaAccessProvider;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.meta.Value;
 
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
 
-import com.oracle.graal.api.test.Graal;
+import com.oracle.graal.api.runtime.Graal;
 import com.oracle.graal.compiler.CompilerThreadFactory;
 import com.oracle.graal.compiler.CompilerThreadFactory.DebugConfigAccess;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
@@ -68,14 +68,14 @@ import com.oracle.graal.debug.DelegatingDebugConfig;
 import com.oracle.graal.debug.GraalDebugConfig;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.graphbuilderconf.InvocationPlugins;
 import com.oracle.graal.java.GraphBuilderPhase;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.PhiNode;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.PhaseSuite;
 import com.oracle.graal.phases.VerifyPhase;
@@ -98,7 +98,7 @@ public class CheckGraalInvariants extends GraalTest {
     private static boolean shouldVerifyEquals(ResolvedJavaMethod m) {
         if (m.getName().equals("identityEquals")) {
             ResolvedJavaType c = m.getDeclaringClass();
-            if (c.getName().equals("Ljdk/vm/ci/meta/AbstractValue;") || c.getName().equals("jdk/vm/ci/meta/Value")) {
+            if (c.getName().equals("Ljdk/internal/jvmci/meta/AbstractValue;") || c.getName().equals("jdk/internal/jvmci/meta/Value")) {
                 return false;
             }
         }
@@ -122,8 +122,7 @@ public class CheckGraalInvariants extends GraalTest {
         MetaAccessProvider metaAccess = providers.getMetaAccess();
 
         PhaseSuite<HighTierContext> graphBuilderSuite = new PhaseSuite<>();
-        Plugins plugins = new Plugins(new InvocationPlugins(metaAccess));
-        GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault(plugins).withEagerResolving(true);
+        GraphBuilderConfiguration config = GraphBuilderConfiguration.getEagerDefault(new Plugins(new InvocationPlugins(metaAccess)));
         graphBuilderSuite.appendPhase(new GraphBuilderPhase(config));
         HighTierContext context = new HighTierContext(providers, graphBuilderSuite, OptimisticOptimizations.NONE);
 
@@ -159,7 +158,6 @@ public class CheckGraalInvariants extends GraalTest {
         String[] filters = property == null ? null : property.split(",");
 
         CompilerThreadFactory factory = new CompilerThreadFactory("CheckInvariantsThread", new DebugConfigAccess() {
-            @Override
             public GraalDebugConfig getDebugConfig() {
                 return DebugEnvironment.initialize(System.out);
             }
