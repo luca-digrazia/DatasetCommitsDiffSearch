@@ -29,6 +29,8 @@
  */
 package com.oracle.truffle.llvm.nodes.func;
 
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -37,63 +39,64 @@ import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.context.LLVMLanguage;
 import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.api.LLVMStackFrameNuller;
+import com.oracle.truffle.llvm.parser.api.model.functions.FunctionDefinition;
 
 public class LLVMFunctionStartNode extends RootNode {
 
     @Child private LLVMExpressionNode node;
     @Children private final LLVMExpressionNode[] beforeFunction;
     @Children private final LLVMExpressionNode[] afterFunction;
-    @Children private final LLVMStackFrameNuller[] nullers;
-    private final String name;
+    @CompilationFinal(dimensions = 1) private final LLVMStackFrameNuller[] nullers;
+    private final FunctionDefinition functionHeader;
 
     public LLVMFunctionStartNode(LLVMExpressionNode node, LLVMExpressionNode[] beforeFunction, LLVMExpressionNode[] afterFunction, SourceSection sourceSection, FrameDescriptor frameDescriptor,
-                    String name, LLVMStackFrameNuller[] initNullers) {
+                    FunctionDefinition functionHeader, LLVMStackFrameNuller[] initNullers) {
         super(LLVMLanguage.class, sourceSection, frameDescriptor);
         this.node = node;
         this.beforeFunction = beforeFunction;
         this.afterFunction = afterFunction;
+        this.functionHeader = functionHeader;
         this.nullers = initNullers;
-        this.name = name;
     }
 
     @Override
-    public Object execute(VirtualFrame frame) {
-        nullStack(frame);
-        doBefore(frame);
-        Object result = node.executeGeneric(frame);
-        doAfter(frame);
-        return result;
-    }
-
     @ExplodeLoop
-    private void nullStack(VirtualFrame frame) {
+    public Object execute(VirtualFrame frame) {
         for (LLVMStackFrameNuller nuller : nullers) {
             nuller.nullifySlot(frame);
         }
-    }
-
-    @ExplodeLoop
-    private void doAfter(VirtualFrame frame) {
-        for (LLVMExpressionNode after : afterFunction) {
-            after.executeGeneric(frame);
-        }
-    }
-
-    @ExplodeLoop
-    private void doBefore(VirtualFrame frame) {
+        CompilerAsserts.compilationConstant(beforeFunction);
         for (LLVMExpressionNode before : beforeFunction) {
             before.executeGeneric(frame);
         }
+        Object result = node.executeGeneric(frame);
+        CompilerAsserts.compilationConstant(afterFunction);
+        for (LLVMExpressionNode after : afterFunction) {
+            after.executeGeneric(frame);
+        }
+        return result;
     }
 
     @Override
     public String toString() {
-        return getName();
+        CompilerAsserts.neverPartOfCompilation();
+        return getFunctionName();
+    }
+
+    public String getFunctionName() {
+        CompilerAsserts.neverPartOfCompilation();
+        return functionHeader == null ? "null" : functionHeader.getName();
+    }
+
+    public FunctionDefinition getFunctionHeader() {
+        CompilerAsserts.neverPartOfCompilation();
+        return functionHeader;
     }
 
     @Override
     public String getName() {
-        return name;
+        CompilerAsserts.neverPartOfCompilation();
+        return getFunctionName();
     }
 
 }
