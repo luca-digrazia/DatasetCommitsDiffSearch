@@ -46,7 +46,6 @@ import org.junit.Test;
 
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine;
-import com.oracle.truffle.sl.SLLanguage;
 import com.oracle.truffle.tck.TruffleTCK;
 
 /**
@@ -58,11 +57,10 @@ public class SLTckTest extends TruffleTCK {
     @Test
     public void testVerifyPresence() {
         PolyglotEngine vm = PolyglotEngine.newBuilder().build();
-        assertTrue("Our language is present", vm.getLanguages().containsKey(SLLanguage.MIME_TYPE));
+        assertTrue("Our language is present", vm.getLanguages().containsKey("application/x-sl"));
         vm.dispose();
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     protected PolyglotEngine prepareVM(PolyglotEngine.Builder builder) throws Exception {
         PolyglotEngine vm = builder.build();
@@ -116,7 +114,7 @@ public class SLTckTest extends TruffleTCK {
                 "  return obj;\n" +
                 "}\n",
                 "SL TCK"
-            ).withMimeType(SLLanguage.MIME_TYPE)
+            ).withMimeType("application/x-sl")
         );
         // @formatter:on
         return vm;
@@ -124,7 +122,7 @@ public class SLTckTest extends TruffleTCK {
 
     @Override
     protected String mimeType() {
-        return SLLanguage.MIME_TYPE;
+        return "application/x-sl";
     }
 
     @Override
@@ -181,7 +179,7 @@ public class SLTckTest extends TruffleTCK {
     protected String multiplyCode(String firstName, String secondName) {
         // @formatter:off
         return
-            "function main(" + firstName + ", " + secondName + ") {\n" +
+            "function multiply(" + firstName + ", " + secondName + ") {\n" +
             "  return " + firstName + " * " + secondName + ";\n" +
             "}\n";
         // @formatter:on
