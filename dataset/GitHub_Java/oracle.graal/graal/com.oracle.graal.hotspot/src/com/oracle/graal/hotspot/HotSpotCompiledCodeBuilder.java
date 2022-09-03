@@ -201,7 +201,8 @@ public class HotSpotCompiledCodeBuilder {
      * {@link Infopoint} PCs to be unique.
      */
     private static Site[] getSortedSites(CompilationResult target) {
-        List<Site> sites = new ArrayList<>();
+        List<Site> sites = new ArrayList<>(
+                        target.getExceptionHandlers().size() + target.getInfopoints().size() + target.getDataPatches().size() + target.getMarks().size() + target.getSourceMappings().size());
         sites.addAll(target.getExceptionHandlers());
         sites.addAll(target.getInfopoints());
         sites.addAll(target.getDataPatches());
@@ -209,7 +210,7 @@ public class HotSpotCompiledCodeBuilder {
 
         /*
          * Translate the source mapping into appropriate info points. In HotSpot only one position
-         * can be really be represented and recording the end PC seems to give the best results and
+         * can really be represented and recording the end PC seems to give the best results and
          * corresponds with what C1 and C2 do.
          */
         for (SourceMapping source : target.getSourceMappings()) {
@@ -242,7 +243,7 @@ public class HotSpotCompiledCodeBuilder {
     }
 
     /**
-     * Verify that the captured receiver type agrees with the declared type of the method.
+     * Verifies that the captured receiver type agrees with the declared type of the method.
      */
     private static boolean verifySourcePositionReceivers(NodeSourcePosition start) {
         NodeSourcePosition pos = start;
