@@ -30,6 +30,9 @@ import com.oracle.graal.options.*;
 // @formatter:off
 public final class GraalOptions {
 
+    @Option(help = "Use experimental baseline compiler configuration.", type = OptionType.Debug)
+    public static final OptionValue<Boolean> UseBaselineCompiler = new OptionValue<>(false);
+
     @Option(help = "Use compiler intrinsifications.", type = OptionType.Debug)
     public static final OptionValue<Boolean> Intrinsify = new OptionValue<>(true);
 
@@ -307,7 +310,7 @@ public final class GraalOptions {
     public static final OptionValue<Boolean> OptFloatingReads = new OptionValue<>(true);
 
     @Option(help = "", type = OptionType.Debug)
-    public static final OptionValue<Boolean> OptTailDuplication = new OptionValue<>(false);
+    public static final OptionValue<Boolean> OptTailDuplication = new OptionValue<>(true);
 
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> OptEliminatePartiallyRedundantGuards = new OptionValue<>(true);
