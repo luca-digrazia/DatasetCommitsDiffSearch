@@ -82,8 +82,7 @@ public class Function implements ParserListener {
                 return new ValueSymbolTable(generator);
 
             case METADATA:
-                // return version.createMetadata(types, symbols, generator);
-                return ParserListener.DEFAULT; // TODO
+                return version.createMetadata(types, symbols);
 
             case METADATA_ATTACHMENT:
                 return ParserListener.DEFAULT; // TODO

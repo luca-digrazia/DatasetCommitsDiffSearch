@@ -82,20 +82,22 @@ public class MetadataArgumentParser implements Iterator<Type> {
         Type typeOfArgument = types.get(typeId);
 
         if (typeOfArgument instanceof IntegerConstantType) {
-            return symbols.get((int) val);
+            return symbols.get((int) val); // TODO: check
         } else if (typeOfArgument instanceof BigIntegerConstantType) {
-            return symbols.get((int) val);
+            return symbols.get((int) val); // TODO: check
         } else if (typeOfArgument instanceof IntegerType) {
-            return symbols.get((int) val);
+            return symbols.get((int) val); // should work
         } else if (typeOfArgument instanceof MetaType) {
-            return new MetadataConstantType(val);
+            // TODO: return more suited type
+            return new MetadataConstantType(val); // TODO: check
         } else if (typeOfArgument instanceof PointerType) {
             // TODO: return more suited type
             return new IntegerConstantType(IntegerType.INTEGER, val); // TODO: check
         } else {
-            throw new AssertionError("type not suported yet: " + typeOfArgument);
-        }
 
+            System.out.println(typeOfArgument.getClass().getName()); // TODO: get correct type
+            return new IntegerConstantType(IntegerType.SHORT, val);
+        }
     }
 
     protected Type get(int i) {

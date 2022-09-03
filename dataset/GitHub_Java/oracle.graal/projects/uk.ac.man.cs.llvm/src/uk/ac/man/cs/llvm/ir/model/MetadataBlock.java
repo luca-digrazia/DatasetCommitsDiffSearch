@@ -76,10 +76,6 @@ public class MetadataBlock {
         return getReference((int) index);
     }
 
-    public int getCurrentIndex() {
-        return startIndex + metadata.size();
-    }
-
     public MetadataReference getReference(Type t) {
         if (t instanceof MetadataConstantType) {
             int index = (int) ((MetadataConstantType) t).getValue();

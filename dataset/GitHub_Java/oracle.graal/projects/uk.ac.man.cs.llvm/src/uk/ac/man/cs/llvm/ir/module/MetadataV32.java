@@ -31,7 +31,6 @@ package uk.ac.man.cs.llvm.ir.module;
 
 import java.util.List;
 
-import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 import uk.ac.man.cs.llvm.ir.module.records.MetadataRecord;
 import uk.ac.man.cs.llvm.ir.model.MetadataBlock;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataBasicType;
@@ -94,9 +93,7 @@ public class MetadataV32 extends Metadata {
                 return;
         }
 
-        if (LLVMBaseOptionFacade.verboseEnabled()) {
-            printMetadataDebugMsg();
-        }
+        // printMetadataDebugMsg(); // Enable to allow debugging of the metadata parser
 
         idx++;
     }
@@ -225,7 +222,6 @@ public class MetadataV32 extends Metadata {
         node.setName(metadata.getReference(args.next()));
         node.setDisplayName(metadata.getReference(args.next()));
         node.setLinkageName(metadata.getReference(args.next()));
-        node.setFile(metadata.getReference(args.next()));
         node.setLine(asInt32(args.next()));
         node.setType(metadata.getReference(args.next()));
         node.setLocalToCompileUnit(asInt1(args.next()));
