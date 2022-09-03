@@ -482,19 +482,14 @@ public abstract class TruffleLanguage<C> {
 
         @Override
         protected Object evalInContext(Object vm, SuspendedEvent ev, String code, FrameInstance frame) throws IOException {
-            Node n = ev.getNode();
-            if (n == null && frame != null) {
-                n = frame.getCallNode();
-            }
-            if (n == null) {
-                throw new IOException("Can't determine language for text \"" + code + "\"");
-            }
+            Node n = frame == null ? ev.getNode() : frame.getCallNode();
             RootNode rootNode = n.getRootNode();
             Class<? extends TruffleLanguage> languageType = findLanguage(rootNode);
-            final Env env = findLanguage(vm, languageType);
-            final TruffleLanguage<?> lang = findLanguage(env);
-            final Source source = Source.fromText(code, "eval in context");
-            return lang.evalInContext(source, n, frame.getFrame(null, true).materialize());
+            Env env = findLanguage(vm, languageType);
+            TruffleLanguage<?> lang = findLanguage(env);
+            Source source = Source.fromText(code, "eval in context");
+            CallTarget target = lang.parse(source, n);
+            return target.call();
         }
 
         @Override
