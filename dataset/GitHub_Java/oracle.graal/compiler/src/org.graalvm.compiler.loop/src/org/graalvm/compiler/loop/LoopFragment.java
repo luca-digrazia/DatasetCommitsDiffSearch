@@ -22,7 +22,11 @@
  */
 package org.graalvm.compiler.loop;
 
-import jdk.vm.ci.meta.TriState;
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.Iterator;
+
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.graph.Graph.DuplicationReplacement;
@@ -53,10 +57,7 @@ import org.graalvm.compiler.nodes.virtual.CommitAllocationNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
 import org.graalvm.util.EconomicMap;
 
-import java.util.ArrayDeque;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.Iterator;
+import jdk.vm.ci.meta.TriState;
 
 public abstract class LoopFragment {
 
@@ -77,10 +78,7 @@ public abstract class LoopFragment {
         this.nodesReady = false;
     }
 
-    /**
-     * Return the original LoopEx for this fragment. For duplicated fragments this returns null.
-     */
-    protected LoopEx loop() {
+    public LoopEx loop() {
         return loop;
     }
 
@@ -174,8 +172,6 @@ public abstract class LoopFragment {
             NodeIterable<Node> nodesIterable = original().nodes();
             duplicationMap = graph().addDuplicates(nodesIterable, graph(), nodesIterable.count(), dr);
             finishDuplication();
-            nodes = new NodeBitMap(graph());
-            nodes.markAll(duplicationMap.getValues());
             nodesReady = true;
         } else {
             // TODO (gd) apply fix ?
@@ -433,7 +429,7 @@ public abstract class LoopFragment {
                  * VirtualState nodes contained in the old exit's state may be shared by other
                  * dominated VirtualStates. Those dominated virtual states need to see the
                  * proxy->phi update that are applied below.
-                 *
+                 * 
                  * We now update the original fragment's nodes accordingly:
                  */
                 originalExitState.applyToVirtual(node -> original.nodes.clearAndGrow(node));
