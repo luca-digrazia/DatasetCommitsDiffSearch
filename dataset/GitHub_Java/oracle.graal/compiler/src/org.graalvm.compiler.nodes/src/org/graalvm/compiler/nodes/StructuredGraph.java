@@ -33,7 +33,6 @@ import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.cfg.BlockMap;
 import org.graalvm.compiler.core.common.type.Stamp;
-import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.JavaMethodContext;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.graph.Node;
@@ -168,28 +167,21 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         private boolean useProfilingInfo = true;
         private final OptionValues options;
         private Cancellable cancellable = null;
-        private final DebugContext debug;
 
         /**
          * Creates a builder for a graph.
          */
-        public Builder(OptionValues options, DebugContext debug, AllowAssumptions allowAssumptions) {
+        public Builder(OptionValues options, AllowAssumptions allowAssumptions) {
             this.options = options;
-            this.debug = debug;
             this.assumptions = allowAssumptions == AllowAssumptions.YES ? new Assumptions() : null;
         }
 
         /**
          * Creates a builder for a graph that does not support {@link Assumptions}.
          */
-        public Builder(OptionValues options, DebugContext debug) {
+        public Builder(OptionValues options) {
             this.options = options;
-            this.debug = debug;
             assumptions = null;
-        }
-
-        public String getName() {
-            return name;
         }
 
         public Builder name(String s) {
@@ -197,21 +189,9 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
             return this;
         }
 
-        public ResolvedJavaMethod getMethod() {
-            return rootMethod;
-        }
-
         public Builder method(ResolvedJavaMethod method) {
             this.rootMethod = method;
             return this;
-        }
-
-        public DebugContext getDebug() {
-            return debug;
-        }
-
-        public SpeculationLog getSpeculationLog() {
-            return speculationLog;
         }
 
         public Builder speculationLog(SpeculationLog log) {
@@ -219,17 +199,9 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
             return this;
         }
 
-        public CompilationIdentifier getCompilationId() {
-            return compilationId;
-        }
-
         public Builder compilationId(CompilationIdentifier id) {
             this.compilationId = id;
             return this;
-        }
-
-        public Cancellable getCancellable() {
-            return cancellable;
         }
 
         public Builder cancellable(Cancellable cancel) {
@@ -237,17 +209,9 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
             return this;
         }
 
-        public int getEntryBCI() {
-            return entryBCI;
-        }
-
         public Builder entryBCI(int bci) {
             this.entryBCI = bci;
             return this;
-        }
-
-        public boolean getUseProfilingInfo() {
-            return useProfilingInfo;
         }
 
         public Builder useProfilingInfo(boolean flag) {
@@ -256,7 +220,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         }
 
         public StructuredGraph build() {
-            return new StructuredGraph(name, rootMethod, entryBCI, assumptions, speculationLog, useProfilingInfo, compilationId, options, debug, cancellable);
+            return new StructuredGraph(name, rootMethod, entryBCI, assumptions, speculationLog, useProfilingInfo, compilationId, options, cancellable);
         }
     }
 
@@ -316,9 +280,8 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
                     boolean useProfilingInfo,
                     CompilationIdentifier compilationId,
                     OptionValues options,
-                    DebugContext debug,
                     Cancellable cancellable) {
-        super(name, options, debug);
+        super(name, options);
         this.setStart(add(new StartNode()));
         this.rootMethod = method;
         this.graphId = uniqueGraphIds.incrementAndGet();
@@ -360,9 +323,9 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
             ValueNode result = returnNode.result();
             if (result != null) {
                 if (returnStamp == null) {
-                    returnStamp = result.stamp(NodeView.DEFAULT);
+                    returnStamp = result.stamp();
                 } else {
-                    returnStamp = returnStamp.meet(result.stamp(NodeView.DEFAULT));
+                    returnStamp = returnStamp.meet(result.stamp());
                 }
             }
         }
@@ -441,16 +404,13 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
      *
      * @param newName the name of the copy, used for debugging purposes (can be null)
      * @param duplicationMapCallback consumer of the duplication map created during the copying
-     * @param debugForCopy the debug context for the graph copy. This must not be the debug for this
-     *            graph if this graph can be accessed from multiple threads (e.g., it's in a cache
-     *            accessed by multiple threads).
      */
     @Override
-    protected Graph copy(String newName, Consumer<UnmodifiableEconomicMap<Node, Node>> duplicationMapCallback, DebugContext debugForCopy) {
-        return copy(newName, duplicationMapCallback, compilationId, debugForCopy);
+    protected Graph copy(String newName, Consumer<UnmodifiableEconomicMap<Node, Node>> duplicationMapCallback) {
+        return copy(newName, duplicationMapCallback, compilationId);
     }
 
-    private StructuredGraph copy(String newName, Consumer<UnmodifiableEconomicMap<Node, Node>> duplicationMapCallback, CompilationIdentifier newCompilationId, DebugContext debugForCopy) {
+    private StructuredGraph copy(String newName, Consumer<UnmodifiableEconomicMap<Node, Node>> duplicationMapCallback, CompilationIdentifier newCompilationId) {
         AllowAssumptions allowAssumptions = AllowAssumptions.ifNonNull(assumptions);
         StructuredGraph copy = new StructuredGraph(newName,
                         method(),
@@ -459,7 +419,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
                         speculationLog,
                         useProfilingInfo,
                         newCompilationId,
-                        getOptions(), debugForCopy, null);
+                        getOptions(), null);
         if (allowAssumptions == AllowAssumptions.YES && assumptions != null) {
             copy.assumptions.record(assumptions);
         }
@@ -477,13 +437,8 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         return copy;
     }
 
-    /**
-     * @param debugForCopy the debug context for the graph copy. This must not be the debug for this
-     *            graph if this graph can be accessed from multiple threads (e.g., it's in a cache
-     *            accessed by multiple threads).
-     */
-    public StructuredGraph copyWithIdentifier(CompilationIdentifier newCompilationId, DebugContext debugForCopy) {
-        return copy(name, null, newCompilationId, debugForCopy);
+    public StructuredGraph copyWithIdentifier(CompilationIdentifier newCompilationId) {
+        return copy(name, null, newCompilationId);
     }
 
     public ParameterNode getParameter(int index) {

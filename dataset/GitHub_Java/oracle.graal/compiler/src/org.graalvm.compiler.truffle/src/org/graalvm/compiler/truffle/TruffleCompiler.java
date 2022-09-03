@@ -22,7 +22,6 @@
  */
 package org.graalvm.compiler.truffle;
 
-import static jdk.vm.ci.runtime.JVMCICompiler.INVOCATION_ENTRY_BCI;
 import static org.graalvm.compiler.core.GraalCompiler.compileGraph;
 import static org.graalvm.compiler.core.common.CompilationRequestIdentifier.asCompilationRequest;
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleEnableInfopoints;
@@ -33,16 +32,20 @@ import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInstrum
 import java.util.ArrayList;
 import java.util.List;
 
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.meta.Assumptions.Assumption;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.code.CompilationResult;
-import org.graalvm.compiler.core.CompilationPrinter;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.util.CompilationAlarm;
 import org.graalvm.compiler.core.target.Backend;
+import org.graalvm.compiler.debug.Debug;
+import org.graalvm.compiler.debug.Debug.Scope;
 import org.graalvm.compiler.debug.DebugCloseable;
-import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.debug.MemUseTrackerKey;
-import org.graalvm.compiler.debug.TimerKey;
+import org.graalvm.compiler.debug.DebugEnvironment;
+import org.graalvm.compiler.debug.DebugMemUseTracker;
+import org.graalvm.compiler.debug.DebugTimer;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilderFactory;
 import org.graalvm.compiler.lir.phases.LIRSuites;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -62,9 +65,6 @@ import com.oracle.truffle.api.nodes.SlowPathException;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 import jdk.vm.ci.code.CompilationRequest;
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.meta.Assumptions.Assumption;
-import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -121,6 +121,10 @@ public abstract class TruffleCompiler {
 
         this.partialEvaluator = createPartialEvaluator();
 
+        if (Debug.isEnabled()) {
+            DebugEnvironment.ensureInitialized(TruffleCompilerOptions.getOptions(), graalTruffleRuntime.getRequiredGraalCapability(SnippetReflectionProvider.class));
+        }
+
         graalTruffleRuntime.reinstallStubs();
     }
 
@@ -142,31 +146,30 @@ public abstract class TruffleCompiler {
         return skippedExceptionTypes;
     }
 
-    public static final TimerKey PartialEvaluationTime = DebugContext.timer("PartialEvaluationTime");
-    public static final TimerKey CompilationTime = DebugContext.timer("CompilationTime");
-    public static final TimerKey CodeInstallationTime = DebugContext.timer("CodeInstallation");
+    public static final DebugTimer PartialEvaluationTime = Debug.timer("PartialEvaluationTime");
+    public static final DebugTimer CompilationTime = Debug.timer("CompilationTime");
+    public static final DebugTimer CodeInstallationTime = Debug.timer("CodeInstallation");
 
-    public static final MemUseTrackerKey PartialEvaluationMemUse = DebugContext.memUseTracker("TrufflePartialEvaluationMemUse");
-    public static final MemUseTrackerKey CompilationMemUse = DebugContext.memUseTracker("TruffleCompilationMemUse");
-    public static final MemUseTrackerKey CodeInstallationMemUse = DebugContext.memUseTracker("TruffleCodeInstallationMemUse");
+    public static final DebugMemUseTracker PartialEvaluationMemUse = Debug.memUseTracker("TrufflePartialEvaluationMemUse");
+    public static final DebugMemUseTracker CompilationMemUse = Debug.memUseTracker("TruffleCompilationMemUse");
+    public static final DebugMemUseTracker CodeInstallationMemUse = Debug.memUseTracker("TruffleCodeInstallationMemUse");
 
-    public void compileMethod(DebugContext debug, final OptimizedCallTarget compilable, GraalTruffleRuntime runtime) {
-        ResolvedJavaMethod rootMethod = partialEvaluator.rootForCallTarget(compilable);
-        CompilationIdentifier compilationId = runtime.getCompilationIdentifier(compilable, rootMethod, backend);
-        compileMethod(debug, compilable, rootMethod, compilationId, null);
+    public void compileMethod(final OptimizedCallTarget compilable, GraalTruffleRuntime runtime) {
+        compileMethod(compilable, runtime, null);
     }
 
     @SuppressWarnings("try")
-    public void compileMethod(DebugContext debug, final OptimizedCallTarget compilable, ResolvedJavaMethod rootMethod, CompilationIdentifier compilationId, CancellableCompileTask task) {
-        final CompilationPrinter printer = CompilationPrinter.get(TruffleCompilerOptions.getOptions(), compilationId, new TruffleDebugJavaMethod(compilable), INVOCATION_ENTRY_BCI);
+    public void compileMethod(final OptimizedCallTarget compilable, GraalTruffleRuntime runtime, CancellableCompileTask task) {
         StructuredGraph graph = null;
         compilationNotify.notifyCompilationStarted(compilable);
 
         try (CompilationAlarm alarm = CompilationAlarm.trackCompilationPeriod(TruffleCompilerOptions.getOptions())) {
+            ResolvedJavaMethod rootMethod = partialEvaluator.rootForCallTarget(compilable);
             TruffleInlining inliningDecision = new TruffleInlining(compilable, new DefaultInliningPolicy());
+            CompilationIdentifier compilationId = runtime.getCompilationIdentifier(compilable, rootMethod, backend);
             PhaseSuite<HighTierContext> graphBuilderSuite = createGraphBuilderSuite();
-            try (DebugCloseable a = PartialEvaluationTime.start(debug); DebugCloseable c = PartialEvaluationMemUse.start(debug)) {
-                graph = partialEvaluator.createGraph(debug, compilable, inliningDecision, rootMethod, AllowAssumptions.YES, compilationId, task);
+            try (DebugCloseable a = PartialEvaluationTime.start(); DebugCloseable c = PartialEvaluationMemUse.start()) {
+                graph = partialEvaluator.createGraph(compilable, inliningDecision, rootMethod, AllowAssumptions.YES, compilationId, task);
             }
 
             // check if the task was cancelled in the time frame between [after PE: before
@@ -180,11 +183,6 @@ public abstract class TruffleCompiler {
             compilationNotify.notifyCompilationTruffleTierFinished(compilable, inliningDecision, graph);
             CompilationResult compilationResult = compileMethodHelper(graph, compilable.toString(), graphBuilderSuite, compilable, asCompilationRequest(compilationId));
             compilationNotify.notifyCompilationSuccess(compilable, inliningDecision, graph, compilationResult);
-
-            // Partial evaluation and installation are included in
-            // compilation time and memory usage reported by printer
-            printer.finish(compilationResult);
-
             dequeueInlinedCallSites(inliningDecision, compilable);
         } catch (Throwable t) {
             // Note: If the compiler cancels the compilation with a bailout exception, then the
@@ -211,18 +209,17 @@ public abstract class TruffleCompiler {
     @SuppressWarnings("try")
     public CompilationResult compileMethodHelper(StructuredGraph graph, String name, PhaseSuite<HighTierContext> graphBuilderSuite, OptimizedCallTarget predefinedInstalledCode,
                     CompilationRequest compilationRequest) {
-        DebugContext debug = graph.getDebug();
-        try (DebugContext.Scope s = debug.scope("TruffleFinal")) {
-            debug.dump(DebugContext.BASIC_LEVEL, graph, "After TruffleTier");
+        try (Scope s = Debug.scope("TruffleFinal")) {
+            Debug.dump(Debug.BASIC_LEVEL, graph, "After TruffleTier");
         } catch (Throwable e) {
-            throw debug.handle(e);
+            throw Debug.handle(e);
         }
 
         CompilationResult result = null;
 
-        try (DebugCloseable a = CompilationTime.start(debug);
-                        DebugContext.Scope s = debug.scope("TruffleGraal.GraalCompiler", graph, providers.getCodeCache());
-                        DebugCloseable c = CompilationMemUse.start(debug)) {
+        try (DebugCloseable a = CompilationTime.start();
+                        Scope s = Debug.scope("TruffleGraal.GraalCompiler", graph, providers.getCodeCache());
+                        DebugCloseable c = CompilationMemUse.start()) {
             SpeculationLog speculationLog = graph.getSpeculationLog();
             if (speculationLog != null) {
                 speculationLog.collectFailedSpeculations();
@@ -232,15 +229,15 @@ public abstract class TruffleCompiler {
             result = compileGraph(graph, graph.method(), providers, backend, graphBuilderSuite, Optimizations, graph.getProfilingInfo(), suites, lirSuites, compilationResult,
                             CompilationResultBuilderFactory.Default);
         } catch (Throwable e) {
-            throw debug.handle(e);
+            throw Debug.handle(e);
         }
 
         compilationNotify.notifyCompilationGraalTierFinished(predefinedInstalledCode, graph);
 
-        try (DebugCloseable a = CodeInstallationTime.start(debug); DebugCloseable c = CodeInstallationMemUse.start(debug)) {
-            backend.createInstalledCode(debug, graph.method(), compilationRequest, result, graph.getSpeculationLog(), predefinedInstalledCode, false);
+        try (DebugCloseable a = CodeInstallationTime.start(); DebugCloseable c = CodeInstallationMemUse.start()) {
+            backend.createInstalledCode(graph.method(), compilationRequest, result, graph.getSpeculationLog(), predefinedInstalledCode, false);
         } catch (Throwable e) {
-            throw debug.handle(e);
+            throw Debug.handle(e);
         }
 
         return result;
