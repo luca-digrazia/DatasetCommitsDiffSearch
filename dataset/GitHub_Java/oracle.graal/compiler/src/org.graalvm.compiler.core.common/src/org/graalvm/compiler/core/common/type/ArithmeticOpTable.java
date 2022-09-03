@@ -96,22 +96,6 @@ public final class ArithmeticOpTable {
         }
     }
 
-    public BinaryOp<?>[] getBinaryOps() {
-        return new BinaryOp<?>[]{add, sub, mul, mulHigh, umulHigh, div, rem, and, or, xor};
-    }
-
-    public UnaryOp<?>[] getUnaryOps() {
-        return new UnaryOp<?>[]{neg, not, abs, sqrt};
-    }
-
-    public ShiftOp<?>[] getShiftOps() {
-        return new ShiftOp<?>[]{shl, shr, ushr};
-    }
-
-    public IntegerConvertOp<?>[] getIntegerConvertOps() {
-        return new IntegerConvertOp<?>[]{zeroExtend, signExtend, narrow};
-    }
-
     public static final ArithmeticOpTable EMPTY = new ArithmeticOpTable(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
     public interface ArithmeticOpWrapper {
@@ -578,10 +562,7 @@ public final class ArithmeticOpTable {
         }
 
         /**
-         * Applies this operation to {@code a} and {@code b}.
-         *
-         * @return the result of applying this operation or {@code null} if applying it would raise
-         *         an exception (e.g., {@link ArithmeticException} for dividing by 0)
+         * Apply the operation to two {@linkplain Constant Constants}.
          */
         public abstract Constant foldConstant(Constant a, Constant b);
 
