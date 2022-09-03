@@ -30,7 +30,7 @@ import java.util.stream.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.graph.*;
 
-public final class ComputeLoopFrequenciesClosure extends ReentrantNodeIterator.NodeIteratorClosure<Double> {
+public class ComputeLoopFrequenciesClosure extends ReentrantNodeIterator.NodeIteratorClosure<Double> {
 
     private static final ComputeLoopFrequenciesClosure INSTANCE = new ComputeLoopFrequenciesClosure();
 
@@ -45,13 +45,13 @@ public final class ComputeLoopFrequenciesClosure extends ReentrantNodeIterator.N
     }
 
     @Override
-    protected Double merge(AbstractMergeNode merge, List<Double> states) {
+    protected Double merge(MergeNode merge, List<Double> states) {
         // a merge has the sum of all predecessor probabilities
         return states.stream().collect(Collectors.summingDouble(d -> d));
     }
 
     @Override
-    protected Double afterSplit(AbstractBeginNode node, Double oldState) {
+    protected Double afterSplit(BeginNode node, Double oldState) {
         // a control split splits up the probability
         ControlSplitNode split = (ControlSplitNode) node.predecessor();
         return oldState * split.probability(node);

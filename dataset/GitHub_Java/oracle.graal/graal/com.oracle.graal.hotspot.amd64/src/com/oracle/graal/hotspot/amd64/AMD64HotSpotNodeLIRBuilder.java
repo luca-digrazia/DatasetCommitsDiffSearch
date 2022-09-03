@@ -47,8 +47,8 @@ import com.oracle.graal.lir.StandardOp.NoOp;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.amd64.AMD64Move.CompareAndSwapOp;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 
@@ -265,15 +265,21 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
         return null;
     }
 
-    @MatchRule("(Add value (Read=access (Compression=compress object) ConstantLocation=location))")
-    @MatchRule("(Sub value (Read=access (Compression=compress object) ConstantLocation=location))")
-    @MatchRule("(Mul value (Read=access (Compression=compress object) ConstantLocation=location))")
+    @MatchRule("(IntegerAdd value (Read=access (Compression=compress object) ConstantLocation=location))")
+    @MatchRule("(IntegerSub value (Read=access (Compression=compress object) ConstantLocation=location))")
+    @MatchRule("(IntegerMul value (Read=access (Compression=compress object) ConstantLocation=location))")
+    @MatchRule("(FloatAdd value (Read=access (Compression=compress object) ConstantLocation=location))")
+    @MatchRule("(FloatSub value (Read=access (Compression=compress object) ConstantLocation=location))")
+    @MatchRule("(FloatMul value (Read=access (Compression=compress object) ConstantLocation=location))")
     @MatchRule("(Or value (Read=access (Compression=compress object) ConstantLocation=location))")
     @MatchRule("(Xor value (Read=access (Compression=compress object) ConstantLocation=location))")
     @MatchRule("(And value (Read=access (Compression=compress object) ConstantLocation=location))")
-    @MatchRule("(Add value (FloatingRead=access (Compression=compress object) ConstantLocation=location))")
-    @MatchRule("(Sub value (FloatingRead=access (Compression=compress object) ConstantLocation=location))")
-    @MatchRule("(Mul value (FloatingRead=access (Compression=compress object) ConstantLocation=location))")
+    @MatchRule("(IntegerAdd value (FloatingRead=access (Compression=compress object) ConstantLocation=location))")
+    @MatchRule("(IntegerSub value (FloatingRead=access (Compression=compress object) ConstantLocation=location))")
+    @MatchRule("(IntegerMul value (FloatingRead=access (Compression=compress object) ConstantLocation=location))")
+    @MatchRule("(FloatAdd value (FloatingRead=access (Compression=compress object) ConstantLocation=location))")
+    @MatchRule("(FloatSub value (FloatingRead=access (Compression=compress object) ConstantLocation=location))")
+    @MatchRule("(FloatMul value (FloatingRead=access (Compression=compress object) ConstantLocation=location))")
     @MatchRule("(Or value (FloatingRead=access (Compression=compress object) ConstantLocation=location))")
     @MatchRule("(Xor value (FloatingRead=access (Compression=compress object) ConstantLocation=location))")
     @MatchRule("(And value (FloatingRead=access (Compression=compress object) ConstantLocation=location))")
