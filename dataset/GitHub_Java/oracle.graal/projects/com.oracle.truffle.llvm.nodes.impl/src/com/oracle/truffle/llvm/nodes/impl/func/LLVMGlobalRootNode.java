@@ -47,7 +47,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFrameUtil;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMAbort;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMSignal;
 import com.oracle.truffle.llvm.runtime.LLVMExitException;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
@@ -123,19 +122,9 @@ public class LLVMGlobalRootNode extends RootNode {
             startExecutionTime = System.currentTimeMillis();
         }
 
-        int returnCode = 0;
+        result = main.call(frame, args);
 
-        try {
-            result = main.call(frame, args);
-        } catch (LLVMExitException e) {
-            returnCode = e.getReturnCode();
-            throw e;
-        } finally {
-            // We shouldn't execute atexit, when there was an abort
-            if (returnCode != LLVMAbort.UNIX_SIGABORT) {
-                executeAtExitFunctions();
-            }
-        }
+        executeAtExitFunctions();
 
         if (printExecutionTime) {
             endExecutionTime = System.currentTimeMillis();
@@ -181,16 +170,8 @@ public class LLVMGlobalRootNode extends RootNode {
     @TruffleBoundary
     protected void executeAtExitFunctions() {
         Deque<RootCallTarget> atExitFunctions = context.getAtExitFunctions();
-        LLVMExitException lastExitException = null;
         while (!atExitFunctions.isEmpty()) {
-            try {
-                atExitFunctions.pop().call(atExitFunctions);
-            } catch (LLVMExitException e) {
-                lastExitException = e;
-            }
-        }
-        if (lastExitException != null) {
-            throw lastExitException;
+            atExitFunctions.pop().call(atExitFunctions);
         }
     }
 

@@ -29,68 +29,202 @@
  */
 package com.oracle.truffle.llvm.nodes.impl.base;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.List;
 import java.util.Map;
 
 import com.oracle.nfi.api.NativeFunctionHandle;
 import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.ExecutionContext;
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.nativeint.NativeLookup;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMNode;
-import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
-import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
-import com.oracle.truffle.llvm.types.LLVMAddress;
+import com.oracle.truffle.llvm.nodes.base.LLVMThread;
+import com.oracle.truffle.llvm.parser.base.facade.NodeFactoryFacade;
 import com.oracle.truffle.llvm.types.LLVMFunction;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.types.memory.LLVMStack;
 
 public class LLVMContext extends ExecutionContext {
 
-    private final LLVMFunctionRegistry registry;
+    private final List<RootCallTarget> globalVarInits = new ArrayList<>();
+    private final List<RootCallTarget> globalVarDeallocs = new ArrayList<>();
+    private final List<RootCallTarget> constructorFunctions = new ArrayList<>();
+    private final List<RootCallTarget> destructorFunctions = new ArrayList<>();
+    private final Deque<RootCallTarget> atExitFunctions = new ArrayDeque<>();
+    private final List<LLVMThread> runningThreads = new ArrayList<>();
 
-    private LLVMNode[] staticInits;
-
-    private LLVMAddress[] deallocations;
+    private final LLVMFunctionRegistry functionRegistry;
+    private final LLVMGlobalVariableRegistry globalVariableRegistry = new LLVMGlobalVariableRegistry();
 
     private final NativeLookup nativeLookup;
 
-    public LLVMContext(NodeFactoryFacade facade, LLVMOptimizationConfiguration optimizationConfig) {
+    private final LLVMStack stack = new LLVMStack();
+
+    private Object[] mainArguments;
+
+    private Source mainSourceFile;
+
+    private boolean parseOnly;
+
+    public LLVMContext(NodeFactoryFacade facade) {
         nativeLookup = new NativeLookup(facade);
-        this.registry = new LLVMFunctionRegistry(optimizationConfig);
-
+        this.functionRegistry = new LLVMFunctionRegistry(facade);
     }
 
-    public RootCallTarget getFunction(LLVMFunction function) {
-        return LLVMFunctionRegistry.lookup(function);
-    }
-
-    public LLVMNode[] getStaticInits() {
-        return staticInits;
-    }
-
-    public LLVMAddress[] getAllocatedGlobalAddresses() {
-        return deallocations;
+    public RootCallTarget getFunction(LLVMFunctionDescriptor function) {
+        return functionRegistry.lookup(function);
     }
 
     public LLVMFunctionRegistry getFunctionRegistry() {
         CompilerAsserts.neverPartOfCompilation();
-        return registry;
+        return functionRegistry;
     }
 
-    public void setStaticInits(LLVMNode[] staticInits, LLVMAddress[] deallocations) {
-        this.staticInits = staticInits;
-        this.deallocations = deallocations;
+    public NativeFunctionHandle getNativeHandle(LLVMFunctionDescriptor function, LLVMExpressionNode[] args) {
+        LLVMFunction sameFunction = getFunctionDescriptor(function);
+        return getNativeLookup().getNativeHandle(sameFunction, args);
     }
 
-    public NativeFunctionHandle getNativeHandle(LLVMFunction function, LLVMExpressionNode[] args) {
-        return nativeLookup.getNativeHandle(function, args);
+    /**
+     * Creates a complete function descriptor from the given one.
+     *
+     * {@link LLVMFunctionRegistry#createFromIndex} creates an incomplete function descriptor, with
+     * illegal types and no function name but a valid index. Not having to look up the whole
+     * function descriptor makes most indirect calls faster. However, since the native interface
+     * needs the return type of the function, we here have to look up the complete function
+     * descriptor.
+     */
+    private LLVMFunction getFunctionDescriptor(LLVMFunctionDescriptor incompleteFunctionDescriptor) {
+        int validFunctionIndex = incompleteFunctionDescriptor.getFunctionIndex();
+        LLVMFunction[] completeFunctionDescriptors = functionRegistry.getFunctionDescriptors();
+        return completeFunctionDescriptors[validFunctionIndex];
+    }
+
+    public LLVMGlobalVariableRegistry getGlobalVariableRegistry() {
+        return globalVariableRegistry;
+    }
+
+    public void addLibraryToNativeLookup(String library) {
+        getNativeLookup().addLibraryToNativeLookup(library);
     }
 
     public long getNativeHandle(String functionName) {
-        return nativeLookup.getNativeHandle(functionName);
+        return getNativeLookup().getNativeHandle(functionName);
     }
 
     public Map<LLVMFunction, Integer> getNativeFunctionLookupStats() {
-        return nativeLookup.getNativeFunctionLookupStats();
+        return getNativeLookup().getNativeFunctionLookupStats();
+    }
+
+    public LLVMStack getStack() {
+        return stack;
+    }
+
+    public void setMainArguments(Object[] mainArguments) {
+        this.mainArguments = mainArguments;
+    }
+
+    public Object[] getMainArguments() {
+        return mainArguments;
+    }
+
+    public void setMainSourceFile(Source mainSourceFile) {
+        this.mainSourceFile = mainSourceFile;
+    }
+
+    public Source getMainSourceFile() {
+        return mainSourceFile;
+    }
+
+    public void registerGlobalVarDealloc(RootCallTarget globalVarDealloc) {
+        globalVarDeallocs.add(globalVarDealloc);
+    }
+
+    public void registerConstructorFunction(RootCallTarget constructorFunction) {
+        constructorFunctions.add(constructorFunction);
+    }
+
+    public void registerDestructorFunction(RootCallTarget destructorFunction) {
+        destructorFunctions.add(destructorFunction);
+    }
+
+    public void registerAtExitFunction(RootCallTarget atExitFunction) {
+        atExitFunctions.push(atExitFunction);
+    }
+
+    public void registerGlobalVarInit(RootCallTarget globalVarInit) {
+        globalVarInits.add(globalVarInit);
+    }
+
+    public synchronized void registerThread(LLVMThread thread) {
+        assert !runningThreads.contains(thread);
+        runningThreads.add(thread);
+    }
+
+    public synchronized void unregisterThread(LLVMThread thread) {
+        runningThreads.remove(thread);
+        assert !runningThreads.contains(thread);
+    }
+
+    @TruffleBoundary
+    public synchronized void shutdownThreads() {
+        // we need to iterate over a copy of the list, because stop() can modify the original list
+        for (LLVMThread node : new ArrayList<>(runningThreads)) {
+            node.stop();
+        }
+    }
+
+    @TruffleBoundary
+    public synchronized void awaitThreadTermination() {
+        shutdownThreads();
+
+        while (!runningThreads.isEmpty()) {
+            LLVMThread node = runningThreads.get(0);
+            node.awaitFinish();
+            assert !runningThreads.contains(node); // should be unregistered by LLVMThreadNode
+        }
+    }
+
+    public List<RootCallTarget> getGlobalVarDeallocs() {
+        return globalVarDeallocs;
+    }
+
+    public List<RootCallTarget> getConstructorFunctions() {
+        return constructorFunctions;
+    }
+
+    public List<RootCallTarget> getDestructorFunctions() {
+        return destructorFunctions;
+    }
+
+    public Deque<RootCallTarget> getAtExitFunctions() {
+        return atExitFunctions;
+    }
+
+    public List<RootCallTarget> getGlobalVarInits() {
+        return globalVarInits;
+    }
+
+    public synchronized List<LLVMThread> getRunningThreads() {
+        return Collections.unmodifiableList(runningThreads);
+    }
+
+    public void setParseOnly(boolean parseOnly) {
+        this.parseOnly = parseOnly;
+    }
+
+    public boolean isParseOnly() {
+        return parseOnly;
+    }
+
+    public NativeLookup getNativeLookup() {
+        return nativeLookup;
     }
 
 }
