@@ -399,16 +399,13 @@ public enum Condition {
                 }
             }
             case Object: {
-                Boolean equal = constantReflection.constantEquals(lt, rt);
-                if (equal != null) {
-                    switch (this) {
-                        case EQ:
-                            return equal.booleanValue();
-                        case NE:
-                            return !equal.booleanValue();
-                        default:
-                            throw new GraalInternalError("expected condition: %s", this);
-                    }
+                switch (this) {
+                    case EQ:
+                        return constantReflection.constantEquals(lt, rt);
+                    case NE:
+                        return !constantReflection.constantEquals(lt, rt);
+                    default:
+                        throw new GraalInternalError("expected condition: %s", this);
                 }
             }
             case Float: {

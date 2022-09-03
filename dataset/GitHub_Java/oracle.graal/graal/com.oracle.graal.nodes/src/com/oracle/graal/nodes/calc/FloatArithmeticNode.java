@@ -22,19 +22,17 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
-@NodeInfo
 public abstract class FloatArithmeticNode extends BinaryNode implements ArithmeticLIRLowerable {
 
     private final boolean isStrictFP;
 
-    public FloatArithmeticNode(Stamp stamp, ValueNode x, ValueNode y, boolean isStrictFP) {
-        super(stamp, x, y);
-        assert stamp instanceof FloatStamp;
+    public FloatArithmeticNode(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP) {
+        super(kind, x, y);
+        assert kind.isNumericFloat();
         this.isStrictFP = isStrictFP;
     }
 

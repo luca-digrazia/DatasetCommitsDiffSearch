@@ -250,7 +250,7 @@ public final class Constant extends Value {
         if (getKind() == Kind.Object) {
             return System.identityHashCode(object);
         }
-        return (int) primitive * getKind().ordinal();
+        return (int) primitive;
     }
 
     /**

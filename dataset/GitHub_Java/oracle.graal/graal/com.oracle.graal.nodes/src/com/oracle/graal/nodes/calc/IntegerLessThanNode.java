@@ -39,8 +39,8 @@ public final class IntegerLessThanNode extends CompareNode {
      */
     public IntegerLessThanNode(ValueNode x, ValueNode y) {
         super(x, y);
-        assert !x.getKind().isNumericFloat() && x.getKind() != Kind.Object;
-        assert !y.getKind().isNumericFloat() && y.getKind() != Kind.Object;
+        assert !x.kind().isNumericFloat() && x.kind() != Kind.Object;
+        assert !y.kind().isNumericFloat() && y.kind() != Kind.Object;
     }
 
     @Override
@@ -60,7 +60,7 @@ public final class IntegerLessThanNode extends CompareNode {
             ValueNode a = mirrored ? normalizeNode.y() : normalizeNode.x();
             ValueNode b = mirrored ? normalizeNode.x() : normalizeNode.y();
 
-            if (normalizeNode.x().getKind() == Kind.Double || normalizeNode.x().getKind() == Kind.Float) {
+            if (normalizeNode.x().kind() == Kind.Double || normalizeNode.x().kind() == Kind.Float) {
                 return graph().unique(new FloatLessThanNode(a, b, mirrored ^ normalizeNode.isUnorderedLess));
             } else {
                 return graph().unique(new IntegerLessThanNode(a, b));

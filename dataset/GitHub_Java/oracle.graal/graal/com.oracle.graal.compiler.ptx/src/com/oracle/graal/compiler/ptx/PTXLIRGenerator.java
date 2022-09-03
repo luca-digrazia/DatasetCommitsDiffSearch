@@ -89,7 +89,7 @@ public class PTXLIRGenerator extends LIRGenerator {
     public PTXLIRGenerator(StructuredGraph graph, Providers providers, FrameMap frameMap, CallingConvention cc, LIR lir) {
         super(graph, providers, frameMap, cc, lir);
         lir.spillMoveFactory = new PTXSpillMoveFactory();
-        int callVariables = cc.getArgumentCount() + (cc.getReturn().equals(Value.ILLEGAL) ? 0 : 1);
+        int callVariables = cc.getArgumentCount() + (cc.getReturn() == Value.ILLEGAL ? 0 : 1);
         lir.setFirstVariableNumber(callVariables);
         nextPredRegNum = 0;
     }
@@ -136,12 +136,11 @@ public class PTXLIRGenerator extends LIRGenerator {
         // Need to emit .param directives based on incoming arguments and return value
         CallingConvention incomingArguments = cc;
         Object returnObject = incomingArguments.getReturn();
-        AllocatableValue[] params = incomingArguments.getArguments();
-        int argCount = incomingArguments.getArgumentCount();
+        AllocatableValue[] params;
+        int argCount;
 
-        if (returnObject.equals(Value.ILLEGAL)) {
+        if (returnObject == Value.ILLEGAL) {
             params = incomingArguments.getArguments();
-            append(new PTXParameterOp(params, false));
         } else {
             argCount = incomingArguments.getArgumentCount();
             params = new Variable[argCount + 1];
@@ -149,9 +148,9 @@ public class PTXLIRGenerator extends LIRGenerator {
                 params[i] = incomingArguments.getArgument(i);
             }
             params[argCount] = (Variable) returnObject;
-            append(new PTXParameterOp(params, true));
         }
 
+        append(new PTXParameterOp(params));
         for (LocalNode local : graph.getNodes(LocalNode.class)) {
             Value param = params[local.index()];
             Annotation[] annos = graph.method().getParameterAnnotations()[local.index()];
