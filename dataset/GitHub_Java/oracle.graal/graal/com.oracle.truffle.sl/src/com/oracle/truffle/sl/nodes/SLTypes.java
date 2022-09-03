@@ -25,7 +25,6 @@ package com.oracle.truffle.sl.nodes;
 import java.math.*;
 
 import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.dsl.internal.*;
 import com.oracle.truffle.sl.*;
 import com.oracle.truffle.sl.runtime.*;
 
@@ -36,7 +35,6 @@ import com.oracle.truffle.sl.runtime.*;
  * generated ones would not be sufficient.
  */
 @TypeSystem({long.class, BigInteger.class, boolean.class, String.class, SLFunction.class, SLNull.class})
-@DSLOptions(useNewLayout = true)
 public abstract class SLTypes {
 
     /**
