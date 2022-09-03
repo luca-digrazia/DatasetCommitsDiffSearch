@@ -65,7 +65,7 @@ public abstract class ToComparableValue extends LLVMNode {
         return NativeToComparableValueNodeGen.create();
     }
 
-    @TruffleBoundary
+    @TruffleBoundary(allowInlining = true)
     private static long getHashCode(Object obj) {
         // if we ever switch to a more robust implementation, we can simplify the
         // LLVMManagedCompareNode
@@ -122,7 +122,6 @@ public abstract class ToComparableValue extends LLVMNode {
             return ManagedToComparableValueNodeGen.create(true);
         }
 
-        @TruffleBoundary
         protected ForeignToLLVM createForeignToI64() {
             return getNodeFactory().createForeignToLLVM(ForeignToLLVMType.I64);
         }
