@@ -29,6 +29,7 @@ import static com.oracle.graal.phases.GraalOptions.*;
 import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 
 import org.junit.*;
@@ -41,7 +42,6 @@ import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.Verbosity;
 import com.oracle.graal.java.*;
@@ -111,20 +111,6 @@ public abstract class GraalCompilerTest extends GraalTest {
     @BeforeClass
     public static void initializeDebugging() {
         DebugEnvironment.initialize(System.out);
-    }
-
-    private Scope debugScope;
-
-    @Before
-    public void beforeTest() {
-        assert debugScope == null;
-        debugScope = Debug.scope(getClass().getSimpleName());
-    }
-
-    @After
-    public void afterTest() {
-        debugScope.close();
-        debugScope = null;
     }
 
     protected void assertEquals(StructuredGraph expected, StructuredGraph graph) {
@@ -543,48 +529,49 @@ public abstract class GraalCompilerTest extends GraalTest {
 
         final int id = compilationId.incrementAndGet();
 
-        InstalledCode installedCode = null;
-        try (Scope ds = Debug.scope("Compiling", new DebugDumpScope(String.valueOf(id), true))) {
-            final boolean printCompilation = PrintCompilation.getValue() && !TTY.isSuppressed();
-            if (printCompilation) {
-                TTY.println(String.format("@%-6d Graal %-70s %-45s %-50s ...", id, method.getDeclaringClass().getName(), method.getName(), method.getSignature()));
-            }
-            long start = System.currentTimeMillis();
-            PhasePlan phasePlan = new PhasePlan();
-            GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(getMetaAccess(), getForeignCalls(), GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL);
-            phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
-            CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graph.method(), false);
-            final CompilationResult compResult = GraalCompiler.compileGraph(graph, cc, method, getProviders(), getBackend(), getCodeCache().getTarget(), null, phasePlan, OptimisticOptimizations.ALL,
-                            new SpeculationLog(), getSuites(), new CompilationResult());
-            if (printCompilation) {
-                TTY.println(String.format("@%-6d Graal %-70s %-45s %-50s | %4dms %5dB", id, "", "", "", System.currentTimeMillis() - start, compResult.getTargetCodeSize()));
-            }
+        InstalledCode installedCode = Debug.scope("Compiling", new Object[]{new DebugDumpScope(String.valueOf(id), true)}, new Callable<InstalledCode>() {
 
-            try (Scope s = Debug.scope("CodeInstall", getCodeCache(), method)) {
-                InstalledCode code = addMethod(method, compResult);
-                if (code == null) {
-                    throw new GraalInternalError("Could not install code for " + MetaUtil.format("%H.%n(%p)", method));
+            public InstalledCode call() throws Exception {
+                final boolean printCompilation = PrintCompilation.getValue() && !TTY.isSuppressed();
+                if (printCompilation) {
+                    TTY.println(String.format("@%-6d Graal %-70s %-45s %-50s ...", id, method.getDeclaringClass().getName(), method.getName(), method.getSignature()));
                 }
-                if (Debug.isDumpEnabled()) {
-                    Debug.dump(new Object[]{compResult, code}, "After code installation");
+                long start = System.currentTimeMillis();
+                PhasePlan phasePlan = new PhasePlan();
+                GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(getMetaAccess(), getForeignCalls(), GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL);
+                phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
+                CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graph.method(), false);
+                final CompilationResult compResult = GraalCompiler.compileGraph(graph, cc, method, getProviders(), getBackend(), getCodeCache().getTarget(), null, phasePlan,
+                                OptimisticOptimizations.ALL, new SpeculationLog(), getSuites(), new CompilationResult());
+                if (printCompilation) {
+                    TTY.println(String.format("@%-6d Graal %-70s %-45s %-50s | %4dms %5dB", id, "", "", "", System.currentTimeMillis() - start, compResult.getTargetCodeSize()));
                 }
-                if (Debug.isLogEnabled()) {
-                    DisassemblerProvider dis = backend.getDisassembler();
-                    if (dis != null) {
-                        String text = dis.disassemble(code);
-                        if (text != null) {
-                            Debug.log("Code installed for %s%n%s", method, text);
+                return Debug.scope("CodeInstall", new Object[]{getCodeCache(), method}, new Callable<InstalledCode>() {
+
+                    @Override
+                    public InstalledCode call() throws Exception {
+                        InstalledCode code = addMethod(method, compResult);
+                        if (code == null) {
+                            throw new GraalInternalError("Could not install code for " + MetaUtil.format("%H.%n(%p)", method));
                         }
-                    }
-                }
+                        if (Debug.isDumpEnabled()) {
+                            Debug.dump(new Object[]{compResult, code}, "After code installation");
+                        }
+                        if (Debug.isLogEnabled()) {
+                            DisassemblerProvider dis = backend.getDisassembler();
+                            if (dis != null) {
+                                String text = dis.disassemble(code);
+                                if (text != null) {
+                                    Debug.log("Code installed for %s%n%s", method, text);
+                                }
+                            }
+                        }
 
-                installedCode = code;
-            } catch (Throwable e) {
-                throw Debug.handle(e);
+                        return code;
+                    }
+                });
             }
-        } catch (Throwable e) {
-            throw Debug.handle(e);
-        }
+        });
 
         if (!forceCompile) {
             cache.put(method, installedCode);

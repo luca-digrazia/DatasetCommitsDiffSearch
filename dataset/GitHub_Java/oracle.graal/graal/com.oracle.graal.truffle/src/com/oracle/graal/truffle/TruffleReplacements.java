@@ -26,35 +26,41 @@ import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.*;
+import com.oracle.graal.runtime.*;
 import com.oracle.graal.truffle.substitutions.*;
-import com.oracle.truffle.api.*;
 
 /**
  * Custom {@link Replacements} for Truffle compilation.
  */
-public abstract class TruffleReplacements extends ReplacementsImpl {
+public final class TruffleReplacements extends ReplacementsImpl {
 
     private final Replacements graalReplacements;
 
-    protected TruffleReplacements(Providers providers, SnippetReflectionProvider snippetReflection) {
-        super(providers, snippetReflection, providers.getReplacements().getAssumptions(), providers.getCodeCache().getTarget());
+    private TruffleReplacements(Providers providers) {
+        super(providers, providers.getReplacements().getAssumptions(), providers.getCodeCache().getTarget());
         this.graalReplacements = providers.getReplacements();
-
-        registerTruffleSubstitutions();
     }
 
-    protected void registerTruffleSubstitutions() {
-        registerSubstitutions(CompilerAsserts.class, CompilerAssertsSubstitutions.class);
-        registerSubstitutions(CompilerDirectives.class, CompilerDirectivesSubstitutions.class);
-        registerSubstitutions(ExactMath.class, ExactMathSubstitutions.class);
-        registerSubstitutions(OptimizedAssumption.class, OptimizedAssumptionSubstitutions.class);
-        registerSubstitutions(OptimizedCallTarget.class, OptimizedCallTargetSubstitutions.class);
-        registerSubstitutions(FrameWithoutBoxing.class, FrameWithoutBoxingSubstitutions.class);
+    static Replacements makeInstance() {
+        Providers graalProviders = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getProviders();
+        Replacements truffleReplacements = new TruffleReplacements(graalProviders);
+
+        truffleReplacements.registerSubstitutions(CompilerAssertsSubstitutions.class);
+        truffleReplacements.registerSubstitutions(CompilerDirectivesSubstitutions.class);
+        truffleReplacements.registerSubstitutions(ExactMathSubstitutions.class);
+        truffleReplacements.registerSubstitutions(UnexpectedResultExceptionSubstitutions.class);
+        truffleReplacements.registerSubstitutions(FrameWithoutBoxingSubstitutions.class);
+        truffleReplacements.registerSubstitutions(OptimizedAssumptionSubstitutions.class);
+        truffleReplacements.registerSubstitutions(OptimizedCallTargetSubstitutions.class);
+        truffleReplacements.registerSubstitutions(DefaultCallTargetSubstitutions.class);
+
+        return truffleReplacements;
     }
 
     @Override

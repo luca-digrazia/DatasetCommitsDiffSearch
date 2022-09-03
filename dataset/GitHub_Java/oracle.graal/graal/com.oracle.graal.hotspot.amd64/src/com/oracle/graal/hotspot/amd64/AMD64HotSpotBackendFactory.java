@@ -37,37 +37,7 @@ import com.oracle.graal.phases.util.*;
 public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
 
     protected Architecture createArchitecture(HotSpotVMConfig config) {
-        // Configure the feature set using the HotSpot flag settings.
-        EnumSet<AMD64.CPUFeature> features = EnumSet.noneOf(AMD64.CPUFeature.class);
-        assert config.useSSE >= 2 : "minimum config for x64";
-        features.add(AMD64.CPUFeature.SSE);
-        features.add(AMD64.CPUFeature.SSE2);
-        if (config.useSSE > 2) {
-            features.add(AMD64.CPUFeature.SSE3);
-        }
-        if (config.useSSE > 3) {
-            features.add(AMD64.CPUFeature.SSE4);
-        }
-        if (config.useAVX > 0) {
-            features.add(AMD64.CPUFeature.AVX);
-        }
-        if (config.useAVX > 1) {
-            features.add(AMD64.CPUFeature.AVX2);
-        }
-        if (config.useCountLeadingZerosInstruction) {
-            features.add(AMD64.CPUFeature.LZCNT);
-        }
-        if (config.usePopCountInstruction) {
-            features.add(AMD64.CPUFeature.POPCNT);
-        }
-        if (config.useAESIntrinsics) {
-            features.add(AMD64.CPUFeature.AES);
-        }
-        if (config.allocatePrefetchInstr == 3) {
-            features.add(AMD64.CPUFeature.AMD_3DNOW_PREFETCH);
-        }
-
-        return new AMD64(features);
+        return new AMD64(config.useSSE, config.useAVX);
     }
 
     protected TargetDescription createTarget(HotSpotVMConfig config) {
