@@ -304,6 +304,7 @@ public final class HotSpotVMConfig extends CompilerObject {
     public int typeProfileWidth;
 
     // runtime stubs
+    public long instanceofStub;
     public long newInstanceStub;
     public long newArrayStub;
     public long newMultiArrayStub;
