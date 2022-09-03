@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,6 +29,8 @@
  */
 package com.oracle.truffle.llvm.test.interop;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -36,6 +38,7 @@ import java.util.Map;
 
 import org.junit.Assert;
 import org.junit.BeforeClass;
+import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -43,21 +46,43 @@ import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.api.interop.KeyInfo;
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.MessageResolution;
+import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.java.JavaInterop;
-import com.oracle.truffle.llvm.test.interop.values.StructObject;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.llvm.test.options.TestOptions;
 import com.oracle.truffle.tck.TruffleRunner;
 import com.oracle.truffle.tck.TruffleRunner.Inject;
 
 @RunWith(Parameterized.class)
 @Parameterized.UseParametersRunnerFactory(TruffleRunner.ParametersFactory.class)
-public final class NameBasedInteropTest extends InteropTestBase {
+public final class NameBasedInteropTest {
+
+    @ClassRule public static TruffleRunner.RunWithPolyglotRule runWithPolyglot = new TruffleRunner.RunWithPolyglotRule();
 
     private static TruffleObject testLibrary;
 
     @BeforeClass
     public static void loadTestBitcode() {
-        testLibrary = InteropTestBase.loadTestBitcodeInternal("nameBasedInterop");
+        File file = new File(TestOptions.TEST_SUITE_PATH, "interop/nameBasedInterop/O0_MEM2REG.bc");
+        Source source;
+        try {
+            source = Source.newBuilder(file).language("llvm").build();
+        } catch (IOException ex) {
+            throw new AssertionError(ex);
+        }
+        CallTarget target = runWithPolyglot.getTruffleTestEnv().parse(source);
+        testLibrary = (TruffleObject) target.call();
     }
 
     @Parameters(name = "{0}")
@@ -75,10 +100,35 @@ public final class NameBasedInteropTest extends InteropTestBase {
     @Parameter(0) public String name;
     @Parameter(1) public Object value;
 
+    public static class SulongTestNode extends RootNode {
+
+        private final TruffleObject function;
+        @Child private Node execute;
+
+        protected SulongTestNode(String fnName, int argCount) {
+            super(null);
+            try {
+                function = (TruffleObject) ForeignAccess.sendRead(Message.READ.createNode(), testLibrary, fnName);
+            } catch (InteropException ex) {
+                throw new AssertionError(ex);
+            }
+            execute = Message.createExecute(argCount).createNode();
+        }
+
+        @Override
+        public Object execute(VirtualFrame frame) {
+            try {
+                return ForeignAccess.sendExecute(execute, function, frame.getArguments());
+            } catch (InteropException ex) {
+                throw new AssertionError(ex);
+            }
+        }
+    }
+
     public class GetStructNode extends SulongTestNode {
 
         public GetStructNode() {
-            super(testLibrary, "getStruct" + name, 1);
+            super("getStruct" + name, 1);
         }
     }
 
@@ -93,7 +143,7 @@ public final class NameBasedInteropTest extends InteropTestBase {
     public class SetStructNode extends SulongTestNode {
 
         public SetStructNode() {
-            super(testLibrary, "setStruct" + name, 2);
+            super("setStruct" + name, 2);
         }
     }
 
@@ -107,7 +157,7 @@ public final class NameBasedInteropTest extends InteropTestBase {
     public class GetArrayNode extends SulongTestNode {
 
         public GetArrayNode() {
-            super(testLibrary, "getArray" + name, 2);
+            super("getArray" + name, 2);
         }
     }
 
@@ -122,7 +172,7 @@ public final class NameBasedInteropTest extends InteropTestBase {
     public class SetArrayNode extends SulongTestNode {
 
         public SetArrayNode() {
-            super(testLibrary, "setArray" + name, 3);
+            super("setArray" + name, 3);
         }
     }
 
@@ -145,4 +195,64 @@ public final class NameBasedInteropTest extends InteropTestBase {
         return values;
     }
 
+    @MessageResolution(receiverType = StructObject.class)
+    static final class StructObject implements TruffleObject {
+        final Map<String, Object> properties;
+
+        StructObject(Map<String, Object> properties) {
+            this.properties = properties;
+        }
+
+        static boolean isInstance(TruffleObject object) {
+            return object instanceof StructObject;
+        }
+
+        @Resolve(message = "READ")
+        abstract static class ReadNode extends Node {
+            @TruffleBoundary
+            Object access(StructObject obj, String name) {
+                Object value = obj.properties.get(name);
+                if (value == null) {
+                    throw UnknownIdentifierException.raise(name);
+                }
+                return value;
+            }
+        }
+
+        @Resolve(message = "WRITE")
+        abstract static class WriteNode extends Node {
+            @TruffleBoundary
+            Object access(StructObject obj, String name, Object value) {
+                if (!obj.properties.containsKey(name)) {
+                    throw UnknownIdentifierException.raise(name);
+                }
+                obj.properties.put(name, value);
+                return value;
+            }
+        }
+
+        @Resolve(message = "KEYS")
+        abstract static class KeysNode extends Node {
+            @TruffleBoundary
+            TruffleObject access(StructObject obj) {
+                return JavaInterop.asTruffleObject(obj.properties.keySet().toArray(new String[0]));
+            }
+        }
+
+        @Resolve(message = "KEY_INFO")
+        abstract static class KeyInfoNode extends Node {
+            @TruffleBoundary
+            int access(StructObject obj, String name) {
+                if (!obj.properties.containsKey(name)) {
+                    return KeyInfo.NONE;
+                }
+                return KeyInfo.READABLE | KeyInfo.MODIFIABLE;
+            }
+        }
+
+        @Override
+        public ForeignAccess getForeignAccess() {
+            return StructObjectForeign.ACCESS;
+        }
+    }
 }

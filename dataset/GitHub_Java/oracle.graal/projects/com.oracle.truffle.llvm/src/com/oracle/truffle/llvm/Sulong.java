@@ -55,7 +55,6 @@ import com.oracle.truffle.llvm.runtime.debug.LLVMDebugObject;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceScope;
-import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import java.util.Collections;
@@ -135,7 +134,7 @@ public final class Sulong extends LLVMLanguage {
 
     @Override
     protected boolean isObjectOfLanguage(Object object) {
-        return object instanceof LLVMInternalTruffleObject;
+        return false; // TODO
     }
 
     @Override
