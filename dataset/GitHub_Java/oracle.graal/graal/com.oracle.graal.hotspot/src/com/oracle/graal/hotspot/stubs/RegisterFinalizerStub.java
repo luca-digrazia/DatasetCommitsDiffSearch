@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.code.*;
@@ -48,10 +48,10 @@ public class RegisterFinalizerStub extends CRuntimeStub {
     @Snippet
     private static void registerFinalizer(Object object) {
         registerFinalizerC(REGISTER_FINALIZER_C, thread(), object);
-        handlePendingException(false);
+        StubUtil.handlePendingException(false);
     }
 
-    public static final Descriptor REGISTER_FINALIZER_C = descriptorFor(RegisterFinalizerStub.class, "registerFinalizerC", false);
+    public static final Descriptor REGISTER_FINALIZER_C = StubUtil.descriptorFor(RegisterFinalizerStub.class, "registerFinalizerC", false);
 
     @NodeIntrinsic(CRuntimeCall.class)
     public static native void registerFinalizerC(@ConstantNodeParameter Descriptor registerFinalizerC, Word thread, Object object);

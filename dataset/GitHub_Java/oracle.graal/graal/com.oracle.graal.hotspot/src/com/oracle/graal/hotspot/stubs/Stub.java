@@ -141,21 +141,17 @@ public abstract class Stub {
      */
     protected abstract ResolvedJavaMethod getInstallationMethod();
 
-    protected Object debugScopeContext() {
-        return getInstallationMethod();
-    }
-
     /**
      * Gets the code for this stub, compiling it first if necessary.
      */
     public synchronized InstalledCode getCode(final Backend backend) {
         if (code == null) {
-            Debug.sandbox("CompilingStub", new Object[]{runtime, debugScopeContext()}, DebugScope.getConfig(), new Runnable() {
+            final StructuredGraph graph = getGraph();
+            Debug.sandbox("CompilingStub", new Object[]{runtime, graph}, DebugScope.getConfig(), new Runnable() {
 
                 @Override
                 public void run() {
 
-                    final StructuredGraph graph = getGraph();
                     StubStartNode newStart = graph.add(new StubStartNode(Stub.this));
                     newStart.setStateAfter(graph.start().stateAfter());
                     graph.replaceFixed(graph.start(), newStart);

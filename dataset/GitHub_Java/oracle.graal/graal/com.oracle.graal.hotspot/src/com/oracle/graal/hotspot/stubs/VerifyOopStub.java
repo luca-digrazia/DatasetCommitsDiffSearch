@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.hotspot.stubs.StubUtil.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
@@ -42,6 +40,6 @@ public class VerifyOopStub extends CRuntimeStub {
 
     @Snippet
     private static Object verifyOop(Object object) {
-        return verifyObject(object);
+        return StubUtil.verifyObject(object);
     }
 }

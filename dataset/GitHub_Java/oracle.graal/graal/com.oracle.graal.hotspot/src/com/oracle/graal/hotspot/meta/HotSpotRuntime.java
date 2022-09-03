@@ -30,6 +30,7 @@ import static com.oracle.graal.api.meta.Value.*;
 import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.HotSpotBackend.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+import static com.oracle.graal.hotspot.nodes.IdentityHashCodeStubCall.*;
 import static com.oracle.graal.hotspot.nodes.MonitorEnterStubCall.*;
 import static com.oracle.graal.hotspot.nodes.MonitorExitStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewArrayStubCall.*;
@@ -40,11 +41,11 @@ import static com.oracle.graal.hotspot.nodes.VMErrorNode.*;
 import static com.oracle.graal.hotspot.nodes.VerifyOopStubCall.*;
 import static com.oracle.graal.hotspot.nodes.WriteBarrierPostStubCall.*;
 import static com.oracle.graal.hotspot.nodes.WriteBarrierPreStubCall.*;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.IDENTITY_HASHCODE;
 import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.*;
 import static com.oracle.graal.hotspot.stubs.CreateNullPointerExceptionStub.*;
 import static com.oracle.graal.hotspot.stubs.CreateOutOfBoundsExceptionStub.*;
 import static com.oracle.graal.hotspot.stubs.ExceptionHandlerStub.*;
+import static com.oracle.graal.hotspot.stubs.IdentityHashCodeStub.*;
 import static com.oracle.graal.hotspot.stubs.LogObjectStub.*;
 import static com.oracle.graal.hotspot.stubs.LogPrimitiveStub.*;
 import static com.oracle.graal.hotspot.stubs.LogPrintfStub.*;
@@ -386,6 +387,15 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                         /*           temps */ null,
                         /*             ret */ ret(Kind.Void));
 
+        addStubCall(IDENTITY_HASHCODE,
+                        /*          ret */ ret(Kind.Int),
+                        /* arg0:    obj */ javaCallingConvention(Kind.Object));
+
+        addCRuntimeCall(IDENTITY_HASH_CODE_C, config.identityHashCodeAddress,
+                        /*             ret */ ret(Kind.Int),
+                        /* arg0:    thread */ nativeCallingConvention(word,
+                        /* arg1:    object */                         Kind.Object));
+
         addStubCall(MONITORENTER,
                         /*          ret */ ret(Kind.Void),
                         /* arg0: object */ javaCallingConvention(Kind.Object,
@@ -572,6 +582,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         link(new NewMultiArrayStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(NEW_MULTI_ARRAY)));
         link(new RegisterFinalizerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(REGISTER_FINALIZER)));
         link(new ThreadIsInterruptedStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(THREAD_IS_INTERRUPTED)));
+        link(new IdentityHashCodeStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(IDENTITY_HASHCODE)));
         link(new ExceptionHandlerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(EXCEPTION_HANDLER)));
         link(new UnwindExceptionToCallerStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(UNWIND_EXCEPTION_TO_CALLER)));
         link(new VerifyOopStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(VERIFY_OOP)));
@@ -586,21 +597,10 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         link(new VMErrorStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(VM_ERROR)));
         link(new WriteBarrierPreStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(WRITE_BARRIER_PRE)));
         link(new WriteBarrierPostStub(this, replacements, graalRuntime.getTarget(), runtimeCalls.get(WRITE_BARRIER_POST)));
-
-        CompilerToVM c2vm = graalRuntime.getCompilerToVM();
-        link(new RuntimeCallStub(config.identityHashCodeAddress, IDENTITY_HASHCODE, true, this, replacements, globalStubRegConfig, c2vm));
     }
 
     private static void link(Stub stub) {
         stub.getLinkage().setStub(stub);
-    }
-
-    private void link(RuntimeCallStub stub) {
-        HotSpotRuntimeCallTarget linkage = stub.getLinkage();
-        HotSpotRuntimeCallTarget targetLinkage = stub.getTargetLinkage();
-        linkage.setStub(stub);
-        runtimeCalls.put(linkage.getDescriptor(), linkage);
-        runtimeCalls.put(targetLinkage.getDescriptor(), targetLinkage);
     }
 
     public HotSpotGraalRuntime getGraalRuntime() {
@@ -772,8 +772,8 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
 
                     HotSpotResolvedJavaMethod hsMethod = (HotSpotResolvedJavaMethod) callTarget.targetMethod();
                     if (!hsMethod.getDeclaringClass().isInterface()) {
-                        if (hsMethod.isInVirtualMethodTable()) {
-                            int vtableEntryOffset = hsMethod.vtableEntryOffset();
+                        int vtableEntryOffset = hsMethod.vtableEntryOffset();
+                        if (vtableEntryOffset > 0) {
                             assert vtableEntryOffset > 0;
                             ReadNode hub = this.createReadHub(tool, graph, wordKind, receiver);
                             ReadNode metaspaceMethod = createReadVirtualMethod(graph, wordKind, hub, hsMethod);
@@ -1048,7 +1048,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     private static ReadNode createReadVirtualMethod(StructuredGraph graph, Kind wordKind, ValueNode hub, ResolvedJavaMethod method) {
         HotSpotResolvedJavaMethod hsMethod = (HotSpotResolvedJavaMethod) method;
         assert !hsMethod.getDeclaringClass().isInterface();
-        assert hsMethod.isInVirtualMethodTable();
 
         int vtableEntryOffset = hsMethod.vtableEntryOffset();
         assert vtableEntryOffset > 0;
@@ -1108,11 +1107,11 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         return barrierType;
     }
 
-    protected static ConstantLocationNode createFieldLocation(StructuredGraph graph, HotSpotResolvedJavaField field) {
+    private static ConstantLocationNode createFieldLocation(StructuredGraph graph, HotSpotResolvedJavaField field) {
         return ConstantLocationNode.create(field, field.getKind(), field.offset(), graph);
     }
 
-    protected IndexedLocationNode createArrayLocation(Graph graph, Kind elementKind, ValueNode index) {
+    private IndexedLocationNode createArrayLocation(Graph graph, Kind elementKind, ValueNode index) {
         int scale = this.graalRuntime.getTarget().arch.getSizeInBytes(elementKind);
         return IndexedLocationNode.create(LocationNode.getArrayLocation(elementKind), elementKind, getArrayBaseOffset(elementKind), index, graph, scale);
     }

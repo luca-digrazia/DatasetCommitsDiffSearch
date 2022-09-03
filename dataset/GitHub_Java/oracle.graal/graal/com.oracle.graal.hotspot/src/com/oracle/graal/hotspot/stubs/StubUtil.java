@@ -31,7 +31,7 @@ import static com.oracle.graal.word.Word.*;
 import java.lang.reflect.*;
 import java.util.*;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.nodes.*;
@@ -46,29 +46,28 @@ import com.oracle.graal.word.*;
  */
 public class StubUtil {
 
-    public static final ForeignCallDescriptor VM_MESSAGE_C = descriptorFor(StubUtil.class, "vmMessageC");
+    public static final Descriptor VM_MESSAGE_C = descriptorFor(StubUtil.class, "vmMessageC", false);
 
     /**
-     * Looks for a {@link StubForeignCallNode} node intrinsic named {@code name} in
-     * {@code stubClass} and returns a {@link ForeignCallDescriptor} based on its signature and the
-     * value of {@code hasSideEffect}.
+     * Looks for a {@link CRuntimeCall} node intrinsic named {@code name} in {@code stubClass} and
+     * returns a {@link Descriptor} based on its signature and the value of {@code hasSideEffect}.
      */
-    public static ForeignCallDescriptor descriptorFor(Class<?> stubClass, String name) {
+    public static Descriptor descriptorFor(Class<?> stubClass, String name, boolean hasSideEffect) {
         Method found = null;
         for (Method method : stubClass.getDeclaredMethods()) {
             if (Modifier.isStatic(method.getModifiers()) && method.getAnnotation(NodeIntrinsic.class) != null && method.getName().equals(name)) {
-                if (method.getAnnotation(NodeIntrinsic.class).value() == StubForeignCallNode.class) {
-                    assert found == null : "found more than one foreign call named " + name + " in " + stubClass;
-                    assert method.getParameterTypes().length != 0 && method.getParameterTypes()[0] == ForeignCallDescriptor.class : "first parameter of foreign call '" + name + "' in " + stubClass +
-                                    " must be of type " + ForeignCallDescriptor.class.getSimpleName();
+                if (method.getAnnotation(NodeIntrinsic.class).value() == CRuntimeCall.class) {
+                    assert found == null : "found more than one C runtime call named " + name + " in " + stubClass;
+                    assert method.getParameterTypes().length != 0 && method.getParameterTypes()[0] == Descriptor.class : "first parameter of C runtime call '" + name + "' in " + stubClass +
+                                    " must be of type " + Descriptor.class.getSimpleName();
                     found = method;
                 }
             }
         }
-        assert found != null : "could not find foreign call named " + name + " in " + stubClass;
+        assert found != null : "could not find C runtime call named " + name + " in " + stubClass;
         List<Class<?>> paramList = Arrays.asList(found.getParameterTypes());
         Class[] cCallTypes = paramList.subList(1, paramList.size()).toArray(new Class[paramList.size() - 1]);
-        return new ForeignCallDescriptor(name, found.getReturnType(), cCallTypes);
+        return new Descriptor(name, hasSideEffect, found.getReturnType(), cCallTypes);
     }
 
     public static void handlePendingException(boolean isObjectResult) {
@@ -80,8 +79,8 @@ public class StubUtil {
         }
     }
 
-    @NodeIntrinsic(StubForeignCallNode.class)
-    private static native void vmMessageC(@ConstantNodeParameter ForeignCallDescriptor stubPrintfC, boolean vmError, Word format, long v1, long v2, long v3);
+    @NodeIntrinsic(CRuntimeCall.class)
+    private static native void vmMessageC(@ConstantNodeParameter Descriptor stubPrintfC, boolean vmError, Word format, long v1, long v2, long v3);
 
     /**
      * Prints a message to the log stream.
