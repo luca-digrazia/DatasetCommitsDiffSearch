@@ -25,13 +25,11 @@
 
 package com.oracle.truffle.api.interop;
 
-import com.oracle.truffle.api.CompilerDirectives;
+import java.util.Arrays;
 
 /**
  * An exception thrown if a {@link TruffleObject} does not support the type of one ore more
  * arguments provided by a foreign access.
- *
- * @since 0.11
  */
 public final class UnsupportedTypeException extends InteropException {
 
@@ -39,13 +37,9 @@ public final class UnsupportedTypeException extends InteropException {
 
     private final Object[] suppliedValues;
 
-    private UnsupportedTypeException(Exception cause, Object[] suppliedValues) {
-        super(cause);
-        this.suppliedValues = suppliedValues;
-    }
-
     private UnsupportedTypeException(Object[] suppliedValues) {
-        this(null, suppliedValues);
+        super("Unsupported types: " + Arrays.toString(suppliedValues));
+        this.suppliedValues = suppliedValues;
     }
 
     /**
@@ -53,7 +47,6 @@ public final class UnsupportedTypeException extends InteropException {
      * {@link TruffleObject}.
      *
      * @return the unsupported arguments
-     * @since 0.11
      */
     public Object[] getSuppliedValues() {
         return suppliedValues;
@@ -68,26 +61,8 @@ public final class UnsupportedTypeException extends InteropException {
      * @param suppliedValues values that were not supported
      *
      * @return the exception
-     * @since 0.11
      */
     public static RuntimeException raise(Object[] suppliedValues) {
-        return raise(null, suppliedValues);
-    }
-
-    /**
-     * Raises an {@link UnsupportedTypeException}, hidden as a {@link RuntimeException}, which
-     * allows throwing it without an explicit throws declaration. The {@link ForeignAccess} methods
-     * (e.g. <code> ForeignAccess.sendRead </code>) catch the exceptions and re-throw them as
-     * checked exceptions.
-     *
-     * @param cause cause of this exception
-     * @param suppliedValues values that were not supported
-     *
-     * @return the exception
-     * @since 0.11
-     */
-    public static RuntimeException raise(Exception cause, Object[] suppliedValues) {
-        CompilerDirectives.transferToInterpreter();
-        return silenceException(RuntimeException.class, new UnsupportedTypeException(cause, suppliedValues));
+        return silenceException(RuntimeException.class, new UnsupportedTypeException(suppliedValues));
     }
 }

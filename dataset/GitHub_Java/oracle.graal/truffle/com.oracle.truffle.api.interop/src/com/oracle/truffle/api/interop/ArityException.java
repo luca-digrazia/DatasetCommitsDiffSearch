@@ -24,13 +24,9 @@
  */
 package com.oracle.truffle.api.interop;
 
-import com.oracle.truffle.api.CompilerDirectives;
-
 /**
  * An exception thrown if a foreign function or method invocation provides the wrong number of
  * arguments.
- *
- * @since 0.11
  */
 public final class ArityException extends InteropException {
 
@@ -49,7 +45,6 @@ public final class ArityException extends InteropException {
      * Returns the number of arguments that the foreign object expects.
      *
      * @return the number of expected arguments
-     * @since 0.11
      */
     public int getExpectedArity() {
         return expectedArity;
@@ -59,7 +54,6 @@ public final class ArityException extends InteropException {
      * Returns the actual number of arguments provided by the foreign access.
      *
      * @return the number of provided arguments
-     * @since 0.11
      */
     public int getActualArity() {
         return actualArity;
@@ -75,10 +69,8 @@ public final class ArityException extends InteropException {
      * @param actualArity the number of provided by the foreign access
      *
      * @return the exception
-     * @since 0.11
      */
     public static RuntimeException raise(int expectedArity, int actualArity) {
-        CompilerDirectives.transferToInterpreter();
         return silenceException(RuntimeException.class, new ArityException(expectedArity, actualArity));
     }
 

@@ -28,7 +28,7 @@ import com.oracle.truffle.api.interop.AcceptMessage;
 
 @AcceptMessage(value = "INVOKE", receiverType = ValidTruffleObject.class, language = TestTruffleLanguage.class)
 public final class Invoke extends BaseInvoke {
-    @Override
+    @SuppressWarnings({"static-method", "unused"})
     @ExpectError({"access method has to have 4 arguments"})
     public Object access(VirtualFrame frame, ValidTruffleObject object, String name, Object[] args, int i) {
         return true;
