@@ -89,7 +89,6 @@ import uk.ac.man.cs.llvm.ir.model.Symbol;
 import uk.ac.man.cs.llvm.ir.model.ValueSymbol;
 import uk.ac.man.cs.llvm.ir.model.constants.InlineAsmConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.IntegerConstant;
-import uk.ac.man.cs.llvm.ir.model.constants.MetadataConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.NullConstant;
 import uk.ac.man.cs.llvm.ir.model.elements.AllocateInstruction;
 import uk.ac.man.cs.llvm.ir.model.elements.BinaryOperationInstruction;
@@ -207,7 +206,7 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
         }
 
         final LLVMBaseType type = typeHelper.getLLVMBaseType(operation.getType());
-        final LLVMArithmeticInstructionType opA = LLVMBitcodeTypeHelper.toArithmeticInstructionType(operation.getOperator());
+        final LLVMArithmeticInstructionType opA = LLVMBitcodeHelper.toArithmeticInstructionType(operation.getOperator());
         if (opA != null) {
             final LLVMExpressionNode result = LLVMArithmeticFactory.createArithmeticOperation(lhs, rhs, opA, type, target);
             final LLVMNode node = LLVMFrameReadWriteFactory.createFrameWrite(type, result, method.getFrame().findFrameSlot(operation.getName()));
@@ -215,7 +214,7 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
             return;
         }
 
-        final LLVMLogicalInstructionType opL = LLVMBitcodeTypeHelper.toLogicalInstructionType(operation.getOperator());
+        final LLVMLogicalInstructionType opL = LLVMBitcodeHelper.toLogicalInstructionType(operation.getOperator());
         if (opL != null) {
             final LLVMExpressionNode result = LLVMLogicalFactory.createLogicalOperation(lhs, rhs, opL, type, target);
             final LLVMNode node = LLVMFrameReadWriteFactory.createFrameWrite(type, result, method.getFrame().findFrameSlot(operation.getName()));
@@ -272,7 +271,7 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
 
     @Override
     public void visit(CastInstruction cast) {
-        LLVMConversionType type = LLVMBitcodeTypeHelper.toConversionType(cast.getOperator());
+        LLVMConversionType type = LLVMBitcodeHelper.toConversionType(cast.getOperator());
         LLVMExpressionNode fromNode = symbols.resolve(cast.getValue());
         LLVMBaseType from = typeHelper.getLLVMBaseType(cast.getValue().getType());
         LLVMBaseType to = typeHelper.getLLVMBaseType(cast.getType());
