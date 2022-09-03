@@ -55,20 +55,9 @@ import com.oracle.svm.hosted.FeatureImpl.DuringAnalysisAccessImpl;
 
 public class ReflectionDataBuilder implements RuntimeReflectionSupport {
 
-    private boolean modified;
-    private boolean sealed;
+    private static final DynamicHub.ReflectionData arrayReflectionData;
 
-    private final DynamicHub.ReflectionData arrayReflectionData;
-    private Set<Class<?>> reflectionClasses = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    private Set<Executable> reflectionMethods = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    private Map<Field, Boolean> reflectionFields = new ConcurrentHashMap<>();
-    private Set<Field> analyzedFinalFields = Collections.newSetFromMap(new ConcurrentHashMap<>());
-
-    public ReflectionDataBuilder() {
-        arrayReflectionData = getArrayReflectionData();
-    }
-
-    private static DynamicHub.ReflectionData getArrayReflectionData() {
+    static {
         Method[] publicArrayMethods;
         try {
             Method getPublicMethodsMethod = findMethod(Class.class, "privateGetPublicMethods");
@@ -78,7 +67,7 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
         }
 
         // array classes only have methods inherited from Object
-        return new DynamicHub.ReflectionData(
+        arrayReflectionData = new DynamicHub.ReflectionData(
                         new Field[0],
                         new Field[0],
                         new Method[0],
@@ -90,6 +79,14 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
                         new Method[0],
                         null);
     }
+
+    private boolean modified;
+    private boolean sealed;
+
+    private Set<Class<?>> reflectionClasses = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private Set<Executable> reflectionMethods = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private Map<Field, Boolean> reflectionFields = new ConcurrentHashMap<>();
+    private Set<Field> analyzedFinalFields = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     @Override
     public void register(Class<?>... classes) {
