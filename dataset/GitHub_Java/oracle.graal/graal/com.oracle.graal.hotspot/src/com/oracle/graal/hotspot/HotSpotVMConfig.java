@@ -62,7 +62,7 @@ public final class HotSpotVMConfig extends CompilerObject {
     /**
      * The offset of the _prototype_header field in a Klass.
      */
-    public int prototypeMarkWordOffset;
+    public int initialMarkWordOffset;
 
     /**
      * The offset of an the array length in an array's header.

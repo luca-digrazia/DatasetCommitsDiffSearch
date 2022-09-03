@@ -117,7 +117,7 @@ public interface CompilerToVM {
 
     String decodePC(long pc);
 
-    long JavaType_prototypeMarkWord(HotSpotResolvedJavaType hotSpotResolvedJavaType);
+    long JavaType_initialMarkWord(HotSpotResolvedJavaType hotSpotResolvedJavaType);
 
     // Checkstyle: resume
 }

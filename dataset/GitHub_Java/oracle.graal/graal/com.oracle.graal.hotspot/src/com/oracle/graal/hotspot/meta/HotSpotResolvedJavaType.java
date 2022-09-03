@@ -288,7 +288,7 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
         return superCheckOffset;
     }
 
-    public long prototypeMarkWord() {
-        return HotSpotGraalRuntime.getInstance().getCompilerToVM().JavaType_prototypeMarkWord(this);
+    public long initialMarkWord() {
+        return HotSpotGraalRuntime.getInstance().getCompilerToVM().JavaType_initialMarkWord(this);
     }
 }
