@@ -138,10 +138,7 @@ public final class ImageClassLoader {
         if (entry.getFileName() != null && entry.getFileName().toString().endsWith("*")) {
             return Arrays.stream(entry.getParent().toFile().listFiles()).filter(File::isFile).map(File::toPath);
         }
-        if (Files.isReadable(entry)) {
-            return Stream.of(entry);
-        }
-        return Stream.empty();
+        return Stream.of(entry);
     }
 
     private static Set<Path> excludeDirectories = getExcludeDirectories();
@@ -224,7 +221,7 @@ public final class ImageClassLoader {
                         String unversionedClassName = unversionedFileName(fileName);
                         String className = curtail(unversionedClassName, CLASS_EXTENSION_LENGTH).replace('/', '.');
                         try {
-                            Class<?> systemClass = forName(className);
+                            Class<?> systemClass = Class.forName(className, false, classLoader);
                             if (includedInPlatform(systemClass)) {
                                 synchronized (systemClasses) {
                                     systemClasses.add(systemClass);
@@ -329,27 +326,14 @@ public final class ImageClassLoader {
                         return void.class;
                 }
             }
-            return forName(name);
+
+            return Class.forName(name, false, classLoader);
         } catch (ClassNotFoundException ex) {
             if (failIfClassMissing) {
                 throw shouldNotReachHere("class " + name + " not found");
             }
-            return null;
         }
-    }
-
-    private Class<?> forName(String name) throws ClassNotFoundException {
-        Class<?> clazz = Class.forName(name, false, classLoader);
-        if (NativeImageClassLoader.classIsMissing(clazz)) {
-            /*
-             * This is a ghost interface. Although Class.forName() doesn't trigger the creation of
-             * ghost interfaces it is possible that the class was referenced in the bytecode, loaded
-             * at an earlier stage and replaced with a ghost interface. Throw a
-             * ClassNotFoundException to maintain the contract of findClassByName().
-             */
-            throw new ClassNotFoundException(name);
-        }
-        return clazz;
+        return null;
     }
 
     public List<String> getClasspath() {
