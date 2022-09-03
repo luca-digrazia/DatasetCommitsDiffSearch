@@ -32,7 +32,6 @@ import java.util.Set;
 import java.util.function.Function;
 
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractValueImpl;
-import org.graalvm.polyglot.proxy.Proxy;
 
 /**
  * Represents a polyglot value. Polyglot values can either result from a {@link #isHostObject()
@@ -391,15 +390,6 @@ public final class Value {
         return (T) impl.asHostObject(receiver);
     }
 
-    public boolean isProxyObject() {
-        return impl.isProxyObject(receiver);
-    }
-
-    @SuppressWarnings("unchecked")
-    public <T extends Proxy> T asProxyObject() {
-        return (T) impl.asProxyObject(receiver);
-    }
-
     /**
      * Maps a polyglot value to a value with a given Java target type.
      *
@@ -417,12 +407,9 @@ public final class Value {
      * string} of length one.
      * <li><code>{@link Number}.class</code> is supported if the value is a {@link #isNumber()
      * number}. {@link Byte}, {@link Short}, {@link Integer}, {@link Long}, {@link Float} and
-     * {@link Double} are allowed if they fit without conversion. If a conversion is necessary then
-     * a {@link ClassCastException} is thrown.
+     * {@link Double} are allowed if they fit without conversion.
      * <li><code>{@link Boolean}.class</code> is supported if the value is a {@link #isBoolean()
      * boolean}.
-     * <li><code>{@link Proxy}.class</code> or one of its subclasses is supported if the value is a
-     * {@link #isProxyObject() proxy}.
      * <li><code>{@link Map}.class</code> is supported if the value has {@link #hasMembers()
      * members} or {@link #hasArrayElements() array elements}. The returned map can be safely cast
      * to Map<Object, Object>. The key type in such a case is either {@link String} or {@link Long}.
@@ -480,15 +467,14 @@ public final class Value {
      *                                                     .foo(new String[]{"42"}) == 1;
      * </pre>
      *
-     * <h1>Object target type mapping</h1>
+     * <h1>Object mapping</h1>
      *
      * The following rules apply when <code>Object</code> is used as a target type:
      * <ol>
      * <li>If the value represents {@link #isNull() null} then <code>null</code> is returned.
      * <li>If the value is a {@link #isHostObject() host object} then the value is coerced to
      * {@link #asHostObject() host object value}.
-     * <li>If the value is a {@link #isString() string} then the value is coerced to {@link String}
-     * or {@link Character}.
+     * <li>If the value is a {@link #isString() string} then the value is coerced to {@link String}.
      * <li>If the value is a {@link #isBoolean() boolean} then the value is coerced to
      * {@link Boolean}.
      * <li>If the value is a {@link #isNumber() number} then the value is coerced to {@link Number}.
@@ -535,6 +521,32 @@ public final class Value {
      * assert context.eval("js", "(function(){})").asHostValue() instanceof Function;
      * </pre>
      *
+     * <h1>Mapping to Java method and field signatures</h1>
+     *
+     * Whenever a polyglot value needs to be mapped to a Java field or method signature then the
+     * semantics of {@link #as(Class) host value mapping} are used. The result of the mapping is
+     * equivalent of calling {@link #as(Class)} with the parameter type.
+     *
+     * For example, when calling a host method from a guest language:
+     *
+     * <pre>
+     * void foo(Value bar) {
+     *     int barInt = bar.as(int.class);
+     *
+     * }
+     * </pre>
+     *
+     * is equivalent to:
+     *
+     * <pre>
+     * void foo(int barInt) {
+     * }
+     * </pre>
+     *
+     * If the guest language value cannot be mapped to an {@link Integer} then a
+     * {@link ClassCastException} {@link PolyglotException#isHostException() host exception} is
+     * thrown.
+     *
      * <h1>Identity preservation</h1>
      *
      * If polyglot values are mapped as Java primitives such as {@link Boolean}, <code>null</code>,
@@ -542,23 +554,11 @@ public final class Value {
      * is not preserved. All other results can be converted back to a {@link Value polyglot value}
      * using {@link Context#asValue(Object)}.
      *
-     * <b>Mapping Example using JavaScript:</b> This example first creates a new JavaScript object
-     * and maps it to a {@link Map}. Using the {@link #asValue(Object)} it is possible to recreate
-     * the {@link Value polyglot value} from the Java map. The JavaScript object identity is
-     * preserved in the process.
-     *
-     * <pre>
-     * Context context = Context.create();
-     * Map<Object, Object> javaMap = context.eval("js", "{}").as(Map.class);
-     * Value polyglotValue = context.asValue(javaMap);
-     * </pre>
-     *
-     * @see #as(TypeLiteral) to map to gerneric type signatures.
      * @param targetType the target Java type to map
      * @throws ClassCastException if polyglot value could not be mapped to the target type.
      * @throws PolyglotException if the conversion triggered a guest language error.
      * @throws IllegalStateException if the underlying context is already closed.
-     * @since 1.0
+     * @see #as(TypeLiteral) to map to gerneric type signatures.
      */
     public <T> T as(Class<T> targetType) {
         if (targetType == Value.class) {
