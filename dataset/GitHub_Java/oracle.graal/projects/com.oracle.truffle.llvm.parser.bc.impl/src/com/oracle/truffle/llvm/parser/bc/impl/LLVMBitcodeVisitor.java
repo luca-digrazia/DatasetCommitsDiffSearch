@@ -606,11 +606,6 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         }
 
         @Override
-        public int getByteAlignment(Type type) {
-            return type.getAlignment(targetDataLayout);
-        }
-
-        @Override
         public int getByteSize(Type type) {
             return type.getSize(targetDataLayout);
         }

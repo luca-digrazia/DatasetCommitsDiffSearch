@@ -71,7 +71,9 @@ public class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
     public void setUpFacade(LLVMParserRuntime runtime) {
     }
 
+    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public LLVMParserRuntime getRuntime() {
         return null;
     }

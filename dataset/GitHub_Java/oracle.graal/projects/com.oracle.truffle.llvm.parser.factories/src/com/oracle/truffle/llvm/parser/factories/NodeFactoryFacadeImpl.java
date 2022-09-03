@@ -129,7 +129,9 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
         this.runtime = runtime;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public LLVMParserRuntime getRuntime() {
         return this.runtime;
     }
