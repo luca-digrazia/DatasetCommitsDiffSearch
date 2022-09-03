@@ -46,11 +46,7 @@ public class MetadataLexicalBlockFile implements MetadataBaseNode {
 
     @Override
     public String toString() {
-        StringBuilder builder = new StringBuilder();
-        builder.append("MetadataLexicalBlockFile [file=");
-        builder.append(file);
-        builder.append("]");
-        return builder.toString();
+        return "LexicalBlockFile [file=" + file + "]";
     }
 
 }

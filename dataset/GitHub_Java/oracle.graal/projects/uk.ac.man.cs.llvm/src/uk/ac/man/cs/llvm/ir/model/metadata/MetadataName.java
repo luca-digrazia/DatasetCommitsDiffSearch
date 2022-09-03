@@ -43,6 +43,6 @@ public class MetadataName implements MetadataBaseNode {
 
     @Override
     public String toString() {
-        return "MetadataName [\"" + name + "\"]";
+        return "Name [\"" + name + "\"]";
     }
 }

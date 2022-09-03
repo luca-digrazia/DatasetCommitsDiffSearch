@@ -118,26 +118,7 @@ public class MetadataGlobalVariable implements MetadataBaseNode {
 
     @Override
     public String toString() {
-        StringBuilder builder = new StringBuilder();
-        builder.append("MetadataGlobalVariable [context=");
-        builder.append(context);
-        builder.append(", name=");
-        builder.append(name);
-        builder.append(", displayName=");
-        builder.append(displayName);
-        builder.append(", linkageName=");
-        builder.append(linkageName);
-        builder.append(", file=");
-        builder.append(file);
-        builder.append(", line=");
-        builder.append(line);
-        builder.append(", type=");
-        builder.append(type);
-        builder.append(", isLocalToCompileUnit=");
-        builder.append(isLocalToCompileUnit);
-        builder.append(", isDefinedInCompileUnit=");
-        builder.append(isDefinedInCompileUnit);
-        builder.append("]");
-        return builder.toString();
+        return "GlobalVariable [context=" + context + ", name=" + name + ", displayName=" + displayName + ", linkageName=" + linkageName + ", file=" + file + ", line=" + line + ", type=" + type +
+                        ", isLocalToCompileUnit=" + isLocalToCompileUnit + ", isDefinedInCompileUnit=" + isDefinedInCompileUnit + "]";
     }
 }
