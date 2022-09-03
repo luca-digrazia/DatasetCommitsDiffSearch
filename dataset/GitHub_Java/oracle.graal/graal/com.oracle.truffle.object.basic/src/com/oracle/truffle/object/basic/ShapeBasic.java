@@ -30,13 +30,18 @@ public final class ShapeBasic extends ShapeImpl {
         super(layout, operations, sharedData, id);
     }
 
-    public ShapeBasic(Layout layout, Object sharedData, ShapeImpl parent, ObjectType operations, PropertyMap propertyMap, Allocator allocator, int id) {
-        super(layout, parent, operations, sharedData, propertyMap, allocator, id);
+    public ShapeBasic(Layout layout, Object sharedData, ShapeImpl parent, ObjectType objectType, PropertyMap propertyMap, Transition transition, Allocator allocator, int id) {
+        super(layout, parent, objectType, sharedData, propertyMap, transition, allocator, id);
     }
 
     @SuppressWarnings("hiding")
     @Override
-    protected ShapeImpl createShape(Layout layout, Object sharedData, ShapeImpl parent, ObjectType operations, PropertyMap propertyMap, Allocator allocator, int id) {
-        return new ShapeBasic(layout, sharedData, parent, operations, propertyMap, allocator, id);
+    protected ShapeImpl createShape(Layout layout, Object sharedData, ShapeImpl parent, ObjectType objectType, PropertyMap propertyMap, Transition transition, Allocator allocator, int id) {
+        return new ShapeBasic(layout, sharedData, parent, objectType, propertyMap, transition, allocator, id);
+    }
+
+    @Override
+    public ShapeImpl replaceProperty(Property oldProperty, Property newProperty) {
+        return directReplaceProperty(oldProperty, newProperty);
     }
 }
