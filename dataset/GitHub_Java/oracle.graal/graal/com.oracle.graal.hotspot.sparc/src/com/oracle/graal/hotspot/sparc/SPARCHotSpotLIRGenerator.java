@@ -25,7 +25,12 @@ package com.oracle.graal.hotspot.sparc;
 import static com.oracle.graal.hotspot.HotSpotBackend.FETCH_UNROLL_INFO;
 import static com.oracle.graal.hotspot.HotSpotBackend.UNCOMMON_TRAP;
 import static com.oracle.graal.lir.LIRValueUtil.asConstant;
+import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
 import static com.oracle.graal.lir.LIRValueUtil.isConstantValue;
+import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
+import static jdk.vm.ci.hotspot.HotSpotCompressedNullConstant.COMPRESSED_NULL;
+import static jdk.vm.ci.meta.JavaConstant.INT_0;
+import static jdk.vm.ci.meta.JavaConstant.LONG_0;
 import static jdk.vm.ci.sparc.SPARC.d32;
 import static jdk.vm.ci.sparc.SPARC.d34;
 import static jdk.vm.ci.sparc.SPARC.d36;
@@ -73,6 +78,7 @@ import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.hotspot.HotSpotCompressedNullConstant;
+import jdk.vm.ci.hotspot.HotSpotConstant;
 import jdk.vm.ci.hotspot.HotSpotObjectConstant;
 import jdk.vm.ci.hotspot.HotSpotVMConfig;
 import jdk.vm.ci.hotspot.HotSpotVMConfig.CompressEncoding;
@@ -114,7 +120,9 @@ import com.oracle.graal.lir.sparc.SPARCControlFlow.StrategySwitchOp;
 import com.oracle.graal.lir.sparc.SPARCFrameMapBuilder;
 import com.oracle.graal.lir.sparc.SPARCImmediateAddressValue;
 import com.oracle.graal.lir.sparc.SPARCMove.CompareAndSwapOp;
+import com.oracle.graal.lir.sparc.SPARCMove.LoadOp;
 import com.oracle.graal.lir.sparc.SPARCMove.NullCheckOp;
+import com.oracle.graal.lir.sparc.SPARCMove.StoreConstantOp;
 import com.oracle.graal.lir.sparc.SPARCMove.StoreOp;
 import com.oracle.graal.lir.sparc.SPARCSaveRegistersOp;
 
@@ -124,18 +132,13 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     private HotSpotLockStack lockStack;
     private LIRFrameState currentRuntimeCallInfo;
 
-    public SPARCHotSpotLIRGenerator(HotSpotProviders providers, HotSpotVMConfig config, CallingConvention cc, LIRGenerationResult lirGenRes) {
-        this(providers, config, cc, lirGenRes, new ConstantTableBaseProvider());
+    public SPARCHotSpotLIRGenerator(SPARCArithmeticLIRGenerator arithmeticLIRGen, HotSpotProviders providers, HotSpotVMConfig config, CallingConvention cc, LIRGenerationResult lirGenRes) {
+        this(new SPARCHotSpotLIRKindTool(), arithmeticLIRGen, providers, config, cc, lirGenRes);
     }
 
-    private SPARCHotSpotLIRGenerator(HotSpotProviders providers, HotSpotVMConfig config, CallingConvention cc, LIRGenerationResult lirGenRes, ConstantTableBaseProvider constantTableBaseProvider) {
-        this(new SPARCHotSpotLIRKindTool(), new SPARCArithmeticLIRGenerator(), new SPARCHotSpotMoveFactory(providers.getCodeCache(), constantTableBaseProvider), providers, config, cc, lirGenRes,
-                        constantTableBaseProvider);
-    }
-
-    protected SPARCHotSpotLIRGenerator(LIRKindTool lirKindTool, SPARCArithmeticLIRGenerator arithmeticLIRGen, MoveFactory moveFactory, HotSpotProviders providers, HotSpotVMConfig config,
-                    CallingConvention cc, LIRGenerationResult lirGenRes, ConstantTableBaseProvider constantTableBaseProvider) {
-        super(lirKindTool, arithmeticLIRGen, moveFactory, providers, cc, lirGenRes, constantTableBaseProvider);
+    protected SPARCHotSpotLIRGenerator(LIRKindTool lirKindTool, SPARCArithmeticLIRGenerator arithmeticLIRGen, HotSpotProviders providers, HotSpotVMConfig config, CallingConvention cc,
+                    LIRGenerationResult lirGenRes) {
+        super(lirKindTool, arithmeticLIRGen, providers, cc, lirGenRes);
         assert config.basicLockSize == 8;
         this.config = config;
     }
@@ -274,6 +277,39 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         append(new SPARCHotSpotDeoptimizeCallerOp());
     }
 
+    @Override
+    public Variable emitLoad(LIRKind kind, Value address, LIRFrameState state) {
+        SPARCAddressValue loadAddress = asAddressValue(address);
+        Variable result = newVariable(toRegisterKind(kind));
+        append(new LoadOp(kind.getPlatformKind(), result, loadAddress, state));
+        return result;
+    }
+
+    @Override
+    public boolean canInlineConstant(JavaConstant c) {
+        if (HotSpotCompressedNullConstant.COMPRESSED_NULL.equals(c)) {
+            return true;
+        } else if (c instanceof HotSpotObjectConstant) {
+            return false;
+        } else {
+            return super.canInlineConstant(c);
+        }
+    }
+
+    @Override
+    public void emitStore(LIRKind kind, Value address, Value inputVal, LIRFrameState state) {
+        SPARCAddressValue storeAddress = asAddressValue(address);
+        if (isJavaConstant(inputVal)) {
+            JavaConstant c = asJavaConstant(inputVal);
+            if (c.isDefaultForKind()) {
+                append(new StoreConstantOp(kind.getPlatformKind(), storeAddress, c, state));
+                return;
+            }
+        }
+        Variable input = load(inputVal);
+        append(new StoreOp(kind.getPlatformKind(), storeAddress, input, state));
+    }
+
     public Variable emitCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
         LIRKind kind = newValue.getLIRKind();
         assert kind.equals(expectedValue.getLIRKind());
@@ -290,6 +326,28 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
 
     public StackSlot getDeoptimizationRescueSlot() {
         return deoptimizationRescueSlot;
+    }
+
+    @Override
+    protected LIRInstruction createMoveConstant(AllocatableValue dst, Constant src) {
+        Constant usedSource;
+        if (COMPRESSED_NULL.equals(src)) {
+            usedSource = INT_0;
+        } else if (src instanceof HotSpotObjectConstant && ((HotSpotObjectConstant) src).isNull()) {
+            usedSource = LONG_0;
+        } else {
+            usedSource = src;
+        }
+        if (usedSource instanceof HotSpotConstant) {
+            HotSpotConstant constant = (HotSpotConstant) usedSource;
+            if (constant.isCompressed()) {
+                return new SPARCHotSpotMove.LoadHotSpotObjectConstantInline(constant, dst);
+            } else {
+                return new SPARCHotSpotMove.LoadHotSpotObjectConstantFromTable(constant, dst, getConstantTableBase());
+            }
+        } else {
+            return super.createMoveConstant(dst, usedSource);
+        }
     }
 
     @Override

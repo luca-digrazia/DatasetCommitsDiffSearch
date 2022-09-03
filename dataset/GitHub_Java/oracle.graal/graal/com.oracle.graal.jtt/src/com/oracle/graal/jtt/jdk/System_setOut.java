@@ -22,10 +22,12 @@
  */
 package com.oracle.graal.jtt.jdk;
 
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
-import com.oracle.graal.jtt.*;
-import org.junit.*;
+import org.junit.Test;
+
+import com.oracle.graal.jtt.JTTTest;
 
 /*
  */
@@ -46,15 +48,16 @@ public class System_setOut extends JTTTest {
         return sum;
     }
 
-// @NEVER_INLINE
     private static void doPrint(int n) {
+        PrintStream out = System.out;
         for (int i = 0; i < n; i++) {
-            System.out.print('x');
+            out.print('x');
         }
     }
 
     public static void main(String[] args) throws Exception {
-        System.out.println(test(10000));
+        PrintStream out = System.out;
+        out.println(test(10000));
     }
 
     @Test
