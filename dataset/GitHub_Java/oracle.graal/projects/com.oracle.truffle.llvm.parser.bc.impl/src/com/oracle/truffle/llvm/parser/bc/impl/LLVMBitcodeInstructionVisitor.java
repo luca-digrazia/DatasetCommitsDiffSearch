@@ -66,7 +66,9 @@ import com.oracle.truffle.llvm.parser.bc.impl.nodes.LLVMNodeGenerator;
 import com.oracle.truffle.llvm.parser.base.util.LLVMBitcodeTypeHelper;
 import com.oracle.truffle.llvm.parser.bc.impl.util.LLVMFrameIDs;
 import com.oracle.truffle.llvm.parser.factories.LLVMIntrinsicFactory;
+import com.oracle.truffle.llvm.parser.factories.LLVMMemoryReadWriteFactory;
 import com.oracle.truffle.llvm.parser.factories.LLVMSelectFactory;
+import com.oracle.truffle.llvm.parser.factories.LLVMTruffleIntrinsicFactory;
 import com.oracle.truffle.llvm.parser.factories.LLVMVectorFactory;
 import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
@@ -252,7 +254,7 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
             result = (LLVMExpressionNode) LLVMIntrinsicFactory.create(((ValueSymbol) target).getName(), argNodes, call.getCallType().getArgumentTypes().length, method.getStackSlot());
 
         } else if (target instanceof FunctionDeclaration && (((ValueSymbol) target).getName()).startsWith("@truffle_")) {
-            method.addInstruction(factoryFacade.createTruffleIntrinsic(((ValueSymbol) target).getName(), argNodes));
+            method.addInstruction(LLVMTruffleIntrinsicFactory.create(((ValueSymbol) target).getName(), argNodes));
             return;
 
         } else if (target instanceof InlineAsmConstant) {
@@ -545,7 +547,7 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
                         method.getStackSlot());
 
         final LLVMBaseType type = shuffle.getType().getLLVMBaseType();
-        final LLVMExpressionNode result = factoryFacade.createShuffleVector(type, destination, vector1, vector2, mask);
+        final LLVMExpressionNode result = LLVMVectorFactory.createShuffleVector(type, destination, vector1, vector2, mask);
 
         createFrameWrite(result, shuffle);
     }
@@ -557,7 +559,8 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
 
         final Type type = store.getSource().getType();
 
-        final LLVMNode node = factoryFacade.createStore(pointerNode, valueNode, type);
+        final LLVMNode node = LLVMMemoryReadWriteFactory.createStore(pointerNode, valueNode, type.getLLVMBaseType(),
+                        type.getSize(method.getTargetDataLayout()));
 
         method.addInstruction(node);
     }
@@ -630,7 +633,7 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
             node = LLVMIntrinsicFactory.create(((ValueSymbol) target).getName(), args, parentArgCount, method.getStackSlot());
 
         } else if (target instanceof FunctionDeclaration && (((ValueSymbol) target).getName()).startsWith("@truffle_")) {
-            node = factoryFacade.createTruffleIntrinsic(((ValueSymbol) target).getName(), args);
+            node = LLVMTruffleIntrinsicFactory.create(((ValueSymbol) target).getName(), args);
             if (node == null) {
                 throw new UnsupportedOperationException("Unknown Truffle Intrinsic: " + ((ValueSymbol) target).getName());
             }
