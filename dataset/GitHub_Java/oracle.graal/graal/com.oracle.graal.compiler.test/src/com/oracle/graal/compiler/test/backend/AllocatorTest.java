@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,140 +22,87 @@
  */
 package com.oracle.graal.compiler.test.backend;
 
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.HashSet;
 
-import org.junit.*;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.ValueUtil;
+import jdk.vm.ci.meta.Value;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.phases.*;
+import org.junit.Assert;
 
-public class AllocatorTest extends GraalCompilerTest {
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.lir.LIR;
+import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.LIRValueUtil;
+import com.oracle.graal.lir.StandardOp.ValueMoveOp;
+import com.oracle.graal.lir.ValueProcedure;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 
-    @Test
-    public void test1() {
-        test("test1snippet", 2, 1, 0);
-    }
+public class AllocatorTest extends BackendTest {
 
-    public static long test1snippet(long x) {
-        return x + 5;
-    }
-
-    @Ignore
-    @Test
-    public void test2() {
-        test("test2snippet", 2, 0, 0);
-    }
-
-    public static long test2snippet(long x) {
-        return x * 5;
-    }
-
-    @Ignore
-    @Test
-    public void test3() {
-        test("test3snippet", 4, 1, 0);
-    }
-
-    public static long test3snippet(long x) {
-        return x / 3 + x % 3;
-    }
-
-    private void test(String snippet, final int expectedRegisters, final int expectedRegRegMoves, final int expectedSpillMoves) {
-        final StructuredGraph graph = parse(snippet);
-        Debug.scope("AllocatorTest", new Object[]{graph, graph.method(), backend.target}, new Runnable() {
-
-            @Override
-            public void run() {
-                final RegisterStats stats = getRegisterStats(graph);
-
-                Debug.scope("Assertions", stats.lir, new Runnable() {
-
-                    @Override
-                    public void run() {
-                        Assert.assertEquals("register count", expectedRegisters, stats.registers.size());
-                        Assert.assertEquals("reg-reg moves", expectedRegRegMoves, stats.regRegMoves);
-                        Assert.assertEquals("spill moves", expectedSpillMoves, stats.spillMoves);
-                    }
-                });
+    @SuppressWarnings("try")
+    protected void testAllocation(String snippet, final int expectedRegisters, final int expectedRegRegMoves, final int expectedSpillMoves) {
+        final StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
+        try (Scope s = Debug.scope("AllocatorTest", graph, graph.method(), getCodeCache())) {
+            final RegisterStats stats = new RegisterStats(getLIRGenerationResult(graph).getLIR());
+            try (Scope s2 = Debug.scope("Assertions", stats.lir)) {
+                Assert.assertEquals("register count", expectedRegisters, stats.registers.size());
+                Assert.assertEquals("reg-reg moves", expectedRegRegMoves, stats.regRegMoves);
+                Assert.assertEquals("spill moves", expectedSpillMoves, stats.spillMoves);
+            } catch (Throwable e) {
+                throw Debug.handle(e);
             }
-        });
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
     }
 
-    class RegisterStats {
+    private class RegisterStats {
 
         public final LIR lir;
         public HashSet<Register> registers = new HashSet<>();
         public int regRegMoves;
         public int spillMoves;
 
-        public RegisterStats(LIR lir) {
+        RegisterStats(LIR lir) {
             this.lir = lir;
 
-            for (Block block : lir.codeEmittingOrder()) {
-                for (LIRInstruction instr : lir.lir(block)) {
+            for (AbstractBlockBase<?> block : lir.codeEmittingOrder()) {
+                if (block == null) {
+                    continue;
+                }
+                for (LIRInstruction instr : lir.getLIRforBlock(block)) {
                     collectStats(instr);
                 }
             }
         }
 
+        private ValueProcedure collectStatsProc = (value, mode, flags) -> {
+            if (ValueUtil.isRegister(value)) {
+                final Register reg = ValueUtil.asRegister(value);
+                registers.add(reg);
+            }
+            return value;
+        };
+
         private void collectStats(final LIRInstruction instr) {
-            final boolean move = instr.name().equals("MOVE");
-            instr.forEachOutput(new ValueProcedure() {
+            instr.forEachOutput(collectStatsProc);
 
-                @Override
-                public Value doValue(Value defValue) {
-                    if (ValueUtil.isRegister(defValue)) {
-                        final Register reg = ValueUtil.asRegister(defValue);
-                        registers.add(reg);
-                        if (move) {
-                            instr.forEachInput(new ValueProcedure() {
-
-                                @Override
-                                public Value doValue(Value useValue) {
-                                    if (ValueUtil.isRegister(useValue) && ValueUtil.asRegister(useValue) != reg) {
-                                        regRegMoves++;
-                                    }
-                                    return useValue;
-                                }
-                            });
-                        }
-                    } else if (move && ValueUtil.isStackSlot(defValue)) {
-                        spillMoves++;
+            if (instr instanceof ValueMoveOp) {
+                ValueMoveOp move = (ValueMoveOp) instr;
+                Value def = move.getResult();
+                Value use = move.getInput();
+                if (ValueUtil.isRegister(def)) {
+                    if (ValueUtil.isRegister(use)) {
+                        regRegMoves++;
                     }
-                    return defValue;
+                } else if (LIRValueUtil.isStackSlotValue(def)) {
+                    spillMoves++;
                 }
-            });
+            }
         }
-    }
-
-    private RegisterStats getRegisterStats(final StructuredGraph graph) {
-        final PhasePlan phasePlan = getDefaultPhasePlan();
-        final Assumptions assumptions = new Assumptions(GraalOptions.OptAssumptions);
-
-        final LIR lir = Debug.scope("FrontEnd", new Callable<LIR>() {
-
-            @Override
-            public LIR call() {
-                return GraalCompiler.emitHIR(runtime, backend.target, graph, assumptions, null, phasePlan, OptimisticOptimizations.NONE);
-            }
-        });
-
-        return Debug.scope("BackEnd", lir, new Callable<RegisterStats>() {
-
-            @Override
-            public RegisterStats call() {
-                GraalCompiler.emitLIR(backend, backend.target, lir, graph, graph.method());
-                return new RegisterStats(lir);
-            }
-        });
     }
 }

@@ -496,9 +496,9 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
     }
 
     @Override
-    public RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig, String[] allocationRestrictedTo) {
+    public RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
-        return new SPARCHotSpotRegisterAllocationConfig(registerConfigNonNull, allocationRestrictedTo);
+        return new SPARCHotSpotRegisterAllocationConfig(registerConfigNonNull);
     }
 
     @Override
