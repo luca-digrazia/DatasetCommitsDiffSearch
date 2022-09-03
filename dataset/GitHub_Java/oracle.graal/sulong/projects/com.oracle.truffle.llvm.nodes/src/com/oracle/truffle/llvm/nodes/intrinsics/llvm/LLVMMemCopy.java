@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.nodes.intrinsics.llvm;
 
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
-import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
@@ -41,9 +40,10 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-@NodeChildren({@NodeChild(type = LLVMExpressionNode.class, value = "destination"), @NodeChild(type = LLVMExpressionNode.class, value = "source"),
-                @NodeChild(type = LLVMExpressionNode.class, value = "length"),
-                @NodeChild(type = LLVMExpressionNode.class, value = "align"), @NodeChild(type = LLVMExpressionNode.class, value = "isVolatile")})
+@NodeChild(type = LLVMExpressionNode.class, value = "destination")
+@NodeChild(type = LLVMExpressionNode.class, value = "source")
+@NodeChild(type = LLVMExpressionNode.class, value = "length")
+@NodeChild(type = LLVMExpressionNode.class, value = "isVolatile")
 public abstract class LLVMMemCopy extends LLVMBuiltin {
 
     @Child private LLVMMemMoveNode memMove;
@@ -55,33 +55,30 @@ public abstract class LLVMMemCopy extends LLVMBuiltin {
     // TODO: remove duplication for length argument with a cast node
 
     @Specialization
-    protected Object doVoid(LLVMVirtualAllocationAddress target, LLVMVirtualAllocationAddress source, int length, int align, boolean isVolatile,
-                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess arrayAccess) {
-        return doVoid(target, source, (long) length, align, isVolatile, arrayAccess);
+    protected Object doVoid(LLVMVirtualAllocationAddress target, LLVMVirtualAllocationAddress source, int length, boolean isVolatile, @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess arrayAccess) {
+        return doVoid(target, source, (long) length, isVolatile, arrayAccess);
     }
 
     @Specialization
-    protected Object doVoid(LLVMVirtualAllocationAddress target, LLVMNativePointer source, int length, int align, boolean isVolatile,
-                    @Cached("getLLVMMemory()") LLVMMemory memory,
+    protected Object doVoid(LLVMVirtualAllocationAddress target, LLVMNativePointer source, int length, boolean isVolatile, @Cached("getLLVMMemory()") LLVMMemory memory,
                     @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess arrayAccess) {
-        return doVoid(target, source, (long) length, align, isVolatile, memory, arrayAccess);
+        return doVoid(target, source, (long) length, isVolatile, memory, arrayAccess);
     }
 
     @Specialization
-    protected Object doVoid(LLVMNativePointer target, LLVMVirtualAllocationAddress source, int length, int align, boolean isVolatile,
-                    @Cached("getLLVMMemory()") LLVMMemory memory,
+    protected Object doVoid(LLVMNativePointer target, LLVMVirtualAllocationAddress source, int length, boolean isVolatile, @Cached("getLLVMMemory()") LLVMMemory memory,
                     @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess arrayAccess) {
-        return doVoid(target, source, (long) length, align, isVolatile, memory, arrayAccess);
+        return doVoid(target, source, (long) length, isVolatile, memory, arrayAccess);
     }
 
     @Specialization
-    protected Object doVoid(LLVMPointer target, LLVMPointer source, int length, int align, boolean isVolatile) {
-        return doVoid(target, source, (long) length, align, isVolatile);
+    protected Object doVoid(LLVMPointer target, LLVMPointer source, int length, boolean isVolatile) {
+        return doVoid(target, source, (long) length, isVolatile);
     }
 
     @SuppressWarnings("unused")
     @Specialization
-    protected Object doVoid(LLVMVirtualAllocationAddress target, LLVMVirtualAllocationAddress source, long length, int align, boolean isVolatile,
+    protected Object doVoid(LLVMVirtualAllocationAddress target, LLVMVirtualAllocationAddress source, long length, boolean isVolatile,
                     @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess arrayAccess) {
         copy(arrayAccess, target, source, length);
         return null;
@@ -89,8 +86,7 @@ public abstract class LLVMMemCopy extends LLVMBuiltin {
 
     @SuppressWarnings("unused")
     @Specialization
-    protected Object doVoid(LLVMVirtualAllocationAddress target, LLVMNativePointer source, long length, int align, boolean isVolatile,
-                    @Cached("getLLVMMemory()") LLVMMemory memory,
+    protected Object doVoid(LLVMVirtualAllocationAddress target, LLVMNativePointer source, long length, boolean isVolatile, @Cached("getLLVMMemory()") LLVMMemory memory,
                     @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess arrayAccess) {
         copy(arrayAccess, memory, target, source.asNative(), length);
         return null;
@@ -98,8 +94,7 @@ public abstract class LLVMMemCopy extends LLVMBuiltin {
 
     @SuppressWarnings("unused")
     @Specialization
-    protected Object doVoid(LLVMNativePointer target, LLVMVirtualAllocationAddress source, long length, int align, boolean isVolatile,
-                    @Cached("getLLVMMemory()") LLVMMemory memory,
+    protected Object doVoid(LLVMNativePointer target, LLVMVirtualAllocationAddress source, long length, boolean isVolatile, @Cached("getLLVMMemory()") LLVMMemory memory,
                     @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess arrayAccess) {
         copy(arrayAccess, memory, target.asNative(), source, length);
         return null;
@@ -107,7 +102,7 @@ public abstract class LLVMMemCopy extends LLVMBuiltin {
 
     @SuppressWarnings("unused")
     @Specialization
-    protected Object doVoid(LLVMPointer target, LLVMPointer source, long length, int align, boolean isVolatile) {
+    protected Object doVoid(LLVMPointer target, LLVMPointer source, long length, boolean isVolatile) {
         memMove.executeWithTarget(target, source, length);
         return null;
     }

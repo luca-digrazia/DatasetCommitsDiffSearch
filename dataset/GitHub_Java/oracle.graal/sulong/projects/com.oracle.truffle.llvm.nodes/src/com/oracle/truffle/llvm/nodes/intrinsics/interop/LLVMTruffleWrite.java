@@ -90,10 +90,7 @@ public final class LLVMTruffleWrite {
         @Child protected LLVMDataEscapeNode prepareValueForEscape;
         @Child private LLVMAsForeignNode asForeign = LLVMAsForeignNode.create();
 
-        public LLVMTruffleWriteToName(int argCount) {
-            if (argCount != 3) {
-                throw new LLVMPolyglotException(this, "polyglot_put_member must be called with exactly 3 arguments.");
-            }
+        public LLVMTruffleWriteToName() {
             this.prepareValueForEscape = LLVMDataEscapeNode.create();
         }
 
@@ -122,10 +119,7 @@ public final class LLVMTruffleWrite {
         @Child protected LLVMDataEscapeNode prepareValueForEscape;
         @Child private LLVMAsForeignNode asForeign = LLVMAsForeignNode.create();
 
-        public LLVMTruffleWriteToIndex(int argCount) {
-            if (argCount != 3) {
-                throw new LLVMPolyglotException(this, "polyglot_set_array_element must be called with exactly 3 arguments.");
-            }
+        public LLVMTruffleWriteToIndex() {
             this.prepareValueForEscape = LLVMDataEscapeNode.create();
         }
 
