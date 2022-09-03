@@ -382,7 +382,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
             if (misspelledGuess != null) {
                 didYouMean = String.format("Did you mean '%s'? ", misspelledGuess);
             }
-            throw new PolyglotIllegalStateException(String.format("A language with id '%s' is not installed. %sInstalled languages are: %s.", id, didYouMean, getLanguages().keySet()));
+            throw new IllegalArgumentException(String.format("A language with id '%s' is not installed. %sInstalled languages are: %s.", id, didYouMean, getLanguages().keySet()));
         }
         return language;
     }
@@ -407,7 +407,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
             if (misspelledGuess != null) {
                 didYouMean = String.format("Did you mean '%s'? ", misspelledGuess);
             }
-            throw new PolyglotIllegalStateException(String.format("An instrument with id '%s' is not installed. %sInstalled instruments are: %s.", id, didYouMean, getInstruments().keySet()));
+            throw new IllegalArgumentException(String.format("An instrument with id '%s' is not installed. %sInstalled instruments are: %s.", id, didYouMean, getInstruments().keySet()));
         }
         return instrument;
     }
@@ -416,26 +416,25 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     public synchronized void ensureClosed(boolean cancelIfExecuting, boolean ignoreCloseFailure) {
         if (!closed) {
             PolyglotContextImpl[] localContexts = contexts.toArray(new PolyglotContextImpl[0]);
-            /*
-             * Check ahead of time for open contexts to fail early and avoid closing only some
-             * contexts.
-             */
-            if (!cancelIfExecuting && !ignoreCloseFailure) {
-                for (PolyglotContextImpl context : localContexts) {
-                    synchronized (context) {
-                        if (context.hasActiveOtherThread(false)) {
-                            throw new IllegalStateException(String.format("One of the context instances is currently executing. " +
-                                            "Set cancelIfExecuting to true to stop the execution on this thread."));
+            for (PolyglotContextImpl context : localContexts) {
+                assert !context.closed : "should not be in the contexts list";
+                Thread boundThread = context.boundThread.get();
+                try {
+                    boolean performClose = true;
+                    if (boundThread != null && boundThread != Thread.currentThread() && context.enteredCount > 0) {
+                        if (!ignoreCloseFailure) {
+                            if (cancelIfExecuting) {
+                                performClose = true;
+                            } else {
+                                throw new IllegalStateException(String.format("One of the context instances is currently executing on thread %s. " +
+                                                "Set cancelIfExecuting to true to stop the execution on this thread.", boundThread));
+                            }
+                        } else {
+                            performClose = false;
                         }
                     }
-                }
-            }
-            for (PolyglotContextImpl context : localContexts) {
-                try {
-                    boolean closeCompleted = context.closeImpl(cancelIfExecuting, cancelIfExecuting);
-                    if (!closeCompleted && !cancelIfExecuting && !ignoreCloseFailure) {
-                        throw new IllegalStateException(String.format("One of the context instances is currently executing. " +
-                                        "Set cancelIfExecuting to true to stop the execution on this thread."));
+                    if (performClose) {
+                        context.closeImpl(cancelIfExecuting);
                     }
                 } catch (Throwable e) {
                     if (!ignoreCloseFailure) {
@@ -483,10 +482,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
 
     @Override
     public String getVersion() {
-        String version = System.getProperty("org.graalvm.version");
-        if (version == null) {
-            version = System.getProperty("graalvm.version");
-        }
+        String version = System.getProperty("graalvm.version");
         if (version == null) {
             return "Development Build";
         } else {
@@ -567,7 +563,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
         void waitForClosing(PolyglotContextImpl... localContexts) {
             boolean cancelling = false;
             for (PolyglotContextImpl context : localContexts) {
-                if (context.cancelling) {
+                if (context.closingLatch != null) {
                     cancelling = true;
                     break;
                 }
@@ -576,54 +572,67 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
             if (cancelling) {
                 enableCancel();
 
-                try {
-                    for (PolyglotContextImpl context : localContexts) {
-                        context.sendInterrupt();
+                for (PolyglotContextImpl context : localContexts) {
+                    Thread thread = context.boundThread.get();
+                    if (thread != null && context.closingLatch != null) {
+                        /*
+                         * We send an interrupt to the thread to wake up and to run some guest
+                         * language code in case they are waiting in some async primitive. The
+                         * interrupt is then cleared when the closed is performed.
+                         */
+                        thread.interrupt();
                     }
+                }
+                try {
                     for (PolyglotContextImpl context : localContexts) {
                         context.waitForClose();
                     }
+
                 } finally {
                     disableCancel();
                 }
             }
         }
 
-        private synchronized void enableCancel() {
-            if (cancellationBinding == null) {
-                cancellationBinding = instrumenter.attachListener(SourceSectionFilter.ANY, new ExecutionEventListener() {
-                    public void onReturnValue(EventContext context, VirtualFrame frame, Object result) {
-                        cancelExecution(context);
-                    }
-
-                    public void onReturnExceptional(EventContext context, VirtualFrame frame, Throwable exception) {
-                        cancelExecution(context);
-                    }
-
-                    public void onEnter(EventContext context, VirtualFrame frame) {
-                        cancelExecution(context);
-                    }
-
-                    @TruffleBoundary
-                    private void cancelExecution(EventContext eventContext) {
-                        PolyglotContextImpl context = PolyglotContextImpl.requireContext();
-                        if (context.cancelling) {
-                            throw new CancelExecution(eventContext);
+        private void enableCancel() {
+            synchronized (this) {
+                if (cancellationBinding == null) {
+                    cancellationBinding = instrumenter.attachListener(SourceSectionFilter.ANY, new ExecutionEventListener() {
+                        public void onReturnValue(EventContext context, VirtualFrame frame, Object result) {
+                            cancelExecution(context);
                         }
-                    }
-                });
+
+                        public void onReturnExceptional(EventContext context, VirtualFrame frame, Throwable exception) {
+                            cancelExecution(context);
+                        }
+
+                        public void onEnter(EventContext context, VirtualFrame frame) {
+                            cancelExecution(context);
+                        }
+
+                        @TruffleBoundary
+                        private void cancelExecution(EventContext eventContext) {
+                            PolyglotContextImpl context = PolyglotContextImpl.current();
+                            if (context.closingLatch != null) {
+                                throw new CancelExecution(eventContext);
+                            }
+                        }
+                    });
+                }
+                cancellationUsers++;
             }
-            cancellationUsers++;
         }
 
-        private synchronized void disableCancel() {
-            int usersLeft = --cancellationUsers;
-            if (usersLeft <= 0) {
-                EventBinding<?> b = cancellationBinding;
-                if (b != null) {
-                    b.dispose();
+        private void disableCancel() {
+            synchronized (this) {
+                int usersLeft = --cancellationUsers;
+                if (usersLeft <= 0) {
+                    EventBinding<?> b = cancellationBinding;
+                    if (b != null) {
+                        b.dispose();
+                    }
+                    cancellationBinding = null;
                 }
-                cancellationBinding = null;
             }
         }
     }
@@ -655,8 +664,8 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     @Override
     @SuppressWarnings({"hiding"})
     public synchronized Context createContext(OutputStream out, OutputStream err, InputStream in, boolean allowHostAccess,
-                    boolean allowCreateThread, Predicate<String> classFilter,
-                    Map<String, String> options, Map<String, String[]> arguments, String[] onlyLanguages) {
+                    Predicate<String> classFilter, Map<String, String> options,
+                    Map<String, String[]> arguments, String[] onlyLanguages) {
         checkState();
         if (boundEngine && !contexts.isEmpty()) {
             throw new IllegalArgumentException("Automatically created engines cannot be used to create more than one context. " +
@@ -670,11 +679,9 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
             allowedLanguages = new HashSet<>(Arrays.asList(onlyLanguages));
         }
 
-        PolyglotContextImpl contextImpl = new PolyglotContextImpl(this, out, err, in, allowHostAccess, allowCreateThread, classFilter, options, arguments, allowedLanguages);
+        PolyglotContextImpl contextImpl = new PolyglotContextImpl(this, out, err, in, allowHostAccess, classFilter, options, arguments, allowedLanguages);
         addContext(contextImpl);
-        Context api = impl.getAPIAccess().newContext(contextImpl);
-        contextImpl.api = api;
-        return api;
+        return impl.getAPIAccess().newContext(contextImpl);
     }
 
 }
