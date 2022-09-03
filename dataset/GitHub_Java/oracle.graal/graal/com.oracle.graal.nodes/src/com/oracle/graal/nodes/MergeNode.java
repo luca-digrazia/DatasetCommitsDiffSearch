@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,143 +22,35 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.graph.iterators.NodePredicates.*;
-
-import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.iterators.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodeinfo.*;
 
 /**
  * Denotes the merging of multiple control-flow paths.
  */
-public class MergeNode extends BeginNode implements Node.IterableNodeType, LIRLowerable {
+@NodeInfo
+public final class MergeNode extends AbstractMergeNode {
 
-    @Input(notDataflow = true) private final NodeInputList<EndNode> ends = new NodeInputList<>(this);
+    public static final NodeClass<MergeNode> TYPE = NodeClass.create(MergeNode.class);
 
-    @Override
-    public boolean needsStateAfter() {
-        return false;
+    public MergeNode() {
+        super(TYPE);
     }
 
-    @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.visitMerge(this);
-    }
-
-    public int forwardEndIndex(EndNode end) {
-        return ends.indexOf(end);
-    }
-
-    public void addForwardEnd(EndNode end) {
-        ends.add(end);
-    }
-
-    public int forwardEndCount() {
-        return ends.size();
-    }
-
-    public EndNode forwardEndAt(int index) {
-        return ends.get(index);
-    }
-
-    @Override
-    public NodeIterable<EndNode> cfgPredecessors() {
-        return ends;
-    }
-
-    /**
-     * Determines if a given node is a phi whose {@linkplain PhiNode#merge() merge} is this node.
-     *
-     * @param value the instruction to test
-     * @return {@code true} if {@code value} is a phi and its merge is {@code this}
-     */
-    public boolean isPhiAtMerge(Node value) {
-        return value instanceof PhiNode && ((PhiNode) value).merge() == this;
-    }
-
-    /**
-     * Removes the given end from the merge, along with the entries corresponding to this end in the phis connected to the merge.
-     * @param pred the end to remove
-     */
-    public void removeEnd(EndNode pred) {
-        int predIndex = phiPredecessorIndex(pred);
-        assert predIndex != -1;
-        deleteEnd(pred);
-        for (PhiNode phi : phis()) {
-            phi.removeInput(predIndex);
+    public static void removeMergeIfDegenerated(MergeNode node) {
+        if (node.forwardEndCount() == 1 && node.hasNoUsages()) {
+            FixedNode currentNext = node.next();
+            node.setNext(null);
+            EndNode forwardEnd = node.forwardEndAt(0);
+            forwardEnd.replaceAtPredecessor(currentNext);
+            node.markDeleted();
+            forwardEnd.markDeleted();
         }
     }
 
-    protected void deleteEnd(EndNode end) {
-        ends.remove(end);
-    }
-
-    public void clearEnds() {
-        ends.clear();
-    }
-
-    public NodeIterable<EndNode> forwardEnds() {
-        return ends;
-    }
-
-    public int phiPredecessorCount() {
-        return forwardEndCount();
-    }
-
-    public int phiPredecessorIndex(EndNode pred) {
-        return forwardEndIndex(pred);
-    }
-
-    public EndNode phiPredecessorAt(int index) {
-        return forwardEndAt(index);
-    }
-
-    public NodeIterable<PhiNode> phis() {
-        return this.usages().filter(new NodePredicate() {
-            @Override
-            public boolean apply(Node n) {
-                return n instanceof PhiNode && ((PhiNode) n).merge() == MergeNode.this;
-            }
-        }).filter(PhiNode.class);
-    }
-
     @Override
-    public void simplify(SimplifierTool tool) {
-        FixedNode next = next();
-        if (next instanceof LoopEndNode) {
-            LoopEndNode origLoopEnd = (LoopEndNode) next;
-            LoopBeginNode begin = origLoopEnd.loopBegin();
-            for (PhiNode phi : phis()) {
-                for (Node usage : phi.usages().filter(isNotA(FrameState.class))) {
-                    if (!begin.isPhiAtMerge(usage)) {
-                        return;
-                    }
-                }
-            }
-            Debug.log("Split %s into loop ends for %s", this, begin);
-            int numEnds = this.forwardEndCount();
-            StructuredGraph graph = (StructuredGraph) graph();
-            for (int i = 0; i < numEnds - 1; i++) {
-                EndNode end = forwardEndAt(numEnds - 1 - i);
-                LoopEndNode loopEnd = graph.add(new LoopEndNode(begin));
-                for (PhiNode phi : begin.phis()) {
-                    ValueNode v = phi.valueAt(origLoopEnd);
-                    ValueNode newInput;
-                    if (isPhiAtMerge(v)) {
-                        PhiNode endPhi = (PhiNode) v;
-                        newInput = endPhi.valueAt(end);
-                    } else {
-                        newInput = v;
-                    }
-                    phi.addInput(newInput);
-                }
-                this.removeEnd(end);
-                end.replaceAtPredecessors(loopEnd);
-                end.safeDelete();
-                tool.addToWorkList(loopEnd.predecessor());
-            }
-            graph.reduceTrivialMerge(this);
-        }
+    public boolean verify() {
+        assertTrue(this.forwardEndCount() > 1, "Must merge more than one end.");
+        return true;
     }
 }
