@@ -61,7 +61,6 @@ public class JavaInteropTest {
         public String[] arr;
         public Object value;
         public Object map;
-        public Data[] data;
 
         public double plus(double a, double b) {
             return a + b;
@@ -365,13 +364,6 @@ public class JavaInteropTest {
     }
 
     @Test
-    public void listUnwrapsTruffleObject() {
-        data.data = new Data[]{new Data()};
-        Data value = xyp.data().get(0);
-        assertSame(data.data[0], value);
-    }
-
-    @Test
     public void isBoxed() {
         assertFalse(JavaInterop.isBoxed(null));
         assertFalse(JavaInterop.isBoxed(JavaInterop.asTruffleObject(new Object())));
@@ -420,8 +412,6 @@ public class JavaInteropTest {
         Integer value();
 
         XYPlus assertThis(Object obj);
-
-        List<Data> data();
     }
 
     static Object message(final Message m, TruffleObject receiver, Object... arr) {

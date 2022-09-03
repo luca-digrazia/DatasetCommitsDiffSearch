@@ -149,11 +149,10 @@ public final class JavaInterop {
      *         was <code>null</code>
      * @since 0.9
      */
-    @SuppressWarnings("unchecked")
     public static <T> T asJavaObject(Class<T> type, TruffleObject foreignObject) {
         RootNode root = new TemporaryConvertRoot(TruffleLanguage.class, ToJavaNodeGen.create(), foreignObject, type);
         Object convertedValue = Truffle.getRuntime().createCallTarget(root).call();
-        return (T) convertedValue;
+        return type.cast(convertedValue);
     }
 
     /**
