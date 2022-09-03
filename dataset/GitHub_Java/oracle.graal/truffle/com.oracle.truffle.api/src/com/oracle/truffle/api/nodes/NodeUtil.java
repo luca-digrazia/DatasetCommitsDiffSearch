@@ -129,7 +129,6 @@ public final class NodeUtil {
         return (T) orig.deepCopy();
     }
 
-    @SuppressWarnings("deprecation")
     static Node deepCopyImpl(Node orig) {
         CompilerAsserts.neverPartOfCompilation();
         final Node clone = orig.copy();
@@ -202,7 +201,6 @@ public final class NodeUtil {
         return replaceChild(parent, oldChild, newChild, false);
     }
 
-    @SuppressWarnings("deprecation")
     static boolean replaceChild(Node parent, Node oldChild, Node newChild, boolean adopt) {
         CompilerAsserts.neverPartOfCompilation();
         NodeClass nodeClass = parent.getNodeClass();
