@@ -181,7 +181,7 @@ public final class InteropDSLProcessor extends AbstractProcessor {
 
     private boolean processLanguageCheck(MessageResolution messageResolutionAnnotation, TypeElement element, ForeignAccessFactoryGenerator factoryGenerator)
                     throws IOException {
-        LanguageCheckGenerator generator = new LanguageCheckGenerator(processingEnv, messageResolutionAnnotation, element, factoryGenerator);
+        LanguageCheckGenerator generator = new LanguageCheckGenerator(processingEnv, messageResolutionAnnotation, element);
 
         if (!ElementUtils.typeEquals(element.getSuperclass(), Utils.getTypeMirror(processingEnv, com.oracle.truffle.api.nodes.Node.class))) {
             emitError(ElementUtils.getQualifiedName(element) + " must extend com.oracle.truffle.api.nodes.Node.", element);
@@ -223,7 +223,7 @@ public final class InteropDSLProcessor extends AbstractProcessor {
 
     private boolean processResolveClass(Resolve resolveAnnotation, MessageResolution messageResolutionAnnotation, TypeElement element, ForeignAccessFactoryGenerator factoryGenerator)
                     throws IOException {
-        MessageGenerator currentGenerator = MessageGenerator.getGenerator(processingEnv, resolveAnnotation, messageResolutionAnnotation, element, factoryGenerator);
+        MessageGenerator currentGenerator = MessageGenerator.getGenerator(processingEnv, resolveAnnotation, messageResolutionAnnotation, element);
 
         if (currentGenerator == null) {
             emitError("Unknown message type: " + resolveAnnotation.message(), element);
