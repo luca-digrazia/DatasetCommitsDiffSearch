@@ -47,6 +47,7 @@ import org.junit.Assert;
 
 import static org.junit.Assert.assertSame;
 
+@SuppressWarnings("deprecation")
 public class EngineTest {
     private Set<PolyglotEngine> toDispose = new HashSet<>();
 
@@ -73,9 +74,9 @@ public class EngineTest {
 
         PolyglotEngine.Language language1 = tvm.getLanguages().get("application/x-test-import-export-1");
         PolyglotEngine.Language language2 = tvm.getLanguages().get("application/x-test-import-export-2");
-        language2.eval(Source.newBuilder("explicit.value=42").name("define 42").mimeType("content/unknown").build());
+        language2.eval(Source.fromText("explicit.value=42", "define 42"));
 
-        PolyglotEngine.Value value = language1.eval(Source.newBuilder("return=value").name("42.value").mimeType("content/unknown").build());
+        PolyglotEngine.Value value = language1.eval(Source.fromText("return=value", "42.value"));
         String res = value.as(String.class);
         assertNotNull(res);
     }
@@ -87,7 +88,7 @@ public class EngineTest {
 
         PolyglotEngine.Language language1 = tvm.getLanguages().get("application/x-test-import-export-1");
         try {
-            PolyglotEngine.Value value = language1.eval(Source.newBuilder("throwInteropException").name("interopTest").mimeType("content/unknown").build());
+            PolyglotEngine.Value value = language1.eval(Source.fromText("throwInteropException", "interopTest"));
             value.as(Object.class);
         } catch (IOException e) {
             if (e.getCause() instanceof InteropException) {
@@ -109,7 +110,7 @@ public class EngineTest {
         PolyglotEngine.Language language2 = vm2.getLanguages().get("application/x-test-hash");
         PolyglotEngine.Language alt1 = vm1.getLanguages().get("application/x-test-hash-alt");
         PolyglotEngine.Language alt2 = vm2.getLanguages().get("application/x-test-hash-alt");
-        final Source sharedSource = Source.newBuilder("anything").name("something").mimeType("content/unknown").build();
+        final Source sharedSource = Source.fromText("anything", "something");
 
         Object hashIn1Round1 = language1.eval(sharedSource).get();
         Object hashIn2Round1 = language2.eval(sharedSource).get();
@@ -154,7 +155,7 @@ public class EngineTest {
         register(tvm);
 
         PolyglotEngine.Language language1 = tvm.getLanguages().get("application/x-test-import-export-1");
-        AccessArray access = language1.eval(Source.newBuilder("return=arr").name("get the array").mimeType("content/unknown").build()).as(AccessArray.class);
+        AccessArray access = language1.eval(Source.fromText("return=arr", "get the array")).as(AccessArray.class);
         assertNotNull("Array converted to list", access);
         access = access.dupl();
         List<? extends Number> list = access.get(0);

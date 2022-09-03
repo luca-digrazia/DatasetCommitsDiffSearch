@@ -33,10 +33,11 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
 
+@SuppressWarnings("deprecation")
 final class TestSource {
 
     static Source createBlock8(String sourceName) {
-        return Source.newBuilder("ROOT(\n" +
+        return Source.fromText("ROOT(\n" +
                         "  STATEMENT,\n" +
                         "  STATEMENT,\n" +
                         "  STATEMENT,\n" +
@@ -45,11 +46,12 @@ final class TestSource {
                         "  STATEMENT,\n" +
                         "  STATEMENT,\n" +
                         "  STATEMENT\n" +
-                        ")\n").name(sourceName + FILENAME_EXTENSION).mimeType(MIME_TYPE).build();
+                        ")\n",
+                        sourceName + FILENAME_EXTENSION).withMimeType(MIME_TYPE);
     }
 
     static Source createBlock12(String sourceName) {
-        return Source.newBuilder("ROOT(\n" +
+        return Source.fromText("ROOT(\n" +
                         "  STATEMENT,\n" +
                         "  STATEMENT,\n" +
                         "  STATEMENT,\n" +
@@ -62,27 +64,30 @@ final class TestSource {
                         "  STATEMENT,\n" +
                         "  STATEMENT,\n" +
                         "  STATEMENT\n" +
-                        ")\n").name(sourceName + FILENAME_EXTENSION).mimeType(MIME_TYPE).build();
+                        ")\n",
+                        sourceName + FILENAME_EXTENSION).withMimeType(MIME_TYPE);
     }
 
     static Source createCall(String sourceName) {
-        return Source.newBuilder("ROOT(\n" +
+        return Source.fromText("ROOT(\n" +
                         "  DEFINE(foo,\n" +
                         "    STATEMENT\n" +
                         "  ),\n" +
                         "  STATEMENT,\n" +
                         "  CALL(foo)\n" +
-                        ")\n").name(sourceName + FILENAME_EXTENSION).mimeType(MIME_TYPE).build();
+                        ")\n",
+                        sourceName + FILENAME_EXTENSION).withMimeType(MIME_TYPE);
     }
 
     static Source createCallLoop3(String sourceName) {
-        return Source.newBuilder("ROOT(\n" +
+        return Source.fromText("ROOT(\n" +
                         "  DEFINE(foo,\n" +
                         "    LOOP(3,\n" +
                         "      STATEMENT)\n" +
                         "  ),\n" +
                         "  CALL(foo)\n" +
-                        ")\n").name(sourceName + FILENAME_EXTENSION).mimeType(MIME_TYPE).build();
+                        ")\n",
+                        sourceName + FILENAME_EXTENSION).withMimeType(MIME_TYPE);
     }
 
     static File createCallLoop3File() throws IOException {

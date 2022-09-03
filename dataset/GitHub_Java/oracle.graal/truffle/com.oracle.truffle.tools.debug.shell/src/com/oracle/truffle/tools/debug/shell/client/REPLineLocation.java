@@ -71,7 +71,7 @@ final class REPLineLocation {
                 if (!file.canRead()) {
                     throw new IllegalArgumentException("Can't read file " + fileName);
                 }
-                source = Source.newBuilder(file.getCanonicalFile()).build();
+                source = Source.newFromFile(file.getCanonicalFile()).build();
             } catch (IOException e1) {
                 throw new IllegalArgumentException("Can't find file \"" + fileName + "\"");
             }

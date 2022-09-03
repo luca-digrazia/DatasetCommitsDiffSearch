@@ -39,6 +39,7 @@ import org.junit.Test;
 import com.oracle.truffle.api.source.Source;
 import org.junit.After;
 
+@SuppressWarnings("deprecation")
 public class ValueTest implements Executor {
     private final List<Runnable> pending = new LinkedList<>();
     private PolyglotEngine engine;
@@ -55,8 +56,8 @@ public class ValueTest implements Executor {
         engine = PolyglotEngine.newBuilder().build();
         PolyglotEngine.Language language1 = engine.getLanguages().get("application/x-test-import-export-1");
         PolyglotEngine.Language language2 = engine.getLanguages().get("application/x-test-import-export-2");
-        language2.eval(Source.newBuilder("explicit.value=42").name("define 42").mimeType("content/unknown").build());
-        PolyglotEngine.Value value = language1.eval(Source.newBuilder("return=value").name("42.value").mimeType("content/unknown").build());
+        language2.eval(Source.fromText("explicit.value=42", "define 42"));
+        PolyglotEngine.Value value = language1.eval(Source.fromText("return=value", "42.value"));
         assertEquals("It's fourtytwo", "42", value.get());
 
         String textual = value.toString();
@@ -71,7 +72,7 @@ public class ValueTest implements Executor {
         PolyglotEngine.Language language1 = engine.getLanguages().get("application/x-test-import-export-1");
         PolyglotEngine.Value value = null;
         try {
-            value = language1.eval(Source.newBuilder("parse=does not work").name("error.value").mimeType("content/unknown").build());
+            value = language1.eval(Source.fromText("parse=does not work", "error.value"));
             Object res = value.get();
             fail("Should throw an exception: " + res);
         } catch (IOException ex) {
@@ -86,10 +87,10 @@ public class ValueTest implements Executor {
         engine = PolyglotEngine.newBuilder().executor(this).build();
         PolyglotEngine.Language language1 = engine.getLanguages().get("application/x-test-import-export-1");
         PolyglotEngine.Language language2 = engine.getLanguages().get("application/x-test-import-export-2");
-        language2.eval(Source.newBuilder("explicit.value=42").name("define 42").mimeType("content/unknown").build());
+        language2.eval(Source.fromText("explicit.value=42", "define 42"));
         flush();
 
-        PolyglotEngine.Value value = language1.eval(Source.newBuilder("return=value").name("42.value").mimeType("content/unknown").build());
+        PolyglotEngine.Value value = language1.eval(Source.fromText("return=value", "42.value"));
 
         String textual = value.toString();
         assertFalse("Doesn't contain the value " + textual, textual.contains("value=42"));
@@ -109,7 +110,7 @@ public class ValueTest implements Executor {
     public void valueToStringExceptionAsync() throws Exception {
         engine = PolyglotEngine.newBuilder().executor(this).build();
         PolyglotEngine.Language language1 = engine.getLanguages().get("application/x-test-import-export-1");
-        PolyglotEngine.Value value = language1.eval(Source.newBuilder("parse=does not work").name("error.value").mimeType("content/unknown").build());
+        PolyglotEngine.Value value = language1.eval(Source.fromText("parse=does not work", "error.value"));
         assertNotNull("Value returned", value);
 
         String textual = value.toString();

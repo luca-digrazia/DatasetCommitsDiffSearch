@@ -26,7 +26,6 @@ package com.oracle.truffle.tools;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -39,14 +38,12 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.EventContext;
 import com.oracle.truffle.api.instrumentation.ExecutionEventNode;
 import com.oracle.truffle.api.instrumentation.ExecutionEventNodeFactory;
-import com.oracle.truffle.api.instrumentation.Instrumenter;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
-import com.oracle.truffle.api.instrumentation.SourceSectionFilter.Builder;
 import com.oracle.truffle.api.instrumentation.StandardTags;
+import com.oracle.truffle.api.instrumentation.SourceSectionFilter.Builder;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
 import com.oracle.truffle.api.nodes.NodeCost;
@@ -61,34 +58,37 @@ public class TruffleProfiler extends TruffleInstrument {
 
     private static final int MAX_CODE_LENGTH = 30;
 
-    private Instrumenter instrumenter;
-
-    private boolean isCollecting;
-
-    private boolean isTiming;
+    private final Map<SourceSection, Counter> counters = new HashMap<>();
 
     private String[] mimeTypes = parseMimeTypes(System.getProperty("truffle.profiling.includeMimeTypes"));
 
-    @SuppressWarnings("rawtypes") private EventBinding binding;
-
-    private Profiler profiler;  // API service to clients; null when disposed
-
-    private final Map<SourceSection, Counter> counters = new HashMap<>();
+    private boolean timingDisabled = Boolean.getBoolean("truffle.profiling.timingDisabled");
 
     // TODO temporary solution until TruffleRuntime#getCallerFrame() is fast
-    // I am aware that this is not thread safe. (CHumer)
+    // I am aware that this is not thread safe.
     private Counter activeCounter;
 
+    // to ensure printing by a shutdown hook
     private boolean disposed;
 
     @Override
     protected void onCreate(final Env env) {
-        this.instrumenter = env.getInstrumenter();
+        if (!isEnabled()) {
+            return;
+        }
+        if (testHook != null) {
+            testHook.onCreate(this);
+        }
+        Builder filterBuilder = SourceSectionFilter.newBuilder();
+        if (mimeTypes != null) {
+            filterBuilder.mimeTypeIs(mimeTypes);
+        }
 
-        assert profiler == null;
-        this.profiler = new Profiler();
-        env.registerService(profiler);
-
+        env.getInstrumenter().attachFactory(filterBuilder.tagIs(StandardTags.RootTag.class).build(), new ExecutionEventNodeFactory() {
+            public ExecutionEventNode create(EventContext context) {
+                return createCountingNode(context);
+            }
+        });
         /*
          * ensure even if the runtime is not disposed that instruments are disposed shouldn't
          * PolylgotEngine ensure that instruments are always disposed
@@ -100,42 +100,8 @@ public class TruffleProfiler extends TruffleInstrument {
         }));
     }
 
-    @Override
-    protected void onDispose(Env env) {
-        if (!disposed) {
-            counters.clear();
-            if (binding != null) {
-                binding.dispose();
-                binding = null;
-            }
-            instrumenter = null;
-            profiler = null;
-            disposed = true;
-        }
-    }
-
-    // Reconfigure what's being collected; does not affect collected data
-    private void reset() {
-        if (isCollecting) {
-            if (binding != null) {
-                binding.dispose();
-            }
-            final Builder filterBuilder = SourceSectionFilter.newBuilder();
-            if (mimeTypes != null) {
-                filterBuilder.mimeTypeIs(mimeTypes);
-            }
-            final SourceSectionFilter filter = filterBuilder.tagIs(StandardTags.RootTag.class).build();
-            binding = instrumenter.attachFactory(filter, new ExecutionEventNodeFactory() {
-                public ExecutionEventNode create(EventContext context) {
-                    return createCountingNode(context);
-                }
-            });
-        } else {
-            if (binding != null) {
-                binding.dispose();
-                binding = null;
-            }
-        }
+    private static boolean isEnabled() {
+        return Boolean.getBoolean("truffle.profiling.enabled") || testHook != null;
     }
 
     private ExecutionEventNode createCountingNode(EventContext context) {
@@ -145,15 +111,31 @@ public class TruffleProfiler extends TruffleInstrument {
             counter = new Counter(sourceSection);
             counters.put(sourceSection, counter);
         }
-        if (isTiming) {
-            return TimedCounterNode.create(this, counter, context);
-        } else {
+        if (timingDisabled) {
             return new CounterNode(this, counter);
+        } else {
+            return TimedCounterNode.create(this, counter, context);
+        }
+    }
+
+    Map<SourceSection, Counter> getCounters() {
+        return counters;
+    }
+
+    @Override
+    protected void onDispose(Env env) {
+        if (!disposed) {
+            disposed = true;
+            if (isEnabled()) {
+                PrintStream out = new PrintStream(env.out());
+                printHistograms(out);
+                out.flush();
+            }
         }
     }
 
     private void printHistograms(PrintStream out) {
-        final List<Counter> sortedCounters = new ArrayList<>(counters.values());
+        List<Counter> sortedCounters = new ArrayList<>(counters.values());
 
         boolean hasCompiled = false;
         for (Counter counter : sortedCounters) {
@@ -176,10 +158,10 @@ public class TruffleProfiler extends TruffleInstrument {
         Collections.sort(sortedCounters, new Comparator<Counter>() {
             @Override
             public int compare(Counter o1, Counter o2) {
-                if (isTiming) {
-                    return Long.compare(o2.getSelfTime(time), o1.getSelfTime(time));
-                } else {
+                if (timingDisabled) {
                     return Long.compare(o2.getInvocations(time), o1.getInvocations(time));
+                } else {
+                    return Long.compare(o2.getSelfTime(time), o1.getSelfTime(time));
                 }
             }
         });
@@ -188,7 +170,7 @@ public class TruffleProfiler extends TruffleInstrument {
         out.println(String.format("%12s | %7s | %11s | %7s | %11s | %-30s | %s ", //
                         "Invoc", "Total", "PerInvoc", "SelfTime", "PerInvoc", "Source", "Code"));
         for (Counter counter : sortedCounters) {
-            final long invocations = counter.getInvocations(time);
+            long invocations = counter.getInvocations(time);
             if (invocations <= 0L) {
                 continue;
             }
@@ -215,7 +197,7 @@ public class TruffleProfiler extends TruffleInstrument {
         return code.replaceAll("\\n", "\\\\n");
     }
 
-    // custom version of SourceSection#getShortDescription
+    // custom version of SourceSeciton#getShortDescription
     private static String getShortDescription(SourceSection sourceSection) {
         if (sourceSection.getSource() == null) {
             return sourceSection.getIdentifier();
@@ -253,44 +235,6 @@ public class TruffleProfiler extends TruffleInstrument {
         }
     }
 
-    private void setCollecting(boolean isCollecting) {
-        if (this.isCollecting != isCollecting) {
-            this.isCollecting = isCollecting;
-            reset();
-        }
-    }
-
-    private void setTiming(boolean isTiming) {
-        if (this.isTiming != isTiming) {
-            this.isTiming = isTiming;
-            reset();
-        }
-    }
-
-    private void setMimeTypes(String[] newTypes) {
-        mimeTypes = newTypes != null && newTypes.length > 0 ? newTypes : null;
-        reset();
-    }
-
-    private boolean hasData() {
-        for (Counter counter : counters.values()) {
-            if (counter.getInvocations(TimeKind.INTERPRETED_AND_COMPILED) > 0) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void clearData() {
-        for (Counter counter : counters.values()) {
-            counter.clear();
-        }
-    }
-
-    private Map<SourceSection, Counter> getCounters() {
-        return Collections.unmodifiableMap(counters);
-    }
-
     private static class TimedCounterNode extends CounterNode {
 
         private final EventContext context;
@@ -301,8 +245,8 @@ public class TruffleProfiler extends TruffleInstrument {
         private static final Object KEY_TIME_STARTED = new Object();
         private static final Object KEY_PARENT_COUNTER = new Object();
 
-        TimedCounterNode(TruffleProfiler truffleProfiler, Counter counter, EventContext context) {
-            super(truffleProfiler, counter);
+        TimedCounterNode(TruffleProfiler profiler, Counter counter, EventContext context) {
+            super(profiler, counter);
             this.context = context;
             FrameDescriptor frameDescriptor = context.getInstrumentedNode().getRootNode().getFrameDescriptor();
             this.timeStartedSlot = frameDescriptor.findOrAddFrameSlot(KEY_TIME_STARTED, "profiler:timeStarted", FrameSlotKind.Long);
@@ -324,8 +268,8 @@ public class TruffleProfiler extends TruffleInstrument {
         protected void onEnter(VirtualFrame frame) {
             frame.setLong(timeStartedSlot, System.nanoTime());
             super.onEnter(frame);
-            frame.setObject(parentCounterSlot, truffleProfiler.activeCounter);
-            truffleProfiler.activeCounter = counter;
+            frame.setObject(parentCounterSlot, profiler.activeCounter);
+            profiler.activeCounter = counter;
             if (CompilerDirectives.inInterpreter()) {
                 counter.compiled = false;
             } else {
@@ -366,7 +310,7 @@ public class TruffleProfiler extends TruffleInstrument {
                     parentCounter.interpretedChildTime += timeNano;
                 }
             }
-            truffleProfiler.activeCounter = parentCounter;
+            profiler.activeCounter = parentCounter;
 
         }
 
@@ -379,11 +323,11 @@ public class TruffleProfiler extends TruffleInstrument {
 
     private static class CounterNode extends ExecutionEventNode {
 
-        protected final TruffleProfiler truffleProfiler;
+        protected final TruffleProfiler profiler;
         protected final Counter counter;
 
-        CounterNode(TruffleProfiler truffleProfiler, Counter counter) {
-            this.truffleProfiler = truffleProfiler;
+        CounterNode(TruffleProfiler profiler, Counter counter) {
+            this.profiler = profiler;
             this.counter = counter;
         }
 
@@ -400,148 +344,10 @@ public class TruffleProfiler extends TruffleInstrument {
         public NodeCost getCost() {
             return NodeCost.NONE;
         }
+
     }
 
-    /**
-     * Access to Truffle profiling services.
-     *
-     * @since 0.15
-     */
-    public final class Profiler {
-
-        private Profiler() {
-        }
-
-        /**
-         * Controls whether profile data is being collected, {@code false} by default.
-         * <p>
-         * Any collected data remains available while collecting is turned off. Unless explicitly
-         * {@linkplain #clearData() cleared}, previously collected data will be included when
-         * collection resumes.
-         *
-         * @since 0.15
-         */
-        public void setCollecting(boolean collecting) {
-            assert !disposed;
-            TruffleProfiler.this.setCollecting(collecting);
-        }
-
-        /**
-         * Is data currently being collected (default {@code false})?
-         * <p>
-         * If data is not being collected, any previously collected data remains. Unless explicitly
-         * {@linkplain #clearData() cleared}, previously collected data will be included when
-         * collection resumes.
-         *
-         * @since 0.15
-         */
-        public boolean isCollecting() {
-            assert !disposed;
-            return TruffleProfiler.this.isCollecting;
-        }
-
-        /**
-         * Controls whether profile data being collected includes timing, {@code false} by default.
-         * <p>
-         * If data is not currently being {@linkplain #isCollecting() collected}, this setting
-         * remains and takes effect when collection resumes.
-         * <p>
-         * While timing data is not being collected, any previously collected timing data remains.
-         * Unless explicitly {@linkplain #clearData() cleared}, previously collected timing data
-         * will be included in data collected when collection resumes.
-         *
-         * @since 0.15
-         */
-        public void setTiming(boolean timing) {
-            assert !disposed;
-            TruffleProfiler.this.setTiming(timing);
-        }
-
-        /**
-         * Does data being {@linkplain #isCollecting() collected} include timing (default
-         * {@code false})?
-         *
-         * @since 0.15
-         */
-        public boolean isTiming() {
-            assert !disposed;
-            return isTiming;
-        }
-
-        /**
-         * Replaces the list of MIME types for which data is being collected, {@code null} for
-         * <strong>ANY</strong>.
-         *
-         * @param newMimeTypes new list of MIME types, {@code null} or an empty list matches any
-         *            MIME type.
-         *
-         * @since 0.15
-         */
-        public void setMimeTypes(String[] newMimeTypes) {
-            assert !disposed;
-            TruffleProfiler.this.setMimeTypes(newMimeTypes);
-        }
-
-        /**
-         * Gets MIME types for which data is being {@linkplain #isCollecting() collected}.
-         *
-         * @return MIME types matching sources being profiled; {@code null} matches
-         *         <strong>ANY</strong> MIME type.
-         * @since 0.15
-         */
-        public String[] getMimeTypes() {
-            assert !disposed;
-            return mimeTypes == null ? null : Arrays.copyOf(mimeTypes, mimeTypes.length);
-        }
-
-        /**
-         * Is any data currently collected?
-         *
-         * @since 0.15
-         */
-        public boolean hasData() {
-            assert !disposed;
-            return TruffleProfiler.this.hasData();
-        }
-
-        /**
-         * Resets all collected data to zero.
-         *
-         * @since 0.15
-         */
-        public void clearData() {
-            assert !disposed;
-            TruffleProfiler.this.clearData();
-        }
-
-        /**
-         * Gets an unmodifiable map of all counters.
-         *
-         * @since 0.15
-         */
-        public Map<SourceSection, Counter> getCounters() {
-            assert !disposed;
-            return TruffleProfiler.this.getCounters();
-        }
-
-        /**
-         * Prints a simple, default textual summary of currently collected data, format subject to
-         * change. Use {@linkplain #getCounters() counters} explicitly for reliable access.
-         *
-         * @since 0.15
-         */
-        public void printHistograms(PrintStream out) {
-            assert !disposed;
-            TruffleProfiler.this.printHistograms(out);
-        }
-    }
-
-    /**
-     * Access Truffle profiling data for a program element.
-     *
-     * @since 0.15
-     */
-    public static final class Counter {
+    static final class Counter {
 
         enum TimeKind {
             INTERPRETED_AND_COMPILED,
@@ -559,38 +365,18 @@ public class TruffleProfiler extends TruffleInstrument {
 
         /*
          * This is a rather hacky flag to find out if the parent was already compiled and so the
-         * child time is accounted as interpretedChildTime or compiledChildTime (CHumer)
+         * child time is accounted as interpretedChildTime or compiledChildTime.
          */
         private boolean compiled;
 
-        private Counter(SourceSection sourceSection) {
+        Counter(SourceSection sourceSection) {
             this.sourceSection = sourceSection;
         }
 
-        private void clear() {
-            interpretedInvocations = 0;
-            interpretedChildTime = 0;
-            interpretedTotalTime = 0;
-            compiledInvocations = 0;
-            compiledTotalTime = 0;
-            compiledChildTime = 0;
-        }
-
-        /**
-         * The program element being profiled.
-         *
-         * @since 0.15
-         */
         public SourceSection getSourceSection() {
             return sourceSection;
         }
 
-        /**
-         * Number of times the program element has been executed since the last time data was
-         * {@linkplain #clear() cleared}.
-         *
-         * @since 0.15
-         */
         public long getInvocations(TimeKind kind) {
             switch (kind) {
                 case INTERPRETED_AND_COMPILED:
@@ -604,12 +390,6 @@ public class TruffleProfiler extends TruffleInstrument {
             }
         }
 
-        /**
-         * Total time taken executing the program element since the last time data was
-         * {@linkplain #clear() cleared}.
-         *
-         * @since 0.15
-         */
         public long getTotalTime(TimeKind kind) {
             switch (kind) {
                 case INTERPRETED_AND_COMPILED:
@@ -623,12 +403,6 @@ public class TruffleProfiler extends TruffleInstrument {
             }
         }
 
-        /**
-         * Self time taken executing the program element since the last time data was
-         * {@linkplain #clear() cleared}.
-         *
-         * @since 0.15
-         */
         public long getSelfTime(TimeKind kind) {
             switch (kind) {
                 case INTERPRETED_AND_COMPILED:
@@ -642,4 +416,16 @@ public class TruffleProfiler extends TruffleInstrument {
             }
         }
     }
+
+    private static TestHook testHook;
+
+    static void setTestHook(TestHook testHook) {
+        TruffleProfiler.testHook = testHook;
+    }
+
+    interface TestHook {
+
+        void onCreate(TruffleProfiler profiler);
+    }
+
 }

@@ -38,6 +38,7 @@ import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.source.Source;
 import java.io.File;
 
+@SuppressWarnings("deprecation")
 public class BreakpointTest extends AbstractDebugTest {
 
     @Test
@@ -161,7 +162,7 @@ public class BreakpointTest extends AbstractDebugTest {
         for (int i = 0; i < 3; i++) {
             expectSuspendedEvent().checkState(4, true, "STATEMENT").resume();
         }
-        getEngine().eval(Source.newBuilder(new File(loopFile.getAbsolutePath())).build());
+        getEngine().eval(Source.fromFileName(loopFile.getAbsolutePath()));
         assertExecutedOK();
         assertTrue(breakpoint.isEnabled());
         assertEquals(breakpoint.getHitCount(), 3);

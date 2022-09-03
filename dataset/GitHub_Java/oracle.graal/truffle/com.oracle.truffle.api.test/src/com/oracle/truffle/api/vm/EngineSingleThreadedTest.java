@@ -33,6 +33,7 @@ import com.oracle.truffle.api.source.Source;
 import java.util.concurrent.CountDownLatch;
 import org.junit.After;
 
+@SuppressWarnings("deprecation")
 public class EngineSingleThreadedTest {
     PolyglotEngine tvm;
     CountDownLatch readyForUse = new CountDownLatch(1);
@@ -68,24 +69,24 @@ public class EngineSingleThreadedTest {
 
     @Test(expected = IllegalStateException.class)
     public void evalURI() throws IOException {
-        tvm.eval(Source.newBuilder(new File(".").toURI().toURL()).name("wrong.test").build());
+        tvm.eval(Source.fromURL(new File(".").toURI().toURL(), "wrong.test"));
     }
 
     @Test(expected = IllegalStateException.class)
     public void evalString() throws IOException {
-        tvm.eval(Source.newBuilder("1 + 1").name("wrong.test").mimeType("text/javascript").build());
+        tvm.eval(Source.fromText("1 + 1", "wrong.test").withMimeType("text/javascript"));
     }
 
     @Test(expected = IllegalStateException.class)
     public void evalReader() throws IOException {
         try (StringReader sr = new StringReader("1 + 1")) {
-            tvm.eval(Source.newBuilder(sr).name("wrong.test").mimeType("text/javascript").build());
+            tvm.eval(Source.fromReader(sr, "wrong.test").withMimeType("text/javascript"));
         }
     }
 
     @Test(expected = IllegalStateException.class)
     public void evalSource() throws IOException {
-        tvm.eval(Source.newBuilder("").name("Empty").mimeType("text/plain").build());
+        tvm.eval(Source.fromText("", "Empty"));
     }
 
     @Test(expected = IllegalStateException.class)

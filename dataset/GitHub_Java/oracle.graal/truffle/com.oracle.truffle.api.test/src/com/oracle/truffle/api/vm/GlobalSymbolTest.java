@@ -37,6 +37,7 @@ import org.junit.Test;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.source.Source;
 
+@SuppressWarnings("deprecation")
 public class GlobalSymbolTest {
 
     private PolyglotEngine vm;
@@ -52,7 +53,8 @@ public class GlobalSymbolTest {
     public void globalSymbolFoundByLanguage() throws IOException {
         vm = createEngineBuilder().globalSymbol("ahoj", "42").build();
         // @formatter:off
-        Object ret = vm.eval(Source.newBuilder("return=ahoj").name("Return").mimeType(L3).build()
+        Object ret = vm.eval(
+            Source.fromText("return=ahoj", "Return").withMimeType(L3)
         ).get();
         // @formatter:on
         assertEquals("42", ret);

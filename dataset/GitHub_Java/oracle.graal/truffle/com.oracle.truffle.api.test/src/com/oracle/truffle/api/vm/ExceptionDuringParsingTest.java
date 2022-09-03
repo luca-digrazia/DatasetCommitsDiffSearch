@@ -38,6 +38,7 @@ import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.ImplicitExplicitExportTest.Ctx;
 
+@SuppressWarnings("deprecation")
 public class ExceptionDuringParsingTest {
     public static Accessor API;
 
@@ -53,7 +54,7 @@ public class ExceptionDuringParsingTest {
         PolyglotEngine.Language language = vm.getLanguages().get(L1);
         assertNotNull("L1 language is defined", language);
 
-        final Source src = Source.newBuilder("parse=No, no, no!").name("Fail on parsing").mimeType(L1).build();
+        final Source src = Source.fromText("parse=No, no, no!", "Fail on parsing").withMimeType(L1);
         try {
             vm.eval(src);
             fail("Exception thrown");

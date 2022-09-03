@@ -48,6 +48,7 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
 /**
  * Creating and modifying breakpoints; no actual executions.
  */
+@SuppressWarnings("deprecation")
 public final class BreakpointCreationTest {
 
     private Debugger db;
@@ -55,9 +56,9 @@ public final class BreakpointCreationTest {
     protected final ByteArrayOutputStream out = new ByteArrayOutputStream();
     protected final ByteArrayOutputStream err = new ByteArrayOutputStream();
 
-    final Source testSource = Source.newBuilder("line 1\n" +
+    final Source testSource = Source.fromText("line 1\n" +
                     "line 2\n" +
-                    "line 3\n").name("testSource").mimeType("content/unknown").build();
+                    "line 3\n", "testSource");
 
     @Before
     public void before() {

@@ -68,13 +68,14 @@ public class AccessorTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void canGetAccessToOwnLanguageInstance() throws Exception {
         engine = PolyglotEngine.newBuilder().executor(Executors.newSingleThreadExecutor()).build();
         PolyglotEngine.Language language = engine.getLanguages().get(L1);
         assertNotNull("L1 language is defined", language);
 
-        Source s = Source.newBuilder("return nothing").name("nothing").mimeType("content/unknown").build();
+        Source s = Source.fromText("return nothing", "nothing");
         Object ret = language.eval(s).get();
         assertNull("nothing is returned", ret);
 

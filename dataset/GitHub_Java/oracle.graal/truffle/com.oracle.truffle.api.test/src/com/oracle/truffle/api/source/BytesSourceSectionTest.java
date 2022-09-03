@@ -38,27 +38,27 @@ public class BytesSourceSectionTest {
         assertEquals("description", source.getName());
         assertEquals("description", source.getShortName());
         assertEquals("description", source.getPath());
-        assertEquals("foo", source.createSection(1).getCode());
-        assertEquals("bar", source.createSection(2).getCode());
-        assertEquals("baz", source.createSection(3).getCode());
+        assertEquals("foo", source.createSection("identifier", 1).getCode());
+        assertEquals("bar", source.createSection("identifier", 2).getCode());
+        assertEquals("baz", source.createSection("identifier", 3).getCode());
     }
 
     @Test
     public void testSectionsFromOffsetsASCII() {
         final byte[] bytes = "foo\nbar\nbaz\n".getBytes(StandardCharsets.US_ASCII);
         final Source source = Source.fromBytes(bytes, "description", StandardCharsets.US_ASCII);
-        assertEquals("foo", source.createSection(0, 3).getCode());
-        assertEquals("bar", source.createSection(4, 3).getCode());
-        assertEquals("baz", source.createSection(8, 3).getCode());
+        assertEquals("foo", source.createSection("identifier", 0, 3).getCode());
+        assertEquals("bar", source.createSection("identifier", 4, 3).getCode());
+        assertEquals("baz", source.createSection("identifier", 8, 3).getCode());
     }
 
     @Test
     public void testOffset() {
         final byte[] bytes = "xxxfoo\nbar\nbaz\nxxx".getBytes(StandardCharsets.US_ASCII);
         final Source source = Source.fromBytes(bytes, 3, bytes.length - 6, "description", StandardCharsets.US_ASCII);
-        assertEquals("foo", source.createSection(0, 3).getCode());
-        assertEquals("bar", source.createSection(4, 3).getCode());
-        assertEquals("baz", source.createSection(8, 3).getCode());
+        assertEquals("foo", source.createSection("identifier", 0, 3).getCode());
+        assertEquals("bar", source.createSection("identifier", 4, 3).getCode());
+        assertEquals("baz", source.createSection("identifier", 8, 3).getCode());
     }
 
     @Test

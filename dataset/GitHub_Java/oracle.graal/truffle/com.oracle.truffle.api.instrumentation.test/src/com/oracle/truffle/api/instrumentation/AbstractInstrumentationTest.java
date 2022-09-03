@@ -37,6 +37,7 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
 /**
  * Base class for instrumentation tests.
  */
+@SuppressWarnings("deprecation")
 public abstract class AbstractInstrumentationTest {
 
     protected PolyglotEngine engine;
@@ -102,7 +103,7 @@ public abstract class AbstractInstrumentationTest {
             b.append(line);
             b.append("\n");
         }
-        return Source.newBuilder(b.toString()).name(null).mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
+        return Source.fromText(b.toString(), null).withMimeType(InstrumentationTestLanguage.MIME_TYPE);
     }
 
     @After
