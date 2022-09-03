@@ -47,7 +47,6 @@ import jdk.vm.ci.runtime.JVMCICompiler;
 import jdk.vm.ci.services.Services;
 
 import com.oracle.graal.code.CompilationResult;
-import static com.oracle.graal.compiler.phases.HighTier.Options.Inline;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.DebugCloseable;
@@ -56,8 +55,6 @@ import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.debug.DebugTimer;
 import com.oracle.graal.debug.Management;
 import com.oracle.graal.debug.TTY;
-import com.oracle.graal.options.OptionValue;
-import com.oracle.graal.options.OptionValue.OverrideScope;
 
 //JaCoCo Exclude
 
@@ -181,14 +178,7 @@ public class CompilationTask {
             try (Scope s = Debug.scope("Compiling", new DebugDumpScope(String.valueOf(getId()), true))) {
                 // Begin the compilation event.
                 compilationEvent.begin();
-                /*
-                 * Disable inlining if HotSpot has it disabled unless it's been explicitly set in
-                 * Graal.
-                 */
-                boolean disableInlining = !config.inline && !Inline.hasBeenSet();
-                try (OverrideScope s1 = disableInlining ? OptionValue.override(Inline, false) : null) {
-                    result = compiler.compile(method, entryBCI, useProfilingInfo);
-                }
+                result = compiler.compile(method, entryBCI, useProfilingInfo);
             } catch (Throwable e) {
                 throw Debug.handle(e);
             } finally {
