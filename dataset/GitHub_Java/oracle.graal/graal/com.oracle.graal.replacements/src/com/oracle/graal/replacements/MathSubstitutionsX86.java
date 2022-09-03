@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,7 +26,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.replacements.nodes.MathIntrinsicNode.Operation;
@@ -41,12 +40,12 @@ public class MathSubstitutionsX86 {
 
     @MethodSubstitution
     public static double abs(double x) {
-        return AbsNode.abs(x);
+        return MathIntrinsicNode.compute(x, Operation.ABS);
     }
 
     @MethodSubstitution
     public static double sqrt(double x) {
-        return SqrtNode.sqrt(x);
+        return MathIntrinsicNode.compute(x, Operation.SQRT);
     }
 
     @MethodSubstitution(guard = UnsafeSubstitutions.GetAndSetGuard.class)
