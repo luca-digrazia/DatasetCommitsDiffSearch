@@ -22,9 +22,10 @@
  */
 package com.oracle.graal.nodes.spi;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.jvmci.meta.*;
 
 public interface LoweringTool {
 
@@ -40,7 +41,9 @@ public interface LoweringTool {
 
     GuardingNode createGuard(FixedNode before, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action);
 
-    GuardingNode createGuard(FixedNode before, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, JavaConstant speculation, boolean negated);
+    GuardingNode createGuard(FixedNode before, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated);
+
+    Assumptions assumptions();
 
     /**
      * Gets the closest fixed node preceding the node currently being lowered.
