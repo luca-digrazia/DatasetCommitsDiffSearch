@@ -25,7 +25,6 @@ package com.oracle.graal.api.code;
 import static java.util.Collections.*;
 
 import java.io.*;
-import java.nio.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
@@ -138,113 +137,51 @@ public class CompilationResult implements Serializable {
     }
 
     /**
-     * Represents some external data that is referenced by the code.
-     */
-    public abstract static class Data {
-
-        public final int size;
-        public final int alignment;
-
-        public abstract void emit(ByteBuffer buffer);
-
-        protected Data(int size, int alignment) {
-            this.size = size;
-            this.alignment = alignment;
-        }
-    }
-
-    public static final class ConstantData extends Data {
-
-        public final Constant constant;
-
-        public ConstantData(Constant constant, int alignment) {
-            super(8, alignment);
-            this.constant = constant;
-        }
-
-        @Override
-        public void emit(ByteBuffer buffer) {
-            if (constant.getKind().isPrimitive()) {
-                buffer.putLong(constant.getPrimitive());
-            } else {
-                // emit placeholder for oop value
-                buffer.putLong(0);
-            }
-        }
-
-        @Override
-        public String toString() {
-            return constant.toString();
-        }
-    }
-
-    public static final class RawData extends Data {
-
-        public final byte[] data;
-
-        public RawData(byte[] data, int alignment) {
-            super(data.length, alignment);
-            this.data = data;
-        }
-
-        @Override
-        public void emit(ByteBuffer buffer) {
-            buffer.put(data);
-        }
-
-        @Override
-        public String toString() {
-            Formatter ret = new Formatter();
-            boolean first = true;
-            for (byte b : data) {
-                ret.format(first ? "%02X" : " %02X", b);
-                first = false;
-            }
-            return ret.toString();
-        }
-    }
-
-    /**
-     * Represents a code site that references some data. The associated data can be either a
-     * reference to an external {@link Data} item in the data section, or it may be an inlined
-     * {@link Constant} that needs to be patched.
+     * Represents a reference to data from the code. The associated data can be either a
+     * {@link Constant} or a raw byte array. The raw byte array is patched as is, no endian swapping
+     * is done on it.
      */
     public static final class DataPatch extends Site {
 
         private static final long serialVersionUID = 5771730331604867476L;
-        public Data externalData;
-        public Constant inlineData;
+        public final Constant constant;
+        public final byte[] rawConstant;
+        public final int alignment;
 
-        DataPatch(int pcOffset, Data externalData) {
-            this(pcOffset, externalData, null);
+        /**
+         * Determines if the data is encoded inline or is loaded from a separate data area.
+         */
+        public final boolean inlined;
+
+        DataPatch(int pcOffset, byte[] data, int alignment) {
+            this(pcOffset, null, data, alignment, false);
         }
 
-        DataPatch(int pcOffset, Constant inlineData) {
-            this(pcOffset, null, inlineData);
+        DataPatch(int pcOffset, Constant data, int alignment, boolean inlined) {
+            this(pcOffset, data, null, alignment, inlined);
         }
 
-        private DataPatch(int pcOffset, Data externalData, Constant inlineData) {
+        private DataPatch(int pcOffset, Constant data, byte[] rawData, int alignment, boolean inlined) {
             super(pcOffset);
-            assert (externalData == null) != (inlineData == null) : "data patch can not be both external and inlined";
-            this.externalData = externalData;
-            this.inlineData = inlineData;
-        }
-
-        public Constant getConstant() {
-            if (inlineData != null) {
-                return inlineData;
-            } else if (externalData instanceof ConstantData) {
-                return ((ConstantData) externalData).constant;
-            } else {
-                return null;
-            }
+            assert (data == null) != (rawData == null) : "only one of data and rawData is allowed";
+            assert !inlined || rawData == null : "rawData can not be inlined";
+            this.constant = data;
+            this.rawConstant = rawData;
+            this.alignment = alignment;
+            this.inlined = inlined;
         }
 
         public String getDataString() {
-            if (inlineData != null) {
-                return inlineData.toString();
+            if (constant != null) {
+                return constant.toString();
             } else {
-                return externalData.toString();
+                Formatter ret = new Formatter();
+                boolean first = true;
+                for (byte b : rawConstant) {
+                    ret.format(first ? "%02X" : " %02X", b);
+                    first = false;
+                }
+                return ret.toString();
             }
         }
 
@@ -380,9 +317,6 @@ public class CompilationResult implements Serializable {
         }
     }
 
-    private int id = -1;
-    private int entryBCI = -1;
-
     private final List<Infopoint> infopoints = new ArrayList<>();
     private final List<DataPatch> dataReferences = new ArrayList<>();
     private final List<ExceptionHandler> exceptionHandlers = new ArrayList<>();
@@ -421,34 +355,6 @@ public class CompilationResult implements Serializable {
 
     public CompilationResult(String name) {
         this.name = name;
-    }
-
-    /**
-     * @return the compile id
-     */
-    public int getId() {
-        return id;
-    }
-
-    /**
-     * @param id the compile id to set
-     */
-    public void setId(int id) {
-        this.id = id;
-    }
-
-    /**
-     * @return the entryBCI
-     */
-    public int getEntryBCI() {
-        return entryBCI;
-    }
-
-    /**
-     * @param entryBCI the entryBCI to set
-     */
-    public void setEntryBCI(int entryBCI) {
-        this.entryBCI = entryBCI;
     }
 
     public void setAssumptions(Assumptions assumptions) {
@@ -494,21 +400,27 @@ public class CompilationResult implements Serializable {
      * 
      * @param codePos the position in the code where the data reference occurs
      * @param data the data that is referenced
+     * @param alignment the alignment requirement of the data or 0 if there is no alignment
+     *            requirement
+     * @param inlined specifies if the data is encoded inline or is loaded from a separate data area
      */
-    public void recordDataReference(int codePos, Data data) {
+    public void recordDataReference(int codePos, Constant data, int alignment, boolean inlined) {
         assert codePos >= 0 && data != null;
-        dataReferences.add(new DataPatch(codePos, data));
+        dataReferences.add(new DataPatch(codePos, data, alignment, inlined));
     }
 
     /**
-     * Records a reference to an inlined constant in the code section (e.g. to load a constant oop).
+     * Records a reference to the data section in the code section (e.g. to load an integer or
+     * floating point constant).
      * 
-     * @param codePos the position in the code where the inlined constant occurs
-     * @param constant the constant that is referenced
+     * @param codePos the position in the code where the data reference occurs
+     * @param data a byte array containing the raw data that is referenced
+     * @param alignment the alignment requirement of the data or 0 if there is no alignment
+     *            requirement
      */
-    public void recordInlineData(int codePos, Constant constant) {
-        assert codePos >= 0 && constant != null;
-        dataReferences.add(new DataPatch(codePos, constant));
+    public void recordDataReference(int codePos, byte[] data, int alignment) {
+        assert codePos >= 0 && data != null && data.length > 0;
+        dataReferences.add(new DataPatch(codePos, data, alignment));
     }
 
     /**
@@ -558,11 +470,11 @@ public class CompilationResult implements Serializable {
      * Records an instruction mark within this method.
      * 
      * @param codePos the position in the code that is covered by the handler
-     * @param markId the identifier for this mark
+     * @param id the identifier for this mark
      * @param references an array of other marks that this mark references
      */
-    public Mark recordMark(int codePos, Object markId, Mark[] references) {
-        Mark mark = new Mark(codePos, markId, references);
+    public Mark recordMark(int codePos, Object id, Mark[] references) {
+        Mark mark = new Mark(codePos, id, references);
         marks.add(mark);
         return mark;
     }

@@ -116,9 +116,7 @@ public final class HotSpotNmethod extends HotSpotInstalledCode {
     }
 
     public Object executeParallel(int dimX, int dimY, int dimZ, Object... args) throws InvalidInstalledCodeException {
-
-        // For HSAIL, we do not pass the iteration variable, it comes from the workitemid
-        // assert checkArgs(args);
+        assert checkArgs(args);
 
         assert isExternal(); // for now
 

@@ -36,7 +36,6 @@ import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.bridge.CompilerToVM.CodeInstallResult;
 import com.oracle.graal.java.*;
-import com.oracle.graal.nodes.*;
 import com.oracle.graal.printer.*;
 
 /**
@@ -158,7 +157,7 @@ public abstract class HotSpotCodeCacheProvider implements CodeCacheProvider {
     }
 
     public HotSpotInstalledCode installMethod(HotSpotResolvedJavaMethod method, int entryBCI, CompilationResult compResult) {
-        HotSpotInstalledCode installedCode = new HotSpotNmethod(method, true);
+        HotSpotInstalledCode installedCode = new HotSpotNmethod(method, compResult.getName(), true);
         runtime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(method, entryBCI, compResult), installedCode, method.getSpeculationLog());
         return installedCode;
     }
@@ -166,7 +165,7 @@ public abstract class HotSpotCodeCacheProvider implements CodeCacheProvider {
     @Override
     public InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult) {
         HotSpotResolvedJavaMethod hotspotMethod = (HotSpotResolvedJavaMethod) method;
-        HotSpotInstalledCode code = new HotSpotNmethod(hotspotMethod, false);
+        HotSpotInstalledCode code = new HotSpotNmethod(hotspotMethod, compResult.getName(), false);
         CodeInstallResult result = runtime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(hotspotMethod, -1, compResult), code, null);
         if (result != CodeInstallResult.OK) {
             return null;
@@ -174,15 +173,10 @@ public abstract class HotSpotCodeCacheProvider implements CodeCacheProvider {
         return code;
     }
 
-    public InstalledCode setDefaultMethod(ResolvedJavaMethod method, CompilationResult compResult) {
-        HotSpotResolvedJavaMethod hotspotMethod = (HotSpotResolvedJavaMethod) method;
-        return installMethod(hotspotMethod, StructuredGraph.INVOCATION_ENTRY_BCI, compResult);
-    }
-
     public InstalledCode addExternalMethod(ResolvedJavaMethod method, CompilationResult compResult) {
 
         HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) method;
-        HotSpotInstalledCode icode = new HotSpotNmethod(javaMethod, false, true);
+        HotSpotInstalledCode icode = new HotSpotNmethod(javaMethod, compResult.getName(), false, true);
         HotSpotCompiledNmethod compiled = new HotSpotCompiledNmethod(javaMethod, -1, compResult);
         CompilerToVM vm = runtime.getCompilerToVM();
         CodeInstallResult result = vm.installCode(compiled, icode, null);
