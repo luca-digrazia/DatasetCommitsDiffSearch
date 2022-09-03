@@ -59,11 +59,10 @@ import org.graalvm.compiler.nodes.spi.LoweringProvider;
 import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.nodes.virtual.VirtualArrayNode;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.virtual.phases.ea.PEReadEliminationBlockState.ReadCacheEntry;
+import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
 import org.graalvm.util.EconomicSet;
-import org.graalvm.util.Equivalence;
 import org.graalvm.util.MapCursor;
 import org.graalvm.util.Pair;
 
@@ -149,20 +148,9 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         ValueNode unproxiedObject = GraphUtil.unproxify(object);
         ValueNode cachedValue = state.getReadCache(unproxiedObject, identity, index, this);
         if (cachedValue != null) {
-            if (!load.stamp().isCompatible(cachedValue.stamp())) {
-                /*
-                 * Can either be the first field of a two slot write to a one slot field which would
-                 * have a non compatible stamp or the second load which will see Illegal.
-                 */
-                assert load.stamp().getStackKind() == JavaKind.Int && (cachedValue.stamp().getStackKind() == JavaKind.Long || cachedValue.getStackKind() == JavaKind.Double ||
-                                cachedValue.getStackKind() == JavaKind.Illegal) : "Can only allow different stack kind two slot marker writes on one slot fields.";
-                return false;
-            } else {
-                // perform the read elimination
-                effects.replaceAtUsages(load, cachedValue, load);
-                addScalarAlias(load, cachedValue);
-                return true;
-            }
+            effects.replaceAtUsages(load, cachedValue, load);
+            addScalarAlias(load, cachedValue);
+            return true;
         } else {
             state.addReadCache(unproxiedObject, identity, index, load, this);
             return false;
@@ -426,8 +414,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                 loopKilledLocations = new LoopKillCache(1/* 1.visit */);
                 loopLocationKillCache.put(loop, loopKilledLocations);
             } else {
-                OptionValues options = loop.getHeader().getBeginNode().getOptions();
-                if (loopKilledLocations.visits() > ReadEliminationMaxLoopVisits.getValue(options)) {
+                if (loopKilledLocations.visits() > ReadEliminationMaxLoopVisits.getValue()) {
                     // we have processed the loop too many times, kill all locations so the inner
                     // loop will never be processed more than once again on visit
                     loopKilledLocations.setKillsAll();

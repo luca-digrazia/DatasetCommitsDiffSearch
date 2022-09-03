@@ -26,11 +26,13 @@ import java.util.Iterator;
 
 import org.graalvm.compiler.core.common.LocationIdentity;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.util.CollectionFactory;
-import org.graalvm.util.CompareStrategy;
+import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
 
-public class ReadEliminationBlockState extends EffectsBlockState<ReadEliminationBlockState> {
+/**
+ * This class maintains a set of known values, identified by base object, locations and offset.
+ */
+public final class ReadEliminationBlockState extends EffectsBlockState<ReadEliminationBlockState> {
 
     final EconomicMap<CacheEntry<?>, ValueNode> readCache;
 
@@ -71,7 +73,7 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
         public abstract LocationIdentity getIdentity();
     }
 
-    static class LoadCacheEntry extends CacheEntry<LocationIdentity> {
+    static final class LoadCacheEntry extends CacheEntry<LocationIdentity> {
 
         LoadCacheEntry(ValueNode object, LocationIdentity identity) {
             super(object, identity);
@@ -98,7 +100,7 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
      * identity are separate so both must be considered when looking for optimizable memory
      * accesses.
      */
-    static class UnsafeLoadCacheEntry extends CacheEntry<ValueNode> {
+    static final class UnsafeLoadCacheEntry extends CacheEntry<ValueNode> {
 
         private final LocationIdentity locationIdentity;
 
@@ -144,11 +146,11 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
     }
 
     public ReadEliminationBlockState() {
-        readCache = CollectionFactory.newMap(CompareStrategy.EQUALS);
+        readCache = EconomicMap.create(Equivalence.DEFAULT);
     }
 
     public ReadEliminationBlockState(ReadEliminationBlockState other) {
-        readCache = CollectionFactory.newMap(CompareStrategy.EQUALS, other.readCache);
+        readCache = EconomicMap.create(Equivalence.DEFAULT, other.readCache);
     }
 
     @Override

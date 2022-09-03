@@ -56,7 +56,6 @@ import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.nodes.virtual.AllocatedObjectNode;
 import org.graalvm.compiler.nodes.virtual.CommitAllocationNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.graph.ReentrantBlockIterator;
 import org.graalvm.compiler.phases.graph.ReentrantBlockIterator.BlockIteratorClosure;
 import org.graalvm.compiler.phases.graph.ReentrantBlockIterator.LoopInfo;
@@ -194,7 +193,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
             Debug.log(" ==== cfg kill effects");
             effects.apply(graph, obsoleteNodes, true);
         }
-        Debug.dump(Debug.DETAILED_LOG_LEVEL, graph, "After applying effects");
+        Debug.dump(Debug.VERBOSE_LOG_LEVEL, graph, "After applying effects");
         assert VirtualUtil.assertNonReachable(graph, obsoleteNodes);
         for (Node node : obsoleteNodes) {
             if (node.isAlive() && node.hasNoUsages()) {
@@ -232,8 +231,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
                 }
             }
 
-            OptionValues options = block.getBeginNode().getOptions();
-            VirtualUtil.trace(options, "\nBlock: %s, preds: %s, succ: %s (", block, block.getPredecessors(), block.getSuccessors());
+            VirtualUtil.trace("\nBlock: %s, preds: %s, succ: %s (", block, block.getPredecessors(), block.getSuccessors());
 
             // a lastFixedNode is needed in case we want to insert fixed nodes
             FixedWithNextNode lastFixedNode = null;
@@ -257,7 +255,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
                     break;
                 }
             }
-            VirtualUtil.trace(options, ")\n    end state: %s\n", state);
+            VirtualUtil.trace(")\n    end state: %s\n", state);
         }
         return state;
     }
