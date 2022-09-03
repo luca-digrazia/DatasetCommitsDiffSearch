@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,45 +22,159 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.phases.GraalOptions.*;
+import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
+import static com.oracle.graal.compiler.common.GraalOptions.GeneratePIC;
+import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
+import static com.oracle.graal.compiler.common.GraalOptions.VerifyPhases;
 
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.phases.*;
-import com.oracle.graal.phases.tiers.*;
+import java.util.ListIterator;
+
+import com.oracle.graal.hotspot.HotSpotBackend;
+import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
+import com.oracle.graal.hotspot.HotSpotInstructionProfiling;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.hotspot.phases.AheadOfTimeVerificationPhase;
+import com.oracle.graal.hotspot.phases.LoadJavaMirrorWithKlassPhase;
+import com.oracle.graal.hotspot.phases.WriteBarrierAdditionPhase;
+import com.oracle.graal.hotspot.phases.WriteBarrierVerificationPhase;
+import com.oracle.graal.hotspot.phases.aot.AOTInliningPolicy;
+import com.oracle.graal.hotspot.phases.aot.EliminateRedundantInitializationPhase;
+import com.oracle.graal.hotspot.phases.aot.ReplaceConstantNodesPhase;
+import com.oracle.graal.hotspot.phases.profiling.FinalizeProfileNodesPhase;
+import com.oracle.graal.java.GraphBuilderPhase;
+import com.oracle.graal.java.SuitesProviderBase;
+import com.oracle.graal.lir.phases.LIRSuites;
+import com.oracle.graal.nodes.EncodedGraph;
+import com.oracle.graal.nodes.GraphEncoder;
+import com.oracle.graal.nodes.SimplifyingGraphDecoder;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.phases.BasePhase;
+import com.oracle.graal.phases.PhaseSuite;
+import com.oracle.graal.phases.common.AddressLoweringPhase;
+import com.oracle.graal.phases.common.AddressLoweringPhase.AddressLowering;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.ExpandLogicPhase;
+import com.oracle.graal.phases.common.LoopSafepointInsertionPhase;
+import com.oracle.graal.phases.common.LoweringPhase;
+import com.oracle.graal.phases.common.inlining.InliningPhase;
+import com.oracle.graal.phases.tiers.HighTierContext;
+import com.oracle.graal.phases.tiers.Suites;
+import com.oracle.graal.phases.tiers.SuitesCreator;
 
 /**
- * HotSpot implementation of {@link SuitesProvider}.
+ * HotSpot implementation of {@link SuitesCreator}.
  */
-public class HotSpotSuitesProvider implements SuitesProvider {
+public class HotSpotSuitesProvider extends SuitesProviderBase {
 
-    protected final Suites defaultSuites;
-    private final HotSpotGraalRuntime graalRuntime;
+    protected final GraalHotSpotVMConfig config;
+    protected final HotSpotGraalRuntimeProvider runtime;
 
-    public HotSpotSuitesProvider(HotSpotGraalRuntime graalRuntime) {
-        this.graalRuntime = graalRuntime;
-        defaultSuites = createSuites();
+    private final AddressLowering addressLowering;
+    private final SuitesCreator defaultSuitesCreator;
+
+    public HotSpotSuitesProvider(SuitesCreator defaultSuitesCreator, GraalHotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, AddressLowering addressLowering) {
+        this.defaultSuitesCreator = defaultSuitesCreator;
+        this.config = config;
+        this.runtime = runtime;
+        this.addressLowering = addressLowering;
+        this.defaultGraphBuilderSuite = createGraphBuilderSuite();
     }
 
-    public Suites getDefaultSuites() {
-        return defaultSuites;
-    }
-
+    @Override
     public Suites createSuites() {
-        Suites ret = Suites.createDefaultSuites();
+        Suites ret = defaultSuitesCreator.createSuites();
 
-        if (AOTCompilation.getValue()) {
+        if (ImmutableCode.getValue()) {
             // lowering introduces class constants, therefore it must be after lowering
-            ret.getHighTier().appendPhase(new LoadJavaMirrorWithKlassPhase(graalRuntime.getConfig().classMirrorOffset));
+            ret.getHighTier().appendPhase(new LoadJavaMirrorWithKlassPhase(config.classMirrorOffset, config.useCompressedOops ? config.getOopEncoding() : null));
             if (VerifyPhases.getValue()) {
                 ret.getHighTier().appendPhase(new AheadOfTimeVerificationPhase());
             }
+            if (GeneratePIC.getValue()) {
+                // EliminateRedundantInitializationPhase must happen before the first lowering.
+                ListIterator<BasePhase<? super HighTierContext>> highTierLowering = ret.getHighTier().findPhase(LoweringPhase.class);
+                highTierLowering.previous();
+                highTierLowering.add(new EliminateRedundantInitializationPhase());
+                if (HotSpotAOTProfilingPlugin.Options.TieredAOT.getValue()) {
+                    highTierLowering.add(new FinalizeProfileNodesPhase(HotSpotAOTProfilingPlugin.Options.TierAInvokeInlineeNotifyFreqLog.getValue()));
+                }
+                ret.getMidTier().findPhase(LoopSafepointInsertionPhase.class).add(new ReplaceConstantNodesPhase());
+
+                // Replace inlining policy
+                ListIterator<BasePhase<? super HighTierContext>> iter = ret.getHighTier().findPhase(InliningPhase.class);
+                InliningPhase inlining = (InliningPhase) iter.previous();
+                CanonicalizerPhase canonicalizer = inlining.getCanonicalizer();
+                iter.set(new InliningPhase(new AOTInliningPolicy(null), canonicalizer));
+            }
         }
 
-        ret.getMidTier().appendPhase(new WriteBarrierAdditionPhase());
+        ret.getMidTier().appendPhase(new WriteBarrierAdditionPhase(config));
         if (VerifyPhases.getValue()) {
-            ret.getMidTier().appendPhase(new WriteBarrierVerificationPhase());
+            ret.getMidTier().appendPhase(new WriteBarrierVerificationPhase(config));
         }
+
+        ret.getLowTier().findPhase(ExpandLogicPhase.class).add(new AddressLoweringPhase(addressLowering));
 
         return ret;
+    }
+
+    protected PhaseSuite<HighTierContext> createGraphBuilderSuite() {
+        PhaseSuite<HighTierContext> suite = defaultSuitesCreator.getDefaultGraphBuilderSuite().copy();
+        assert appendGraphEncoderTest(suite);
+        return suite;
+    }
+
+    /**
+     * When assertions are enabled, we encode and decode every parsed graph, to ensure that the
+     * encoding and decoding process work correctly. The decoding performs canonicalization during
+     * decoding, so the decoded graph can be different than the encoded graph - we cannot check them
+     * for equality here. However, the encoder {@link GraphEncoder#verifyEncoding verifies the
+     * encoding itself}, i.e., performs a decoding without canoncialization and checks the graphs
+     * for equality.
+     */
+    private boolean appendGraphEncoderTest(PhaseSuite<HighTierContext> suite) {
+        suite.appendPhase(new BasePhase<HighTierContext>() {
+            @Override
+            protected void run(StructuredGraph graph, HighTierContext context) {
+                EncodedGraph encodedGraph = GraphEncoder.encodeSingleGraph(graph, runtime.getTarget().arch);
+
+                SimplifyingGraphDecoder graphDecoder = new SimplifyingGraphDecoder(context.getMetaAccess(), context.getConstantReflection(), context.getConstantFieldProvider(),
+                                context.getStampProvider(), !ImmutableCode.getValue(), runtime.getTarget().arch);
+                StructuredGraph targetGraph = new StructuredGraph(graph.method(), AllowAssumptions.YES, INVALID_COMPILATION_ID);
+                graphDecoder.decode(targetGraph, encodedGraph);
+            }
+
+            @Override
+            protected CharSequence getName() {
+                return "VerifyEncodingDecoding";
+            }
+        });
+        return true;
+    }
+
+    /**
+     * Modifies a given {@link GraphBuilderConfiguration} to record per node source information.
+     *
+     * @param gbs the current graph builder suite to modify
+     */
+    public static PhaseSuite<HighTierContext> withNodeSourcePosition(PhaseSuite<HighTierContext> gbs) {
+        PhaseSuite<HighTierContext> newGbs = gbs.copy();
+        GraphBuilderPhase graphBuilderPhase = (GraphBuilderPhase) newGbs.findPhase(GraphBuilderPhase.class).previous();
+        GraphBuilderConfiguration graphBuilderConfig = graphBuilderPhase.getGraphBuilderConfig();
+        GraphBuilderPhase newGraphBuilderPhase = new GraphBuilderPhase(graphBuilderConfig.withNodeSourcePosition(true));
+        newGbs.findPhase(GraphBuilderPhase.class).set(newGraphBuilderPhase);
+        return newGbs;
+    }
+
+    @Override
+    public LIRSuites createLIRSuites() {
+        LIRSuites suites = defaultSuitesCreator.createLIRSuites();
+        String profileInstructions = HotSpotBackend.Options.ASMInstructionProfiling.getValue();
+        if (profileInstructions != null) {
+            suites.getPostAllocationOptimizationStage().appendPhase(new HotSpotInstructionProfiling(profileInstructions));
+        }
+        return suites;
     }
 }
