@@ -20,9 +20,8 @@ import android.content.ContentValues;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Build;
 
-import org.litepal.annotation.Encrypt;
 import org.litepal.crud.model.AssociationsInfo;
-import org.litepal.exceptions.LitePalSupportException;
+import org.litepal.exceptions.DataSupportException;
 import org.litepal.util.BaseUtility;
 import org.litepal.util.DBUtility;
 
@@ -44,7 +43,7 @@ import static org.litepal.util.BaseUtility.changeCase;
  * @author Tony Green
  * @since 1.1
  */
-public class UpdateHandler extends DataHandler {
+class UpdateHandler extends DataHandler {
 
 	/**
 	 * Initialize {@link org.litepal.crud.DataHandler#mDatabase} for operating database. Do not
@@ -53,7 +52,7 @@ public class UpdateHandler extends DataHandler {
 	 * @param db
 	 *            The instance of SQLiteDatabase.
 	 */
-    public UpdateHandler(SQLiteDatabase db) {
+	UpdateHandler(SQLiteDatabase db) {
 		mDatabase = db;
 	}
 
@@ -101,7 +100,7 @@ public class UpdateHandler extends DataHandler {
 	 *            value that will be translated to NULL.
 	 * @return The number of rows affected.
 	 */
-    public int onUpdate(Class<?> modelClass, long id, ContentValues values) {
+	int onUpdate(Class<?> modelClass, long id, ContentValues values) {
 		if (values.size() > 0) {
             convertContentValues(values);
             return mDatabase.update(getTableName(modelClass), values, "id = " + id, null);
@@ -171,7 +170,7 @@ public class UpdateHandler extends DataHandler {
 	 *            value that will be translated to NULL.
 	 * @return The number of rows affected.
 	 */
-    public int onUpdateAll(String tableName, ContentValues values, String... conditions) {
+	int onUpdateAll(String tableName, ContentValues values, String... conditions) {
         BaseUtility.checkConditionsCorrect(conditions);
         if (conditions != null && conditions.length > 0) {
             conditions[0] = DBUtility.convertWhereClauseToColumnName(conditions[0]);
@@ -183,7 +182,7 @@ public class UpdateHandler extends DataHandler {
 	/**
 	 * Do the action for updating multiple rows. It will check the validity of
 	 * conditions, then update rows in database. If the format of conditions is
-	 * invalid, throw LitePalSupportException.
+	 * invalid, throw DataSupportException.
 	 * 
 	 * @param tableName
 	 *            Which table to delete from.
@@ -248,10 +247,10 @@ public class UpdateHandler extends DataHandler {
 				}
 			}
 		} catch (NoSuchFieldException e) {
-			throw new LitePalSupportException(LitePalSupportException.noSuchFieldExceptioin(
+			throw new DataSupportException(DataSupportException.noSuchFieldExceptioin(
 					baseObj.getClassName(), fieldName), e);
 		} catch (Exception e) {
-			throw new LitePalSupportException(e.getMessage(), e);
+			throw new DataSupportException(e.getMessage(), e);
 		}
 	}
 
@@ -281,7 +280,7 @@ public class UpdateHandler extends DataHandler {
 					.getClassName());
 			analyzeAssociatedModels(baseObj, associationInfos);
 		} catch (Exception e) {
-			throw new LitePalSupportException(e.getMessage(), e);
+			throw new DataSupportException(e.getMessage(), e);
 		}
 	}
 
@@ -332,12 +331,6 @@ public class UpdateHandler extends DataHandler {
                                      long... ids) throws IllegalAccessException, InvocationTargetException {
         if (ids != null && ids.length > 0) {
             for (Field field : supportedGenericFields) {
-                Encrypt annotation = field.getAnnotation(Encrypt.class);
-                String algorithm = null;
-                String genericTypeName = getGenericTypeName(field);
-                if (annotation != null && "java.lang.String".equals(genericTypeName)) {
-                    algorithm = annotation.algorithm();
-                }
                 field.setAccessible(true);
                 Collection<?> collection = (Collection<?>) field.get(baseObj);
                 if (collection != null && !collection.isEmpty()) {
@@ -348,22 +341,9 @@ public class UpdateHandler extends DataHandler {
                         for (Object object : collection) {
                             ContentValues values = new ContentValues();
                             values.put(genericValueIdColumnName, id);
-                            object = encryptValue(algorithm, object);
-                            if (baseObj.getClassName().equals(genericTypeName)) {
-                                DataSupport dataSupport = (DataSupport) object;
-                                if (dataSupport == null) {
-                                    continue;
-                                }
-                                long baseObjId = dataSupport.getBaseObjId();
-                                if (baseObjId <= 0) {
-                                    continue;
-                                }
-                                values.put(DBUtility.getM2MSelfRefColumnName(field), baseObjId);
-                            } else {
-                                Object[] parameters = new Object[] { DBUtility.convertToValidColumnName(changeCase(field.getName())), object };
-                                Class<?>[] parameterTypes = new Class[] { String.class, getGenericTypeClass(field) };
-                                DynamicExecutor.send(values, "put", parameters, values.getClass(), parameterTypes);
-                            }
+                            Object[] parameters = new Object[] { DBUtility.convertToValidColumnName(changeCase(field.getName())), object };
+                            Class<?>[] parameterTypes = new Class[] { String.class, getGenericTypeClass(field) };
+                            DynamicExecutor.send(values, "put", parameters, values.getClass(), parameterTypes);
                             mDatabase.insert(tableName, null, values);
                         }
                     }

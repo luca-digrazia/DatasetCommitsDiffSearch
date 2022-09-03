@@ -1,9 +1,33 @@
+/*
+ * Copyright (C)  Tony Green, LitePal Framework Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.litepal;
+
+import org.litepal.parser.LitePalAttr;
+import org.litepal.parser.LitePalConfig;
+import org.litepal.parser.LitePalParser;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
+ * Configuration of LitePal database. It's similar to litepal.xml configuration, but allows to
+ * configure database details at runtime. This is very important when comes to support multiple
+ * databases functionality.
+ *
  * @author Tony Green
  * @since 1.4
  */
@@ -30,6 +54,28 @@ public class LitePalDB {
      */
     private List<String> classNames;
 
+    /**
+     * Construct a LitePalDB instance from the default configuration by litepal.xml. But database
+     * name must be different than the default.
+     * @param dbName
+     *          Name of database.
+     * @return A LitePalDB instance which used the default configuration in litepal.xml but with a specified database name.
+     */
+    public static LitePalDB fromDefault(String dbName) {
+        LitePalConfig config = LitePalParser.parseLitePalConfiguration();
+        LitePalDB litePalDB = new LitePalDB(dbName, config.getVersion());
+        litePalDB.setExternalStorage("external".equals(config.getStorage()));
+        litePalDB.setClassNames(config.getClassNames());
+        return litePalDB;
+    }
+
+    /**
+     * Construct a LitePalDB instance. Database name and version are necessary fields.
+     * @param dbName
+     *          Name of database.
+     * @param version
+     *          Version of database.
+     */
     public LitePalDB(String dbName, int version) {
         this.dbName = dbName;
         this.version = version;
@@ -39,16 +85,8 @@ public class LitePalDB {
         return version;
     }
 
-    public void setVersion(int version) {
-        this.version = version;
-    }
-
     public String getDbName() {
         return dbName;
-    }
-
-    public void setDbName(String dbName) {
-        this.dbName = dbName;
     }
 
     public boolean isExternalStorage() {
@@ -82,6 +120,10 @@ public class LitePalDB {
      */
     public void addClassName(String className) {
         getClassNames().add(className);
+    }
+
+    void setClassNames(List<String> className) {
+        this.classNames = className;
     }
 
 }
