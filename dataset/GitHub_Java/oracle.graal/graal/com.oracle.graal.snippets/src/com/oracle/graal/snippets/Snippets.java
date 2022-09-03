@@ -91,12 +91,13 @@ public class Snippets {
     }
 
     private static StructuredGraph buildSnippetGraph(final RiResolvedMethod snippetRiMethod, final GraalRuntime runtime, final CiTarget target, final BoxingMethodPool pool) {
-        final StructuredGraph graph = new StructuredGraph(snippetRiMethod);
-        return Debug.scope("BuildSnippetGraph", new Object[] {snippetRiMethod, graph}, new Callable<StructuredGraph>() {
+        return Debug.scope("BuildSnippetGraph", snippetRiMethod, new Callable<StructuredGraph>() {
+
             @Override
             public StructuredGraph call() throws Exception {
                 GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault();
                 GraphBuilderPhase graphBuilder = new GraphBuilderPhase(runtime, config, OptimisticOptimizations.NONE);
+                StructuredGraph graph = new StructuredGraph(snippetRiMethod);
                 graphBuilder.apply(graph);
 
                 Debug.dump(graph, "%s: %s", snippetRiMethod.name(), GraphBuilderPhase.class.getSimpleName());
@@ -107,7 +108,7 @@ public class Snippets {
                     MethodCallTargetNode callTarget = invoke.callTarget();
                     RiResolvedMethod targetMethod = callTarget.targetMethod();
                     RiResolvedType holder = targetMethod.holder();
-                    if (enclosedInSnippetsClass(holder)) {
+                    if (holder.isSubtypeOf(runtime.getType(SnippetsInterface.class))) {
                         StructuredGraph targetGraph = (StructuredGraph) targetMethod.compilerStorage().get(Graph.class);
                         if (targetGraph == null) {
                             targetGraph = buildSnippetGraph(targetMethod, runtime, target, pool);
@@ -138,17 +139,6 @@ public class Snippets {
                 snippetRiMethod.compilerStorage().put(Graph.class, graph);
 
                 return graph;
-            }
-
-            private boolean enclosedInSnippetsClass(RiResolvedType holder) {
-                Class enclosingClass = holder.toJava();
-                while (enclosingClass != null) {
-                    if (SnippetsInterface.class.isAssignableFrom(enclosingClass)) {
-                        return true;
-                    }
-                    enclosingClass = enclosingClass.getEnclosingClass();
-                }
-                return false;
             }
         });
 

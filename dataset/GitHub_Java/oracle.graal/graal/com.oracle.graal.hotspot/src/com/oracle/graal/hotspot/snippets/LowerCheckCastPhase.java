@@ -24,7 +24,6 @@ package com.oracle.graal.hotspot.snippets;
 
 import java.util.*;
 
-import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.phases.CanonicalizerPhase.IsImmutablePredicate;
 import com.oracle.graal.compiler.util.*;
@@ -36,7 +35,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
-import com.oracle.max.criutils.*;
 
 /**
  * Lowers a {@link CheckCastNode} by replacing it with the graph of a {@linkplain CheckCastSnippets checkcast snippet}.
@@ -65,19 +63,19 @@ public class LowerCheckCastPhase extends Phase {
         for (CheckCastNode node : graph.getNodes(CheckCastNode.class)) {
             ValueNode hub = node.targetClassInstruction();
             ValueNode object = node.object();
-            CiAssumptions assumptions = null;
-            TypeCheckHints hints = new TypeCheckHints(node.targetClass(), node.profile(), assumptions, GraalOptions.CheckcastMinHintHitProbability, GraalOptions.CheckcastMaxHints);
+            RiResolvedType[] hints = node.hints();
             StructuredGraph snippetGraph = (StructuredGraph) checkcast.compilerStorage().get(Graph.class);
             assert snippetGraph != null : CheckCastSnippets.class.getSimpleName() + " should be installed";
-            HotSpotKlassOop[] hintHubs = new HotSpotKlassOop[hints.types.length];
+            HotSpotKlassOop[] hintHubs = new HotSpotKlassOop[hints.length];
             for (int i = 0; i < hintHubs.length; i++) {
-                hintHubs[i] = ((HotSpotType) hints.types[i]).klassOop();
+                hintHubs[i] = ((HotSpotType) hints[i]).klassOop();
             }
+            assert !node.hintsExact() || hints.length > 0 : "cannot have 0 exact hints!";
             final CiConstant hintHubsConst = CiConstant.forObject(hintHubs);
             hintHubsSet.put(hintHubsConst, hintHubsConst);
-            Debug.log("Lowering checkcast in %s: node=%s, hintsHubs=%s, exact=%b", graph, node, Arrays.toString(hints.types), hints.exact);
+            Debug.log("Lowering checkcast in %s: node=%s, hintsHubs=%s, exact=%b", graph, node, Arrays.toString(hints), node.hintsExact());
 
-            InliningUtil.inlineSnippet(runtime, node, node, snippetGraph, true, immutabilityPredicate, hub, object, hintHubsConst, CiConstant.forBoolean(hints.exact));
+            InliningUtil.inlineSnippet(runtime, node, (FixedWithNextNode) node.anchor(), snippetGraph, true, immutabilityPredicate, hub, object, hintHubsConst, CiConstant.forBoolean(node.hintsExact()));
         }
         if (!hintHubsSet.isEmpty()) {
             Debug.log("Lowered %d checkcasts in %s ", hintHubsSet.size(), graph);

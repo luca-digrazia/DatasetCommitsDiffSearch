@@ -40,7 +40,6 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.max.cri.ci.*;
@@ -288,7 +287,7 @@ public class InliningUtil {
             PhiNode exceptionObjectPhi = null;
             if (invoke instanceof InvokeWithExceptionNode) {
                 InvokeWithExceptionNode invokeWithException = (InvokeWithExceptionNode) invoke;
-                DispatchBeginNode exceptionEdge = invokeWithException.exceptionEdge();
+                BeginNode exceptionEdge = invokeWithException.exceptionEdge();
                 ExceptionObjectNode exceptionObject = (ExceptionObjectNode) exceptionEdge.next();
 
                 exceptionMerge = graph.add(new MergeNode());
@@ -635,7 +634,7 @@ public class InliningUtil {
                         return null;
                     }
                 } else {
-                    invoke.setMegamorphic(true);
+                    invoke.setMegamorph(true);
                     if (optimisticOpts.inlinePolymorphicCalls() && notRecordedTypeProbability == 0 || optimisticOpts.inlineMegamorphicCalls() && notRecordedTypeProbability > 0) {
                         // TODO (chaeubl) inlining of multiple methods should work differently
                         // 1. check which methods can be inlined
@@ -786,7 +785,7 @@ public class InliningUtil {
         ArrayList<Node> nodes = new ArrayList<>();
         ReturnNode returnNode = null;
         UnwindNode unwindNode = null;
-        StartNode entryPointNode = inlineGraph.start();
+        BeginNode entryPointNode = inlineGraph.start();
         FixedNode firstCFGNode = entryPointNode.next();
         for (Node node : inlineGraph.getNodes()) {
             if (node == entryPointNode || node == entryPointNode.stateAfter()) {
@@ -922,12 +921,11 @@ public class InliningUtil {
                     final StructuredGraph snippetGraph,
                     final boolean explodeLoops,
                     final IsImmutablePredicate immutabilityPredicate,
-                    final CiLoweringTool tool,
                     final Object... args) {
         Debug.scope("InliningSnippet", snippetGraph.method(), new Runnable() {
             @Override
             public void run() {
-                inlineSnippet0(runtime, replacee, anchor, snippetGraph, explodeLoops, immutabilityPredicate, tool, args);
+                inlineSnippet0(runtime, replacee, anchor, snippetGraph, explodeLoops, immutabilityPredicate, args);
             }
         });
     }
@@ -937,10 +935,7 @@ public class InliningUtil {
                     StructuredGraph snippetGraph,
                     boolean explodeLoops,
                     IsImmutablePredicate immutabilityPredicate,
-                    CiLoweringTool tool, Object... args) {
-
-        Debug.dump(replacee.graph(), "Before lowering %s", replacee);
-
+                    Object... args) {
         // Copy snippet graph, replacing parameters with given args in the process
         StructuredGraph snippetCopy = new StructuredGraph(snippetGraph.name, snippetGraph.method());
         IdentityHashMap<Node, Node> replacements = new IdentityHashMap<>();
@@ -972,23 +967,19 @@ public class InliningUtil {
                 LoopBeginNode loopBegin = loop.loopBegin();
                 SuperBlock wholeLoop = LoopTransformUtil.wholeLoop(loop);
                 Debug.dump(snippetCopy, "Before exploding loop %s", loopBegin);
-                int peel = 0;
                 while (!loopBegin.isDeleted()) {
                     snippetCopy.mark();
                     LoopTransformUtil.peel(loop, wholeLoop);
-                    Debug.dump(snippetCopy, "After peel %d", peel);
                     new CanonicalizerPhase(null, runtime, null, true, immutabilityPredicate).apply(snippetCopy);
-                    peel++;
                 }
                 Debug.dump(snippetCopy, "After exploding loop %s", loopBegin);
             }
-            new DeadCodeEliminationPhase().apply(snippetCopy);
         }
 
-        // Gather the nodes in the snippet that are to be inlined
+        // Gather the nodes in the snippets that are to be inlined
         ArrayList<Node> nodes = new ArrayList<>();
         ReturnNode returnNode = null;
-        StartNode entryPointNode = snippetCopy.start();
+        BeginNode entryPointNode = snippetCopy.start();
         FixedNode firstCFGNode = entryPointNode.next();
         replacements.clear();
         for (Node node : snippetCopy.getNodes()) {
@@ -1012,38 +1003,20 @@ public class InliningUtil {
 
         // Inline the gathered snippet nodes
         StructuredGraph graph = (StructuredGraph) replacee.graph();
-        graph.mark();
         Map<Node, Node> duplicates = graph.addDuplicates(nodes, replacements);
-        Debug.dump(graph, "After inlining snippet %s", snippetCopy.method());
 
         // Remove all frame states from the inlined snippet graph. Snippets must be atomic (i.e. free
         // of side-effects that prevent deoptimizing to a point before the snippet).
-        if (tool != null) {
-            boolean innerLowering = false;
-            for (Node node : duplicates.values()) {
-                if (node instanceof Lowerable) {
-                    innerLowering = true;
-                    ((Lowerable) node).lower(tool);
-
-                }
-            }
-            if (innerLowering) {
-                Debug.dump(graph, "After inner lowering");
-            }
-        }
-
-        for (Node node : graph.getNewNodes()) {
+        for (Node node : duplicates.values()) {
             if (node instanceof StateSplit) {
                 StateSplit stateSplit = (StateSplit) node;
                 FrameState frameState = stateSplit.stateAfter();
-                assert !stateSplit.hasSideEffect() : "snippets cannot contain side-effecting node " + node + "\n    " + replacee.graph();
+                assert !stateSplit.hasSideEffect() : "snippets cannot contain side-effecting node " + node;
                 if (frameState != null) {
                     stateSplit.setStateAfter(null);
                 }
             }
         }
-
-        Debug.dump(graph, "After removing frame states");
 
         // Rewire the control flow graph around the replacee
         FixedNode firstCFGNodeDuplicate = (FixedNode) duplicates.get(firstCFGNode);

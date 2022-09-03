@@ -46,7 +46,7 @@ public class CheckCastSnippets implements SnippetsInterface {
                 return object;
             }
         }
-        if (hintsAreExact || !TypeCheckSlowPath.check(objectHub, hub)) {
+        if (hintsAreExact || TypeCheckSlowPath.check(objectHub, hub) == null) {
             DeoptimizeNode.deopt(RiDeoptAction.InvalidateReprofile, RiDeoptReason.ClassCastException);
         }
         return object;
