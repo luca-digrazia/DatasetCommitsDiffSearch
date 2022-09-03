@@ -665,7 +665,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             @Override
             protected ValueNode createCheckCast(ResolvedJavaType type, ValueNode object, JavaTypeProfile profileForTypeCheck, boolean forStoreCheck) {
-                return CheckCastNode.create(type, object, profileForTypeCheck, forStoreCheck, currentGraph.getAssumptions());
+                return CheckCastNode.create(type, object, profileForTypeCheck, forStoreCheck);
             }
 
             @Override
@@ -971,9 +971,9 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     calleeBeforeUnwindNode.setNext(handleException(calleeUnwindValue, bci()));
                 }
 
-                // Record inlined method dependency in the graph
-                if (currentGraph.isInlinedMethodRecordingEnabled()) {
-                    currentGraph.getInlinedMethods().add(targetMethod);
+                // Record method dependency in the graph
+                if (currentGraph.isMethodRecordingEnabled()) {
+                    currentGraph.getMethods().add(targetMethod);
                 }
             }
 
