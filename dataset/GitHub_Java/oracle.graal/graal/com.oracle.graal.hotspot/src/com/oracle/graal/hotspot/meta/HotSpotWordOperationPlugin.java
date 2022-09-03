@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,46 +22,35 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode.POINTER_EQ;
-import static com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode.POINTER_NE;
-import static com.oracle.graal.nodes.ConstantNode.forBoolean;
-import static jdk.vm.ci.meta.LocationIdentity.any;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LocationIdentity;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import static com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode.*;
+import static com.oracle.graal.nodes.ConstantNode.*;
+import static jdk.internal.jvmci.meta.LocationIdentity.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.api.replacements.SnippetReflectionProvider;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.hotspot.nodes.LoadIndexedPointerNode;
-import com.oracle.graal.hotspot.nodes.type.KlassPointerStamp;
-import com.oracle.graal.hotspot.nodes.type.MetaspacePointerStamp;
-import com.oracle.graal.hotspot.nodes.type.MethodPointerStamp;
-import com.oracle.graal.hotspot.word.HotSpotOperation;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.hotspot.nodes.type.*;
+import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode;
-import com.oracle.graal.hotspot.word.PointerCastNode;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.ConditionalNode;
-import com.oracle.graal.nodes.calc.IsNullNode;
-import com.oracle.graal.nodes.calc.PointerEqualsNode;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.nodes.java.LoadIndexedNode;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.memory.HeapAccess.BarrierType;
-import com.oracle.graal.nodes.memory.ReadNode;
-import com.oracle.graal.nodes.memory.address.AddressNode;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.replacements.WordOperationPlugin;
-import com.oracle.graal.word.WordTypes;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.memory.address.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.replacements.*;
+import com.oracle.graal.word.*;
 
 /**
  * Extends {@link WordOperationPlugin} to handle {@linkplain HotSpotOperation HotSpot word
  * operations}.
  */
 class HotSpotWordOperationPlugin extends WordOperationPlugin {
-    HotSpotWordOperationPlugin(SnippetReflectionProvider snippetReflection, WordTypes wordTypes) {
+    public HotSpotWordOperationPlugin(SnippetReflectionProvider snippetReflection, WordTypes wordTypes) {
         super(snippetReflection, wordTypes);
     }
 
@@ -92,7 +81,7 @@ class HotSpotWordOperationPlugin extends WordOperationPlugin {
     }
 
     protected void processHotSpotWordOperation(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args, HotSpotOperation operation) {
-        JavaKind returnKind = method.getSignature().getReturnKind();
+        Kind returnKind = method.getSignature().getReturnKind();
         switch (operation.opcode()) {
             case POINTER_EQ:
             case POINTER_NE:

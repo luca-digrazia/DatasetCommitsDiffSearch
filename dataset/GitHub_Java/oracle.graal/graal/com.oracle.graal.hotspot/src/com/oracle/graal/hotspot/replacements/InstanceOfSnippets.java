@@ -22,63 +22,34 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.PRIMARY_SUPERS_LOCATION;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.SECONDARY_SUPER_CACHE_LOCATION;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.loadHubIntrinsic;
-import static com.oracle.graal.hotspot.replacements.InstanceOfSnippetsOptions.TypeCheckMaxHints;
-import static com.oracle.graal.hotspot.replacements.InstanceOfSnippetsOptions.TypeCheckMinProfileHitProbability;
-import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.checkSecondarySubType;
-import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.checkUnknownSubType;
-import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.createHints;
-import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.displayHit;
-import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.displayMiss;
-import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.exactHit;
-import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.exactMiss;
-import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.hintsHit;
-import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.hintsMiss;
-import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.isNull;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.LIKELY_PROBABILITY;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.NOT_FREQUENT_PROBABILITY;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.NOT_LIKELY_PROBABILITY;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.probability;
-import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
-import static jdk.vm.ci.meta.DeoptimizationReason.OptimizedTypeCheckViolated;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.TriState;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.options.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.hotspot.replacements.InstanceOfSnippets.Options.*;
+import static com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.*;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
+import static jdk.internal.jvmci.meta.DeoptimizationAction.*;
+import static jdk.internal.jvmci.meta.DeoptimizationReason.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.hotspot.nodes.SnippetAnchorNode;
-import com.oracle.graal.hotspot.nodes.type.KlassPointerStamp;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.hotspot.nodes.type.*;
 import com.oracle.graal.hotspot.replacements.TypeCheckSnippetUtils.Hints;
-import com.oracle.graal.hotspot.word.KlassPointer;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.DeoptimizeNode;
-import com.oracle.graal.nodes.PiNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.TypeCheckHints;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.extended.BranchProbabilityNode;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.java.ClassIsAssignableFromNode;
-import com.oracle.graal.nodes.java.InstanceOfDynamicNode;
-import com.oracle.graal.nodes.java.InstanceOfNode;
-import com.oracle.graal.nodes.java.TypeCheckNode;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.replacements.InstanceOfSnippetsTemplates;
-import com.oracle.graal.replacements.Snippet;
+import com.oracle.graal.hotspot.word.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.Snippet.VarargsParameter;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
-import com.oracle.graal.replacements.Snippets;
-import com.oracle.graal.replacements.nodes.ExplodeLoopNode;
+import com.oracle.graal.replacements.nodes.*;
 
 /**
  * Snippets used for implementing the type test of an instanceof instruction. Since instanceof is a
@@ -107,7 +78,7 @@ public class InstanceOfSnippets implements Snippets {
             return falseValue;
         }
         GuardingNode anchorNode = SnippetAnchorNode.anchor();
-        KlassPointer objectHub = loadHubIntrinsic(PiNode.piCastNonNull(object, anchorNode));
+        KlassPointer objectHub = loadHubIntrinsic(object, anchorNode);
         // if we get an exact match: succeed immediately
         ExplodeLoopNode.explodeLoop();
         for (int i = 0; i < hints.length; i++) {
@@ -137,7 +108,7 @@ public class InstanceOfSnippets implements Snippets {
             return falseValue;
         }
         GuardingNode anchorNode = SnippetAnchorNode.anchor();
-        KlassPointer objectHub = loadHubIntrinsic(PiNode.piCastNonNull(object, anchorNode));
+        KlassPointer objectHub = loadHubIntrinsic(object, anchorNode);
         if (probability(LIKELY_PROBABILITY, objectHub.notEqual(exactHub))) {
             exactMiss.inc();
             return falseValue;
@@ -156,7 +127,7 @@ public class InstanceOfSnippets implements Snippets {
             return falseValue;
         }
         GuardingNode anchorNode = SnippetAnchorNode.anchor();
-        KlassPointer objectHub = loadHubIntrinsic(PiNode.piCastNonNull(object, anchorNode));
+        KlassPointer objectHub = loadHubIntrinsic(object, anchorNode);
         if (probability(NOT_LIKELY_PROBABILITY, objectHub.readKlassPointer(superCheckOffset, PRIMARY_SUPERS_LOCATION).notEqual(hub))) {
             displayMiss.inc();
             return falseValue;
@@ -175,7 +146,7 @@ public class InstanceOfSnippets implements Snippets {
             return falseValue;
         }
         GuardingNode anchorNode = SnippetAnchorNode.anchor();
-        KlassPointer objectHub = loadHubIntrinsic(PiNode.piCastNonNull(object, anchorNode));
+        KlassPointer objectHub = loadHubIntrinsic(object, anchorNode);
         // if we get an exact match: succeed immediately
         ExplodeLoopNode.explodeLoop();
         for (int i = 0; i < hints.length; i++) {
@@ -204,7 +175,7 @@ public class InstanceOfSnippets implements Snippets {
         }
         GuardingNode anchorNode = SnippetAnchorNode.anchor();
         KlassPointer hub = ClassGetHubNode.readClass(mirror, anchorNode);
-        KlassPointer objectHub = loadHubIntrinsic(PiNode.piCastNonNull(object, anchorNode));
+        KlassPointer objectHub = loadHubIntrinsic(object, anchorNode);
         if (hub.isNull() || !checkUnknownSubType(hub, objectHub)) {
             return falseValue;
         }
@@ -228,6 +199,19 @@ public class InstanceOfSnippets implements Snippets {
             return falseValue;
         }
         return trueValue;
+    }
+
+    static class Options {
+
+        // @formatter:off
+        @Option(help = "If the probability that a type check will hit one the profiled types (up to " +
+                       "TypeCheckMaxHints) is below this value, the type check will be compiled without profiling info", type = OptionType.Expert)
+        static final OptionValue<Double> TypeCheckMinProfileHitProbability = new OptionValue<>(0.5);
+
+        @Option(help = "The maximum number of profiled types that will be used when compiling a profiled type check. " +
+                        "Note that TypeCheckMinProfileHitProbability also influences whether profiling info is used in compiled type checks.", type = OptionType.Expert)
+        static final OptionValue<Integer> TypeCheckMaxHints = new OptionValue<>(2);
+        // @formatter:on
     }
 
     public static class Templates extends InstanceOfSnippetsTemplates {
@@ -261,7 +245,7 @@ public class InstanceOfSnippets implements Snippets {
                     args = new Arguments(instanceofWithProfile, graph.getGuardsStage(), tool.getLoweringStage());
                     args.add("object", object);
                     args.addVarargs("hints", KlassPointer.class, KlassPointerStamp.klassNonNull(), hints.hubs);
-                    args.addVarargs("hintIsPositive", boolean.class, StampFactory.forKind(JavaKind.Boolean), hints.isPositive);
+                    args.addVarargs("hintIsPositive", boolean.class, StampFactory.forKind(Kind.Boolean), hints.isPositive);
                 } else if (hintInfo.exact != null) {
                     args = new Arguments(instanceofExact, graph.getGuardsStage(), tool.getLoweringStage());
                     args.add("object", object);
@@ -277,7 +261,7 @@ public class InstanceOfSnippets implements Snippets {
                     args.add("hub", hub);
                     args.add("object", object);
                     args.addVarargs("hints", KlassPointer.class, KlassPointerStamp.klassNonNull(), hints.hubs);
-                    args.addVarargs("hintIsPositive", boolean.class, StampFactory.forKind(JavaKind.Boolean), hints.isPositive);
+                    args.addVarargs("hintIsPositive", boolean.class, StampFactory.forKind(Kind.Boolean), hints.isPositive);
                 }
                 args.add("trueValue", replacer.trueValue);
                 args.add("falseValue", replacer.falseValue);

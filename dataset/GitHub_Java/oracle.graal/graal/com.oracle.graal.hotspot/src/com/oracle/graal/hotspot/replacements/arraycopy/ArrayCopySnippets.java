@@ -22,63 +22,35 @@
  */
 package com.oracle.graal.hotspot.replacements.arraycopy;
 
-import static com.oracle.graal.compiler.common.GraalOptions.SnippetCounters;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.KLASS_SUPER_CHECK_OFFSET_LOCATION;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.OBJ_ARRAY_KLASS_ELEMENT_KLASS_LOCATION;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.arrayBaseOffset;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.arrayClassElementOffset;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.arrayIndexScale;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.layoutHelperElementTypePrimitiveInPlace;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.loadHub;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.readLayoutHelper;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.superCheckOffsetOffset;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.FAST_PATH_PROBABILITY;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.SLOW_PATH_PROBABILITY;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.probability;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 
-import java.lang.reflect.Method;
-import java.util.EnumMap;
-import java.util.Map;
+import java.lang.reflect.*;
+import java.util.*;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LocationIdentity;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.api.directives.GraalDirectives;
-import com.oracle.graal.api.replacements.Fold;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.hotspot.nodes.type.KlassPointerStamp;
-import com.oracle.graal.hotspot.word.KlassPointer;
-import com.oracle.graal.nodes.CallTargetNode;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.DeoptimizeNode;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.InvokeNode;
-import com.oracle.graal.nodes.NamedLocationIdentity;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.extended.UnsafeLoadNode;
-import com.oracle.graal.nodes.java.ArrayLengthNode;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.replacements.Snippet;
+import com.oracle.graal.api.directives.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.nodes.type.*;
+import com.oracle.graal.hotspot.word.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
-import com.oracle.graal.replacements.SnippetCounter;
-import com.oracle.graal.replacements.SnippetTemplate;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
-import com.oracle.graal.replacements.Snippets;
-import com.oracle.graal.replacements.nodes.BasicArrayCopyNode;
-import com.oracle.graal.replacements.nodes.DirectObjectStoreNode;
-import com.oracle.graal.replacements.nodes.ExplodeLoopNode;
-import com.oracle.graal.word.Word;
+import com.oracle.graal.replacements.nodes.*;
+import com.oracle.graal.word.*;
 
 public class ArrayCopySnippets implements Snippets {
 
@@ -103,11 +75,11 @@ public class ArrayCopySnippets implements Snippets {
             checkAIOOBECounter.inc();
             DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
         }
-        if (probability(SLOW_PATH_PROBABILITY, srcPos > ArrayLengthNode.arrayLength(src) - length)) {
+        if (probability(SLOW_PATH_PROBABILITY, srcPos + length > ArrayLengthNode.arrayLength(src))) {
             checkAIOOBECounter.inc();
             DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
         }
-        if (probability(SLOW_PATH_PROBABILITY, destPos > ArrayLengthNode.arrayLength(dest) - length)) {
+        if (probability(SLOW_PATH_PROBABILITY, destPos + length > ArrayLengthNode.arrayLength(dest))) {
             checkAIOOBECounter.inc();
             DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
         }
@@ -127,7 +99,7 @@ public class ArrayCopySnippets implements Snippets {
     }
 
     @Snippet
-    public static void arraycopyExactIntrinsic(Object src, int srcPos, Object dest, int destPos, int length, @ConstantParameter JavaKind elementKind, @ConstantParameter SnippetCounter counter,
+    public static void arraycopyExactIntrinsic(Object src, int srcPos, Object dest, int destPos, int length, @ConstantParameter Kind elementKind, @ConstantParameter SnippetCounter counter,
                     @ConstantParameter SnippetCounter copiedCounter) {
         Object nonNullSrc = GraalDirectives.guardingNonNull(src);
         Object nonNullDest = GraalDirectives.guardingNonNull(dest);
@@ -148,8 +120,8 @@ public class ArrayCopySnippets implements Snippets {
      * inputs but not the other.
      */
     @Snippet
-    public static void arraycopyPredictedExactIntrinsic(Object src, int srcPos, Object dest, int destPos, int length, @ConstantParameter JavaKind elementKind,
-                    @ConstantParameter SnippetCounter counter, @ConstantParameter SnippetCounter copiedCounter) {
+    public static void arraycopyPredictedExactIntrinsic(Object src, int srcPos, Object dest, int destPos, int length, @ConstantParameter Kind elementKind, @ConstantParameter SnippetCounter counter,
+                    @ConstantParameter SnippetCounter copiedCounter) {
         Object nonNullSrc = GraalDirectives.guardingNonNull(src);
         Object nonNullDest = GraalDirectives.guardingNonNull(dest);
         KlassPointer srcHub = loadHub(nonNullSrc);
@@ -194,7 +166,7 @@ public class ArrayCopySnippets implements Snippets {
      * underlying type is really an array type.
      */
     @Snippet
-    public static void arraycopySlowPathIntrinsic(Object src, int srcPos, Object dest, int destPos, int length, @ConstantParameter JavaKind elementKind, @ConstantParameter SnippetInfo slowPath,
+    public static void arraycopySlowPathIntrinsic(Object src, int srcPos, Object dest, int destPos, int length, @ConstantParameter Kind elementKind, @ConstantParameter SnippetInfo slowPath,
                     @ConstantParameter Object slowPathArgument) {
         Object nonNullSrc = GraalDirectives.guardingNonNull(src);
         Object nonNullDest = GraalDirectives.guardingNonNull(dest);
@@ -216,7 +188,7 @@ public class ArrayCopySnippets implements Snippets {
      * Snippet for unrolled arraycopy.
      */
     @Snippet
-    public static void arraycopyUnrolledIntrinsic(Object src, int srcPos, Object dest, int destPos, int length, @ConstantParameter int unrolledLength, @ConstantParameter JavaKind elementKind) {
+    public static void arraycopyUnrolledIntrinsic(Object src, int srcPos, Object dest, int destPos, int length, @ConstantParameter int unrolledLength, @ConstantParameter Kind elementKind) {
         Object nonNullSrc = GraalDirectives.guardingNonNull(src);
         Object nonNullDest = GraalDirectives.guardingNonNull(dest);
         checkLimits(nonNullSrc, srcPos, nonNullDest, destPos, length);
@@ -270,7 +242,7 @@ public class ArrayCopySnippets implements Snippets {
             if (probability(FAST_PATH_PROBABILITY, isObjectArray)) {
                 genericObjectExactCallCounter.inc();
                 genericObjectExactCallCopiedCounter.add(length);
-                ArrayCopyCallNode.disjointArraycopy(nonNullSrc, srcPos, nonNullDest, destPos, length, JavaKind.Object);
+                ArrayCopyCallNode.disjointArraycopy(nonNullSrc, srcPos, nonNullDest, destPos, length, Kind.Object);
             } else {
                 genericPrimitiveCallCounter.inc();
                 genericPrimitiveCallCopiedCounter.add(length);
@@ -284,12 +256,12 @@ public class ArrayCopySnippets implements Snippets {
     }
 
     @Fold
-    private static LocationIdentity getArrayLocation(JavaKind kind) {
+    private static LocationIdentity getArrayLocation(Kind kind) {
         return NamedLocationIdentity.getArrayLocation(kind);
     }
 
     @Snippet
-    public static void arraycopyUnrolledWork(Object nonNullSrc, int srcPos, Object nonNullDest, int destPos, @ConstantParameter int length, @ConstantParameter JavaKind elementKind) {
+    public static void arraycopyUnrolledWork(Object nonNullSrc, int srcPos, Object nonNullDest, int destPos, @ConstantParameter int length, @ConstantParameter Kind elementKind) {
         final int scale = arrayIndexScale(elementKind);
         int arrayBaseOffset = arrayBaseOffset(elementKind);
         LocationIdentity arrayLocation = getArrayLocation(elementKind);
@@ -329,13 +301,13 @@ public class ArrayCopySnippets implements Snippets {
     private static final SnippetCounter predictedObjectArrayCopySlowPathCounter = new SnippetCounter(counters, "Object[]{slow-path}", "used System.arraycopy slow path for predicted Object[] arrays");
     private static final SnippetCounter predictedObjectArrayCopyFastPathCounter = new SnippetCounter(counters, "Object[]{fast-path}", "used oop_arraycopy for predicted Object[] arrays");
 
-    private static final EnumMap<JavaKind, SnippetCounter> arraycopyCallCounters = new EnumMap<>(JavaKind.class);
-    private static final EnumMap<JavaKind, SnippetCounter> arraycopyCounters = new EnumMap<>(JavaKind.class);
+    private static final EnumMap<Kind, SnippetCounter> arraycopyCallCounters = new EnumMap<>(Kind.class);
+    private static final EnumMap<Kind, SnippetCounter> arraycopyCounters = new EnumMap<>(Kind.class);
 
-    private static final EnumMap<JavaKind, SnippetCounter> arraycopyCallCopiedCounters = new EnumMap<>(JavaKind.class);
-    private static final EnumMap<JavaKind, SnippetCounter> arraycopyCopiedCounters = new EnumMap<>(JavaKind.class);
+    private static final EnumMap<Kind, SnippetCounter> arraycopyCallCopiedCounters = new EnumMap<>(Kind.class);
+    private static final EnumMap<Kind, SnippetCounter> arraycopyCopiedCounters = new EnumMap<>(Kind.class);
 
-    static void createArraycopyCounter(JavaKind kind) {
+    static void createArraycopyCounter(Kind kind) {
         arraycopyCallCounters.put(kind, new SnippetCounter(counters, kind + "[]{stub}", "arraycopy call for " + kind + "[] arrays"));
         arraycopyCounters.put(kind, new SnippetCounter(counters, kind + "[]{inline}", "inline arraycopy for " + kind + "[] arrays"));
 
@@ -344,15 +316,15 @@ public class ArrayCopySnippets implements Snippets {
     }
 
     static {
-        createArraycopyCounter(JavaKind.Byte);
-        createArraycopyCounter(JavaKind.Boolean);
-        createArraycopyCounter(JavaKind.Char);
-        createArraycopyCounter(JavaKind.Short);
-        createArraycopyCounter(JavaKind.Int);
-        createArraycopyCounter(JavaKind.Long);
-        createArraycopyCounter(JavaKind.Float);
-        createArraycopyCounter(JavaKind.Double);
-        createArraycopyCounter(JavaKind.Object);
+        createArraycopyCounter(Kind.Byte);
+        createArraycopyCounter(Kind.Boolean);
+        createArraycopyCounter(Kind.Char);
+        createArraycopyCounter(Kind.Short);
+        createArraycopyCounter(Kind.Int);
+        createArraycopyCounter(Kind.Long);
+        createArraycopyCounter(Kind.Float);
+        createArraycopyCounter(Kind.Double);
+        createArraycopyCounter(Kind.Object);
     }
 
     private static final SnippetCounter genericPrimitiveCallCounter = new SnippetCounter(counters, "genericPrimitive", "generic arraycopy snippet for primitive arrays");
@@ -417,17 +389,17 @@ public class ArrayCopySnippets implements Snippets {
             return info;
         }
 
-        public static JavaKind selectComponentKind(BasicArrayCopyNode arraycopy) {
+        public static Kind selectComponentKind(BasicArrayCopyNode arraycopy) {
             return selectComponentKind(arraycopy, true);
         }
 
-        public static JavaKind selectComponentKind(BasicArrayCopyNode arraycopy, boolean exact) {
+        public static Kind selectComponentKind(BasicArrayCopyNode arraycopy, boolean exact) {
             ResolvedJavaType srcType = StampTool.typeOrNull(arraycopy.getSource().stamp());
             ResolvedJavaType destType = StampTool.typeOrNull(arraycopy.getDestination().stamp());
 
             if (srcType == null || !srcType.isArray() || destType == null || !destType.isArray()) {
                 if (!exact) {
-                    JavaKind component = getComponentKind(srcType);
+                    Kind component = getComponentKind(srcType);
                     if (component != null) {
                         return component;
                     }
@@ -443,12 +415,12 @@ public class ArrayCopySnippets implements Snippets {
                     return null;
                 }
             }
-            return srcType.getComponentType().getJavaKind();
+            return srcType.getComponentType().getKind();
         }
 
-        private static JavaKind getComponentKind(ResolvedJavaType type) {
+        private static Kind getComponentKind(ResolvedJavaType type) {
             if (type != null && type.isArray()) {
-                return type.getComponentType().getJavaKind();
+                return type.getComponentType().getKind();
             }
             return null;
         }
@@ -458,7 +430,7 @@ public class ArrayCopySnippets implements Snippets {
         }
 
         public void lower(ArrayCopyNode arraycopy, LoweringTool tool) {
-            JavaKind componentKind = selectComponentKind(arraycopy);
+            Kind componentKind = selectComponentKind(arraycopy);
             SnippetInfo snippetInfo = null;
             SnippetInfo slowPathSnippetInfo = null;
             Object slowPathArgument = null;
@@ -471,7 +443,7 @@ public class ArrayCopySnippets implements Snippets {
                     snippetInfo = arraycopyUnrolledIntrinsicSnippet;
                 }
             } else {
-                if (componentKind == JavaKind.Object) {
+                if (componentKind == Kind.Object) {
                     ResolvedJavaType srcType = StampTool.typeOrNull(arraycopy.getSource().stamp());
                     ResolvedJavaType destType = StampTool.typeOrNull(arraycopy.getDestination().stamp());
                     ResolvedJavaType srcComponentType = srcType == null ? null : srcType.getComponentType();
@@ -488,7 +460,7 @@ public class ArrayCopySnippets implements Snippets {
                     }
                 }
                 if (componentKind == null && snippetInfo == null) {
-                    JavaKind predictedKind = selectComponentKind(arraycopy, false);
+                    Kind predictedKind = selectComponentKind(arraycopy, false);
                     if (predictedKind != null) {
                         /*
                          * At least one array is of a known type requiring no store checks, so
@@ -496,7 +468,7 @@ public class ArrayCopySnippets implements Snippets {
                          * deficiencies in our propagation of type information.
                          */
                         componentKind = predictedKind;
-                        if (predictedKind == JavaKind.Object) {
+                        if (predictedKind == Kind.Object) {
                             snippetInfo = arraycopySlowPathIntrinsicSnippet;
                             slowPathSnippetInfo = arraycopyPredictedObjectWorkSnippet;
                             slowPathArgument = predictedKind;
@@ -518,9 +490,9 @@ public class ArrayCopySnippets implements Snippets {
             args.add("length", arraycopy.getLength());
             if (snippetInfo == arraycopyUnrolledIntrinsicSnippet) {
                 args.addConst("unrolledLength", arraycopy.getLength().asJavaConstant().asInt());
-                args.addConst("elementKind", componentKind != null ? componentKind : JavaKind.Illegal);
+                args.addConst("elementKind", componentKind != null ? componentKind : Kind.Illegal);
             } else if (snippetInfo == arraycopySlowPathIntrinsicSnippet) {
-                args.addConst("elementKind", componentKind != null ? componentKind : JavaKind.Illegal);
+                args.addConst("elementKind", componentKind != null ? componentKind : Kind.Illegal);
                 args.addConst("slowPath", slowPathSnippetInfo);
                 assert slowPathArgument != null;
                 args.addConst("slowPathArgument", slowPathArgument);
@@ -555,8 +527,8 @@ public class ArrayCopySnippets implements Snippets {
                 HotSpotResolvedObjectType arrayKlass = (HotSpotResolvedObjectType) tool.getMetaAccess().lookupJavaType(Object[].class);
                 ValueNode objectArrayKlass = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), arrayKlass.klass(), tool.getMetaAccess(), arraycopy.graph());
                 args.add("objectArrayKlass", objectArrayKlass);
-                args.addConst("counter", arraycopyCallCounters.get(JavaKind.Object));
-                args.addConst("copiedCounter", arraycopyCallCopiedCounters.get(JavaKind.Object));
+                args.addConst("counter", arraycopyCallCounters.get(Kind.Object));
+                args.addConst("copiedCounter", arraycopyCallCopiedCounters.get(Kind.Object));
             }
             instantiate(args, arraycopy);
         }

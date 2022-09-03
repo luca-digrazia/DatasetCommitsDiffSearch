@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,9 +22,14 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.java.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
 
 /**
@@ -33,16 +38,21 @@ import com.oracle.graal.phases.util.*;
  */
 public class HotSpotProviders extends Providers {
 
-    private final HotSpotDisassemblerProvider disassembler;
-    private final HotSpotSuitesProvider suites;
-    private final HotSpotRegisters registers;
+    private final SuitesProvider suites;
+    private final HotSpotRegistersProvider registers;
+    private final SnippetReflectionProvider snippetReflection;
+    private final HotSpotWordTypes wordTypes;
+    private final Plugins graphBuilderPlugins;
 
-    public HotSpotProviders(HotSpotMetaAccessProvider metaAccess, HotSpotCodeCacheProvider codeCache, ConstantReflectionProvider constantReflection, HotSpotForeignCallsProvider foreignCalls,
-                    LoweringProvider lowerer, Replacements replacements, HotSpotDisassemblerProvider disassembler, HotSpotSuitesProvider suites, HotSpotRegisters registers) {
-        super(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements);
-        this.disassembler = disassembler;
+    public HotSpotProviders(MetaAccessProvider metaAccess, HotSpotCodeCacheProvider codeCache, ConstantReflectionProvider constantReflection, HotSpotForeignCallsProvider foreignCalls,
+                    LoweringProvider lowerer, Replacements replacements, SuitesProvider suites, HotSpotRegistersProvider registers, SnippetReflectionProvider snippetReflection,
+                    HotSpotWordTypes wordTypes, Plugins graphBuilderPlugins) {
+        super(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, new HotSpotStampProvider());
         this.suites = suites;
         this.registers = registers;
+        this.snippetReflection = snippetReflection;
+        this.wordTypes = wordTypes;
+        this.graphBuilderPlugins = graphBuilderPlugins;
     }
 
     @Override
@@ -51,29 +61,27 @@ public class HotSpotProviders extends Providers {
     }
 
     @Override
-    public HotSpotMetaAccessProvider getMetaAccess() {
-        return (HotSpotMetaAccessProvider) super.getMetaAccess();
-    }
-
-    public HotSpotDisassemblerProvider getDisassembler() {
-        return disassembler;
-    }
-
-    public BytecodeDisassemblerProvider getBytecodeDisassembler() {
-        return new BytecodeDisassembler();
-    }
-
-    @Override
     public HotSpotForeignCallsProvider getForeignCalls() {
         return (HotSpotForeignCallsProvider) super.getForeignCalls();
     }
 
-    public HotSpotSuitesProvider getSuites() {
+    public SuitesProvider getSuites() {
         return suites;
     }
 
-    public HotSpotRegisters getRegisters() {
+    public HotSpotRegistersProvider getRegisters() {
         return registers;
     }
 
+    public SnippetReflectionProvider getSnippetReflection() {
+        return snippetReflection;
+    }
+
+    public Plugins getGraphBuilderPlugins() {
+        return graphBuilderPlugins;
+    }
+
+    public HotSpotWordTypes getWordTypes() {
+        return wordTypes;
+    }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,29 +22,31 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
-import static com.oracle.graal.replacements.nodes.BranchProbabilityNode.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.meta.*;
+import java.util.*;
+
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.hotspot.nodes.type.*;
+import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.phases.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.word.*;
+
+//JaCoCo Exclude
 
 /**
  * Utilities and common code paths used by the type check snippets.
  */
 public class TypeCheckSnippetUtils {
 
-    public static final Object TYPE_DISPLAY_LOCATION = LocationNode.createLocation("TypeDisplay");
-
-    static boolean checkSecondarySubType(Word t, Word s) {
+    static boolean checkSecondarySubType(KlassPointer t, KlassPointer s) {
         // if (S.cache == T) return true
-        if (s.readWord(secondarySuperCacheOffset(), SECONDARY_SUPER_CACHE_LOCATION).equal(t)) {
+        if (s.readKlassPointer(secondarySuperCacheOffset(), SECONDARY_SUPER_CACHE_LOCATION).equal(t)) {
             cacheHit.inc();
             return true;
         }
@@ -52,13 +54,13 @@ public class TypeCheckSnippetUtils {
         return checkSelfAndSupers(t, s);
     }
 
-    static boolean checkUnknownSubType(Word t, Word s) {
+    static boolean checkUnknownSubType(KlassPointer t, KlassPointer s) {
         // int off = T.offset
-        int superCheckOffset = t.readInt(superCheckOffsetOffset(), FINAL_LOCATION);
+        int superCheckOffset = t.readInt(superCheckOffsetOffset(), KLASS_SUPER_CHECK_OFFSET_LOCATION);
         boolean primary = superCheckOffset != secondarySuperCacheOffset();
 
         // if (T = S[off]) return true
-        if (s.readWord(superCheckOffset, TYPE_DISPLAY_LOCATION).equal(t)) {
+        if (s.readKlassPointer(superCheckOffset, PRIMARY_SUPERS_LOCATION).equal(t)) {
             if (primary) {
                 cacheHit.inc();
             } else {
@@ -76,7 +78,7 @@ public class TypeCheckSnippetUtils {
         return checkSelfAndSupers(t, s);
     }
 
-    private static boolean checkSelfAndSupers(Word t, Word s) {
+    private static boolean checkSelfAndSupers(KlassPointer t, KlassPointer s) {
         // if (T == S) return true
         if (s.equal(t)) {
             T_equals_S.inc();
@@ -85,11 +87,10 @@ public class TypeCheckSnippetUtils {
 
         // if (S.scan_s_s_array(T)) { S.cache = T; return true; }
         Word secondarySupers = s.readWord(secondarySupersOffset(), SECONDARY_SUPERS_LOCATION);
-        int length = secondarySupers.readInt(metaspaceArrayLengthOffset(), FINAL_LOCATION);
+        int length = secondarySupers.readInt(metaspaceArrayLengthOffset(), METASPACE_ARRAY_LENGTH_LOCATION);
         for (int i = 0; i < length; i++) {
-            if (t.equal(loadSecondarySupersElement(secondarySupers, i))) {
-                probability(NOT_LIKELY_PROBABILITY);
-                s.writeWord(secondarySuperCacheOffset(), t, SECONDARY_SUPER_CACHE_LOCATION);
+            if (probability(NOT_LIKELY_PROBABILITY, t.equal(loadSecondarySupersElement(secondarySupers, i)))) {
+                s.writeKlassPointer(secondarySuperCacheOffset(), t, SECONDARY_SUPER_CACHE_LOCATION);
                 secondariesHit.inc();
                 return true;
             }
@@ -98,20 +99,54 @@ public class TypeCheckSnippetUtils {
         return false;
     }
 
-    static ConstantNode[] createHints(TypeCheckHints hints, MetaAccessProvider runtime, Graph graph) {
-        ConstantNode[] hintHubs = new ConstantNode[hints.types.length];
-        for (int i = 0; i < hintHubs.length; i++) {
-            hintHubs[i] = ConstantNode.forConstant(((HotSpotResolvedObjectType) hints.types[i]).klass(), runtime, graph);
+    /**
+     * A set of type check hints ordered by decreasing probabilities.
+     */
+    public static class Hints {
+
+        /**
+         * The hubs of the hint types.
+         */
+        public final ConstantNode[] hubs;
+
+        /**
+         * A predicate over {@link #hubs} specifying whether the corresponding hint type is a
+         * sub-type of the checked type.
+         */
+        public final boolean[] isPositive;
+
+        Hints(ConstantNode[] hints, boolean[] hintIsPositive) {
+            this.hubs = hints;
+            this.isPositive = hintIsPositive;
         }
-        return hintHubs;
     }
 
-    static Word loadSecondarySupersElement(Word metaspaceArray, int index) {
-        return metaspaceArray.readWord(metaspaceArrayBaseOffset() + index * wordSize(), FINAL_LOCATION);
+    static Hints createHints(TypeCheckHints hints, MetaAccessProvider metaAccess, boolean positiveOnly, StructuredGraph graph) {
+        ConstantNode[] hubs = new ConstantNode[hints.hints.length];
+        boolean[] isPositive = new boolean[hints.hints.length];
+        int index = 0;
+        for (int i = 0; i < hubs.length; i++) {
+            if (!positiveOnly || hints.hints[i].positive) {
+                hubs[index] = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), ((HotSpotResolvedObjectType) hints.hints[i].type).klass(), metaAccess, graph);
+                isPositive[index] = hints.hints[i].positive;
+                index++;
+            }
+        }
+        if (positiveOnly && index != hubs.length) {
+            assert index < hubs.length;
+            hubs = Arrays.copyOf(hubs, index);
+            isPositive = Arrays.copyOf(isPositive, index);
+        }
+        return new Hints(hubs, isPositive);
     }
 
-    private static final SnippetCounter.Group counters = GraalOptions.SnippetCounters ? new SnippetCounter.Group("TypeCheck") : null;
+    static KlassPointer loadSecondarySupersElement(Word metaspaceArray, int index) {
+        return KlassPointer.fromWord(metaspaceArray.readWord(metaspaceArrayBaseOffset() + index * wordSize(), SECONDARY_SUPERS_ELEMENT_LOCATION));
+    }
+
+    private static final SnippetCounter.Group counters = SnippetCounters.getValue() ? new SnippetCounter.Group("TypeCheck") : null;
     static final SnippetCounter hintsHit = new SnippetCounter(counters, "hintsHit", "hit a hint type");
+    static final SnippetCounter hintsMiss = new SnippetCounter(counters, "hintsMiss", "missed a hint type");
     static final SnippetCounter exactHit = new SnippetCounter(counters, "exactHit", "exact type test succeeded");
     static final SnippetCounter exactMiss = new SnippetCounter(counters, "exactMiss", "exact type test failed");
     static final SnippetCounter isNull = new SnippetCounter(counters, "isNull", "object tested was null");

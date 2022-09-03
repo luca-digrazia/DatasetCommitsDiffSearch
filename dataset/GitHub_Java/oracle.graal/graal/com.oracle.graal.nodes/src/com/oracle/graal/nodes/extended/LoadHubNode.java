@@ -22,32 +22,21 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.Assumptions.AssumptionResult;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.meta.Assumptions.AssumptionResult;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.type.ObjectStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.StampProvider;
-import com.oracle.graal.nodes.spi.Virtualizable;
-import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Loads an object's hub. The object is not null-checked by this operation.
  */
 @NodeInfo
-public final class LoadHubNode extends FloatingNode implements Lowerable, Canonicalizable, Virtualizable {
+public final class LoadHubNode extends FloatingGuardedNode implements Lowerable, Canonicalizable, Virtualizable {
 
     public static final NodeClass<LoadHubNode> TYPE = NodeClass.create(LoadHubNode.class);
     @Input ValueNode value;
@@ -67,15 +56,20 @@ public final class LoadHubNode extends FloatingNode implements Lowerable, Canoni
         if (synonym != null) {
             return synonym;
         }
-        return new LoadHubNode(stamp, value);
+        return new LoadHubNode(stamp, value, null);
     }
 
     public LoadHubNode(@InjectedNodeParameter StampProvider stampProvider, ValueNode value) {
-        this(hubStamp(stampProvider, value), value);
+        this(stampProvider, value, null);
     }
 
-    public LoadHubNode(Stamp stamp, ValueNode value) {
-        super(TYPE, stamp);
+    public LoadHubNode(@InjectedNodeParameter StampProvider stampProvider, ValueNode value, ValueNode guard) {
+        this(hubStamp(stampProvider, value), value, guard);
+    }
+
+    public LoadHubNode(Stamp stamp, ValueNode value, ValueNode guard) {
+        super(TYPE, stamp, (GuardingNode) guard);
+        assert value != guard;
         this.value = value;
     }
 
@@ -109,12 +103,11 @@ public final class LoadHubNode extends FloatingNode implements Lowerable, Canoni
             ObjectStamp objectStamp = (ObjectStamp) curValue.stamp();
             if (objectStamp.isExactType()) {
                 exactType = objectStamp.type();
-            } else if (objectStamp.type() != null && graph != null) {
-                Assumptions assumptions = graph.getAssumptions();
+            } else if (objectStamp.type() != null && graph != null && graph.getAssumptions() != null) {
                 AssumptionResult<ResolvedJavaType> leafConcreteSubtype = objectStamp.type().findLeafConcreteSubtype();
-                if (leafConcreteSubtype != null && leafConcreteSubtype.canRecordTo(assumptions)) {
-                    leafConcreteSubtype.recordTo(assumptions);
+                if (leafConcreteSubtype != null) {
                     exactType = leafConcreteSubtype.getResult();
+                    graph.getAssumptions().record(leafConcreteSubtype);
                 }
             }
         }

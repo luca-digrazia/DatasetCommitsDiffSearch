@@ -22,34 +22,21 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
-import jdk.vm.ci.hotspot.HotSpotResolvedPrimitiveType;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.LocationIdentity;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.calc.Condition;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.hotspot.nodes.type.KlassPointerStamp;
-import com.oracle.graal.hotspot.word.KlassPointer;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FloatingGuardedNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.ConvertNode;
-import com.oracle.graal.nodes.extended.GetClassNode;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.extended.LoadHubNode;
-import com.oracle.graal.nodes.memory.ReadNode;
-import com.oracle.graal.nodes.memory.address.AddressNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.hotspot.nodes.type.*;
+import com.oracle.graal.hotspot.word.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.memory.address.*;
+import com.oracle.graal.nodes.spi.*;
 
 /**
  * Read {@code Class::_klass} to get the hub for a {@link java.lang.Class}. This node mostly exists
@@ -91,7 +78,7 @@ public final class ClassGetHubNode extends FloatingGuardedNode implements Lowera
             }
             if (clazz instanceof GetClassNode) {
                 GetClassNode getClass = (GetClassNode) clazz;
-                return new LoadHubNode(KlassPointerStamp.klassNonNull(), getClass.getObject());
+                return new LoadHubNode(KlassPointerStamp.klassNonNull(), getClass.getObject(), null);
             }
             if (clazz instanceof HubGetClassNode) {
                 // replace _klass._java_mirror._klass -> _klass

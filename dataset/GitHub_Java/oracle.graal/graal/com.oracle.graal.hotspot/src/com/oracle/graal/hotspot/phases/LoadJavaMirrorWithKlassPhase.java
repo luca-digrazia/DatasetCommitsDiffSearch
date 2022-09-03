@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,36 +22,107 @@
  */
 package com.oracle.graal.hotspot.phases;
 
-import static com.oracle.graal.api.meta.LocationIdentity.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.nodes.ConstantNode.*;
+import static com.oracle.graal.nodes.NamedLocationIdentity.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.hotspot.HotSpotVMConfig.CompressEncoding;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.hotspot.nodes.type.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
 
+/**
+ * For AOT compilation we aren't allowed to use a {@link Class} reference ({@code javaMirror})
+ * directly. Instead the {@link Class} reference should be obtained from the {@code Klass} object.
+ * The reason for this is, that in Class Data Sharing (CDS) a {@code Klass} object is mapped to a
+ * fixed address in memory, but the {@code javaMirror} is not (which lives in the Java heap).
+ *
+ * Lowering can introduce new {@link ConstantNode}s containing a {@link Class} reference, thus this
+ * phase must be applied after {@link LoweringPhase}.
+ *
+ * @see AheadOfTimeVerificationPhase
+ */
 public class LoadJavaMirrorWithKlassPhase extends BasePhase<PhaseContext> {
+
+    private final int classMirrorOffset;
+    private final CompressEncoding oopEncoding;
+
+    public LoadJavaMirrorWithKlassPhase(int classMirrorOffset, CompressEncoding oopEncoding) {
+        this.classMirrorOffset = classMirrorOffset;
+        this.oopEncoding = oopEncoding;
+    }
+
+    private ValueNode getClassConstantReplacement(StructuredGraph graph, PhaseContext context, JavaConstant constant) {
+        if (constant instanceof HotSpotObjectConstant) {
+            ConstantReflectionProvider constantReflection = context.getConstantReflection();
+            ResolvedJavaType type = constantReflection.asJavaType(constant);
+            if (type != null) {
+                MetaAccessProvider metaAccess = context.getMetaAccess();
+                Stamp stamp = StampFactory.exactNonNull(metaAccess.lookupJavaType(Class.class));
+
+                if (type instanceof HotSpotResolvedObjectType) {
+                    ConstantNode klass = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), ((HotSpotResolvedObjectType) type).klass(), metaAccess, graph);
+                    AddressNode address = graph.unique(new OffsetAddressNode(klass, ConstantNode.forLong(classMirrorOffset, graph)));
+                    ValueNode read = graph.unique(new FloatingReadNode(address, CLASS_MIRROR_LOCATION, null, stamp));
+
+                    if (((HotSpotObjectConstant) constant).isCompressed()) {
+                        return CompressionNode.compress(read, oopEncoding);
+                    } else {
+                        return read;
+                    }
+                } else {
+                    /*
+                     * Primitive classes are more difficult since they don't have a corresponding
+                     * Klass* so get them from Class.TYPE for the java box type.
+                     */
+                    HotSpotResolvedPrimitiveType primitive = (HotSpotResolvedPrimitiveType) type;
+                    ResolvedJavaType boxingClass = metaAccess.lookupJavaType(primitive.getKind().toBoxedJavaClass());
+                    ConstantNode clazz = ConstantNode.forConstant(boxingClass.getJavaClass(), metaAccess, graph);
+                    HotSpotResolvedJavaField[] a = (HotSpotResolvedJavaField[]) boxingClass.getStaticFields();
+                    HotSpotResolvedJavaField typeField = null;
+                    for (HotSpotResolvedJavaField f : a) {
+                        if (f.getName().equals("TYPE")) {
+                            typeField = f;
+                            break;
+                        }
+                    }
+                    if (typeField == null) {
+                        throw new JVMCIError("Can't find TYPE field in class");
+                    }
+
+                    if (oopEncoding != null) {
+                        stamp = NarrowOopStamp.compressed((AbstractObjectStamp) stamp, oopEncoding);
+                    }
+                    AddressNode address = graph.unique(new OffsetAddressNode(clazz, ConstantNode.forLong(typeField.offset(), graph)));
+                    ValueNode read = graph.unique(new FloatingReadNode(address, FINAL_LOCATION, null, stamp));
+
+                    if (oopEncoding == null || ((HotSpotObjectConstant) constant).isCompressed()) {
+                        return read;
+                    } else {
+                        return CompressionNode.uncompress(read, oopEncoding);
+                    }
+                }
+            }
+        }
+        return null;
+    }
 
     @Override
     protected void run(StructuredGraph graph, PhaseContext context) {
-        for (ConstantNode node : graph.getNodes().filter(ConstantNode.class)) {
-            Constant constant = node.asConstant();
-            if (constant.getKind() == Kind.Object && constant.asObject() instanceof Class<?>) {
-                ResolvedJavaType type = context.getRuntime().lookupJavaType((Class<?>) constant.asObject());
-                assert type instanceof HotSpotResolvedObjectType;
-
-                HotSpotRuntime runtime = (HotSpotRuntime) context.getRuntime();
-
-                Constant klass = ((HotSpotResolvedObjectType) type).klass();
-                ConstantNode klassNode = ConstantNode.forConstant(klass, runtime, graph);
-
-                Stamp stamp = StampFactory.exactNonNull(runtime.lookupJavaType(Class.class));
-                LocationNode location = graph.unique(ConstantLocationNode.create(FINAL_LOCATION, stamp.kind(), runtime.config.classMirrorOffset, graph));
-                FloatingReadNode freadNode = graph.add(new FloatingReadNode(klassNode, location, null, stamp));
-
-                graph.replaceFloating(node, freadNode);
+        for (ConstantNode node : getConstantNodes(graph)) {
+            JavaConstant constant = node.asJavaConstant();
+            ValueNode freadNode = getClassConstantReplacement(graph, context, constant);
+            if (freadNode != null) {
+                node.replace(graph, freadNode);
             }
         }
     }
