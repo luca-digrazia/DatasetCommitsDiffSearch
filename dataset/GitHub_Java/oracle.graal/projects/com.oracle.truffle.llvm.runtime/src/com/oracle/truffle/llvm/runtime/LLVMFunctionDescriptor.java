@@ -47,7 +47,6 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.llvm.runtime.interop.LLVMFunctionMessageResolutionForeign;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack.NeedsStack;
-import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 
 public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject, Comparable<LLVMFunctionDescriptor> {
@@ -141,29 +140,7 @@ public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject
 
         @Override
         TruffleObject createNativeWrapper(LLVMFunctionDescriptor descriptor) {
-            CompilerAsserts.neverPartOfCompilation();
-
-            TruffleObject wrapper = null;
-            LLVMAddress pointer = null;
-            if (UnresolvedFunction.isNFIAvailable(descriptor)) {
-                NFIContextExtension nfiContextExtension = descriptor.context.getContextExtension(NFIContextExtension.class);
-                wrapper = nfiContextExtension.createNativeWrapper(descriptor);
-                if (wrapper != null) {
-                    try {
-                        pointer = LLVMAddress.fromLong(ForeignAccess.sendAsPointer(Message.AS_POINTER.createNode(), wrapper));
-                    } catch (UnsupportedMessageException e) {
-                        throw new AssertionError(e);
-                    }
-                }
-            }
-
-            if (wrapper == null) {
-                pointer = LLVMAddress.fromLong(LLVMFunction.tagSulongFunctionPointer(descriptor.getFunctionId()));
-                wrapper = new LLVMTruffleAddress(pointer, descriptor.getType(), descriptor.context);
-            }
-
-            descriptor.context.registerFunctionPointer(pointer, descriptor);
-            return wrapper;
+            return descriptor.context.createNativeWrapper(descriptor);
         }
     }
 
@@ -200,26 +177,17 @@ public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject
         void resolve(LLVMFunctionDescriptor descriptor) {
             if (descriptor.isNullFunction()) {
                 descriptor.setFunction(new NullFunction());
-            } else if (canIntrinsify(descriptor)) {
-                NativeIntrinsicProvider nativeIntrinsicProvider = descriptor.getContext().getContextExtension(NativeIntrinsicProvider.class);
-                Intrinsic intrinsification = new Intrinsic(nativeIntrinsicProvider, descriptor.functionName);
+            } else if (descriptor.context.getNativeIntrinsicsProvider().isIntrinsified(descriptor.functionName)) {
+                Intrinsic intrinsification = new Intrinsic(descriptor.context.getNativeIntrinsicsProvider(), descriptor.functionName);
                 descriptor.setFunction(new NativeIntrinsicFunction(intrinsification));
-            } else if (isNFIAvailable(descriptor)) {
-                NFIContextExtension nfiContextExtension = descriptor.getContext().getContextExtension(NFIContextExtension.class);
-                TruffleObject nativeFunction = nfiContextExtension.getNativeFunction(descriptor.getContext(), descriptor.getName());
-                descriptor.setFunction(new NativeFunction(nativeFunction));
             } else {
-                throw new AssertionError("Failed to look up the function " + descriptor.getName() + ".");
+                NativeLookup nativeLookup = descriptor.context.getNativeLookup();
+                if (nativeLookup == null) {
+                    throw new AssertionError("The NativeLookup is disabled. Failed to look up the function " + descriptor.getName() + ".");
+                }
+                TruffleObject nativeFunction = nativeLookup.getNativeFunction(descriptor.getName());
+                descriptor.setFunction(new NativeFunction(nativeFunction));
             }
-        }
-
-        private static boolean isNFIAvailable(LLVMFunctionDescriptor descriptor) {
-            return descriptor.getContext().hasContextExtension(NFIContextExtension.class) && descriptor.getContext().getEnv().getOptions().get(SulongEngineOption.ENABLE_NFI);
-        }
-
-        private static boolean canIntrinsify(LLVMFunctionDescriptor descriptor) {
-            return descriptor.getContext().hasContextExtension(NativeIntrinsicProvider.class) &&
-                            descriptor.getContext().getContextExtension(NativeIntrinsicProvider.class).isIntrinsified(descriptor.functionName);
         }
 
         @Override
@@ -349,7 +317,9 @@ public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject
             setFunction(newFunction);
         } else {
             // existing function is strong
-            if (!newFunction.weak) {
+            if (newFunction.weak) {
+                // ignore
+            } else {
                 throw new AssertionError("Found multiple strong declarations of function " + getName() + ".");
             }
         }
