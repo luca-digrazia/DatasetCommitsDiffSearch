@@ -22,10 +22,7 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
-import java.util.*;
-
 import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.ir.StateSplit.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
@@ -61,8 +58,7 @@ public final class Phi extends FloatingNode {
         return (Merge) inputs().get(super.inputCount() + INPUT_MERGE);
     }
 
-    public void setMerge(Merge n) {
-        assert n != null;
+    public void setMerge(Value n) {
         inputs().set(super.inputCount() + INPUT_MERGE, n);
     }
 
@@ -71,15 +67,11 @@ public final class Phi extends FloatingNode {
         setMerge(merge);
     }
 
-    Phi(CiKind kind, Graph graph) {
-        super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
-    }
-
     @Override
     public boolean verify() {
         assertTrue(merge() != null);
         if (!isDead()) {
-            assertTrue(merge().phiPredecessorCount() == valueCount());
+            assertTrue(merge().endCount() + (merge() instanceof LoopBegin ? 1 : 0) == valueCount());
         }
         return true;
     }
@@ -156,20 +148,8 @@ public final class Phi extends FloatingNode {
 
     @Override
     public Node copy(Graph into) {
-        Phi x = new Phi(kind, into);
+        Phi x = new Phi(kind, null, into);
         x.isDead = isDead;
         return x;
-    }
-
-    @Override
-    public Iterable<? extends Node> dataInputs() {
-        final Iterator< ? extends Node> input = super.dataInputs().iterator();
-        return new Iterable<Node>() {
-            @Override
-            public Iterator<Node> iterator() {
-                // TODO Auto-generated method stub
-                return new FilteringIterator(input, Merge.class);
-            }
-        };
     }
 }
