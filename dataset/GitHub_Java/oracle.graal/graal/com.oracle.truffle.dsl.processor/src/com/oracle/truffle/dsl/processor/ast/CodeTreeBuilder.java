@@ -165,18 +165,14 @@ public class CodeTreeBuilder {
     }
 
     public CodeTreeBuilder startCall(String callSite) {
-        return startCall((CodeTree) null, callSite);
+        return startCall(null, callSite);
     }
 
     public CodeTreeBuilder startCall(String receiver, String callSite) {
-        return startCall(singleString(receiver), callSite);
-    }
-
-    public CodeTreeBuilder startCall(CodeTree receiver, String callSite) {
         if (receiver == null) {
             return startGroup().string(callSite).startParanthesesCommaGroup().endAfter();
         } else {
-            return startGroup().tree(receiver).string(".").string(callSite).startParanthesesCommaGroup().endAfter();
+            return startGroup().string(receiver).string(".").string(callSite).startParanthesesCommaGroup().endAfter();
         }
     }
 
@@ -338,10 +334,6 @@ public class CodeTreeBuilder {
 
     public CodeTreeBuilder startIf() {
         return startGroup().string("if ").startParanthesesCommaGroup().endAndWhitespaceAfter().startGroup().endAfter();
-    }
-
-    public CodeTreeBuilder startFor() {
-        return startGroup().string("for ").startParantheses().endAndWhitespaceAfter().startGroup().endAfter();
     }
 
     public boolean startIf(boolean elseIf) {
