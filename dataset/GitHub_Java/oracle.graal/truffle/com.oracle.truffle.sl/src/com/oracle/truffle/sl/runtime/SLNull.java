@@ -74,13 +74,8 @@ public final class SLNull implements TruffleObject {
         return "null";
     }
 
-    /**
-     * In case you want some of your objects to co-operate with other languages, you need to make
-     * them implement {@link TruffleObject} and provide additional {@link SLNullMessageResolution
-     * foreign access implementation}.
-     */
     @Override
     public ForeignAccess getForeignAccess() {
-        return SLNullMessageResolutionForeign.createAccess();
+        return SLFunctionForeignAccess.create();
     }
 }

@@ -49,7 +49,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.sl.SLLanguage;
 import com.oracle.truffle.sl.nodes.call.SLDispatchNode;
 import com.oracle.truffle.sl.nodes.call.SLDispatchNodeGen;
-import static com.oracle.truffle.sl.runtime.SLContext.fromForeignValue;
+import java.math.BigInteger;
 import java.util.List;
 
 /**
@@ -74,8 +74,6 @@ final class SLFunctionForeignAccess implements ForeignAccess.Factory {
             return Truffle.getRuntime().createCallTarget(new SLForeignCallerRootNode());
         } else if (Message.IS_NULL.equals(tree)) {
             return Truffle.getRuntime().createCallTarget(new SLForeignNullCheckNode());
-        } else if (Message.IS_EXECUTABLE.equals(tree)) {
-            return Truffle.getRuntime().createCallTarget(new SLForeignExecutableCheckNode());
         } else {
             throw new IllegalArgumentException(tree.toString() + " not supported");
         }
@@ -95,17 +93,22 @@ final class SLFunctionForeignAccess implements ForeignAccess.Factory {
             // function call (the this object)
             // as an implicit 1st argument; we need to ignore this argument for SL
             List<Object> args = ForeignAccess.getArguments(frame);
-            Object[] arr;
-            if (args.size() > 0 && args.get(0) instanceof SLContext) {
-                arr = args.subList(1, args.size()).toArray();
-            } else {
-                arr = args.toArray();
-            }
+            Object[] arr = args.subList(1, args.size()).toArray();
             for (int i = 0; i < arr.length; i++) {
-                arr[i] = fromForeignValue(arr[i]);
+                Object a = arr[i];
+                if (a instanceof Long) {
+                    continue;
+                }
+                if (a instanceof BigInteger) {
+                    continue;
+                }
+                if (a instanceof Number) {
+                    arr[i] = ((Number) a).longValue();
+                }
             }
             return dispatch.executeDispatch(frame, function, arr);
         }
+
     }
 
     private static class SLForeignNullCheckNode extends RootNode {
@@ -117,18 +120,6 @@ final class SLFunctionForeignAccess implements ForeignAccess.Factory {
         public Object execute(VirtualFrame frame) {
             Object receiver = ForeignAccess.getReceiver(frame);
             return SLNull.SINGLETON == receiver;
-        }
-    }
-
-    private static class SLForeignExecutableCheckNode extends RootNode {
-        public SLForeignExecutableCheckNode() {
-            super(SLLanguage.class, null, null);
-        }
-
-        @Override
-        public Object execute(VirtualFrame frame) {
-            Object receiver = ForeignAccess.getReceiver(frame);
-            return receiver instanceof SLFunction;
         }
     }
 }
