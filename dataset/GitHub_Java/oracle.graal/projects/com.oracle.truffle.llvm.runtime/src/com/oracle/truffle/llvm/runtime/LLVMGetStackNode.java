@@ -32,12 +32,11 @@ package com.oracle.truffle.llvm.runtime;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 
-public abstract class LLVMGetStackNode extends LLVMNode {
+public abstract class LLVMGetStackNode extends Node {
 
     public static LLVMGetStackNode create() {
         return LLVMGetStackNodeGen.create();
@@ -45,9 +44,9 @@ public abstract class LLVMGetStackNode extends LLVMNode {
 
     public abstract LLVMStack executeWithTarget(LLVMThreadingStack threadingStack, Thread currentThread);
 
-    protected synchronized LLVMStack getStack(LLVMMemory memory, LLVMThreadingStack threadingStack, Thread cachedThread) {
+    protected synchronized LLVMStack getStack(LLVMThreadingStack threadingStack, Thread cachedThread) {
         if (Thread.currentThread() == cachedThread) {
-            return threadingStack.getStack(memory);
+            return threadingStack.getStack();
         }
         CompilerDirectives.transferToInterpreter();
         throw new IllegalStateException();
@@ -55,17 +54,13 @@ public abstract class LLVMGetStackNode extends LLVMNode {
 
     @SuppressWarnings("unused")
     @Specialization(limit = "3", guards = "currentThread == cachedThread")
-    protected LLVMStack cached(LLVMThreadingStack stack, Thread currentThread,
-                    @Cached("currentThread") Thread cachedThread,
-                    @Cached("getLLVMMemory()") LLVMMemory memory,
-                    @Cached("getStack(memory, stack, cachedThread)") LLVMStack cachedStack) {
+    public LLVMStack cached(LLVMThreadingStack stack, Thread currentThread, @Cached("currentThread") Thread cachedThread, @Cached("getStack(stack, cachedThread)") LLVMStack cachedStack) {
         return cachedStack;
     }
 
     @SuppressWarnings("unused")
     @Specialization(replaces = "cached")
-    protected LLVMStack generic(LLVMThreadingStack stack, Thread currentThread,
-                    @Cached("getLLVMMemory()") LLVMMemory memory) {
-        return stack.getStack(memory);
+    public LLVMStack generic(LLVMThreadingStack stack, Thread currentThread) {
+        return stack.getStack();
     }
 }

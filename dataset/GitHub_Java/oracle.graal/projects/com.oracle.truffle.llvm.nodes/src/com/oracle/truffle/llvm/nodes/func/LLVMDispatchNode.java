@@ -44,10 +44,9 @@ import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.Intrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMGetStackNode;
-import com.oracle.truffle.llvm.runtime.NFIContextExtension;
-import com.oracle.truffle.llvm.runtime.NFIContextExtension.UnsupportedNativeTypeException;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.Intrinsic;
+import com.oracle.truffle.llvm.runtime.NativeLookup.UnsupportedNativeTypeException;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
@@ -69,9 +68,7 @@ public abstract class LLVMDispatchNode extends LLVMNode {
         if (signature == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             try {
-                LLVMContext context = getContext();
-                NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
-                this.signature = nfiContextExtension.getNativeSignature(type, LLVMCallNode.USER_ARGUMENT_OFFSET);
+                this.signature = LLVMContext.getNativeSignature(type, LLVMCallNode.USER_ARGUMENT_OFFSET);
             } catch (UnsupportedNativeTypeException ex) {
                 throw new AssertionError(ex);
             }

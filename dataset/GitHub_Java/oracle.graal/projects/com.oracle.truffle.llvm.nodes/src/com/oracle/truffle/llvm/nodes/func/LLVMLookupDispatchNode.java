@@ -45,7 +45,6 @@ import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
 import com.oracle.truffle.llvm.runtime.LLVMGetStackNode;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNode;
 import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNodeGen;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
@@ -130,7 +129,7 @@ public abstract class LLVMLookupDispatchNode extends LLVMNode {
     }
 
     @Specialization(guards = "isForeignFunction(function)")
-    protected Object doForeign(LLVMTruffleObject function, Object[] arguments,
+    protected Object doForeign(TruffleObject function, Object[] arguments,
                     @Cached("createCrossLanguageCallNode(arguments)") Node crossLanguageCallNode,
                     @Cached("createLLVMDataEscapeNodes()") LLVMDataEscapeNode[] dataEscapeNodes,
                     @Cached("createToLLVMNode()") ForeignToLLVM toLLVMNode,
@@ -139,7 +138,7 @@ public abstract class LLVMLookupDispatchNode extends LLVMNode {
         try {
             LLVMStack stack = getStack.executeWithTarget(getThreadingStack(context), Thread.currentThread());
             stack.setStackPointer((long) arguments[0]);
-            Object ret = ForeignAccess.sendExecute(crossLanguageCallNode, function.getObject(), getForeignArguments(dataEscapeNodes, arguments, context));
+            Object ret = ForeignAccess.sendExecute(crossLanguageCallNode, function, getForeignArguments(dataEscapeNodes, arguments, context));
             stack.setStackPointer((long) arguments[0]);
             return toLLVMNode.executeWithTarget(ret);
         } catch (InteropException e) {
@@ -166,8 +165,8 @@ public abstract class LLVMLookupDispatchNode extends LLVMNode {
         return args;
     }
 
-    protected static boolean isForeignFunction(LLVMTruffleObject function) {
-        return function.getOffset() == 0;
+    protected static boolean isForeignFunction(TruffleObject function) {
+        return !(function instanceof LLVMFunction);
     }
 
     protected static Node createCrossLanguageCallNode(Object[] arguments) {
