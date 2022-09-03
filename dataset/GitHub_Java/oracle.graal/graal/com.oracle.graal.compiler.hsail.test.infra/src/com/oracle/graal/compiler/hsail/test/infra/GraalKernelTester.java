@@ -128,8 +128,6 @@ public abstract class GraalKernelTester extends KernelTester {
                 Debug.log("WARNING:Invalid installed code: " + e);
                 e.printStackTrace();
             }
-        } else {
-            super.dispatchMethodKernelOkra(range, args);
         }
     }
 
