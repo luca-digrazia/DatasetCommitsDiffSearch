@@ -32,6 +32,7 @@ import javax.lang.model.type.*;
 import javax.lang.model.util.*;
 
 import com.oracle.truffle.api.dsl.*;
+import com.oracle.truffle.api.nodes.NodeInfo.Kind;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.dsl.processor.*;
 import com.oracle.truffle.dsl.processor.ast.*;
@@ -953,28 +954,28 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 clazz.add(createGenericExecute(node, rootGroup));
             }
 
-            clazz.add(createGetCost(node, null, NodeCost.MONOMORPHIC));
+            clazz.add(createGetKind(node, null, Kind.SPECIALIZED));
         }
 
         protected boolean needsInvokeCopyConstructorMethod() {
             return getModel().getNode().isPolymorphic();
         }
 
-        protected CodeExecutableElement createGetCost(NodeData node, SpecializationData specialization, NodeCost cost) {
-            CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), context.getTruffleTypes().getNodeCost(), "getCost");
+        protected CodeExecutableElement createGetKind(NodeData node, SpecializationData specialization, Kind kind) {
+            CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), context.getTruffleTypes().getNodeInfoKind(), "getKind");
 
-            TypeMirror nodeInfoKind = context.getTruffleTypes().getNodeCost();
+            TypeMirror nodeInfoKind = context.getTruffleTypes().getNodeInfoKind();
 
             CodeTreeBuilder builder = method.createBuilder();
             if (node.isPolymorphic() && specialization == null) {
                 // assume next0 exists
-                builder.startIf().string("next0 != null && next0.getCost() == ").staticReference(nodeInfoKind, "MONOMORPHIC").end();
+                builder.startIf().string("next0 != null && next0.getKind() == ").staticReference(nodeInfoKind, "SPECIALIZED").end();
                 builder.startBlock();
                 builder.startReturn().staticReference(nodeInfoKind, "POLYMORPHIC").end();
                 builder.end();
             }
 
-            builder.startReturn().staticReference(nodeInfoKind, cost.name()).end();
+            builder.startReturn().staticReference(nodeInfoKind, kind.name()).end();
             return method;
         }
 
@@ -2475,7 +2476,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             }
             CodeTypeElement clazz = createClass(node, modifiers(PRIVATE, STATIC, FINAL), nodePolymorphicClassName(node), baseType, false);
 
-            clazz.getAnnotationMirrors().add(createNodeInfo(node, NodeCost.NONE));
+            clazz.getAnnotationMirrors().add(createNodeInfo(node, Kind.POLYMORPHIC));
 
             for (ActualParameter polymorphParameter : polymorph.getSignatureParameters()) {
                 if (!polymorphParameter.getTypeSystemType().isGeneric()) {
@@ -2522,7 +2523,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             }
 
             createCachedExecuteMethods(specialization);
-            clazz.add(createGetCost(specialization.getNode(), specialization, NodeCost.NONE));
+            clazz.add(createGetKind(specialization.getNode(), specialization, Kind.SPECIALIZED));
         }
 
         private ExecutableElement createUpdateType(ActualParameter parameter) {
@@ -2562,34 +2563,34 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             }
             CodeTypeElement clazz = createClass(node, modifiers(PRIVATE, STATIC, FINAL), nodeSpecializationClassName(specialization), baseType, false);
 
-            NodeCost cost;
+            Kind kind;
             if (specialization.isGeneric()) {
-                cost = NodeCost.MEGAMORPHIC;
+                kind = Kind.GENERIC;
             } else if (specialization.isUninitialized()) {
-                cost = NodeCost.UNINITIALIZED;
+                kind = Kind.UNINITIALIZED;
             } else if (specialization.isPolymorphic()) {
-                cost = NodeCost.NONE;
+                kind = Kind.POLYMORPHIC;
             } else if (specialization.isSpecialized()) {
-                cost = NodeCost.MONOMORPHIC;
+                kind = Kind.SPECIALIZED;
             } else {
                 throw new AssertionError();
             }
-            clazz.getAnnotationMirrors().add(createNodeInfo(node, cost));
+            clazz.getAnnotationMirrors().add(createNodeInfo(node, kind));
 
             return clazz;
         }
 
-        protected CodeAnnotationMirror createNodeInfo(NodeData node, NodeCost cost) {
+        protected CodeAnnotationMirror createNodeInfo(NodeData node, Kind kind) {
             String shortName = node.getShortName();
             CodeAnnotationMirror nodeInfoMirror = new CodeAnnotationMirror(getContext().getTruffleTypes().getNodeInfoAnnotation());
             if (shortName != null) {
                 nodeInfoMirror.setElementValue(nodeInfoMirror.findExecutableElement("shortName"), new CodeAnnotationValue(shortName));
             }
 
-            DeclaredType nodeinfoCost = getContext().getTruffleTypes().getNodeCost();
-            VariableElement varKind = Utils.findVariableElement(nodeinfoCost, cost.name());
+            DeclaredType nodeinfoKind = getContext().getTruffleTypes().getNodeInfoKind();
+            VariableElement varKind = Utils.findVariableElement(nodeinfoKind, kind.name());
 
-            nodeInfoMirror.setElementValue(nodeInfoMirror.findExecutableElement("cost"), new CodeAnnotationValue(varKind));
+            nodeInfoMirror.setElementValue(nodeInfoMirror.findExecutableElement("kind"), new CodeAnnotationValue(varKind));
             return nodeInfoMirror;
         }
 
@@ -2608,9 +2609,9 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             }
 
             if (specialization.isGeneric()) {
-                clazz.add(createGetCost(specialization.getNode(), specialization, NodeCost.MEGAMORPHIC));
+                clazz.add(createGetKind(specialization.getNode(), specialization, Kind.GENERIC));
             } else if (specialization.isUninitialized()) {
-                clazz.add(createGetCost(specialization.getNode(), specialization, NodeCost.UNINITIALIZED));
+                clazz.add(createGetKind(specialization.getNode(), specialization, Kind.UNINITIALIZED));
             }
         }
 
