@@ -22,22 +22,21 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.graal.cri.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.virtual.*;
+import com.oracle.max.cri.ci.*;
 
 /**
  * Load of a value from a location specified as an offset relative to an object.
- * No null check is performed before the load.
  */
-public class UnsafeLoadNode extends FixedWithNextNode implements Lowerable, Virtualizable {
+public class UnsafeLoadNode extends FixedWithNextNode implements Lowerable {
 
     @Input private ValueNode object;
     @Input private ValueNode offset;
     private final int displacement;
-    private final Kind loadKind;
+    private final CiKind loadKind;
 
     public ValueNode object() {
         return object;
@@ -56,49 +55,35 @@ public class UnsafeLoadNode extends FixedWithNextNode implements Lowerable, Virt
         this.object = object;
         this.displacement = displacement;
         this.offset = offset;
-        this.loadKind = Kind.Object;
+        this.loadKind = CiKind.Object;
     }
 
-    public UnsafeLoadNode(ValueNode object, int displacement, ValueNode offset, Kind kind) {
-        super(StampFactory.forKind(kind.getStackKind()));
+    public UnsafeLoadNode(ValueNode object, int displacement, ValueNode offset, CiKind kind) {
+        super(StampFactory.forKind(kind.stackKind()));
         this.object = object;
         this.displacement = displacement;
         this.offset = offset;
         this.loadKind = kind;
     }
 
-    public Kind loadKind() {
+    public CiKind loadKind() {
         return loadKind;
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(CiLoweringTool tool) {
         tool.getRuntime().lower(this, tool);
     }
 
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        VirtualObjectNode virtual = tool.getVirtualState(object());
-        if (virtual != null) {
-            ValueNode indexValue = tool.getReplacedValue(offset());
-            if (indexValue.isConstant()) {
-                int fieldIndex = virtual.fieldIndexForOffset(indexValue.asConstant().asLong());
-                if (fieldIndex != -1) {
-                    ValueNode result = tool.getVirtualEntry(virtual, fieldIndex);
-                    VirtualObjectNode virtualResult = tool.getVirtualState(result);
-                    if (virtualResult != null) {
-                        tool.replaceWithVirtual(virtualResult);
-                    } else {
-                        tool.replaceWithValue(result);
-                    }
-                }
-            }
-        }
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static <T> T load(Object object, @ConstantNodeParameter int displacement, long offset, @ConstantNodeParameter CiKind kind) {
+        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
     }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native <T> T load(Object object, @ConstantNodeParameter int displacement, long offset, @ConstantNodeParameter Kind kind);
-
-    @NodeIntrinsic
-    public static native Object loadObject(Object object, @ConstantNodeParameter int displacement, long offset, @ConstantNodeParameter boolean nonNull);
+    public static Object loadObject(Object object, @ConstantNodeParameter int displacement, long offset, @ConstantNodeParameter boolean nonNull) {
+        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
+    }
 }
