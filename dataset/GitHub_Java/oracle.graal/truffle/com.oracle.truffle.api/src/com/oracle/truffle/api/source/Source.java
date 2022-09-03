@@ -167,7 +167,7 @@ public abstract class Source {
      * @return new instance of builder
      * @since 0.15
      */
-    public static Builder<Source,IOException> newFromFile(File file) {
+    public static Builder<Source> newFromFile(File file) {
         return EMPTY.new Builder<>(file);
     }
 
@@ -278,18 +278,7 @@ public abstract class Source {
         return new SourceImpl(content);
     }
 
-    /** Builds new {@link Source source} from a provided text. One needs
-     * to specify a {@link Builder#mimeType(java.lang.String)}, possibly a
-     * {@link Builder#name(java.lang.String)} and other attributes and then
-     * can {@link Builder#build()} a new instance of the source. Sample usage:
-     *
-     * {@link SourceSnippets#fromAString}
-     *
-     * @param text the text to be returned by {@link Source#getCode()}
-     * @return new builder to configure additional properties
-     * @since 0.15
-     */
-    public static Builder<Void,RuntimeException> newFromText(String text) {
+    public static Builder<Void> newWithText(String text) {
         return EMPTY.new Builder<>(text);
     }
 
@@ -396,7 +385,7 @@ public abstract class Source {
         return new SourceImpl(content);
     }
 
-    public static Builder<Source,IOException> newFromURL(URL url) {
+    public static Builder<Source> newFromURL(URL url) {
         return EMPTY.new Builder<>(url);
     }
 
@@ -429,7 +418,8 @@ public abstract class Source {
      * @return new builder to configure and {@link Builder#build() construct} {@link Source} from
      * @since 0.15
      */
-    public static Builder<Void,IOException> newFromReader(Reader reader) {
+    public static Builder<Void> newFromReader(Reader reader) {
+        // TBD: read only once vs. build twice
         return EMPTY.new Builder<>(reader);
     }
 
@@ -996,12 +986,7 @@ public abstract class Source {
                         Objects.equals(getPath(), other.getPath());
     }
 
-    @SuppressWarnings("unchecked")
-    static <E extends Exception> E raise(Class<E> type, Exception ex) throws E {
-        throw (E)ex;
-    }
-
-    public final class Builder<R,E extends Exception> {
+    public final class Builder<R> {
         private final Object source;
         private String name;
         private String path;
@@ -1013,21 +998,21 @@ public abstract class Source {
             this.source = source;
         }
 
-        public Builder<R,E> name(String newName) {
+        public Builder<R> name(String newName) {
             this.name = newName;
             return this;
         }
 
-        Builder<R,E> path(String p) {
+        Builder<R> path(String p) {
             this.path = p;
             return this;
         }
 
         @SuppressWarnings("unchecked")
-        public Builder<Source,E> mimeType(String newMimeType) {
+        public Builder<Source> mimeType(String newMimeType) {
             Objects.nonNull(newMimeType);
             this.mime = newMimeType;
-            return (Builder<Source,E>) this;
+            return (Builder<Source>) this;
         }
 
         /**
@@ -1038,64 +1023,39 @@ public abstract class Source {
          * @return the instance of this builder
          * @since 0.15
          */
-        public Builder<R,E> internal() {
+        public Builder<R> internal() {
             this.internal = true;
             return this;
         }
 
-        public Builder<R,E> content(String code) {
+        public Builder<R> content(String code) {
             this.content = code;
             return this;
         }
 
-        public Builder<R,E> content(byte[] arr, int offset, int length, Charset encoding) {
+        public Builder<R> content(byte[] arr, int offset, int length, Charset encoding) {
             this.content = new String(arr, offset, length, encoding);
             return this;
         }
 
-        /** Uses configuration of this builder to create new {@link Source} object.
-         * The return value is parametrized to ensure your code doesn't
-         * compile until you specify a MIME type:
-         * <ul>
-         *   <li>either via file related
-         * methods like {@link Source#newFromFile(java.io.File)} that can
-         * guess the MIME type</li>
-         *   <li>or directly via {@link #mimeType(java.lang.String)} method
-         * on this builder
-         * </ul>
-         * This method may throw an exception - especially when dealing with
-         * files (e.g. {@link Source#newFromURL(java.net.URL)},
-         * {@link Source#newFromFile(java.io.File)} or {@link Source#newFromReader(java.io.Reader)}
-         * this method may throw {@link IOException} that one needs to deal with.
-         * In case of other building styles (like {@link Source#newFromText(java.lang.String)}
-         * one doesn't need to capture any exception when calling this method.
-         *
-         * @return the source object
-         * @throws E exception if something went wrong while creating the source
-         * @since 0.15
-         */
         @SuppressWarnings("unchecked")
-        public R build() throws E {
+        public R build() throws IOException {
             Content holder;
-            try {
-                if (source instanceof File) {
-                    holder = buildFile();
-                } else if (source instanceof Reader) {
-                    holder = buildReader();
-                } else if (source instanceof URL) {
-                    holder = buildURL();
-                } else {
-                    holder = buildString();
-                }
-                String type = this.mime == null ? holder.findMimeType() : this.mime;
-                if (type == null) {
-                    throw new IllegalStateException("Unknown mime type for " + source);
-                }
-                SourceImpl ret = new SourceImpl(holder, type, name, internal);
-                return (R) ret;
-            } catch (IOException ex) {
-                throw raise(RuntimeException.class, ex);
+            if (source instanceof File) {
+                holder = buildFile();
+            } else if (source instanceof Reader) {
+                holder = buildReader();
+            } else if (source instanceof URL) {
+                holder = buildURL();
+            } else {
+                holder = buildString();
             }
+            String type = this.mime == null ? holder.findMimeType() : this.mime;
+            if (type == null) {
+                throw new IOException("Unknown mime type for " + source);
+            }
+            SourceImpl ret = new SourceImpl(holder, type, name, internal);
+            return (R) ret;
         }
 
         private Content buildFile() throws IOException {
@@ -1185,9 +1145,9 @@ class SourceSnippets {
         return source;
     }
 
-    public static Source fromAString() {
+    public static Source fromAString() throws Exception {
         // BEGIN: SourceSnippets#fromAString
-        Source source = Source.newFromText("function() {\n"
+        Source source = Source.newWithText("function() {\n"
             + "  return 'Hi';\n"
             + "}\n")
             .name("hi.js")

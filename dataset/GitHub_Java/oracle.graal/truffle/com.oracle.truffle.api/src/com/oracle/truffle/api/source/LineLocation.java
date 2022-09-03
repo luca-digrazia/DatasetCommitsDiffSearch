@@ -24,37 +24,95 @@
  */
 package com.oracle.truffle.api.source;
 
-import java.util.*;
-
 /**
  * A specification for a location in guest language source, expressed as a line number in a specific
  * instance of {@link Source}, suitable for hash table keys with equality defined in terms of
  * content.
+ * 
+ * @since 0.8 or earlier
  */
-public interface LineLocation {
+public final class LineLocation implements Comparable<LineLocation> {
+    private final Source source;
+    private final int line;
 
-    Source getSource();
+    LineLocation(Source source, int line) {
+        assert source != null;
+        this.source = source;
+        this.line = line;
+    }
+
+    /** @since 0.8 or earlier */
+    public Source getSource() {
+        return source;
+    }
 
     /**
      * Gets the 1-based number of a line in the source.
+     *
+     * @return value from 1 to infinity
+     * @since 0.8 or earlier
      */
-    int getLineNumber();
+    public int getLineNumber() {
+        return line;
+    }
 
-    String getShortDescription();
+    /** @since 0.8 or earlier */
+    public String getShortDescription() {
+        return source.getName() + ":" + line;
+    }
 
-    /**
-     * Default comparator by (1) textual path name, (2) line number.
-     */
-    Comparator<LineLocation> COMPARATOR = new Comparator<LineLocation>() {
+    /** @since 0.8 or earlier */
+    @Override
+    public String toString() {
+        return "Line[" + getShortDescription() + "]";
+    }
 
-        public int compare(LineLocation l1, LineLocation l2) {
-            final int sourceResult = l1.getSource().getPath().compareTo(l2.getSource().getPath());
-            if (sourceResult != 0) {
-                return sourceResult;
-            }
-            return Integer.compare(l1.getLineNumber(), l2.getLineNumber());
+    /** @since 0.8 or earlier */
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + line;
+        result = prime * result + source.getHashKey().hashCode();
+        return result;
+    }
+
+    /** @since 0.8 or earlier */
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
         }
+        if (obj == null) {
+            return false;
+        }
+        if (!(obj instanceof LineLocation)) {
+            return false;
+        }
+        LineLocation other = (LineLocation) obj;
+        if (line != other.line) {
+            return false;
+        }
+        return source.getHashKey().equals(other.source.getHashKey());
+    }
 
-    };
+    /** @since 0.8 or earlier */
+    @Override
+    public int compareTo(LineLocation o) {
+        int sourceResult = 0;
+        final Source thisSource = this.getSource();
+        final String thisPath = thisSource.getPath();
+        final String otherPath = o.getSource().getPath();
 
+        if (thisPath == null || otherPath == null) {
+            sourceResult = thisSource.getCode().compareTo(o.getSource().getCode());
+        } else {
+            final String thatPath = otherPath;
+            sourceResult = thisPath.compareTo(thatPath);
+        }
+        if (sourceResult != 0) {
+            return sourceResult;
+        }
+        return Integer.compare(this.getLineNumber(), o.getLineNumber());
+    }
 }
