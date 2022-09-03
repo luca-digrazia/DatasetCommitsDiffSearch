@@ -37,9 +37,7 @@ public class SimpleLanguage {
 
     public static void run(InputStream input, PrintStream printOutput, int repeats, boolean log) {
         if (log) {
-            // CheckStyle: stop system..print check
             System.out.printf("== running on %s\n", Truffle.getRuntime().getName());
-            // CheckStyle: resume system..print check
         }
 
         NodeFactory factory = new NodeFactory(printOutput);
@@ -65,9 +63,7 @@ public class SimpleLanguage {
                     printOutput.println(result);
                 }
                 if (log) {
-                    // CheckStyle: stop system..print check
                     System.out.printf("== iteration %d: %.3f ms\n", (i + 1), (end - start) / 1000000.0);
-                    // CheckStyle: resume system..print check
                 }
             }
 

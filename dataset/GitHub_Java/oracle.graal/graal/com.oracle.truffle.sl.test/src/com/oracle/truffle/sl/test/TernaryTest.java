@@ -25,20 +25,24 @@ package com.oracle.truffle.sl.test;
 import org.junit.*;
 
 // @formatter:off
-public class LoopTest extends AbstractTest {
+public class TernaryTest extends AbstractTest {
 
     private static String[] INPUT = new String[] {
-"function main {  ",
-"  i = 0;  ",
-"  while (i < 1000) {  ",
-"    i = i + 1;  ",
-"  }  ",
-"  return i;  ",
+"function main {  " +
+"  print #(1 < 2) ? 1 : 2;" +
+"  print #(2 < 1) ? 100000000000000 : 1;  ",
+"  print #(1 < 2) ? 100000000000000 : 1;  ",
+"  print #(2 < 1) ? \"wrong\" : \"true\";",
+"  print #(2 < 1) ? \"wrong\" : 1;",
 "}  ",
     };
 
     private static String[] OUTPUT = new String[] {
-"1000",
+        "1",
+        "1",
+        "100000000000000",
+        "true",
+        "1",
     };
 
     @Test

@@ -49,7 +49,7 @@ public class AbstractTest {
         return result.toString();
     }
 
-    protected static void executeSL(String[] input, String[] expectedOutput, boolean useConsole) {
+    protected void executeSL(String[] input, String[] expectedOutput, boolean useConsole) {
         InputStream in = new ByteArrayInputStream(concat(input).getBytes());
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -62,5 +62,4 @@ public class AbstractTest {
         System.setErr(origErr);
         Assert.assertEquals(repeat(concat(expectedOutput), REPEATS), new String(out.toByteArray()));
     }
-
 }

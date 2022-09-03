@@ -24,6 +24,7 @@ package com.oracle.truffle.sl.test;
 
 import org.junit.*;
 
+// @formatter:off
 public class SumTest extends AbstractTest {
 
     private static String[] INPUT = new String[] {
@@ -44,6 +45,6 @@ public class SumTest extends AbstractTest {
 
     @Test
     public void test() {
-        executeSL(INPUT, OUTPUT, true);
+        executeSL(INPUT, OUTPUT, false);
     }
 }
