@@ -140,30 +140,22 @@ public final class VirtualObject extends Value {
                 for (int i = 0; i < values.length; i++) {
                     ResolvedJavaField field = fields[fieldIndex++];
                     Kind valKind = values[i].getKind().getStackKind();
-                    if (field.getKind() == Kind.Object) {
-                        assert values[i].getLIRKind().isReference(0) : field + ": " + valKind + " != " + field.getKind();
+                    if ((valKind == Kind.Double || valKind == Kind.Long) && field.getKind() == Kind.Int) {
+                        assert fields[fieldIndex].getKind() == Kind.Int;
+                        fieldIndex++;
                     } else {
-                        if ((valKind == Kind.Double || valKind == Kind.Long) && field.getKind() == Kind.Int) {
-                            assert fields[fieldIndex].getKind() == Kind.Int;
-                            fieldIndex++;
-                        } else {
-                            assert valKind == field.getKind().getStackKind() : field + ": " + valKind + " != " + field.getKind();
-                        }
+                        assert valKind == field.getKind().getStackKind() : field + ": " + valKind + " != " + field.getKind().getStackKind();
                     }
                 }
                 assert fields.length == fieldIndex : type + ": fields=" + Arrays.toString(fields) + ", field values=" + Arrays.toString(values);
             } else {
                 Kind componentKind = type.getComponentType().getKind().getStackKind();
-                if (componentKind == Kind.Object) {
-                    for (int i = 0; i < values.length; i++) {
-                        assert values[i].getLIRKind().isReference(0) : values[i].getKind() + " != " + componentKind;
-                    }
-                } else {
-                    for (int i = 0; i < values.length; i++) {
-                        assert values[i].getKind() == componentKind || componentKind.getBitCount() >= values[i].getKind().getBitCount() : values[i].getKind() + " != " + componentKind;
-                    }
+                for (int i = 0; i < values.length; i++) {
+                    assert values[i].getKind().getStackKind() == componentKind || componentKind.getBitCount() >= values[i].getKind().getStackKind().getBitCount() : values[i].getKind() + " != " +
+                                    componentKind;
                 }
             }
+
         }
         return true;
     }
