@@ -54,7 +54,6 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
     private ConstantPool constantPool;
     private boolean isInitialized;
     private ResolvedJavaType arrayOfType;
-    private long prototypeHeader;
 
     private HotSpotResolvedJavaType() {
         throw new GraalInternalError(HotSpotResolvedJavaType.class + " should only be created from C++ code");
@@ -283,9 +282,5 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
 
     public int superCheckOffset() {
         return superCheckOffset;
-    }
-
-    public long prototypeHeader() {
-        return prototypeHeader;
     }
 }

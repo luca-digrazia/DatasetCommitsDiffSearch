@@ -30,7 +30,7 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 
 /**
- * Implementation of {@link JavaType} for primitive HotSpot types.
+ * Implementation of RiType for primitive HotSpot types.
  */
 public final class HotSpotTypePrimitive extends HotSpotJavaType implements ResolvedJavaType {
 
@@ -152,7 +152,7 @@ public final class HotSpotTypePrimitive extends HotSpotJavaType implements Resol
 
     @Override
     public ResolvedJavaField[] declaredFields() {
-        return new ResolvedJavaField[0];
+        return null;
     }
 
     @Override
