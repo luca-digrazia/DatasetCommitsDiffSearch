@@ -196,7 +196,7 @@ public class SafepointRethrowDeoptPETest extends PartialEvaluationTest {
 
     private void testInner(RootNode rootNode) {
         terminate = 1; // executed 3 times
-        OptimizedCallTarget compiledMethod = compileHelper(rootNode.toString(), rootNode, new Object[0]);
+        OptimizedCallTarget compiledMethod = compileHelper(rootNode.getClass().getSimpleName(), rootNode, new Object[0]);
 
         terminate = 0;
         entered = 0;
@@ -208,12 +208,12 @@ public class SafepointRethrowDeoptPETest extends PartialEvaluationTest {
                     /* spin */
                 }
                 /* Thread.sleep(100); */
-                compiledMethod.invalidate();
-            } catch (InterruptedException e) {
-                Assert.fail("interrupted");
-            }
-            terminate = 1;
-        });
+                        compiledMethod.invalidate();
+                    } catch (InterruptedException e) {
+                        Assert.fail("interrupted");
+                    }
+                    terminate = 1;
+                });
         Thread t2 = new Thread(() -> {
             cdl.countDown();
             Object result = compiledMethod.call();

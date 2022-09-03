@@ -25,13 +25,13 @@
  */
 package com.oracle.graal.jtt.micro;
 
-import org.junit.*;
+import org.junit.Assert;
+import org.junit.Test;
 
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.jtt.*;
+import com.oracle.graal.jtt.JTTTest;
 
 /**
- * Tests different alignment on the stack with extended parameters (index > 5)
+ * Tests different alignment on the stack with extended parameters (index > 5).
  */
 public class BigMixedParams04 extends JTTTest {
 
@@ -39,9 +39,9 @@ public class BigMixedParams04 extends JTTTest {
     public static long test(int choice, int i0, int i1, int i2, int i3, double d1, double d2, boolean bo1, boolean bo2, byte by, short sh, char ch, int in) {
         switch (choice) {
             case 0:
-                return bo1 ? 1l : 2l;
+                return bo1 ? 1L : 2L;
             case 1:
-                return bo2 ? 1l : 2l;
+                return bo2 ? 1L : 2L;
             case 2:
                 return by;
             case 3:
@@ -55,7 +55,7 @@ public class BigMixedParams04 extends JTTTest {
     }
 
     /**
-     * Test SPARC mixed params with double/single float register overlapping
+     * Test SPARC mixed params with double/single float register overlapping.
      *
      * @param f1
      * @param d2
@@ -64,16 +64,16 @@ public class BigMixedParams04 extends JTTTest {
      */
     @SuppressWarnings("all")
     public static double test2(int i1, float f1, double d2, float f3,
-    // @formatter:off
-                    double ad1 ,
-                    double ad2 ,
-                    double ad3 ,
-                    double ad4 ,
-                    double ad5 ,
-                    double ad6 ,
-                    double ad7 ,
-                    double ad8 ,
-                    double ad9 ,
+// @formatter:off
+                    double ad1,
+                    double ad2,
+                    double ad3,
+                    double ad4,
+                    double ad5,
+                    double ad6,
+                    double ad7,
+                    double ad8,
+                    double ad9,
                     double ad10,
                     double ad11,
                     double ad12,
@@ -81,15 +81,15 @@ public class BigMixedParams04 extends JTTTest {
                     double ad14,
                     double ad15,
                     double ad16,
-                    float  af1 ,
-                    float  af2 ,
-                    float  af3 ,
-                    float  af4 ,
-                    float  af5 ,
-                    float  af6 ,
-                    float  af7 ,
-                    float  af8 ,
-                    float  af9 ,
+                    float  af1,
+                    float  af2,
+                    float  af3,
+                    float  af4,
+                    float  af5,
+                    float  af6,
+                    float  af7,
+                    float  af8,
+                    float  af9,
                     float  af10,
                     float  af11,
                     float  af12,
@@ -98,7 +98,7 @@ public class BigMixedParams04 extends JTTTest {
                     float  af15,
                     float  af16
     // @formatter:on
-    ) {
+                    ) {
 
         // now do something with the locals to make sure the locals don't get optimized away.
         for (int i = 0; i < i1; i++) {
@@ -177,7 +177,7 @@ public class BigMixedParams04 extends JTTTest {
     }
 
     /**
-     * Test SPARC mixed params with double/single float register overlapping
+     * Test SPARC mixed params with double/single float register overlapping.
      *
      * @param f1
      * @param d2
@@ -186,16 +186,16 @@ public class BigMixedParams04 extends JTTTest {
      */
     @SuppressWarnings("all")
     public static double test3(boolean f, int idx,
-    // @formatter:off
-                    double ad1 ,
-                    double ad2 ,
-                    double ad3 ,
-                    double ad4 ,
-                    double ad5 ,
-                    double ad6 ,
-                    double ad7 ,
-                    double ad8 ,
-                    double ad9 ,
+// @formatter:off
+                    double ad1,
+                    double ad2,
+                    double ad3,
+                    double ad4,
+                    double ad5,
+                    double ad6,
+                    double ad7,
+                    double ad8,
+                    double ad9,
                     double ad10,
                     double ad11,
                     double ad12,
@@ -203,15 +203,15 @@ public class BigMixedParams04 extends JTTTest {
                     double ad14,
                     double ad15,
                     double ad16,
-                    float  af1 ,
-                    float  af2 ,
-                    float  af3 ,
-                    float  af4 ,
-                    float  af5 ,
-                    float  af6 ,
-                    float  af7 ,
-                    float  af8 ,
-                    float  af9 ,
+                    float  af1,
+                    float  af2,
+                    float  af3,
+                    float  af4,
+                    float  af5,
+                    float  af6,
+                    float  af7,
+                    float  af8,
+                    float  af9,
                     float  af10,
                     float  af11,
                     float  af12,
@@ -221,15 +221,15 @@ public class BigMixedParams04 extends JTTTest {
                     float  af16
     ) {
         switch(f ? idx + 16 : idx) {
-            case 1 : return ad1 ;
-            case 2 : return ad2 ;
-            case 3 : return ad3 ;
-            case 4 : return ad4 ;
-            case 5 : return ad5 ;
-            case 6 : return ad6 ;
-            case 7 : return ad7 ;
-            case 8 : return ad8 ;
-            case 9 : return ad9 ;
+            case 1 : return ad1;
+            case 2 : return ad2;
+            case 3 : return ad3;
+            case 4 : return ad4;
+            case 5 : return ad5;
+            case 6 : return ad6;
+            case 7 : return ad7;
+            case 8 : return ad8;
+            case 9 : return ad9;
             case 10: return ad10;
             case 11: return ad11;
             case 12: return ad12;
@@ -237,15 +237,15 @@ public class BigMixedParams04 extends JTTTest {
             case 14: return ad14;
             case 15: return ad15;
             case 16: return ad16;
-            case 1  + 16: return af1 ;
-            case 2  + 16: return af2 ;
-            case 3  + 16: return af3 ;
-            case 4  + 16: return af4 ;
-            case 5  + 16: return af5 ;
-            case 6  + 16: return af6 ;
-            case 7  + 16: return af7 ;
-            case 8  + 16: return af8 ;
-            case 9  + 16: return af9 ;
+            case 1  + 16: return af1;
+            case 2  + 16: return af2;
+            case 3  + 16: return af3;
+            case 4  + 16: return af4;
+            case 5  + 16: return af5;
+            case 6  + 16: return af6;
+            case 7  + 16: return af7;
+            case 8  + 16: return af8;
+            case 9  + 16: return af9;
             case 10 + 16: return af10;
             case 11 + 16: return af11;
             case 12 + 16: return af12;
@@ -333,8 +333,8 @@ public class BigMixedParams04 extends JTTTest {
     @Test
     public void run7() throws Throwable {
         // @formatter:off
-        for(int i =0; i<32*2; i++)
-        runTest("test3", i%2==0, i/2,
+        for (int i = 0; i < 32 * 2; i++) {
+        runTest("test3", i % 2 == 0, i / 2,
                         1d,
                         2d,
                         3d,
@@ -368,6 +368,7 @@ public class BigMixedParams04 extends JTTTest {
                         15f,
                         16f
                         );
+        }
         // @formatter:on
     }
 
