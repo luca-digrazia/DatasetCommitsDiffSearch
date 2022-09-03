@@ -290,8 +290,15 @@ public class ValueAssert {
                         assertNull(value.as(Function.class));
                         assertNull(value.as(IsFunctionalInterfaceVarArgs.class));
                     } else if (!value.canInstantiate()) {
-                        assertFails(() -> value.as(FUNCTION), ClassCastException.class);
-                        assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class), ClassCastException.class);
+                        if (value.hasMembers()) {
+                            Function<Object, Object> f1 = value.as(FUNCTION);
+                            assertFails(() -> f1.apply(""), UnsupportedOperationException.class);
+                            IsFunctionalInterfaceVarArgs f2 = value.as(IsFunctionalInterfaceVarArgs.class);
+                            assertFails(() -> f2.foobarbaz(), UnsupportedOperationException.class);
+                        } else {
+                            assertFails(() -> value.as(FUNCTION), ClassCastException.class);
+                            assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class), ClassCastException.class);
+                        }
                     }
                     break;
                 case INSTANTIABLE:
@@ -301,8 +308,15 @@ public class ValueAssert {
                         assertNull(value.as(Function.class));
                         assertNull(value.as(IsFunctionalInterfaceVarArgs.class));
                     } else if (!value.canExecute()) {
-                        assertFails(() -> value.as(FUNCTION), ClassCastException.class);
-                        assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class), ClassCastException.class);
+                        if (value.hasMembers()) {
+                            Function<Object, Object> f1 = value.as(FUNCTION);
+                            assertFails(() -> f1.apply(""), UnsupportedOperationException.class);
+                            IsFunctionalInterfaceVarArgs f2 = value.as(IsFunctionalInterfaceVarArgs.class);
+                            assertFails(() -> f2.foobarbaz(), UnsupportedOperationException.class);
+                        } else {
+                            assertFails(() -> value.as(FUNCTION), ClassCastException.class);
+                            assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class), ClassCastException.class);
+                        }
                     }
                     break;
                 case NULL:
