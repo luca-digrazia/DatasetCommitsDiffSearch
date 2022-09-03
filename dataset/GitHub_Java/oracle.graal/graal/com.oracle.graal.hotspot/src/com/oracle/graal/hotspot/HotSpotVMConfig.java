@@ -1169,7 +1169,7 @@ public class HotSpotVMConfig extends CompilerObject {
     @HotSpotVMConstant(name = "JVM_ACC_SYNTHETIC") @Stable public int syntheticFlag;
 
     /**
-     * @see HotSpotResolvedObjectTypeImpl#createField
+     * @see HotSpotResolvedObjectType#createField
      */
     @HotSpotVMConstant(name = "JVM_RECOGNIZED_FIELD_MODIFIERS") @Stable public int recognizedFieldModifiers;
 
@@ -1443,6 +1443,8 @@ public class HotSpotVMConfig extends CompilerObject {
     @HotSpotVMValue(expression = "GraalRuntime::write_barrier_pre", get = HotSpotVMValue.Type.ADDRESS) @Stable public long writeBarrierPreAddress;
     @HotSpotVMValue(expression = "GraalRuntime::write_barrier_post", get = HotSpotVMValue.Type.ADDRESS) @Stable public long writeBarrierPostAddress;
     @HotSpotVMValue(expression = "GraalRuntime::validate_object", get = HotSpotVMValue.Type.ADDRESS) @Stable public long validateObject;
+
+    @HotSpotVMValue(expression = "GraalRuntime::test_deoptimize_call_int", get = HotSpotVMValue.Type.ADDRESS) @Stable public long testDeoptimizeCallInt;
 
     @HotSpotVMValue(expression = "SharedRuntime::register_finalizer", get = HotSpotVMValue.Type.ADDRESS) @Stable public long registerFinalizerAddress;
     @HotSpotVMValue(expression = "SharedRuntime::exception_handler_for_return_address", get = HotSpotVMValue.Type.ADDRESS) @Stable public long exceptionHandlerForReturnAddressAddress;
