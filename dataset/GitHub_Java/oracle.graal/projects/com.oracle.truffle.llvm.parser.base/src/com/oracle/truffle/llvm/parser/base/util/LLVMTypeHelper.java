@@ -36,6 +36,7 @@ import com.intel.llvm.ireditor.types.ResolvedArrayType;
 import com.intel.llvm.ireditor.types.ResolvedFloatingType;
 import com.intel.llvm.ireditor.types.ResolvedIntegerType;
 import com.intel.llvm.ireditor.types.ResolvedNamedType;
+import com.intel.llvm.ireditor.types.ResolvedOpaqueType;
 import com.intel.llvm.ireditor.types.ResolvedPointerType;
 import com.intel.llvm.ireditor.types.ResolvedStructType;
 import com.intel.llvm.ireditor.types.ResolvedType;
@@ -50,7 +51,9 @@ import com.oracle.truffle.llvm.parser.base.model.types.PointerType;
 import com.oracle.truffle.llvm.parser.base.model.types.Type;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
+import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
+import com.oracle.truffle.llvm.types.memory.LLVMHeap;
 
 public class LLVMTypeHelper {
 
@@ -61,7 +64,34 @@ public class LLVMTypeHelper {
     }
 
     public int getByteSize(ResolvedType type) {
-        return runtime.getByteSize(LLVMToBitcodeAdapter.resolveType(type));
+        int bits = type.getBits().intValue();
+        if (type instanceof ResolvedIntegerType || type instanceof ResolvedFloatingType) {
+            return Math.max(1, bits / Byte.SIZE);
+        } else if (type instanceof ResolvedPointerType) {
+            if (type.getContainedType(0).isFunction()) {
+                return LLVMHeap.FUNCTION_PTR_SIZE_BYTE;
+            } else {
+                return LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE;
+            }
+        } else if (type instanceof ResolvedArrayType) {
+            ResolvedArrayType arrayType = (ResolvedArrayType) type;
+            int arraySize = arrayType.getSize();
+            if (arraySize == 0) {
+                return 0;
+            } else {
+                return arraySize * getByteSize(arrayType.getContainedType(0));
+            }
+        } else if (type instanceof ResolvedStructType) {
+            return getStructSizeByte((ResolvedStructType) type);
+        } else if (type instanceof ResolvedNamedType) {
+            return getByteSize(((ResolvedNamedType) type).getReferredType());
+        } else if (type instanceof ResolvedOpaqueType) {
+            return 0;
+        } else if (type instanceof ResolvedVectorType) {
+            return type.getBits().intValue() / Byte.SIZE;
+        } else {
+            throw new AssertionError(type);
+        }
     }
 
     public int getStructureSizeByte(StructureConstant structure, TypeResolver typeResolver) {
@@ -85,7 +115,21 @@ public class LLVMTypeHelper {
     }
 
     private int getStructSizeByte(ResolvedStructType type) {
-        return runtime.getByteSize(LLVMToBitcodeAdapter.resolveType(type));
+        int sumByte = 0;
+        for (ResolvedType field : type.getFieldTypes()) {
+            if (!type.isPacked()) {
+                sumByte += computePaddingByte(sumByte, field);
+            }
+            sumByte += getByteSize(field);
+        }
+        int padding;
+        if (type.isPacked() || sumByte == 0) {
+            padding = 0;
+        } else {
+            padding = computePadding(sumByte, largestAlignmentByte(type));
+        }
+        int totalSizeByte = sumByte + padding;
+        return totalSizeByte;
     }
 
     private static int computePadding(int offset, int alignment) {
@@ -94,6 +138,15 @@ public class LLVMTypeHelper {
         }
         int padding = (alignment - (offset % alignment)) % alignment;
         return padding;
+    }
+
+    private int largestAlignmentByte(ResolvedStructType structType) {
+        int largestAlignment = 0;
+        for (ResolvedType field : structType.getFieldTypes()) {
+            int alignment = getAlignmentByte(field);
+            largestAlignment = Math.max(largestAlignment, alignment);
+        }
+        return largestAlignment;
     }
 
     public static LLVMType getLLVMType(Type type) {
@@ -231,11 +284,31 @@ public class LLVMTypeHelper {
     }
 
     public int computePaddingByte(int currentOffset, ResolvedType type) {
-        return runtime.getBytePadding(currentOffset, LLVMToBitcodeAdapter.resolveType(type));
+        int alignmentByte = getAlignmentByte(type);
+        if (alignmentByte == 0) {
+            return 0;
+        } else {
+            return computePadding(currentOffset, alignmentByte);
+        }
+    }
+
+    interface LayoutConverter {
+        int getBitAlignment(LLVMBaseType type);
     }
 
     public int getAlignmentByte(ResolvedType field) {
-        return runtime.getByteAlignment(LLVMToBitcodeAdapter.resolveType(field));
+        if (field instanceof ResolvedNamedType) {
+            return getAlignmentByte(((ResolvedNamedType) field).getReferredType());
+        } else if (field instanceof ResolvedStructType) {
+            return largestAlignmentByte((ResolvedStructType) field);
+        } else if (field instanceof ResolvedArrayType) {
+            return getAlignmentByte(((ResolvedArrayType) field).getContainedType(-1));
+        } else if (field instanceof ResolvedVectorType) {
+            return getAlignmentByte(field.getContainedType(-1));
+        } else {
+            LLVMBaseType type = getLLVMType(field).getType();
+            return runtime.getBitAlignment(type) / Byte.SIZE;
+        }
     }
 
     public static boolean isVectorType(LLVMBaseType llvmType) {

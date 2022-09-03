@@ -315,7 +315,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         if (constant != null) {
             final Type type = ((PointerType) global.getType()).getPointeeType();
             final LLVMBaseType baseType = type.getLLVMBaseType();
-            final int size = parserRuntime.getByteSize(type);
+            final int size = type.getSize(targetDataLayout);
 
             final LLVMAddressNode globalVarAddress = (LLVMAddressNode) getGlobalVariable(global);
 
@@ -336,6 +336,10 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
     public LLVMContext getContext() {
         return context;
+    }
+
+    public DataLayoutConverter.DataSpecConverter getTargetDataLayout() {
+        return targetDataLayout;
     }
 
     public LLVMParserRuntime getParserRuntime() {
@@ -398,10 +402,10 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         final int elemCount = arrayConstant.getElementCount();
 
         final StructureType elementType = (StructureType) arrayConstant.getType().getElementType();
-        final int structSize = parserRuntime.getByteSize(elementType);
+        final int structSize = elementType.getSize(targetDataLayout);
 
         final FunctionType functionType = (FunctionType) ((PointerType) elementType.getElementType(1)).getPointeeType();
-        final int indexedTypeLength = parserRuntime.getByteAlignment(functionType);
+        final int indexedTypeLength = functionType.getAlignment(targetDataLayout);
 
         final LLVMNode[] structors = new LLVMNode[elemCount];
         for (int i = 0; i < elemCount; i++) {
@@ -442,7 +446,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         // this case we assume memory has already been allocated elsewhere
         final boolean allocateMemory = !descriptor.isDeclared() && global.getValue() != null;
         if (allocateMemory) {
-            final int byteSize = parserRuntime.getByteSize(((PointerType) global.getType()).getPointeeType());
+            final int byteSize = ((PointerType) global.getType()).getPointeeType().getSize(targetDataLayout);
             final LLVMAddress nativeStorage = LLVMHeap.allocateMemory(byteSize);
             final LLVMAddressNode addressLiteralNode = new LLVMAddressLiteralNode(nativeStorage);
             deallocations.add(LLVMFreeFactory.create(addressLiteralNode));
