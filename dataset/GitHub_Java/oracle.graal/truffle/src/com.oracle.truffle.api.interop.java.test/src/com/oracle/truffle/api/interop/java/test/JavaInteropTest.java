@@ -33,20 +33,15 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.junit.Assume.assumeTrue;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.concurrent.Callable;
 
-import org.graalvm.polyglot.Engine;
 import org.hamcrest.CoreMatchers;
 import org.junit.Before;
 import org.junit.Test;
@@ -63,7 +58,6 @@ import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.interop.java.MethodMessage;
 import com.oracle.truffle.api.nodes.Node;
@@ -71,11 +65,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.test.ReflectionUtils;
 
 public class JavaInteropTest {
-    static {
-        // ensure engine is initialized
-        Engine.newBuilder().build().close();
-    }
-
     public class Data {
         public int x;
         public double y;
@@ -576,38 +565,6 @@ public class JavaInteropTest {
     }
 
     @Test
-    public void executableAsFunctionalInterface1() throws Exception {
-        TruffleObject executable = new FunctionObject();
-        FunctionalWithDefaults f = JavaInterop.asJavaFunction(FunctionalWithDefaults.class, executable);
-        assertEquals(50, f.call((Object) 13, (Object) 37));
-        f.hashCode();
-        f.equals(null);
-        f.toString();
-    }
-
-    @Test
-    public void executableAsFunctionalInterface2() throws Exception {
-        TruffleObject executable = new FunctionObject();
-        FunctionalWithObjectMethodOverrides f = JavaInterop.asJavaFunction(FunctionalWithObjectMethodOverrides.class, executable);
-        assertEquals(50, f.call(13, 37));
-        f.hashCode();
-        f.equals(null);
-        f.toString();
-    }
-
-    @Test
-    public void executableAsFunctionalInterface3() throws Exception {
-        assumeTrue("JDK 9 or later", System.getProperty("java.specification.version").compareTo("1.9") >= 0);
-        TruffleObject executable = new FunctionObject();
-        FunctionalWithDefaults f = JavaInterop.asJavaFunction(FunctionalWithDefaults.class, executable);
-        assertEquals(42, f.call((Object) 13, (Object) 29));
-        assertEquals(50, f.call(13, 37));
-        f.hashCode();
-        f.equals(null);
-        f.toString();
-    }
-
-    @Test
     public void listUnwrapsTruffleObject() {
         data.data = new Data[]{new Data()};
         Data value = xyp.data().get(0);
@@ -752,22 +709,6 @@ public class JavaInteropTest {
         testArrayObject(aobj, 4);
     }
 
-    @Test
-    public void testHasKeysDefaults() {
-        TruffleObject noKeys = new NoKeysObject();
-        assertFalse(hasKeys(noKeys));
-        TruffleObject keysObj = new DefaultHasKeysObject();
-        assertTrue(hasKeys(keysObj));
-    }
-
-    @Test
-    public void testHasKeys() {
-        TruffleObject hasKeysObj = new HasKeysObject(true);
-        assertTrue(hasKeys(hasKeysObj));
-        hasKeysObj = new HasKeysObject(false);
-        assertFalse(hasKeys(hasKeysObj));
-    }
-
     private static void testArrayObject(TruffleObject array, int length) {
         int keyInfo;
         for (int i = 0; i < length; i++) {
@@ -898,40 +839,6 @@ public class JavaInteropTest {
         assertEquals(4, message(Message.GET_SIZE, (TruffleObject) longArray));
     }
 
-    @Test
-    public void testException() throws InteropException {
-        TruffleObject iterator = JavaInterop.asTruffleObject(Collections.emptyList().iterator());
-        try {
-            ForeignAccess.sendInvoke(Message.createInvoke(0).createNode(), iterator, "next");
-            fail("expected an exception but none was thrown");
-        } catch (InteropException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            assertTrue("expected HostException but was: " + ex.getClass(), JavaInterop.isHostException(ex));
-            assertThat(JavaInterop.asHostException(ex), CoreMatchers.instanceOf(NoSuchElementException.class));
-        }
-    }
-
-    @Test
-    public void testException2() throws InteropException {
-        TruffleObject hashMapClass = JavaInterop.asTruffleObject(HashMap.class);
-        try {
-            ForeignAccess.sendNew(Message.createNew(0).createNode(), hashMapClass, -1);
-            fail("expected an exception but none was thrown");
-        } catch (InteropException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            assertTrue("expected HostException but was: " + ex.getClass(), JavaInterop.isHostException(ex));
-            assertThat(JavaInterop.asHostException(ex), CoreMatchers.instanceOf(IllegalArgumentException.class));
-        }
-
-        try {
-            ForeignAccess.sendNew(Message.createNew(0).createNode(), hashMapClass, "");
-            fail("expected an exception but none was thrown");
-        } catch (UnsupportedTypeException ex) {
-        }
-    }
-
     public static final class TestJavaObject {
         public int aField = 10;
     }
@@ -972,10 +879,6 @@ public class JavaInteropTest {
         Node n = m.createNode();
         CallTarget callTarget = Truffle.getRuntime().createCallTarget(new TemporaryRoot(n, receiver));
         return callTarget.call(arr);
-    }
-
-    static boolean hasKeys(TruffleObject foreignObject) {
-        return ForeignAccess.sendHasKeys(Message.HAS_KEYS.createNode(), foreignObject);
     }
 
     static int getKeyInfo(TruffleObject foreignObject, Object propertyName) {
@@ -1076,61 +979,6 @@ public class JavaInteropTest {
         }
     }
 
-    static final class DefaultHasKeysObject implements TruffleObject {
-
-        @Override
-        public ForeignAccess getForeignAccess() {
-            return ForeignAccess.create(new ForeignAccess.Factory() {
-                @Override
-                public boolean canHandle(TruffleObject obj) {
-                    return obj instanceof DefaultHasKeysObject;
-                }
-
-                @Override
-                public CallTarget accessMessage(Message message) {
-                    if (Message.HAS_KEYS.equals(message)) {
-                        return null;
-                    }
-                    if (Message.KEYS.equals(message)) {
-                        return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(new ArrayTruffleObject(1)));
-                    }
-                    return null;
-                }
-            });
-        }
-
-    }
-
-    static final class HasKeysObject implements TruffleObject {
-
-        private final boolean hasKeys;
-
-        HasKeysObject(boolean hasKeys) {
-            this.hasKeys = hasKeys;
-        }
-
-        @Override
-        public ForeignAccess getForeignAccess() {
-            return HasKeysObjectMessageResolutionForeign.ACCESS;
-        }
-
-        public static boolean isInstance(TruffleObject obj) {
-            return obj instanceof HasKeysObject;
-        }
-
-        @MessageResolution(receiverType = HasKeysObject.class)
-        static final class HasKeysObjectMessageResolution {
-
-            @Resolve(message = "HAS_KEYS")
-            public abstract static class HasKeysNode extends Node {
-
-                public Object access(HasKeysObject receiver) {
-                    return receiver.hasKeys;
-                }
-            }
-        }
-    }
-
     static final class ArrayTruffleObject implements TruffleObject {
 
         private final int size;
@@ -1214,16 +1062,6 @@ public class JavaInteropTest {
 
         @MessageResolution(receiverType = InternalPropertiesObject.class)
         static final class PropertiesVisibilityObjectMessageResolution {
-
-            @Resolve(message = "HAS_KEYS")
-            public abstract static class HasKeysNode extends Node {
-
-                public Object access(InternalPropertiesObject receiver) {
-                    assert receiver != null;
-                    return true;
-                }
-            }
-
             @Resolve(message = "KEYS")
             public abstract static class KeysNode extends Node {
 
@@ -1261,34 +1099,6 @@ public class JavaInteropTest {
                     return KeyInfo.newBuilder().setReadable(readable).setWritable(writable).setInvocable(invocable).setInternal(internal).build();
                 }
             }
-        }
-    }
-
-    @MessageResolution(receiverType = FunctionObject.class)
-    static final class FunctionObject implements TruffleObject {
-        @Resolve(message = "IS_EXECUTABLE")
-        abstract static class IsExecutable extends Node {
-            @SuppressWarnings("unused")
-            protected Object access(FunctionObject obj) {
-                return true;
-            }
-        }
-
-        @Resolve(message = "EXECUTE")
-        @SuppressWarnings("unused")
-        abstract static class Execute extends Node {
-            protected Object access(FunctionObject obj, Object[] args) {
-                return Arrays.stream(args).mapToInt(o -> (int) o).sum();
-            }
-        }
-
-        static boolean isInstance(TruffleObject obj) {
-            return obj instanceof FunctionObject;
-        }
-
-        @Override
-        public ForeignAccess getForeignAccess() {
-            return FunctionObjectForeign.ACCESS;
         }
     }
 }
