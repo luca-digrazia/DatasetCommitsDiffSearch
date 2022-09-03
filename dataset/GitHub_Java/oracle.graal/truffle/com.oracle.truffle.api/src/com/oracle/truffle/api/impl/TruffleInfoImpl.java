@@ -30,9 +30,7 @@ import com.oracle.truffle.api.boot.TruffleInfo;
 import com.oracle.truffle.api.nodes.Node;
 
 final class TruffleInfoImpl extends TruffleInfo {
-    static final TruffleInfoImpl INFO = new TruffleInfoImpl();
-
-    private TruffleInfoImpl() {
+    TruffleInfoImpl() {
     }
 
     @Override
