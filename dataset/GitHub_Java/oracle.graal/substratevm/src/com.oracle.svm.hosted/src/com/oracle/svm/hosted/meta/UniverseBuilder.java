@@ -36,7 +36,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ForkJoinTask;
 
@@ -45,7 +44,6 @@ import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.Indent;
 import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.c.function.CEntryPointLiteral;
 import org.graalvm.nativeimage.c.function.CFunction;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
 
@@ -65,13 +63,11 @@ import com.oracle.svm.core.StaticFieldsSupport;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.ExcludeFromReferenceMap;
-import com.oracle.svm.core.c.BoxedRelocatedPointer;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.config.ObjectLayout;
 import com.oracle.svm.core.deopt.DeoptimizedFrame;
 import com.oracle.svm.core.heap.ReferenceMapEncoder;
 import com.oracle.svm.core.heap.SubstrateReferenceMap;
-import com.oracle.svm.core.hub.ClassInitializationInfo.ClassInitializerFunctionPointerHolder;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.hub.DynamicHubSupport;
 import com.oracle.svm.core.hub.LayoutEncoding;
@@ -591,43 +587,34 @@ public class UniverseBuilder {
 //    }
     // @formatter:on
 
-    /**
-     * We want these types to be immutable so that they can be in the read-only part of the image
-     * heap. Moreover, all of them except for String *must* be read-only because they contain
-     * relocatable pointers.
-     */
-    private static final Class<?>[] IMMUTABLE_TYPES = new Class<?>[]{
-                    String.class,
-                    DynamicHub.class,
-                    CEntryPointLiteral.class,
-                    BoxedRelocatedPointer.class,
-                    ClassInitializerFunctionPointerHolder.class};
-
     private void collectMonitorFieldInfo(BigBang bb) {
         if (!SubstrateOptions.MultiThreaded.getValue()) {
             /* No locking information needed in single-threaded mode. */
             return;
         }
 
-        Set<AnalysisType> immutableTypes = new HashSet<>();
-        for (Class<?> immutableType : IMMUTABLE_TYPES) {
-            Optional<AnalysisType> aType = aMetaAccess.optionalLookupJavaType(immutableType);
-            if (aType.isPresent()) {
-                immutableTypes.add(aType.get());
-            }
-        }
-
         TypeState allSynchronizedTypeState = bb.getAllSynchronizedTypeState();
         for (AnalysisType aType : allSynchronizedTypeState.types()) {
-            if (!aType.isArray() && !immutableTypes.contains(aType)) {
-                /*
-                 * Monitor fields on arrays would increase the array header too much. Also, types
-                 * that must be immutable cannot have a monitor field.
-                 */
+            if (canHaveMonitorFields(aType)) {
                 final HostedInstanceClass hostedInstanceClass = (HostedInstanceClass) hUniverse.lookup(aType);
                 hostedInstanceClass.setNeedMonitorField();
             }
         }
+    }
+
+    private boolean canHaveMonitorFields(AnalysisType aType) {
+        if (aType.isArray()) {
+            /* Monitor fields on arrays would increase the array header too much. */
+            return false;
+        }
+        if (aType.equals(aMetaAccess.lookupJavaType(String.class)) || aType.equals(aMetaAccess.lookupJavaType(DynamicHub.class))) {
+            /*
+             * We want String and DynamicHub instances to be immutable so that they can be in the
+             * read-only part of the image heap.
+             */
+            return false;
+        }
+        return true;
     }
 
     @SuppressWarnings("try")

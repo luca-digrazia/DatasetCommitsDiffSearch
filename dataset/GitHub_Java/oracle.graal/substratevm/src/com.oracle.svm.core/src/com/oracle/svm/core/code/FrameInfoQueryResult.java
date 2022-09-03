@@ -266,20 +266,8 @@ public class FrameInfoQueryResult {
         return sourceClass;
     }
 
-    public String getSourceClassName() {
-        return sourceClass != null ? sourceClass.getName() : "";
-    }
-
     public String getSourceMethodName() {
         return sourceMethodName;
-    }
-
-    public String getSourceFileName() {
-        return sourceClass != null ? DynamicHub.fromClass(sourceClass).getSourceFileName() : null;
-    }
-
-    public int getSourceLineNumber() {
-        return sourceLineNumber;
     }
 
     /**
@@ -295,7 +283,7 @@ public class FrameInfoQueryResult {
         return new StackTraceElement(className, sourceMethodName, sourceFileName, sourceLineNumber);
     }
 
-    public boolean isNativeMethod() {
+    private boolean isNativeMethod() {
         return sourceLineNumber == -2;
     }
 
