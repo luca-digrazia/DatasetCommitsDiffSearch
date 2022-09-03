@@ -81,7 +81,6 @@ public final class HotSpotTruffleRuntime implements GraalTruffleRuntime {
     private final ResolvedJavaMethod[] callNodeMethod;
     private final ResolvedJavaMethod[] callTargetMethod;
     private final ResolvedJavaMethod[] anyFrameMethod;
-    private final Map<RootCallTarget, Void> callTargets = Collections.synchronizedMap(new WeakHashMap<RootCallTarget, Void>());
 
     private HotSpotTruffleRuntime() {
         installOptimizedCallTargetCallMethod();
@@ -116,10 +115,7 @@ public final class HotSpotTruffleRuntime implements GraalTruffleRuntime {
         } else {
             compilationPolicy = new InterpreterOnlyCompilationPolicy();
         }
-        OptimizedCallTarget target = new OptimizedCallTarget(rootNode, this, TruffleMinInvokeThreshold.getValue(), TruffleCompilationThreshold.getValue(), compilationPolicy,
-                        new HotSpotSpeculationLog());
-        callTargets.put(target, null);
-        return target;
+        return new OptimizedCallTarget(rootNode, this, TruffleMinInvokeThreshold.getValue(), TruffleCompilationThreshold.getValue(), compilationPolicy, new HotSpotSpeculationLog());
     }
 
     public LoopNode createLoopNode(RepeatingNode repeating) {
@@ -345,17 +341,6 @@ public final class HotSpotTruffleRuntime implements GraalTruffleRuntime {
         return false;
     }
 
-    public void waitForCompilation(OptimizedCallTarget optimizedCallTarget, long timeout) throws ExecutionException, TimeoutException {
-        Future<?> codeTask = this.compilations.get(optimizedCallTarget);
-        if (codeTask != null && isCompiling(optimizedCallTarget)) {
-            try {
-                codeTask.get(timeout, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                // ignore interrupted
-            }
-        }
-    }
-
     public boolean isCompiling(OptimizedCallTarget optimizedCallTarget) {
         Future<?> codeTask = this.compilations.get(optimizedCallTarget);
         if (codeTask != null) {
@@ -374,11 +359,6 @@ public final class HotSpotTruffleRuntime implements GraalTruffleRuntime {
 
     public void reinstallStubs() {
         installOptimizedCallTargetCallMethod();
-    }
-
-    @Override
-    public List<RootCallTarget> getCallTargets() {
-        return new ArrayList<>(callTargets.keySet());
     }
 
     public void notifyTransferToInterpreter() {
