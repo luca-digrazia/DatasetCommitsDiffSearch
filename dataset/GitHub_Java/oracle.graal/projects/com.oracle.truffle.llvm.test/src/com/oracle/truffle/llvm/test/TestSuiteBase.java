@@ -43,7 +43,6 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 
-import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.LLVMOptions;
 import com.oracle.truffle.llvm.runtime.LLVMParserException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
@@ -114,8 +113,8 @@ public abstract class TestSuiteBase {
 
     static void printList(String header, List<File> files) {
         if (files.size() != 0) {
-            LLVMLogger.info(header + " (" + files.size() + "):");
-            files.stream().forEach(t -> LLVMLogger.info(t.toString()));
+            System.out.println(header + " (" + files.size() + "):");
+            files.stream().forEach(t -> System.out.println(t));
         }
     }
 
@@ -204,7 +203,9 @@ public abstract class TestSuiteBase {
             List<File> excludedFiles = testSpecification.getExcludedFiles();
             File absoluteDiscoveryPath = new File(testSuite.getAbsolutePath(), LLVMOptions.getTestDiscoveryPath());
             assert absoluteDiscoveryPath.exists() : absoluteDiscoveryPath.toString();
-            LLVMLogger.info("\tcollect files");
+            if (LLVMOptions.debugEnabled()) {
+                System.out.println("\tcollect files");
+            }
             List<File> filesToRun = getFilesRecursively(absoluteDiscoveryPath, gen);
             for (File alreadyCanExecute : includedFiles) {
                 filesToRun.remove(alreadyCanExecute);
@@ -224,7 +225,9 @@ public abstract class TestSuiteBase {
                     }
                 }
             }
-            LLVMLogger.info("\tfinished collecting files");
+            if (LLVMOptions.debugEnabled()) {
+                System.out.println("\tfinished collecting files");
+            }
             return discoveryTestCases;
         } else {
             List<TestCaseFiles[]> includedFileTestCases = collectIncludedFiles(includedFiles, gen);
