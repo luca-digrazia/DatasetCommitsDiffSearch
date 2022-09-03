@@ -48,7 +48,7 @@ public class ComputeAddressNode extends FloatingNode implements LIRLowerable {
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
+    public void generate(LIRGeneratorTool gen) {
         Value addr = getLocation().generateAddress(gen, gen.operand(getObject()));
         gen.setResult(this, addr);
     }

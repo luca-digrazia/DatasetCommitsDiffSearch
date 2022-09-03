@@ -24,6 +24,7 @@ package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
@@ -55,6 +56,16 @@ public class ConstantLocationNode extends LocationNode {
 
     @Override
     public Value generateAddress(LIRGeneratorTool gen, Value base) {
-        return gen.emitAddress(base, displacement(), Value.ILLEGAL, 0);
+        return gen.emitLea(base, displacement(), Value.ILLEGAL, 0);
+    }
+
+    @Override
+    public Value generateLoad(LIRGeneratorTool gen, Value base, DeoptimizingNode deopting) {
+        return gen.emitLoad(getValueKind(), base, displacement(), Value.ILLEGAL, 0, deopting);
+    }
+
+    @Override
+    public void generateStore(LIRGeneratorTool gen, Value base, Value value, DeoptimizingNode deopting) {
+        gen.emitStore(getValueKind(), base, displacement(), Value.ILLEGAL, 0, value, deopting);
     }
 }
