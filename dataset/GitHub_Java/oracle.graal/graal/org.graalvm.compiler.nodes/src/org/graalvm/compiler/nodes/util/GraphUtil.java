@@ -435,8 +435,8 @@ public class GraphUtil {
             return;
         }
 
-        ValueNode singleValue = phiNode.singleValueOrThis();
-        if (singleValue != phiNode) {
+        ValueNode singleValue = phiNode.singleValue();
+        if (singleValue != PhiNode.MULTIPLE_VALUES) {
             Collection<PhiNode> phiUsages = phiNode.usages().filter(PhiNode.class).snapshot();
             Collection<ProxyNode> proxyUsages = phiNode.usages().filter(ProxyNode.class).snapshot();
             phiNode.replaceAtUsagesAndDelete(singleValue);
@@ -702,9 +702,8 @@ public class GraphUtil {
             if (v instanceof LimitedValueProxy) {
                 v = ((LimitedValueProxy) v).getOriginalNode();
             } else if (v instanceof PhiNode) {
-                PhiNode phiNode = (PhiNode) v;
-                v = phiNode.singleValueOrThis();
-                if (v == phiNode) {
+                v = ((PhiNode) v).singleValue();
+                if (v == PhiNode.MULTIPLE_VALUES) {
                     v = null;
                 }
             } else {
