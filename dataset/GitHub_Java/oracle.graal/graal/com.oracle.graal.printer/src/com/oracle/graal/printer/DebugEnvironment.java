@@ -22,14 +22,12 @@
  */
 package com.oracle.graal.printer;
 
-import static com.oracle.graal.compiler.GraalDebugConfig.*;
-import static com.oracle.graal.phases.GraalOptions.*;
-
 import java.io.*;
 import java.util.*;
 
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.phases.*;
 
 public class DebugEnvironment {
 
@@ -37,13 +35,13 @@ public class DebugEnvironment {
         Debug.enable();
         List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
         dumpHandlers.add(new GraphPrinterDumpHandler());
-        if (PrintCFG.getValue()) {
-            if (PrintBinaryGraphs.getValue()) {
+        if (GraalOptions.PrintCFG) {
+            if (GraalOptions.PrintBinaryGraphs) {
                 TTY.println("CFG dumping slows down PrintBinaryGraphs: use -G:-PrintCFG to disable it");
             }
             dumpHandlers.add(new CFGPrinterObserver());
         }
-        GraalDebugConfig hotspotDebugConfig = new GraalDebugConfig(Log.getValue(), Meter.getValue(), Time.getValue(), Dump.getValue(), MethodFilter.getValue(), log, dumpHandlers);
+        GraalDebugConfig hotspotDebugConfig = new GraalDebugConfig(GraalOptions.Log, GraalOptions.Meter, GraalOptions.Time, GraalOptions.Dump, GraalOptions.MethodFilter, log, dumpHandlers);
         Debug.setConfig(hotspotDebugConfig);
     }
 }

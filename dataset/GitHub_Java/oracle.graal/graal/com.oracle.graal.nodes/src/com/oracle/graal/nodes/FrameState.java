@@ -28,6 +28,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
 
 /**
@@ -35,7 +36,7 @@ import com.oracle.graal.nodes.virtual.*;
  * stack) at a particular point in the abstract interpretation.
  */
 @NodeInfo(nameTemplate = "FrameState@{p#method/s}:{p#bci}")
-public final class FrameState extends VirtualState implements Node.IterableNodeType {
+public final class FrameState extends VirtualState implements Node.IterableNodeType, LIRLowerable {
 
     protected final int localsSize;
 
@@ -301,6 +302,11 @@ public final class FrameState extends VirtualState implements Node.IterableNodeT
 
     public NodeIterable<FrameState> innerFrameStates() {
         return usages().filter(FrameState.class);
+    }
+
+    @Override
+    public void generate(LIRGeneratorTool gen) {
+        // Nothing to do, frame states are processed as part of the handling of StateSplit nodes.
     }
 
     private static String toString(FrameState frameState) {

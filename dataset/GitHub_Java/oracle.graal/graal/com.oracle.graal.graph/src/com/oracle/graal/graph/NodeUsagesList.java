@@ -26,7 +26,7 @@ import java.util.*;
 
 import com.oracle.graal.graph.iterators.*;
 
-public final class NodeUsagesList extends NodeIterable<Node> {
+public final class NodeUsagesList extends AbstractNodeIterable<Node> {
 
     protected static final Node[] EMPTY_NODE_ARRAY = new Node[0];
 
@@ -44,10 +44,6 @@ public final class NodeUsagesList extends NodeIterable<Node> {
         this.nodes = nodes;
     }
 
-    public int size() {
-        return size;
-    }
-
     @Override
     public boolean isEmpty() {
         return size == 0;
@@ -63,66 +59,10 @@ public final class NodeUsagesList extends NodeIterable<Node> {
         return size;
     }
 
-    protected void incModCount() {
-        modCount++;
-    }
-
-    public boolean add(Node node) {
-        incModCount();
-        if (size == nodes.length) {
-            nodes = Arrays.copyOf(nodes, nodes.length * 2 + 1);
-        }
-        nodes[size++] = node;
-        return true;
-    }
-
-    void copyAndClear(NodeUsagesList other) {
-        incModCount();
-        other.incModCount();
-        nodes = other.nodes;
-        size = other.size;
-        nodes = EMPTY_NODE_ARRAY;
-        size = 0;
-    }
-
-    public void clear() {
-        incModCount();
-        nodes = EMPTY_NODE_ARRAY;
-        size = 0;
-    }
-
-    boolean remove(Node node) {
-        int i = 0;
-        incModCount();
-        while (i < size && nodes[i] != node) {
-            i++;
-        }
-        if (i < size) {
-            i++;
-            while (i < size) {
-                nodes[i - 1] = nodes[i];
-                i++;
-            }
-            nodes[--size] = null;
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    boolean replaceFirst(Node node, Node other) {
-        for (int i = 0; i < size; i++) {
-            if (nodes[i] == node) {
-                nodes[i] = other;
-                return true;
-            }
-        }
-        return false;
-    }
-
     @Override
     public Iterator<Node> iterator() {
         return new Iterator<Node>() {
+
             private final int expectedModCount = NodeUsagesList.this.modCount;
             private int index = 0;
 
@@ -158,6 +98,53 @@ public final class NodeUsagesList extends NodeIterable<Node> {
     @Override
     public List<Node> snapshot() {
         return Arrays.asList(Arrays.copyOf(NodeUsagesList.this.nodes, NodeUsagesList.this.size));
+    }
+
+    private void incModCount() {
+        modCount++;
+    }
+
+    boolean add(Node node) {
+        incModCount();
+        if (size == nodes.length) {
+            nodes = Arrays.copyOf(nodes, nodes.length * 2 + 1);
+        }
+        nodes[size++] = node;
+        return true;
+    }
+
+    void copyAndClear(NodeUsagesList other) {
+        incModCount();
+        other.incModCount();
+        nodes = other.nodes;
+        size = other.size;
+        nodes = EMPTY_NODE_ARRAY;
+        size = 0;
+    }
+
+    void clear() {
+        incModCount();
+        nodes = EMPTY_NODE_ARRAY;
+        size = 0;
+    }
+
+    boolean remove(Node node) {
+        int i = 0;
+        incModCount();
+        while (i < size && nodes[i] != node) {
+            i++;
+        }
+        if (i < size) {
+            i++;
+            while (i < size) {
+                nodes[i - 1] = nodes[i];
+                i++;
+            }
+            nodes[--size] = null;
+            return true;
+        } else {
+            return false;
+        }
     }
 
     @Override

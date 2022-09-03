@@ -23,9 +23,8 @@
 package com.oracle.graal.snippets;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.compiler.target.*;
 
 public interface SnippetProvider {
 
-    void installSnippets(Backend backend, SnippetInstaller installer, Assumptions assumptions);
+    void installSnippets(SnippetInstaller installer, Assumptions assumptions);
 }

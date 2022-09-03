@@ -24,8 +24,9 @@ package com.oracle.graal.nodes.virtual;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 
-public abstract class EscapeObjectState extends VirtualState implements Node.IterableNodeType {
+public abstract class EscapeObjectState extends VirtualState implements Node.IterableNodeType, LIRLowerable {
 
     @Input private VirtualObjectNode object;
 
@@ -35,6 +36,12 @@ public abstract class EscapeObjectState extends VirtualState implements Node.Ite
 
     public EscapeObjectState(VirtualObjectNode object) {
         this.object = object;
+    }
+
+    @Override
+    public void generate(LIRGeneratorTool generator) {
+        // Nothing to do, virtual object states are processed as part of the handling of StateSplit
+        // nodes.
     }
 
     @Override

@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.phases.GraalOptions.*;
-
 import java.io.*;
 import java.lang.ref.*;
 import java.util.*;
@@ -32,6 +30,7 @@ import java.util.Map.Entry;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.*;
 
 /**
  * This class implements the graph caching system for the HotSpot platform.
@@ -74,12 +73,12 @@ public class HotSpotGraphCache implements GraphCache {
         private static final long serialVersionUID = -3973307040793397840L;
 
         public LRUCache() {
-            super(GraphCacheSize.getValue() * 2, 0.75f, false);
+            super(GraalOptions.GraphCacheSize * 2, 0.75f, false);
         }
 
         @Override
         protected boolean removeEldestEntry(Entry<Long, WeakReference<ResolvedJavaMethod>> eldest) {
-            if (size() > GraphCacheSize.getValue()) {
+            if (size() > GraalOptions.GraphCacheSize) {
                 ResolvedJavaMethod method = eldest.getValue().get();
                 if (method != null) {
                     StructuredGraph cachedGraph = (StructuredGraph) method.getCompilerStorage().get(HotSpotGraphCache.this);
@@ -97,7 +96,7 @@ public class HotSpotGraphCache implements GraphCache {
     private final Map<Long, WeakReference<ResolvedJavaMethod>> cachedGraphIds = Collections.synchronizedMap(new LRUCache());
 
     public HotSpotGraphCache() {
-        if (PrintGraphCache.getValue()) {
+        if (GraalOptions.PrintGraphCache) {
             Runtime.getRuntime().addShutdownHook(new Thread() {
 
                 @Override
@@ -116,7 +115,7 @@ public class HotSpotGraphCache implements GraphCache {
     public StructuredGraph get(ResolvedJavaMethod method) {
         StructuredGraph result = (StructuredGraph) method.getCompilerStorage().get(this);
 
-        if (PrintGraphCache.getValue()) {
+        if (GraalOptions.PrintGraphCache) {
             if (result == null) {
                 missCounter++;
             } else {
@@ -132,7 +131,7 @@ public class HotSpotGraphCache implements GraphCache {
         cachedGraphIds.put(graph.graphId(), new WeakReference<>(graph.method()));
         graph.method().getCompilerStorage().put(this, graph);
 
-        if (PrintGraphCache.getValue()) {
+        if (GraalOptions.PrintGraphCache) {
             putCounter++;
         }
     }
@@ -162,12 +161,12 @@ public class HotSpotGraphCache implements GraphCache {
                 StructuredGraph cachedGraph = (StructuredGraph) method.getCompilerStorage().get(this);
                 if (cachedGraph != null && cachedGraph.graphId() == graphId) {
                     method.getCompilerStorage().remove(this);
-                    if (PrintGraphCache.getValue()) {
+                    if (GraalOptions.PrintGraphCache) {
                         removeHitCounter++;
                     }
                 }
             }
-            if (PrintGraphCache.getValue()) {
+            if (GraalOptions.PrintGraphCache) {
                 removeCounter++;
             }
         }

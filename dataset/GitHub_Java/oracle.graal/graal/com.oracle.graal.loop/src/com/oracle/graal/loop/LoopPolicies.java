@@ -26,7 +26,6 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 
 public abstract class LoopPolicies {
@@ -36,9 +35,9 @@ public abstract class LoopPolicies {
     }
 
     // TODO (gd) change when inversion is available
-    public static boolean shouldPeel(LoopEx loop, NodesToDoubles probabilities) {
+    public static boolean shouldPeel(LoopEx loop) {
         LoopBeginNode loopBegin = loop.loopBegin();
-        double entryProbability = probabilities.get(loopBegin.forwardEnd());
+        double entryProbability = loopBegin.forwardEnd().probability();
         return entryProbability > GraalOptions.MinimumPeelProbability && loop.size() + loopBegin.graph().getNodeCount() < GraalOptions.MaximumDesiredSize;
     }
 

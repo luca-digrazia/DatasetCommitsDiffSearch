@@ -48,13 +48,15 @@ public final class GuardNode extends FloatingNode implements Canonicalizable, LI
     private final DeoptimizationReason reason;
     private final DeoptimizationAction action;
     private boolean negated;
+    private final long leafGraphId;
 
-    public GuardNode(BooleanNode condition, FixedNode anchor, DeoptimizationReason reason, DeoptimizationAction action, boolean negated) {
+    public GuardNode(BooleanNode condition, FixedNode anchor, DeoptimizationReason reason, DeoptimizationAction action, boolean negated, long leafGraphId) {
         super(StampFactory.dependency(), anchor);
         this.condition = condition;
         this.reason = reason;
         this.action = action;
         this.negated = negated;
+        this.leafGraphId = leafGraphId;
     }
 
     /**
@@ -81,6 +83,10 @@ public final class GuardNode extends FloatingNode implements Canonicalizable, LI
         return action;
     }
 
+    public long getLeafGraphId() {
+        return leafGraphId;
+    }
+
     @Override
     public String toString(Verbosity verbosity) {
         if (verbosity == Verbosity.Name && negated) {
@@ -92,7 +98,7 @@ public final class GuardNode extends FloatingNode implements Canonicalizable, LI
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        gen.emitGuardCheck(condition(), reason(), action(), negated());
+        gen.emitGuardCheck(condition(), reason(), action(), negated(), leafGraphId);
     }
 
     @Override

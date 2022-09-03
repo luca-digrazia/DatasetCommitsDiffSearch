@@ -41,13 +41,15 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     private final int bci;
     private boolean polymorphic;
     private boolean useForInlining;
+    private final long leafGraphId;
     private double inliningRelevance;
 
-    public InvokeWithExceptionNode(CallTargetNode callTarget, DispatchBeginNode exceptionEdge, int bci) {
+    public InvokeWithExceptionNode(CallTargetNode callTarget, DispatchBeginNode exceptionEdge, int bci, long leafGraphId) {
         super(callTarget.returnStamp());
         this.exceptionEdge = exceptionEdge;
         this.bci = bci;
         this.callTarget = callTarget;
+        this.leafGraphId = leafGraphId;
         this.polymorphic = false;
         this.useForInlining = true;
         this.inliningRelevance = Double.NaN;
@@ -107,6 +109,11 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     @Override
     public void setInliningRelevance(double value) {
         inliningRelevance = value;
+    }
+
+    @Override
+    public long leafGraphId() {
+        return leafGraphId;
     }
 
     @Override

@@ -21,10 +21,10 @@
  * questions.
  */
 package com.oracle.graal.hotspot.snippets;
+
 import static com.oracle.graal.api.code.DeoptimizationAction.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
-import static com.oracle.graal.snippets.nodes.BranchProbabilityNode.*;
 
 import java.lang.reflect.*;
 import java.util.*;
@@ -45,9 +45,8 @@ import com.oracle.graal.snippets.Snippet.ConstantParameter;
 import com.oracle.graal.snippets.Snippet.Fold;
 import com.oracle.graal.snippets.nodes.*;
 
-
 @SuppressWarnings("unused")
-public class ArrayCopySnippets implements SnippetsInterface{
+public class ArrayCopySnippets implements SnippetsInterface {
 
     private static final EnumMap<Kind, Method> arraycopyMethods = new EnumMap<>(Kind.class);
     public static final Method increaseGenericCallCounterMethod;
@@ -80,7 +79,8 @@ public class ArrayCopySnippets implements SnippetsInterface{
     private static final Kind VECTOR_KIND = Kind.Long;
     private static final long VECTOR_SIZE = arrayIndexScale(Kind.Long);
 
-    public static void vectorizedCopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantParameter("baseKind") Kind baseKind) {
+    public static void vectorizedCopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantParameter("baseKind")
+    Kind baseKind) {
         checkInputs(src, srcPos, dest, destPos, length);
         int header = arrayBaseOffset(baseKind);
         int elementSize = arrayIndexScale(baseKind);
@@ -89,7 +89,6 @@ public class ArrayCopySnippets implements SnippetsInterface{
         long srcOffset = (long) srcPos * elementSize;
         long destOffset = (long) destPos * elementSize;
         if (src == dest && srcPos < destPos) { // bad aliased case
-            probability(0.1);
             for (long i = byteLength - elementSize; i >= byteLength - nonVectorBytes; i -= elementSize) {
                 UnsafeStoreNode.store(dest, header, i + destOffset, UnsafeLoadNode.load(src, header, i + srcOffset, baseKind), baseKind);
             }
@@ -110,40 +109,13 @@ public class ArrayCopySnippets implements SnippetsInterface{
     }
 
     public static void checkInputs(Object src, int srcPos, Object dest, int destPos, int length) {
-        if (src == null) {
-            probability(0.01);
+        if (src == null || dest == null) {
             checkNPECounter.inc();
-            DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
+            throw new NullPointerException();
         }
-        if (dest == null) {
-            probability(0.01);
-            checkNPECounter.inc();
-            DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
-        }
-        if (srcPos < 0) {
-            probability(0.01);
+        if (srcPos < 0 || destPos < 0 || length < 0 || srcPos + length > ArrayLengthNode.arrayLength(src) || destPos + length > ArrayLengthNode.arrayLength(dest)) {
             checkAIOOBECounter.inc();
-            DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
-        }
-        if (destPos < 0) {
-            probability(0.01);
-            checkAIOOBECounter.inc();
-            DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
-        }
-        if (length < 0) {
-            probability(0.01);
-            checkAIOOBECounter.inc();
-            DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
-        }
-        if (srcPos + length > ArrayLengthNode.arrayLength(src)) {
-            probability(0.01);
-            checkAIOOBECounter.inc();
-            DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
-        }
-        if (destPos + length > ArrayLengthNode.arrayLength(dest)) {
-            probability(0.01);
-            checkAIOOBECounter.inc();
-            DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
+            throw new ArrayIndexOutOfBoundsException();
         }
         checkSuccessCounter.inc();
     }
@@ -289,6 +261,5 @@ public class ArrayCopySnippets implements SnippetsInterface{
     private static final SnippetCounter doubleCounter = new SnippetCounter(counters, "double[]", "arraycopy for double[] arrays");
     private static final SnippetCounter genericPrimitiveCallCounter = new SnippetCounter(counters, "genericPrimitive", "call to the generic, native arraycopy method");
     private static final SnippetCounter genericObjectCallCounter = new SnippetCounter(counters, "genericObject", "call to the generic, native arraycopy method");
-
 
 }

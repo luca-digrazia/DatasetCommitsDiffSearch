@@ -26,50 +26,55 @@ import java.util.*;
 
 import com.oracle.graal.graph.*;
 
-public class FilteredNodeIterable<T extends Node> extends NodeIterable<T> {
-    private final NodeIterable<T> nodeIterable;
-    private NodePredicate predicate = NodePredicates.alwaysTrue();
-    private NodePredicate until = NodePredicates.isNull();
-    private boolean distinct;
+public class FilteredNodeIterable<T extends Node> extends AbstractNodeIterable<T> {
+
+    protected final NodeIterable<T> nodeIterable;
+    protected NodePredicate predicate = NodePredicates.alwaysTrue();
+    protected NodePredicate until = NodePredicates.isNull();
+
     public FilteredNodeIterable(NodeIterable<T> nodeIterable) {
         this.nodeIterable = nodeIterable;
     }
+
     public FilteredNodeIterable<T> and(NodePredicate nodePredicate) {
         this.predicate = this.predicate.and(nodePredicate);
         return this;
     }
+
     public FilteredNodeIterable<T> or(NodePredicate nodePredicate) {
         this.predicate = this.predicate.or(nodePredicate);
         return this;
     }
+
     @Override
     public NodeIterable<T> until(final T u) {
         until = until.or(NodePredicates.equals(u));
         return this;
     }
+
     @Override
     public NodeIterable<T> until(final Class<? extends T> clazz) {
         until = until.or(NodePredicates.isA(clazz));
         return this;
     }
+
     @Override
     public FilteredNodeIterable<T> nonNull() {
-        this.predicate = this.predicate.or(NodePredicates.isNotNull());
+        this.predicate = this.predicate.and(NodePredicates.isNotNull());
         return this;
     }
+
     @Override
-    public FilteredNodeIterable<T> distinct() {
-        distinct = true;
-        return this;
+    public DistinctFilteredNodeIterable<T> distinct() {
+        DistinctFilteredNodeIterable<T> distinct = new DistinctFilteredNodeIterable<>(nodeIterable);
+        distinct.predicate = predicate;
+        distinct.until = until;
+        return distinct;
     }
+
     @Override
     public Iterator<T> iterator() {
-        final Iterator<T> iterator = nodeIterable.iterator();
-        if (distinct) {
-            return new DistinctPredicatedProxyNodeIterator<>(until, iterator, predicate);
-        } else {
-            return new PredicatedProxyNodeIterator<>(until, iterator, predicate);
-        }
+        return new PredicatedProxyNodeIterator<>(until, nodeIterable.iterator(), predicate);
     }
 
     @SuppressWarnings("unchecked")
@@ -84,7 +89,7 @@ public class FilteredNodeIterable<T extends Node> extends NodeIterable<T> {
     }
 
     @Override
-    public FilteredNodeIterable<T> filterInterface(Class< ? > iface) {
+    public FilteredNodeIterable<T> filterInterface(Class<?> iface) {
         return this.and(NodePredicates.isAInterface(iface));
     }
 }

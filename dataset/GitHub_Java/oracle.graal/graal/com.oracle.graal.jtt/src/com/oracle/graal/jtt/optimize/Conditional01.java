@@ -25,7 +25,7 @@ package com.oracle.graal.jtt.optimize;
 import java.util.*;
 
 import com.oracle.graal.jtt.*;
-import com.oracle.graal.test.*;
+import org.junit.*;
 
 /*
  */
@@ -117,22 +117,22 @@ public class Conditional01 extends JTTTest {
         return c2 ? 1 : 0;
     }
 
-    @LongTest
+    @Test
     public void run0() throws Throwable {
         runTest("test", 0);
     }
 
-    @LongTest
+    @Test
     public void run1() throws Throwable {
         runTest("test", 10);
     }
 
-    @LongTest
+    @Test
     public void run2() throws Throwable {
         runTest("test", 20);
     }
 
-    @LongTest
+    @Test
     public void run3() throws Throwable {
         runTest("test", 40);
     }

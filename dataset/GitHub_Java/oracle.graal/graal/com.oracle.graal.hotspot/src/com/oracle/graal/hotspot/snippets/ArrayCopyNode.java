@@ -26,7 +26,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.IterableNodeType;
-import com.oracle.graal.loop.phases.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
@@ -35,118 +34,99 @@ import com.oracle.graal.snippets.nodes.*;
 
 public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableNodeType, Lowerable {
 
-    public ArrayCopyNode(Invoke invoke) {
+    public ArrayCopyNode(InvokeNode invoke) {
         super(invoke);
     }
 
-    private ValueNode getSource() {
+    public ValueNode src() {
         return arguments.get(0);
     }
 
-    private ValueNode getSourcePosition() {
+    public ValueNode srcPos() {
         return arguments.get(1);
     }
 
-    private ValueNode getDestination() {
+    public ValueNode dest() {
         return arguments.get(2);
     }
 
-    private ValueNode getDestinationPosition() {
+    public ValueNode destPos() {
         return arguments.get(3);
     }
 
-    private ValueNode getLength() {
+    public ValueNode length() {
         return arguments.get(4);
-    }
-
-    private ResolvedJavaMethod selectSnippet(LoweringTool tool) {
-        ResolvedJavaType srcType = getSource().objectStamp().type();
-        ResolvedJavaType destType = getDestination().objectStamp().type();
-
-        if (srcType != null && srcType.isArray() && destType != null && destType.isArray()) {
-            Kind componentKind = srcType.getComponentType().getKind();
-            if (componentKind != Kind.Object) {
-                if (srcType.getComponentType() == destType.getComponentType()) {
-                    return tool.getRuntime().lookupJavaMethod(ArrayCopySnippets.getSnippetForKind(componentKind));
-                }
-            } else if (destType.getComponentType().isAssignableFrom(srcType.getComponentType()) && getDestination().objectStamp().isExactType()) {
-                return tool.getRuntime().lookupJavaMethod(ArrayCopySnippets.getSnippetForKind(Kind.Object));
-            }
-        }
-        return null;
-    }
-
-    private static void unrollFixedLengthLoop(StructuredGraph snippetGraph, int length, LoweringTool tool) {
-        snippetGraph.replaceFloating(snippetGraph.getLocal(4), ConstantNode.forInt(length, snippetGraph));
-        // the canonicalization before loop unrolling is needed to propagate the length into additions, etc.
-        new CanonicalizerPhase(tool.getTarget(), tool.getRuntime(), tool.assumptions()).apply(snippetGraph);
-        new LoopFullUnrollPhase(tool.getRuntime(), tool.assumptions()).apply(snippetGraph);
-        new CanonicalizerPhase(tool.getTarget(), tool.getRuntime(), tool.assumptions()).apply(snippetGraph);
     }
 
     @Override
     public void lower(LoweringTool tool) {
-        ResolvedJavaMethod snippetMethod = selectSnippet(tool);
+        ResolvedJavaMethod snippetMethod = null;
+        ResolvedJavaType srcType = src().objectStamp().type();
+        ResolvedJavaType destType = dest().objectStamp().type();
+        if (srcType != null && srcType.isArray() && destType != null && destType.isArray()) {
+            Kind componentKind = srcType.getComponentType().getKind();
+            if (componentKind != Kind.Object) {
+                if (srcType.getComponentType() == destType.getComponentType()) {
+                    snippetMethod = tool.getRuntime().lookupJavaMethod(ArrayCopySnippets.getSnippetForKind(componentKind));
+                }
+            } else if (destType.getComponentType().isAssignableFrom(srcType.getComponentType()) && dest().objectStamp().isExactType()) {
+                snippetMethod = tool.getRuntime().lookupJavaMethod(ArrayCopySnippets.getSnippetForKind(Kind.Object));
+            }
+        }
         if (snippetMethod == null) {
             snippetMethod = tool.getRuntime().lookupJavaMethod(ArrayCopySnippets.increaseGenericCallCounterMethod);
-            // we will call the generic method. the generic snippet will only increase the counter, not call the actual
+            // we will call the generic method. the generic snippet will only increase the counter,
+            // not call the actual
             // method. therefore we create a second invoke here.
             ((StructuredGraph) graph()).addAfterFixed(this, createInvoke());
-        }
-        if (Debug.isLogEnabled()) {
+        } else {
             Debug.log("%s > Intrinsify (%s)", Debug.currentScope(), snippetMethod.getSignature().getParameterType(0, snippetMethod.getDeclaringClass()).getComponentType());
         }
 
-        StructuredGraph snippetGraph = (StructuredGraph) snippetMethod.getCompilerStorage().get(Graph.class);
-        assert snippetGraph != null : "ArrayCopySnippets should be installed";
-        if (getLength().isConstant()) {
-            snippetGraph = snippetGraph.copy();
-            unrollFixedLengthLoop(snippetGraph, getLength().asConstant().asInt(), tool);
+        if (snippetMethod != null) {
+            StructuredGraph snippetGraph = (StructuredGraph) snippetMethod.getCompilerStorage().get(Graph.class);
+            assert snippetGraph != null : "ArrayCopySnippets should be installed";
+            InvokeNode invoke = replaceWithInvoke();
+            InliningUtil.inline(invoke, snippetGraph, false);
+        } else {
+            super.lower(tool);
         }
-        InvokeNode invoke = replaceWithInvoke();
-        InliningUtil.inline(invoke, snippetGraph, false);
-    }
-
-    private static boolean checkBounds(int position, int length, VirtualObjectNode virtualObject) {
-        return position >= 0 && position + length <= virtualObject.entryCount();
-    }
-
-    private static boolean checkEntryTypes(int srcPos, int length, State srcState, ResolvedJavaType destComponentType) {
-        if (destComponentType.getKind() == Kind.Object) {
-            for (int i = 0; i < length; i++) {
-                if (!destComponentType.isAssignableFrom(srcState.getEntry(srcPos + i).objectStamp().type())) {
-                    return false;
-                }
-            }
-        }
-        return true;
     }
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        if (getSourcePosition().isConstant() && getDestinationPosition().isConstant() && getLength().isConstant()) {
-            int srcPos = getSourcePosition().asConstant().asInt();
-            int destPos = getDestinationPosition().asConstant().asInt();
-            int length = getLength().asConstant().asInt();
-            State srcState = tool.getObjectState(getSource());
-            State destState = tool.getObjectState(getDestination());
+        if (srcPos().isConstant() && destPos().isConstant() && length().isConstant()) {
+            int srcPos = srcPos().asConstant().asInt();
+            int destPos = destPos().asConstant().asInt();
+            int length = length().asConstant().asInt();
+            State srcState = tool.getObjectState(src());
+            State destState = tool.getObjectState(dest());
 
             if (srcState != null && srcState.getState() == EscapeState.Virtual && destState != null && destState.getState() == EscapeState.Virtual) {
                 VirtualObjectNode srcVirtual = srcState.getVirtualObject();
                 VirtualObjectNode destVirtual = destState.getVirtualObject();
-                if (length < 0 || !checkBounds(srcPos, length, srcVirtual) || !checkBounds(destPos, length, destVirtual)) {
+                if (length < 0) {
                     return;
                 }
-                if (!checkEntryTypes(srcPos, length, srcState, destVirtual.type().getComponentType())) {
+                if (srcPos < 0 || srcPos + length > srcVirtual.entryCount()) {
                     return;
+                }
+                if (destPos < 0 || destPos + length > destVirtual.entryCount()) {
+                    return;
+                }
+                ResolvedJavaType destComponentType = destVirtual.type().getComponentType();
+                if (destComponentType.getKind() == Kind.Object) {
+                    for (int i = 0; i < length; i++) {
+                        if (!destComponentType.isAssignableFrom(srcState.getEntry(srcPos + i).objectStamp().javaType(tool.getMetaAccessProvider()))) {
+                            return;
+                        }
+                    }
                 }
                 for (int i = 0; i < length; i++) {
                     tool.setVirtualEntry(destState, destPos + i, srcState.getEntry(srcPos + i));
                 }
                 tool.delete();
-                if (Debug.isLogEnabled()) {
-                    Debug.log("virtualized arraycopyf(%s, %d, %s, %d, %d)", getSource(), srcPos, getDestination(), destPos, length);
-                }
+                Debug.log("virtualized arraycopyf(%s, %d, %s, %d, %d)", src(), srcPos, dest(), destPos, length);
             }
         }
     }

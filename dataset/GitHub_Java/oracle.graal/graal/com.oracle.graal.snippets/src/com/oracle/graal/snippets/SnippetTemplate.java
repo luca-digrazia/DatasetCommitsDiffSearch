@@ -357,17 +357,18 @@ public class SnippetTemplate {
 
         // Remove all frame states from inlined snippet graph. Snippets must be atomic (i.e. free
         // of side-effects that prevent deoptimizing to a point before the snippet).
-        ArrayList<StateSplit> curSideEffectNodes = new ArrayList<>();
-        ArrayList<ValueNode> curStampNodes = new ArrayList<>();
+        List<Node> curSideEffectNodes = new ArrayList<>();
+        Node curStampNode = null;
         for (Node node : snippetCopy.getNodes()) {
             if (node instanceof ValueNode && ((ValueNode) node).stamp() == StampFactory.forNodeIntrinsic()) {
-                curStampNodes.add((ValueNode) node);
+                assert curStampNode == null : "Currently limited to one stamp node (but this can be converted to a List if necessary)";
+                curStampNode = node;
             }
             if (node instanceof StateSplit) {
                 StateSplit stateSplit = (StateSplit) node;
                 FrameState frameState = stateSplit.stateAfter();
                 if (stateSplit.hasSideEffect()) {
-                    curSideEffectNodes.add((StateSplit) node);
+                    curSideEffectNodes.add(node);
                 }
                 if (frameState != null) {
                     stateSplit.setStateAfter(null);
@@ -398,7 +399,7 @@ public class SnippetTemplate {
         }
 
         this.sideEffectNodes = curSideEffectNodes;
-        this.stampNodes = curStampNodes;
+        this.stampNode = curStampNode;
         this.returnNode = retNode;
     }
 
@@ -456,12 +457,12 @@ public class SnippetTemplate {
      * Nodes that inherit the {@link StateSplit#stateAfter()} from the replacee during
      * instantiation.
      */
-    private final ArrayList<StateSplit> sideEffectNodes;
+    private final List<Node> sideEffectNodes;
 
     /**
-     * The nodes that inherit the {@link ValueNode#stamp()} from the replacee during instantiation.
+     * Node that inherits the {@link ValueNode#stamp()} from the replacee during instantiation.
      */
-    private final ArrayList<ValueNode> stampNodes;
+    private final Node stampNode;
 
     /**
      * The nodes to be inlined when this specialization is instantiated.
@@ -577,13 +578,13 @@ public class SnippetTemplate {
         replacee.setNext(null);
 
         if (replacee instanceof StateSplit) {
-            for (StateSplit sideEffectNode : sideEffectNodes) {
+            for (Node sideEffectNode : sideEffectNodes) {
                 assert ((StateSplit) replacee).hasSideEffect();
                 Node sideEffectDup = duplicates.get(sideEffectNode);
                 ((StateSplit) sideEffectDup).setStateAfter(((StateSplit) replacee).stateAfter());
             }
         }
-        for (ValueNode stampNode : stampNodes) {
+        if (stampNode != null) {
             Node stampDup = duplicates.get(stampNode);
             ((ValueNode) stampDup).setStamp(((ValueNode) replacee).stamp());
         }
@@ -650,13 +651,13 @@ public class SnippetTemplate {
         replaceeGraph.addAfterFixed(lastFixedNode, firstCFGNodeDuplicate);
 
         if (replacee instanceof StateSplit) {
-            for (StateSplit sideEffectNode : sideEffectNodes) {
+            for (Node sideEffectNode : sideEffectNodes) {
                 assert ((StateSplit) replacee).hasSideEffect();
                 Node sideEffectDup = duplicates.get(sideEffectNode);
                 ((StateSplit) sideEffectDup).setStateAfter(((StateSplit) replacee).stateAfter());
             }
         }
-        for (ValueNode stampNode : stampNodes) {
+        if (stampNode != null) {
             Node stampDup = duplicates.get(stampNode);
             ((ValueNode) stampDup).setStamp(((ValueNode) replacee).stamp());
         }

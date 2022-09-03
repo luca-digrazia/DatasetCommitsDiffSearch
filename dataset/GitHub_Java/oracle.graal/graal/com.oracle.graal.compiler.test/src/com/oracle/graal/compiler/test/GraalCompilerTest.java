@@ -43,7 +43,6 @@ import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.printer.*;
-import com.oracle.graal.test.*;
 
 /**
  * Base class for Graal compiler unit tests.
@@ -64,7 +63,7 @@ import com.oracle.graal.test.*;
  * <p>
  * These tests will be run by the {@code mx unittest} command.
  */
-public abstract class GraalCompilerTest extends GraalTest {
+public abstract class GraalCompilerTest {
 
     protected final GraalCodeCacheProvider runtime;
     protected final GraalCompiler graalCompiler;
@@ -145,6 +144,21 @@ public abstract class GraalCompilerTest extends GraalTest {
      */
     protected StructuredGraph parse(String methodName) {
         return parse(getMethod(methodName));
+    }
+
+    protected Method getMethod(String methodName) {
+        Method found = null;
+        for (Method m : this.getClass().getMethods()) {
+            if (m.getName().equals(methodName)) {
+                Assert.assertNull(found);
+                found = m;
+            }
+        }
+        if (found != null) {
+            return found;
+        } else {
+            throw new RuntimeException("method not found: " + methodName);
+        }
     }
 
     private static int compilationId = 0;
@@ -305,6 +319,8 @@ public abstract class GraalCompilerTest extends GraalTest {
             Assert.assertTrue("expected " + expect.exception, actual.exception != null);
             Assert.assertEquals(expect.exception.getClass(), actual.exception.getClass());
         } else {
+            // System.out.println(name + "(" + Arrays.toString(args) + "): expected=" +
+            // expect.returnValue + ", actual=" + actual.returnValue);
             assertEquals(expect.returnValue, actual.returnValue);
         }
     }
@@ -340,6 +356,8 @@ public abstract class GraalCompilerTest extends GraalTest {
             if (cached != null) {
                 if (cached.isValid()) {
                     return cached;
+                } else {
+                    // System.out.println(cached.getMethod() + " was invalidated");
                 }
 
             }

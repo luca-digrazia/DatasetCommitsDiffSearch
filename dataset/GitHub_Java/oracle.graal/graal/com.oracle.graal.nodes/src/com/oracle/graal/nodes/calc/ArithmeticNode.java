@@ -22,11 +22,12 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 
 /**
- * The {@code ArithmeticOp} class represents arithmetic operations such as addition, subtraction, etc.
+ * The {@code ArithmeticOp} class represents arithmetic operations such as addition, subtraction,
+ * etc.
  */
 public abstract class ArithmeticNode extends BinaryNode {
 
@@ -34,18 +35,20 @@ public abstract class ArithmeticNode extends BinaryNode {
 
     /**
      * Creates a new arithmetic operation.
+     * 
      * @param kind the result kind of the operation
      * @param x the first input instruction
      * @param y the second input instruction
      * @param isStrictFP indicates this operation has strict rounding semantics
      */
-    public ArithmeticNode(CiKind kind, ValueNode x, ValueNode y, boolean isStrictFP) {
+    public ArithmeticNode(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP) {
         super(kind, x, y);
         this.isStrictFP = isStrictFP;
     }
 
     /**
      * Checks whether this instruction has strict fp semantics.
+     * 
      * @return {@code true} if this instruction has strict fp semantics
      */
     public boolean isStrictFP() {

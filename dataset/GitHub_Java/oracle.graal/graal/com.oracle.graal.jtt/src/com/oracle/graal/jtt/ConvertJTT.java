@@ -52,7 +52,8 @@ public class ConvertJTT {
                         try {
                             processFile(file.toPath(), new File(targetDir, file.getName()).toPath(), packageName);
                         } catch (RuntimeException e) {
-                            throw new RuntimeException(String.format("Exception while processing file %s", file.getAbsolutePath()), e);
+                            e.printStackTrace();
+                            System.out.println("in file " + file.getAbsolutePath());
                         }
                     }
                 }

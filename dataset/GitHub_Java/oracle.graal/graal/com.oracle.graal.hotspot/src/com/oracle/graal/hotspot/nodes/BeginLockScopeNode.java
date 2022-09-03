@@ -63,5 +63,6 @@ public final class BeginLockScopeNode extends AbstractStateSplit implements LIRG
     }
 
     @NodeIntrinsic
-    public static native Word beginLockScope(@ConstantNodeParameter boolean eliminated);
+    public static native Word beginLockScope(@ConstantNodeParameter
+    boolean eliminated);
 }

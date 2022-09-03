@@ -191,8 +191,6 @@ public interface CompilerToVM {
 
     String disassembleNative(byte[] code, long address);
 
-    String disassembleNMethod(long nmethod);
-
     StackTraceElement getStackTraceElement(long metaspaceMethod, int bci);
 
     Object executeCompiledMethod(long metaspaceMethod, long nmethod, Object arg1, Object arg2, Object arg3);

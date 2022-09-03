@@ -39,7 +39,6 @@ public class LoopEx {
     private LoopFragmentWhole whole;
     private CountedLoopInfo counted; // TODO (gd) detect
     private LoopsData data;
-    private InductionVariables ivs;
 
     LoopEx(Loop lirLoop, LoopsData data) {
         this.lirLoop = lirLoop;
@@ -149,9 +148,9 @@ public class LoopEx {
         return data;
     }
 
-    public NodeBitMap nodesInLoopFrom(AbstractBeginNode point, AbstractBeginNode until) {
-        Collection<AbstractBeginNode> blocks = new LinkedList<>();
-        Collection<AbstractBeginNode> exits = new LinkedList<>();
+    public NodeBitMap nodesInLoopFrom(BeginNode point, BeginNode until) {
+        Collection<BeginNode> blocks = new LinkedList<>();
+        Collection<BeginNode> exits = new LinkedList<>();
         Queue<Block> work = new LinkedList<>();
         ControlFlowGraph cfg = loopsData().controlFlowGraph();
         work.add(cfg.blockFor(point));
@@ -169,12 +168,5 @@ public class LoopEx {
             }
         }
         return LoopFragment.computeNodes(point.graph(), blocks, exits);
-    }
-
-    public InductionVariables getInductionVariables() {
-        if (ivs == null) {
-            ivs = new InductionVariables(this);
-        }
-        return ivs;
     }
 }

@@ -23,12 +23,9 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.ProfilingInfo.TriState;
-import com.oracle.graal.compiler.common.calc.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "<")
 public final class FloatLessThanNode extends CompareNode {
@@ -37,7 +34,7 @@ public final class FloatLessThanNode extends CompareNode {
 
     /**
      * Constructs a new floating point comparison node.
-     *
+     * 
      * @param x the instruction producing the first input to the instruction
      * @param y the instruction that produces the second input to this instruction
      * @param unorderedIsTrue whether a comparison that is undecided (involving NaNs, etc.) leads to
@@ -45,8 +42,8 @@ public final class FloatLessThanNode extends CompareNode {
      */
     public FloatLessThanNode(ValueNode x, ValueNode y, boolean unorderedIsTrue) {
         super(x, y);
-        assert x.stamp() instanceof FloatStamp && y.stamp() instanceof FloatStamp;
-        assert x.stamp().isCompatible(y.stamp());
+        assert x.kind() == Kind.Double || x.kind() == Kind.Float;
+        assert y.kind() == Kind.Double || y.kind() == Kind.Float;
         this.unorderedIsTrue = unorderedIsTrue;
     }
 
@@ -61,10 +58,10 @@ public final class FloatLessThanNode extends CompareNode {
     }
 
     @Override
-    public TriState evaluate(ConstantReflectionProvider constantReflection, ValueNode forX, ValueNode forY) {
-        if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY) && !unorderedIsTrue()) {
-            return TriState.FALSE;
+    public ValueNode canonical(CanonicalizerTool tool) {
+        if (x() == y() && !unorderedIsTrue()) {
+            return ConstantNode.forBoolean(false, graph());
         }
-        return super.evaluate(constantReflection, forX, forY);
+        return super.canonical(tool);
     }
 }

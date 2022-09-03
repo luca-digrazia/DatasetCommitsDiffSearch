@@ -26,7 +26,6 @@ package com.oracle.graal.hotspot.bridge;
 import java.io.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.debug.*;
 import com.oracle.graal.hotspot.meta.*;
 
 /**
@@ -78,6 +77,4 @@ public interface VMToCompiler {
     Constant createConstantDouble(double value);
 
     Constant createConstantObject(Object object);
-
-    LocalImpl createLocalImpl(String name, String type, HotSpotResolvedObjectType holder, int bciStart, int bciEnd, int slot);
 }

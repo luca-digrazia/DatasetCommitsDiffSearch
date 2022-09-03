@@ -232,7 +232,7 @@ public class GraphUtil {
         RuntimeException exception = new RuntimeException(cause.getMessage(), cause) {
 
             @Override
-            public final synchronized Throwable fillInStackTrace() {
+            public synchronized Throwable fillInStackTrace() {
                 setStackTrace(elements);
                 return this;
             }

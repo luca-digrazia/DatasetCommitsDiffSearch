@@ -33,9 +33,7 @@ import com.oracle.graal.graph.Node.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.loop.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
@@ -43,28 +41,7 @@ import com.oracle.graal.phases.common.*;
 
 public class OnStackReplacementPhase extends Phase {
 
-    public static final Descriptor OSR_MIGRATION_END = new Descriptor("OSR_migration_end", true, null, void.class, long.class);
-
-    public class OSREntryProxyNode extends FloatingNode implements LIRLowerable {
-
-        @Input private ValueNode object;
-        @Input(notDataflow = true) private final RuntimeCallNode anchor;
-
-        public OSREntryProxyNode(ValueNode object, RuntimeCallNode anchor) {
-            super(object.stamp());
-            this.object = object;
-            this.anchor = anchor;
-        }
-
-        public RuntimeCallNode getAnchor() {
-            return anchor;
-        }
-
-        @Override
-        public void generate(LIRGeneratorTool generator) {
-            generator.setResult(this, generator.operand(object));
-        }
-    }
+    public static final Descriptor OSR_MIGRATION_END = new Descriptor("OSR_migration_end", true, void.class, long.class);
 
     @Override
     protected void run(StructuredGraph graph) {
@@ -139,8 +116,7 @@ public class OnStackReplacementPhase extends Phase {
                 int size = (value.kind() == Kind.Long || value.kind() == Kind.Double) ? 2 : 1;
                 int offset = localsOffset - (i + size - 1) * 8;
                 UnsafeLoadNode load = graph.add(new UnsafeLoadNode(buffer, offset, ConstantNode.forInt(0, graph), value.kind()));
-                OSREntryProxyNode newProxy = graph.add(new OSREntryProxyNode(load, migrationEnd));
-                proxy.replaceAndDelete(newProxy);
+                proxy.replaceAndDelete(load);
                 graph.addBeforeFixed(migrationEnd, load);
             }
         }

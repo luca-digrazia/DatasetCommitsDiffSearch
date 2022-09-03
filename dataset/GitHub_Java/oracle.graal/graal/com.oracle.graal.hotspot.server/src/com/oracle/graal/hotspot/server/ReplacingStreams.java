@@ -28,7 +28,6 @@ import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.logging.*;
-import com.oracle.graal.hotspot.meta.*;
 
 public class ReplacingStreams {
 
@@ -173,7 +172,7 @@ public class ReplacingStreams {
                 if (constant.getKind() != Kind.Object) {
                     return obj;
                 }
-                Object contents = HotSpotObjectConstant.asObject(constant);
+                Object contents = constant.asObject();
                 if (contents == null) {
                     return obj;
                 }
@@ -183,12 +182,12 @@ public class ReplacingStreams {
                 }
                 placeholder = objectMap.get(contents);
                 if (placeholder != null) {
-                    return HotSpotObjectConstant.forObject(placeholder);
+                    return Constant.forObject(placeholder);
                 }
                 if (contents instanceof Remote) {
-                    return HotSpotObjectConstant.forObject(createRemoteCallPlaceholder(contents));
+                    return Constant.forObject(createRemoteCallPlaceholder(contents));
                 }
-                return HotSpotObjectConstant.forObject(createDummyPlaceholder(contents));
+                return Constant.forObject(createDummyPlaceholder(contents));
             }
             return obj;
         }

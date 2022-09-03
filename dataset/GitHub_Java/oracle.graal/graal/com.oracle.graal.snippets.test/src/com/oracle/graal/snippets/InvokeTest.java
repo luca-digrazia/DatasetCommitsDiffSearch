@@ -25,9 +25,10 @@ package com.oracle.graal.snippets;
 import org.junit.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.compiler.tests.*;
+import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
 
 /**
  * Tests the implementation of the snippets for lowering the INVOKE* instructions.
@@ -40,12 +41,16 @@ public class InvokeTest extends GraalCompilerTest {
     }
 
     public interface I {
+
         String virtualMethod(String s);
     }
 
     public static class A implements I {
+
+        final String name = "A";
+
         public String virtualMethod(String s) {
-            return s;
+            return name + s;
         }
     }
 
@@ -60,7 +65,15 @@ public class InvokeTest extends GraalCompilerTest {
         test("invokespecialConstructor", "a string");
         test("invokespecial", this, "a string");
         test("invokevirtual", new A(), "a string");
+        test("invokevirtual2", new A(), "a string");
         test("invokeinterface", new A(), "a string");
+        Object[] args = {null};
+        test("invokestatic", args);
+        test("invokespecialConstructor", args);
+        test("invokespecial", null, null);
+        test("invokevirtual", null, null);
+        test("invokevirtual2", null, null);
+        test("invokeinterface", null, null);
     }
 
     public static String invokestatic(String s) {
@@ -80,6 +93,11 @@ public class InvokeTest extends GraalCompilerTest {
     }
 
     public static String invokevirtual(A a, String s) {
+        return a.virtualMethod(s);
+    }
+
+    public static String invokevirtual2(A a, String s) {
+        a.virtualMethod(s);
         return a.virtualMethod(s);
     }
 

@@ -30,15 +30,13 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.snippets.target.amd64.*;
-import com.oracle.graal.snippets.target.amd64.AMD64BitScanOp.IntrinsicOpcode;
-
 
 public class BitScanForwardNode extends FloatingNode implements LIRGenLowerable, Canonicalizable {
+
     @Input private ValueNode value;
 
     public BitScanForwardNode(ValueNode value) {
-        super(StampFactory.forInteger(Kind.Int, 0, value.kind().bits()));
+        super(StampFactory.forInteger(Kind.Int, 0, value.kind().getBitCount()));
         this.value = value;
     }
 
@@ -46,9 +44,9 @@ public class BitScanForwardNode extends FloatingNode implements LIRGenLowerable,
     public ValueNode canonical(CanonicalizerTool tool) {
         if (value.isConstant()) {
             long v = value.asConstant().asLong();
-            if (value.kind().isInt()) {
+            if (value.kind().getStackKind() == Kind.Int) {
                 return ConstantNode.forInt(Integer.numberOfTrailingZeros((int) v), graph());
-            } else if (value.kind().isLong()) {
+            } else if (value.kind() == Kind.Long) {
                 return ConstantNode.forInt(Long.numberOfTrailingZeros(v), graph());
             }
         }
@@ -56,14 +54,12 @@ public class BitScanForwardNode extends FloatingNode implements LIRGenLowerable,
     }
 
     @NodeIntrinsic
-    public static int scan(@SuppressWarnings("unused") long v) {
-        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
-    }
+    public static native int scan(long v);
 
     @Override
     public void generate(LIRGenerator gen) {
         Variable result = gen.newVariable(Kind.Int);
-        gen.append(new AMD64BitScanOp(IntrinsicOpcode.BSF, result, gen.operand(value)));
+        gen.emitBitScanForward(result, gen.operand(value));
         gen.setResult(this, result);
     }
 }

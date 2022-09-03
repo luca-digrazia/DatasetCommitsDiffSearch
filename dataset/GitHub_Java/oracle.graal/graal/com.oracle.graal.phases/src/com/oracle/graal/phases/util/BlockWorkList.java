@@ -31,16 +31,16 @@ import com.oracle.graal.nodes.*;
  */
 public class BlockWorkList {
 
-    AbstractMergeNode[] workList;
+    MergeNode[] workList;
     int[] workListNumbers;
     int workListIndex;
 
     /**
      * Adds a block to this list in an unsorted fashion, like a stack.
-     *
+     * 
      * @param block the block to add
      */
-    public void add(AbstractMergeNode block) {
+    public void add(MergeNode block) {
         if (workList == null) {
             // worklist not allocated yet
             allocate();
@@ -55,11 +55,11 @@ public class BlockWorkList {
     /**
      * Adds a block to this list, sorted by the supplied number. The block with the lowest number is
      * returned upon subsequent removes.
-     *
+     * 
      * @param block the block to add
      * @param number the number used to sort the block
      */
-    public void addSorted(AbstractMergeNode block, int number) {
+    public void addSorted(MergeNode block, int number) {
         if (workList == null) {
             // worklist not allocated yet
             allocate();
@@ -89,10 +89,10 @@ public class BlockWorkList {
      * Removes the next block from this work list. If the blocks have been added in a sorted order,
      * then the block with the lowest number is returned. Otherwise, the last block added is
      * returned.
-     *
+     * 
      * @return the next block in the list
      */
-    public AbstractMergeNode removeFromWorkList() {
+    public MergeNode removeFromWorkList() {
         if (workListIndex != 0) {
             return workList[--workListIndex];
         }
@@ -101,7 +101,7 @@ public class BlockWorkList {
 
     /**
      * Checks whether the list is empty.
-     *
+     * 
      * @return {@code true} if this list is empty
      */
     public boolean isEmpty() {
@@ -109,13 +109,13 @@ public class BlockWorkList {
     }
 
     private void allocate() {
-        workList = new AbstractMergeNode[5];
+        workList = new MergeNode[5];
         workListNumbers = new int[5];
     }
 
     private void grow() {
         int prevLength = workList.length;
-        AbstractMergeNode[] nworkList = new AbstractMergeNode[prevLength * 3];
+        MergeNode[] nworkList = new MergeNode[prevLength * 3];
         System.arraycopy(workList, 0, nworkList, 0, prevLength);
         workList = nworkList;
 

@@ -32,15 +32,17 @@ public class DeadCodeEliminationPhase extends Phase {
     // Metrics
     private static final DebugMetric metricNodesRemoved = Debug.metric("NodesRemoved");
 
+    private NodeFlood flood;
+
     @Override
     protected void run(StructuredGraph graph) {
-        NodeFlood flood = graph.createNodeFlood();
+        this.flood = graph.createNodeFlood();
 
         flood.add(graph.start());
-        iterateSuccessors(flood);
-        disconnectCFGNodes(flood, graph);
-        iterateInputs(flood, graph);
-        deleteNodes(flood, graph);
+        iterateSuccessors();
+        disconnectCFGNodes(graph);
+        iterateInputs(graph);
+        deleteNodes(graph);
 
         // remove chained Merges
         for (MergeNode merge : graph.getNodes(MergeNode.class)) {
@@ -50,10 +52,10 @@ public class DeadCodeEliminationPhase extends Phase {
         }
     }
 
-    private static void iterateSuccessors(NodeFlood flood) {
+    private void iterateSuccessors() {
         for (Node current : flood) {
-            if (current instanceof AbstractEndNode) {
-                AbstractEndNode end = (AbstractEndNode) current;
+            if (current instanceof EndNode) {
+                EndNode end = (EndNode) current;
                 flood.add(end.merge());
             } else {
                 for (Node successor : current.successors()) {
@@ -63,8 +65,8 @@ public class DeadCodeEliminationPhase extends Phase {
         }
     }
 
-    private static void disconnectCFGNodes(NodeFlood flood, StructuredGraph graph) {
-        for (AbstractEndNode node : graph.getNodes(AbstractEndNode.class)) {
+    private void disconnectCFGNodes(StructuredGraph graph) {
+        for (EndNode node : graph.getNodes(EndNode.class)) {
             if (!flood.isMarked(node)) {
                 MergeNode merge = node.merge();
                 if (merge != null && flood.isMarked(merge)) {
@@ -93,7 +95,7 @@ public class DeadCodeEliminationPhase extends Phase {
         }
     }
 
-    private static void deleteNodes(NodeFlood flood, StructuredGraph graph) {
+    private void deleteNodes(StructuredGraph graph) {
         for (Node node : graph.getNodes()) {
             if (!flood.isMarked(node)) {
                 node.clearInputs();
@@ -108,8 +110,11 @@ public class DeadCodeEliminationPhase extends Phase {
         }
     }
 
-    private static void iterateInputs(NodeFlood flood, StructuredGraph graph) {
+    private void iterateInputs(StructuredGraph graph) {
         for (Node node : graph.getNodes()) {
+            if (node instanceof LocalNode) {
+                flood.add(node);
+            }
             if (flood.isMarked(node)) {
                 for (Node input : node.inputs()) {
                     flood.add(input);

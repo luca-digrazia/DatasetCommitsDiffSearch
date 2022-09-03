@@ -40,12 +40,14 @@ public class LIRFrameState {
 
     public final BytecodeFrame topFrame;
     private final VirtualObject[] virtualObjects;
+    private final List<StackSlot> pointerSlots;
     public final LabelRef exceptionEdge;
     private DebugInfo debugInfo;
 
-    public LIRFrameState(BytecodeFrame topFrame, VirtualObject[] virtualObjects, LabelRef exceptionEdge) {
+    public LIRFrameState(BytecodeFrame topFrame, VirtualObject[] virtualObjects, List<StackSlot> pointerSlots, LabelRef exceptionEdge) {
         this.topFrame = topFrame;
         this.virtualObjects = virtualObjects;
+        this.pointerSlots = pointerSlots;
         this.exceptionEdge = exceptionEdge;
     }
 
@@ -110,8 +112,15 @@ public class LIRFrameState {
         }
     }
 
-    public void finish(BitSet registerRefMap, BitSet frameRefMap) {
+    public void finish(BitSet registerRefMap, BitSet frameRefMap, FrameMap frameMap) {
         debugInfo = new DebugInfo(topFrame, registerRefMap, frameRefMap);
+
+        // Add additional stack slots for outgoing method parameters.
+        if (pointerSlots != null) {
+            for (StackSlot v : pointerSlots) {
+                frameMap.setReference(v, registerRefMap, frameRefMap);
+            }
+        }
     }
 
     @Override

@@ -26,12 +26,13 @@ import java.util.*;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
 
 /**
  * This class encapsulated the virtual state of an escape analyzed object.
  */
-public final class VirtualObjectState extends EscapeObjectState implements Node.IterableNodeType, Node.ValueNumberable {
+public final class VirtualObjectState extends EscapeObjectState implements Node.IterableNodeType, LIRLowerable, Node.ValueNumberable {
 
     @Input private final NodeInputList<ValueNode> fieldValues;
 
@@ -49,6 +50,12 @@ public final class VirtualObjectState extends EscapeObjectState implements Node.
         super(object);
         assert object.entryCount() == fieldValues.size();
         this.fieldValues = new NodeInputList<>(this, fieldValues);
+    }
+
+    @Override
+    public void generate(LIRGeneratorTool generator) {
+        // Nothing to do, virtual object states are processed as part of the handling of StateSplit
+        // nodes.
     }
 
     @Override

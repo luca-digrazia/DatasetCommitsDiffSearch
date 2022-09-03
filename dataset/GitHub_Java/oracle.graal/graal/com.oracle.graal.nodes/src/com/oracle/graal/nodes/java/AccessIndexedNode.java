@@ -35,6 +35,7 @@ public abstract class AccessIndexedNode extends AccessArrayNode implements Lower
 
     @Input private ValueNode index;
     private final Kind elementType;
+    private final long leafGraphId;
 
     public ValueNode index() {
         return index;
@@ -48,10 +49,11 @@ public abstract class AccessIndexedNode extends AccessArrayNode implements Lower
      * @param index the instruction producing the index
      * @param elementKind the type of the elements of the array
      */
-    protected AccessIndexedNode(Stamp stamp, ValueNode array, ValueNode index, Kind elementKind) {
+    protected AccessIndexedNode(Stamp stamp, ValueNode array, ValueNode index, Kind elementKind, long leafGraphId) {
         super(stamp, array);
         this.index = index;
         this.elementType = elementKind;
+        this.leafGraphId = leafGraphId;
     }
 
     /**
@@ -61,6 +63,10 @@ public abstract class AccessIndexedNode extends AccessArrayNode implements Lower
      */
     public Kind elementKind() {
         return elementType;
+    }
+
+    public long leafGraphId() {
+        return leafGraphId;
     }
 
     @Override

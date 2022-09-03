@@ -36,8 +36,19 @@ public class LockEliminationPhase extends Phase {
             if (next instanceof MonitorEnterNode) {
                 MonitorEnterNode monitorEnterNode = (MonitorEnterNode) next;
                 if (monitorEnterNode.object() == node.object()) {
-                    GraphUtil.removeFixedWithUnusedInputs(monitorEnterNode);
-                    GraphUtil.removeFixedWithUnusedInputs(node);
+                    FixedNode monitorEnterSuccessor = monitorEnterNode.next();
+                    monitorEnterNode.setNext(null);
+                    ((FixedWithNextNode) node.predecessor()).setNext(monitorEnterSuccessor);
+                    FrameState stateAfterFirst = node.stateAfter();
+                    FrameState stateAfterSecond = monitorEnterNode.stateAfter();
+                    node.safeDelete();
+                    monitorEnterNode.safeDelete();
+                    if (stateAfterFirst.usages().isEmpty()) {
+                        GraphUtil.killWithUnusedFloatingInputs(stateAfterFirst);
+                    }
+                    if (stateAfterSecond.usages().isEmpty()) {
+                        GraphUtil.killWithUnusedFloatingInputs(stateAfterSecond);
+                    }
                 }
             }
         }

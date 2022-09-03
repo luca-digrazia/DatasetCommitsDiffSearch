@@ -185,9 +185,6 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                 }
             }
         }
-        if (result.isEmpty()) {
-            result.add("Top Scope");
-        }
         return result;
     }
 

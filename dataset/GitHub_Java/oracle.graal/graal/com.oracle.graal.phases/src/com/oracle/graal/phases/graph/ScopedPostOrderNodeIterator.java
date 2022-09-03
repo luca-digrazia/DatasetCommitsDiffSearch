@@ -29,13 +29,16 @@ import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
 
 public abstract class ScopedPostOrderNodeIterator {
+
+    private final NodeBitMap processedNodes;
     private final Deque<FixedNode> nodeQueue;
     private final NodeBitMap queuedNodes;
     private final Deque<FixedNode> scopes;
 
-    protected FixedNode currentScopeStart;
+    protected FixedNode currentScope;
 
     public ScopedPostOrderNodeIterator(StructuredGraph graph) {
+        this.processedNodes = graph.createNodeBitMap();
         this.queuedNodes = graph.createNodeBitMap();
         this.nodeQueue = new ArrayDeque<>();
         this.scopes = getScopes(graph);
@@ -43,57 +46,64 @@ public abstract class ScopedPostOrderNodeIterator {
 
     public void apply() {
         while (!scopes.isEmpty()) {
+            processedNodes.clearAll();
             queuedNodes.clearAll();
-            this.currentScopeStart = scopes.pop();
+            this.currentScope = scopes.pop();
             initializeScope();
             processScope();
         }
     }
 
     public void processScope() {
-        FixedNode current;
-        queue(currentScopeStart);
-
-        while ((current = nextQueuedNode()) != null) {
+        FixedNode current = currentScope;
+        do {
             assert current.isAlive();
+            processedNodes.mark(current);
 
             if (current instanceof Invoke) {
                 invoke((Invoke) current);
                 queueSuccessors(current);
+                current = nextQueuedNode();
             } else if (current instanceof LoopBeginNode) {
                 queueLoopBeginSuccessors((LoopBeginNode) current);
+                current = nextQueuedNode();
             } else if (current instanceof LoopExitNode) {
                 queueLoopExitSuccessors((LoopExitNode) current);
+                current = nextQueuedNode();
             } else if (current instanceof LoopEndNode) {
-                // nothing todo
+                current = nextQueuedNode();
             } else if (current instanceof MergeNode) {
-                queueSuccessors(current);
+                current = ((MergeNode) current).next();
+                assert current != null;
             } else if (current instanceof FixedWithNextNode) {
                 queueSuccessors(current);
+                current = nextQueuedNode();
             } else if (current instanceof EndNode) {
                 queueMerge((EndNode) current);
+                current = nextQueuedNode();
             } else if (current instanceof DeoptimizeNode) {
-                // nothing todo
+                current = nextQueuedNode();
             } else if (current instanceof ReturnNode) {
-                // nothing todo
+                current = nextQueuedNode();
             } else if (current instanceof UnwindNode) {
-                // nothing todo
+                current = nextQueuedNode();
             } else if (current instanceof ControlSplitNode) {
                 queueSuccessors(current);
+                current = nextQueuedNode();
             } else {
                 assert false : current;
             }
-        }
+        } while (current != null);
     }
 
     protected void queueLoopBeginSuccessors(LoopBeginNode node) {
-        if (currentScopeStart == node) {
+        if (currentScope == node) {
             queue(node.next());
-        } else if (currentScopeStart instanceof LoopBeginNode) {
+        } else if (currentScope instanceof LoopBeginNode) {
             // so we are currently processing loop A and found another loop B
             // -> queue all loop exits of B except those that also exit loop A
-            for (LoopExitNode loopExit: node.loopExits()) {
-                if (!((LoopBeginNode) currentScopeStart).loopExits().contains(loopExit)) {
+            for (LoopExitNode loopExit : node.loopExits()) {
+                if (!((LoopBeginNode) currentScope).loopExits().contains(loopExit)) {
                     queue(loopExit);
                 }
             }
@@ -103,7 +113,7 @@ public abstract class ScopedPostOrderNodeIterator {
     }
 
     protected void queueLoopExitSuccessors(LoopExitNode node) {
-        if (!(currentScopeStart instanceof LoopBeginNode) || !((LoopBeginNode) currentScopeStart).loopExits().contains(node)) {
+        if (!(currentScope instanceof LoopBeginNode) || !((LoopBeginNode) currentScope).loopExits().contains(node)) {
             queueSuccessors(node);
         }
     }
@@ -111,7 +121,7 @@ public abstract class ScopedPostOrderNodeIterator {
     protected Deque<FixedNode> getScopes(StructuredGraph graph) {
         Deque<FixedNode> result = new ArrayDeque<>();
         result.push(graph.start());
-        for (LoopBeginNode loopBegin: graph.getNodes(LoopBeginNode.class)) {
+        for (LoopBeginNode loopBegin : graph.getNodes(LoopBeginNode.class)) {
             result.push(loopBegin);
         }
         return result;
@@ -147,13 +157,14 @@ public abstract class ScopedPostOrderNodeIterator {
     private void queueMerge(EndNode end) {
         MergeNode merge = end.merge();
         if (!queuedNodes.isMarked(merge) && visitedAllEnds(merge)) {
-            queue(merge);
+            queuedNodes.mark(merge);
+            nodeQueue.add(merge);
         }
     }
 
     private boolean visitedAllEnds(MergeNode merge) {
         for (int i = 0; i < merge.forwardEndCount(); i++) {
-            if (!queuedNodes.isMarked(merge.forwardEndAt(i))) {
+            if (!processedNodes.isMarked(merge.forwardEndAt(i))) {
                 return false;
             }
         }
@@ -161,5 +172,6 @@ public abstract class ScopedPostOrderNodeIterator {
     }
 
     protected abstract void initializeScope();
+
     protected abstract void invoke(Invoke invoke);
 }

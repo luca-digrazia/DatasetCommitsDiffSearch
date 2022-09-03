@@ -44,7 +44,7 @@ public interface NodeIterable<T extends Node> extends Iterable<T> {
 
     List<T> snapshot();
 
-    void snapshotTo(Collection<T> to);
+    void snapshotTo(List<T> to);
 
     T first();
 

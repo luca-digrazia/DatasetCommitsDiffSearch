@@ -24,7 +24,7 @@ package com.oracle.graal.hotspot;
 
 import java.io.*;
 
-import com.oracle.graal.api.meta.Kind.FormatWithToString;
+import com.oracle.graal.api.meta.Kind.*;
 
 /**
  * Parent class for all HotSpot types that need to be serialized.

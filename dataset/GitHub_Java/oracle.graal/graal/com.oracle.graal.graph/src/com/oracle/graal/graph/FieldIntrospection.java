@@ -21,44 +21,27 @@
  * questions.
  */
 package com.oracle.graal.graph;
+
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-import sun.misc.*;
-
-public abstract class FieldIntrospection {
+public abstract class FieldIntrospection extends UnsafeAccess {
 
     /**
-     * Interface used by {@link #rescanAllFieldOffsets(CalcOffset)} to determine the offset (in bytes) of a field.
+     * Interface used by {@link #rescanAllFieldOffsets(CalcOffset)} to determine the offset (in
+     * bytes) of a field.
      */
     public interface CalcOffset {
+
         long getOffset(Field field);
     }
 
     public static class DefaultCalcOffset implements CalcOffset {
+
         @Override
         public long getOffset(Field field) {
             return unsafe.objectFieldOffset(field);
-        }
-    }
-
-    protected static final Unsafe unsafe = getUnsafe();
-
-    private static Unsafe getUnsafe() {
-        try {
-            // this will only fail if graal is not part of the boot class path
-            return Unsafe.getUnsafe();
-        } catch (SecurityException e) {
-            // nothing to do
-        }
-        try {
-            Field theUnsafeInstance = Unsafe.class.getDeclaredField("theUnsafe");
-            theUnsafeInstance.setAccessible(true);
-            return (Unsafe) theUnsafeInstance.get(Unsafe.class);
-        } catch (Exception e) {
-            // currently we rely on being able to use Unsafe...
-            throw new RuntimeException("exception while trying to get Unsafe.theUnsafe via reflection:", e);
         }
     }
 
@@ -82,6 +65,7 @@ public abstract class FieldIntrospection {
     protected abstract void rescanFieldOffsets(CalcOffset calc);
 
     public abstract static class BaseFieldScanner {
+
         private final CalcOffset calc;
 
         /** The offsets of fields that are not specially handled by subclasses. */

@@ -166,9 +166,9 @@ public abstract class LIRInstruction {
         STACK,
 
         /**
-         * The value can be a {@link CompositeValue}.
+         * The value can be a {@link Address}.
          */
-        COMPOSITE,
+        ADDR,
 
         /**
          * The value can be a {@link Constant}.
@@ -179,11 +179,6 @@ public abstract class LIRInstruction {
          * The value can be {@link Value#ILLEGAL}.
          */
         ILLEGAL,
-
-        /**
-         * The value can be {@link AllocatableValue#UNUSED}.
-         */
-        UNUSED,
 
         /**
          * The register allocator should try to assign a certain register to improve code quality.
@@ -205,10 +200,10 @@ public abstract class LIRInstruction {
 
     static {
         ALLOWED_FLAGS = new EnumMap<>(OperandMode.class);
-        ALLOWED_FLAGS.put(USE, EnumSet.of(REG, STACK, COMPOSITE, CONST, ILLEGAL, HINT, UNUSED, UNINITIALIZED));
-        ALLOWED_FLAGS.put(ALIVE, EnumSet.of(REG, STACK, COMPOSITE, CONST, ILLEGAL, HINT, UNUSED, UNINITIALIZED));
-        ALLOWED_FLAGS.put(TEMP, EnumSet.of(REG, COMPOSITE, CONST, ILLEGAL, UNUSED, HINT));
-        ALLOWED_FLAGS.put(DEF, EnumSet.of(REG, STACK, COMPOSITE, ILLEGAL, UNUSED, HINT));
+        ALLOWED_FLAGS.put(USE, EnumSet.of(REG, STACK, ADDR, CONST, ILLEGAL, HINT, UNINITIALIZED));
+        ALLOWED_FLAGS.put(ALIVE, EnumSet.of(REG, STACK, ADDR, CONST, ILLEGAL, HINT, UNINITIALIZED));
+        ALLOWED_FLAGS.put(TEMP, EnumSet.of(REG, CONST, ILLEGAL, HINT));
+        ALLOWED_FLAGS.put(DEF, EnumSet.of(REG, STACK, ILLEGAL, HINT));
     }
 
     /**
@@ -260,8 +255,8 @@ public abstract class LIRInstruction {
      * Returns true when this instruction is a call instruction that destroys all caller-saved
      * registers.
      */
-    public boolean hasCall() {
-        return false;
+    public final boolean hasCall() {
+        return this instanceof StandardOp.CallOp;
     }
 
     public final void forEachInput(ValueProcedure proc) {

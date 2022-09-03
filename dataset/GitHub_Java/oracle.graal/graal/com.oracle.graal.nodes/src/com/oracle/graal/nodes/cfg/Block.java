@@ -47,7 +47,6 @@ public final class Block {
 
     protected Block() {
         id = ControlFlowGraph.BLOCK_ID_INITIAL;
-        this.linearScanNumber = -1;
     }
 
     public int getId() {

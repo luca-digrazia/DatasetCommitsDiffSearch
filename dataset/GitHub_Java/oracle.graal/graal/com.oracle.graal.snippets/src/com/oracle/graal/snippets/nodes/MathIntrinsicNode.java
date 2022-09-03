@@ -113,5 +113,6 @@ public class MathIntrinsicNode extends FloatingNode implements Canonicalizable, 
     }
 
     @NodeIntrinsic
-    public static native double compute(double x, @ConstantNodeParameter Operation op);
+    public static native double compute(double x, @ConstantNodeParameter
+    Operation op);
 }

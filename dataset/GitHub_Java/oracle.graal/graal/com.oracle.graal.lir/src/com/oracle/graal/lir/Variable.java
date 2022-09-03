@@ -29,7 +29,7 @@ import com.oracle.graal.api.meta.*;
  * Represents a value that is yet to be bound to a machine location (such as a {@link RegisterValue}
  * or {@link StackSlot}) by a register allocator.
  */
-public final class Variable extends AllocatableValue {
+public final class Variable extends Value {
 
     private static final long serialVersionUID = 4507578431686109809L;
 
@@ -49,8 +49,9 @@ public final class Variable extends AllocatableValue {
      * @param kind
      * @param index
      */
-    public Variable(PlatformKind kind, int index, Register.RegisterFlag flag) {
+    public Variable(Kind kind, int index, Register.RegisterFlag flag) {
         super(kind);
+        assert kind == kind.getStackKind() : "Variables can be only created for stack kinds";
         assert index >= 0;
         this.index = index;
         this.flag = flag;

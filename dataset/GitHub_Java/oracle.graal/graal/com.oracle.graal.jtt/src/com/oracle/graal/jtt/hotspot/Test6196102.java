@@ -22,15 +22,17 @@
  */
 package com.oracle.graal.jtt.hotspot;
 
-import com.oracle.graal.test.*;
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 /**
+ * @test
  * @bug 6196102
- * @summary Integer seems to be greater than {@link Integer#MAX_VALUE}.
- *
+ * @summary Integer seems to be greater than Integer.MAX_VALUE
+ * 
  * @run main Test6196102
  */
+// @formatter:off
 public class Test6196102 extends JTTTest {
 
     public static String test() {
@@ -46,7 +48,7 @@ public class Test6196102 extends JTTTest {
         return "ok";
     }
 
-    @LongTest
+    @Test
     public void run0() throws Throwable {
         runTest("test");
     }

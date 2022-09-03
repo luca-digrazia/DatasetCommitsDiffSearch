@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.loop;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
@@ -49,10 +48,6 @@ public abstract class InductionVariable {
         this.loop = loop;
     }
 
-    public LoopEx getLoop() {
-        return loop;
-    }
-
     public abstract Direction direction();
 
     public abstract ValueNode valueNode();
@@ -69,11 +64,7 @@ public abstract class InductionVariable {
 
     public abstract long constantStride();
 
-    public ValueNode extremumNode() {
-        return extremumNode(false, valueNode().kind());
-    }
-
-    public abstract ValueNode extremumNode(boolean assumePositiveTripCount, Kind kind);
+    public abstract ValueNode extremumNode();
 
     public abstract boolean isConstantExtremum();
 

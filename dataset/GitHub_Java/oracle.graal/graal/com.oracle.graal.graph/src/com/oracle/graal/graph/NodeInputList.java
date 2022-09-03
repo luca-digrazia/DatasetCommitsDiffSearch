@@ -39,13 +39,13 @@ public final class NodeInputList<T extends Node> extends NodeList<T> {
 
     public NodeInputList(Node self, T[] elements) {
         super(elements);
-        assert self.usages().isEmpty();
+        assert self.usages() == null;
         this.self = self;
     }
 
     public NodeInputList(Node self, List<? extends T> elements) {
         super(elements);
-        assert self.usages().isEmpty();
+        assert self.usages() == null;
         this.self = self;
     }
 

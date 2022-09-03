@@ -53,10 +53,6 @@ public class BeginNode extends FixedWithNextNode implements StateSplit, LIRLower
         super(StampFactory.dependency());
     }
 
-    protected BeginNode(Stamp stamp) {
-        super(stamp);
-    }
-
     public static BeginNode begin(FixedNode with) {
         if (with instanceof BeginNode) {
             return (BeginNode) with;
@@ -112,7 +108,7 @@ public class BeginNode extends FixedWithNextNode implements StateSplit, LIRLower
     }
 
     public void removeProxies() {
-        for (ProxyNode vpn : proxies().snapshot()) {
+        for (ValueProxyNode vpn : proxies().snapshot()) {
             // can not use graph.replaceFloating because vpn.value may be null during killCFG
             vpn.replaceAtUsages(vpn.value());
             vpn.safeDelete();
@@ -135,11 +131,11 @@ public class BeginNode extends FixedWithNextNode implements StateSplit, LIRLower
     }
 
     public NodeIterable<Node> anchored() {
-        return usages().filter(isNotA(ProxyNode.class));
+        return usages().filter(isNotA(ValueProxyNode.class));
     }
 
-    public NodeIterable<ProxyNode> proxies() {
-        return usages().filter(ProxyNode.class);
+    public NodeIterable<ValueProxyNode> proxies() {
+        return usages().filter(ValueProxyNode.class);
     }
 
     public NodeIterable<FixedNode> getBlockNodes() {
@@ -184,7 +180,4 @@ public class BeginNode extends FixedWithNextNode implements StateSplit, LIRLower
             throw new UnsupportedOperationException();
         }
     }
-
-    @NodeIntrinsic
-    public static native <T> T anchor(@ConstantNodeParameter Stamp stamp);
 }

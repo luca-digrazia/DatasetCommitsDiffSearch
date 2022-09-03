@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.snippets.nodes;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.lir.*;
@@ -29,15 +30,14 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.snippets.target.amd64.*;
-
 
 public class ReverseBytesNode extends FloatingNode implements LIRGenLowerable, Canonicalizable {
+
     @Input private ValueNode value;
 
     public ReverseBytesNode(ValueNode value) {
         super(StampFactory.forKind(value.kind()));
-        assert kind().isInt() || kind().isLong();
+        assert kind().getStackKind() == Kind.Int || kind() == Kind.Long;
         this.value = value;
     }
 
@@ -45,9 +45,9 @@ public class ReverseBytesNode extends FloatingNode implements LIRGenLowerable, C
     public ValueNode canonical(CanonicalizerTool tool) {
         if (value.isConstant()) {
             long v = value.asConstant().asLong();
-            if (kind().isInt()) {
+            if (kind().getStackKind() == Kind.Int) {
                 return ConstantNode.forInt(Integer.reverseBytes((int) v), graph());
-            } else if (kind().isLong()) {
+            } else if (kind() == Kind.Long) {
                 return ConstantNode.forLong(Long.reverseBytes(v), graph());
             }
         }
@@ -55,19 +55,15 @@ public class ReverseBytesNode extends FloatingNode implements LIRGenLowerable, C
     }
 
     @NodeIntrinsic
-    public static int reverse(@SuppressWarnings("unused") int v) {
-        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
-    }
+    public static native int reverse(int v);
 
     @NodeIntrinsic
-    public static long reverse(@SuppressWarnings("unused") long v) {
-        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
-    }
+    public static native long reverse(long v);
 
     @Override
     public void generate(LIRGenerator gen) {
         Variable result = gen.newVariable(value.kind());
-        gen.append(new AMD64ByteSwapOp(result, gen.operand(value)));
+        gen.emitByteSwap(result, gen.operand(value));
         gen.setResult(this, result);
     }
 }

@@ -69,15 +69,9 @@ public final class HotSpotProfilingInfo extends CompilerObject implements Profil
     }
 
     @Override
-    public TriState getExceptionSeen(int bci) {
+    public ExceptionSeen getExceptionSeen(int bci) {
         findBCI(bci, true);
         return dataAccessor.getExceptionSeen(methodData, position);
-    }
-
-    @Override
-    public TriState getNullSeen(int bci) {
-        findBCI(bci, false);
-        return dataAccessor.getNullSeen(methodData, position);
     }
 
     @Override

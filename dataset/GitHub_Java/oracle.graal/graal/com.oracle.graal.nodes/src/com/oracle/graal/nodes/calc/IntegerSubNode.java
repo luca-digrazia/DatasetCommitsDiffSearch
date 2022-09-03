@@ -29,7 +29,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "-")
-public class IntegerSubNode extends IntegerArithmeticNode implements Canonicalizable, LIRLowerable {
+public final class IntegerSubNode extends IntegerArithmeticNode implements Canonicalizable, LIRLowerable {
 
     public IntegerSubNode(Kind kind, ValueNode x, ValueNode y) {
         super(kind, x, y);
@@ -44,40 +44,6 @@ public class IntegerSubNode extends IntegerArithmeticNode implements Canonicaliz
     public ValueNode canonical(CanonicalizerTool tool) {
         if (x() == y()) {
             return ConstantNode.forIntegerKind(kind(), 0, graph());
-        }
-        if (x() instanceof IntegerAddNode) {
-            IntegerAddNode x = (IntegerAddNode) x();
-            if (x.y() == y()) {
-                // (a + b) - b
-                return x.x();
-            }
-            if (x.x() == y()) {
-                // (a + b) - a
-                return x.y();
-            }
-        } else if (x() instanceof IntegerSubNode) {
-            IntegerSubNode x = (IntegerSubNode) x();
-            if (x.x() == y()) {
-                // (a - b) - a
-                return graph().unique(new NegateNode(x.y()));
-            }
-        }
-        if (y() instanceof IntegerAddNode) {
-            IntegerAddNode y = (IntegerAddNode) y();
-            if (y.x() == x()) {
-                // a - (a + b)
-                return graph().unique(new NegateNode(y.y()));
-            }
-            if (y.y() == x()) {
-                // b - (a + b)
-                return graph().unique(new NegateNode(y.x()));
-            }
-        } else if (y() instanceof IntegerSubNode) {
-            IntegerSubNode y = (IntegerSubNode) y();
-            if (y.x() == x()) {
-                // a - (a - b)
-                return y.y();
-            }
         }
         if (x().isConstant() && y().isConstant()) {
             if (kind() == Kind.Int) {
@@ -109,9 +75,6 @@ public class IntegerSubNode extends IntegerArithmeticNode implements Canonicaliz
                 return graph().unique(new NegateNode(y()));
             }
             return BinaryNode.reassociate(this, ValueNode.isConstantPredicate());
-        }
-        if (y() instanceof NegateNode) {
-            return IntegerArithmeticNode.add(x(), ((NegateNode) y()).x());
         }
         return this;
     }

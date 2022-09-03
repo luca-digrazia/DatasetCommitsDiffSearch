@@ -22,16 +22,22 @@
  */
 package com.oracle.graal.api.code;
 
-import java.nio.*;
 import java.util.*;
 
-import com.oracle.graal.api.code.Register.RegisterFlag;
+import com.oracle.graal.api.code.Register.*;
 
 /**
  * Represents a CPU architecture, including information such as its endianness, CPU registers, word
  * width, etc.
  */
 public abstract class Architecture {
+
+    /**
+     * The endianness of the architecture.
+     */
+    public static enum ByteOrder {
+        LittleEndian, BigEndian
+    }
 
     /**
      * The number of bits required in a bit map covering all the registers that may store

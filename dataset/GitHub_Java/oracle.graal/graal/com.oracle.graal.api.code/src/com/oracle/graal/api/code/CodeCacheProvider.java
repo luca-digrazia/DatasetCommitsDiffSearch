@@ -103,9 +103,4 @@ public interface CodeCacheProvider extends MetaAccessProvider {
      * {@link CompilationResult}. A data patch is always created for an object constant.
      */
     boolean needsDataPatch(Constant constant);
-
-    /**
-     * Gets a description of the target architecture.
-     */
-    TargetDescription getTarget();
 }

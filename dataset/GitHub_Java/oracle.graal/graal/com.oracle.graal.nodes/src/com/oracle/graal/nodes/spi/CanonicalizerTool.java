@@ -28,6 +28,8 @@ import com.oracle.graal.graph.*;
 
 public interface CanonicalizerTool {
 
+    TargetDescription target();
+
     Assumptions assumptions();
 
     MetaAccessProvider runtime();

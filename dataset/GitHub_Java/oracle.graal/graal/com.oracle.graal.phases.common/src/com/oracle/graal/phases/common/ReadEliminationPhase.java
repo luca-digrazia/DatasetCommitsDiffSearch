@@ -27,6 +27,7 @@ import java.util.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.phases.*;
 
@@ -58,8 +59,8 @@ public class ReadEliminationPhase extends Phase {
         if (visited.isMarked(lastLocationAccess)) {
             return true; // dataflow loops must come from Phis assume them ok until proven wrong
         }
-        if (lastLocationAccess instanceof ProxyNode) {
-            return isWrites(n, ((ProxyNode) lastLocationAccess).value(), visited);
+        if (lastLocationAccess instanceof ValueProxyNode) {
+            return isWrites(n, ((ValueProxyNode) lastLocationAccess).value(), visited);
         }
         if (lastLocationAccess instanceof WriteNode) {
             WriteNode other = (WriteNode) lastLocationAccess;
@@ -82,10 +83,10 @@ public class ReadEliminationPhase extends Phase {
         if (exisiting != null) {
             return exisiting;
         }
-        if (lastLocationAccess instanceof ProxyNode) {
-            ProxyNode proxy = (ProxyNode) lastLocationAccess;
+        if (lastLocationAccess instanceof ValueProxyNode) {
+            ValueProxyNode proxy = (ValueProxyNode) lastLocationAccess;
             ValueNode value = getValue(n, proxy.value(), nodeMap);
-            return ProxyNode.forValue(value, proxy.proxyPoint(), (StructuredGraph) lastLocationAccess.graph());
+            return lastLocationAccess.graph().add(new ValueProxyNode(value, proxy.proxyPoint(), PhiType.Value));
         }
         if (lastLocationAccess instanceof WriteNode) {
             return ((WriteNode) lastLocationAccess).value();

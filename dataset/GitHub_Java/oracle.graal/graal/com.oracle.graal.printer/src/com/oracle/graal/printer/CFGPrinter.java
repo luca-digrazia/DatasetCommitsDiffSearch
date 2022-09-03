@@ -127,7 +127,7 @@ class CFGPrinter extends CompilationPrinter {
      * @param label A label describing the compilation phase that produced the control flow graph.
      * @param blocks The list of blocks to be printed.
      */
-    public void printCFG(String label, List<Block> blocks, boolean printNodes) {
+    public void printCFG(String label, List<Block> blocks) {
         if (lir == null) {
             latestScheduling = new NodeMap<>(cfg.getNodeToBlock());
             for (Block block : blocks) {
@@ -149,7 +149,7 @@ class CFGPrinter extends CompilationPrinter {
         begin("cfg");
         out.print("name \"").print(label).println('"');
         for (Block block : blocks) {
-            printBlock(block, printNodes);
+            printBlock(block);
         }
         end("cfg");
 
@@ -162,7 +162,7 @@ class CFGPrinter extends CompilationPrinter {
             PhiNode phi = (PhiNode) node;
             assert nodeBlock.getBeginNode() == phi.merge();
             for (Block pred : nodeBlock.getPredecessors()) {
-                schedule(phi.valueAt((AbstractEndNode) pred.getEndNode()), pred);
+                schedule(phi.valueAt((EndNode) pred.getEndNode()), pred);
             }
 
         } else {
@@ -185,7 +185,7 @@ class CFGPrinter extends CompilationPrinter {
         }
     }
 
-    private void printBlock(Block block, boolean printNodes) {
+    private void printBlock(Block block) {
         begin("block");
 
         out.print("name \"").print(blockToString(block)).println('"');
@@ -231,9 +231,7 @@ class CFGPrinter extends CompilationPrinter {
             out.print("loop_depth ").println(block.getLoop().depth);
         }
 
-        if (printNodes) {
-            printNodes(block);
-        }
+        printNodes(block);
         printLIR(block);
         end("block");
     }
@@ -448,10 +446,9 @@ class CFGPrinter extends CompilationPrinter {
                 @Override
                 protected void doState(LIRFrameState state) {
                     if (state.hasDebugInfo()) {
-                        DebugInfo di = state.debugInfo();
-                        stateString.append(debugInfoToString(di.getBytecodePosition(), di.getRegisterRefMap(), di.getFrameRefMap(), di.getCalleeSaveInfo(), target.arch));
+                        stateString.append(debugInfoToString(state.debugInfo().getBytecodePosition(), state.debugInfo().getRegisterRefMap(), state.debugInfo().getFrameRefMap(), target.arch));
                     } else {
-                        stateString.append(debugInfoToString(state.topFrame, null, null, null, target.arch));
+                        stateString.append(debugInfoToString(state.topFrame, null, null, target.arch));
                     }
                 }
             });
@@ -473,7 +470,7 @@ class CFGPrinter extends CompilationPrinter {
             return "-";
         }
         String prefix;
-        if (node instanceof AbstractBeginNode && lir == null) {
+        if (node instanceof BeginNode && lir == null) {
             prefix = "B";
         } else if (node instanceof ValueNode) {
             ValueNode value = (ValueNode) node;

@@ -22,18 +22,20 @@
  */
 package com.oracle.graal.snippets;
 
+//JaCoCo Exclude
+
+import static com.oracle.graal.graph.FieldIntrospection.*;
+
 import java.io.*;
 import java.util.*;
-
-import sun.misc.*;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.snippets.Snippet.Fold;
 import com.oracle.graal.snippets.nodes.*;
 
 /**
- * A counter that can be safely {@linkplain #inc() incremented} from within a
- * snippet for gathering snippet specific metrics.
+ * A counter that can be safely {@linkplain #inc() incremented} from within a snippet for gathering
+ * snippet specific metrics.
  */
 public class SnippetCounter implements Comparable<SnippetCounter> {
 
@@ -41,6 +43,7 @@ public class SnippetCounter implements Comparable<SnippetCounter> {
      * A group of related counters.
      */
     public static class Group {
+
         final String name;
         final List<SnippetCounter> counters;
 
@@ -54,15 +57,17 @@ public class SnippetCounter implements Comparable<SnippetCounter> {
             Collections.sort(counters);
 
             long total = 0;
+            int maxNameLen = 0;
             for (SnippetCounter c : counters) {
                 total += c.value;
+                maxNameLen = Math.max(c.name.length(), maxNameLen);
             }
 
             StringBuilder buf = new StringBuilder(String.format("Counters: %s%n", name));
 
             for (SnippetCounter c : counters) {
                 double percent = total == 0D ? 0D : ((double) (c.value * 100)) / total;
-                buf.append(String.format("%16s: %5.2f%%%10d  // %s%n", c.name, percent, c.value, c.description));
+                buf.append(String.format("  %" + maxNameLen + "s: %5.2f%%%10d  // %s%n", c.name, percent, c.value, c.description));
             }
             return buf.toString();
         }
@@ -92,7 +97,7 @@ public class SnippetCounter implements Comparable<SnippetCounter> {
     @Fold
     private static int countOffset() {
         try {
-            return (int) Unsafe.getUnsafe().objectFieldOffset(SnippetCounter.class.getDeclaredField("value"));
+            return (int) unsafe.objectFieldOffset(SnippetCounter.class.getDeclaredField("value"));
         } catch (Exception e) {
             throw new GraalInternalError(e);
         }
@@ -100,9 +105,9 @@ public class SnippetCounter implements Comparable<SnippetCounter> {
 
     /**
      * Creates a counter.
-     *
-     * @param group the group to which the counter belongs. If this is null, the newly created counter is disabled and
-     *            {@linkplain #inc() incrementing} is a no-op.
+     * 
+     * @param group the group to which the counter belongs. If this is null, the newly created
+     *            counter is disabled and {@linkplain #inc() incrementing} is a no-op.
      * @param name the name of the counter
      * @param description a brief comment describing the metric represented by the counter
      */
@@ -123,8 +128,8 @@ public class SnippetCounter implements Comparable<SnippetCounter> {
     }
 
     /**
-     * Increments the value of this counter. This method can be safely used in a snippet
-     * if it is invoked on a compile-time constant {@link SnippetCounter} object.
+     * Increments the value of this counter. This method can be safely used in a snippet if it is
+     * invoked on a compile-time constant {@link SnippetCounter} object.
      */
     public void inc() {
         if (group != null) {

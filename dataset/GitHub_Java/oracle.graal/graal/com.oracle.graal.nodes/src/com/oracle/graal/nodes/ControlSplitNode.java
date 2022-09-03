@@ -34,7 +34,5 @@ public abstract class ControlSplitNode extends FixedNode {
         super(stamp);
     }
 
-    public abstract double probability(AbstractBeginNode successor);
-
-    public abstract void setProbability(AbstractBeginNode successor, double value);
+    public abstract double probability(BeginNode successor);
 }

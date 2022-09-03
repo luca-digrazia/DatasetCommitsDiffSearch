@@ -36,6 +36,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 
+// TODO (chaeubl): add more test cases
 @SuppressWarnings("unused")
 public class InliningTest extends GraalCompilerTest {
 

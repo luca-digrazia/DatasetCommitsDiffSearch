@@ -48,4 +48,9 @@ public final class HotSpotMethodUnresolved extends HotSpotMethod {
     public JavaType getDeclaringClass() {
         return holder;
     }
+
+    @Override
+    public String toString() {
+        return "HotSpotMethod<" + holder.getName() + ". " + name + ", unresolved>";
+    }
 }

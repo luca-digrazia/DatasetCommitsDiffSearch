@@ -38,5 +38,7 @@ public abstract class ShiftNode extends BinaryNode {
      */
     public ShiftNode(Kind kind, ValueNode x, ValueNode s) {
         super(kind, x, s);
+        // TODO (cwimmer) Why check for null here - what is a shift with no left operand?
+        assert x == null || x.kind() == kind;
     }
 }

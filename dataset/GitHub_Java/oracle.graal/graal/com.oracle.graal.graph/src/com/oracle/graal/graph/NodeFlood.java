@@ -22,7 +22,9 @@
  */
 package com.oracle.graal.graph;
 
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.Iterator;
+import java.util.Queue;
 
 public class NodeFlood implements Iterable<Node> {
 
@@ -41,7 +43,7 @@ public class NodeFlood implements Iterable<Node> {
         }
     }
 
-    public void addAll(Iterable<? extends Node> nodes) {
+    public void addAll(Iterable<Node> nodes) {
         for (Node node : nodes) {
             this.add(node);
         }

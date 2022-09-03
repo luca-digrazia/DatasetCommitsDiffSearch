@@ -87,7 +87,7 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
         return snapshot;
     }
 
-    public AbstractEndNode forwardEnd() {
+    public EndNode forwardEnd() {
         assert forwardEndCount() == 1;
         return forwardEndAt(0);
     }
@@ -98,7 +98,7 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
     }
 
     @Override
-    protected void deleteEnd(AbstractEndNode end) {
+    protected void deleteEnd(EndNode end) {
         if (end instanceof LoopEndNode) {
             LoopEndNode loopEnd = (LoopEndNode) end;
             loopEnd.setLoopBegin(null);
@@ -122,7 +122,7 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
     }
 
     @Override
-    public int phiPredecessorIndex(AbstractEndNode pred) {
+    public int phiPredecessorIndex(EndNode pred) {
         if (pred instanceof LoopEndNode) {
             LoopEndNode loopEnd = (LoopEndNode) pred;
             if (loopEnd.loopBegin() == this) {
@@ -136,7 +136,7 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
     }
 
     @Override
-    public AbstractEndNode phiPredecessorAt(int index) {
+    public EndNode phiPredecessorAt(int index) {
         if (index < forwardEndCount()) {
             return forwardEndAt(index);
         }
@@ -173,14 +173,15 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
         // nothing yet
     }
 
-    public boolean isLoopExit(AbstractBeginNode begin) {
+    public boolean isLoopExit(BeginNode begin) {
         return begin instanceof LoopExitNode && ((LoopExitNode) begin).loopBegin() == this;
     }
 
     public void removeExits() {
+        StructuredGraph graph = (StructuredGraph) graph();
         for (LoopExitNode loopexit : loopExits().snapshot()) {
             loopexit.removeProxies();
-            graph().replaceFixedWithFixed(loopexit, graph().add(new BeginNode()));
+            graph.replaceFixedWithFixed(loopexit, graph.add(new BeginNode()));
         }
     }
 }

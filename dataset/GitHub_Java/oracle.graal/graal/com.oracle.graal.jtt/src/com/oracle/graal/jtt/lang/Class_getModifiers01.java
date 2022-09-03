@@ -24,9 +24,8 @@ package com.oracle.graal.jtt.lang;
 
 import java.io.*;
 
-import org.junit.*;
-
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 public final class Class_getModifiers01 extends JTTTest {
 

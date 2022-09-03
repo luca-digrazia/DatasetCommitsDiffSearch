@@ -361,10 +361,8 @@ public class LIRInstructionClass extends FieldIntrospection {
 
     private static void doAddress(Address address, OperandMode mode, EnumSet<OperandFlag> flags, ValueProcedure proc) {
         assert flags.contains(OperandFlag.ADDR);
-        Value[] components = address.components();
-        for (int i = 0; i < components.length; i++) {
-            components[i] = proc.doValue(components[i], mode, LIRInstruction.ADDRESS_FLAGS);
-        }
+        address.setBase(proc.doValue(address.getBase(), mode, LIRInstruction.ADDRESS_FLAGS));
+        address.setIndex(proc.doValue(address.getIndex(), mode, LIRInstruction.ADDRESS_FLAGS));
     }
 
     public final Value forEachRegisterHint(LIRInstruction obj, OperandMode mode, ValueProcedure proc) {

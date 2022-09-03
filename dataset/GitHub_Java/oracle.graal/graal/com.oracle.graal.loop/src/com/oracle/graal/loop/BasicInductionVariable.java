@@ -22,11 +22,9 @@
  */
 package com.oracle.graal.loop;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.calc.ConvertNode.Op;
 import com.oracle.graal.nodes.type.*;
 
 public class BasicInductionVariable extends InductionVariable {
@@ -115,19 +113,8 @@ public class BasicInductionVariable extends InductionVariable {
     }
 
     @Override
-    public ValueNode extremumNode(boolean assumePositiveTripCount, Kind kind) {
-        Kind fromKind = phi.kind();
-        Graph graph = phi.graph();
-        ValueNode stride = strideNode();
-        ValueNode maxTripCount = loop.counted().maxTripCountNode(assumePositiveTripCount);
-        ValueNode initNode = this.initNode();
-        if (fromKind != kind) {
-            Op convertOp = Op.getOp(fromKind, kind);
-            stride = graph.unique(new ConvertNode(convertOp, stride));
-            maxTripCount = graph.unique(new ConvertNode(convertOp, maxTripCount));
-            initNode = graph.unique(new ConvertNode(convertOp, initNode));
-        }
-        return IntegerArithmeticNode.add(IntegerArithmeticNode.mul(stride, IntegerArithmeticNode.sub(maxTripCount, ConstantNode.forIntegerKind(kind, 1, graph))), initNode);
+    public ValueNode extremumNode() {
+        return IntegerArithmeticNode.add(IntegerArithmeticNode.mul(strideNode(), loop.counted().maxTripCountNode()), init);
     }
 
     @Override
@@ -137,6 +124,6 @@ public class BasicInductionVariable extends InductionVariable {
 
     @Override
     public long constantExtremum() {
-        return constantStride() * (loop.counted().constantMaxTripCount() - 1) + constantInit();
+        return constantStride() * loop.counted().constantMaxTripCount() + constantInit();
     }
 }

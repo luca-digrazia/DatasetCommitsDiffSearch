@@ -22,8 +22,35 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.*;
+import java.util.*;
 
-@NodeInfo(allowedUsageTypes = {InputType.Association})
-public class EndNode extends AbstractEndNode {
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+
+public class EndNode extends FixedNode implements Node.IterableNodeType, LIRLowerable {
+
+    public EndNode() {
+        super(StampFactory.forVoid());
+    }
+
+    @Override
+    public void generate(LIRGeneratorTool gen) {
+        gen.visitEndNode(this);
+    }
+
+    public MergeNode merge() {
+        return (MergeNode) usages().first();
+    }
+
+    @Override
+    public boolean verify() {
+        assertTrue(usages().count() <= 1, "at most one usage");
+        return super.verify();
+    }
+
+    @Override
+    public Iterable<? extends Node> cfgSuccessors() {
+        return Arrays.asList(merge());
+    }
 }

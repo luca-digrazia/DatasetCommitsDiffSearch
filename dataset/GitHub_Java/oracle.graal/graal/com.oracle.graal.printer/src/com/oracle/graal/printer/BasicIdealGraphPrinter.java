@@ -23,7 +23,6 @@
 package com.oracle.graal.printer;
 
 import java.io.*;
-import java.nio.charset.*;
 import java.util.*;
 import java.util.Map.Entry;
 
@@ -91,7 +90,7 @@ class BasicIdealGraphPrinter {
             } else {
                 buffered = new BufferedOutputStream(stream, 256 * 1024);
             }
-            this.stream = new PrintStream(buffered, false, Charset.defaultCharset().name());
+            this.stream = new PrintStream(buffered, false, "US-ASCII");
         } catch (UnsupportedEncodingException e) {
             throw new RuntimeException(e);
         }

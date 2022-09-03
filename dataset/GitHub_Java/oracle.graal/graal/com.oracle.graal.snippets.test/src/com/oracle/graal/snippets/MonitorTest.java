@@ -24,8 +24,8 @@ package com.oracle.graal.snippets;
 
 import org.junit.*;
 
-import com.oracle.graal.compiler.phases.ea.*;
 import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.virtual.phases.ea.*;
 
 public class MonitorTest extends GraalCompilerTest {
 
@@ -161,11 +161,13 @@ public class MonitorTest extends GraalCompilerTest {
     }
 
     static class Chars {
+
         final char[] data;
 
         public Chars(int size) {
             this.data = new char[size];
         }
+
         public Chars(char[] data) {
             this.data = data;
         }

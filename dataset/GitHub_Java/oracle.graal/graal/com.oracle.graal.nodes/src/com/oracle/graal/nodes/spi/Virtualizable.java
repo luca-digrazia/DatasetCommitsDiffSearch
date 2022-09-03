@@ -47,9 +47,9 @@ public interface Virtualizable {
 
         public abstract ValueNode getEntry(int index);
 
-        public abstract void addLock(int depth);
+        public abstract int getLockCount();
 
-        public abstract int removeLock();
+        public abstract void setLockCount(int lockCount);
 
         public abstract ValueNode getMaterializedValue();
     }

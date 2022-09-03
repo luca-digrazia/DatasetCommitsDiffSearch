@@ -22,13 +22,10 @@
  */
 package com.oracle.graal.hotspot.logging;
 
-import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
-
-import com.oracle.graal.debug.*;
 
 /**
  * A java.lang.reflect proxy that hierarchically logs all method invocations along with their
@@ -44,7 +41,7 @@ public class CountingProxy<T> implements InvocationHandler {
 
     public CountingProxy(T delegate) {
         assert ENABLED;
-        TTY.println("Counting proxy for " + delegate.getClass().getSimpleName() + " created");
+        System.out.println("Counting proxy for " + delegate.getClass().getSimpleName() + " created");
         this.delegate = delegate;
         proxies.add(this);
     }
@@ -97,13 +94,12 @@ public class CountingProxy<T> implements InvocationHandler {
 
     protected void print() {
         long sum = 0;
-        PrintStream out = System.out;
         for (Map.Entry<Method, AtomicLong> entry : calls.entrySet()) {
             Method method = entry.getKey();
             long count = entry.getValue().get();
             sum += count;
-            out.println(delegate.getClass().getSimpleName() + "." + method.getName() + ": " + count);
+            System.out.println(delegate.getClass().getSimpleName() + "." + method.getName() + ": " + count);
         }
-        out.println(delegate.getClass().getSimpleName() + " calls: " + sum);
+        System.out.println(delegate.getClass().getSimpleName() + " calls: " + sum);
     }
 }

@@ -24,8 +24,6 @@ package com.oracle.graal.api.code;
 
 import java.util.*;
 
-import com.oracle.graal.api.meta.*;
-
 /**
  * The callee save area (CSA) is a contiguous space in a stack frame used to save (and restore) the
  * values of the caller's registers. This class describes the layout of a CSA in terms of its
@@ -71,7 +69,7 @@ public class CalleeSaveLayout {
      *            CSA
      * @param registers the registers that can be saved in the CSA
      */
-    public CalleeSaveLayout(Architecture architecture, int frameOffsetToCSA, int size, int slotSize, Register... registers) {
+    public CalleeSaveLayout(int frameOffsetToCSA, int size, int slotSize, Register... registers) {
         this.frameOffsetToCSA = frameOffsetToCSA;
         assert slotSize == 0 || CodeUtil.isPowerOf2(slotSize);
         this.slotSize = slotSize;
@@ -88,8 +86,7 @@ public class CalleeSaveLayout {
             if (offset > maxOffset) {
                 maxOffset = offset;
             }
-            PlatformKind kind = architecture.getLargestStorableKind(reg.getRegisterCategory());
-            offset += architecture.getSizeInBytes(kind);
+            offset += reg.spillSlotSize;
         }
         if (size == -1) {
             this.size = offset;
@@ -106,8 +103,7 @@ public class CalleeSaveLayout {
             int index = offset / slotSize;
             regNumToIndex[reg.number] = index;
             indexToReg[index] = reg;
-            PlatformKind kind = architecture.getLargestStorableKind(reg.getRegisterCategory());
-            offset += architecture.getSizeInBytes(kind);
+            offset += reg.spillSlotSize;
         }
     }
 

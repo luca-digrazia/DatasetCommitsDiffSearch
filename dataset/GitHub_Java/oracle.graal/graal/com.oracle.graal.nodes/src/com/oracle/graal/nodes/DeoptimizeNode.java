@@ -73,5 +73,7 @@ public class DeoptimizeNode extends FixedNode implements Node.IterableNodeType, 
     }
 
     @NodeIntrinsic
-    public static native void deopt(@ConstantNodeParameter DeoptimizationAction action, @ConstantNodeParameter DeoptimizationReason reason);
+    public static native void deopt(@ConstantNodeParameter
+    DeoptimizationAction action, @ConstantNodeParameter
+    DeoptimizationReason reason);
 }

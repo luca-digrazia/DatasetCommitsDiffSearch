@@ -26,6 +26,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /* TODO (thomaswue/gdub) For high-level optimization purpose the compare node should be a boolean *value* (it is currently only a helper node)
  * But in the back-end the comparison should not always be materialized (for example in x86 the comparison result will not be in a register but in a flag)
@@ -33,7 +34,7 @@ import com.oracle.graal.nodes.spi.*;
  * Compare should probably be made a value (so that it can be canonicalized for example) and in later stages some Compare usage should be transformed
  * into variants that do not materialize the value (CompareIf, CompareGuard...)
  */
-public abstract class CompareNode extends LogicNode implements Canonicalizable, LIRLowerable {
+public abstract class CompareNode extends BooleanNode implements Canonicalizable, LIRLowerable {
 
     @Input private ValueNode x;
     @Input private ValueNode y;
@@ -53,6 +54,7 @@ public abstract class CompareNode extends LogicNode implements Canonicalizable, 
      * @param y the instruction that produces the second input to this instruction
      */
     public CompareNode(ValueNode x, ValueNode y) {
+        super(StampFactory.condition());
         assert (x == null && y == null) || x.kind() == y.kind();
         this.x = x;
         this.y = y;
@@ -76,7 +78,7 @@ public abstract class CompareNode extends LogicNode implements Canonicalizable, 
     public void generate(LIRGeneratorTool gen) {
     }
 
-    private LogicNode optimizeConditional(Constant constant, ConditionalNode conditionalNode, MetaAccessProvider runtime, Condition cond) {
+    private ValueNode optimizeConditional(Constant constant, ConditionalNode conditionalNode, MetaAccessProvider runtime, Condition cond) {
         Constant trueConstant = conditionalNode.trueValue().asConstant();
         Constant falseConstant = conditionalNode.falseValue().asConstant();
 
@@ -85,7 +87,7 @@ public abstract class CompareNode extends LogicNode implements Canonicalizable, 
             boolean falseResult = cond.foldCondition(falseConstant, constant, runtime, unorderedIsTrue());
 
             if (trueResult == falseResult) {
-                return LogicConstantNode.forBoolean(trueResult, graph());
+                return ConstantNode.forBoolean(trueResult, graph());
             } else {
                 if (trueResult) {
                     assert falseResult == false;
@@ -101,24 +103,13 @@ public abstract class CompareNode extends LogicNode implements Canonicalizable, 
         return this;
     }
 
-    protected void setX(ValueNode x) {
-        updateUsages(this.x, x);
-        this.x = x;
-    }
-
-    protected void setY(ValueNode y) {
-        updateUsages(this.y, y);
-        this.y = y;
-    }
-
-    protected LogicNode optimizeNormalizeCmp(Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
+    protected ValueNode optimizeNormalizeCmp(Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
         throw new GraalInternalError("NormalizeCompareNode connected to %s (%s %s %s)", this, constant, normalizeNode, mirrored);
     }
 
-    @Override
-    public LogicNode canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (x().isConstant() && y().isConstant() && tool.runtime() != null) {
-            return LogicConstantNode.forBoolean(condition().foldCondition(x().asConstant(), y().asConstant(), tool.runtime(), unorderedIsTrue()), graph());
+            return ConstantNode.forBoolean(condition().foldCondition(x().asConstant(), y().asConstant(), tool.runtime(), unorderedIsTrue()), graph());
         }
         if (x().isConstant()) {
             if (y() instanceof ConditionalNode) {
@@ -131,14 +122,6 @@ public abstract class CompareNode extends LogicNode implements Canonicalizable, 
                 return optimizeConditional(y().asConstant(), (ConditionalNode) x(), tool.runtime(), condition());
             } else if (x() instanceof NormalizeCompareNode) {
                 return optimizeNormalizeCmp(y().asConstant(), (NormalizeCompareNode) x(), false);
-            }
-        }
-        if (x() instanceof ConvertNode && y() instanceof ConvertNode) {
-            ConvertNode convertX = (ConvertNode) x();
-            ConvertNode convertY = (ConvertNode) y();
-            if (convertX.opcode.isLossless() && convertY.opcode.isLossless()) {
-                setX(convertX.value());
-                setY(convertY.value());
             }
         }
         return this;

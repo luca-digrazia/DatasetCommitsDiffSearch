@@ -83,57 +83,6 @@ public abstract class BinaryNode extends FloatingNode {
         }
     }
 
-    public static BinaryNode add(ValueNode x, ValueNode y) {
-        assert x.kind() == y.kind();
-        switch (x.kind()) {
-            case Byte:
-            case Char:
-            case Short:
-            case Int:
-            case Long:
-                return IntegerArithmeticNode.add(x, y);
-            case Float:
-            case Double:
-                return x.graph().unique(new FloatAddNode(x.kind(), x, y, false));
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
-    }
-
-    public static BinaryNode sub(ValueNode x, ValueNode y) {
-        assert x.kind() == y.kind();
-        switch (x.kind()) {
-            case Byte:
-            case Char:
-            case Short:
-            case Int:
-            case Long:
-                return IntegerArithmeticNode.sub(x, y);
-            case Float:
-            case Double:
-                return x.graph().unique(new FloatSubNode(x.kind(), x, y, false));
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
-    }
-
-    public static BinaryNode mul(ValueNode x, ValueNode y) {
-        assert x.kind() == y.kind();
-        switch (x.kind()) {
-            case Byte:
-            case Char:
-            case Short:
-            case Int:
-            case Long:
-                return IntegerArithmeticNode.mul(x, y);
-            case Float:
-            case Double:
-                return x.graph().unique(new FloatMulNode(x.kind(), x, y, false));
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
-    }
-
     public static boolean canTryReassociate(BinaryNode node) {
         return node instanceof IntegerAddNode || node instanceof IntegerSubNode || node instanceof IntegerMulNode || node instanceof AndNode || node instanceof OrNode || node instanceof XorNode;
     }
@@ -226,11 +175,11 @@ public abstract class BinaryNode extends FloatingNode {
         } else if (node instanceof IntegerMulNode) {
             return IntegerArithmeticNode.mul(a, IntegerAddNode.mul(m1, m2));
         } else if (node instanceof AndNode) {
-            return BitLogicNode.and(a, BitLogicNode.and(m1, m2));
+            return LogicNode.and(a, LogicNode.and(m1, m2));
         } else if (node instanceof OrNode) {
-            return BitLogicNode.or(a, BitLogicNode.or(m1, m2));
+            return LogicNode.or(a, LogicNode.or(m1, m2));
         } else if (node instanceof XorNode) {
-            return BitLogicNode.xor(a, BitLogicNode.xor(m1, m2));
+            return LogicNode.xor(a, LogicNode.xor(m1, m2));
         } else {
             throw GraalInternalError.shouldNotReachHere();
         }

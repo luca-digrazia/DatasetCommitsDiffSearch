@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.jtt.loop;
 
-import org.junit.*;
-
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 /*
  * see java.lang.String.lastIndexOf(char[], int, int, char[], int ,int, int)

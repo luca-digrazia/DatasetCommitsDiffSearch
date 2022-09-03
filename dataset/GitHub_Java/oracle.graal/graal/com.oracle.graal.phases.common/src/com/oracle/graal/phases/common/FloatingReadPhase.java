@@ -73,7 +73,6 @@ public class FloatingReadPhase extends Phase {
             return "Map=" + lastMemorySnapshot.toString() + " Loops=" + loops.toString();
         }
 
-        @SuppressWarnings("unchecked")
         @Override
         public boolean merge(MergeNode merge, List<MemoryMap> withStates) {
             if (withStates.size() == 0) {
@@ -107,6 +106,7 @@ public class FloatingReadPhase extends Phase {
                     keys.add(key);
                 }
             }
+            @SuppressWarnings("unchecked")
             IdentityHashMap<Object, ValueNode> newMemorySnapshot = (IdentityHashMap<Object, ValueNode>) lastMemorySnapshot.clone();
 
             for (Object key : keys) {
@@ -185,6 +185,8 @@ public class FloatingReadPhase extends Phase {
     private void processNode(FixedNode node, MemoryMap state) {
         if (node instanceof ReadNode) {
             processRead((ReadNode) node, state);
+        } else if (node instanceof WriteNode) {
+            processWrite((WriteNode) node, state);
         } else if (node instanceof MemoryCheckpoint) {
             processCheckpoint((MemoryCheckpoint) node, state);
         } else if (node instanceof LoopExitNode) {
@@ -193,13 +195,22 @@ public class FloatingReadPhase extends Phase {
     }
 
     private static void processCheckpoint(MemoryCheckpoint checkpoint, MemoryMap state) {
-        if (checkpoint.getLocationIdentity() == LocationNode.ANY_LOCATION) {
-            for (Map.Entry<Object, ValueNode> entry : state.lastMemorySnapshot.entrySet()) {
-                entry.setValue((ValueNode) checkpoint);
-            }
-            state.loops.clear();
+        processAnyLocationWrite((ValueNode) checkpoint, state);
+    }
+
+    private static void processWrite(WriteNode writeNode, MemoryMap state) {
+        if (writeNode.location().locationIdentity() == LocationNode.ANY_LOCATION) {
+            processAnyLocationWrite(writeNode, state);
         }
-        state.lastMemorySnapshot.put(checkpoint.getLocationIdentity(), (ValueNode) checkpoint);
+        state.lastMemorySnapshot.put(writeNode.location().locationIdentity(), writeNode);
+    }
+
+    private static void processAnyLocationWrite(ValueNode modifiying, MemoryMap state) {
+        for (Map.Entry<Object, ValueNode> entry : state.lastMemorySnapshot.entrySet()) {
+            entry.setValue(modifiying);
+        }
+        state.lastMemorySnapshot.put(LocationNode.ANY_LOCATION, modifiying);
+        state.loops.clear();
     }
 
     private void processRead(ReadNode readNode, MemoryMap state) {

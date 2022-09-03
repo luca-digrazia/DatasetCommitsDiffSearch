@@ -53,9 +53,9 @@ public final class ObjectEqualsNode extends CompareNode implements Virtualizable
     }
 
     @Override
-    public LogicNode canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (x() == y()) {
-            return LogicConstantNode.tautology(graph());
+            return ConstantNode.forBoolean(true, graph());
         }
 
         if (x().objectStamp().alwaysNull()) {
@@ -64,7 +64,7 @@ public final class ObjectEqualsNode extends CompareNode implements Virtualizable
             return graph().unique(new IsNullNode(x()));
         }
         if (x().stamp().alwaysDistinct(y().stamp())) {
-            return LogicConstantNode.contradiction(graph());
+            return ConstantNode.forBoolean(false, graph());
         }
 
         return super.canonical(tool);
@@ -79,30 +79,10 @@ public final class ObjectEqualsNode extends CompareNode implements Virtualizable
 
         if (xVirtual ^ yVirtual) {
             // one of them is virtual: they can never be the same objects
-            tool.replaceWithValue(LogicConstantNode.contradiction(graph()));
+            tool.replaceWithValue(ConstantNode.forBoolean(false, graph()));
         } else if (xVirtual && yVirtual) {
-            boolean xIdentity = stateX.getVirtualObject().hasIdentity();
-            boolean yIdentity = stateY.getVirtualObject().hasIdentity();
-            if (xIdentity ^ yIdentity) {
-                tool.replaceWithValue(LogicConstantNode.contradiction(graph()));
-            } else if (!xIdentity && !yIdentity) {
-                // both are virtual without identity: check contents
-                assert stateX.getVirtualObject().entryCount() == 1 && stateY.getVirtualObject().entryCount() == 1;
-                assert stateX.getVirtualObject().type() == stateY.getVirtualObject().type();
-                assert stateX.getVirtualObject().entryKind(0) == Kind.Int || stateX.getVirtualObject().entryKind(0) == Kind.Long;
-                final IntegerEqualsNode equals = new IntegerEqualsNode(stateX.getEntry(0), stateY.getEntry(0));
-                tool.customAction(new Runnable() {
-
-                    @Override
-                    public void run() {
-                        graph().add(equals);
-                    }
-                });
-                tool.replaceWithValue(equals);
-            } else {
-                // both are virtual with identity: check if they refer to the same object
-                tool.replaceWithValue(LogicConstantNode.forBoolean(stateX == stateY, graph()));
-            }
+            // both are virtual: check if they refer to the same object
+            tool.replaceWithValue(ConstantNode.forBoolean(stateX == stateY, graph()));
         }
     }
 }

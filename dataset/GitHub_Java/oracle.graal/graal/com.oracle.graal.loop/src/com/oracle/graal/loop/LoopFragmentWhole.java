@@ -68,15 +68,10 @@ public class LoopFragmentWhole extends LoopFragment {
         final Graph graph = this.graph();
         return new DuplicationReplacement() {
 
-            private EndNode endNode;
-
             @Override
             public Node replacement(Node o) {
                 if (o == entry) {
-                    if (endNode == null) {
-                        endNode = graph.add(new EndNode());
-                    }
-                    return endNode;
+                    return graph.add(new EndNode());
                 }
                 return o;
             }

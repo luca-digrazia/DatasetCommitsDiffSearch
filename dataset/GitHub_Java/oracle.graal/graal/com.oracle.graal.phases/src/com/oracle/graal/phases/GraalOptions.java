@@ -22,13 +22,12 @@
  */
 package com.oracle.graal.phases;
 
-
-
 /**
  * This class encapsulates options that control the behavior of the Graal compiler.
- *
+ * 
  * (thomaswue) WARNING: Fields of this class are treated as final by Graal.
  */
+// @formatter:off
 public final class GraalOptions {
 
     // Checkstyle: stop
@@ -44,36 +43,44 @@ public final class GraalOptions {
            static boolean InlineMonomorphicCalls             = true;
            static boolean InlinePolymorphicCalls             = true;
            static boolean InlineMegamorphicCalls             = ____;
+    public static int     InliningPolicy                     = 1;
+    public static int     InliningDecision                   = 4;
+    public static int     WeightComputationPolicy            = 2;
+    public static int     MaximumTrivialSize                 = 10;
     public static int     MaximumInlineLevel                 = 30;
-    public static int     MaximumDesiredSize                 = 5000;
+    public static int     MaximumDesiredSize                 = 3000;
     public static int     MaximumRecursiveInlining           = 1;
+    public static int     SmallCompiledCodeSize              = 2200;
     public static boolean LimitInlinedProbability            = ____;
-    public static boolean LimitInlinedRelevance              = true;
+    public static boolean UseRelevanceBasedInlining          = ____;
+    // WeightBasedInliningPolicy (0)
+    public static float   InliningSizePenaltyExp             = 20;
+    public static float   MaximumInlineWeight                = 1.25f;
+    public static float   InliningSizePenalty                = 1;
+    // StaticSizeBasedInliningPolicy (1), MinimumCodeSizeBasedInlining (2),
+    // DynamicSizeBasedInliningPolicy (3)
+    public static int     MaximumInlineSize                  = 35;
+    // GreedySizeBasedInlining (4)
+    public static int     MaximumGreedyInlineSize            = 100;
+    public static int     InliningBonusPerTransferredValue   = 10;
+    // Common options for inlining policies 1 to 4
+    public static float   NestedInliningSizeRatio            = 1f;
     public static float   BoostInliningForEscapeAnalysis     = 2f;
-    public static float   RelevanceCapForInlining            = 1f;
-
-    public static int     TrivialBytecodeSize                = 10;
-    public static int     NormalBytecodeSize                 = 100;
-    public static int     MaximumBytecodeSize                = 500;
-    public static int     TrivialComplexity                  = 10;
-    public static int     NormalComplexity                   = 40;
-    public static int     MaximumComplexity                  = 400;
-    public static int     TrivialCompiledCodeSize            = 150;
-    public static int     NormalCompiledCodeSize             = 500;
-    public static int     MaximumCompiledCodeSize            = 4000;
-    public static int     SmallCompiledCodeSize              = 1000;
+    public static float   RatioCapForInlining                = 1f;
 
     // escape analysis settings
     public static boolean PartialEscapeAnalysis              = true;
     public static boolean EscapeAnalysisHistogram            = ____;
     public static int     EscapeAnalysisIterations           = 2;
     public static String  EscapeAnalyzeOnly                  = null;
+    public static int     MaximumEscapeAnalysisArrayLength   = 32;
 
     public static double  TailDuplicationProbability         = 0.5;
     public static int     TailDuplicationTrivialSize         = 1;
 
     // absolute probability analysis
     public static boolean ProbabilityAnalysis                = true;
+    public static int     LoopFrequencyPropagationPolicy     = -2;
 
     // profiling information
     public static int     DeoptsToDisableOptimisticOptimization = 40;
@@ -98,8 +105,8 @@ public final class GraalOptions {
     public static boolean ReassociateInvariants              = true;
     public static boolean FullUnroll                         = true;
     public static boolean LoopUnswitch                       = true;
-    public static int     FullUnrollMaxNodes                 = 150;
-    public static int     ExactFullUnrollMaxNodes            = 600;
+    public static int     FullUnrollMaxNodes                 = 300;
+    public static int     ExactFullUnrollMaxNodes            = 1200;
     public static float   MinimumPeelProbability             = 0.35f;
     public static int     LoopMaxUnswitch                    = 3;
     public static int     LoopUnswitchMaxIncrease            = 50;
@@ -185,7 +192,6 @@ public final class GraalOptions {
     public static boolean OptReadElimination                 = true;
     public static boolean OptCanonicalizer                   = true;
     public static boolean OptScheduleOutOfLoops              = true;
-    public static boolean OptReorderLoops                    = true;
     public static boolean OptEliminateGuards                 = true;
     public static boolean OptImplicitNullChecks              = true;
     public static boolean OptLivenessAnalysis                = true;
@@ -195,7 +201,6 @@ public final class GraalOptions {
     public static boolean OptTailDuplication                 = true;
     public static boolean OptEliminatePartiallyRedundantGuards = true;
     public static boolean OptFilterProfiledTypes             = true;
-    public static boolean OptDevirtualizeInvokesOptimistically = true;
 
     // Intrinsification settings
     public static boolean IntrinsifyArrayCopy                = true;

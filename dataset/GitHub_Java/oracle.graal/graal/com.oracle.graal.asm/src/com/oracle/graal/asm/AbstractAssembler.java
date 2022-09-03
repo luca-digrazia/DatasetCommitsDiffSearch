@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.asm;
 
-import java.nio.*;
-
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.Architecture.*;
 
 /**
  * The platform-independent base class for the assembler.
@@ -37,7 +36,7 @@ public abstract class AbstractAssembler {
     public AbstractAssembler(TargetDescription target) {
         this.target = target;
 
-        if (target.arch.getByteOrder() == ByteOrder.BIG_ENDIAN) {
+        if (target.arch.getByteOrder() == ByteOrder.BigEndian) {
             this.codeBuffer = new Buffer.BigEndian();
         } else {
             this.codeBuffer = new Buffer.LittleEndian();

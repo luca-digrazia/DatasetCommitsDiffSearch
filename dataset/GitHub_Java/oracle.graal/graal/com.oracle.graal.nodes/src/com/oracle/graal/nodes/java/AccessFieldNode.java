@@ -37,6 +37,7 @@ public abstract class AccessFieldNode extends FixedWithNextNode implements Lower
     @Input private ValueNode object;
 
     protected final ResolvedJavaField field;
+    private final long leafGraphId;
 
     public ValueNode object() {
         return object;
@@ -48,10 +49,11 @@ public abstract class AccessFieldNode extends FixedWithNextNode implements Lower
      * @param object the instruction producing the receiver object
      * @param field the compiler interface representation of the field
      */
-    public AccessFieldNode(Stamp stamp, ValueNode object, ResolvedJavaField field) {
+    public AccessFieldNode(Stamp stamp, ValueNode object, ResolvedJavaField field, long leafGraphId) {
         super(stamp);
         this.object = object;
         this.field = field;
+        this.leafGraphId = leafGraphId;
         assert field.getDeclaringClass().isInitialized();
     }
 
@@ -62,6 +64,10 @@ public abstract class AccessFieldNode extends FixedWithNextNode implements Lower
      */
     public ResolvedJavaField field() {
         return field;
+    }
+
+    public long leafGraphId() {
+        return leafGraphId;
     }
 
     /**

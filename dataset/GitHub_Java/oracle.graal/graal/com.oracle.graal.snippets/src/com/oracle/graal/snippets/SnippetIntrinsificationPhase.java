@@ -43,18 +43,42 @@ public class SnippetIntrinsificationPhase extends Phase {
 
     private final MetaAccessProvider runtime;
     private final BoxingMethodPool pool;
+    private final boolean intrinsificationOrFoldingCanBeDeferred;
 
-    public SnippetIntrinsificationPhase(MetaAccessProvider runtime, BoxingMethodPool pool) {
+    /**
+     * @param intrinsificationOrFoldingCanBeDeferred if true, then {@link NonConstantParameterError}
+     *            s are not fatal
+     */
+    public SnippetIntrinsificationPhase(MetaAccessProvider runtime, BoxingMethodPool pool, boolean intrinsificationOrFoldingCanBeDeferred) {
         this.runtime = runtime;
         this.pool = pool;
+        this.intrinsificationOrFoldingCanBeDeferred = intrinsificationOrFoldingCanBeDeferred;
     }
 
     @Override
     protected void run(StructuredGraph graph) {
         for (Invoke i : graph.getInvokes()) {
-            if (i.callTarget() instanceof MethodCallTargetNode) {
-                tryIntrinsify(i);
+            try {
+                if (i.callTarget() instanceof MethodCallTargetNode) {
+                    tryIntrinsify(i);
+                }
+            } catch (NonConstantParameterError t) {
+                if (!intrinsificationOrFoldingCanBeDeferred) {
+                    throw t;
+                }
             }
+        }
+    }
+
+    /**
+     * Exception raised when an argument to a {@linkplain Fold foldable} or {@link NodeIntrinsic}
+     * method is not a constant.
+     */
+    @SuppressWarnings("serial")
+    public static class NonConstantParameterError extends Error {
+
+        public NonConstantParameterError(String message) {
+            super(message);
         }
     }
 
@@ -67,7 +91,7 @@ public class SnippetIntrinsificationPhase extends Phase {
         return result;
     }
 
-    private boolean tryIntrinsify(Invoke invoke) {
+    private void tryIntrinsify(Invoke invoke) {
         ResolvedJavaMethod target = invoke.methodCallTarget().targetMethod();
         NodeIntrinsic intrinsic = target.getAnnotation(Node.NodeIntrinsic.class);
         ResolvedJavaType declaringClass = target.getDeclaringClass();
@@ -80,9 +104,6 @@ public class SnippetIntrinsificationPhase extends Phase {
 
             // Prepare the arguments for the reflective constructor call on the node class.
             Object[] nodeConstructorArguments = prepareArguments(invoke, parameterTypes, target, false);
-            if (nodeConstructorArguments == null) {
-                return false;
-            }
 
             // Create the new node instance.
             Class<?> c = getNodeClass(target, intrinsic);
@@ -99,9 +120,6 @@ public class SnippetIntrinsificationPhase extends Phase {
 
             // Prepare the arguments for the reflective method call
             Object[] arguments = prepareArguments(invoke, parameterTypes, target, true);
-            if (arguments == null) {
-                return false;
-            }
             Object receiver = null;
             if (!invoke.methodCallTarget().isStatic()) {
                 receiver = arguments[0];
@@ -124,7 +142,6 @@ public class SnippetIntrinsificationPhase extends Phase {
                 invoke.intrinsify(null);
             }
         }
-        return true;
     }
 
     /**
@@ -132,8 +149,6 @@ public class SnippetIntrinsificationPhase extends Phase {
      * to a reflective invocation of a Java constructor or method.
      * 
      * @param folding specifies if the invocation is for handling a {@link Fold} annotation
-     * @return the arguments for the reflective invocation or null if an argument of {@code invoke}
-     *         that is expected to be constant isn't
      */
     private Object[] prepareArguments(Invoke invoke, Class<?>[] parameterTypes, ResolvedJavaMethod target, boolean folding) {
         NodeInputList<ValueNode> arguments = invoke.callTarget().arguments();
@@ -146,7 +161,8 @@ public class SnippetIntrinsificationPhase extends Phase {
             ValueNode argument = tryBoxingElimination(parameterIndex, target, arguments.get(i));
             if (folding || MetaUtil.getParameterAnnotation(ConstantNodeParameter.class, parameterIndex, target) != null) {
                 if (!(argument instanceof ConstantNode)) {
-                    return null;
+                    throw new NonConstantParameterError("parameter " + parameterIndex + " must be a compile time constant for calling " + invoke.methodCallTarget().targetMethod() + " at " +
+                                    sourceLocation(invoke.node()) + ": " + argument);
                 }
                 ConstantNode constantNode = (ConstantNode) argument;
                 Constant constant = constantNode.asConstant();
@@ -348,7 +364,7 @@ public class SnippetIntrinsificationPhase extends Phase {
         if (newInstance instanceof ValueNode && (((ValueNode) newInstance).kind() != Kind.Object || ((ValueNode) newInstance).stamp() == StampFactory.forNodeIntrinsic())) {
             StructuredGraph graph = (StructuredGraph) newInstance.graph();
             for (CheckCastNode checkCastNode : newInstance.usages().filter(CheckCastNode.class).snapshot()) {
-                for (ProxyNode vpn : checkCastNode.usages().filter(ProxyNode.class).snapshot()) {
+                for (ValueProxyNode vpn : checkCastNode.usages().filter(ValueProxyNode.class).snapshot()) {
                     graph.replaceFloating(vpn, checkCastNode);
                 }
                 for (Node checkCastUsage : checkCastNode.usages().snapshot()) {

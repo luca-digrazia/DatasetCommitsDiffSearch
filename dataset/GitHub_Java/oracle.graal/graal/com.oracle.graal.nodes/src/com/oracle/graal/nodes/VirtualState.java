@@ -28,7 +28,6 @@ import com.oracle.graal.graph.*;
  * Base class for nodes that contain "virtual" state, like FrameState and VirtualObjectState.
  * Subclasses of this class will be treated in a special way by the scheduler.
  */
-@NodeInfo(allowedUsageTypes = {InputType.State})
 public abstract class VirtualState extends Node {
 
     public interface NodeClosure<T extends Node> {
@@ -45,10 +44,6 @@ public abstract class VirtualState extends Node {
 
     public abstract void applyToNonVirtual(NodeClosure<? super ValueNode> closure);
 
-    /**
-     * Performs a <b>pre-order</b> iteration over all elements reachable from this state that are a
-     * subclass of {@link VirtualState}.
-     */
     public abstract void applyToVirtual(VirtualClosure closure);
 
     public abstract boolean isPartOfThisState(VirtualState state);

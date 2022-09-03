@@ -35,7 +35,7 @@ public interface FrameContext {
      * <li>stack overflow checking</li>
      * </ul>
      */
-    void enter(CompilationResultBuilder crb);
+    void enter(TargetMethodAssembler tasm);
 
     /**
      * Emits code to be executed just prior to returning from a method. This may include:
@@ -45,10 +45,5 @@ public interface FrameContext {
      * <li>destroying the stack frame</li>
      * </ul>
      */
-    void leave(CompilationResultBuilder crb);
-
-    /**
-     * Determines if a frame is set up and torn down by this object.
-     */
-    boolean hasFrame();
+    void leave(TargetMethodAssembler tasm);
 }

@@ -32,7 +32,7 @@ import com.oracle.graal.nodes.type.*;
  * This node is used to perform the finalizer registration at the end of the java.lang.Object
  * constructor.
  */
-public final class RegisterFinalizerNode extends AbstractStateSplit implements StateSplit, Canonicalizable, LIRLowerable, Virtualizable {
+public final class RegisterFinalizerNode extends AbstractStateSplit implements StateSplit, Canonicalizable, LIRLowerable {
 
     public static final Descriptor REGISTER_FINALIZER = new Descriptor("registerFinalizer", true, void.class, Object.class);
 
@@ -73,13 +73,5 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements S
         }
 
         return this;
-    }
-
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        State state = tool.getObjectState(object);
-        if (state != null && !state.getVirtualObject().type().hasFinalizer()) {
-            tool.delete();
-        }
     }
 }

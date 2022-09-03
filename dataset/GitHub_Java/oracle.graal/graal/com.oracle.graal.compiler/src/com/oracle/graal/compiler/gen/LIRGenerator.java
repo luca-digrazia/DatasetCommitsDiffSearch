@@ -467,9 +467,9 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         ((LIRLowerable) node).generate(this);
     }
 
-    private boolean canBeNullCheck(LocationNode location) {
+    private static boolean canBeNullCheck(LocationNode location) {
         // TODO: Make this part of TargetDescription
-        return !(location instanceof IndexedLocationNode) && location.displacement() < this.target().implicitNullCheckLimit;
+        return !(location instanceof IndexedLocationNode) && location.displacement() < 4096;
     }
 
     protected CallingConvention createCallingConvention() {

@@ -25,23 +25,14 @@ package com.oracle.graal.interpreter;
 import java.lang.reflect.*;
 import java.util.*;
 
-import com.oracle.graal.api.*;
 import com.oracle.graal.api.interpreter.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.bytecode.*;
 
 /**
- *
- * <h1>Implementation notes</h1>
- * <li>Native methods are invoked using standard java reflection.</li>
- *
- * <h1>Features:</h1>
- *
- *
- * <h1>Limitations:</h1>
- *
- * <li>The interpreter is not able to recognize a native method that calls a java method.
- *  In that case the java method will be interpreted directly on the vm interpreter.</li>
+ * High-level bytecode interpreter that executes on top of Java. Java native methods are executed
+ * using the {@link com.oracle.graal.api.interpreter.RuntimeInterpreterInterface}.
  */
 @SuppressWarnings("static-method")
 public final class BytecodeInterpreter implements Interpreter {
@@ -62,7 +53,6 @@ public final class BytecodeInterpreter implements Interpreter {
     private Map<ResolvedJavaMethod, MethodRedirectionInfo> methodDelegates;
 
     private int maxStackFrames;
-    private int stackFrameDepth;
 
     private ResolvedJavaMethod rootMethod;
     private RuntimeInterpreterInterface runtimeInterface;
@@ -75,11 +65,11 @@ public final class BytecodeInterpreter implements Interpreter {
         GraalRuntime runtime = Graal.getRuntime();
         this.runtimeInterface = runtime.getCapability(RuntimeInterpreterInterface.class);
         if (this.runtimeInterface == null) {
-            throw new UnsupportedOperationException("The provided graal runtime does not support the required capability " + RuntimeInterpreterInterface.class.getName() + ".");
+            throw new UnsupportedOperationException("The provided Graal runtime does not support the required capability " + RuntimeInterpreterInterface.class.getName() + ".");
         }
         this.metaAccessProvider = runtime.getCapability(MetaAccessProvider.class);
         if (this.metaAccessProvider == null) {
-            throw new UnsupportedOperationException("The provided graal runtime does not support the required capability " + MetaAccessProvider.class.getName() + ".");
+            throw new UnsupportedOperationException("The provided Graal runtime does not support the required capability " + MetaAccessProvider.class.getName() + ".");
         }
 
         this.rootMethod = resolveRootMethod();
@@ -95,36 +85,39 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     private void registerDelegates() {
-       addDelegate(findMethod(Throwable.class, "fillInStackTrace"), new InterpreterCallable() {
-        @Override
-        public Object invoke(InterpreterFrame caller, ResolvedJavaMethod method, Object[] arguments) throws Throwable {
-            setBackTrace(caller, (Throwable) arguments[0], createStackTraceElements(caller));
-            return null;
-        }
-       });
-       addDelegate(findMethod(Throwable.class, "getStackTraceDepth"), new InterpreterCallable() {
-           @Override
-           public Object invoke(InterpreterFrame caller, ResolvedJavaMethod method, Object[] arguments) throws Throwable {
-               StackTraceElement[] elements = getBackTrace(caller, (Throwable) arguments[0]);
-               if (elements != null) {
-                   return elements.length;
-               }
-               return 0;
-           }
-       });
-       addDelegate(findMethod(Throwable.class, "getStackTraceElement", int.class), new InterpreterCallable() {
-           @Override
-           public Object invoke(InterpreterFrame caller, ResolvedJavaMethod method, Object[] arguments) throws Throwable {
-               StackTraceElement[] elements = getBackTrace(caller, (Throwable) arguments[0]);
-               if (elements != null) {
-                   Integer index = (Integer) arguments[0];
-                   if (index != null) {
-                       return elements[index];
-                   }
-               }
-               return null;
-           }
-       });
+        addDelegate(findMethod(Throwable.class, "fillInStackTrace"), new InterpreterCallable() {
+
+            @Override
+            public Object invoke(InterpreterFrame caller, ResolvedJavaMethod method, Object[] arguments) throws Throwable {
+                setBackTrace(caller, (Throwable) arguments[0], createStackTraceElements(caller, runtimeInterface));
+                return null;
+            }
+        });
+        addDelegate(findMethod(Throwable.class, "getStackTraceDepth"), new InterpreterCallable() {
+
+            @Override
+            public Object invoke(InterpreterFrame caller, ResolvedJavaMethod method, Object[] arguments) throws Throwable {
+                StackTraceElement[] elements = getBackTrace(caller, (Throwable) arguments[0]);
+                if (elements != null) {
+                    return elements.length;
+                }
+                return 0;
+            }
+        });
+        addDelegate(findMethod(Throwable.class, "getStackTraceElement", int.class), new InterpreterCallable() {
+
+            @Override
+            public Object invoke(InterpreterFrame caller, ResolvedJavaMethod method, Object[] arguments) throws Throwable {
+                StackTraceElement[] elements = getBackTrace(caller, (Throwable) arguments[0]);
+                if (elements != null) {
+                    Integer index = (Integer) arguments[0];
+                    if (index != null) {
+                        return elements[index];
+                    }
+                }
+                return null;
+            }
+        });
     }
 
     @SuppressWarnings("unused")
@@ -142,7 +135,7 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     public void addDelegate(Method method, InterpreterCallable callable) {
-        ResolvedJavaMethod resolvedMethod = metaAccessProvider.getResolvedJavaMethod(method);
+        ResolvedJavaMethod resolvedMethod = metaAccessProvider.lookupJavaMethod(method);
         if (methodDelegates.containsKey(resolvedMethod)) {
             throw new IllegalArgumentException("Delegate for method " + method + " already added.");
         }
@@ -151,18 +144,22 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     public void removeDelegate(Method method) {
-        methodDelegates.remove(metaAccessProvider.getResolvedJavaMethod(method));
+        methodDelegates.remove(metaAccessProvider.lookupJavaMethod(method));
     }
 
     @Override
     public Object execute(ResolvedJavaMethod method, Object... boxedArguments) throws Throwable {
         try {
             boolean receiver = hasReceiver(method);
-            Signature signature = method.signature();
+            Signature signature = method.getSignature();
             assert boxedArguments != null;
-            assert signature.argumentCount(receiver) == boxedArguments.length;
+            assert signature.getParameterCount(receiver) == boxedArguments.length;
 
-            InterpreterFrame rootFrame = new InterpreterFrame(rootMethod, signature.argumentSlots(true));
+            if (TRACE) {
+                trace(0, "Executing root method " + method);
+            }
+
+            InterpreterFrame rootFrame = new InterpreterFrame(rootMethod, signature.getParameterSlots(true));
             rootFrame.pushObject(this);
             rootFrame.pushObject(method);
             rootFrame.pushObject(boxedArguments);
@@ -173,39 +170,38 @@ public final class BytecodeInterpreter implements Interpreter {
                 index++;
             }
 
-            for (int i = 0; i < boxedArguments.length; i++, index++) {
-                pushAsObject(rootFrame, signature.argumentKindAt(i), boxedArguments[index]);
+            for (int i = 0; index < boxedArguments.length; i++, index++) {
+                pushAsObject(rootFrame, signature.getParameterKind(i), boxedArguments[index]);
             }
 
             InterpreterFrame frame = rootFrame.create(method, receiver);
             executeRoot(rootFrame, frame);
-            return popAsObject(rootFrame, signature.returnKind());
+            return popAsObject(rootFrame, signature.getReturnKind());
         } catch (Exception e) {
+            // TODO (chaeubl): remove this exception handler (only used for debugging)
             throw e;
         }
     }
 
     public Object execute(Method javaMethod, Object... boxedArguments) throws Throwable {
-        return execute(metaAccessProvider.getResolvedJavaMethod(javaMethod), boxedArguments);
+        return execute(metaAccessProvider.lookupJavaMethod(javaMethod), boxedArguments);
     }
 
     private boolean hasReceiver(ResolvedJavaMethod method) {
-        return !Modifier.isStatic(method.accessFlags());
+        return !Modifier.isStatic(method.getModifiers());
     }
 
     private void executeRoot(InterpreterFrame root, InterpreterFrame frame) throws Throwable {
-        //TODO reflection redirection
-        stackFrameDepth = 0;
-
+        // TODO reflection redirection
         InterpreterFrame prevFrame = frame;
         InterpreterFrame currentFrame = frame;
-        BytecodeStream bs = new BytecodeStream(currentFrame.getMethod().code());
+        BytecodeStream bs = new BytecodeStream(currentFrame.getMethod().getCode());
         if (TRACE) {
             traceCall(frame, "Call");
         }
         while (currentFrame != root) {
             if (prevFrame != currentFrame) {
-                bs = new BytecodeStream(currentFrame.getMethod().code());
+                bs = new BytecodeStream(currentFrame.getMethod().getCode());
             }
             bs.setBCI(currentFrame.getBCI());
 
@@ -220,17 +216,17 @@ public final class BytecodeInterpreter implements Interpreter {
             while (true) {
                 int result = executeInstruction(frame, bs);
                 switch (result) {
-                    case NEXT :
+                    case NEXT:
                         bs.next();
                         break;
-                    case RETURN :
+                    case RETURN:
                         return popFrame(frame);
                     case CALL:
                         return allocateFrame(frame, bs);
-                    case BRANCH :
+                    case BRANCH:
                         bs.setBCI(bs.readBranchDest());
                         break;
-                    default :
+                    default:
                         // the outcome depends on stack values
                         assert result >= 0 : "negative branch target";
                         bs.setBCI(result);
@@ -239,7 +235,7 @@ public final class BytecodeInterpreter implements Interpreter {
             }
         } catch (Throwable t) {
             if (TRACE) {
-                traceOp("Exception " + t.toString());
+                traceOp(frame, "Exception " + t.toString());
             }
             updateStackTrace(frame, t);
 
@@ -252,7 +248,7 @@ public final class BytecodeInterpreter implements Interpreter {
                 throw t;
             } else {
                 if (TRACE) {
-                    traceOp("Handler found " + handlerFrame.getMethod() + ":" + handlerFrame.getBCI());
+                    traceOp(frame, "Handler found " + handlerFrame.getMethod() + ":" + handlerFrame.getBCI());
                 }
                 // update bci from frame
                 bs.setBCI(handlerFrame.getBCI());
@@ -268,79 +264,80 @@ public final class BytecodeInterpreter implements Interpreter {
 
     private int executeInstruction(InterpreterFrame frame, BytecodeStream bs) throws Throwable {
         if (TRACE_BYTE_CODE) {
-            traceOp(bs.currentBCI() + ": " + Bytecodes.baseNameOf(bs.currentBC()));
+            traceOp(frame, bs.currentBCI() + ": " + Bytecodes.baseNameOf(bs.currentBC()));
         }
-        switch(bs.currentBC()) {
-            case Bytecodes.NOP            : break;
-            case Bytecodes.ACONST_NULL    :
+        switch (bs.currentBC()) {
+            case Bytecodes.NOP:
+                break;
+            case Bytecodes.ACONST_NULL:
                 frame.pushObject(null);
                 break;
-            case Bytecodes.ICONST_M1      :
+            case Bytecodes.ICONST_M1:
                 frame.pushInt(-1);
                 break;
-            case Bytecodes.ICONST_0       :
+            case Bytecodes.ICONST_0:
                 frame.pushInt(0);
                 break;
-            case Bytecodes.ICONST_1       :
+            case Bytecodes.ICONST_1:
                 frame.pushInt(1);
                 break;
-            case Bytecodes.ICONST_2       :
+            case Bytecodes.ICONST_2:
                 frame.pushInt(2);
                 break;
-            case Bytecodes.ICONST_3       :
+            case Bytecodes.ICONST_3:
                 frame.pushInt(3);
                 break;
-            case Bytecodes.ICONST_4       :
+            case Bytecodes.ICONST_4:
                 frame.pushInt(4);
                 break;
-            case Bytecodes.ICONST_5       :
+            case Bytecodes.ICONST_5:
                 frame.pushInt(5);
                 break;
-            case Bytecodes.LCONST_0       :
+            case Bytecodes.LCONST_0:
                 frame.pushLong(0L);
                 break;
-            case Bytecodes.LCONST_1       :
+            case Bytecodes.LCONST_1:
                 frame.pushLong(1L);
                 break;
-            case Bytecodes.FCONST_0       :
+            case Bytecodes.FCONST_0:
                 frame.pushFloat(0.0F);
                 break;
-            case Bytecodes.FCONST_1       :
+            case Bytecodes.FCONST_1:
                 frame.pushFloat(1.0F);
                 break;
-            case Bytecodes.FCONST_2       :
+            case Bytecodes.FCONST_2:
                 frame.pushFloat(2.0F);
                 break;
-            case Bytecodes.DCONST_0       :
+            case Bytecodes.DCONST_0:
                 frame.pushDouble(0.0D);
                 break;
-            case Bytecodes.DCONST_1       :
+            case Bytecodes.DCONST_1:
                 frame.pushDouble(1.0D);
                 break;
-            case Bytecodes.BIPUSH         :
+            case Bytecodes.BIPUSH:
                 frame.pushInt(bs.readByte());
                 break;
-            case Bytecodes.SIPUSH         :
+            case Bytecodes.SIPUSH:
                 frame.pushInt(bs.readShort());
                 break;
-            case Bytecodes.LDC            :
-            case Bytecodes.LDC_W          :
-            case Bytecodes.LDC2_W         :
+            case Bytecodes.LDC:
+            case Bytecodes.LDC_W:
+            case Bytecodes.LDC2_W:
                 pushCPConstant(frame, bs.readCPI());
                 break;
-            case Bytecodes.ILOAD          :
+            case Bytecodes.ILOAD:
                 frame.pushInt(frame.getInt(frame.resolveLocalIndex(bs.readLocalIndex())));
                 break;
-            case Bytecodes.LLOAD          :
+            case Bytecodes.LLOAD:
                 frame.pushLong(frame.getLong(frame.resolveLocalIndex(bs.readLocalIndex())));
                 break;
-            case Bytecodes.FLOAD          :
+            case Bytecodes.FLOAD:
                 frame.pushFloat(frame.getFloat(frame.resolveLocalIndex(bs.readLocalIndex())));
                 break;
-            case Bytecodes.DLOAD          :
+            case Bytecodes.DLOAD:
                 frame.pushDouble(frame.getDouble(frame.resolveLocalIndex(bs.readLocalIndex())));
                 break;
-            case Bytecodes.ALOAD          :
+            case Bytecodes.ALOAD:
                 frame.pushObject(frame.getObject(frame.resolveLocalIndex(bs.readLocalIndex())));
                 break;
             case Bytecodes.ILOAD_0:
@@ -355,441 +352,441 @@ public final class BytecodeInterpreter implements Interpreter {
             case Bytecodes.ILOAD_3:
                 frame.pushInt(frame.getInt(frame.resolveLocalIndex(3)));
                 break;
-            case Bytecodes.LLOAD_0        :
+            case Bytecodes.LLOAD_0:
                 frame.pushLong(frame.getLong(frame.resolveLocalIndex(0)));
                 break;
-            case Bytecodes.LLOAD_1        :
+            case Bytecodes.LLOAD_1:
                 frame.pushLong(frame.getLong(frame.resolveLocalIndex(1)));
                 break;
-            case Bytecodes.LLOAD_2        :
+            case Bytecodes.LLOAD_2:
                 frame.pushLong(frame.getLong(frame.resolveLocalIndex(2)));
                 break;
-            case Bytecodes.LLOAD_3        :
+            case Bytecodes.LLOAD_3:
                 frame.pushLong(frame.getLong(frame.resolveLocalIndex(3)));
                 break;
-            case Bytecodes.FLOAD_0        :
+            case Bytecodes.FLOAD_0:
                 frame.pushFloat(frame.getFloat(frame.resolveLocalIndex(0)));
                 break;
-            case Bytecodes.FLOAD_1        :
+            case Bytecodes.FLOAD_1:
                 frame.pushFloat(frame.getFloat(frame.resolveLocalIndex(1)));
                 break;
-            case Bytecodes.FLOAD_2        :
+            case Bytecodes.FLOAD_2:
                 frame.pushFloat(frame.getFloat(frame.resolveLocalIndex(2)));
                 break;
-            case Bytecodes.FLOAD_3        :
+            case Bytecodes.FLOAD_3:
                 frame.pushFloat(frame.getFloat(frame.resolveLocalIndex(3)));
                 break;
-            case Bytecodes.DLOAD_0        :
+            case Bytecodes.DLOAD_0:
                 frame.pushDouble(frame.getDouble(frame.resolveLocalIndex(0)));
                 break;
-            case Bytecodes.DLOAD_1        :
+            case Bytecodes.DLOAD_1:
                 frame.pushDouble(frame.getDouble(frame.resolveLocalIndex(1)));
                 break;
-            case Bytecodes.DLOAD_2        :
+            case Bytecodes.DLOAD_2:
                 frame.pushDouble(frame.getDouble(frame.resolveLocalIndex(2)));
                 break;
-            case Bytecodes.DLOAD_3        :
+            case Bytecodes.DLOAD_3:
                 frame.pushDouble(frame.getDouble(frame.resolveLocalIndex(3)));
                 break;
-            case Bytecodes.ALOAD_0        :
+            case Bytecodes.ALOAD_0:
                 frame.pushObject(frame.getObject(frame.resolveLocalIndex(0)));
                 break;
-            case Bytecodes.ALOAD_1        :
+            case Bytecodes.ALOAD_1:
                 frame.pushObject(frame.getObject(frame.resolveLocalIndex(1)));
                 break;
-            case Bytecodes.ALOAD_2        :
+            case Bytecodes.ALOAD_2:
                 frame.pushObject(frame.getObject(frame.resolveLocalIndex(2)));
                 break;
-            case Bytecodes.ALOAD_3        :
+            case Bytecodes.ALOAD_3:
                 frame.pushObject(frame.getObject(frame.resolveLocalIndex(3)));
                 break;
-            case Bytecodes.IALOAD         :
+            case Bytecodes.IALOAD:
                 frame.pushInt(runtimeInterface.getArrayInt(frame.popInt(), frame.popObject()));
                 break;
-            case Bytecodes.LALOAD         :
+            case Bytecodes.LALOAD:
                 frame.pushLong(runtimeInterface.getArrayLong(frame.popInt(), frame.popObject()));
                 break;
-            case Bytecodes.FALOAD         :
+            case Bytecodes.FALOAD:
                 frame.pushFloat(runtimeInterface.getArrayFloat(frame.popInt(), frame.popObject()));
                 break;
-            case Bytecodes.DALOAD         :
+            case Bytecodes.DALOAD:
                 frame.pushDouble(runtimeInterface.getArrayDouble(frame.popInt(), frame.popObject()));
                 break;
-            case Bytecodes.AALOAD         :
+            case Bytecodes.AALOAD:
                 frame.pushObject(runtimeInterface.getArrayObject(frame.popInt(), frame.popObject()));
                 break;
-            case Bytecodes.BALOAD         :
+            case Bytecodes.BALOAD:
                 frame.pushInt(runtimeInterface.getArrayByte(frame.popInt(), frame.popObject()));
                 break;
-            case Bytecodes.CALOAD         :
+            case Bytecodes.CALOAD:
                 frame.pushInt(runtimeInterface.getArrayChar(frame.popInt(), frame.popObject()));
                 break;
-             case Bytecodes.SALOAD:
+            case Bytecodes.SALOAD:
                 frame.pushInt(runtimeInterface.getArrayShort(frame.popInt(), frame.popObject()));
                 break;
             case Bytecodes.ISTORE:
                 frame.setInt(frame.resolveLocalIndex(bs.readLocalIndex()), frame.popInt());
                 break;
-            case Bytecodes.LSTORE         :
+            case Bytecodes.LSTORE:
                 frame.setLong(frame.resolveLocalIndex(bs.readLocalIndex()), frame.popLong());
                 break;
-            case Bytecodes.FSTORE         :
+            case Bytecodes.FSTORE:
                 frame.setFloat(frame.resolveLocalIndex(bs.readLocalIndex()), frame.popFloat());
                 break;
-            case Bytecodes.DSTORE         :
+            case Bytecodes.DSTORE:
                 frame.setDouble(frame.resolveLocalIndex(bs.readLocalIndex()), frame.popDouble());
                 break;
-            case Bytecodes.ASTORE         :
+            case Bytecodes.ASTORE:
                 frame.setObject(frame.resolveLocalIndex(bs.readLocalIndex()), frame.popObject());
                 break;
-            case Bytecodes.ISTORE_0       :
+            case Bytecodes.ISTORE_0:
                 frame.setInt(frame.resolveLocalIndex(0), frame.popInt());
                 break;
-            case Bytecodes.ISTORE_1       :
+            case Bytecodes.ISTORE_1:
                 frame.setInt(frame.resolveLocalIndex(1), frame.popInt());
                 break;
-            case Bytecodes.ISTORE_2       :
+            case Bytecodes.ISTORE_2:
                 frame.setInt(frame.resolveLocalIndex(2), frame.popInt());
                 break;
-            case Bytecodes.ISTORE_3       :
+            case Bytecodes.ISTORE_3:
                 frame.setInt(frame.resolveLocalIndex(3), frame.popInt());
                 break;
-            case Bytecodes.LSTORE_0       :
+            case Bytecodes.LSTORE_0:
                 frame.setLong(frame.resolveLocalIndex(0), frame.popLong());
                 break;
-            case Bytecodes.LSTORE_1       :
+            case Bytecodes.LSTORE_1:
                 frame.setLong(frame.resolveLocalIndex(1), frame.popLong());
                 break;
-            case Bytecodes.LSTORE_2       :
+            case Bytecodes.LSTORE_2:
                 frame.setLong(frame.resolveLocalIndex(2), frame.popLong());
                 break;
-            case Bytecodes.LSTORE_3       :
+            case Bytecodes.LSTORE_3:
                 frame.setLong(frame.resolveLocalIndex(3), frame.popLong());
                 break;
-            case Bytecodes.FSTORE_0       :
+            case Bytecodes.FSTORE_0:
                 frame.setFloat(frame.resolveLocalIndex(0), frame.popFloat());
                 break;
-            case Bytecodes.FSTORE_1       :
+            case Bytecodes.FSTORE_1:
                 frame.setFloat(frame.resolveLocalIndex(1), frame.popFloat());
                 break;
-            case Bytecodes.FSTORE_2       :
+            case Bytecodes.FSTORE_2:
                 frame.setFloat(frame.resolveLocalIndex(2), frame.popFloat());
                 break;
-            case Bytecodes.FSTORE_3       :
+            case Bytecodes.FSTORE_3:
                 frame.setFloat(frame.resolveLocalIndex(3), frame.popFloat());
                 break;
-            case Bytecodes.DSTORE_0       :
+            case Bytecodes.DSTORE_0:
                 frame.setDouble(frame.resolveLocalIndex(0), frame.popDouble());
                 break;
-            case Bytecodes.DSTORE_1       :
+            case Bytecodes.DSTORE_1:
                 frame.setDouble(frame.resolveLocalIndex(1), frame.popDouble());
                 break;
-            case Bytecodes.DSTORE_2       :
+            case Bytecodes.DSTORE_2:
                 frame.setDouble(frame.resolveLocalIndex(2), frame.popDouble());
                 break;
-            case Bytecodes.DSTORE_3       :
+            case Bytecodes.DSTORE_3:
                 frame.setDouble(frame.resolveLocalIndex(3), frame.popDouble());
                 break;
-            case Bytecodes.ASTORE_0       :
+            case Bytecodes.ASTORE_0:
                 frame.setObject(frame.resolveLocalIndex(0), frame.popObject());
                 break;
-            case Bytecodes.ASTORE_1       :
+            case Bytecodes.ASTORE_1:
                 frame.setObject(frame.resolveLocalIndex(1), frame.popObject());
                 break;
-            case Bytecodes.ASTORE_2       :
+            case Bytecodes.ASTORE_2:
                 frame.setObject(frame.resolveLocalIndex(2), frame.popObject());
                 break;
-            case Bytecodes.ASTORE_3       :
+            case Bytecodes.ASTORE_3:
                 frame.setObject(frame.resolveLocalIndex(3), frame.popObject());
                 break;
-            case Bytecodes.IASTORE        :
+            case Bytecodes.IASTORE:
                 runtimeInterface.setArrayInt(frame.popInt(), frame.popInt(), frame.popObject());
                 break;
-            case Bytecodes.LASTORE        :
+            case Bytecodes.LASTORE:
                 runtimeInterface.setArrayLong(frame.popLong(), frame.popInt(), frame.popObject());
                 break;
-            case Bytecodes.FASTORE        :
+            case Bytecodes.FASTORE:
                 runtimeInterface.setArrayFloat(frame.popFloat(), frame.popInt(), frame.popObject());
                 break;
-            case Bytecodes.DASTORE        :
+            case Bytecodes.DASTORE:
                 runtimeInterface.setArrayDouble(frame.popDouble(), frame.popInt(), frame.popObject());
                 break;
-            case Bytecodes.AASTORE        :
+            case Bytecodes.AASTORE:
                 runtimeInterface.setArrayObject(frame.popObject(), frame.popInt(), frame.popObject());
                 break;
-            case Bytecodes.BASTORE        :
+            case Bytecodes.BASTORE:
                 runtimeInterface.setArrayByte((byte) frame.popInt(), frame.popInt(), frame.popObject());
                 break;
-            case Bytecodes.CASTORE        :
+            case Bytecodes.CASTORE:
                 runtimeInterface.setArrayChar((char) frame.popInt(), frame.popInt(), frame.popObject());
                 break;
-            case Bytecodes.SASTORE        :
+            case Bytecodes.SASTORE:
                 runtimeInterface.setArrayShort((short) frame.popInt(), frame.popInt(), frame.popObject());
                 break;
-            case Bytecodes.POP            :
+            case Bytecodes.POP:
                 frame.popVoid(1);
                 break;
-            case Bytecodes.POP2           :
+            case Bytecodes.POP2:
                 frame.popVoid(2);
                 break;
-            case Bytecodes.DUP            :
+            case Bytecodes.DUP:
                 frame.dup(1);
                 break;
-            case Bytecodes.DUP_X1         :
+            case Bytecodes.DUP_X1:
                 frame.dupx1();
                 break;
-            case Bytecodes.DUP_X2         :
+            case Bytecodes.DUP_X2:
                 frame.dupx2();
                 break;
-            case Bytecodes.DUP2           :
+            case Bytecodes.DUP2:
                 frame.dup(2);
                 break;
-            case Bytecodes.DUP2_X1        :
+            case Bytecodes.DUP2_X1:
                 frame.dup2x1();
                 break;
-            case Bytecodes.DUP2_X2        :
+            case Bytecodes.DUP2_X2:
                 frame.dup2x2();
                 break;
-            case Bytecodes.SWAP           :
+            case Bytecodes.SWAP:
                 frame.swapSingle();
                 break;
-            case Bytecodes.IADD           :
+            case Bytecodes.IADD:
                 frame.pushInt(frame.popInt() + frame.popInt());
                 break;
-            case Bytecodes.LADD           :
+            case Bytecodes.LADD:
                 frame.pushLong(frame.popLong() + frame.popLong());
                 break;
-            case Bytecodes.FADD           :
+            case Bytecodes.FADD:
                 frame.pushFloat(frame.popFloat() + frame.popFloat());
                 break;
-            case Bytecodes.DADD           :
+            case Bytecodes.DADD:
                 frame.pushDouble(frame.popDouble() + frame.popDouble());
                 break;
-            case Bytecodes.ISUB           :
+            case Bytecodes.ISUB:
                 frame.pushInt(-frame.popInt() + frame.popInt());
                 break;
-            case Bytecodes.LSUB           :
+            case Bytecodes.LSUB:
                 frame.pushLong(-frame.popLong() + frame.popLong());
                 break;
-            case Bytecodes.FSUB           :
+            case Bytecodes.FSUB:
                 frame.pushFloat(-frame.popFloat() + frame.popFloat());
                 break;
-            case Bytecodes.DSUB           :
+            case Bytecodes.DSUB:
                 frame.pushDouble(-frame.popDouble() + frame.popDouble());
                 break;
-            case Bytecodes.IMUL           :
+            case Bytecodes.IMUL:
                 frame.pushInt(frame.popInt() * frame.popInt());
                 break;
-            case Bytecodes.LMUL           :
+            case Bytecodes.LMUL:
                 frame.pushLong(frame.popLong() * frame.popLong());
                 break;
-            case Bytecodes.FMUL           :
+            case Bytecodes.FMUL:
                 frame.pushFloat(frame.popFloat() * frame.popFloat());
                 break;
-            case Bytecodes.DMUL           :
+            case Bytecodes.DMUL:
                 frame.pushDouble(frame.popDouble() * frame.popDouble());
                 break;
-            case Bytecodes.IDIV           :
+            case Bytecodes.IDIV:
                 divInt(frame);
                 break;
-            case Bytecodes.LDIV           :
+            case Bytecodes.LDIV:
                 divLong(frame);
                 break;
-            case Bytecodes.FDIV           :
+            case Bytecodes.FDIV:
                 divFloat(frame);
                 break;
-            case Bytecodes.DDIV           :
+            case Bytecodes.DDIV:
                 divDouble(frame);
                 break;
-            case Bytecodes.IREM           :
+            case Bytecodes.IREM:
                 remInt(frame);
                 break;
-            case Bytecodes.LREM           :
+            case Bytecodes.LREM:
                 remLong(frame);
                 break;
-            case Bytecodes.FREM           :
+            case Bytecodes.FREM:
                 remFloat(frame);
                 break;
-            case Bytecodes.DREM           :
+            case Bytecodes.DREM:
                 remDouble(frame);
                 break;
-            case Bytecodes.INEG           :
+            case Bytecodes.INEG:
                 frame.pushInt(-frame.popInt());
                 break;
-            case Bytecodes.LNEG           :
+            case Bytecodes.LNEG:
                 frame.pushLong(-frame.popLong());
                 break;
-            case Bytecodes.FNEG           :
+            case Bytecodes.FNEG:
                 frame.pushFloat(-frame.popFloat());
                 break;
-            case Bytecodes.DNEG           :
+            case Bytecodes.DNEG:
                 frame.pushDouble(-frame.popDouble());
                 break;
-            case Bytecodes.ISHL           :
+            case Bytecodes.ISHL:
                 shiftLeftInt(frame);
                 break;
-            case Bytecodes.LSHL           :
+            case Bytecodes.LSHL:
                 shiftLeftLong(frame);
                 break;
-            case Bytecodes.ISHR           :
+            case Bytecodes.ISHR:
                 shiftRightSignedInt(frame);
                 break;
-            case Bytecodes.LSHR           :
+            case Bytecodes.LSHR:
                 shiftRightSignedLong(frame);
                 break;
-            case Bytecodes.IUSHR          :
+            case Bytecodes.IUSHR:
                 shiftRightUnsignedInt(frame);
                 break;
-            case Bytecodes.LUSHR          :
+            case Bytecodes.LUSHR:
                 shiftRightUnsignedLong(frame);
                 break;
-            case Bytecodes.IAND           :
+            case Bytecodes.IAND:
                 frame.pushInt(frame.popInt() & frame.popInt());
                 break;
-            case Bytecodes.LAND           :
+            case Bytecodes.LAND:
                 frame.pushLong(frame.popLong() & frame.popLong());
                 break;
-            case Bytecodes.IOR            :
+            case Bytecodes.IOR:
                 frame.pushInt(frame.popInt() | frame.popInt());
                 break;
-            case Bytecodes.LOR            :
+            case Bytecodes.LOR:
                 frame.pushLong(frame.popLong() | frame.popLong());
                 break;
-            case Bytecodes.IXOR           :
+            case Bytecodes.IXOR:
                 frame.pushInt(frame.popInt() ^ frame.popInt());
                 break;
-            case Bytecodes.LXOR           :
+            case Bytecodes.LXOR:
                 frame.pushLong(frame.popLong() ^ frame.popLong());
                 break;
-            case Bytecodes.IINC           :
+            case Bytecodes.IINC:
                 iinc(frame, bs);
                 break;
-            case Bytecodes.I2L            :
+            case Bytecodes.I2L:
                 frame.pushLong(frame.popInt());
                 break;
-            case Bytecodes.I2F            :
+            case Bytecodes.I2F:
                 frame.pushFloat(frame.popInt());
                 break;
-            case Bytecodes.I2D            :
+            case Bytecodes.I2D:
                 frame.pushDouble(frame.popInt());
                 break;
-            case Bytecodes.L2I            :
+            case Bytecodes.L2I:
                 frame.pushInt((int) frame.popLong());
                 break;
-            case Bytecodes.L2F            :
+            case Bytecodes.L2F:
                 frame.pushFloat(frame.popLong());
                 break;
-            case Bytecodes.L2D            :
+            case Bytecodes.L2D:
                 frame.pushDouble(frame.popLong());
                 break;
-            case Bytecodes.F2I            :
+            case Bytecodes.F2I:
                 frame.pushInt((int) frame.popFloat());
                 break;
-            case Bytecodes.F2L            :
+            case Bytecodes.F2L:
                 frame.pushLong((long) frame.popFloat());
                 break;
-            case Bytecodes.F2D            :
+            case Bytecodes.F2D:
                 frame.pushDouble(frame.popFloat());
                 break;
-            case Bytecodes.D2I            :
+            case Bytecodes.D2I:
                 frame.pushInt((int) frame.popDouble());
                 break;
-            case Bytecodes.D2L            :
+            case Bytecodes.D2L:
                 frame.pushLong((long) frame.popDouble());
                 break;
-            case Bytecodes.D2F            :
+            case Bytecodes.D2F:
                 frame.pushFloat((float) frame.popDouble());
                 break;
-            case Bytecodes.I2B            :
+            case Bytecodes.I2B:
                 frame.pushInt((byte) frame.popInt());
                 break;
-            case Bytecodes.I2C            :
+            case Bytecodes.I2C:
                 frame.pushInt((char) frame.popInt());
                 break;
-            case Bytecodes.I2S            :
+            case Bytecodes.I2S:
                 frame.pushInt((short) frame.popInt());
                 break;
-            case Bytecodes.LCMP           :
+            case Bytecodes.LCMP:
                 compareLong(frame);
                 break;
-            case Bytecodes.FCMPL          :
+            case Bytecodes.FCMPL:
                 compareFloatLess(frame);
                 break;
-            case Bytecodes.FCMPG          :
+            case Bytecodes.FCMPG:
                 compareFloatGreater(frame);
                 break;
-            case Bytecodes.DCMPL          :
+            case Bytecodes.DCMPL:
                 compareDoubleLess(frame);
                 break;
-            case Bytecodes.DCMPG          :
+            case Bytecodes.DCMPG:
                 compareDoubleGreater(frame);
                 break;
-            case Bytecodes.IFEQ           :
+            case Bytecodes.IFEQ:
                 if (frame.popInt() == 0) {
                     return BRANCH;
                 }
                 break;
-            case Bytecodes.IFNE           :
+            case Bytecodes.IFNE:
                 if (frame.popInt() != 0) {
                     return BRANCH;
                 }
                 break;
-            case Bytecodes.IFLT           :
+            case Bytecodes.IFLT:
                 if (frame.popInt() < 0) {
                     return BRANCH;
                 }
                 break;
-            case Bytecodes.IFGE           :
+            case Bytecodes.IFGE:
                 if (frame.popInt() >= 0) {
                     return BRANCH;
                 }
                 break;
-            case Bytecodes.IFGT           :
+            case Bytecodes.IFGT:
                 if (frame.popInt() > 0) {
                     return BRANCH;
                 }
                 break;
-            case Bytecodes.IFLE           :
+            case Bytecodes.IFLE:
                 if (frame.popInt() <= 0) {
                     return BRANCH;
                 }
                 break;
-            case Bytecodes.IF_ICMPEQ      :
+            case Bytecodes.IF_ICMPEQ:
                 if (frame.popInt() == frame.popInt()) {
                     return BRANCH;
                 }
                 break;
-            case Bytecodes.IF_ICMPNE      :
+            case Bytecodes.IF_ICMPNE:
                 if (frame.popInt() != frame.popInt()) {
                     return BRANCH;
                 }
                 break;
-            case Bytecodes.IF_ICMPLT      :
+            case Bytecodes.IF_ICMPLT:
                 if (frame.popInt() > frame.popInt()) {
                     return BRANCH;
                 }
                 break;
-            case Bytecodes.IF_ICMPGE      :
+            case Bytecodes.IF_ICMPGE:
                 if (frame.popInt() <= frame.popInt()) {
                     return BRANCH;
                 }
                 break;
-            case Bytecodes.IF_ICMPGT      :
+            case Bytecodes.IF_ICMPGT:
                 if (frame.popInt() < frame.popInt()) {
                     return BRANCH;
                 }
                 break;
-            case Bytecodes.IF_ICMPLE      :
+            case Bytecodes.IF_ICMPLE:
                 if (frame.popInt() >= frame.popInt()) {
                     return BRANCH;
                 }
                 break;
-            case Bytecodes.IF_ACMPEQ      :
+            case Bytecodes.IF_ACMPEQ:
                 if (frame.popObject() == frame.popObject()) {
                     return BRANCH;
                 }
                 break;
-            case Bytecodes.IF_ACMPNE      :
+            case Bytecodes.IF_ACMPNE:
                 if (frame.popObject() != frame.popObject()) {
                     return BRANCH;
                 }
@@ -797,58 +794,58 @@ public final class BytecodeInterpreter implements Interpreter {
             case Bytecodes.GOTO:
             case Bytecodes.GOTO_W:
                 return BRANCH;
-            case Bytecodes.JSR            :
-            case Bytecodes.JSR_W          :
+            case Bytecodes.JSR:
+            case Bytecodes.JSR_W:
                 frame.pushInt(bs.currentBCI());
                 return BRANCH;
-            case Bytecodes.RET            :
+            case Bytecodes.RET:
                 return frame.getInt(frame.resolveLocalIndex(bs.readLocalIndex()));
-            case Bytecodes.TABLESWITCH    :
+            case Bytecodes.TABLESWITCH:
                 return tableSwitch(frame, bs);
-            case Bytecodes.LOOKUPSWITCH   :
+            case Bytecodes.LOOKUPSWITCH:
                 return lookupSwitch(frame, bs);
-            case Bytecodes.IRETURN        :
+            case Bytecodes.IRETURN:
                 frame.getParentFrame().pushInt(frame.popInt());
                 return RETURN;
-            case Bytecodes.LRETURN        :
+            case Bytecodes.LRETURN:
                 frame.getParentFrame().pushLong(frame.popLong());
                 return RETURN;
-            case Bytecodes.FRETURN        :
+            case Bytecodes.FRETURN:
                 frame.getParentFrame().pushFloat(frame.popFloat());
                 return RETURN;
-            case Bytecodes.DRETURN        :
+            case Bytecodes.DRETURN:
                 frame.getParentFrame().pushDouble(frame.popDouble());
                 return RETURN;
-            case Bytecodes.ARETURN        :
+            case Bytecodes.ARETURN:
                 frame.getParentFrame().pushObject(frame.popObject());
                 return RETURN;
-            case Bytecodes.RETURN         :
+            case Bytecodes.RETURN:
                 return RETURN;
-            case Bytecodes.GETSTATIC      :
+            case Bytecodes.GETSTATIC:
                 getField(frame, null, bs.currentBC(), bs.readCPI());
                 break;
-            case Bytecodes.PUTSTATIC      :
+            case Bytecodes.PUTSTATIC:
                 putStatic(frame, bs.readCPI());
                 break;
             case Bytecodes.GETFIELD:
                 getField(frame, nullCheck(frame.popObject()), bs.currentBC(), bs.readCPI());
                 break;
-            case Bytecodes.PUTFIELD       :
+            case Bytecodes.PUTFIELD:
                 putField(frame, bs.readCPI());
                 break;
-            case Bytecodes.INVOKEVIRTUAL  :
+            case Bytecodes.INVOKEVIRTUAL:
                 callFrame = invokeVirtual(frame, bs.readCPI());
                 if (callFrame == null) {
                     break;
                 }
                 return CALL;
-            case Bytecodes.INVOKESPECIAL  :
+            case Bytecodes.INVOKESPECIAL:
                 callFrame = invokeSpecial(frame, bs.readCPI());
                 if (callFrame == null) {
                     break;
                 }
                 return CALL;
-            case Bytecodes.INVOKESTATIC   :
+            case Bytecodes.INVOKESTATIC:
                 callFrame = invokeStatic(frame, bs.readCPI());
                 if (callFrame == null) {
                     break;
@@ -860,53 +857,57 @@ public final class BytecodeInterpreter implements Interpreter {
                     break;
                 }
                 return CALL;
-            case Bytecodes.XXXUNUSEDXXX   :
+            case Bytecodes.XXXUNUSEDXXX:
                 assert false : "unused bytecode used. behaviour unspecified.";
                 // nop
                 break;
-            case Bytecodes.NEW            :
+            case Bytecodes.NEW:
                 frame.pushObject(allocateInstance(frame, bs.readCPI()));
                 break;
-            case Bytecodes.NEWARRAY       :
+            case Bytecodes.NEWARRAY:
                 frame.pushObject(allocateNativeArray(frame, bs.readByte()));
                 break;
-            case Bytecodes.ANEWARRAY      :
+            case Bytecodes.ANEWARRAY:
                 frame.pushObject(allocateArray(frame, bs.readCPI()));
                 break;
-            case Bytecodes.ARRAYLENGTH    :
+            case Bytecodes.ARRAYLENGTH:
                 frame.pushInt(Array.getLength(nullCheck(frame.popObject())));
                 break;
-            case Bytecodes.ATHROW         :
-                throw (Throwable) frame.popObject();
-            case Bytecodes.CHECKCAST      :
+            case Bytecodes.ATHROW:
+                Throwable t = (Throwable) frame.popObject();
+                if ("break".equals(t.getMessage())) {
+                    t.printStackTrace();
+                }
+                throw t;
+            case Bytecodes.CHECKCAST:
                 checkCast(frame, bs.readCPI());
                 break;
-            case Bytecodes.INSTANCEOF     :
+            case Bytecodes.INSTANCEOF:
                 instanceOf(frame, bs.readCPI());
                 break;
-            case Bytecodes.MONITORENTER   :
+            case Bytecodes.MONITORENTER:
                 runtimeInterface.monitorEnter(frame.popObject());
                 break;
-            case Bytecodes.MONITOREXIT    :
+            case Bytecodes.MONITOREXIT:
                 runtimeInterface.monitorExit(frame.popObject());
                 break;
-            case Bytecodes.WIDE           :
+            case Bytecodes.WIDE:
                 assert false;
                 break;
-            case Bytecodes.MULTIANEWARRAY :
+            case Bytecodes.MULTIANEWARRAY:
                 frame.pushObject(allocateMultiArray(frame, bs.readCPI(), bs.readUByte(bs.currentBCI() + 3)));
                 break;
-            case Bytecodes.IFNULL         :
+            case Bytecodes.IFNULL:
                 if (frame.popObject() == null) {
                     return BRANCH;
                 }
                 break;
-            case Bytecodes.IFNONNULL      :
+            case Bytecodes.IFNONNULL:
                 if (frame.popObject() != null) {
                     return BRANCH;
                 }
                 break;
-            case Bytecodes.BREAKPOINT     :
+            case Bytecodes.BREAKPOINT:
                 assert false : "no breakpoints supported at this time.";
                 break; // nop
         }
@@ -924,7 +925,7 @@ public final class BytecodeInterpreter implements Interpreter {
                 currentFrame = popFrame(currentFrame);
             } else {
                 // found a handler -> execute it
-                currentFrame.setBCI(handler.handlerBCI());
+                currentFrame.setBCI(handler.getHandlerBCI());
                 currentFrame.popStack();
                 currentFrame.pushObject(t);
                 return currentFrame;
@@ -941,13 +942,12 @@ public final class BytecodeInterpreter implements Interpreter {
             setStackTrace(frame, t, elements);
             setBackTrace(frame, t, null);
         } else {
-            setBackTrace(frame, t, createStackTraceElements(frame));
+            setBackTrace(frame, t, createStackTraceElements(frame, runtimeInterface));
         }
     }
 
-
     private void setStackTrace(InterpreterFrame frame, Throwable t, StackTraceElement[] stackTrace) {
-      runtimeInterface.setFieldObject(stackTrace, t,  findThrowableField(frame, "stackTrace"));
+        runtimeInterface.setFieldObject(stackTrace, t, findThrowableField(frame, "stackTrace"));
     }
 
     private StackTraceElement[] getBackTrace(InterpreterFrame frame, Throwable t) {
@@ -963,30 +963,31 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     private ExceptionHandler resolveExceptionHandlers(InterpreterFrame frame, int bci, Throwable t) {
-        ExceptionHandler[] handlers = frame.getMethod().exceptionHandlers();
+        ExceptionHandler[] handlers = frame.getMethod().getExceptionHandlers();
         for (int i = 0; i < handlers.length; i++) {
             ExceptionHandler handler = handlers[i];
-            if (bci >= handler.startBCI() && bci <= handler.endBCI()) {
+            if (bci >= handler.getStartBCI() && bci <= handler.getEndBCI()) {
                 ResolvedJavaType catchType = null;
                 if (!handler.isCatchAll()) {
                     // exception handlers are similar to instanceof bytecodes, so we pass instanceof
                     catchType = resolveType(frame, Bytecodes.INSTANCEOF, (char) handler.catchTypeCPI());
                 }
 
-                if (catchType == null
-                                || catchType.toJava().isInstance(t)) {
+                if (catchType == null || catchType.isInstance(Constant.forObject(t))) {
                     // the first found exception handler is our exception handler
-                   return handler;
+                    return handler;
                 }
             }
         }
         return null;
     }
 
+    private Class<?> mirror(ResolvedJavaType type) {
+        return runtimeInterface.getMirror(type);
+    }
+
     private InterpreterFrame allocateFrame(InterpreterFrame frame, BytecodeStream bs) {
         try {
-            stackFrameDepth++;
-
             InterpreterFrame nextFrame = this.callFrame;
 
             assert nextFrame != null;
@@ -998,12 +999,12 @@ public final class BytecodeInterpreter implements Interpreter {
             if (TRACE) {
                 traceCall(nextFrame, "Call");
             }
-            if (Modifier.isSynchronized(nextFrame.getMethod().accessFlags())) {
+            if (Modifier.isSynchronized(nextFrame.getMethod().getModifiers())) {
                 if (TRACE) {
-                    traceOp("Method monitor enter");
+                    traceOp(frame, "Method monitor enter");
                 }
-                if (Modifier.isStatic(nextFrame.getMethod().accessFlags())) {
-                    runtimeInterface.monitorEnter(nextFrame.getMethod().holder().toJava());
+                if (Modifier.isStatic(nextFrame.getMethod().getModifiers())) {
+                    runtimeInterface.monitorEnter(mirror(nextFrame.getMethod().getDeclaringClass()));
                 } else {
                     Object enterObject = nextFrame.getObject(frame.resolveLocalIndex(0));
                     assert enterObject != null;
@@ -1020,12 +1021,12 @@ public final class BytecodeInterpreter implements Interpreter {
 
     private InterpreterFrame popFrame(InterpreterFrame frame) {
         InterpreterFrame parent = frame.getParentFrame();
-        if (Modifier.isSynchronized(frame.getMethod().accessFlags())) {
+        if (Modifier.isSynchronized(frame.getMethod().getModifiers())) {
             if (TRACE) {
-                traceOp("Method monitor exit");
+                traceOp(frame, "Method monitor exit");
             }
-            if (Modifier.isStatic(frame.getMethod().accessFlags())) {
-                runtimeInterface.monitorExit(frame.getMethod().holder().toJava());
+            if (Modifier.isStatic(frame.getMethod().getModifiers())) {
+                runtimeInterface.monitorExit(mirror(frame.getMethod().getDeclaringClass()));
             } else {
                 Object exitObject = frame.getObject(frame.resolveLocalIndex(0));
                 if (exitObject != null) {
@@ -1036,19 +1037,17 @@ public final class BytecodeInterpreter implements Interpreter {
         if (TRACE) {
             traceCall(frame, "Ret");
         }
-        stackFrameDepth--;
 
         frame.dispose();
         return parent;
     }
 
-    private void traceOp(String opName) {
-        trace(stackFrameDepth + 1, opName);
+    private void traceOp(InterpreterFrame frame, String opName) {
+        trace(frame.depth(), opName);
     }
 
     private void traceCall(InterpreterFrame frame, String type) {
-        trace(stackFrameDepth, type + " " +
-                        frame.getMethod() + " - " + frame.getMethod().signature().asString());
+        trace(frame.depth(), type + " " + frame.getMethod() + " - " + frame.getMethod().getSignature());
     }
 
     private void trace(int level, String message) {
@@ -1059,7 +1058,6 @@ public final class BytecodeInterpreter implements Interpreter {
         builder.append(message);
         System.out.println(builder);
     }
-
 
     private void divInt(InterpreterFrame frame) {
         int dividend = frame.popInt();
@@ -1084,7 +1082,6 @@ public final class BytecodeInterpreter implements Interpreter {
         double divisor = frame.popDouble();
         frame.pushDouble(divisor / dividend);
     }
-
 
     private void remInt(InterpreterFrame frame) {
         int dividend = frame.popInt();
@@ -1147,8 +1144,7 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     private int lookupSwitch(InterpreterFrame frame, BytecodeStream bs) {
-        return lookupSearch(
-                        new BytecodeLookupSwitch(bs, bs.currentBCI()), frame.popInt());
+        return lookupSearch(new BytecodeLookupSwitch(bs, bs.currentBCI()), frame.popInt());
     }
 
     /**
@@ -1169,7 +1165,7 @@ public final class BytecodeInterpreter implements Interpreter {
                 return switchHelper.bci() + switchHelper.offsetAt(mid); // key found
             }
         }
-        return switchHelper.defaultTarget();  // key not found.
+        return switchHelper.defaultTarget(); // key not found.
     }
 
     private int tableSwitch(InterpreterFrame frame, BytecodeStream bs) {
@@ -1189,17 +1185,17 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     private void checkCast(InterpreterFrame frame, char cpi) {
-        frame.pushObject(resolveType(frame, Bytecodes.CHECKCAST, cpi).toJava().cast(frame.popObject()));
+        frame.pushObject(mirror(resolveType(frame, Bytecodes.CHECKCAST, cpi)).cast(frame.popObject()));
     }
 
     private ResolvedJavaType resolveType(InterpreterFrame frame, int opcode, char cpi) {
         ConstantPool constantPool = frame.getConstantPool();
         constantPool.loadReferencedType(cpi, opcode);
-        return constantPool.lookupType(cpi, opcode).resolve(frame.getMethod().holder());
+        return constantPool.lookupType(cpi, opcode).resolve(frame.getMethod().getDeclaringClass());
     }
 
     private ResolvedJavaType resolveType(InterpreterFrame frame, Class<?> javaClass) {
-        return metaAccessProvider.getResolvedJavaType(javaClass).resolve(frame.getMethod().holder());
+        return metaAccessProvider.lookupJavaType(javaClass).resolve(frame.getMethod().getDeclaringClass());
     }
 
     private ResolvedJavaMethod resolveMethod(InterpreterFrame frame, int opcode, char cpi) {
@@ -1215,9 +1211,7 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     private void instanceOf(InterpreterFrame frame, char cpi) {
-        frame.pushInt(resolveType(frame, Bytecodes.INSTANCEOF, cpi).
-                        toJava().isInstance(frame.popObject())
-                        ? 1 : 0);
+        frame.pushInt(resolveType(frame, Bytecodes.INSTANCEOF, cpi).isInstance(Constant.forObject(frame.popObject())) ? 1 : 0);
     }
 
     private void pushCPConstant(InterpreterFrame frame, char cpi) {
@@ -1226,8 +1220,8 @@ public final class BytecodeInterpreter implements Interpreter {
 
         if (constant instanceof Constant) {
             Constant c = ((Constant) constant);
-            switch (c.kind) {
-                case Int :
+            switch (c.getKind()) {
+                case Int:
                     frame.pushInt(c.asInt());
                     break;
                 case Float:
@@ -1236,17 +1230,17 @@ public final class BytecodeInterpreter implements Interpreter {
                 case Object:
                     frame.pushObject(c.asObject());
                     break;
-                case Double :
+                case Double:
                     frame.pushDouble(c.asDouble());
                     break;
-                case Long :
+                case Long:
                     frame.pushLong(c.asLong());
                     break;
                 default:
                     assert false : "unspecified case";
             }
         } else if (constant instanceof JavaType) {
-            frame.pushObject(((JavaType) constant).resolve(method.holder()).toJava());
+            frame.pushObject(mirror(((JavaType) constant).resolve(method.getDeclaringClass())));
         } else {
             assert false : "unexpected case";
         }
@@ -1288,6 +1282,7 @@ public final class BytecodeInterpreter implements Interpreter {
         }
         return value;
     }
+
     private InterpreterFrame invokeStatic(InterpreterFrame frame, char cpi) throws Throwable {
         return invoke(frame, resolveMethod(frame, Bytecodes.INVOKESTATIC, cpi), null);
     }
@@ -1299,7 +1294,7 @@ public final class BytecodeInterpreter implements Interpreter {
     private InterpreterFrame resolveAndInvoke(InterpreterFrame parent, ResolvedJavaMethod m) throws Throwable {
         Object receiver = nullCheck(parent.peekReceiver(m));
 
-        ResolvedJavaMethod method = resolveType(parent, receiver.getClass()).resolveMethodImpl(m);
+        ResolvedJavaMethod method = resolveType(parent, receiver.getClass()).resolveMethod(m);
 
         if (method == null) {
             throw new AbstractMethodError();
@@ -1310,7 +1305,7 @@ public final class BytecodeInterpreter implements Interpreter {
 
     private InterpreterFrame invokeVirtual(InterpreterFrame frame, char cpi) throws Throwable {
         ResolvedJavaMethod m = resolveMethod(frame, Bytecodes.INVOKEVIRTUAL, cpi);
-        if (Modifier.isFinal(m.accessFlags())) {
+        if (Modifier.isFinal(m.getModifiers())) {
             return invoke(frame, m, nullCheck(frame.peekReceiver(m)));
         } else {
             return resolveAndInvoke(frame, m);
@@ -1323,14 +1318,14 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     private Object[] popArgumentsAsObject(InterpreterFrame frame, ResolvedJavaMethod method, boolean hasReceiver) {
-        Signature signature = method.signature();
-        int argumentCount = method.signature().argumentCount(hasReceiver);
+        Signature signature = method.getSignature();
+        int argumentCount = method.getSignature().getParameterCount(hasReceiver);
         Object[] parameters = new Object[argumentCount];
 
         int lastSignatureIndex = hasReceiver ? 1 : 0;
         for (int i = argumentCount - 1; i >= lastSignatureIndex; i--) {
-            ResolvedJavaType type = signature.argumentTypeAt(i - lastSignatureIndex, method.holder()).resolve(method.holder());
-            parameters[i] = popAsObject(frame, type.kind());
+            ResolvedJavaType type = signature.getParameterType(i - lastSignatureIndex, method.getDeclaringClass()).resolve(method.getDeclaringClass());
+            parameters[i] = popAsObject(frame, type.getKind());
         }
 
         if (hasReceiver) {
@@ -1340,11 +1335,11 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     private InterpreterFrame invoke(InterpreterFrame caller, ResolvedJavaMethod method, Object receiver) throws Throwable {
-        if (stackFrameDepth >= maxStackFrames) {
+        if (caller.depth() >= maxStackFrames) {
             throw new StackOverflowError("Maximum callstack of " + maxStackFrames + " exceeded.");
         }
 
-        if (Modifier.isNative(method.accessFlags())) {
+        if (Modifier.isNative(method.getModifiers())) {
             return invokeNativeMethodViaVM(caller, method, receiver != null);
         } else {
             MethodRedirectionInfo redirectedMethod = methodDelegates.get(method);
@@ -1365,7 +1360,7 @@ public final class BytecodeInterpreter implements Interpreter {
         // mark the current thread as high level and execute the native method
         Object[] parameters = popArgumentsAsObject(caller, method, hasReceiver);
         Object returnValue = runtimeInterface.invoke(method, parameters);
-        pushAsObject(caller, method.signature().returnKind(), returnValue);
+        pushAsObject(caller, method.getSignature().getReturnKind(), returnValue);
 
         return null;
     }
@@ -1376,11 +1371,12 @@ public final class BytecodeInterpreter implements Interpreter {
             traceCall(caller, "Delegate " + originalMethod);
         }
 
-        // current thread is low level and we also execute the target method in the low-level interpreter
+        // current thread is low level and we also execute the target method in the low-level
+        // interpreter
         Object[] originalCalleeParameters = popArgumentsAsObject(caller, originalMethod, hasReceiver);
-        Object[] parameters = new Object[] {caller, originalMethod, originalCalleeParameters};
+        Object[] parameters = new Object[]{caller, originalMethod, originalCalleeParameters};
         Object returnValue = redirectionInfo.getTargetMethod().invoke(redirectionInfo.getReceiver(), parameters);
-        pushAsObject(caller, originalMethod.signature().returnKind(), returnValue);
+        pushAsObject(caller, originalMethod.getSignature().getReturnKind(), returnValue);
 
         return null;
     }
@@ -1396,40 +1392,40 @@ public final class BytecodeInterpreter implements Interpreter {
         for (int i = dimension - 1; i >= 0; i--) {
             dimensions[i] = frame.popInt();
         }
-        return Array.newInstance(type.toJava(), dimensions);
+        return Array.newInstance(mirror(type), dimensions);
     }
 
     private ResolvedJavaType getLastDimensionType(ResolvedJavaType type) {
         ResolvedJavaType result = type;
-        while (result.isArrayClass()) {
-            result = result.componentType();
+        while (result.isArray()) {
+            result = result.getComponentType();
         }
         return result;
     }
 
     private Object allocateArray(InterpreterFrame frame, char cpi) {
         ResolvedJavaType type = resolveType(frame, Bytecodes.ANEWARRAY, cpi);
-        return Array.newInstance(type.toJava(), frame.popInt());
+        return Array.newInstance(runtimeInterface.getMirror(type), frame.popInt());
     }
 
     private Object allocateNativeArray(InterpreterFrame frame, byte cpi) {
         // the constants for the cpi are loosely defined and no real cpi indices.
         switch (cpi) {
-            case 4 :
+            case 4:
                 return new byte[frame.popInt()];
-            case 8 :
+            case 8:
                 return new byte[frame.popInt()];
-            case 5 :
+            case 5:
                 return new char[frame.popInt()];
-            case 7 :
+            case 7:
                 return new double[frame.popInt()];
-            case 6 :
+            case 6:
                 return new float[frame.popInt()];
-            case 10 :
+            case 10:
                 return new int[frame.popInt()];
-            case 11 :
+            case 11:
                 return new long[frame.popInt()];
-            case 9 :
+            case 9:
                 return new short[frame.popInt()];
             default:
                 assert false : "unexpected case";
@@ -1455,125 +1451,124 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     private void putFieldStatic(InterpreterFrame frame, ResolvedJavaField field) {
-        switch (field.kind()) {
-            case Boolean :
-            case Byte :
-            case Char :
-            case Short :
-            case Int :
+        switch (field.getKind()) {
+            case Boolean:
+            case Byte:
+            case Char:
+            case Short:
+            case Int:
                 runtimeInterface.setFieldInt(frame.popInt(), null, field);
                 break;
-            case Double :
+            case Double:
                 runtimeInterface.setFieldDouble(frame.popDouble(), null, field);
                 break;
-            case Float :
+            case Float:
                 runtimeInterface.setFieldFloat(frame.popFloat(), null, field);
                 break;
-            case Long :
+            case Long:
                 runtimeInterface.setFieldLong(frame.popLong(), null, field);
                 break;
-            case Object :
+            case Object:
                 runtimeInterface.setFieldObject(frame.popObject(), null, field);
                 break;
-            default :
+            default:
                 assert false : "unexpected case";
         }
     }
 
     private void putFieldVirtual(InterpreterFrame frame, ResolvedJavaField field) {
-        switch (field.kind()) {
-            case Boolean :
-            case Byte :
-            case Char :
-            case Short :
-            case Int :
+        switch (field.getKind()) {
+            case Boolean:
+            case Byte:
+            case Char:
+            case Short:
+            case Int:
                 runtimeInterface.setFieldInt(frame.popInt(), nullCheck(frame.popObject()), field);
                 break;
-            case Double :
+            case Double:
                 runtimeInterface.setFieldDouble(frame.popDouble(), nullCheck(frame.popObject()), field);
                 break;
-            case Float :
+            case Float:
                 runtimeInterface.setFieldFloat(frame.popFloat(), nullCheck(frame.popObject()), field);
                 break;
-            case Long :
+            case Long:
                 runtimeInterface.setFieldLong(frame.popLong(), nullCheck(frame.popObject()), field);
                 break;
-            case Object :
+            case Object:
                 runtimeInterface.setFieldObject(frame.popObject(), nullCheck(frame.popObject()), field);
                 break;
-            default :
+            default:
                 assert false : "unexpected case";
         }
     }
 
     private void getField(InterpreterFrame frame, Object base, int opcode, char cpi) {
         ResolvedJavaField field = resolveField(frame, opcode, cpi);
-        switch (field.kind()) {
-            case Boolean :
+        switch (field.getKind()) {
+            case Boolean:
                 frame.pushInt(runtimeInterface.getFieldBoolean(base, field) ? 1 : 0);
                 break;
-            case Byte :
+            case Byte:
                 frame.pushInt(runtimeInterface.getFieldByte(base, field));
                 break;
-            case Char :
+            case Char:
                 frame.pushInt(runtimeInterface.getFieldChar(base, field));
                 break;
-            case Short :
+            case Short:
                 frame.pushInt(runtimeInterface.getFieldShort(base, field));
                 break;
-            case Int :
+            case Int:
                 frame.pushInt(runtimeInterface.getFieldInt(base, field));
                 break;
-            case Double :
+            case Double:
                 frame.pushDouble(runtimeInterface.getFieldDouble(base, field));
                 break;
-            case Float :
+            case Float:
                 frame.pushFloat(runtimeInterface.getFieldFloat(base, field));
                 break;
-            case Long :
+            case Long:
                 frame.pushLong(runtimeInterface.getFieldLong(base, field));
                 break;
-            case Object :
+            case Object:
                 frame.pushObject(runtimeInterface.getFieldObject(base, field));
                 break;
-            default :
+            default:
                 assert false : "unexpected case";
         }
     }
 
-
     private int pushAsObject(InterpreterFrame frame, Kind typeKind, Object value) {
-        switch(typeKind) {
-            case Int :
+        switch (typeKind) {
+            case Int:
                 frame.pushInt((int) value);
                 break;
-            case Long :
+            case Long:
                 frame.pushLong((long) value);
                 return 2;
-            case Boolean :
+            case Boolean:
                 frame.pushInt(((boolean) value) ? 1 : 0);
                 break;
-            case Byte :
+            case Byte:
                 frame.pushInt((byte) value);
                 break;
-            case Char :
+            case Char:
                 frame.pushInt((char) value);
                 break;
-            case Double :
+            case Double:
                 frame.pushDouble((double) value);
                 return 2;
-            case Float :
+            case Float:
                 frame.pushFloat((float) value);
                 break;
-            case Short :
+            case Short:
                 frame.pushInt((short) value);
                 break;
-            case Object :
+            case Object:
                 frame.pushObject(value);
                 break;
-            case Void :
+            case Void:
                 return 0;
-            default :
+            default:
                 assert false : "case not specified";
         }
         return 1;
@@ -1581,27 +1576,27 @@ public final class BytecodeInterpreter implements Interpreter {
 
     private Object popAsObject(InterpreterFrame frame, Kind typeKind) {
         switch (typeKind) {
-            case Boolean :
+            case Boolean:
                 return frame.popInt() == 1 ? true : false;
-            case Byte :
+            case Byte:
                 return (byte) frame.popInt();
-            case Char :
+            case Char:
                 return (char) frame.popInt();
-            case Double :
+            case Double:
                 return frame.popDouble();
-            case Int :
+            case Int:
                 return frame.popInt();
-            case Float :
+            case Float:
                 return frame.popFloat();
-            case Long :
+            case Long:
                 return frame.popLong();
-            case Short :
+            case Short:
                 return (short) frame.popInt();
-            case Object :
+            case Object:
                 return frame.popObject();
-            case Void :
+            case Void:
                 return null;
-            default :
+            default:
                 assert false : "unexpected case";
         }
         return null;
@@ -1609,13 +1604,13 @@ public final class BytecodeInterpreter implements Interpreter {
 
     private ResolvedJavaMethod resolveRootMethod() {
         try {
-            return metaAccessProvider.getResolvedJavaMethod(BytecodeInterpreter.class.getDeclaredMethod("execute", Method.class, Object[].class));
+            return metaAccessProvider.lookupJavaMethod(BytecodeInterpreter.class.getDeclaredMethod("execute", Method.class, Object[].class));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
-    private static Method findMethod(Class<?> clazz, String name, Class<?> ... parameters) {
+    private static Method findMethod(Class<?> clazz, String name, Class<?>... parameters) {
         try {
             return clazz.getDeclaredMethod(name, parameters);
         } catch (Exception e) {
@@ -1623,29 +1618,29 @@ public final class BytecodeInterpreter implements Interpreter {
         }
     }
 
-    private static StackTraceElement[] createStackTraceElements(InterpreterFrame frame) {
+    private static StackTraceElement[] createStackTraceElements(InterpreterFrame frame, RuntimeInterpreterInterface runtimeInterface) {
         InterpreterFrame tmp = frame;
         List<StackTraceElement> elements = new ArrayList<>();
         boolean first = false; // filter only first stack elements
         while (tmp != null) {
-            if (first || !filterStackElement(tmp)) {
+            if (first || !filterStackElement(tmp, runtimeInterface)) {
                 first = true;
-                elements.add(tmp.getMethod().toStackTraceElement(tmp.getBCI()));
+                elements.add(tmp.getMethod().asStackTraceElement(tmp.getBCI()));
             }
             tmp = tmp.getParentFrame();
         }
         return elements.toArray(new StackTraceElement[elements.size()]);
     }
 
-    private static boolean filterStackElement(InterpreterFrame frame) {
-        return Throwable.class.isAssignableFrom(frame.getMethod().holder().toJava());
+    private static boolean filterStackElement(InterpreterFrame frame, RuntimeInterpreterInterface runtimeInterface) {
+        return Throwable.class.isAssignableFrom(runtimeInterface.getMirror(frame.getMethod().getDeclaringClass()));
     }
 
     private ResolvedJavaField findThrowableField(InterpreterFrame frame, String name) {
         ResolvedJavaType throwableType = resolveType(frame, Throwable.class);
-        ResolvedJavaField[] fields = throwableType.declaredFields();
+        ResolvedJavaField[] fields = throwableType.getInstanceFields(false);
         for (int i = 0; i < fields.length; i++) {
-            if (fields[i].name().equals(name)) {
+            if (fields[i].getName().equals(name)) {
                 return fields[i];
             }
         }
@@ -1654,6 +1649,7 @@ public final class BytecodeInterpreter implements Interpreter {
     }
 
     private class MethodRedirectionInfo {
+
         private InterpreterCallable receiver;
         private Method method;
 

@@ -23,15 +23,37 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
  * The {@code Local} instruction is a placeholder for an incoming argument to a function call.
  */
 @NodeInfo(nameTemplate = "Local({p#index})")
-public final class LocalNode extends AbstractLocalNode implements Node.IterableNodeType {
+public final class LocalNode extends FloatingNode implements Node.IterableNodeType {
+
+    private final int index;
 
     public LocalNode(int index, Stamp stamp) {
-        super(index, stamp);
+        super(stamp);
+        this.index = index;
+    }
+
+    /**
+     * Gets the index of this local in the array of parameters. This is NOT the JVM local index.
+     * 
+     * @return the index
+     */
+    public int index() {
+        return index;
+    }
+
+    @Override
+    public String toString(Verbosity verbosity) {
+        if (verbosity == Verbosity.Name) {
+            return super.toString(Verbosity.Name) + "(" + index + ")";
+        } else {
+            return super.toString(verbosity);
+        }
     }
 }

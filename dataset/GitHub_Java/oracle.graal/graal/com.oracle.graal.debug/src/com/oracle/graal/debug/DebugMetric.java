@@ -26,5 +26,5 @@ public interface DebugMetric {
 
     void increment();
 
-    void add(long value);
+    void add(int value);
 }

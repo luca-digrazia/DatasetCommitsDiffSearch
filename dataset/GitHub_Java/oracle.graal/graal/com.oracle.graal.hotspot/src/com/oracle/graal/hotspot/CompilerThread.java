@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot;
 
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-
 import java.io.*;
 import java.util.concurrent.*;
 
@@ -61,7 +59,7 @@ public final class CompilerThread extends Thread {
     public void run() {
         GraalDebugConfig hotspotDebugConfig = null;
         if (GraalOptions.Debug) {
-            PrintStream log = graalRuntime().getVMToCompiler().log();
+            PrintStream log = HotSpotGraalRuntime.getInstance().getVMToCompiler().log();
             DebugEnvironment.initialize(log);
         }
         try {

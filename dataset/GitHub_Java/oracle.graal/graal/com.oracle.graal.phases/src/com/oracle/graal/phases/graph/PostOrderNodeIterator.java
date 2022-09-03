@@ -89,8 +89,14 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
                 end((EndNode) current);
                 queueMerge((EndNode) current);
                 current = nextQueuedNode();
-            } else if (current instanceof ControlSinkNode) {
-                node(current);
+            } else if (current instanceof DeoptimizeNode) {
+                deoptimize((DeoptimizeNode) current);
+                current = nextQueuedNode();
+            } else if (current instanceof ReturnNode) {
+                returnNode((ReturnNode) current);
+                current = nextQueuedNode();
+            } else if (current instanceof UnwindNode) {
+                unwind((UnwindNode) current);
                 current = nextQueuedNode();
             } else if (current instanceof ControlSplitNode) {
                 Set<Node> successors = controlSplit((ControlSplitNode) current);
@@ -210,12 +216,24 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
         node(loopEnd);
     }
 
+    protected void deoptimize(DeoptimizeNode deoptimize) {
+        node(deoptimize);
+    }
+
     protected Set<Node> controlSplit(ControlSplitNode controlSplit) {
         node(controlSplit);
         return null;
     }
 
+    protected void returnNode(ReturnNode returnNode) {
+        node(returnNode);
+    }
+
     protected void invoke(Invoke invoke) {
         node(invoke.node());
+    }
+
+    protected void unwind(UnwindNode unwind) {
+        node(unwind);
     }
 }

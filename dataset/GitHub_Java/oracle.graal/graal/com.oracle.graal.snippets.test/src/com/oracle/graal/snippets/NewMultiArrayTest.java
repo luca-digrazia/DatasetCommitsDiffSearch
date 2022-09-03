@@ -38,34 +38,8 @@ import com.oracle.graal.nodes.java.*;
  */
 public class NewMultiArrayTest extends GraalCompilerTest {
 
-    @Override
-    protected void assertEquals(Object expected, Object actual) {
-        Assert.assertTrue(expected != null);
-        Assert.assertTrue(actual != null);
-        super.assertEquals(expected.getClass(), actual.getClass());
-        if (expected instanceof int[]) {
-            Assert.assertArrayEquals((int[]) expected, (int[]) actual);
-        } else if (expected instanceof byte[]) {
-            Assert.assertArrayEquals((byte[]) expected, (byte[]) actual);
-        } else if (expected instanceof char[]) {
-            Assert.assertArrayEquals((char[]) expected, (char[]) actual);
-        } else if (expected instanceof short[]) {
-            Assert.assertArrayEquals((short[]) expected, (short[]) actual);
-        } else if (expected instanceof float[]) {
-            Assert.assertArrayEquals((float[]) expected, (float[]) actual, 0.0f);
-        } else if (expected instanceof long[]) {
-            Assert.assertArrayEquals((long[]) expected, (long[]) actual);
-        } else if (expected instanceof double[]) {
-            Assert.assertArrayEquals((double[]) expected, (double[]) actual, 0.0d);
-        } else if (expected instanceof Object[]) {
-            Assert.assertArrayEquals((Object[]) expected, (Object[]) actual);
-        } else {
-            Assert.fail("non-array value encountered: " + expected);
-        }
-    }
-
     private static int rank(ResolvedJavaType type) {
-        String name = type.name();
+        String name = type.getName();
         int dims = 0;
         while (dims < name.length() && name.charAt(dims) == '[') {
             dims++;
@@ -99,9 +73,8 @@ public class NewMultiArrayTest extends GraalCompilerTest {
     @Override
     protected Object referenceInvoke(Method method, Object receiver, Object... args) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException {
         if (bottomType != null) {
-            Class< ? > componentType = bottomType.toJava();
             try {
-                return Array.newInstance(componentType, dimensions);
+                return Array.newInstance(bottomClass, dimensions);
             } catch (Exception e) {
                 throw new InvocationTargetException(e);
             }
@@ -111,16 +84,18 @@ public class NewMultiArrayTest extends GraalCompilerTest {
 
     ResolvedJavaType arrayType;
     ResolvedJavaType bottomType;
+    Class bottomClass;
     int[] dimensions;
 
     @Test
     public void test1() {
-        for (Class clazz : new Class[] {byte.class, char.class, short.class, int.class, float.class, long.class, double.class, String.class}) {
-            bottomType = runtime.getResolvedJavaType(clazz);
+        for (Class clazz : new Class[]{byte.class, char.class, short.class, int.class, float.class, long.class, double.class, String.class}) {
+            bottomClass = clazz;
+            bottomType = runtime.lookupJavaType(clazz);
             arrayType = bottomType;
-            for (int rank : new int[] {1, 2, 10, 50, 100, 200, 254, 255}) {
+            for (int rank : new int[]{1, 2, 10, 50, 100, 200, 254, 255}) {
                 while (rank(arrayType) != rank) {
-                    arrayType = arrayType.arrayOf();
+                    arrayType = arrayType.getArrayClass();
                 }
 
                 dimensions = new int[rank];
@@ -138,7 +113,8 @@ public class NewMultiArrayTest extends GraalCompilerTest {
     public static Object newMultiArray() {
         // This is merely a template - the NewMultiArrayNode is replaced in getCode() above.
         // This also means we need a separate test for correct handling of negative dimensions
-        // as deoptimization won't do what we want for a graph modified to be different from the source bytecode.
+        // as deoptimization won't do what we want for a graph modified to be different from the
+        // source bytecode.
         return new Object[10][9][8];
     }
 

@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.api.meta;
 
-import java.util.*;
-
 /**
  * Represents an exception handler within the bytecodes.
  */
@@ -95,27 +93,5 @@ public final class ExceptionHandler {
      */
     public JavaType getCatchType() {
         return catchType;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (!(obj instanceof ExceptionHandler)) {
-            return false;
-        }
-        ExceptionHandler that = (ExceptionHandler) obj;
-        if (this.startBCI != that.startBCI || this.endBCI != that.endBCI || this.handlerBCI != that.handlerBCI || this.catchTypeCPI != that.catchTypeCPI) {
-            return false;
-        }
-        return Objects.equals(this.catchType, that.catchType);
-    }
-
-    @Override
-    public String toString() {
-        return "ExceptionHandler<startBCI=" + startBCI + ", endBCI=" + endBCI + ", handlerBCI=" + handlerBCI + ", catchTypeCPI=" + catchTypeCPI + ", catchType=" + catchType + ">";
-    }
-
-    @Override
-    public int hashCode() {
-        return catchTypeCPI ^ endBCI ^ handlerBCI;
     }
 }

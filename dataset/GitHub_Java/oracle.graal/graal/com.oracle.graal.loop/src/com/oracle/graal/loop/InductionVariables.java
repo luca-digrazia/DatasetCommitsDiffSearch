@@ -46,7 +46,7 @@ public class InductionVariables {
     private Collection<BasicInductionVariable> findBasic() {
         List<BasicInductionVariable> bivs = new LinkedList<>();
         LoopBeginNode loopBegin = loop.loopBegin();
-        AbstractEndNode forwardEnd = loopBegin.forwardEnd();
+        EndNode forwardEnd = loopBegin.forwardEnd();
         for (PhiNode phi : loopBegin.phis()) {
             ValueNode backValue = phi.singleBackValue();
             if (backValue == null) {
@@ -54,7 +54,7 @@ public class InductionVariables {
             }
             ValueNode stride = addSub(backValue, phi);
             if (stride != null) {
-                BasicInductionVariable biv = new BasicInductionVariable(loop, (ValuePhiNode) phi, phi.valueAt(forwardEnd), stride, (IntegerArithmeticNode) backValue);
+                BasicInductionVariable biv = new BasicInductionVariable(loop, phi, phi.valueAt(forwardEnd), stride, (IntegerArithmeticNode) backValue);
                 ivs.put(phi, biv);
                 bivs.add(biv);
             }
@@ -63,7 +63,7 @@ public class InductionVariables {
     }
 
     private void findDerived(Collection<BasicInductionVariable> bivs) {
-        Queue<InductionVariable> scanQueue = new LinkedList<>(bivs);
+        Queue<InductionVariable> scanQueue = new LinkedList<InductionVariable>(bivs);
         while (!scanQueue.isEmpty()) {
             InductionVariable baseIv = scanQueue.remove();
             ValueNode baseIvNode = baseIv.valueNode();

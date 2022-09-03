@@ -52,5 +52,6 @@ public final class DimensionsNode extends FixedWithNextNode implements LIRGenLow
     }
 
     @NodeIntrinsic
-    public static native Word allocaDimsArray(@ConstantNodeParameter int rank);
+    public static native Word allocaDimsArray(@ConstantNodeParameter
+    int rank);
 }

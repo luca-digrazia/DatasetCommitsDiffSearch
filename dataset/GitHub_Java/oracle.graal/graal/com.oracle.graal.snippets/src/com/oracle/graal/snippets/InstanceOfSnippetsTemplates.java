@@ -172,7 +172,7 @@ public abstract class InstanceOfSnippetsTemplates<T extends SnippetsInterface> e
                 // Can simply use the phi result if the same materialized values are expected.
                 return result;
             } else {
-                return t.graph().unique(new ConditionalNode(asCondition(trueValue), t, f));
+                return MaterializeNode.create(asCondition(trueValue), t, f);
             }
         }
     }
@@ -227,7 +227,7 @@ public abstract class InstanceOfSnippetsTemplates<T extends SnippetsInterface> e
         public void replace(ValueNode oldNode, ValueNode newNode) {
             assert newNode instanceof PhiNode;
             assert oldNode == instanceOf;
-            if (sameBlock && solitaryUsage && instantiation.result != null && instantiation.result.merge().next() == usage) {
+            if (sameBlock && solitaryUsage) {
                 removeIntermediateMaterialization(newNode);
             } else {
                 newNode.inferStamp();

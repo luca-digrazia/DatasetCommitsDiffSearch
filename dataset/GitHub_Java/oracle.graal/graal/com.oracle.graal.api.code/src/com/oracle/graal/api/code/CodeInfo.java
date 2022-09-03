@@ -25,24 +25,24 @@ package com.oracle.graal.api.code;
 import com.oracle.graal.api.meta.*;
 
 /**
- * Represents some code installed in the code cache of the runtime.
- * This encapsulated details are only for informational purposes.
- * At any time, the runtime may invalidate the underlying code (e.g. due to deopt etc).
+ * Represents some code installed in the code cache of the runtime. This encapsulated details are
+ * only for informational purposes. At any time, the runtime may invalidate the underlying code
+ * (e.g. due to deopt etc).
  */
 public interface CodeInfo {
 
     /**
-     * Gets the start address of this installed code.
+     * Returns the start address of this installed code.
      */
-    long start();
+    long getStart();
 
     /**
-     * Gets a copy of this installed code.
+     * Returns a copy of this installed code.
      */
-    byte[] code();
+    byte[] getCode();
 
     /**
-     * Gets the method (if any) from which this installed code was compiled.
+     * Returns the method (if any) from which this installed code was compiled.
      */
-    ResolvedJavaMethod method();
+    ResolvedJavaMethod getMethod();
 }

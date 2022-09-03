@@ -22,14 +22,11 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import java.lang.reflect.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
@@ -37,11 +34,11 @@ import com.oracle.graal.nodes.type.*;
 /**
  * Node implementing a call to HotSpot's ThreadIsInterrupted stub.
  */
-public class ThreadIsInterruptedStubCall extends DeoptimizingStubCall implements LIRGenLowerable {
+public class ThreadIsInterruptedStubCall extends FixedWithNextNode implements LIRGenLowerable {
 
     @Input private final ValueNode thread;
     @Input private final ValueNode clearIsInterrupted;
-    public static final Descriptor THREAD_IS_INTERRUPTED = new Descriptor("thread_is_interrupted", false, boolean.class, Object.class, boolean.class);
+    public static final Descriptor THREAD_IS_INTERRUPTED = new Descriptor("thread_is_interrupted", false, int.class, Object.class, boolean.class);
 
     public ThreadIsInterruptedStubCall(ValueNode thread, ValueNode clearIsInterrupted) {
         super(StampFactory.forInteger(Kind.Int, 0, 1));
@@ -52,18 +49,10 @@ public class ThreadIsInterruptedStubCall extends DeoptimizingStubCall implements
     @Override
     public void generate(LIRGenerator gen) {
         RuntimeCallTarget stub = gen.getRuntime().lookupRuntimeCall(ThreadIsInterruptedStubCall.THREAD_IS_INTERRUPTED);
-        Variable result = gen.emitCall(stub, stub.getCallingConvention(), this, gen.operand(thread), gen.operand(clearIsInterrupted));
+        Variable result = gen.emitCall(stub, stub.getCallingConvention(), true, gen.operand(thread), gen.operand(clearIsInterrupted));
         gen.setResult(this, result);
     }
 
     @NodeIntrinsic
-    public static boolean call(Thread thread, boolean clearIsInterrupted) {
-        try {
-            Method isInterrupted = Thread.class.getDeclaredMethod("isInterrupted", boolean.class);
-            isInterrupted.setAccessible(true);
-            return (Boolean) isInterrupted.invoke(thread, clearIsInterrupted);
-        } catch (Exception e) {
-            throw new GraalInternalError(e);
-        }
-    }
+    public static native int call(Thread thread, boolean clearIsInterrupted);
 }

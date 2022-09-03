@@ -46,7 +46,7 @@ import com.oracle.graal.nodes.type.*;
  */
 public final class BreakpointNode extends FixedWithNextNode implements LIRLowerable {
 
-    @Input private final NodeInputList<ValueNode> arguments;
+    @Input public final NodeInputList<ValueNode> arguments;
 
     public BreakpointNode(ValueNode... arguments) {
         super(StampFactory.forVoid());
@@ -56,9 +56,5 @@ public final class BreakpointNode extends FixedWithNextNode implements LIRLowera
     @Override
     public void generate(LIRGeneratorTool gen) {
         gen.visitBreakpointNode(this);
-    }
-
-    public NodeInputList<ValueNode> arguments() {
-        return arguments;
     }
 }

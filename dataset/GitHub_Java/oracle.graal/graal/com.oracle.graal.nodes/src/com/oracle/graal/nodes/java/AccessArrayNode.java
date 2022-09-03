@@ -22,14 +22,12 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * This the base class of all array operations.
  */
-@NodeInfo
 public abstract class AccessArrayNode extends FixedWithNextNode {
 
     @Input private ValueNode array;

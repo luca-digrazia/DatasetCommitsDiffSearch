@@ -199,6 +199,7 @@ public class IntegerStamp extends Stamp {
                 return 0xffffL;
             case Short:
                 return 0xffffL;
+            case Jsr:
             case Int:
                 return 0xffffffffL;
             case Long:

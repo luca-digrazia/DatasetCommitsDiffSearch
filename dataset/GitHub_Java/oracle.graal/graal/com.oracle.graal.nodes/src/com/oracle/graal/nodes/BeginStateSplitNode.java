@@ -22,23 +22,12 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.nodes.type.*;
-
 /**
- * Base class for {@link AbstractBeginNode}s that are associated with a frame state.
- * 
- * TODO (dnsimon) this not needed until {@link AbstractBeginNode} no longer implements
- * {@link StateSplit} which is not possible until loop peeling works without requiring begin nodes
- * to have frames states.
+ * Base class for {@link BeginNode}s that are associated with a frame state. TODO (dnsimon) this not
+ * needed until {@link BeginNode} no longer implements {@link StateSplit} which is not possible
+ * until loop peeling works without requiring begin nodes to have frames states
  */
-public abstract class BeginStateSplitNode extends AbstractBeginNode implements StateSplit {
-
-    public BeginStateSplitNode() {
-    }
-
-    protected BeginStateSplitNode(Stamp stamp) {
-        super(stamp);
-    }
+public abstract class BeginStateSplitNode extends BeginNode implements StateSplit {
 
     /**
      * A begin node has no side effect.

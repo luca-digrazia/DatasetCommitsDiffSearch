@@ -342,6 +342,7 @@ public enum Condition {
             case Byte:
             case Char:
             case Short:
+            case Jsr:
             case Int: {
                 int x = lt.asInt();
                 int y = rt.asInt();

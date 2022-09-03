@@ -198,7 +198,7 @@ public class EscapeAnalysisTest extends GraalCompilerTest {
         StructuredGraph graph = parse(snippet);
         try {
             for (Invoke n : graph.getInvokes()) {
-                n.setInliningRelevance(1);
+                n.node().setProbability(100000);
             }
 
             Assumptions assumptions = new Assumptions(false);

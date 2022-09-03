@@ -22,7 +22,10 @@
  */
 package com.oracle.graal.api.code;
 
-import com.oracle.graal.api.code.CallingConvention.Type;
+import java.util.*;
+
+import com.oracle.graal.api.code.CallingConvention.*;
+import com.oracle.graal.api.code.Register.*;
 import com.oracle.graal.api.meta.*;
 
 /**
@@ -41,6 +44,8 @@ public interface RegisterConfig {
      */
     Register getFrameRegister();
 
+    Register getScratchRegister();
+
     /**
      * Gets the calling convention describing how arguments are passed.
      * 
@@ -57,11 +62,12 @@ public interface RegisterConfig {
      * given calling convention.
      * 
      * @param type the type of calling convention
-     * @param kind specifies what kind of registers is being requested
+     * @param flag specifies whether registers for {@linkplain RegisterFlag#CPU integral} or
+     *            {@linkplain RegisterFlag#FPU floating point} parameters are being requested
      * @return the ordered set of registers that may be used to pass parameters in a call conforming
      *         to {@code type}
      */
-    Register[] getCallingConventionRegisters(Type type, Kind kind);
+    Register[] getCallingConventionRegisters(Type type, RegisterFlag flag);
 
     /**
      * Gets the set of registers that can be used by the register allocator.
@@ -69,10 +75,16 @@ public interface RegisterConfig {
     Register[] getAllocatableRegisters();
 
     /**
-     * Gets the set of registers that can be used by the register allocator for a value of a
-     * particular kind.
+     * Gets the set of registers that can be used by the register allocator,
+     * {@linkplain Register#categorize(Register[]) categorized} by register
+     * {@linkplain RegisterFlag flags}.
+     * 
+     * @return a map from each {@link RegisterFlag} constant to the list of
+     *         {@linkplain #getAllocatableRegisters() allocatable} registers for which the flag is
+     *         set
+     * 
      */
-    Register[] getAllocatableRegisters(PlatformKind kind);
+    EnumMap<RegisterFlag, Register[]> getCategorizedAllocatableRegisters();
 
     /**
      * Gets the registers whose values must be preserved by a method across any call it makes.
@@ -92,6 +104,7 @@ public interface RegisterConfig {
      * 
      * @return an array where an element at index i holds the attributes of the register whose
      *         number is i
+     * @see Register#categorize(Register[])
      */
     RegisterAttributes[] getAttributesMap();
 

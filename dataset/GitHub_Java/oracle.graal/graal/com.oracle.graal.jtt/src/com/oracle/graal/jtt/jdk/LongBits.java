@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.jtt.jdk;
 
-import org.junit.*;
-
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 public class LongBits extends JTTTest {
 

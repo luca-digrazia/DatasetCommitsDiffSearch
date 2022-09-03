@@ -23,9 +23,8 @@
 // Checkstyle: stop
 package com.oracle.graal.jtt.loop;
 
-import org.junit.*;
-
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 /*
  * Test around an object that escapes directly from inside a loop (no virtual phi on the loop)

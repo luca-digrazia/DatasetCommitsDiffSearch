@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.printer;
 
-import java.io.Closeable;
-import java.io.IOException;
+import java.io.*;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
-import com.oracle.graal.graph.Graph;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.phases.schedule.*;
 
 interface GraphPrinter extends Closeable {
 
@@ -41,7 +40,7 @@ interface GraphPrinter extends Closeable {
      * Prints an entire {@link Graph} with the specified title, optionally using short names for
      * nodes.
      */
-    void print(Graph graph, String title) throws IOException;
+    void print(Graph graph, String title, SchedulePhase predefinedSchedule) throws IOException;
 
     /**
      * Ends the current group.

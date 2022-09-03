@@ -36,7 +36,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public boolean windowsOs;
     public int codeEntryAlignment;
     public boolean verifyOops;
-    public boolean ciTime;
     public boolean useFastLocking;
     public boolean useTLAB;
     public boolean useBiasedLocking;

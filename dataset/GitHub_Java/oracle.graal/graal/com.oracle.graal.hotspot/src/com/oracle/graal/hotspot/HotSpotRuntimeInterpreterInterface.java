@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.hotspot;
 
+import static com.oracle.graal.graph.FieldIntrospection.*;
+
 import java.lang.reflect.*;
 
 import sun.misc.*;
@@ -32,12 +34,14 @@ import com.oracle.graal.hotspot.meta.*;
 
 public class HotSpotRuntimeInterpreterInterface implements RuntimeInterpreterInterface {
 
-    private static final Unsafe unsafe = loadUnsafe();
-
     private final MetaAccessProvider metaProvider;
 
     public HotSpotRuntimeInterpreterInterface(MetaAccessProvider metaProvider) {
         this.metaProvider = metaProvider;
+    }
+
+    public Class<?> getMirror(ResolvedJavaType type) {
+        return ((HotSpotResolvedJavaType) type).mirror();
     }
 
     public native Object invoke(ResolvedJavaMethod method, Object... args);
@@ -53,7 +57,7 @@ public class HotSpotRuntimeInterpreterInterface implements RuntimeInterpreterInt
     }
 
     public Object newObject(ResolvedJavaType type) throws InstantiationException {
-        return unsafe.allocateInstance(type.toJava());
+        return unsafe.allocateInstance(getMirror(type));
     }
 
     public Object getFieldObject(Object base, ResolvedJavaField field) {
@@ -154,7 +158,6 @@ public class HotSpotRuntimeInterpreterInterface implements RuntimeInterpreterInt
             unsafe.putInt(resolveBase(base, field), offset, value);
         }
     }
-
 
     public void setFieldFloat(float value, Object base, ResolvedJavaField field) {
         long offset = resolveOffset(field);
@@ -285,16 +288,16 @@ public class HotSpotRuntimeInterpreterInterface implements RuntimeInterpreterInt
         if (arrayType == null) {
             return;
         }
-        ResolvedJavaType type = metaProvider.getResolvedJavaType(array.getClass()).componentType();
-        if (!type.toJava().isAssignableFrom(arrayType)) {
+        ResolvedJavaType type = metaProvider.lookupJavaType(array.getClass()).getComponentType();
+        if (!getMirror(type).isAssignableFrom(arrayType)) {
             throw new ArrayStoreException(arrayType.getName());
         }
     }
 
     private void checkArray(Object array, long index) {
         nullCheck(array);
-        ResolvedJavaType type = metaProvider.getResolvedJavaType(array.getClass());
-        if (!type.isArrayClass()) {
+        ResolvedJavaType type = metaProvider.lookupJavaType(array.getClass());
+        if (!type.isArray()) {
             throw new ArrayStoreException(array.getClass().getName());
         }
         if (index < 0 || index >= arrayLength(array)) {
@@ -308,32 +311,18 @@ public class HotSpotRuntimeInterpreterInterface implements RuntimeInterpreterInt
     }
 
     private static boolean isVolatile(ResolvedJavaField field) {
-        return Modifier.isVolatile(field.accessFlags());
+        return Modifier.isVolatile(field.getModifiers());
     }
 
     private static long resolveOffset(ResolvedJavaField field) {
         return ((HotSpotResolvedJavaField) field).offset();
     }
 
-    private static Object resolveBase(Object base, ResolvedJavaField field) {
+    private Object resolveBase(Object base, ResolvedJavaField field) {
         Object accessorBase = base;
         if (accessorBase == null) {
-            accessorBase = field.holder().toJava();
+            accessorBase = getMirror(field.getDeclaringClass());
         }
         return accessorBase;
-    }
-
-    private static Unsafe loadUnsafe() {
-        try {
-            return Unsafe.getUnsafe();
-        } catch (SecurityException e) {
-        }
-        try {
-            Field theUnsafeInstance = Unsafe.class.getDeclaredField("theUnsafe");
-            theUnsafeInstance.setAccessible(true);
-            return (Unsafe) theUnsafeInstance.get(Unsafe.class);
-        } catch (Exception e) {
-            throw new RuntimeException("exception while trying to get Unsafe.theUnsafe via reflection:", e);
-        }
     }
 }

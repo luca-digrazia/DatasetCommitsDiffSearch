@@ -31,11 +31,11 @@ public class BlockMap<T> {
         data = (T[]) new Object[cfg.getBlocks().length];
     }
 
-    public T get(AbstractBlock<?> block) {
+    public T get(Block block) {
         return data[block.getId()];
     }
 
-    public void put(AbstractBlock<?> block, T value) {
+    public void put(Block block, T value) {
         data[block.getId()] = value;
     }
 }

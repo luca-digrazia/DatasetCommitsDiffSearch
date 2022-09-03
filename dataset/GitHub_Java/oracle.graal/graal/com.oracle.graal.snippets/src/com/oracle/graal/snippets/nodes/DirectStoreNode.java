@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.snippets.nodes;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
@@ -36,48 +37,40 @@ public class DirectStoreNode extends FixedWithNextNode implements LIRLowerable {
 
     @Input private ValueNode address;
     @Input private ValueNode value;
-    private final Kind kind;
 
-    public DirectStoreNode(ValueNode address, ValueNode value, Kind kind) {
+    public DirectStoreNode(ValueNode address, ValueNode value) {
         super(StampFactory.forVoid());
         this.address = address;
         this.value = value;
-        this.kind = kind;
     }
+
+    @NodeIntrinsic
+    public static native void store(long address, boolean value);
+
+    @NodeIntrinsic
+    public static native void store(long address, byte value);
+
+    @NodeIntrinsic
+    public static native void store(long address, short value);
+
+    @NodeIntrinsic
+    public static native void store(long address, char value);
+
+    @NodeIntrinsic
+    public static native void store(long address, int value);
+
+    @NodeIntrinsic
+    public static native void store(long address, long value);
+
+    @NodeIntrinsic
+    public static native void store(long address, float value);
+
+    @NodeIntrinsic
+    public static native void store(long address, double value);
 
     @Override
     public void generate(LIRGeneratorTool gen) {
         Value v = gen.operand(value);
-        gen.emitStore(gen.makeAddress(kind, gen.operand(address)), v, false);
+        gen.emitStore(new Address(v.getKind(), gen.operand(address)), v, false);
     }
-
-    /*
-     * The kind of the store is provided explicitly in these intrinsics because it is not always
-     * possible to determine the kind from the given value during compilation (because stack kinds
-     * are used).
-     */
-
-    @NodeIntrinsic
-    public static native void store(long address, boolean value, @ConstantNodeParameter Kind kind);
-
-    @NodeIntrinsic
-    public static native void store(long address, byte value, @ConstantNodeParameter Kind kind);
-
-    @NodeIntrinsic
-    public static native void store(long address, short value, @ConstantNodeParameter Kind kind);
-
-    @NodeIntrinsic
-    public static native void store(long address, char value, @ConstantNodeParameter Kind kind);
-
-    @NodeIntrinsic
-    public static native void store(long address, int value, @ConstantNodeParameter Kind kind);
-
-    @NodeIntrinsic
-    public static native void store(long address, long value, @ConstantNodeParameter Kind kind);
-
-    @NodeIntrinsic
-    public static native void store(long address, float value, @ConstantNodeParameter Kind kind);
-
-    @NodeIntrinsic
-    public static native void store(long address, double value, @ConstantNodeParameter Kind kind);
 }

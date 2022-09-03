@@ -759,11 +759,8 @@ public class NodeClass extends FieldIntrospection {
     }
 
     public boolean edgesEqual(Node node, Node other) {
-        return inputsEqual(node, other) && successorsEqual(node, other);
-    }
-
-    public boolean inputsEqual(Node node, Node other) {
         assert node.getClass() == clazz && other.getClass() == clazz;
+
         int index = 0;
         while (index < directInputCount) {
             if (getNode(other, inputOffsets[index]) != getNode(node, inputOffsets[index])) {
@@ -778,12 +775,8 @@ public class NodeClass extends FieldIntrospection {
             }
             index++;
         }
-        return true;
-    }
 
-    public boolean successorsEqual(Node node, Node other) {
-        assert node.getClass() == clazz && other.getClass() == clazz;
-        int index = 0;
+        index = 0;
         while (index < directSuccessorCount) {
             if (getNode(other, successorOffsets[index]) != getNode(node, successorOffsets[index])) {
                 return false;

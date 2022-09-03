@@ -248,7 +248,7 @@ final class RegisterVerifier {
             // check if input operands are correct
             op.forEachInput(useProc);
             // invalidate all caller save registers at calls
-            if (op.destroysCallerSavedRegisters()) {
+            if (op.hasCall()) {
                 for (Register r : allocator.frameMap.registerConfig.getCallerSaveRegisters()) {
                     statePut(inputState, r.asValue(), null);
                 }

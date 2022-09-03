@@ -24,8 +24,6 @@ package com.oracle.graal.api.meta;
 
 import java.io.*;
 
-import com.oracle.graal.api.meta.ProfilingInfo.*;
-
 /**
  * This profile object represents the type profile at a specific BCI. The precision of the supplied
  * values may vary, but a runtime that provides this information should be aware that it will be
@@ -80,7 +78,6 @@ public final class JavaTypeProfile implements Serializable {
         }
     }
 
-    private final TriState nullSeen;
     private final double notRecordedProbability;
     private final ProfiledType[] ptypes;
 
@@ -97,8 +94,7 @@ public final class JavaTypeProfile implements Serializable {
         return true;
     }
 
-    public JavaTypeProfile(TriState nullSeen, double notRecordedProbability, ProfiledType... ptypes) {
-        this.nullSeen = nullSeen;
+    public JavaTypeProfile(double notRecordedProbability, ProfiledType... ptypes) {
         this.ptypes = ptypes;
         this.notRecordedProbability = notRecordedProbability;
         assert isSorted(ptypes);
@@ -112,13 +108,6 @@ public final class JavaTypeProfile implements Serializable {
      */
     public double getNotRecordedProbability() {
         return notRecordedProbability;
-    }
-
-    /**
-     * Returns whether a null value was at the type check.
-     */
-    public TriState getNullSeen() {
-        return nullSeen;
     }
 
     /**

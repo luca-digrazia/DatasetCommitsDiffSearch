@@ -40,8 +40,8 @@ public final class LoadIndexedNode extends AccessIndexedNode implements Node.Ite
      * @param index the instruction producing the index
      * @param elementKind the element type
      */
-    public LoadIndexedNode(ValueNode array, ValueNode index, Kind elementKind) {
-        super(createStamp(array, elementKind), array, index, elementKind);
+    public LoadIndexedNode(ValueNode array, ValueNode index, Kind elementKind, long leafGraphId) {
+        super(createStamp(array, elementKind), array, index, elementKind, leafGraphId);
     }
 
     private static Stamp createStamp(ValueNode array, Kind kind) {

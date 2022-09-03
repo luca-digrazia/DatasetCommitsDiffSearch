@@ -222,7 +222,9 @@ public final class HotSpotMethodData extends CompilerObject {
             return data.readUnsignedByte(position, config.dataLayoutFlagsOffset);
         }
 
-        protected int getDynamicSize(@SuppressWarnings("unused") HotSpotMethodData data, @SuppressWarnings("unused") int position) {
+        protected int getDynamicSize(@SuppressWarnings("unused")
+        HotSpotMethodData data, @SuppressWarnings("unused")
+        int position) {
             return 0;
         }
     }

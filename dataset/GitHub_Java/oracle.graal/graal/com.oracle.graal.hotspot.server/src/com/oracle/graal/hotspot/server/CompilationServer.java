@@ -44,9 +44,9 @@ public class CompilationServer implements Runnable {
 
     public interface ConnectionObserver {
 
-        void connectionStarted(HotSpotGraalRuntimeProvider compiler);
+        void connectionStarted(HotSpotGraalRuntime compiler);
 
-        void connectionFinished(HotSpotGraalRuntimeProvider compiler);
+        void connectionFinished(HotSpotGraalRuntime compiler);
     }
 
     private final boolean multiple;
@@ -55,13 +55,14 @@ public class CompilationServer implements Runnable {
     /**
      * Creates a new Compilation server. The server is activated by calling {@link #run()} directly
      * or via a new {@link Thread}.
-     *
+     * 
      * @param multiple true if the server should server should serve an infinite amount of
      *            consecutive connections, false if it should terminate after the first connection
      *            ends.
      */
     public CompilationServer(boolean multiple) {
         this.multiple = multiple;
+        HotSpotOptions.setDefaultOptions();
     }
 
     public void addConnectionObserver(ConnectionObserver observer) {
@@ -92,7 +93,8 @@ public class CompilationServer implements Runnable {
                 CompilerToVM toVM = (CompilerToVM) streams.getInvocation().waitForResult(false);
 
                 // return the initialized compiler to the client
-                HotSpotGraalRuntimeProvider compiler = initializeServer(toVM);
+                HotSpotGraalRuntime compiler = initializeServer(toVM);
+                compiler.getCompiler();
                 streams.getInvocation().sendResult(compiler);
 
                 for (ConnectionObserver observer : observers) {
@@ -120,7 +122,7 @@ public class CompilationServer implements Runnable {
     }
 
     @SuppressWarnings("unused")
-    private static HotSpotGraalRuntimeProvider initializeServer(CompilerToVM toVM) {
+    private static HotSpotGraalRuntime initializeServer(CompilerToVM toVM) {
         // TODO(thomaswue): Fix creation of compiler instances on server side.
         return null;
     }

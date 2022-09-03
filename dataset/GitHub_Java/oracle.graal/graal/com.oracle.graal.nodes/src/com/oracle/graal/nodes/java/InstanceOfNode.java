@@ -32,7 +32,7 @@ import com.oracle.graal.nodes.type.*;
 /**
  * The {@code InstanceOfNode} represents an instanceof test.
  */
-public final class InstanceOfNode extends LogicNode implements Canonicalizable, Lowerable, Virtualizable {
+public final class InstanceOfNode extends BooleanNode implements Canonicalizable, Lowerable, Virtualizable {
 
     @Input private ValueNode object;
     private final ResolvedJavaType type;
@@ -45,6 +45,7 @@ public final class InstanceOfNode extends LogicNode implements Canonicalizable, 
      * @param object the object being tested by the instanceof
      */
     public InstanceOfNode(ResolvedJavaType type, ValueNode object, JavaTypeProfile profile) {
+        super(StampFactory.condition());
         this.type = type;
         this.object = object;
         this.profile = profile;
@@ -52,24 +53,24 @@ public final class InstanceOfNode extends LogicNode implements Canonicalizable, 
     }
 
     @Override
-    public void lower(LoweringTool tool, LoweringType loweringType) {
+    public void lower(LoweringTool tool) {
         tool.getRuntime().lower(this, tool);
     }
 
     @Override
-    public LogicNode canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         assert object() != null : this;
 
         ObjectStamp stamp = object().objectStamp();
         ResolvedJavaType stampType = stamp.type();
 
-        if (stamp.isExactType() || stampType != null) {
+        if (stamp.isExactType()) {
             boolean subType = type().isAssignableFrom(stampType);
 
             if (subType) {
                 if (stamp.nonNull()) {
                     // the instanceOf matches, so return true
-                    return LogicConstantNode.tautology(graph());
+                    return ConstantNode.forBoolean(true, graph());
                 } else {
                     // the instanceof matches if the object is non-null, so return true depending on
                     // the null-ness.
@@ -77,19 +78,31 @@ public final class InstanceOfNode extends LogicNode implements Canonicalizable, 
                     return graph().unique(new IsNullNode(object()));
                 }
             } else {
-                if (stamp.isExactType()) {
-                    // since this type check failed for an exact type we know that it can never
-                    // succeed at run time. we also don't care about null values, since they will
-                    // also make the check fail.
-                    return LogicConstantNode.contradiction(graph());
+                // since this type check failed for an exact type we know that it can never succeed
+                // at run time.
+                // we also don't care about null values, since they will also make the check fail.
+                return ConstantNode.forBoolean(false, graph());
+            }
+        } else if (stampType != null) {
+            boolean subType = type().isAssignableFrom(stampType);
+
+            if (subType) {
+                if (stamp.nonNull()) {
+                    // the instanceOf matches, so return true
+                    return ConstantNode.forBoolean(true, graph());
                 } else {
-                    // since the subtype comparison was only performed on a declared type we don't
-                    // really know if it might be true at run time...
+                    // the instanceof matches if the object is non-null, so return true depending on
+                    // the null-ness.
+                    negateUsages();
+                    return graph().unique(new IsNullNode(object()));
                 }
+            } else {
+                // since the subtype comparison was only performed on a declared type we don't
+                // really know if it might be true at run time...
             }
         }
         if (object().objectStamp().alwaysNull()) {
-            return LogicConstantNode.contradiction(graph());
+            return ConstantNode.forBoolean(false, graph());
         }
         return this;
     }
@@ -121,7 +134,7 @@ public final class InstanceOfNode extends LogicNode implements Canonicalizable, 
     public void virtualize(VirtualizerTool tool) {
         State state = tool.getObjectState(object);
         if (state != null) {
-            tool.replaceWithValue(LogicConstantNode.forBoolean(type().isAssignableFrom(state.getVirtualObject().type()), graph()));
+            tool.replaceWithValue(ConstantNode.forBoolean(type().isAssignableFrom(state.getVirtualObject().type()), graph()));
         }
     }
 }

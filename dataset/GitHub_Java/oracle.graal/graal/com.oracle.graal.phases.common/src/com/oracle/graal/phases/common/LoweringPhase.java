@@ -43,20 +43,15 @@ public class LoweringPhase extends Phase {
 
     final class LoweringToolImpl implements LoweringTool {
 
-        private final FixedNode guardAnchor;
-        private final NodeBitMap activeGuards;
-        private FixedWithNextNode lastFixedNode;
-        private ControlFlowGraph cfg;
+        final FixedNode guardAnchor;
+        final NodeBitMap activeGuards;
+        FixedWithNextNode lastFixedNode;
+        ControlFlowGraph cfg;
 
         public LoweringToolImpl(FixedNode guardAnchor, NodeBitMap activeGuards, ControlFlowGraph cfg) {
             this.guardAnchor = guardAnchor;
             this.activeGuards = activeGuards;
             this.cfg = cfg;
-        }
-
-        @Override
-        public TargetDescription getTarget() {
-            return target;
         }
 
         @Override
@@ -106,14 +101,12 @@ public class LoweringPhase extends Phase {
         }
     }
 
-    private final TargetDescription target;
     private final GraalCodeCacheProvider runtime;
     private final Assumptions assumptions;
 
     private boolean deferred;
 
-    public LoweringPhase(TargetDescription target, GraalCodeCacheProvider runtime, Assumptions assumptions) {
-        this.target = target;
+    public LoweringPhase(GraalCodeCacheProvider runtime, Assumptions assumptions) {
         this.runtime = runtime;
         this.assumptions = assumptions;
     }
@@ -129,7 +122,7 @@ public class LoweringPhase extends Phase {
 
     @Override
     protected void run(final StructuredGraph graph) {
-        int  i = 0;
+        int i = 0;
         NodeBitMap processed = graph.createNodeBitMap();
         while (true) {
             int mark = graph.getMark();
@@ -196,9 +189,12 @@ public class LoweringPhase extends Phase {
 
             if (node.isAlive() && !processed.isMarked(node) && node instanceof Lowerable) {
                 if (loweringTool.lastFixedNode == null) {
-                    // We cannot lower the node now because we don't have a fixed node to anchor the replacements.
-                    // This can happen when previous lowerings in this lowering iteration deleted the BeginNode of this block.
-                    // In the next iteration, we will have the new BeginNode available, and we can lower this node.
+                    // We cannot lower the node now because we don't have a fixed node to anchor the
+                    // replacements.
+                    // This can happen when previous lowerings in this lowering iteration deleted
+                    // the BeginNode of this block.
+                    // In the next iteration, we will have the new BeginNode available, and we can
+                    // lower this node.
                     deferred = true;
                 } else {
                     processed.mark(node);

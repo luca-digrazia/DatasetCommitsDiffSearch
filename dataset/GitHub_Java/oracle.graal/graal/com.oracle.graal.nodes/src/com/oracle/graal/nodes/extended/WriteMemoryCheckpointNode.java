@@ -37,11 +37,6 @@ public final class WriteMemoryCheckpointNode extends AbstractStateSplit implemen
     }
 
     @Override
-    public Object getLocationIdentity() {
-        return LocationNode.ANY_LOCATION;
-    }
-
-    @Override
     public void generate(LIRGeneratorTool generator) {
         // nothing to do...
     }
