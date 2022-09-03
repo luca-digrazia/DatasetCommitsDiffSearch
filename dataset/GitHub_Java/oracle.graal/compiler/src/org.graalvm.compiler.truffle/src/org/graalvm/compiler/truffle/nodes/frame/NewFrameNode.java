@@ -49,6 +49,8 @@ import org.graalvm.compiler.nodes.spi.VirtualizerTool;
 import org.graalvm.compiler.nodes.virtual.VirtualArrayNode;
 import org.graalvm.compiler.nodes.virtual.VirtualInstanceNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
+import org.graalvm.compiler.truffle.GraalTruffleRuntime;
+import org.graalvm.compiler.truffle.OptimizedAssumption;
 import org.graalvm.compiler.truffle.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.nodes.AssumptionValidAssumption;
 import org.graalvm.compiler.truffle.substitutions.KnownTruffleFields;
@@ -141,17 +143,17 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
             final JavaConstant slots = constantReflection.readFieldValue(knownFields.fieldFrameDescriptorSlots, frameDescriptor);
             final JavaConstant slotsElementData = constantReflection.readFieldValue(knownFields.fieldArrayListElementData, slots);
             final int length = constantReflection.readArrayLength(slotsElementData);
-            final byte[] slotsData = new byte[length];
+            final byte[] frameSlots = new byte[length];
             int count = 0;
             for (int i = 0; i < length; i++) {
                 final JavaConstant slot = constantReflection.readArrayElement(slotsElementData, i);
                 if (slot.isNonNull()) {
                     final JavaConstant slotKind = constantReflection.readFieldValue(knownFields.fieldFrameSlotKind, slot);
                     final JavaConstant slotKindTag = constantReflection.readFieldValue(knownFields.fieldFrameSlotKindTag, slotKind);
-                    slotsData[count++] = (byte) slotKindTag.asInt();
+                    frameSlots[count++] = (byte) slotKindTag.asInt();
                 }
             }
-            this.frameSlots = slotsData;
+            this.frameSlots = frameSlots;
             this.frameSlotsUsed = count;
         }
 

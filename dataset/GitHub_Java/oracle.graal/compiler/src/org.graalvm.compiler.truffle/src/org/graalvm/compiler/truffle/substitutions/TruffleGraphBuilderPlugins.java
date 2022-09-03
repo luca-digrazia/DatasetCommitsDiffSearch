@@ -110,7 +110,6 @@ import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -126,11 +125,11 @@ public class TruffleGraphBuilderPlugins {
 
     public static void registerInvocationPlugins(InvocationPlugins plugins, boolean canDelayIntrinsification, SnippetReflectionProvider snippetReflection) {
 
-        registerOptimizedAssumptionPlugins(plugins);
+        registerOptimizedAssumptionPlugins(plugins, snippetReflection);
         registerExactMathPlugins(plugins);
         registerCompilerDirectivesPlugins(plugins, canDelayIntrinsification);
         registerCompilerAssertsPlugins(plugins, canDelayIntrinsification);
-        registerOptimizedCallTargetPlugins(plugins, canDelayIntrinsification);
+        registerOptimizedCallTargetPlugins(plugins, snippetReflection, canDelayIntrinsification);
         registerCompilationFinalReferencePlugins(plugins, snippetReflection, canDelayIntrinsification);
 
         if (TruffleCompilerOptions.getValue(TruffleUseFrameWithoutBoxing)) {
@@ -141,15 +140,15 @@ public class TruffleGraphBuilderPlugins {
 
     }
 
-    public static void registerOptimizedAssumptionPlugins(InvocationPlugins plugins) {
+    public static void registerOptimizedAssumptionPlugins(InvocationPlugins plugins, SnippetReflectionProvider snippetReflection) {
         Registration r = new Registration(plugins, OptimizedAssumption.class);
         InvocationPlugin plugin = new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 if (receiver.isConstant() && b.getAssumptions() != null) {
-                    final JavaConstant assumption = (JavaConstant) receiver.get().asConstant();
-                    final KnownTruffleFields knownTruffleFields = new KnownTruffleFields(b.getMetaAccess()); // Temporary - move me to outer scope
-                    if (b.getConstantReflection().readFieldValue(knownTruffleFields.fieldOptimizedAssumptionIsValid, assumption).asBoolean()) {
+                    Constant constant = receiver.get().asConstant();
+                    OptimizedAssumption assumption = snippetReflection.asObject(OptimizedAssumption.class, (JavaConstant) constant);
+                    if (assumption.isValid()) {
                         if (targetMethod.getName().equals("isValid")) {
                             b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(true));
                         } else {
@@ -406,15 +405,12 @@ public class TruffleGraphBuilderPlugins {
                     throw b.bailout("Parameter 'descriptor' is not a compile-time constant");
                 }
 
-                final ValueNode nonNullArguments = b.add(PiNode.create(args, StampFactory.objectNonNull(StampTool.typeReferenceOrNull(args))));
-                b.addPush(JavaKind.Object, newFrameNode(b, descriptor, nonNullArguments));
+                ValueNode nonNullArguments = b.add(PiNode.create(args, StampFactory.objectNonNull(StampTool.typeReferenceOrNull(args))));
+                Class<?> frameClass = TruffleCompilerOptions.getValue(TruffleUseFrameWithoutBoxing) ? FrameWithoutBoxing.class : FrameWithBoxing.class;
+                NewFrameNode newFrame = new NewFrameNode(new KnownTruffleFields(b.getMetaAccess()), b.getMetaAccess(), b.getGraph(), b.getMetaAccess().lookupJavaType(frameClass), descriptor,
+                                nonNullArguments);
+                b.addPush(JavaKind.Object, newFrame);
                 return true;
-            }
-            private NewFrameNode newFrameNode(GraphBuilderContext b, ValueNode descriptor, ValueNode nonNullArguments) {
-                final MetaAccessProvider metaAccess = b.getMetaAccess();
-                final KnownTruffleFields knownTruffleFields = new KnownTruffleFields(metaAccess); // Temporary - move me to the outer scope
-                return new NewFrameNode(knownTruffleFields, metaAccess, b.getConstantReflection(), b.getGraph(), knownTruffleFields.classFrameClass, descriptor,
-                        nonNullArguments);
             }
         });
         r.register2("castArrayFixedLength", Object[].class, int.class, new InvocationPlugin() {
