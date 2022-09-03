@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,13 +29,15 @@ import java.lang.ref.*;
 import java.net.*;
 import java.util.*;
 
+import com.oracle.truffle.api.instrument.*;
+
 /**
  * Representation of a guest language source code unit and its contents. Sources originate in
  * several ways:
  * <ul>
  * <li><strong>Literal:</strong> A named text string. These are not indexed and should be considered
  * value objects; equality is defined based on contents. <br>
- * See {@link Source#fromText(String, String)}</li>
+ * See {@link Source#fromText(CharSequence, String)}</li>
  * <p>
  * <li><strong>File:</strong> Each file is represented as a canonical object, indexed by the
  * absolute, canonical path name of the file. File contents are <em>read lazily</em> and contents
@@ -53,7 +55,7 @@ import java.util.*;
  * <p>
  * <li><strong>Pseudo File:</strong> A literal text string that can be retrieved by name as if it
  * were a file, unlike literal sources; useful for testing. <br>
- * See {@link Source#asPseudoFile(String, String)}</li>
+ * See {@link Source#asPseudoFile(CharSequence, String)}</li>
  * </ul>
  * <p>
  * <strong>File cache:</strong>
@@ -66,16 +68,27 @@ import java.util.*;
  * <li>Any access to file contents via the cache will result in a timestamp check and possible cache
  * reload.</li>
  * </ol>
+ * <p>
+ *
+ * @see SourceTag
+ * @see SourceListener
  */
 public abstract class Source {
 
     // TODO (mlvdv) consider canonicalizing and reusing SourceSection instances
     // TOOD (mlvdv) connect SourceSections into a spatial tree for fast geometric lookup
 
+    /**
+     * All Sources that have been created.
+     */
+    private static final List<WeakReference<Source>> allSources = Collections.synchronizedList(new ArrayList<WeakReference<Source>>());
+
     // Files and pseudo files are indexed.
-    private static final Map<String, WeakReference<Source>> filePathToSource = new HashMap<>();
+    private static final Map<String, WeakReference<Source>> filePathToSource = new Hashtable<>();
 
     private static boolean fileCacheEnabled = true;
+
+    private static final List<SourceListener> sourceListeners = new ArrayList<>();
 
     /**
      * Gets the canonical representation of a source file, whose contents will be read lazily and
@@ -106,6 +119,7 @@ public abstract class Source {
         if (reset) {
             source.reset();
         }
+        notifyNewSource(source).tagAs(StandardSourceTag.FROM_FILE);
         return source;
     }
 
@@ -122,27 +136,62 @@ public abstract class Source {
     }
 
     /**
-     * Creates a non-canonical source from literal text.
+     * Gets the canonical representation of a source file, whose contents have already been read and
+     * need not be read again. It is confirmed that the file resolves to a file name, so it can be
+     * indexed by canonical path. It is not confirmed that the text supplied agrees with the file's
+     * contents or even whether the file is readable.
      *
-     * @param code textual source code
+     * @param chars textual source code already read from the file
+     * @param fileName
+     * @return canonical representation of the file's contents.
+     * @throws IOException if the file cannot be found
+     */
+    public static Source fromFileName(CharSequence chars, String fileName) throws IOException {
+
+        final WeakReference<Source> nameRef = filePathToSource.get(fileName);
+        Source source = nameRef == null ? null : nameRef.get();
+        if (source == null) {
+            final File file = new File(fileName);
+            // We are going to trust that the fileName is readable.
+            final String path = file.getCanonicalPath();
+            final WeakReference<Source> pathRef = filePathToSource.get(path);
+            source = pathRef == null ? null : pathRef.get();
+            if (source == null) {
+                source = new FileSource(file, fileName, path, chars);
+                filePathToSource.put(path, new WeakReference<>(source));
+            }
+        }
+        notifyNewSource(source).tagAs(StandardSourceTag.FROM_FILE);
+        return source;
+    }
+
+    /**
+     * Creates a non-canonical source from literal text. If an already created literal source must
+     * be retrievable by name, use {@link #asPseudoFile(CharSequence, String)}.
+     *
+     * @param chars textual source code
      * @param description a note about the origin, for error messages and debugging
      * @return a newly created, non-indexed source representation
      */
-    public static Source fromText(String code, String description) {
-        assert code != null;
-        return new LiteralSource(description, code);
+    public static Source fromText(CharSequence chars, String description) {
+        assert chars != null;
+        final LiteralSource source = new LiteralSource(description, chars.toString());
+        notifyNewSource(source).tagAs(StandardSourceTag.FROM_LITERAL);
+        return source;
     }
 
     /**
      * Creates a source whose contents will be read immediately from a URL and cached.
      *
      * @param url
-     * @param name identifies the origin, possibly useful for debugging
+     * @param description identifies the origin, possibly useful for debugging
      * @return a newly created, non-indexed source representation
      * @throws IOException if reading fails
      */
-    public static Source fromURL(URL url, String name) throws IOException {
-        return URLSource.get(url, name);
+    public static Source fromURL(URL url, String description) throws IOException {
+        final URLSource source = URLSource.get(url, description);
+        notifyNewSource(source).tagAs(StandardSourceTag.FROM_URL);
+        return source;
     }
 
     /**
@@ -154,23 +203,60 @@ public abstract class Source {
      * @throws IOException if reading fails
      */
     public static Source fromReader(Reader reader, String description) throws IOException {
-        return new LiteralSource(description, read(reader));
+        final LiteralSource source = new LiteralSource(description, read(reader));
+        notifyNewSource(source).tagAs(StandardSourceTag.FROM_READER);
+        return source;
+    }
+
+    /**
+     * Creates a source from raw bytes. This can be used if the encoding of strings in your language
+     * is not compatible with Java strings, or if your parser returns byte indices instead of
+     * character indices. The returned source is then indexed by byte, not by character.
+     *
+     * @param bytes the raw bytes of the source
+     * @param description a note about the origin, possibly useful for debugging
+     * @param decoder how to decode the bytes into Java strings
+     * @return a newly created, non-indexed source representation
+     */
+    public static Source fromBytes(byte[] bytes, String description, BytesDecoder decoder) {
+        return fromBytes(bytes, 0, bytes.length, description, decoder);
+    }
+
+    /**
+     * Creates a source from raw bytes. This can be used if the encoding of strings in your language
+     * is not compatible with Java strings, or if your parser returns byte indices instead of
+     * character indices. The returned source is then indexed by byte, not by character. Offsets are
+     * relative to byteIndex.
+     *
+     * @param bytes the raw bytes of the source
+     * @param byteIndex where the string starts in the byte array
+     * @param length the length of the string in the byte array
+     * @param description a note about the origin, possibly useful for debugging
+     * @param decoder how to decode the bytes into Java strings
+     * @return a newly created, non-indexed source representation
+     */
+    public static Source fromBytes(byte[] bytes, int byteIndex, int length, String description, BytesDecoder decoder) {
+        final BytesSource source = new BytesSource(description, bytes, byteIndex, length, decoder);
+        notifyNewSource(source).tagAs(StandardSourceTag.FROM_BYTES);
+        return source;
     }
 
     /**
      * Creates a source from literal text, but which acts as a file and can be retrieved by name
      * (unlike other literal sources); intended for testing.
      *
-     * @param code textual source code
+     * @param chars textual source code
      * @param pseudoFileName string to use for indexing/lookup
      * @return a newly created, source representation, canonical with respect to its name
      */
-    public static Source asPseudoFile(String code, String pseudoFileName) {
-        final Source source = new LiteralSource(pseudoFileName, code);
+    public static Source asPseudoFile(CharSequence chars, String pseudoFileName) {
+        final Source source = new LiteralSource(pseudoFileName, chars.toString());
         filePathToSource.put(pseudoFileName, new WeakReference<>(source));
+        notifyNewSource(source).tagAs(StandardSourceTag.FROM_LITERAL);
         return source;
     }
 
+    // TODO (mlvdv) enable per-file choice whether to cache?
     /**
      * Enables/disables caching of file contents, <em>disabled</em> by default. Caching of sources
      * created from literal text or readers is always enabled.
@@ -179,12 +265,57 @@ public abstract class Source {
         fileCacheEnabled = enabled;
     }
 
+    /**
+     * Returns all {@link Source}s holding a particular {@link SyntaxTag}, or the whole collection
+     * of Sources if the specified tag is {@code null}.
+     *
+     * @return A collection of Sources containing the given tag.
+     */
+    public static Collection<Source> findSourcesTaggedAs(SourceTag tag) {
+        final List<Source> taggedSources = new ArrayList<>();
+        synchronized (allSources) {
+            for (WeakReference<Source> ref : allSources) {
+                Source source = ref.get();
+                if (source != null) {
+                    if (tag == null || source.isTaggedAs(tag)) {
+                        taggedSources.add(ref.get());
+                    }
+                }
+            }
+        }
+        return taggedSources;
+    }
+
+    /**
+     * Adds a {@link SourceListener} to receive events.
+     */
+    public static void addSourceListener(SourceListener listener) {
+        assert listener != null;
+        sourceListeners.add(listener);
+    }
+
+    /**
+     * Removes a {@link SourceListener}. Ignored if listener not found.
+     */
+    public static void removeSourceListener(SourceListener listener) {
+        sourceListeners.remove(listener);
+    }
+
+    private static Source notifyNewSource(Source source) {
+        allSources.add(new WeakReference<>(source));
+        for (SourceListener listener : sourceListeners) {
+            listener.sourceCreated(source);
+        }
+        return source;
+    }
+
     private static String read(Reader reader) throws IOException {
+        final BufferedReader bufferedReader = new BufferedReader(reader);
         final StringBuilder builder = new StringBuilder();
         final char[] buffer = new char[1024];
 
         while (true) {
-            final int n = reader.read(buffer);
+            final int n = bufferedReader.read(buffer);
             if (n == -1) {
                 break;
             }
@@ -194,12 +325,40 @@ public abstract class Source {
         return builder.toString();
     }
 
+    private final ArrayList<SourceTag> tags = new ArrayList<>();
+
     Source() {
     }
 
     private TextMap textMap = null;
 
     protected abstract void reset();
+
+    public final boolean isTaggedAs(SourceTag tag) {
+        assert tag != null;
+        return tags.contains(tag);
+    }
+
+    public final Collection<SourceTag> getSourceTags() {
+        return Collections.unmodifiableCollection(tags);
+    }
+
+    /**
+     * Adds a {@linkplain SourceTag tag} to the set of tags associated with this {@link Source};
+     * {@code no-op} if already in the set.
+     *
+     * @return this
+     */
+    public final Source tagAs(SourceTag tag) {
+        assert tag != null;
+        if (!tags.contains(tag)) {
+            tags.add(tag);
+            for (SourceListener listener : sourceListeners) {
+                listener.sourceTaggedAs(this, tag);
+            }
+        }
+        return this;
+    }
 
     /**
      * Returns the name of this resource holding a guest language program. An example would be the
@@ -241,9 +400,23 @@ public abstract class Source {
     }
 
     /**
-     * Return the complete text of the code.
+     * Gets the number of characters in the source.
+     */
+    public final int getLength() {
+        return checkTextMap().length();
+    }
+
+    /**
+     * Returns the complete text of the code.
      */
     public abstract String getCode();
+
+    /**
+     * Returns a subsection of the code test.
+     */
+    public String getCode(int charIndex, int charLength) {
+        return getCode().substring(charIndex, charIndex + charLength);
+    }
 
     /**
      * Gets the text (not including a possible terminating newline) in a (1-based) numbered line.
@@ -367,15 +540,18 @@ public abstract class Source {
      * @throws IllegalStateException if the source is one of the "null" instances
      */
     public final SourceSection createSection(String identifier, int charIndex, int length) throws IllegalArgumentException {
-        final int codeLength = getCode().length();
-        if (!(charIndex >= 0 && length >= 0 && charIndex + length <= codeLength)) {
-            throw new IllegalArgumentException("text positions out of range");
-        }
+        checkRange(charIndex, length);
         checkTextMap();
         final int startLine = getLineNumber(charIndex);
         final int startColumn = charIndex - getLineStartOffset(startLine) + 1;
 
         return new DefaultSourceSection(this, identifier, startLine, startColumn, charIndex, length);
+    }
+
+    protected void checkRange(int charIndex, int length) {
+        if (!(charIndex >= 0 && length >= 0 && charIndex + length <= getCode().length())) {
+            throw new IllegalArgumentException("text positions out of range");
+        }
     }
 
     /**
@@ -408,13 +584,17 @@ public abstract class Source {
 
     private TextMap checkTextMap() {
         if (textMap == null) {
-            final String code = getCode();
-            if (code == null) {
-                throw new RuntimeException("can't read file " + getName());
-            }
-            textMap = new TextMap(code);
+            textMap = createTextMap();
         }
         return textMap;
+    }
+
+    protected TextMap createTextMap() {
+        final String code = getCode();
+        if (code == null) {
+            throw new RuntimeException("can't read file " + getName());
+        }
+        return TextMap.fromString(code);
     }
 
     private static final class LiteralSource extends Source {
@@ -497,9 +677,16 @@ public abstract class Source {
         private long timeStamp;      // timestamp of the cache in the file system
 
         public FileSource(File file, String name, String path) {
-            this.file = file;
+            this(file, name, path, null);
+        }
+
+        public FileSource(File file, String name, String path, CharSequence chars) {
+            this.file = file.getAbsoluteFile();
             this.name = name;
             this.path = path;
+            if (chars != null) {
+                this.code = chars.toString();
+            }
         }
 
         @Override
@@ -549,8 +736,26 @@ public abstract class Source {
             try {
                 return new FileReader(file);
             } catch (FileNotFoundException e) {
-                throw new RuntimeException("Can't find file " + path);
+
+                throw new RuntimeException("Can't find file " + path, e);
             }
+        }
+
+        @Override
+        public int hashCode() {
+            return path.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj instanceof FileSource) {
+                FileSource other = (FileSource) obj;
+                return path.equals(other.path);
+            }
+            return false;
         }
 
         @Override
@@ -620,6 +825,74 @@ public abstract class Source {
 
     }
 
+    private static final class BytesSource extends Source {
+
+        private final String name;
+        private final byte[] bytes;
+        private final int byteIndex;
+        private final int length;
+        private final BytesDecoder decoder;
+
+        public BytesSource(String name, byte[] bytes, int byteIndex, int length, BytesDecoder decoder) {
+            this.name = name;
+            this.bytes = bytes;
+            this.byteIndex = byteIndex;
+            this.length = length;
+            this.decoder = decoder;
+        }
+
+        @Override
+        protected void reset() {
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public String getShortName() {
+            return name;
+        }
+
+        @Override
+        public String getPath() {
+            return name;
+        }
+
+        @Override
+        public URL getURL() {
+            return null;
+        }
+
+        @Override
+        public Reader getReader() {
+            return null;
+        }
+
+        @Override
+        public String getCode() {
+            return decoder.decode(bytes, byteIndex, length);
+        }
+
+        @Override
+        public String getCode(int byteOffset, int codeLength) {
+            return decoder.decode(bytes, byteIndex + byteOffset, codeLength);
+        }
+
+        @Override
+        protected void checkRange(int charIndex, int rangeLength) {
+            if (!(charIndex >= 0 && rangeLength >= 0 && charIndex + rangeLength <= length)) {
+                throw new IllegalArgumentException("text positions out of range");
+            }
+        }
+
+        @Override
+        protected TextMap createTextMap() {
+            return TextMap.fromBytes(bytes, byteIndex, length, decoder);
+        }
+    }
+
     private static final class DefaultSourceSection implements SourceSection {
 
         private final Source source;
@@ -662,52 +935,60 @@ public abstract class Source {
         }
 
         @Override
-        public final Source getSource() {
+        public Source getSource() {
             return source;
         }
 
         @Override
-        public final int getStartLine() {
+        public int getStartLine() {
             return startLine;
         }
 
         @Override
-        public final LineLocation getLineLocation() {
+        public LineLocation getLineLocation() {
             return source.createLineLocation(startLine);
         }
 
         @Override
-        public final int getStartColumn() {
+        public int getStartColumn() {
             return startColumn;
         }
 
+        public int getEndLine() {
+            return source.getLineNumber(charIndex + charLength - 1);
+        }
+
+        public int getEndColumn() {
+            return source.getColumnNumber(charIndex + charLength - 1);
+        }
+
         @Override
-        public final int getCharIndex() {
+        public int getCharIndex() {
             return charIndex;
         }
 
         @Override
-        public final int getCharLength() {
+        public int getCharLength() {
             return charLength;
         }
 
         @Override
-        public final int getCharEndIndex() {
+        public int getCharEndIndex() {
             return charIndex + charLength;
         }
 
         @Override
-        public final String getIdentifier() {
+        public String getIdentifier() {
             return identifier;
         }
 
         @Override
-        public final String getCode() {
-            return getSource().getCode().substring(charIndex, charIndex + charLength);
+        public String getCode() {
+            return getSource().getCode(charIndex, charLength);
         }
 
         @Override
-        public final String getShortDescription() {
+        public String getShortDescription() {
             return String.format("%s:%d", source.getShortName(), startLine);
         }
 
@@ -769,7 +1050,6 @@ public abstract class Source {
             }
             return true;
         }
-
     }
 
     private static final class LineLocationImpl implements LineLocation {
@@ -793,8 +1073,13 @@ public abstract class Source {
         }
 
         @Override
+        public String getShortDescription() {
+            return source.getShortName() + ":" + line;
+        }
+
+        @Override
         public String toString() {
-            return "SourceLine [" + source.getName() + ", " + line + "]";
+            return "Line[" + getShortDescription() + "]";
         }
 
         @Override
@@ -865,12 +1150,18 @@ public abstract class Source {
         // Is the final text character a newline?
         final boolean finalNL;
 
+        public TextMap(int[] nlOffsets, int textLength, boolean finalNL) {
+            this.nlOffsets = nlOffsets;
+            this.textLength = textLength;
+            this.finalNL = finalNL;
+        }
+
         /**
          * Constructs map permitting translation between 0-based character offsets and 1-based
          * lines/columns.
          */
-        public TextMap(String text) {
-            this.textLength = text.length();
+        public static TextMap fromString(String text) {
+            final int textLength = text.length();
             final ArrayList<Integer> lines = new ArrayList<>();
             lines.add(0);
             int offset = 0;
@@ -886,12 +1177,37 @@ public abstract class Source {
             }
             lines.add(Integer.MAX_VALUE);
 
-            nlOffsets = new int[lines.size()];
+            final int[] nlOffsets = new int[lines.size()];
             for (int line = 0; line < lines.size(); line++) {
                 nlOffsets[line] = lines.get(line);
             }
 
-            finalNL = textLength > 0 && (textLength == nlOffsets[nlOffsets.length - 2]);
+            final boolean finalNL = textLength > 0 && (textLength == nlOffsets[nlOffsets.length - 2]);
+
+            return new TextMap(nlOffsets, textLength, finalNL);
+        }
+
+        public static TextMap fromBytes(byte[] bytes, int byteIndex, int length, BytesDecoder bytesDecoder) {
+            final ArrayList<Integer> lines = new ArrayList<>();
+            lines.add(0);
+
+            bytesDecoder.decodeLines(bytes, byteIndex, length, new BytesDecoder.LineMarker() {
+
+                public void markLine(int index) {
+                    lines.add(index);
+                }
+            });
+
+            lines.add(Integer.MAX_VALUE);
+
+            final int[] nlOffsets = new int[lines.size()];
+            for (int line = 0; line < lines.size(); line++) {
+                nlOffsets[line] = lines.get(line);
+            }
+
+            final boolean finalNL = length > 0 && (length == nlOffsets[nlOffsets.length - 2]);
+
+            return new TextMap(nlOffsets, length, finalNL);
         }
 
         /**
@@ -920,6 +1236,13 @@ public abstract class Source {
          */
         public int offsetToCol(int offset) throws IllegalArgumentException {
             return 1 + offset - nlOffsets[offsetToLine(offset) - 1];
+        }
+
+        /**
+         * The number of characters in the mapped text.
+         */
+        public int length() {
+            return textLength;
         }
 
         /**
