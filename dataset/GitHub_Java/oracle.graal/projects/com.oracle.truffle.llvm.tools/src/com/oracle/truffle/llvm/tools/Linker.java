@@ -30,9 +30,10 @@
 package com.oracle.truffle.llvm.tools;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.io.InputStream;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -102,9 +103,9 @@ public class Linker {
 
                 final MessageDigest digest = MessageDigest.getInstance("SHA-1");
 
-                try (RandomAccessFile inputFile = new RandomAccessFile(bitcodeFile, "r")) {
+                try (InputStream inputStream = new FileInputStream(bitcodeFile)) {
                     while (true) {
-                        int count = inputFile.read(buffer);
+                        int count = inputStream.read(buffer);
 
                         if (count == -1) {
                             break;
@@ -112,16 +113,16 @@ public class Linker {
 
                         digest.update(buffer, 0, count);
                     }
+                }
 
-                    final String digestString = new BigInteger(1, digest.digest()).toString(16);
-                    final String entryName = String.format("%s_%s", digestString, bitcodeFile.getName());
+                final String digestString = new BigInteger(1, digest.digest()).toString(16);
+                final String entryName = String.format("%s_%s", digestString, bitcodeFile.getName());
 
+                try (InputStream inputStream = new FileInputStream(bitcodeFile)) {
                     outputStream.putNextEntry(new ZipEntry(entryName));
 
-                    inputFile.seek(0);
-
                     while (true) {
-                        int count = inputFile.read(buffer);
+                        int count = inputStream.read(buffer);
 
                         if (count == -1) {
                             break;
