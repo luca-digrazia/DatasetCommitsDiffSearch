@@ -137,8 +137,9 @@ public class LanguageSPITest {
 
     @Test
     public void testAccessContextFromOtherThread() {
+        Engine engine = Engine.create();
         langContext = null;
-        Context context = Context.newBuilder().build();
+        Context context = Context.newBuilder().engine(engine).build();
         LanguageSPITestLanguage.runinside = new Function<Env, Object>() {
             public Object apply(Env env) {
                 return LanguageSPITestLanguage.getContext();
@@ -165,14 +166,15 @@ public class LanguageSPITest {
         };
         LanguageContext langContextFromOtherThread = context.eval(LanguageSPITestLanguage.ID, "accessContextFromOtherThread").asHostObject();
         assertSame(langContextFromOtherThread, langContext);
-        context.close();
+        engine.close();
         assertEquals(1, langContext.disposeCalled);
     }
 
     @Test
     public void testContextCloseInsideFromSameThread() {
+        Engine engine = Engine.create();
         langContext = null;
-        Context context = Context.newBuilder(LanguageSPITestLanguage.ID).build();
+        Context context = Context.newBuilder(LanguageSPITestLanguage.ID).engine(engine).build();
         LanguageSPITestLanguage.runinside = new Function<Env, Object>() {
             public Object apply(Env t) {
                 context.close();
@@ -180,7 +182,7 @@ public class LanguageSPITest {
             }
         };
         context.eval(LanguageSPITestLanguage.ID, "");
-        context.close();
+        engine.close();
         assertEquals(1, langContext.disposeCalled);
     }
 
@@ -213,7 +215,6 @@ public class LanguageSPITest {
         };
         context.eval(LanguageSPITestLanguage.ID, "");
         assertEquals(1, langContext.disposeCalled);
-        engine.close();
     }
 
     @Test
@@ -229,7 +230,6 @@ public class LanguageSPITest {
         };
         context.eval(LanguageSPITestLanguage.ID, "");
         assertEquals(1, langContext.disposeCalled);
-        engine.close();
     }
 
     @SuppressWarnings("serial")
@@ -329,7 +329,6 @@ public class LanguageSPITest {
         assertTrue(value.isHostObject());
         Object map = value.asHostObject();
         assertSame(map, HashMap.class);
-        context.close();
     }
 
     @Test
@@ -346,7 +345,6 @@ public class LanguageSPITest {
         } catch (PolyglotException e) {
             assertTrue(!e.isInternalError());
         }
-        context.close();
     }
 
     @Test
@@ -358,7 +356,6 @@ public class LanguageSPITest {
             }
         };
         assertTrue(!context.eval(LanguageSPITestLanguage.ID, "").asBoolean());
-        context.close();
 
         context = Context.newBuilder().allowHostAccess(true).build();
         LanguageSPITestLanguage.runinside = new Function<Env, Object>() {
@@ -367,7 +364,6 @@ public class LanguageSPITest {
             }
         };
         assertTrue(context.eval(LanguageSPITestLanguage.ID, "").asBoolean());
-        context.close();
     }
 
     @Test
@@ -423,8 +419,6 @@ public class LanguageSPITest {
 
         // ensure we are not yet closed
         context.eval(LanguageSPITestLanguage.ID, "");
-
-        context.close();
     }
 
     @Test
