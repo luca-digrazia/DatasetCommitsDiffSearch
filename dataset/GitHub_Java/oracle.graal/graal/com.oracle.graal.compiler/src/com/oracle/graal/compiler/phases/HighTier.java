@@ -36,8 +36,6 @@ public class HighTier extends PhaseSuite<HighTierContext> {
     public HighTier() {
         CanonicalizerPhase canonicalizer = new CanonicalizerPhase(!AOTCompilation.getValue());
 
-        appendPhase(new CleanTypeProfileProxyPhase());
-
         if (FullUnroll.getValue()) {
             appendPhase(new LoopFullUnrollPhase(!AOTCompilation.getValue()));
         }
