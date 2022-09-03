@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,79 +32,84 @@ package com.oracle.truffle.llvm.nodes.vector;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMFloatNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI16Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI8Node;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMDoubleVectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMFloatVectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI16VectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI32VectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI64VectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI8VectorNode;
-import com.oracle.truffle.llvm.types.vector.LLVMDoubleVector;
-import com.oracle.truffle.llvm.types.vector.LLVMFloatVector;
-import com.oracle.truffle.llvm.types.vector.LLVMI16Vector;
-import com.oracle.truffle.llvm.types.vector.LLVMI32Vector;
-import com.oracle.truffle.llvm.types.vector.LLVMI64Vector;
-import com.oracle.truffle.llvm.types.vector.LLVMI8Vector;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
+import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMPointerVector;
 
 public abstract class LLVMExtractElementNode {
 
-    @NodeChildren({@NodeChild(type = LLVMI8VectorNode.class), @NodeChild(type = LLVMI32Node.class)})
-    public abstract static class LLVMI8ExtractElementNode extends LLVMI8Node {
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+    public abstract static class LLVMI1ExtractElementNode extends LLVMExpressionNode {
 
         @Specialization
-        public byte executeI8(LLVMI8Vector vector, int index) {
+        protected boolean doI1(LLVMI1Vector vector, int index) {
             return vector.getValue(index);
         }
     }
 
-    @NodeChildren({@NodeChild(type = LLVMI16VectorNode.class), @NodeChild(type = LLVMI32Node.class)})
-    public abstract static class LLVMI16ExtractElementNode extends LLVMI16Node {
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+    public abstract static class LLVMI8ExtractElementNode extends LLVMExpressionNode {
 
         @Specialization
-        public short executeI16(LLVMI16Vector vector, int index) {
+        protected byte doI8(LLVMI8Vector vector, int index) {
             return vector.getValue(index);
         }
     }
 
-    @NodeChildren({@NodeChild(type = LLVMI32VectorNode.class), @NodeChild(type = LLVMI32Node.class)})
-    public abstract static class LLVMI32ExtractElementNode extends LLVMI32Node {
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+    public abstract static class LLVMI16ExtractElementNode extends LLVMExpressionNode {
 
         @Specialization
-        public int executeI32(LLVMI32Vector vector, int index) {
+        protected short doI16(LLVMI16Vector vector, int index) {
             return vector.getValue(index);
         }
     }
 
-    @NodeChildren({@NodeChild(type = LLVMI64VectorNode.class), @NodeChild(type = LLVMI32Node.class)})
-    public abstract static class LLVMI64ExtractElementNode extends LLVMI64Node {
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+    public abstract static class LLVMI32ExtractElementNode extends LLVMExpressionNode {
 
         @Specialization
-        public long executeI64(LLVMI64Vector vector, int index) {
+        protected int doI32(LLVMI32Vector vector, int index) {
             return vector.getValue(index);
         }
     }
 
-    @NodeChildren({@NodeChild(type = LLVMFloatVectorNode.class), @NodeChild(type = LLVMI32Node.class)})
-    public abstract static class LLVMFloatExtractElementNode extends LLVMFloatNode {
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+    public abstract static class LLVMI64ExtractElementNode extends LLVMExpressionNode {
 
         @Specialization
-        public float executeFloat(LLVMFloatVector vector, int index) {
+        protected long doI64(LLVMI64Vector vector, int index) {
+            return vector.getValue(index);
+        }
+
+        @Specialization
+        protected LLVMPointer doPointer(LLVMPointerVector vector, int index) {
             return vector.getValue(index);
         }
     }
 
-    @NodeChildren({@NodeChild(type = LLVMDoubleVectorNode.class), @NodeChild(type = LLVMI32Node.class)})
-    public abstract static class LLVMDoubleExtractElementNode extends LLVMDoubleNode {
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+    public abstract static class LLVMFloatExtractElementNode extends LLVMExpressionNode {
 
         @Specialization
-        public Double executeDouble(LLVMDoubleVector vector, int index) {
+        protected float doFloat(LLVMFloatVector vector, int index) {
             return vector.getValue(index);
         }
     }
 
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+    public abstract static class LLVMDoubleExtractElementNode extends LLVMExpressionNode {
+
+        @Specialization
+        protected double doDouble(LLVMDoubleVector vector, int index) {
+            return vector.getValue(index);
+        }
+    }
 }
