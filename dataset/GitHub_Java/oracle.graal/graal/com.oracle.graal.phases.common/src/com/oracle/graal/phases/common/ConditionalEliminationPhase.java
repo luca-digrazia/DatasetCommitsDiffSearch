@@ -347,10 +347,10 @@ public class ConditionalEliminationPhase extends Phase {
                 } else {
                     if (state.isNull(x) && !state.isNonNull(y)) {
                         metricObjectEqualsRegistered.increment();
-                        state.addNullness(false, y);
+                        state.addNullness(true, y);
                     } else if (!state.isNonNull(x) && state.isNull(y)) {
                         metricObjectEqualsRegistered.increment();
-                        state.addNullness(false, x);
+                        state.addNullness(true, x);
                     }
                 }
             }
