@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,65 +25,98 @@ package com.oracle.graal.api.meta;
 /**
  * Represents a method signature provided by the runtime.
  *
- * @see <a href="http://java.sun.com/docs/books/jvms/second_edition/html/ClassFile.doc.html#7035">Method Descriptors</a>
+ * @see <a href="http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.3.3">Method
+ *      Descriptors</a>
  */
 public interface Signature {
+
     /**
-     * Gets the number of arguments in this signature, adding 1 for a receiver if requested.
+     * Returns the number of parameters in this signature, adding 1 for a receiver if requested.
      *
      * @param receiver true if 1 is to be added to the result for a receiver
-     * @return the number of arguments + 1 iff {@code receiver == true}
+     * @return the number of parameters; + 1 iff {@code receiver == true}
      */
-    int argumentCount(boolean receiver);
+    int getParameterCount(boolean receiver);
 
     /**
-     * Gets the argument type at the specified position. This method will return a
-     * {@linkplain JavaType#isResolved() resolved} type if possible but without
-     * triggering any class loading or resolution.
+     * Gets the parameter type at the specified position.
      *
      * @param index the index into the parameters, with {@code 0} indicating the first parameter
-     * @param accessingClass the context of the type lookup. If accessing class is resolved, its class loader
-     *        is used to retrieve an existing resolved type. This value can be {@code null} if the caller does
-     *        not care for a resolved type.
-     * @return the {@code index}'th argument type
-     */
-    JavaType argumentTypeAt(int index, ResolvedJavaType accessingClass);
-
-    /**
-     * Gets the argument kind at the specified position.
-     * @param index the index into the parameters, with {@code 0} indicating the first parameter
-     * @return the kind of the argument at the specified position
-     */
-    Kind argumentKindAt(int index);
-
-    /**
-     * Gets the return type of this signature. This method will return a
-     * {@linkplain ResolvedJavaType resolved} type if possible but without
-     * triggering any class loading or resolution.
+     * @param accessingClass the context of the type lookup. If non-null, its class loader is used
+     *            for resolving the type. If {@code null}, then the type returned is either
+     *            unresolved or a resolved type whose resolution is context free (e.g., a primitive
+     *            type or a type in a java.* package).
+     * @return the {@code index}'th parameter type
+     * @throws LinkageError if {@code accessingClass != null} and resolution fails
      *
-     * @param accessingClass the context of the type lookup. If accessing class is resolved, its class loader
-     *        is used to retrieve an existing resolved type. This value can be {@code null} if the caller does
-     *        not care for a resolved type.
-     * @return the compiler interface type representing the return type
      */
-    JavaType returnType(JavaType accessingClass);
+    JavaType getParameterType(int index, ResolvedJavaType accessingClass);
 
     /**
-     * Gets the return kind of this signature.
-     * @return the return kind
+     * Gets the parameter kind at the specified position. This is the same as calling
+     * {@link #getParameterType}. {@link JavaType#getKind getKind}.
+     *
+     * @param index the index into the parameters, with {@code 0} indicating the first parameter
+     * @return the kind of the parameter at the specified position
      */
-    Kind returnKind();
+    default Kind getParameterKind(int index) {
+        return getParameterType(index, null).getKind();
+    }
 
     /**
-     * Converts this signature to a string.
+     * Gets the return type of this signature.
+     *
+     * @param accessingClass the context of the type lookup. If non-null, its class loader is used
+     *            for resolving the type. If {@code null}, then the type returned is either
+     *            unresolved or a resolved type whose resolution is context free (e.g., a primitive
+     *            type or a type in a java.* package).
+     * @return the return type
+     * @throws LinkageError if {@code accessingClass != null} and resolution fails
+     */
+    JavaType getReturnType(ResolvedJavaType accessingClass);
+
+    /**
+     * Gets the return kind of this signature. This is the same as calling {@link #getReturnType}.
+     * {@link JavaType#getKind getKind}.
+     */
+    default Kind getReturnKind() {
+        return getReturnType(null).getKind();
+    }
+
+    /**
+     * Gets the <a
+     * href="http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.3.3">method
+     * descriptor</a> corresponding to this signature. For example:
+     *
+     * <pre>
+     * (ILjava/lang/String;D)V
+     * </pre>
+     *
      * @return the signature as a string
      */
-    String asString();
+    default String toMethodDescriptor() {
+        StringBuilder sb = new StringBuilder("(");
+        for (int i = 0; i < getParameterCount(false); ++i) {
+            sb.append(getParameterType(i, null).getName());
+        }
+        sb.append(')').append(getReturnType(null).getName());
+        return sb.toString();
+    }
 
-    /**
-     * Gets the size, in Java slots, of the arguments to this signature.
-     * @param withReceiver {@code true} if to add a slot for a receiver object; {@code false} not to include the receiver
-     * @return the size of the arguments in slots
-     */
-    int argumentSlots(boolean withReceiver);
+    default JavaType[] toParameterTypes(JavaType receiverType) {
+        int args = getParameterCount(false);
+        JavaType[] result;
+        int i = 0;
+        if (receiverType != null) {
+            result = new JavaType[args + 1];
+            result[0] = receiverType;
+            i = 1;
+        } else {
+            result = new JavaType[args];
+        }
+        for (int j = 0; j < args; j++) {
+            result[i + j] = getParameterType(j, null);
+        }
+        return result;
+    }
 }

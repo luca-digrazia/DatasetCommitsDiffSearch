@@ -25,6 +25,7 @@ package com.oracle.graal.nodes.spi;
 import java.lang.reflect.*;
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.nodes.*;
@@ -73,13 +74,6 @@ public interface Replacements {
     StructuredGraph getMethodSubstitution(ResolvedJavaMethod method);
 
     /**
-     * Gets the method that is a substitution for a given method.
-     *
-     * @return the method, if any, that is a substitution for {@code method}
-     */
-    ResolvedJavaMethod getMethodSubstitutionMethod(ResolvedJavaMethod method);
-
-    /**
      * Gets the node class with which a method invocation should be replaced.
      *
      * @param method target of an invocation
@@ -87,6 +81,11 @@ public interface Replacements {
      *         {@code method} or null if there is no such association
      */
     Class<? extends FixedWithNextNode> getMacroSubstitution(ResolvedJavaMethod method);
+
+    /**
+     * Gets the assumptions with which replacement graphs are preprocessed.
+     */
+    Assumptions getAssumptions();
 
     /**
      * Registers all the {@linkplain MethodSubstitution method} and {@linkplain MacroSubstitution

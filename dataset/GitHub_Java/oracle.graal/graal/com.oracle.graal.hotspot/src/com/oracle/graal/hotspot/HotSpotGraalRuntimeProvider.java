@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.hotspot;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.code.stack.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.stack.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.runtime.*;
 
@@ -38,19 +37,11 @@ import com.oracle.graal.runtime.*;
  */
 public interface HotSpotGraalRuntimeProvider extends GraalRuntime, RuntimeProvider, StackIntrospection {
 
-    HotSpotJVMCIRuntimeProvider getJVMCIRuntime();
+    HotSpotVMConfig getConfig();
 
-    default HotSpotVMConfig getConfig() {
-        return getJVMCIRuntime().getConfig();
-    }
+    TargetDescription getTarget();
 
-    default TargetDescription getTarget() {
-        return getHostBackend().getTarget();
-    }
-
-    default CompilerToVM getCompilerToVM() {
-        return getJVMCIRuntime().getCompilerToVM();
-    }
+    CompilerToVM getCompilerToVM();
 
     /**
      * Converts a name to a Java type. This method attempts to resolve {@code name} to a
@@ -65,9 +56,7 @@ public interface HotSpotGraalRuntimeProvider extends GraalRuntime, RuntimeProvid
      * @throws LinkageError if {@code resolve == true} and the resolution failed
      * @throws NullPointerException if {@code accessingClass} is {@code null}
      */
-    default JavaType lookupType(String name, HotSpotResolvedObjectType accessingType, boolean resolve) {
-        return getJVMCIRuntime().lookupType(name, accessingType, resolve);
-    }
+    JavaType lookupType(String name, HotSpotResolvedObjectType accessingType, boolean resolve);
 
     HotSpotProviders getHostProviders();
 
@@ -76,4 +65,25 @@ public interface HotSpotGraalRuntimeProvider extends GraalRuntime, RuntimeProvid
     }
 
     HotSpotBackend getHostBackend();
+
+    /**
+     * The offset from the origin of an array to the first element.
+     *
+     * @return the offset in bytes
+     */
+    int getArrayBaseOffset(Kind kind);
+
+    /**
+     * The scale used for the index when accessing elements of an array of this kind.
+     *
+     * @return the scale in order to convert the index into a byte offset
+     */
+    int getArrayIndexScale(Kind kind);
+
+    /**
+     * Gets the Graal mirror for a {@link Class} object.
+     *
+     * @return the {@link ResolvedJavaType} corresponding to {@code javaClass}
+     */
+    ResolvedJavaType fromClass(Class<?> clazz);
 }

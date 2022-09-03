@@ -22,69 +22,110 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.nodes.*;
 
-
-public final class HotSpotProfilingInfo extends CompilerObject implements ProfilingInfo {
+public final class HotSpotProfilingInfo extends CompilerObject implements ProfilingInfo, Remote {
 
     private static final long serialVersionUID = -8307682725047864875L;
     private static final DebugMetric metricInsufficentSpace = Debug.metric("InsufficientSpaceForProfilingData");
 
+    private final HotSpotMethodData methodData;
+    private final HotSpotResolvedJavaMethod method;
+
+    private boolean isMature;
     private int position;
     private int hintPosition;
     private int hintBCI;
     private HotSpotMethodDataAccessor dataAccessor;
-    private HotSpotMethodData methodData;
-    private final int codeSize;
 
-    public HotSpotProfilingInfo(HotSpotMethodData methodData, int codeSize) {
+    private boolean includeNormal;
+    private boolean includeOSR;
+
+    public HotSpotProfilingInfo(HotSpotMethodData methodData, HotSpotResolvedJavaMethod method, boolean includeNormal, boolean includeOSR) {
         this.methodData = methodData;
-        this.codeSize = codeSize;
+        this.method = method;
+        this.includeNormal = includeNormal;
+        this.includeOSR = includeOSR;
+        this.isMature = methodData.isProfileMature();
         hintPosition = 0;
         hintBCI = -1;
     }
 
     @Override
-    public int codeSize() {
-        return codeSize;
+    public int getCodeSize() {
+        return method.getCodeSize();
     }
 
     @Override
     public JavaTypeProfile getTypeProfile(int bci) {
+        if (!isMature) {
+            return null;
+        }
         findBCI(bci, false);
         return dataAccessor.getTypeProfile(methodData, position);
     }
 
     @Override
+    public JavaMethodProfile getMethodProfile(int bci) {
+        if (!isMature) {
+            return null;
+        }
+        findBCI(bci, false);
+        return dataAccessor.getMethodProfile(methodData, position);
+    }
+
+    @Override
     public double getBranchTakenProbability(int bci) {
+        if (!isMature) {
+            return -1;
+        }
         findBCI(bci, false);
         return dataAccessor.getBranchTakenProbability(methodData, position);
     }
 
     @Override
     public double[] getSwitchProbabilities(int bci) {
+        if (!isMature) {
+            return null;
+        }
         findBCI(bci, false);
         return dataAccessor.getSwitchProbabilities(methodData, position);
     }
 
     @Override
-    public ExceptionSeen getExceptionSeen(int bci) {
+    public TriState getExceptionSeen(int bci) {
         findBCI(bci, true);
         return dataAccessor.getExceptionSeen(methodData, position);
     }
 
     @Override
+    public TriState getNullSeen(int bci) {
+        findBCI(bci, false);
+        return dataAccessor.getNullSeen(methodData, position);
+    }
+
+    @Override
     public int getExecutionCount(int bci) {
+        if (!isMature) {
+            return -1;
+        }
         findBCI(bci, false);
         return dataAccessor.getExecutionCount(methodData, position);
     }
 
     @Override
     public int getDeoptimizationCount(DeoptimizationReason reason) {
-        return methodData.getDeoptimizationCount(reason);
+        int count = 0;
+        if (includeNormal) {
+            count += methodData.getDeoptimizationCount(reason);
+        }
+        if (includeOSR) {
+            count += methodData.getOSRDeoptimizationCount(reason);
+        }
+        return count;
     }
 
     private void findBCI(int targetBCI, boolean searchExtraData) {
@@ -148,7 +189,38 @@ public final class HotSpotProfilingInfo extends CompilerObject implements Profil
     }
 
     @Override
+    public boolean isMature() {
+        return isMature;
+    }
+
+    public void ignoreMature() {
+        isMature = true;
+    }
+
+    @Override
     public String toString() {
-        return "HotSpotProfilingInfo<" + CodeUtil.profileToString(this, null, "; ") + ">";
+        return "HotSpotProfilingInfo<" + this.toString(null, "; ") + ">";
+    }
+
+    @Override
+    public void setMature() {
+        isMature = true;
+    }
+
+    @Override
+    public boolean setCompilerIRSize(Class<?> irType, int size) {
+        if (irType == StructuredGraph.class) {
+            methodData.setCompiledGraphSize(size);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public int getCompilerIRSize(Class<?> irType) {
+        if (irType == StructuredGraph.class) {
+            return methodData.getCompiledGraphSize();
+        }
+        return -1;
     }
 }

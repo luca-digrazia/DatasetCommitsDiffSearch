@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,39 +24,81 @@ package com.oracle.graal.api.meta;
 
 import java.lang.reflect.*;
 
-
+/**
+ * Provides access to the metadata of a class typically provided in a class file.
+ */
 public interface MetaAccessProvider {
 
-
     /**
-     * Returns the JavaType object representing the base type for the given kind.
+     * Returns the resolved Java type representing a given Java class.
+     *
+     * @param clazz the Java class object
+     * @return the resolved Java type object
      */
-    ResolvedJavaType getResolvedJavaType(Kind kind);
+    ResolvedJavaType lookupJavaType(Class<?> clazz);
 
     /**
-     * Returns the type of the given constant object.
+     * Returns the resolved Java types representing some given Java classes.
+     *
+     * @param classes the Java class objects
+     * @return the resolved Java type objects
+     */
+    default ResolvedJavaType[] lookupJavaTypes(Class<?>[] classes) {
+        ResolvedJavaType[] result = new ResolvedJavaType[classes.length];
+        for (int i = 0; i < result.length; i++) {
+            result[i] = lookupJavaType(classes[i]);
+        }
+        return result;
+    }
+
+    /**
+     * Provides the {@link ResolvedJavaMethod} for a {@link Method} or {@link Constructor} obtained
+     * via reflection.
+     */
+    ResolvedJavaMethod lookupJavaMethod(Executable reflectionMethod);
+
+    /**
+     * Provides the {@link ResolvedJavaField} for a {@link Field} obtained via reflection.
+     */
+    ResolvedJavaField lookupJavaField(Field reflectionField);
+
+    /**
+     * Returns the resolved Java type of the given {@link JavaConstant} object.
      *
      * @return {@code null} if {@code constant.isNull() || !constant.kind.isObject()}
      */
-    ResolvedJavaType getTypeOf(Constant constant);
-
-
-    ResolvedJavaType getResolvedJavaType(Class<?> clazz);
+    ResolvedJavaType lookupJavaType(JavaConstant constant);
 
     /**
-     * Used by the canonicalizer to compare objects, since a given runtime might not want to expose the real objects to the compiler.
+     * Returns the number of bytes occupied by this constant value or constant object.
      *
-     * @return true if the two parameters represent the same runtime object, false otherwise
+     * @param constant the constant whose bytes should be measured
+     * @return the number of bytes occupied by this constant
      */
-    boolean areConstantObjectsEqual(Constant x, Constant y);
+    long getMemorySize(JavaConstant constant);
 
     /**
-     * Provides the {@link JavaMethod} for a {@link Method} obtained via reflection.
+     * Parses a <a
+     * href="http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.3.3">method
+     * descriptor</a> into a {@link Signature}. The behavior of this method is undefined if the
+     * method descriptor is not well formed.
      */
-    ResolvedJavaMethod getResolvedJavaMethod(Method reflectionMethod);
+    Signature parseMethodDescriptor(String methodDescriptor);
 
     /**
-     * Gets the length of the array that is wrapped in a Constant object.
+     * Encodes a deoptimization action and a deoptimization reason in an integer value.
+     *
+     * @param debugId an integer that can be used to track the origin of a deoptimization at
+     *            runtime. There is no guarantee that the runtime will use this value. The runtime
+     *            may even keep fewer than 32 bits.
+     *
+     * @return the encoded value as an integer
      */
-    int getArrayLength(Constant array);
+    JavaConstant encodeDeoptActionAndReason(DeoptimizationAction action, DeoptimizationReason reason, int debugId);
+
+    DeoptimizationReason decodeDeoptReason(JavaConstant constant);
+
+    DeoptimizationAction decodeDeoptAction(JavaConstant constant);
+
+    int decodeDebugId(JavaConstant constant);
 }

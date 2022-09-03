@@ -87,8 +87,4 @@ public final class HotSpotMetaspaceConstantImpl extends PrimitiveConstant implem
         }
         return null;
     }
-
-    public long rawValue() {
-        return asLong();
-    }
 }

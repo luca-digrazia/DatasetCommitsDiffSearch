@@ -24,14 +24,19 @@ package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.meta.HotSpotResolvedJavaType.*;
-import static com.oracle.graal.hotspot.meta.HotSpotResolvedObjectType.*;
+import static com.oracle.graal.hotspot.meta.HotSpotResolvedObjectTypeImpl.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.hotspot.*;
 
-public class HotSpotMethodHandleAccessProvider implements MethodHandleAccessProvider {
+public class HotSpotMethodHandleAccessProvider implements MethodHandleAccessProvider, Remote {
+
+    private final ConstantReflectionProvider constantReflection;
+
+    public HotSpotMethodHandleAccessProvider(ConstantReflectionProvider constantReflection) {
+        this.constantReflection = constantReflection;
+    }
 
     /**
      * Lazy initialization to break class initialization cycle. Field and method lookup is only
@@ -65,7 +70,7 @@ public class HotSpotMethodHandleAccessProvider implements MethodHandleAccessProv
 
         private static ResolvedJavaMethod findMethodInClass(String className, String methodName) throws ClassNotFoundException {
             Class<?> clazz = Class.forName(className);
-            HotSpotResolvedObjectType type = fromObjectClass(clazz);
+            HotSpotResolvedObjectTypeImpl type = fromObjectClass(clazz);
             ResolvedJavaMethod result = null;
             for (ResolvedJavaMethod method : type.getDeclaredMethods()) {
                 if (method.getName().equals(methodName)) {
@@ -116,7 +121,7 @@ public class HotSpotMethodHandleAccessProvider implements MethodHandleAccessProv
         }
 
         /* Load non-public field: LambdaForm MethodHandle.form */
-        JavaConstant lambdaForm = LazyInitialization.methodHandleFormField.readValue(methodHandle);
+        JavaConstant lambdaForm = constantReflection.readFieldValue(LazyInitialization.methodHandleFormField, methodHandle);
         if (lambdaForm.isNull()) {
             return null;
         }
@@ -127,7 +132,7 @@ public class HotSpotMethodHandleAccessProvider implements MethodHandleAccessProv
             memberName = LazyInitialization.lambdaFormCompileToBytecodeMethod.invoke(lambdaForm, new JavaConstant[0]);
         } else {
             /* Load non-public field: MemberName LambdaForm.vmentry */
-            memberName = LazyInitialization.lambdaFormVmentryField.readValue(lambdaForm);
+            memberName = constantReflection.readFieldValue(LazyInitialization.lambdaFormVmentryField, lambdaForm);
         }
         return getTargetMethod(memberName);
     }
@@ -140,13 +145,13 @@ public class HotSpotMethodHandleAccessProvider implements MethodHandleAccessProv
     /**
      * Returns the {@link ResolvedJavaMethod} for the vmtarget of a java.lang.invoke.MemberName.
      */
-    private static ResolvedJavaMethod getTargetMethod(JavaConstant memberName) {
+    private ResolvedJavaMethod getTargetMethod(JavaConstant memberName) {
         if (memberName.isNull()) {
             return null;
         }
 
         /* Load injected field: JVM_Method* MemberName.vmtarget */
-        JavaConstant vmtarget = LazyInitialization.memberNameVmtargetField.readValue(memberName);
+        JavaConstant vmtarget = constantReflection.readFieldValue(LazyInitialization.memberNameVmtargetField, memberName);
         /* Create a method from the vmtarget method pointer. */
         return HotSpotResolvedJavaMethodImpl.fromMetaspace(vmtarget.asLong());
     }

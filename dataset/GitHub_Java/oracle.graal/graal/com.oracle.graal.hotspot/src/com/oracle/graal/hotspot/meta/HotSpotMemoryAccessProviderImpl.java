@@ -41,92 +41,66 @@ public class HotSpotMemoryAccessProviderImpl implements HotSpotMemoryAccessProvi
         this.runtime = runtime;
     }
 
-    private static Object asObject(Constant base) {
-        if (base instanceof HotSpotObjectConstantImpl) {
-            return ((HotSpotObjectConstantImpl) base).object();
-        } else {
-            return null;
-        }
-    }
-
-    private static long asRawPointer(Constant base) {
-        if (base instanceof HotSpotMetaspaceConstant) {
-            return ((HotSpotMetaspaceConstant) base).rawValue();
-        } else if (base instanceof PrimitiveConstant) {
-            PrimitiveConstant prim = (PrimitiveConstant) base;
-            if (prim.getKind().isNumericInteger()) {
-                return prim.asLong();
-            }
-        }
-        throw GraalInternalError.shouldNotReachHere();
-    }
-
-    private static long readRawValue(Constant baseConstant, long displacement, int bits) {
-        Object base = asObject(baseConstant);
-        if (base != null) {
-            switch (bits) {
-                case 8:
-                    return unsafe.getByte(base, displacement);
-                case 16:
-                    return unsafe.getShort(base, displacement);
-                case 32:
-                    return unsafe.getInt(base, displacement);
-                case 64:
-                    return unsafe.getLong(base, displacement);
-                default:
-                    throw GraalInternalError.shouldNotReachHere();
+    private static long readRawValue(Constant baseConstant, long initialDisplacement, int bits) {
+        Object base;
+        long displacement;
+        if (baseConstant instanceof JavaConstant) {
+            JavaConstant javaConstant = (JavaConstant) baseConstant;
+            if (javaConstant instanceof HotSpotObjectConstantImpl) {
+                base = ((HotSpotObjectConstantImpl) javaConstant).object();
+                displacement = initialDisplacement;
+            } else if (javaConstant.getKind().isNumericInteger()) {
+                long baseLong = javaConstant.asLong();
+                assert baseLong != 0;
+                displacement = initialDisplacement + baseLong;
+                base = null;
+            } else {
+                throw GraalInternalError.shouldNotReachHere();
             }
         } else {
-            long pointer = asRawPointer(baseConstant);
-            switch (bits) {
-                case 8:
-                    return unsafe.getByte(pointer + displacement);
-                case 16:
-                    return unsafe.getShort(pointer + displacement);
-                case 32:
-                    return unsafe.getInt(pointer + displacement);
-                case 64:
-                    return unsafe.getLong(pointer + displacement);
-                default:
-                    throw GraalInternalError.shouldNotReachHere();
-            }
+            throw GraalInternalError.shouldNotReachHere();
         }
+
+        long rawValue;
+        switch (bits) {
+            case 8:
+                rawValue = base == null ? unsafe.getByte(displacement) : unsafe.getByte(base, displacement);
+                break;
+            case 16:
+                rawValue = base == null ? unsafe.getShort(displacement) : unsafe.getShort(base, displacement);
+                break;
+            case 32:
+                rawValue = base == null ? unsafe.getInt(displacement) : unsafe.getInt(base, displacement);
+                break;
+            case 64:
+                rawValue = base == null ? unsafe.getLong(displacement) : unsafe.getLong(base, displacement);
+                break;
+            default:
+                throw GraalInternalError.shouldNotReachHere();
+        }
+        return rawValue;
     }
 
-    private boolean verifyReadRawObject(Object expected, Constant base, long displacement, boolean compressed) {
-        if (compressed == runtime.getConfig().useCompressedOops) {
-            Object obj = asObject(base);
-            if (obj != null) {
-                assert expected == unsafe.getObject(obj, displacement) : "readUnsafeOop doesn't agree with unsafe.getObject";
-            }
-        }
-        if (base instanceof HotSpotMetaspaceConstant) {
-            Object metaspaceObject = HotSpotMetaspaceConstantImpl.getMetaspaceObject(base);
+    private Object readRawObject(Constant baseConstant, long displacement, boolean compressed) {
+        if (baseConstant instanceof HotSpotObjectConstantImpl) {
+            assert compressed == runtime.getConfig().useCompressedOops;
+            return unsafe.getObject(((HotSpotObjectConstantImpl) baseConstant).object(), displacement);
+        } else if (baseConstant instanceof HotSpotMetaspaceConstant) {
+            Object metaspaceObject = HotSpotMetaspaceConstantImpl.getMetaspaceObject(baseConstant);
             if (metaspaceObject instanceof HotSpotResolvedObjectTypeImpl) {
+                assert !compressed : "unexpected compressed read from Klass*";
                 if (displacement == runtime.getConfig().classMirrorOffset) {
-                    assert expected == ((HotSpotResolvedObjectTypeImpl) metaspaceObject).mirror();
+                    return ((HotSpotResolvedObjectTypeImpl) metaspaceObject).mirror();
                 } else if (displacement == runtime.getConfig().arrayKlassComponentMirrorOffset) {
-                    assert expected == ((HotSpotResolvedObjectTypeImpl) metaspaceObject).mirror().getComponentType();
+                    return ((HotSpotResolvedObjectTypeImpl) metaspaceObject).mirror().getComponentType();
                 } else if (displacement == runtime.getConfig().instanceKlassNodeClassOffset) {
-                    assert expected == NodeClass.get(((HotSpotResolvedObjectTypeImpl) metaspaceObject).mirror());
+                    return NodeClass.get(((HotSpotResolvedObjectTypeImpl) metaspaceObject).mirror());
                 }
             }
+            throw GraalInternalError.shouldNotReachHere("read from unknown Klass* offset " + displacement);
+        } else {
+            throw GraalInternalError.shouldNotReachHere("unexpected base pointer: " + (baseConstant == null ? "null" : baseConstant.toString()));
         }
-        return true;
-    }
-
-    private Object readRawObject(Constant baseConstant, long initialDisplacement, boolean compressed) {
-        long displacement = initialDisplacement;
-
-        Object base = asObject(baseConstant);
-        if (base == null) {
-            displacement += asRawPointer(baseConstant);
-        }
-
-        Object ret = runtime.getCompilerToVM().readUnsafeOop(base, displacement, compressed);
-        assert verifyReadRawObject(ret, baseConstant, initialDisplacement, compressed);
-
-        return ret;
     }
 
     @Override

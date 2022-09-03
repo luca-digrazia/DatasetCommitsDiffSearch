@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,18 +20,10 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.hotspot.meta;
+package com.oracle.graal.api.meta;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
-
-public interface HotSpotMetaspaceConstant extends HotSpotConstant, VMConstant {
-
-    boolean isCompressed();
-
-    Constant compress(CompressEncoding encoding);
-
-    Constant uncompress(CompressEncoding encoding);
-
-    HotSpotResolvedObjectType asResolvedJavaType();
+/**
+ * Represents the resolved target of an invocation.
+ */
+public interface InvokeTarget {
 }
