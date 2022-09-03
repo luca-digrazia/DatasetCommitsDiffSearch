@@ -1941,13 +1941,6 @@ public final class DebugContext implements AutoCloseable {
             globalMetrics.add(this);
         }
         metricValues = null;
-        if (sharedChannel != null) {
-            try {
-                sharedChannel.realClose();
-            } catch (IOException ex) {
-                // ignore.
-            }
-        }
     }
 
     public void closeDumpHandlers(boolean ignoreErrors) {

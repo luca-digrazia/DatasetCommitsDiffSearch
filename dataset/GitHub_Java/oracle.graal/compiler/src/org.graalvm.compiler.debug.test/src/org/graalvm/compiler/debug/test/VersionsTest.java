@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,8 +25,6 @@ package org.graalvm.compiler.debug.test;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
 import java.nio.file.Files;
@@ -82,15 +78,15 @@ public class VersionsTest {
     }
 
     @Test
-    public void emptyProperties() throws URISyntaxException {
-        Path root = Paths.get(new URI("file:/"));
+    public void emptyProperties() {
+        Path root = Paths.get("file:/");
         Versions v = new Versions(root);
         assertEmpty(v.withVersions(null));
     }
 
     @Test
-    public void emptyWithNullProperties() throws URISyntaxException {
-        Path root = Paths.get(new URI("file:/"));
+    public void emptyWithNullProperties() {
+        Path root = Paths.get("file:/");
         Versions v = new Versions(root);
         assertEmpty(v.withVersions(null));
     }
