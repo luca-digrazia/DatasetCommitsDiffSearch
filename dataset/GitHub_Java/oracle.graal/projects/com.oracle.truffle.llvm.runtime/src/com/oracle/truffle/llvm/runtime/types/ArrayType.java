@@ -29,13 +29,13 @@
  */
 package com.oracle.truffle.llvm.runtime.types;
 
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
 public final class ArrayType extends AggregateType {
 
-    @CompilationFinal private Type elementType;
+    private static final int NO_LENGTH = -1;
+
+    private final Type elementType;
     private final int length;
 
     public ArrayType(Type type, int length) {
@@ -43,9 +43,8 @@ public final class ArrayType extends AggregateType {
         this.length = length;
     }
 
-    public void setElementType(Type elementType) {
-        CompilerAsserts.neverPartOfCompilation();
-        this.elementType = elementType;
+    public ArrayType(Type type) {
+        this(type, NO_LENGTH);
     }
 
     @Override
@@ -62,8 +61,15 @@ public final class ArrayType extends AggregateType {
         return elementType;
     }
 
+    public boolean hasLength() {
+        return length != NO_LENGTH;
+    }
+
     @Override
     public int getNumberOfElements() {
+        if (length == NO_LENGTH) {
+            throw new UnsupportedOperationException();
+        }
         return length;
     }
 
@@ -80,13 +86,6 @@ public final class ArrayType extends AggregateType {
     @Override
     public int getSize(DataSpecConverter targetDataLayout) {
         return getElementType().getSize(targetDataLayout) * length;
-    }
-
-    @Override
-    public Type shallowCopy() {
-        final ArrayType copy = new ArrayType(elementType, length);
-        copy.setSourceType(getSourceType());
-        return copy;
     }
 
     @Override
@@ -132,4 +131,5 @@ public final class ArrayType extends AggregateType {
         }
         return true;
     }
+
 }
