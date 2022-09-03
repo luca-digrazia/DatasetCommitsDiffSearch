@@ -30,8 +30,8 @@ import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess.Factory;
 import com.oracle.truffle.api.nodes.Node;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Inter-operability is based on sending messages. Standard messages are defined as as constants
@@ -574,7 +574,7 @@ public abstract class Message {
         }
     }
 
-    private static final Map<String, Message> CLASS_TO_MESSAGE = new ConcurrentHashMap<>();
+    private static final Map<String, Message> CLASS_TO_MESSAGE = new HashMap<>();
 
     @CompilerDirectives.TruffleBoundary
     private static void registerClass(Message message) {
@@ -582,6 +582,8 @@ public abstract class Message {
             return;
         }
         final String key = message.getClass().getName();
-        CLASS_TO_MESSAGE.putIfAbsent(key, message);
+        if (!CLASS_TO_MESSAGE.containsKey(key)) {
+            CLASS_TO_MESSAGE.put(key, message);
+        }
     }
 }
