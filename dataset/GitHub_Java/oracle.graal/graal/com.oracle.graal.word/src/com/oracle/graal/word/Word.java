@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,9 +29,9 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-import jdk.vm.ci.common.JVMCIError;
+import jdk.internal.jvmci.common.JVMCIError;
+import jdk.internal.jvmci.meta.LocationIdentity;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.common.calc.UnsignedMath;
 import com.oracle.graal.nodes.ValueNode;
@@ -952,7 +952,6 @@ public abstract class Word implements Signed, Unsigned, Pointer {
     @Operation(opcode = Opcode.READ_POINTER)
     public native Object readObject(WordBase offset);
 
-    @Override
     @Operation(opcode = Opcode.READ_HEAP)
     public native Object readObject(WordBase offset, BarrierType barrierType);
 
@@ -1010,7 +1009,6 @@ public abstract class Word implements Signed, Unsigned, Pointer {
         return readObject(signed(offset));
     }
 
-    @Override
     @Operation(opcode = Opcode.READ_HEAP)
     public Object readObject(int offset, BarrierType barrierType) {
         return readObject(signed(offset), barrierType);

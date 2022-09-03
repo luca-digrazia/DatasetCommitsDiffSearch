@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,39 +22,48 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import jdk.internal.jvmci.code.CodeUtil;
+
+import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 @NodeInfo(shortName = "|/|")
-public class UnsignedDivNode extends FixedBinaryNode implements Canonicalizable, Lowerable, LIRLowerable {
+public class UnsignedDivNode extends FixedBinaryNode implements Lowerable, LIRLowerable {
 
-    public UnsignedDivNode(Kind kind, ValueNode x, ValueNode y) {
-        super(kind, x, y);
+    public static final NodeClass<UnsignedDivNode> TYPE = NodeClass.create(UnsignedDivNode.class);
+
+    public UnsignedDivNode(ValueNode x, ValueNode y) {
+        this(TYPE, x, y);
+    }
+
+    protected UnsignedDivNode(NodeClass<? extends UnsignedDivNode> c, ValueNode x, ValueNode y) {
+        super(c, x.stamp().unrestricted(), x, y);
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (x().isConstant() && y().isConstant()) {
-            long yConst = y().asConstant().asLong();
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        int bits = ((IntegerStamp) stamp()).getBits();
+        if (forX.isConstant() && forY.isConstant()) {
+            long yConst = CodeUtil.zeroExtend(forY.asJavaConstant().asLong(), bits);
             if (yConst == 0) {
                 return this; // this will trap, cannot canonicalize
             }
-            if (kind() == Kind.Int) {
-                return ConstantNode.forInt(UnsignedMath.divide(x().asConstant().asInt(), (int) yConst), graph());
-            } else {
-                assert kind() == Kind.Long;
-                return ConstantNode.forLong(UnsignedMath.divide(x().asConstant().asLong(), yConst), graph());
-            }
-        } else if (y().isConstant()) {
-            long c = y().asConstant().asLong();
+            return ConstantNode.forIntegerStamp(stamp(), Long.divideUnsigned(CodeUtil.zeroExtend(forX.asJavaConstant().asLong(), bits), yConst));
+        } else if (forY.isConstant()) {
+            long c = CodeUtil.zeroExtend(forY.asJavaConstant().asLong(), bits);
             if (c == 1) {
-                return x();
+                return forX;
             }
             if (CodeUtil.isPowerOf2(c)) {
-                return graph().unique(new UnsignedRightShiftNode(kind(), x(), ConstantNode.forInt(CodeUtil.log2(c), graph())));
+                return new UnsignedRightShiftNode(forX, ConstantNode.forInt(CodeUtil.log2(c)));
             }
         }
         return this;
@@ -62,16 +71,22 @@ public class UnsignedDivNode extends FixedBinaryNode implements Canonicalizable,
 
     @Override
     public void lower(LoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
+        tool.getLowerer().lower(this, tool);
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.setResult(this, gen.emitUDiv(gen.operand(x()), gen.operand(y()), this));
+    public void generate(NodeLIRBuilderTool gen) {
+        gen.setResult(this, gen.getLIRGeneratorTool().emitUDiv(gen.operand(getX()), gen.operand(getY()), gen.state(this)));
     }
 
     @Override
     public boolean canDeoptimize() {
-        return y().integerStamp().contains(0);
+        return !(getY().stamp() instanceof IntegerStamp) || ((IntegerStamp) getY().stamp()).contains(0);
     }
+
+    @NodeIntrinsic
+    public static native int unsignedDivide(int a, int b);
+
+    @NodeIntrinsic
+    public static native long unsignedDivide(long a, long b);
 }

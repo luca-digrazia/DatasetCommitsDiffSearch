@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.compiler.common.calc;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.PrimitiveConstant;
+import jdk.internal.jvmci.common.JVMCIError;
+import jdk.internal.jvmci.meta.Constant;
+import jdk.internal.jvmci.meta.ConstantReflectionProvider;
+import jdk.internal.jvmci.meta.JavaConstant;
+import jdk.internal.jvmci.meta.PrimitiveConstant;
 
 /**
  * Condition codes used in conditionals.
@@ -84,7 +84,7 @@ public enum Condition {
 
     public final String operator;
 
-    Condition(String operator) {
+    private Condition(String operator) {
         this.operator = operator;
     }
 
