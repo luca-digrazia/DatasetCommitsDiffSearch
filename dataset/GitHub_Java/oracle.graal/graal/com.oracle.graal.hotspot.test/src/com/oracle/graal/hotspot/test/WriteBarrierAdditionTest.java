@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,17 +39,17 @@ import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.hotspot.replacements.*;
+import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.memory.*;
-import com.oracle.graal.nodes.memory.HeapAccess.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.common.inlining.policy.*;
 import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.replacements.*;
 
 /**
  * The following unit tests assert the presence of write barriers for both Serial and G1 GCs.
@@ -249,8 +249,9 @@ public class WriteBarrierAdditionTest extends GraalCompilerTest {
         ResolvedJavaMethod snippet = getResolvedJavaMethod(snippetName);
         try (Scope s = Debug.scope("WriteBarrierAdditionTest", snippet)) {
             StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
-            HighTierContext highContext = getDefaultHighTierContext();
+            HighTierContext highContext = new HighTierContext(getProviders(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
             MidTierContext midContext = new MidTierContext(getProviders(), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo(), null);
+            new NodeIntrinsificationPhase(getMetaAccess(), getConstantReflection(), getSnippetReflection(), getProviders().getForeignCalls(), getProviders().getStampProvider()).apply(graph);
             new InliningPhase(new InlineEverythingPolicy(), new CanonicalizerPhase()).apply(graph, highContext);
             new CanonicalizerPhase().apply(graph, highContext);
             new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, highContext);
