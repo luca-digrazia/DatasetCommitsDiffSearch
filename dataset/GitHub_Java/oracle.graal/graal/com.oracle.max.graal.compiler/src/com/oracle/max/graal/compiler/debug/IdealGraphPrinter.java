@@ -28,7 +28,6 @@ import java.util.Map.Entry;
 
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.schedule.*;
-import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
 
 /**
@@ -132,24 +131,24 @@ public class IdealGraphPrinter {
         }
         stream.println("  </edges>");
 
+        stream.println("  <controlFlow>");
         if (schedule != null) {
-            stream.println("  <controlFlow>");
             for (Block block : schedule.getBlocks()) {
-                printBlock(graph, block, schedule.getNodeToBlock());
+                printBlock(graph, block);
             }
-            printNoBlock();
-            stream.println("  </controlFlow>");
         }
+        printNoBlock();
+        stream.println("  </controlFlow>");
 
         stream.println(" </graph>");
         flush();
     }
 
-    private List<Edge> printNodes(Iterable<Node> nodes, boolean shortNames, NodeMap<Block> nodeToBlock) {
+    private List<Edge> printNodes(Collection<Node> nodes, boolean shortNames, NodeMap<Block> nodeToBlock) {
         ArrayList<Edge> edges = new ArrayList<Edge>();
 
         for (Node node : nodes) {
-            if (omittedClasses.contains(node.getClass())) {
+            if (node == Node.Null || omittedClasses.contains(node.getClass())) {
                 continue;
             }
 
@@ -166,13 +165,9 @@ public class IdealGraphPrinter {
                 }
                 stream.printf("    <p name='name'>%s</p>%n", escape(name));
             }
-            stream.printf("    <p name='class'>%s</p>%n", escape(node.getClass().getSimpleName()));
             Block block = nodeToBlock == null ? null : nodeToBlock.get(node);
             if (block != null) {
                 stream.printf("    <p name='block'>%d</p>%n", block.blockID());
-                if (!(node instanceof Phi || node instanceof FrameState || node instanceof Local) && !block.getInstructions().contains(node)) {
-                    stream.printf("    <p name='notInOwnBlock'>true</p>%n");
-                }
             } else {
                 stream.printf("    <p name='block'>noBlock</p>%n");
                 noBlockNodes.add(node);
@@ -211,33 +206,23 @@ public class IdealGraphPrinter {
         stream.printf("   <edge from='%d' fromIndex='%d' to='%d' toIndex='%d'/>%n", edge.from, edge.fromIndex, edge.to, edge.toIndex);
     }
 
-    private void printBlock(Graph graph, Block block, NodeMap<Block> nodeToBlock) {
+    private void printBlock(Graph graph, Block block) {
         stream.printf("   <block name='%d'>%n", block.blockID());
         stream.printf("    <successors>%n");
         for (Block sux : block.getSuccessors()) {
-//            if (sux.firstNode() instanceof LoopBegin && block.lastNode() instanceof LoopEnd) { //TODO gd
-//                // Skip back edges.
-//            } else {
+            if (sux.firstNode() instanceof LoopBegin && block.lastNode() instanceof LoopEnd) {
+                // Skip back edges.
+            } else {
                 stream.printf("     <successor name='%d'/>%n", sux.blockID());
-//            }
+            }
         }
         stream.printf("    </successors>%n");
         stream.printf("    <nodes>%n");
 
-        Set<Node> nodes = new HashSet<Node>(block.getInstructions());
-
-        if (nodeToBlock != null) {
-            for (Node n : graph.getNodes()) {
-                Block blk = nodeToBlock.get(n);
-                if (blk == block) {
-                    nodes.add(n);
-                }
-            }
-        }
-
+        ArrayList<Node> nodes = new ArrayList<Node>(block.getInstructions());
         if (nodes.size() > 0) {
             // if this is the first block: add all locals to this block
-            if (block.getInstructions().size() > 0  && block.getInstructions().get(0) == graph.start()) {
+            if (nodes.get(0) == graph.start()) {
                 for (Node node : graph.getNodes()) {
                     if (node instanceof Local) {
                         nodes.add(node);
@@ -251,7 +236,8 @@ public class IdealGraphPrinter {
                     nodes.add(((Instruction) node).stateAfter());
                 }
                 if (node instanceof Merge) {
-                    for (Node usage : node.usages()) {
+                    Merge merge = (Merge) node;
+                    for (Node usage : merge.usages()) {
                         if (usage instanceof Phi || usage instanceof LoopCounter) {
                             nodes.add(usage);
                         }
