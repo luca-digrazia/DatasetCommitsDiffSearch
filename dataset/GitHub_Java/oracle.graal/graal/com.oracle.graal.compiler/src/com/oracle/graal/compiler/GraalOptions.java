@@ -100,10 +100,7 @@ public final class GraalOptions {
     public static float   MinimumUsageProbability            = 0.95f;
 
     //loop transform settings
-    public static float   MinimumPeelProbability             = 0.35f;
-    public static boolean ReassociateInvariants              = true;
-    public static boolean FullUnroll                         = true;
-    public static int     FullUnrollMaxNodes                 = 150; // TODO (gd) tune
+    public static float   MinimumPeelProbability             = 0.25f;
 
     // debugging settings
     public static int     MethodEndBreakpointGuards          = 0;
@@ -210,6 +207,11 @@ public final class GraalOptions {
     public static boolean OptLivenessAnalysis                = true;
     public static boolean OptLoopTransform                   = true;
     public static boolean OptSafepointElimination            = true;
+
+    // Loops
+    public static boolean ReassociateInvariants              = true;
+    public static boolean FullUnroll                         = true;
+    public static int FullUnrollMaxNodes                     = 250; // TODO (gd) tune
 
     /**
      * Insert a counter in the method prologue to track the most frequently called methods that were compiled by Graal.

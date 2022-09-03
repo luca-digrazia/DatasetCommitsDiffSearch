@@ -22,26 +22,22 @@
  */
 package com.oracle.graal.compiler.phases;
 
-import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.loop.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
 
-public class LoopTransformLowPhase extends Phase {
+public class LoopTransformHighPhase extends Phase {
 
     @Override
     protected void run(StructuredGraph graph) {
         if (graph.hasLoops()) {
-            if (GraalOptions.ReassociateInvariants) {
-                final LoopsData dataReassociate = new LoopsData(graph);
-                Debug.scope("ReassociateInvariants", new Runnable() {
-                    @Override
-                    public void run() {
-                        for (LoopEx loop : dataReassociate.loops()) {
-                            loop.reassociateInvariants();
-                        }
-                    }
-                });
+            LoopsData data = new LoopsData(graph);
+            for (LoopEx loop : data.outterFirst()) {
+                if (LoopPolicies.shouldPeel(loop)) {
+                    Debug.log("Peeling %s", loop);
+                    LoopTransformations.peel(loop);
+                    Debug.dump(graph, "After peeling %s", loop);
+                }
             }
         }
     }
