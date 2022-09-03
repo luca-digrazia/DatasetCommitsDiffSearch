@@ -22,22 +22,42 @@
  */
 package com.oracle.truffle.api.dsl.test;
 
-import static com.oracle.truffle.api.dsl.test.TestHelper.*;
-import static org.junit.Assert.*;
+import static com.oracle.truffle.api.dsl.test.TestHelper.createCallTarget;
+import static com.oracle.truffle.api.dsl.test.TestHelper.getNode;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.fail;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
 
-import org.junit.*;
+import org.junit.Test;
 
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.dsl.*;
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.NodeField;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.dsl.TypeSystemReference;
+import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
 import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.AssumptionArrayTestFactory;
+import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.AssumptionInvalidateTest1NodeGen;
+import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.AssumptionInvalidateTest2NodeGen;
+import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.AssumptionInvalidateTest3NodeGen;
+import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.AssumptionInvalidateTest4NodeGen;
 import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.CacheAssumptionTestFactory;
 import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.FieldTestFactory;
 import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.MethodTestFactory;
+import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.MultipleAssumptionArraysTestFactory;
+import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.MultipleAssumptionsTestFactory;
 import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.NodeFieldTest2Factory;
 import com.oracle.truffle.api.dsl.test.AssumptionsTestFactory.StaticFieldTestFactory;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
+import com.oracle.truffle.api.dsl.test.examples.ExampleNode;
+import com.oracle.truffle.api.dsl.test.examples.ExampleTypes;
+import com.oracle.truffle.api.nodes.Node;
 
 public class AssumptionsTest {
 
@@ -197,6 +217,46 @@ public class AssumptionsTest {
     }
 
     @Test
+    public void testMultipleAssumptions() {
+        CallTarget root = createCallTarget(MultipleAssumptionsTestFactory.getInstance());
+        MultipleAssumptionsTest node = getNode(root);
+        node.assumption1 = Truffle.getRuntime().createAssumption();
+        node.assumption2 = Truffle.getRuntime().createAssumption();
+
+        assertEquals("do1", root.call(42));
+        node.assumption1.invalidate();
+        assertEquals("do2", root.call(42));
+
+        CallTarget root2 = createCallTarget(MultipleAssumptionsTestFactory.getInstance());
+        MultipleAssumptionsTest node2 = getNode(root2);
+        node2.assumption1 = Truffle.getRuntime().createAssumption();
+        node2.assumption2 = Truffle.getRuntime().createAssumption();
+
+        assertEquals("do1", root2.call(42));
+        node2.assumption2.invalidate();
+        assertEquals("do2", root2.call(42));
+    }
+
+    @NodeChild
+    @SuppressWarnings("unused")
+    static class MultipleAssumptionsTest extends ValueNode {
+
+        Assumption assumption1;
+        Assumption assumption2;
+
+        @Specialization(assumptions = {"assumption1", "assumption2"})
+        static String do1(int value) {
+            return "do1";
+        }
+
+        @Specialization
+        static String do2(int value) {
+            return "do2";
+        }
+
+    }
+
+    @Test
     public void testAssumptionArrays() {
         CallTarget root = createCallTarget(AssumptionArrayTestFactory.getInstance());
         AssumptionArrayTest node = getNode(root);
@@ -229,6 +289,192 @@ public class AssumptionsTest {
             return "do2";
         }
 
+    }
+
+    @Test
+    public void testMultipleAssumptionArrays() {
+        CallTarget root = createCallTarget(MultipleAssumptionArraysTestFactory.getInstance());
+        MultipleAssumptionArraysTest node = getNode(root);
+
+        Assumption a1 = Truffle.getRuntime().createAssumption();
+        Assumption a2 = Truffle.getRuntime().createAssumption();
+
+        node.assumptions1 = new Assumption[]{a1};
+        node.assumptions2 = new Assumption[]{a2};
+
+        assertEquals("do1", root.call(42));
+
+        a2.invalidate();
+
+        assertEquals("do2", root.call(42));
+    }
+
+    @NodeChild
+    @SuppressWarnings("unused")
+    static class MultipleAssumptionArraysTest extends ValueNode {
+
+        Assumption[] assumptions1;
+        Assumption[] assumptions2;
+
+        @Specialization(assumptions = {"assumptions1", "assumptions2"})
+        static String do1(int value) {
+            return "do1";
+        }
+
+        @Specialization
+        static String do2(int value) {
+            return "do2";
+        }
+
+    }
+
+    @Test
+    public void testAssumptionInvalidateTest1() {
+        AssumptionInvalidateTest1 node = AssumptionInvalidateTest1NodeGen.create();
+        node.execute(0);
+        node.execute(1);
+        node.execute(2);
+
+        for (int i = 0; i < 100; i++) {
+            int removeIndex = i % 3;
+            Assumption a = node.assumptions[removeIndex];
+            a.invalidate();
+            node.execute(removeIndex);
+            assertNotSame(a, node.assumptions[removeIndex]);
+        }
+    }
+
+    @TypeSystemReference(ExampleTypes.class)
+    abstract static class AssumptionInvalidateTest1 extends Node {
+
+        Assumption[] assumptions = new Assumption[3];
+
+        abstract int execute(int value);
+
+        @Specialization(guards = "value == cachedValue", assumptions = "createAssumption(cachedValue)")
+        public int s0(int value, @SuppressWarnings("unused") @Cached("value") int cachedValue) {
+            return value;
+        }
+
+        Assumption createAssumption(int value) {
+            Assumption a = Truffle.getRuntime().createAssumption();
+            assumptions[value] = a;
+            return a;
+        }
+    }
+
+    @Test
+    public void testAssumptionInvalidateTest2() {
+        AssumptionInvalidateTest2 node = AssumptionInvalidateTest2NodeGen.create();
+        node.execute(0);
+        node.execute(1);
+        node.execute(2);
+
+        for (int i = 0; i < 100; i++) {
+            int removeIndex = i % 3;
+            Assumption a = node.assumptions[removeIndex];
+            a.invalidate();
+            node.execute(removeIndex);
+            assertNotSame(a, node.assumptions[removeIndex]);
+        }
+    }
+
+    @TypeSystemReference(ExampleTypes.class)
+    abstract static class AssumptionInvalidateTest2 extends Node {
+
+        Assumption[] assumptions = new Assumption[3];
+
+        abstract int execute(int value);
+
+        @Specialization(guards = "value == cachedValue", assumptions = "createAssumption(cachedValue)")
+        @SuppressWarnings("unused")
+        public int s0(int value, @Cached("value") int cachedValue, @Cached("createChild()") Node node) {
+            return value;
+        }
+
+        static Node createChild() {
+            // does not matter for this test
+            return null;
+        }
+
+        Assumption createAssumption(int value) {
+            Assumption a = Truffle.getRuntime().createAssumption();
+            assumptions[value] = a;
+            return a;
+        }
+    }
+
+    @Test
+    public void testAssumptionInvalidateTest3() {
+        AssumptionInvalidateTest3 node = AssumptionInvalidateTest3NodeGen.create();
+        node.execute(0);
+
+        for (int i = 0; i < 100; i++) {
+            int removeIndex = 0;
+            Assumption a = node.assumptions[removeIndex];
+            a.invalidate();
+            node.execute(removeIndex);
+            assertNotSame(a, node.assumptions[removeIndex]);
+        }
+    }
+
+    @TypeSystemReference(ExampleTypes.class)
+    abstract static class AssumptionInvalidateTest3 extends Node {
+
+        Assumption[] assumptions = new Assumption[1];
+
+        abstract int execute(int value);
+
+        @Specialization(guards = "value == cachedValue", assumptions = "createAssumption(cachedValue)", limit = "1")
+        @SuppressWarnings("unused")
+        public int s0(int value, @Cached("value") int cachedValue, @Cached("createChild()") Node node) {
+            return value;
+        }
+
+        static Node createChild() {
+            // does not matter for this test
+            return new ExampleNode() {
+            };
+        }
+
+        Assumption createAssumption(int value) {
+            Assumption a = Truffle.getRuntime().createAssumption();
+            assumptions[value] = a;
+            return a;
+        }
+    }
+
+    @Test
+    public void testAssumptionInvalidateTest4() {
+        AssumptionInvalidateTest4 node = AssumptionInvalidateTest4NodeGen.create();
+        node.execute(0);
+
+        for (int i = 0; i < 100; i++) {
+            int removeIndex = 0;
+            Assumption a = node.assumptions;
+            a.invalidate();
+            node.execute(removeIndex);
+            assertNotSame(a, node.assumptions);
+        }
+    }
+
+    @TypeSystemReference(ExampleTypes.class)
+    abstract static class AssumptionInvalidateTest4 extends Node {
+
+        Assumption assumptions;
+
+        abstract int execute(int value);
+
+        @Specialization(assumptions = "createAssumption()")
+        public int s0(int value) {
+            return value;
+        }
+
+        Assumption createAssumption() {
+            Assumption a = Truffle.getRuntime().createAssumption();
+            assumptions = a;
+            return a;
+        }
     }
 
     @NodeChild
