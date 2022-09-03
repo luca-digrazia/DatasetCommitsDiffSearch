@@ -45,6 +45,10 @@ public final class SulongEngineOption {
 
     public static final String OPTION_ARRAY_SEPARATOR = ":";
 
+    public static final OptionKey<String> CONFIGURATION = new OptionKey<>("native");
+    public static final String CONFIGURATION_NAME = "llvm.configuration";
+    public static final String CONFIGURATION_INFO = "Sulongs configuration (default=basic).";
+
     public static final OptionKey<Integer> STACK_SIZE_KB = new OptionKey<>(81920);
     public static final String STACK_SIZE_KB_NAME = "llvm.stackSizeKB";
     public static final String STACK_SIZE_KB_INFO = "The stack size in KB.";
@@ -61,6 +65,10 @@ public final class SulongEngineOption {
     public static final OptionKey<Boolean> ENABLE_NFI = new OptionKey<>(true);
     public static final String ENABLE_NFI_NAME = "llvm.enableExternalNativeAccess";
     public static final String ENABLE_NFI_INFO = "Enable Sulongs native interface.";
+
+    public static final OptionKey<String> DEBUG = new OptionKey<>(String.valueOf(false));
+    public static final String DEBUG_NAME = "llvm.debug";
+    public static final String DEBUG_INFO = "Turns debugging on/off. Can be \'true\', \'false\', \'stdout\', \'stderr\' or a filepath.";
 
     public static final OptionKey<String> DEBUG_SYSCALLS = new OptionKey<>(String.valueOf(false));
     public static final String DEBUG_SYSCALLS_NAME = "llvm.debugSysCalls";
@@ -100,6 +108,7 @@ public final class SulongEngineOption {
 
     public static List<OptionDescriptor> describeOptions() {
         ArrayList<OptionDescriptor> options = new ArrayList<>();
+        options.add(OptionDescriptor.newBuilder(CONFIGURATION, CONFIGURATION_NAME).help(CONFIGURATION_INFO).category(OptionCategory.USER).build());
         options.add(OptionDescriptor.newBuilder(STACK_SIZE_KB, STACK_SIZE_KB_NAME).help(STACK_SIZE_KB_INFO).category(OptionCategory.USER).build());
         options.add(OptionDescriptor.newBuilder(LIBRARIES, LIBRARIES_NAME).help(LIBRARIES_INFO).category(OptionCategory.USER).build());
         options.add(OptionDescriptor.newBuilder(LIBRARY_PATH, LIBRARY_PATH_NAME).help(LIBRARY_PATH_INFO).category(OptionCategory.USER).build());

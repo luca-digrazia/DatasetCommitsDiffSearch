@@ -1,42 +1,26 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.oracle.truffle.api.interop;
 
@@ -48,7 +32,6 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.interop.ForeignAccess.Factory;
-import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.nodes.Node;
 
 /**
@@ -57,12 +40,7 @@ import com.oracle.truffle.api.nodes.Node;
  * specialized messages.
  *
  * @since 0.8 or earlier
- * @deprecated message is no longer needed to send interop messages. See {@link InteropLibrary} for
- *             details. For a reflective message representation see
- *             {@link com.oracle.truffle.api.library.Message} instead.
  */
-@Deprecated
-@SuppressWarnings("deprecation")
 public abstract class Message {
     /**
      * One can define their own extended message by subclassing. The expectation is that the
@@ -107,11 +85,8 @@ public abstract class Message {
      * {@link Message#createNode() created node}.
      *
      * @since 0.8 or earlier
-     * @deprecated use {@link ObjectLibrary#readMember(Object, String)} or
-     *             {@link ArrayLibrary#readElement(Object, long)} instead. See
-     *             {@link InteropLibrary} for an overview of the new interop messages.
      */
-    @Deprecated public static final Message READ = Read.INSTANCE;
+    public static final Message READ = Read.INSTANCE;
 
     /**
      * Converts {@link TruffleObject truffle value} to Java primitive type. Primitive types are
@@ -137,14 +112,8 @@ public abstract class Message {
      * {@link Message#createNode() created node}.
      *
      * @since 0.8 or earlier
-     * @deprecated use {@link StringLibrary#asString(Object)},
-     *             {@link BooleanLibrary#asBoolean(Object)}, {@link NumberLibrary#asByte(Object)},
-     *             {@link NumberLibrary#asShort(Object)}, {@link NumberLibrary#asInt(Object)},
-     *             {@link NumberLibrary#asLong(Object)}, {@link NumberLibrary#asFloat(Object)} or
-     *             {@link NumberLibrary#asDouble(Object)} instead. See {@link InteropLibrary} for an
-     *             overview of the new interop messages.
      */
-    @Deprecated public static final Message UNBOX = Unbox.INSTANCE;
+    public static final Message UNBOX = Unbox.INSTANCE;
 
     /**
      * Message to write a field. The
@@ -181,10 +150,8 @@ public abstract class Message {
      * {@link Message#createNode() created node}.
      *
      * @since 0.8 or earlier
-     * @deprecated use {@link ObjectLibrary#writeMember(Object, String, Object)} or
-     *             {@link ArrayLibrary#writeElement(Object, long, Object)} instead.
      */
-    @Deprecated public static final Message WRITE = Write.INSTANCE;
+    public static final Message WRITE = Write.INSTANCE;
 
     /**
      * Message to remove a field. The
@@ -215,10 +182,8 @@ public abstract class Message {
      * {@link Message#createNode() created node}.
      *
      * @since 0.32
-     * @deprecated use {@link ObjectLibrary#removeMember(Object, String)} or
-     *             {@link ArrayLibrary#removeElement(Object, long)} instead.
      */
-    @Deprecated public static final Message REMOVE = Remove.INSTANCE;
+    public static final Message REMOVE = Remove.INSTANCE;
 
     /**
      * The non-object oriented execution message. In contrast to the {@link #INVOKE} message, which
@@ -269,10 +234,8 @@ public abstract class Message {
      * <p>
      *
      * @since 1.0
-     * @deprecated use {@link ExecutableLibrary#execute(Object, Object...)} instead. See
-     *             {@link InteropLibrary} for an overview of the new interop messages.
      */
-    @Deprecated public static final Message EXECUTE = Execute.INSTANCE;
+    public static final Message EXECUTE = Execute.INSTANCE;
 
     /**
      * Use {@link Message#EXECUTE} instead.
@@ -306,10 +269,8 @@ public abstract class Message {
      * {@link Message#createNode() created node}.
      *
      * @since 0.8 or earlier
-     * @deprecated use {@link ExecutableLibrary#isExecutable(Object)} instead. See
-     *             {@link InteropLibrary} for an overview of the new interop messages.
      */
-    @Deprecated public static final Message IS_EXECUTABLE = IsExecutable.INSTANCE;
+    public static final Message IS_EXECUTABLE = IsExecutable.INSTANCE;
 
     /**
      * Message to check the ability to create new instances of a
@@ -333,10 +294,8 @@ public abstract class Message {
      * {@link Message#createNode() created node}.
      *
      * @since 0.30
-     * @deprecated use {@link InstantiableLibrary#isInstantiable(Object)} instead. See
-     *             {@link InteropLibrary} for an overview of the new interop messages.
      */
-    @Deprecated public static final Message IS_INSTANTIABLE = IsInstantiable.INSTANCE;
+    public static final Message IS_INSTANTIABLE = IsInstantiable.INSTANCE;
 
     /**
      * The object oriented execute message. Unlike {@link #EXECUTE} the receiver of the message
@@ -409,10 +368,8 @@ public abstract class Message {
      * {@link #EXECUTE} the result.
      *
      * @since 1.0
-     * @deprecated use {@link ObjectLibrary#invokeMember(Object, String, Object...)} instead. See
-     *             {@link InteropLibrary} for an overview of the new interop messages.
      */
-    @Deprecated public static final Message INVOKE = Invoke.INSTANCE;
+    public static final Message INVOKE = Invoke.INSTANCE;
 
     /**
      * Use {@link Message#INVOKE} instead.
@@ -441,10 +398,8 @@ public abstract class Message {
      * <p>
      *
      * @since 1.0
-     * @deprecated use {@link InstantiableLibrary#instantiate(Object, Object...)} instead. See
-     *             {@link InteropLibrary} for an overview of the new interop messages.
      */
-    @Deprecated public static final Message NEW = New.INSTANCE;
+    public static final Message NEW = New.INSTANCE;
 
     /**
      * Use {@link Message#NEW} instead.
@@ -476,10 +431,8 @@ public abstract class Message {
      * {@link Message#createNode() created node}.
      *
      * @since 0.8 or earlier
-     * @deprecated use {@link ValueLibrary#isNull(Object)} instead. See {@link InteropLibrary} for
-     *             an overview of the new interop messages.
      */
-    @Deprecated public static final Message IS_NULL = IsNull.INSTANCE;
+    public static final Message IS_NULL = IsNull.INSTANCE;
 
     /**
      * Message to check for having a size. If a {@link TruffleObject} indicates it <em>has a
@@ -493,10 +446,8 @@ public abstract class Message {
      * @since 0.8 or earlier
      * @see ForeignAccess#sendHasSize(com.oracle.truffle.api.nodes.Node,
      *      com.oracle.truffle.api.interop.TruffleObject)
-     * @deprecated use {@link ArrayLibrary#isArray(Object)} instead. See {@link InteropLibrary} for
-     *             an overview of the new interop messages.
      */
-    @Deprecated public static final Message HAS_SIZE = HasSize.INSTANCE;
+    public static final Message HAS_SIZE = HasSize.INSTANCE;
 
     /**
      * Getter of the size. If {@link #HAS_SIZE supported}, this message has to return size of
@@ -515,10 +466,8 @@ public abstract class Message {
      * @since 0.8 or earlier
      * @see ForeignAccess#sendGetSize(com.oracle.truffle.api.nodes.Node,
      *      com.oracle.truffle.api.interop.TruffleObject)
-     * @deprecated use {@link ArrayLibrary#getArraySize(Object)} instead. See {@link InteropLibrary}
-     *             for an overview of the new interop messages.
      */
-    @Deprecated public static final Message GET_SIZE = GetSize.INSTANCE;
+    public static final Message GET_SIZE = GetSize.INSTANCE;
 
     /**
      * Check for value being boxed. Can the {@link TruffleObject foreign object} be converted to one
@@ -538,12 +487,8 @@ public abstract class Message {
      * {@link Boolean#TRUE}, it is safe to continue by sending it {@link #UNBOX} message.
      *
      * @since 0.8 or earlier
-     * @deprecated use {@link StringLibrary#isString(Object)},
-     *             {@link BooleanLibrary#isBoolean(Object)} or
-     *             {@link NumberLibrary#isNumber(Object)} instead. See {@link InteropLibrary} for an
-     *             overview of the new interop messages.
      */
-    @Deprecated public static final Message IS_BOXED = IsBoxed.INSTANCE;
+    public static final Message IS_BOXED = IsBoxed.INSTANCE;
 
     /**
      * Message to retrieve flags about a particular key (a property name). The returned value is an
@@ -575,19 +520,8 @@ public abstract class Message {
      * {@link Message#createNode() created node}.
      *
      * @since 0.26
-     * @deprecated for {@link ObjectLibrary#isObject(Object) objects} use
-     *             {@link ObjectLibrary#isMemberReadable(Object, String)},
-     *             {@link ObjectLibrary#isMemberWritable(Object, String)},
-     *             {@link ObjectLibrary#isMemberInsertable(Object, String)},
-     *             {@link ObjectLibrary#isMemberRemovable(Object, String)} or
-     *             {@link ObjectLibrary#isMemberInternal(Object, String)} instead. For
-     *             {@link ArrayLibrary#isArray(Object) arras} use
-     *             {@link ArrayLibrary#isElementReadable(Object, long)},
-     *             {@link ArrayLibrary#isElementWritable(Object, long)},
-     *             {@link ArrayLibrary#isElementInsertable(Object, long)} instead. See
-     *             {@link InteropLibrary} for an overview of the new interop messages.
      */
-    @Deprecated public static final Message KEY_INFO = KeyInfoMsg.INSTANCE;
+    public static final Message KEY_INFO = KeyInfoMsg.INSTANCE;
 
     /**
      * Message to check for having properties. If a {@link TruffleObject} indicates it <em>has
@@ -604,10 +538,8 @@ public abstract class Message {
      * @since 0.30
      * @see ForeignAccess#sendHasKeys(com.oracle.truffle.api.nodes.Node,
      *      com.oracle.truffle.api.interop.TruffleObject)
-     * @deprecated use {@link ObjectLibrary#isObject(Object)} instead. See {@link InteropLibrary}
-     *             for an overview of the new interop messages.
      */
-    @Deprecated public static final Message HAS_KEYS = HasKeys.INSTANCE;
+    public static final Message HAS_KEYS = HasKeys.INSTANCE;
 
     /**
      * Obtains list of property names. Checks the properties of a {@link TruffleObject foreign
@@ -627,10 +559,8 @@ public abstract class Message {
      * names of individual properties. The properties should be provided in deterministic order.
      *
      * @since 0.18
-     * @deprecated use {@link ObjectLibrary#getMembers(Object)} instead. See {@link InteropLibrary}
-     *             for an overview of the new interop messages.
      */
-    @Deprecated public static final Message KEYS = Keys.INSTANCE;
+    public static final Message KEYS = Keys.INSTANCE;
 
     /**
      * Check for a value being a native pointer. Can the {@link TruffleObject foreign object} be
@@ -656,10 +586,8 @@ public abstract class Message {
      * and wait for the {@link #TO_NATIVE} message to trigger the transformation.
      *
      * @since 0.26 or earlier
-     * @deprecated use {@link NativeLibrary#isPointer(Object)} instead. See {@link InteropLibrary}
-     *             for an overview of the new interop messages.
      */
-    @Deprecated public static final Message IS_POINTER = IsPointer.INSTANCE;
+    public static final Message IS_POINTER = IsPointer.INSTANCE;
 
     /**
      * Converts {@link TruffleObject truffle value} to a raw 64bit pointer value. Before sending the
@@ -683,10 +611,8 @@ public abstract class Message {
      * {@link Message#createNode() created node}.
      *
      * @since 0.26 or earlier
-     * @deprecated use {@link NativeLibrary#asPointer(Object)} instead. See {@link InteropLibrary}
-     *             for an overview of the new interop messages.
      */
-    @Deprecated public static final Message AS_POINTER = AsPointer.INSTANCE;
+    public static final Message AS_POINTER = AsPointer.INSTANCE;
 
     /**
      * Transforms a {@link TruffleObject truffle value} a new {@link TruffleObject truffle native
@@ -714,10 +640,8 @@ public abstract class Message {
      * {@link Message#createNode() created node}.
      *
      * @since 0.26 or earlier
-     * @deprecated use {@link NativeLibrary#toNative(Object)} instead. See {@link InteropLibrary}
-     *             for an overview of the new interop messages.
      */
-    @Deprecated public static final Message TO_NATIVE = ToNative.INSTANCE;
+    public static final Message TO_NATIVE = ToNative.INSTANCE;
 
     /**
      * Compares types of two messages. Messages are encouraged to implement this method. All
@@ -749,19 +673,10 @@ public abstract class Message {
      *         {@link ForeignAccess#send(com.oracle.truffle.api.nodes.Node, com.oracle.truffle.api.interop.TruffleObject, java.lang.Object...)}
      *         method.
      * @since 0.8 or earlier
-     * @deprecated use {@link Library#createCached(Class)} or
-     *             {@link Library#getUncached(Class, Object)} instead. see {@link InteropLibrary}
-     *             for examples.
      */
-    @Deprecated
-    @SuppressWarnings("all")
     public final Node createNode() {
         CompilerAsserts.neverPartOfCompilation();
-        if (ForeignAccess.LEGACY_TO_LIBRARY_BRIDGE && this instanceof KnownMessage) {
-            return LegacyToLibraryNode.create(this);
-        } else {
-            return InteropAccessNode.create(this);
-        }
+        return InteropAccessNode.create(this);
     }
 
     /**
@@ -772,9 +687,7 @@ public abstract class Message {
      * @param message the message to convert
      * @return canonical string representation
      * @since 0.9
-     * @deprecated use {@link com.oracle.truffle.api.library.Message#getSimpleName()} instead.
      */
-    @Deprecated
     public static String toString(Message message) {
         if (Message.READ == message) {
             return "READ"; // NOI18N
@@ -909,8 +822,6 @@ public abstract class Message {
             throw new IllegalArgumentException("Cannot find message for " + message, ex);
         }
     }
-
-    InteropAccessNode uncached;
 
     private static final Map<String, Message> CLASS_TO_MESSAGE = new ConcurrentHashMap<>();
 
