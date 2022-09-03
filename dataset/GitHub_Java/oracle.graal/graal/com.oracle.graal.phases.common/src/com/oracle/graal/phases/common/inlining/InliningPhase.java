@@ -140,10 +140,8 @@ public class InliningPhase extends AbstractInliningPhase {
     protected void run(final StructuredGraph graph, final HighTierContext context) {
         final InliningData data = new InliningData(graph, context, maxMethodPerInlining, canonicalizer, inliningPolicy);
 
-        assert data.repOK();
         while (data.hasUnprocessedGraphs()) {
             boolean wasInlined = data.moveForward();
-            assert data.repOK();
             if (wasInlined) {
                 inliningCount++;
             }
