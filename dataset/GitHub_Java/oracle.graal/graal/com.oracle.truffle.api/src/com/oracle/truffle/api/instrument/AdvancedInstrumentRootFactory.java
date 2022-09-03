@@ -29,13 +29,14 @@ import com.oracle.truffle.api.nodes.*;
 /**
  * Creator of {@linkplain AdvancedInstrumentRoot AST fragments} suitable for efficient execution,
  * subject to full Truffle optimization, by an
- * {@linkplain Instrument#create(AdvancedInstrumentResultListener, AdvancedInstrumentRootFactory, String)
- * Advanced Instrument}.
+ * {@linkplain Instrument#create(AdvancedInstrumentRootFactory, String) Advanced Instrument}.
  *
  * @see Instrument
  * @see AdvancedInstrumentRoot
  */
-public interface AdvancedInstrumentRootFactory {
+public abstract class AdvancedInstrumentRootFactory {
+
+    private final AdvancedInstrumentResultListener resultListener;
 
     /**
      * Provider of {@linkplain AdvancedInstrumentRoot AST fragment} instances for efficient
@@ -48,5 +49,17 @@ public interface AdvancedInstrumentRootFactory {
      * @return a newly created AST fragment suitable for execution, via instrumentation, in the
      *         execution context of the specified guest-language AST site.
      */
-    AdvancedInstrumentRoot createInstrumentRoot(Probe probe, Node node);
+    public abstract AdvancedInstrumentRoot createInstrumentRoot(Probe probe, Node node);
+
+    /**
+     * Gets the listener, if one was specified, to notify with the result of executing every
+     * {@link AdvancedInstrumentRoot} created by this factory.
+     */
+    public final AdvancedInstrumentResultListener resultListener() {
+        return resultListener;
+    }
+
+    protected AdvancedInstrumentRootFactory(AdvancedInstrumentResultListener resultListener) {
+        this.resultListener = resultListener;
+    }
 }
