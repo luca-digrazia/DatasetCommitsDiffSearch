@@ -22,26 +22,19 @@
  */
 package com.oracle.graal.lir.test;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.COMPOSITE;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static org.junit.Assert.*;
 
-import java.util.EnumSet;
+import java.util.*;
 
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.meta.*;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.lir.CompositeValue;
-import com.oracle.graal.lir.InstructionValueConsumer;
-import com.oracle.graal.lir.InstructionValueProcedure;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.lir.asm.*;
 
 /**
  * This test verifies that {@link CompositeValue}s are immutable, i.e. that a write to a component
@@ -53,7 +46,7 @@ public class CompositeValueReplacementTest1 {
 
         @Component({REG, OperandFlag.ILLEGAL}) protected Value value;
 
-        TestCompositeValue(Value value) {
+        public TestCompositeValue(Value value) {
             super(LIRKind.Illegal);
             this.value = value;
         }
@@ -75,7 +68,7 @@ public class CompositeValueReplacementTest1 {
         }
     }
 
-    private static class DummyValue extends Value {
+    private static class DummyValue extends AbstractValue {
 
         private final int id;
         private static int counter = 1;
@@ -123,7 +116,7 @@ public class CompositeValueReplacementTest1 {
 
         @Use({COMPOSITE}) protected TestCompositeValue compValue;
 
-        TestOp(TestCompositeValue compValue) {
+        public TestOp(TestCompositeValue compValue) {
             super(TYPE);
             this.compValue = compValue;
         }

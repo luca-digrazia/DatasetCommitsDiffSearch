@@ -20,43 +20,31 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.lir.amd64;
+package com.oracle.graal.lir.sparc;
 
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import static jdk.internal.jvmci.code.ValueUtil.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.asm.amd64.AMD64Address.*;
+import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 
-public final class AMD64AddressValue extends CompositeValue {
+public final class SPARCIndexedAddressValue extends SPARCAddressValue {
 
-    @Component({REG, OperandFlag.ILLEGAL}) protected AllocatableValue base;
-    @Component({REG, OperandFlag.ILLEGAL}) protected AllocatableValue index;
-    protected final Scale scale;
-    protected final int displacement;
+    @Component({REG}) protected AllocatableValue base;
+    @Component({REG}) protected AllocatableValue index;
 
-    private static final EnumSet<OperandFlag> flags = EnumSet.of(OperandFlag.REG, OperandFlag.ILLEGAL);
+    private static final EnumSet<OperandFlag> flags = EnumSet.of(OperandFlag.REG);
 
-    public AMD64AddressValue(LIRKind kind, AllocatableValue base, int displacement) {
-        this(kind, base, Value.ILLEGAL, Scale.Times1, displacement);
-    }
-
-    public AMD64AddressValue(LIRKind kind, AllocatableValue base, AllocatableValue index, Scale scale, int displacement) {
+    public SPARCIndexedAddressValue(LIRKind kind, AllocatableValue base, AllocatableValue index) {
         super(kind);
         this.base = base;
         this.index = index;
-        this.scale = scale;
-        this.displacement = displacement;
-
-        assert scale != null;
     }
 
     @Override
@@ -64,7 +52,7 @@ public final class AMD64AddressValue extends CompositeValue {
         AllocatableValue newBase = (AllocatableValue) proc.doValue(inst, base, mode, flags);
         AllocatableValue newIndex = (AllocatableValue) proc.doValue(inst, index, mode, flags);
         if (!base.identityEquals(newBase) || !index.identityEquals(newIndex)) {
-            return new AMD64AddressValue(getLIRKind(), newBase, newIndex, scale, displacement);
+            return new SPARCIndexedAddressValue(getLIRKind(), newBase, newIndex);
         }
         return this;
     }
@@ -75,17 +63,14 @@ public final class AMD64AddressValue extends CompositeValue {
         proc.visitValue(inst, index, mode, flags);
     }
 
-    private static Register toRegister(AllocatableValue value) {
-        if (value.equals(Value.ILLEGAL)) {
-            return Register.None;
-        } else {
-            RegisterValue reg = (RegisterValue) value;
-            return reg.getRegister();
-        }
+    @Override
+    public SPARCAddress toAddress() {
+        return new SPARCAddress(asRegister(base), asRegister(index));
     }
 
-    public AMD64Address toAddress() {
-        return new AMD64Address(toRegister(base), toRegister(index), scale, displacement);
+    @Override
+    public boolean isValidImplicitNullCheckFor(Value value, int implicitNullCheckLimit) {
+        return false;
     }
 
     @Override
@@ -97,33 +82,23 @@ public final class AMD64AddressValue extends CompositeValue {
             sep = " + ";
         }
         if (isLegal(index)) {
-            s.append(sep).append(index).append(" * ").append(scale.value);
-            sep = " + ";
-        }
-        if (displacement < 0) {
-            s.append(" - ").append(-displacement);
-        } else if (displacement > 0) {
-            s.append(sep).append(displacement);
+            s.append(sep).append(index);
         }
         s.append("]");
         return s.toString();
     }
 
-    public boolean isValidImplicitNullCheckFor(Value value, int implicitNullCheckLimit) {
-        return value.equals(base) && index.equals(Value.ILLEGAL) && displacement >= 0 && displacement < implicitNullCheckLimit;
-    }
-
     @Override
     public boolean equals(Object obj) {
-        if (obj instanceof AMD64AddressValue) {
-            AMD64AddressValue addr = (AMD64AddressValue) obj;
-            return getLIRKind().equals(addr.getLIRKind()) && displacement == addr.displacement && base.equals(addr.base) && scale == addr.scale && index.equals(addr.index);
+        if (obj instanceof SPARCIndexedAddressValue) {
+            SPARCIndexedAddressValue addr = (SPARCIndexedAddressValue) obj;
+            return getLIRKind().equals(addr.getLIRKind()) && base.equals(addr.base) && index.equals(addr.index);
         }
         return false;
     }
 
     @Override
     public int hashCode() {
-        return base.hashCode() ^ index.hashCode() ^ (displacement << 4) ^ (scale.value << 8) ^ getLIRKind().hashCode();
+        return base.hashCode() ^ index.hashCode() ^ getLIRKind().hashCode();
     }
 }
