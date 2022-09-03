@@ -37,7 +37,7 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.Snippet.*;
+import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
 
@@ -247,16 +247,29 @@ public class ArrayCopySnippets implements Snippets {
         int header = arrayBaseOffset(Kind.Object);
         if (src == dest && srcPos < destPos) { // bad aliased case
             long start = (long) (length - 1) * scale;
+<<<<<<< local
+=======
+            long j = (long) (length) - 1;
+>>>>>>> other
             for (long i = start; i >= 0; i -= scale) {
                 Object a = UnsafeLoadNode.load(src, header, i + (long) srcPos * scale, Kind.Object);
                 DirectObjectStoreNode.storeObject(dest, header, i + (long) destPos * scale, a);
+<<<<<<< local
+=======
+                WriteBarrierPost.arrayCopyWriteBarrier(dest, a, j);
+                j--;
+>>>>>>> other
             }
         } else {
             long end = (long) length * scale;
+<<<<<<< local
+=======
+            long j = srcPos;
+>>>>>>> other
             for (long i = 0; i < end; i += scale) {
                 Object a = UnsafeLoadNode.load(src, header, i + (long) srcPos * scale, Kind.Object);
                 DirectObjectStoreNode.storeObject(dest, header, i + (long) destPos * scale, a);
-
+<<<<<<< local
             }
         }
         if (length > 0) {
@@ -268,6 +281,10 @@ public class ArrayCopySnippets implements Snippets {
             long count = end - start + 1;
             while (count-- > 0) {
                 DirectStoreNode.store((start + cardStart) + count, false, Kind.Boolean);
+=======
+                WriteBarrierPost.arrayCopyWriteBarrier(dest, a, j);
+                j++;
+>>>>>>> other
             }
         }
     }
@@ -308,12 +325,12 @@ public class ArrayCopySnippets implements Snippets {
         Word destNonVectorEnd = destStart.add(nonVectorBytes);
 
         while (destOffset.belowThan(destNonVectorEnd)) {
-            destOffset.writeByte(0, srcOffset.readByte(0, ANY_LOCATION), ANY_LOCATION);
+            destOffset.writeByte(0, srcOffset.readByte(0, UNKNOWN_LOCATION), ANY_LOCATION);
             destOffset = destOffset.add(1);
             srcOffset = srcOffset.add(1);
         }
         while (destOffset.belowThan(destEnd)) {
-            destOffset.writeWord(0, srcOffset.readWord(0, ANY_LOCATION), ANY_LOCATION);
+            destOffset.writeWord(0, srcOffset.readWord(0, UNKNOWN_LOCATION), ANY_LOCATION);
             destOffset = destOffset.add(wordSize());
             srcOffset = srcOffset.add(wordSize());
         }
