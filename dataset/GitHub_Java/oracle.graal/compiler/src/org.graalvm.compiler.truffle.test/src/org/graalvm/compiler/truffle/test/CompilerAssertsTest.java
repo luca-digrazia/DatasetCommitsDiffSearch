@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -81,11 +81,10 @@ public class CompilerAssertsTest extends PartialEvaluationTest {
     }
 
     @Test
-    @SuppressWarnings("try")
     public void neverPartOfCompilationTest() {
         NeverPartOfCompilationTestNode result = new NeverPartOfCompilationTestNode();
         RootTestNode rootNode = new RootTestNode(new FrameDescriptor(), "neverPartOfCompilation", result);
-        try (PreventDumping noDump = new PreventDumping()) {
+        try {
             compileHelper("neverPartOfCompilation", rootNode, new Object[0]);
             Assert.fail("Expected bailout exception due to never part of compilation");
         } catch (BailoutException e) {
@@ -94,12 +93,11 @@ public class CompilerAssertsTest extends PartialEvaluationTest {
     }
 
     @Test
-    @SuppressWarnings("try")
     public void compilationNonConstantTest() {
         FrameDescriptor descriptor = new FrameDescriptor();
         CompilationConstantTestNode result = new CompilationConstantTestNode(new NonConstantTestNode(5));
         RootTestNode rootNode = new RootTestNode(descriptor, "compilationConstant", result);
-        try (PreventDumping noDump = new PreventDumping()) {
+        try {
             compileHelper("compilationConstant", rootNode, new Object[0]);
             Assert.fail("Expected bailout exception because expression is not compilation constant");
         } catch (BailoutException e) {
