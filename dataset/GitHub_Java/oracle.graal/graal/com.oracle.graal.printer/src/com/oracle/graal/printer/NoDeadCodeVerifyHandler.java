@@ -42,22 +42,19 @@ public class NoDeadCodeVerifyHandler implements DebugVerifyHandler {
 
     // The options below will be removed once all phases clean up their own dead code.
 
-    private static final int OFF = 0;
-    private static final int INFO = 1;
-    private static final int VERBOSE = 2;
-    private static final int FATAL = 3;
-
     static class Options {
         // @formatter:off
-        @Option(help = "Run level for NoDeadCodeVerifyHandler (0 = off, 1 = info, 2 = verbose, 3 = fatal)")
-        public static final OptionValue<Integer> NDCV = new OptionValue<>(0);
+        @Option(help = "Enable NoDeadCodeVerifyHandler")
+        public static final OptionValue<Boolean> NDCV = new OptionValue<>(false);
+        @Option(help = "Issues caught by NoDeadCodeVerifyHandler raise an error")
+        public static final OptionValue<Boolean> NDCVFatal = new OptionValue<>(false);
         // @formatter:on
     }
 
     private static final Map<Class<?>, Boolean> discovered = new ConcurrentHashMap<>();
 
     public void verify(Object object, Object... context) {
-        if (NDCV.getValue() != OFF) {
+        if (NDCV.getValue()) {
             StructuredGraph graph = extract(StructuredGraph.class, object);
             BasePhase<?> phase = extract(BasePhase.class, context);
             if (graph != null) {
@@ -67,19 +64,15 @@ public class NoDeadCodeVerifyHandler implements DebugVerifyHandler {
                 assert after.size() <= before.size();
                 if (before.size() != after.size()) {
                     before.removeAll(after);
-                    if (discovered.put(phase.getClass(), Boolean.TRUE) == null) {
+                    if (NDCVFatal.getValue() || discovered.put(phase.getClass(), Boolean.TRUE) == null) {
                         String message = extract(String.class, context);
                         String prefix = message == null ? "" : message + ": ";
                         String phaseClass = phase == null ? null : phase.getClass().getName();
                         GraalInternalError error = new GraalInternalError("%sfound dead nodes in %s (phase class=%s): %s", prefix, graph, phaseClass, before);
-                        if (NDCV.getValue() == INFO) {
-                            System.out.println(error.getMessage());
-                        } else if (NDCV.getValue() == VERBOSE) {
-                            error.printStackTrace(System.out);
-                        } else {
-                            assert NDCV.getValue() == FATAL;
+                        if (NDCVFatal.getValue()) {
                             throw error;
                         }
+                        error.printStackTrace(System.out);
                     }
                 }
             }
