@@ -134,8 +134,8 @@ public abstract class HotSpotForeignCallsProviderImpl implements HotSpotForeignC
     public static final LocationIdentity[] NO_LOCATIONS = {};
 
     public HotSpotForeignCallLinkage lookupForeignCall(ForeignCallDescriptor descriptor) {
-        assert foreignCalls != null : descriptor;
         HotSpotForeignCallLinkage callTarget = foreignCalls.get(descriptor);
+        assert foreignCalls != null : descriptor;
         callTarget.finalizeAddress(runtime.getHostBackend());
         return callTarget;
     }
