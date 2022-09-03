@@ -62,7 +62,7 @@ public class MacroNode extends AbstractStateSplit implements Lowerable {
     protected InvokeNode createInvoke() {
         InvokeKind invokeKind = Modifier.isStatic(targetMethod.getModifiers()) ? InvokeKind.Static : InvokeKind.Special;
         MethodCallTargetNode callTarget = graph().add(new MethodCallTargetNode(invokeKind, targetMethod, arguments.toArray(new ValueNode[arguments.size()]), returnType));
-        InvokeNode invoke = graph().add(new InvokeNode(callTarget, bci));
+        InvokeNode invoke = graph().add(new InvokeNode(callTarget, bci, StructuredGraph.INVALID_GRAPH_ID));
         invoke.setStateAfter(stateAfter());
         return invoke;
     }
