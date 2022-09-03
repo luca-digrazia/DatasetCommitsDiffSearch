@@ -29,10 +29,10 @@ import org.junit.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.dsl.test.ShortCircuitTestFactory.DoubleChildNodeFactory;
+import com.oracle.truffle.api.dsl.test.ShortCircuitTestFactory.ShortCircuitWithImplicitCastNodeFactory;
 import com.oracle.truffle.api.dsl.test.ShortCircuitTestFactory.SingleChildNodeFactory;
 import com.oracle.truffle.api.dsl.test.ShortCircuitTestFactory.VarArgsNodeFactory;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ArgumentNode;
-import com.oracle.truffle.api.dsl.test.TypeSystemTest.TestArguments;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
 
 public class ShortCircuitTest {
@@ -42,7 +42,7 @@ public class ShortCircuitTest {
         ArgumentNode arg0 = new ArgumentNode(0);
         CallTarget callTarget = TestHelper.createCallTarget(SingleChildNodeFactory.create(arg0));
         SingleChildNode.needsChild = true;
-        assertEquals(42, callTarget.call(new TestArguments(42)));
+        assertEquals(42, callTarget.call(new Object[]{42}));
         assertEquals(1, arg0.getInvocationCount());
     }
 
@@ -51,7 +51,7 @@ public class ShortCircuitTest {
         ArgumentNode arg0 = new ArgumentNode(0);
         CallTarget callTarget = TestHelper.createCallTarget(SingleChildNodeFactory.create(arg0));
         SingleChildNode.needsChild = false;
-        assertEquals(0, callTarget.call(new TestArguments(42)));
+        assertEquals(0, callTarget.call(new Object[]{42}));
         assertEquals(0, arg0.getInvocationCount());
     }
 
@@ -78,7 +78,7 @@ public class ShortCircuitTest {
         ArgumentNode arg0 = new ArgumentNode(0);
         ArgumentNode arg1 = new ArgumentNode(1);
         CallTarget callTarget = TestHelper.createCallTarget(DoubleChildNodeFactory.create(arg0, arg1));
-        assertEquals(42, callTarget.call(new TestArguments(41, 42)));
+        assertEquals(42, callTarget.call(new Object[]{41, 42}));
         assertEquals(1, arg1.getInvocationCount());
     }
 
@@ -87,7 +87,7 @@ public class ShortCircuitTest {
         ArgumentNode arg0 = new ArgumentNode(0);
         ArgumentNode arg1 = new ArgumentNode(1);
         CallTarget callTarget = TestHelper.createCallTarget(DoubleChildNodeFactory.create(arg0, arg1));
-        assertEquals(0, callTarget.call(new TestArguments(42, 42)));
+        assertEquals(0, callTarget.call(new Object[]{42, 42}));
         assertEquals(0, arg1.getInvocationCount());
     }
 
@@ -107,12 +107,32 @@ public class ShortCircuitTest {
 
     }
 
+    @NodeChildren({@NodeChild("child0"), @NodeChild("child1")})
+    @SuppressWarnings("unused")
+    abstract static class GuardChildNode extends ValueNode {
+
+        @ShortCircuit("child1")
+        boolean needsChild1(Object a) {
+            return a.equals(new Integer(42));
+        }
+
+        static boolean guard(int a, boolean hasB, int b) {
+            return false;
+        }
+
+        @Specialization(guards = "guard(a, hasB, b)")
+        int doIt(int a, boolean hasB, int b) {
+            return a + b;
+        }
+
+    }
+
     @Test
     public void testVarArgs1() {
         ArgumentNode arg0 = new ArgumentNode(0);
         ArgumentNode arg1 = new ArgumentNode(1);
         CallTarget callTarget = TestHelper.createCallTarget(VarArgsNodeFactory.create(new ValueNode[]{arg0, arg1}));
-        assertEquals(42, callTarget.call(new TestArguments(41, 42)));
+        assertEquals(42, callTarget.call(new Object[]{41, 42}));
         assertEquals(1, arg1.getInvocationCount());
     }
 
@@ -121,7 +141,7 @@ public class ShortCircuitTest {
         ArgumentNode arg0 = new ArgumentNode(0);
         ArgumentNode arg1 = new ArgumentNode(1);
         CallTarget callTarget = TestHelper.createCallTarget(VarArgsNodeFactory.create(new ValueNode[]{arg0, arg1}));
-        assertEquals(0, callTarget.call(new TestArguments(42, 42)));
+        assertEquals(0, callTarget.call(new Object[]{42, 42}));
         assertEquals(0, arg1.getInvocationCount());
     }
 
@@ -137,6 +157,40 @@ public class ShortCircuitTest {
         @SuppressWarnings("unused")
         int doIt(int child0, boolean hasChild1, int child1) {
             return child1;
+        }
+
+    }
+
+    @Test
+    public void testShortCircuitWithImplicitCastNode() {
+        ArgumentNode arg0 = new ArgumentNode(0);
+        ArgumentNode arg1 = new ArgumentNode(1);
+        CallTarget callTarget = TestHelper.createCallTarget(ShortCircuitWithImplicitCastNodeFactory.create(new ValueNode[]{arg0, arg1}));
+        assertEquals(42, callTarget.call(new Object[]{42, 41}));
+    }
+
+    @TypeSystem(int.class)
+    abstract static class ShortCircuitWithImplicitCastTypes {
+
+        @ImplicitCast
+        public static int doAnImplicitCast(String foo) {
+            return Integer.parseInt(foo);
+        }
+
+    }
+
+    @NodeChild(value = "children", type = ValueNode[].class)
+    @TypeSystemReference(ShortCircuitWithImplicitCastTypes.class)
+    abstract static class ShortCircuitWithImplicitCastNode extends ValueNode {
+
+        @ShortCircuit("children[1]")
+        public boolean needsRightNode(Object left) {
+            return (int) left == 41;
+        }
+
+        @Specialization
+        public int doInteger(int left, boolean needsRight, int right) {
+            return needsRight ? right : left;
         }
 
     }
