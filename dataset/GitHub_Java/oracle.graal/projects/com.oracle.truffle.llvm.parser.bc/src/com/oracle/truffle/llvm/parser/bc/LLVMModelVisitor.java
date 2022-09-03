@@ -29,6 +29,9 @@
  */
 package com.oracle.truffle.llvm.parser.bc;
 
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.PrintStream;
 import java.util.List;
 
 import com.oracle.truffle.api.RootCallTarget;
@@ -39,18 +42,18 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.context.LLVMContext;
 import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.parser.api.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.api.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.api.model.globals.GlobalAlias;
 import com.oracle.truffle.llvm.parser.api.model.globals.GlobalConstant;
 import com.oracle.truffle.llvm.parser.api.model.globals.GlobalVariable;
-import com.oracle.truffle.llvm.parser.api.model.types.Type;
 import com.oracle.truffle.llvm.parser.api.model.visitors.ModelVisitor;
 import com.oracle.truffle.llvm.parser.api.util.LLVMBitcodeTypeHelper;
+import com.oracle.truffle.llvm.runtime.LLVMLogger;
+import com.oracle.truffle.llvm.runtime.LLVMFunction;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.LLVMRuntimeType;
 import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
-import com.oracle.truffle.llvm.types.LLVMFunction;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
+import com.oracle.truffle.llvm.runtime.types.Type;
 
 public final class LLVMModelVisitor implements ModelVisitor {
 
@@ -85,20 +88,38 @@ public final class LLVMModelVisitor implements ModelVisitor {
     public void visit(FunctionDefinition method) {
         FrameDescriptor frame = visitor.getStack().getFrame(method.getName());
 
-        List<LLVMNode> parameters = visitor.createParameters(frame, method);
+        List<LLVMExpressionNode> parameters = visitor.createParameters(frame, method);
 
         final LLVMLifetimeAnalysis lifetimes = LLVMLifetimeAnalysis.getResult(method, frame, visitor.getPhis().getPhiMap(method.getName()));
 
         LLVMExpressionNode body = visitor.createFunction(method, lifetimes);
 
-        LLVMNode[] beforeFunction = parameters.toArray(new LLVMNode[parameters.size()]);
-        LLVMNode[] afterFunction = new LLVMNode[0];
+        LLVMExpressionNode[] beforeFunction = parameters.toArray(new LLVMExpressionNode[parameters.size()]);
+        LLVMExpressionNode[] afterFunction = new LLVMExpressionNode[0];
 
         final SourceSection sourceSection = visitor.getSource().createSection(1);
         RootNode rootNode = visitor.getNodeFactoryFacade().createFunctionStartNode(visitor, body, beforeFunction, afterFunction, sourceSection, frame, method);
-        if (LLVMOptions.DEBUG.printFunctionASTs()) {
+
+        final String astPrintTarget = LLVMOptions.DEBUG.printFunctionASTs();
+        if (LLVMLogger.TARGET_STDOUT.equals(astPrintTarget) || LLVMLogger.TARGET_ANY.equals(astPrintTarget)) {
+            // Checkstyle: stop
             NodeUtil.printTree(System.out, rootNode);
             System.out.flush();
+            // Checkstyle: resume
+
+        } else if (LLVMLogger.TARGET_STDERR.equals(astPrintTarget)) {
+            // Checkstyle: stop
+            NodeUtil.printTree(System.err, rootNode);
+            System.err.flush();
+            // Checkstyle: resume
+
+        } else if (!LLVMLogger.TARGET_NONE.equals(astPrintTarget)) {
+            try (final PrintStream out = new PrintStream(new FileOutputStream(astPrintTarget, true))) {
+                NodeUtil.printTree(out, rootNode);
+                out.flush();
+            } catch (IOException e) {
+                throw new IllegalStateException("Cannot write to file: " + astPrintTarget);
+            }
         }
 
         LLVMRuntimeType llvmReturnType = method.getReturnType().getRuntimeType();

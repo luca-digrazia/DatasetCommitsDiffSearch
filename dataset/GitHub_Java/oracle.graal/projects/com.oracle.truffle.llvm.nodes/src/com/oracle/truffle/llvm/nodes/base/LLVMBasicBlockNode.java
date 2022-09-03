@@ -136,9 +136,9 @@ public class LLVMBasicBlockNode extends LLVMExpressionNode {
         LLVMFunctionStartNode functionStartNode = NodeUtil.findParent(this, LLVMFunctionStartNode.class);
         assert functionStartNode != null : getParent().getClass();
         if (blockId == 0) {
-            return String.format("first basic block in function %s", functionStartNode.getName());
+            return String.format("first basic block in function %s", functionStartNode.getFunctionName());
         } else {
-            return String.format("basic block %s in function %s", blockName, functionStartNode.getName());
+            return String.format("basic block %s in function %s", blockName, functionStartNode.getFunctionName());
         }
     }
 
