@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -369,11 +369,9 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
         SIG_WINCH("WINCH"),
         SIG_UNUSED("UNUSED");
 
-        private static final Signals[] VALUES = values();
-
         @TruffleBoundary
         public static Signals decode(int code) throws NoSuchElementException {
-            for (Signals currentSignal : VALUES) {
+            for (Signals currentSignal : values()) {
                 if (currentSignal.signal() != null && currentSignal.signal().getNumber() == code) {
                     return currentSignal;
                 }
