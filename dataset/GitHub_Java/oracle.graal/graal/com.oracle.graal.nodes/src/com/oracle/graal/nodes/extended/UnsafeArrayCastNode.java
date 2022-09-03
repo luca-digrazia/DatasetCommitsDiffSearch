@@ -37,8 +37,8 @@ public final class UnsafeArrayCastNode extends UnsafeCastNode implements ArrayLe
         return length;
     }
 
-    public UnsafeArrayCastNode(ValueNode object, ValueNode length, Stamp stamp, ValueNode anchor) {
-        super(object, stamp, anchor);
+    public UnsafeArrayCastNode(ValueNode object, ValueNode length, Stamp stamp) {
+        super(object, stamp);
         this.length = length;
     }
 
@@ -51,5 +51,5 @@ public final class UnsafeArrayCastNode extends UnsafeCastNode implements ArrayLe
     }
 
     @NodeIntrinsic
-    public static native <T> T unsafeArrayCast(Object object, int length, @ConstantNodeParameter Stamp stamp, ValueNode anchor);
+    public static native <T> T unsafeArrayCast(Object object, int length, @ConstantNodeParameter Stamp stamp);
 }

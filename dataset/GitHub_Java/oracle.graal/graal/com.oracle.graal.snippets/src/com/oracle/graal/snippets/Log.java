@@ -22,51 +22,81 @@
  */
 package com.oracle.graal.snippets;
 
-import com.oracle.graal.api.code.*;
+import java.io.*;
+
+import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.nodes.extended.*;
 
+//JaCoCo Exclude
+
 /**
- * Provides printf-like debug facility. This should only be used in {@linkplain Snippet snippets}.
+ * Provides {@link PrintStream}-like logging facility. This should only be used in
+ * {@linkplain Snippet snippets}.
  */
 public final class Log {
 
-    @SuppressWarnings("unused")
-    @NodeIntrinsic(RuntimeCallNode.class)
-    private static void log(@ConstantNodeParameter RuntimeCall logObject, Object object, boolean newline, boolean string) {
-        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
-    }
+    public static final Descriptor LOG_PRIMITIVE = new Descriptor("logPrimitive", false, void.class, int.class, long.class, boolean.class);
+    public static final Descriptor LOG_OBJECT = new Descriptor("logObject", false, void.class, Object.class, int.class);
+    public static final Descriptor LOG_PRINTF = new Descriptor("logPrintf", false, void.class, Object.class, long.class, long.class, long.class);
 
-    @SuppressWarnings("unused")
+    // Note: Must be kept in sync with constants in c1_Runtime1.hpp
+    private static final int LOG_OBJECT_NEWLINE = 0x01;
+    private static final int LOG_OBJECT_STRING = 0x02;
+    private static final int LOG_OBJECT_ADDRESS = 0x04;
+
     @NodeIntrinsic(RuntimeCallNode.class)
-    private static void log(@ConstantNodeParameter RuntimeCall logPrimitive, int typeChar, long value, boolean newline) {
-        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
-    }
+    private static native void log(@ConstantNodeParameter Descriptor logObject, Object object, int flags);
+
+    @NodeIntrinsic(RuntimeCallNode.class)
+    private static native void log(@ConstantNodeParameter Descriptor logPrimitive, int typeChar, long value, boolean newline);
+
+    @NodeIntrinsic(RuntimeCallNode.class)
+    private static native void printf(@ConstantNodeParameter Descriptor logPrintf, String format, long v1, long v2, long v3);
 
     public static void print(boolean value) {
-        log(RuntimeCall.LogPrimitive, Kind.Boolean.typeChar, value ? 1L : 0L, false);
+        log(LOG_PRIMITIVE, Kind.Boolean.getTypeChar(), value ? 1L : 0L, false);
     }
 
     public static void print(byte value) {
-        log(RuntimeCall.LogPrimitive, Kind.Byte.typeChar, value, false);
+        log(LOG_PRIMITIVE, Kind.Byte.getTypeChar(), value, false);
     }
 
     public static void print(char value) {
-        log(RuntimeCall.LogPrimitive, Kind.Char.typeChar, value, false);
+        log(LOG_PRIMITIVE, Kind.Char.getTypeChar(), value, false);
     }
 
     public static void print(short value) {
-        log(RuntimeCall.LogPrimitive, Kind.Short.typeChar, value, false);
+        log(LOG_PRIMITIVE, Kind.Short.getTypeChar(), value, false);
     }
 
     public static void print(int value) {
-        log(RuntimeCall.LogPrimitive, Kind.Int.typeChar, value, false);
+        log(LOG_PRIMITIVE, Kind.Int.getTypeChar(), value, false);
     }
 
     public static void print(long value) {
-        log(RuntimeCall.LogPrimitive, Kind.Long.typeChar, value, false);
+        log(LOG_PRIMITIVE, Kind.Long.getTypeChar(), value, false);
+    }
+
+    /**
+     * Prints a formatted string to the log stream.
+     * 
+     * @param format a C style printf format value that can contain at most one conversion specifier
+     *            (i.e., a sequence of characters starting with '%').
+     * @param value the value associated with the conversion specifier
+     */
+    public static void printf(String format, long value) {
+        printf(LOG_PRINTF, format, value, 0L, 0L);
+    }
+
+    public static void printf(String format, long v1, long v2) {
+        printf(LOG_PRINTF, format, v1, v2, 0L);
+    }
+
+    public static void printf(String format, long v1, long v2, long v3) {
+        printf(LOG_PRINTF, format, v1, v2, v3);
     }
 
     public static void print(float value) {
@@ -77,7 +107,7 @@ public final class Log {
         } else if (value == Float.NEGATIVE_INFINITY) {
             print("-Infinity");
         } else {
-            log(RuntimeCall.LogPrimitive, Kind.Float.typeChar, Float.floatToRawIntBits(value), false);
+            log(LOG_PRIMITIVE, Kind.Float.getTypeChar(), Float.floatToRawIntBits(value), false);
         }
     }
 
@@ -89,40 +119,44 @@ public final class Log {
         } else if (value == Double.NEGATIVE_INFINITY) {
             print("-Infinity");
         } else {
-            log(RuntimeCall.LogPrimitive, Kind.Double.typeChar, Double.doubleToRawLongBits(value), false);
+            log(LOG_PRIMITIVE, Kind.Double.getTypeChar(), Double.doubleToRawLongBits(value), false);
         }
     }
 
     public static void print(String value) {
-        log(RuntimeCall.LogObject, value, false, true);
+        log(LOG_OBJECT, value, LOG_OBJECT_STRING);
     }
 
     public static void printAddress(Object o) {
-        log(RuntimeCall.LogObject, o, false, false);
+        log(LOG_OBJECT, o, LOG_OBJECT_ADDRESS);
+    }
+
+    public static void printObject(Object o) {
+        log(LOG_OBJECT, o, 0);
     }
 
     public static void println(boolean value) {
-        log(RuntimeCall.LogPrimitive, Kind.Boolean.typeChar, value ? 1L : 0L, true);
+        log(LOG_PRIMITIVE, Kind.Boolean.getTypeChar(), value ? 1L : 0L, true);
     }
 
     public static void println(byte value) {
-        log(RuntimeCall.LogPrimitive, Kind.Byte.typeChar, value, true);
+        log(LOG_PRIMITIVE, Kind.Byte.getTypeChar(), value, true);
     }
 
     public static void println(char value) {
-        log(RuntimeCall.LogPrimitive, Kind.Char.typeChar, value, true);
+        log(LOG_PRIMITIVE, Kind.Char.getTypeChar(), value, true);
     }
 
     public static void println(short value) {
-        log(RuntimeCall.LogPrimitive, Kind.Short.typeChar, value, true);
+        log(LOG_PRIMITIVE, Kind.Short.getTypeChar(), value, true);
     }
 
     public static void println(int value) {
-        log(RuntimeCall.LogPrimitive, Kind.Int.typeChar, value, true);
+        log(LOG_PRIMITIVE, Kind.Int.getTypeChar(), value, true);
     }
 
     public static void println(long value) {
-        log(RuntimeCall.LogPrimitive, Kind.Long.typeChar, value, true);
+        log(LOG_PRIMITIVE, Kind.Long.getTypeChar(), value, true);
     }
 
     public static void println(float value) {
@@ -133,7 +167,7 @@ public final class Log {
         } else if (value == Float.NEGATIVE_INFINITY) {
             println("-Infinity");
         } else {
-            log(RuntimeCall.LogPrimitive, Kind.Float.typeChar, Float.floatToRawIntBits(value), true);
+            log(LOG_PRIMITIVE, Kind.Float.getTypeChar(), Float.floatToRawIntBits(value), true);
         }
     }
 
@@ -145,16 +179,20 @@ public final class Log {
         } else if (value == Double.NEGATIVE_INFINITY) {
             println("-Infinity");
         } else {
-            log(RuntimeCall.LogPrimitive, Kind.Double.typeChar, Double.doubleToRawLongBits(value), true);
+            log(LOG_PRIMITIVE, Kind.Double.getTypeChar(), Double.doubleToRawLongBits(value), true);
         }
     }
 
     public static void println(String value) {
-        log(RuntimeCall.LogObject, value, true, true);
+        log(LOG_OBJECT, value, LOG_OBJECT_NEWLINE | LOG_OBJECT_STRING);
     }
 
     public static void printlnAddress(Object o) {
-        log(RuntimeCall.LogObject, o, true, false);
+        log(LOG_OBJECT, o, LOG_OBJECT_NEWLINE | LOG_OBJECT_ADDRESS);
+    }
+
+    public static void printlnObject(Object o) {
+        log(LOG_OBJECT, o, LOG_OBJECT_NEWLINE);
     }
 
     public static void println() {

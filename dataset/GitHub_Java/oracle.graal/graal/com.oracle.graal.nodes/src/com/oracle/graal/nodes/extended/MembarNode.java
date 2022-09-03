@@ -43,11 +43,6 @@ public class MembarNode extends FixedWithNextNode implements LIRLowerable, Memor
     }
 
     @Override
-    public Object getLocationIdentity() {
-        return LocationNode.ANY_LOCATION;
-    }
-
-    @Override
     public void generate(LIRGeneratorTool generator) {
         generator.emitMembar(barriers);
     }

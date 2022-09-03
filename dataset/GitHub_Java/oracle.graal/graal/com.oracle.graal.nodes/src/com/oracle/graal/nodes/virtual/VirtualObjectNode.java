@@ -25,19 +25,27 @@ package com.oracle.graal.nodes.virtual;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(nameTemplate = "VirtualObject {p#type}")
-public abstract class VirtualObjectNode extends ValueNode implements LIRLowerable {
+public abstract class VirtualObjectNode extends FloatingNode implements LIRLowerable {
 
-    public VirtualObjectNode() {
+    private final long virtualId;
+
+    public VirtualObjectNode(long virtualId) {
         super(StampFactory.virtual());
+        this.virtualId = virtualId;
     }
 
     public abstract ResolvedJavaType type();
 
     public abstract int entryCount();
+
+    public long virtualId() {
+        return virtualId;
+    }
 
     @Override
     public void generate(LIRGeneratorTool gen) {

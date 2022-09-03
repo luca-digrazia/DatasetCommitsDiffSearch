@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.snippets.nodes;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
@@ -45,7 +46,7 @@ public class DirectReadNode extends FixedWithNextNode implements LIRLowerable {
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        gen.setResult(this, gen.emitLoad(gen.makeAddress(readKind, gen.operand(address)), false));
+        gen.setResult(this, gen.emitLoad(new Address(readKind, gen.operand(address)), false));
     }
 
     @NodeIntrinsic

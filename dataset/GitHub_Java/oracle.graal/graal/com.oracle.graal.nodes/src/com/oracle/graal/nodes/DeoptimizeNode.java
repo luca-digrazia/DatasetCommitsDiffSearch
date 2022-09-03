@@ -34,11 +34,17 @@ public class DeoptimizeNode extends FixedNode implements Node.IterableNodeType, 
     private String message;
     private final DeoptimizationAction action;
     private final DeoptimizationReason reason;
+    private final long leafGraphId;
 
     public DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason) {
+        this(action, reason, -1);
+    }
+
+    public DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason, long leafGraphId) {
         super(StampFactory.forVoid());
         this.action = action;
         this.reason = reason;
+        this.leafGraphId = leafGraphId;
     }
 
     public void setMessage(String message) {
@@ -57,9 +63,13 @@ public class DeoptimizeNode extends FixedNode implements Node.IterableNodeType, 
         return reason;
     }
 
+    public long leafGraphId() {
+        return leafGraphId;
+    }
+
     @Override
     public void generate(LIRGeneratorTool gen) {
-        gen.emitDeoptimize(action, reason, message);
+        gen.emitDeoptimize(action, reason, message, leafGraphId);
     }
 
     @NodeIntrinsic

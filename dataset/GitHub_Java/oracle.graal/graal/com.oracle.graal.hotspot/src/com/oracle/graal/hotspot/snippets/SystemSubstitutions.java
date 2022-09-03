@@ -23,15 +23,15 @@
 package com.oracle.graal.hotspot.snippets;
 
 import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
+import static com.oracle.graal.snippets.nodes.BranchProbabilityNode.*;
 
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.snippets.*;
-import com.oracle.graal.snippets.ClassSubstitution.*;
-import com.oracle.graal.word.*;
+import com.oracle.graal.snippets.ClassSubstitution.MacroSubstitution;
+import com.oracle.graal.snippets.ClassSubstitution.MethodSubstitution;
 
 /**
  * Substitutions for {@link java.lang.System} methods.
@@ -41,6 +41,9 @@ public class SystemSubstitutions {
 
     public static final Descriptor JAVA_TIME_MILLIS = new Descriptor("javaTimeMillis", false, long.class);
     public static final Descriptor JAVA_TIME_NANOS = new Descriptor("javaTimeNanos", false, long.class);
+
+    @MacroSubstitution(macro = ArrayCopyNode.class, isStatic = true)
+    public static native void arraycopy(Object src, int srcPos, Object dest, int destPos, int length);
 
     @MethodSubstitution
     public static long currentTimeMillis() {
@@ -55,21 +58,11 @@ public class SystemSubstitutions {
     @MethodSubstitution
     public static int identityHashCode(Object x) {
         if (x == null) {
+            probability(NOT_FREQUENT_PROBABILITY);
             return 0;
         }
 
-        Word mark = loadWordFromObject(x, markOffset());
-
-        // this code is independent from biased locking (although it does not look that way)
-        final Word biasedLock = mark.and(biasedLockMaskInPlace());
-        if (biasedLock == Word.unsigned(unlockedMask())) {
-            int hash = (int) mark.unsignedShiftRight(identityHashCodeShift()).rawValue();
-            if (hash != uninitializedIdentityHashCodeValue()) {
-                return hash;
-            }
-        }
-
-        return IdentityHashCodeStubCall.call(x);
+        return computeHashCode(x);
     }
 
     @NodeIntrinsic(value = RuntimeCallNode.class, setStampFromReturnType = true)

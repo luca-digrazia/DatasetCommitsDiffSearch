@@ -22,35 +22,13 @@
  */
 package com.oracle.graal.nodes;
 
+import static com.oracle.graal.nodes.calc.CompareNode.*;
+
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.java.*;
 
 public final class MaterializeNode extends ConditionalNode {
-
-    private static CompareNode createCompareNode(Condition condition, ValueNode x, ValueNode y) {
-        assert x.kind() == y.kind();
-        assert condition.isCanonical() : "condition is not canonical: " + condition;
-
-        assert !x.kind().isFloatOrDouble();
-        CompareNode comparison;
-        if (condition == Condition.EQ) {
-            if (x.kind().isObject()) {
-                comparison = new ObjectEqualsNode(x, y);
-            } else {
-                assert x.kind().stackKind().isInt() || x.kind().isLong();
-                comparison = new IntegerEqualsNode(x, y);
-            }
-        } else if (condition == Condition.LT) {
-            assert x.kind().stackKind().isInt() || x.kind().isLong();
-            comparison = new IntegerLessThanNode(x, y);
-        } else {
-            assert condition == Condition.BT;
-            assert x.kind().stackKind().isInt() || x.kind().isLong();
-            comparison = new IntegerBelowThanNode(x, y);
-        }
-
-        return x.graph().unique(comparison);
-    }
 
     private MaterializeNode(Condition condition, ValueNode x, ValueNode y) {
         this(createCompareNode(condition, x, y), ConstantNode.forInt(1, x.graph()), ConstantNode.forInt(0, x.graph()));
@@ -58,6 +36,10 @@ public final class MaterializeNode extends ConditionalNode {
 
     private MaterializeNode(BooleanNode condition, ValueNode trueValue, ValueNode falseValue) {
         super(condition, trueValue, falseValue);
+    }
+
+    private MaterializeNode(ValueNode type, ValueNode object) {
+        super(type.graph().add(new InstanceOfDynamicNode(type, object)), ConstantNode.forInt(1, type.graph()), ConstantNode.forInt(0, type.graph()));
     }
 
     public static MaterializeNode create(BooleanNode condition, ValueNode trueValue, ValueNode falseValue) {
@@ -72,14 +54,11 @@ public final class MaterializeNode extends ConditionalNode {
     }
 
     @NodeIntrinsic
-    @SuppressWarnings("unused")
-    public static boolean materialize(@ConstantNodeParameter Condition condition, int x, int y) {
-        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
-    }
+    public static native boolean materialize(@ConstantNodeParameter Condition condition, int x, int y);
 
     @NodeIntrinsic
-    @SuppressWarnings("unused")
-    public static boolean materialize(@ConstantNodeParameter Condition condition, long x, long y) {
-        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
-    }
+    public static native boolean materialize(@ConstantNodeParameter Condition condition, long x, long y);
+
+    @NodeIntrinsic
+    public static native boolean isInstance(Class mirror, Object object);
 }
