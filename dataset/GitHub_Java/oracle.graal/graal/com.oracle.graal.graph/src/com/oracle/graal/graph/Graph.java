@@ -125,49 +125,37 @@ public class Graph {
         }
     }
 
-    int extractOriginalNodeId(Node node) {
-        int id = node.id;
-        if (id <= Node.DELETED_ID_START) {
-            id = Node.DELETED_ID_START - id;
-        }
-        return id;
-    }
-
     int modCount(Node node) {
-        int id = extractOriginalNodeId(node);
-        if (id >= 0 && id < nodeModCounts.length) {
-            return nodeModCounts[id];
+        if (node.id >= 0 && node.id < nodeModCounts.length) {
+            return nodeModCounts[node.id];
         }
         return 0;
     }
 
     void incModCount(Node node) {
-        int id = extractOriginalNodeId(node);
-        if (id >= 0) {
-            if (id >= nodeModCounts.length) {
-                nodeModCounts = Arrays.copyOf(nodeModCounts, id + 30);
+        if (node.id >= 0) {
+            if (node.id >= nodeModCounts.length) {
+                nodeModCounts = Arrays.copyOf(nodeModCounts, node.id + 30);
             }
-            nodeModCounts[id]++;
+            nodeModCounts[node.id]++;
         } else {
             assert false;
         }
     }
 
     int usageModCount(Node node) {
-        int id = extractOriginalNodeId(node);
-        if (id >= 0 && id < nodeUsageModCounts.length) {
+        if (node.id >= 0 && node.id < nodeUsageModCounts.length) {
             return nodeUsageModCounts[node.id];
         }
         return 0;
     }
 
     void incUsageModCount(Node node) {
-        int id = extractOriginalNodeId(node);
-        if (id >= 0) {
-            if (id >= nodeUsageModCounts.length) {
-                nodeUsageModCounts = Arrays.copyOf(nodeUsageModCounts, id + 30);
+        if (node.id >= 0) {
+            if (node.id >= nodeUsageModCounts.length) {
+                nodeUsageModCounts = Arrays.copyOf(nodeUsageModCounts, node.id + 30);
             }
-            nodeUsageModCounts[id]++;
+            nodeUsageModCounts[node.id]++;
         } else {
             assert false;
         }

@@ -23,7 +23,6 @@
 package com.oracle.graal.replacements;
 
 import static com.oracle.graal.api.meta.MetaUtil.*;
-import static com.oracle.graal.compiler.GraalCompiler.*;
 import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.lang.reflect.*;
@@ -44,7 +43,6 @@ import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.replacements.Snippet.DefaultSnippetInliningPolicy;
 import com.oracle.graal.replacements.Snippet.SnippetInliningPolicy;
 import com.oracle.graal.word.phases.*;
@@ -140,7 +138,7 @@ public class ReplacementsImpl implements Replacements {
                 Member originalMethod = originalMethod(classSubstitution, methodSubstitution.optional(), originalName, originalParameters);
                 if (originalMethod != null) {
                     ResolvedJavaMethod original = registerMethodSubstitution(originalMethod, substituteMethod);
-                    if (original != null && methodSubstitution.forced() && shouldIntrinsify(original)) {
+                    if (original != null && methodSubstitution.forced()) {
                         forcedSubstitutions.add(original);
                     }
                 }
@@ -151,7 +149,7 @@ public class ReplacementsImpl implements Replacements {
                 Member originalMethod = originalMethod(classSubstitution, macroSubstitution.optional(), originalName, originalParameters);
                 if (originalMethod != null) {
                     ResolvedJavaMethod original = registerMacroSubstitution(originalMethod, macroSubstitution.macro());
-                    if (original != null && macroSubstitution.forced() && shouldIntrinsify(original)) {
+                    if (original != null && macroSubstitution.forced()) {
                         forcedSubstitutions.add(original);
                     }
                 }
@@ -161,7 +159,7 @@ public class ReplacementsImpl implements Replacements {
 
     /**
      * Registers a method substitution.
-     * 
+     *
      * @param originalMember a method or constructor being substituted
      * @param substituteMethod the substitute method
      * @return the original method
@@ -182,7 +180,7 @@ public class ReplacementsImpl implements Replacements {
 
     /**
      * Registers a macro substitution.
-     * 
+     *
      * @param originalMethod a method or constructor being substituted
      * @param macro the substitute macro node class
      * @return the original method
@@ -216,7 +214,7 @@ public class ReplacementsImpl implements Replacements {
 
     /**
      * Creates a preprocessed graph for a snippet or method substitution.
-     * 
+     *
      * @param method the snippet or method substitution for which a graph will be created
      * @param original the original method if {@code method} is a {@linkplain MethodSubstitution
      *            substitution} otherwise null
@@ -325,12 +323,14 @@ public class ReplacementsImpl implements Replacements {
 
                 @Override
                 public void run() {
-                    new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(graph);
-                    new WordTypeVerificationPhase(runtime, target.wordKind).apply(graph);
-                    new WordTypeRewriterPhase(runtime, target.wordKind).apply(graph);
+                    GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault();
+                    GraphBuilderPhase graphBuilder = new GraphBuilderPhase(runtime, config, OptimisticOptimizations.NONE);
+                    graphBuilder.apply(graph);
 
+                    new WordTypeVerificationPhase(runtime, target.wordKind).apply(graph);
                     if (OptCanonicalizer.getValue()) {
-                        new CanonicalizerPhase(true).apply(graph, new PhaseContext(runtime, assumptions, ReplacementsImpl.this));
+                        new WordTypeRewriterPhase(runtime, target.wordKind).apply(graph);
+                        new CanonicalizerPhase.Instance(runtime, assumptions, true).apply(graph);
                     }
                 }
             });
@@ -343,14 +343,15 @@ public class ReplacementsImpl implements Replacements {
 
         /**
          * Called after a graph is inlined.
-         * 
+         *
          * @param caller the graph into which {@code callee} was inlined
          * @param callee the graph that was inlined into {@code caller}
          * @param beforeInlineData value returned by {@link #beforeInline}.
          */
         protected void afterInline(StructuredGraph caller, StructuredGraph callee, Object beforeInlineData) {
             if (OptCanonicalizer.getValue()) {
-                new CanonicalizerPhase(true).apply(caller, new PhaseContext(runtime, assumptions, ReplacementsImpl.this));
+                new WordTypeRewriterPhase(runtime, target.wordKind).apply(caller);
+                new CanonicalizerPhase.Instance(runtime, assumptions, true).apply(caller);
             }
         }
 
@@ -359,9 +360,12 @@ public class ReplacementsImpl implements Replacements {
          */
         protected void afterInlining(StructuredGraph graph) {
             new NodeIntrinsificationPhase(runtime).apply(graph);
+
+            new WordTypeRewriterPhase(runtime, target.wordKind).apply(graph);
+
             new DeadCodeEliminationPhase().apply(graph);
             if (OptCanonicalizer.getValue()) {
-                new CanonicalizerPhase(true).apply(graph, new PhaseContext(runtime, assumptions, ReplacementsImpl.this));
+                new CanonicalizerPhase.Instance(runtime, assumptions, true).apply(graph);
             }
         }
 
@@ -377,9 +381,6 @@ public class ReplacementsImpl implements Replacements {
                         if (callee == method) {
                             final StructuredGraph originalGraph = new StructuredGraph(original);
                             new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(originalGraph);
-                            new WordTypeVerificationPhase(runtime, target.wordKind).apply(graph);
-                            new WordTypeRewriterPhase(runtime, target.wordKind).apply(graph);
-
                             InliningUtil.inline(callTarget.invoke(), originalGraph, true);
 
                             Debug.dump(graph, "after inlining %s", callee);
@@ -431,7 +432,7 @@ public class ReplacementsImpl implements Replacements {
 
     /**
      * Resolves a name to a class.
-     * 
+     *
      * @param className the name of the class to resolve
      * @param optional if true, resolution failure returns null
      * @return the resolved class or null if resolution fails and {@code optional} is true

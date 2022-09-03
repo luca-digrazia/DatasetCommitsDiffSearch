@@ -279,25 +279,20 @@ public abstract class Node implements Cloneable, Formattable {
         }
     }
 
-    private Node removeLastUsage() {
-        for (int i = extraUsages.length - 1; i >= 0; --i) {
-            Node n = extraUsages[i];
-            if (n != null) {
-                extraUsages[i] = null;
-                return n;
+    private Node removeFirstExtraUsage() {
+        Node res = null;
+        if (extraUsages.length > 0) {
+            res = extraUsages[0];
+            for (int i = 1; i < extraUsages.length; ++i) {
+                Node n = extraUsages[i];
+                extraUsages[i - 1] = n;
+                if (n == null) {
+                    break;
+                }
             }
+            extraUsages[extraUsages.length - 1] = null;
         }
-        if (usage1 != null) {
-            Node n = usage1;
-            usage1 = null;
-            return n;
-        }
-        if (usage0 != null) {
-            Node n = usage0;
-            usage0 = null;
-            return n;
-        }
-        return null;
+        return res;
     }
 
     /**
@@ -314,41 +309,32 @@ public abstract class Node implements Cloneable, Formattable {
             return false;
         }
         if (usage0 == node) {
+            usage0 = usage1;
             if (usage1 != null) {
-                // usage0 is not the last element
-                usage0 = removeLastUsage();
-            } else {
-                // usage0 is the last element
-                usage0 = null;
+                usage1 = removeFirstExtraUsage();
             }
             return true;
+        }
+        if (usage1 == null) {
+            return false;
         }
         if (usage1 == node) {
-            if (extraUsages.length != 0 && extraUsages[0] != null) {
-                // usage1 is not the last element
-                usage1 = removeLastUsage();
-            } else {
-                // usage1 is the last element
-                usage1 = null;
-            }
+            usage1 = removeFirstExtraUsage();
             return true;
         }
-        for (int i = extraUsages.length - 1; i >= 0; --i) {
-            Node n = extraUsages[i];
-            if (n != null) {
-                if (n == node) {
-                    extraUsages[i] = null;
-                    return true;
-                } else {
-                    for (int j = 0; j < i; j++) {
-                        if (extraUsages[j] == node) {
-                            // Move the last element to the position of 'node'
-                            extraUsages[j] = n;
-                            extraUsages[i] = null;
-                            return true;
-                        }
+        int length = extraUsages.length;
+        for (int i = 0; i < length; i++) {
+            if (extraUsages[i] == node) {
+                for (int j = i + 1; j < length; j++) {
+                    Node toMove = extraUsages[j];
+                    extraUsages[j - 1] = toMove;
+                    if (toMove == null) {
+                        break;
                     }
                 }
+                extraUsages[length - 1] = null;
+
+                return true;
             }
         }
         return false;
