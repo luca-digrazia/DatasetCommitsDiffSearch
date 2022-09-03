@@ -23,12 +23,12 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.word.*;
 
 /**
@@ -37,8 +37,7 @@ import com.oracle.graal.word.*;
  * {@linkplain #compareAndSwap(Object, long, Word, Word, LocationIdentity)} returns either the
  * expected value or the compared against value instead of a boolean.
  */
-@NodeInfo(allowedUsageTypes = {InputType.Memory})
-public class DirectCompareAndSwapNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Single {
+public class DirectCompareAndSwapNode extends FixedWithNextNode implements LIRGenLowerable, MemoryCheckpoint.Single {
 
     @Input private ValueNode object;
     @Input private ValueNode offset;
@@ -47,11 +46,7 @@ public class DirectCompareAndSwapNode extends FixedWithNextNode implements LIRLo
 
     private final LocationIdentity locationIdentity;
 
-    public static DirectCompareAndSwapNode create(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue, LocationIdentity locationIdentity) {
-        return new DirectCompareAndSwapNodeGen(object, offset, expected, newValue, locationIdentity);
-    }
-
-    protected DirectCompareAndSwapNode(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue, LocationIdentity locationIdentity) {
+    public DirectCompareAndSwapNode(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue, LocationIdentity locationIdentity) {
         super(expected.stamp());
         this.object = object;
         this.offset = offset;
@@ -82,8 +77,8 @@ public class DirectCompareAndSwapNode extends FixedWithNextNode implements LIRLo
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        ((HotSpotNodeLIRBuilder) gen).visitDirectCompareAndSwap(this);
+    public void generate(LIRGenerator gen) {
+        ((HotSpotLIRGenerator) gen).visitDirectCompareAndSwap(this);
     }
 
     /**
@@ -91,7 +86,7 @@ public class DirectCompareAndSwapNode extends FixedWithNextNode implements LIRLo
      * given offset. Iff they are same, {@code newValue} is placed into the location and the
      * {@code expectedValue} is returned. Otherwise, the actual value is returned. All of the above
      * is performed in one atomic hardware transaction.
-     *
+     * 
      * @param object the object containing a field to be atomically tested and updated
      * @param offset offset from {@code object} of the field
      * @param expectedValue if this value is currently in the field, perform the swap
@@ -100,4 +95,12 @@ public class DirectCompareAndSwapNode extends FixedWithNextNode implements LIRLo
      */
     @NodeIntrinsic
     public static native Word compareAndSwap(Object object, long offset, Word expectedValue, Word newValue, @ConstantNodeParameter LocationIdentity locationIdentity);
+
+    public MemoryCheckpoint asMemoryCheckpoint() {
+        return this;
+    }
+
+    public MemoryPhiNode asMemoryPhi() {
+        return null;
+    }
 }

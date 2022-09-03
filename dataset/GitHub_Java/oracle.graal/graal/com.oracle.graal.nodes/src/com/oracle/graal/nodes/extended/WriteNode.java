@@ -23,49 +23,94 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.LocationNode.Location;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
 
 /**
- * Writes a given {@linkplain #value() value} a {@linkplain FixedAccessNode memory location}.
+ * Writes a given {@linkplain #value() value} a {@linkplain AccessNode memory location}.
  */
-public final class WriteNode extends AbstractWriteNode implements LIRLowerable, Simplifiable, Virtualizable {
+public final class WriteNode extends AccessNode implements StateSplit, LIRLowerable, MemoryCheckpoint.Single, MemoryAccess, Virtualizable {
+
+    @Input private ValueNode value;
+    @Input(notDataflow = true) private FrameState stateAfter;
+    private final boolean initialization;
+
+    @Input private Node lastLocationAccess;
+
+    public FrameState stateAfter() {
+        return stateAfter;
+    }
+
+    @Override
+    public FrameState getState() {
+        if (stateAfter != null) {
+            assert super.getState() == null;
+            return stateAfter;
+        } else {
+            return super.getState();
+        }
+    }
+
+    public void setStateAfter(FrameState x) {
+        assert x == null || x.isAlive() : "frame state must be in a graph";
+        updateUsages(stateAfter, x);
+        stateAfter = x;
+    }
+
+    public boolean hasSideEffect() {
+        return true;
+    }
+
+    public ValueNode value() {
+        return value;
+    }
+
+    /**
+     * Returns whether this write is the initialization of the written location. If it is true, the
+     * old value of the memory location is either uninitialized or zero. If it is false, the memory
+     * location is guaranteed to contain a valid value or zero.
+     */
+    public boolean isInitialization() {
+        return initialization;
+    }
 
     public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean compressible) {
-        super(object, value, location, barrierType, compressible);
+        this(object, value, location, barrierType, compressible, false);
     }
 
     public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean compressible, boolean initialization) {
-        super(object, value, location, barrierType, compressible, initialization);
+        super(object, location, StampFactory.forVoid(), barrierType, compressible);
+        this.value = value;
+        this.initialization = initialization;
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
+    public void generate(LIRGeneratorTool gen) {
         Value address = location().generateAddress(gen, gen.operand(object()));
-        // It's possible a constant was forced for other usages so inspect the value directly and
-        // use a constant if it can be directly stored.
-        Value v;
-        if (value().isConstant() && gen.getLIRGeneratorTool().canStoreConstant(value().asConstant(), isCompressible())) {
-            v = value().asConstant();
-        } else {
-            v = gen.operand(value());
-        }
-        PlatformKind writeKind = gen.getLIRGeneratorTool().getPlatformKind(value().stamp());
-        gen.getLIRGeneratorTool().emitStore(writeKind, address, v, this);
-    }
-
-    @Override
-    public void simplify(SimplifierTool tool) {
-        if (object() instanceof PiNode && ((PiNode) object()).getGuard() == getGuard()) {
-            setObject(((PiNode) object()).getOriginalValue());
-        }
+        gen.emitStore(location().getValueKind(), address, gen.operand(value()), this);
     }
 
     @NodeIntrinsic
     public static native void writeMemory(Object object, Object value, Location location, @ConstantNodeParameter BarrierType barrierType, @ConstantNodeParameter boolean compressible);
+
+    @Override
+    public LocationIdentity getLocationIdentity() {
+        return location().getLocationIdentity();
+    }
+
+    public MemoryNode getLastLocationAccess() {
+        return (MemoryNode) lastLocationAccess;
+    }
+
+    public void setLastLocationAccess(MemoryNode lla) {
+        Node newLla = ValueNodeUtil.asNode(lla);
+        updateUsages(lastLocationAccess, newLla);
+        lastLocationAccess = newLla;
+    }
 
     @Override
     public void virtualize(VirtualizerTool tool) {
@@ -81,5 +126,13 @@ public final class WriteNode extends AbstractWriteNode implements LIRLowerable, 
                 }
             }
         }
+    }
+
+    public MemoryCheckpoint asMemoryCheckpoint() {
+        return this;
+    }
+
+    public MemoryPhiNode asMemoryPhi() {
+        return null;
     }
 }

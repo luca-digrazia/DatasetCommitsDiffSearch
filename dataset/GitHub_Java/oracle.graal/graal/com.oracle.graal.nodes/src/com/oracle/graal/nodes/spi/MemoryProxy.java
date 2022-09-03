@@ -25,7 +25,7 @@ package com.oracle.graal.nodes.spi;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.extended.*;
 
-public interface MemoryProxy extends Proxy, MemoryNode {
+public interface MemoryProxy extends ValueProxy, MemoryNode {
 
     LocationIdentity getLocationIdentity();
 

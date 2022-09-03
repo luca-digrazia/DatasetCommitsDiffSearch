@@ -24,11 +24,11 @@ package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.word.*;
 
 /**
@@ -37,8 +37,7 @@ import com.oracle.graal.word.*;
  * is locked (ensuring the GC sees and updates the object) so it must come after any null pointer
  * check on the object.
  */
-@NodeInfo(allowedUsageTypes = {InputType.Memory})
-public class BeginLockScopeNode extends AbstractMemoryCheckpoint implements LIRLowerable, MonitorEnter, MemoryCheckpoint.Single {
+public final class BeginLockScopeNode extends AbstractMemoryCheckpoint implements LIRGenLowerable, MonitorEnter, MemoryCheckpoint.Single {
 
     private int lockDepth;
 
@@ -58,11 +57,11 @@ public class BeginLockScopeNode extends AbstractMemoryCheckpoint implements LIRL
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
+    public void generate(LIRGenerator gen) {
         assert lockDepth != -1;
-        HotSpotLIRGenerator hsGen = (HotSpotLIRGenerator) gen.getLIRGeneratorTool();
+        HotSpotLIRGenerator hsGen = (HotSpotLIRGenerator) gen;
         StackSlot slot = hsGen.getLockSlot(lockDepth);
-        Value result = gen.getLIRGeneratorTool().emitAddress(slot);
+        Value result = gen.emitAddress(slot);
         gen.setResult(this, result);
     }
 

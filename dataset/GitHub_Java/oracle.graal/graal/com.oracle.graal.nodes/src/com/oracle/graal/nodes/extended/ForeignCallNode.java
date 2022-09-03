@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import java.util.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
@@ -45,17 +43,6 @@ public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowe
 
     public ForeignCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, ValueNode... arguments) {
         super(StampFactory.forKind(Kind.fromJavaClass(descriptor.getResultType())));
-        this.arguments = new NodeInputList<>(this, arguments);
-        this.descriptor = descriptor;
-        this.foreignCalls = foreignCalls;
-    }
-
-    public ForeignCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, List<ValueNode> arguments) {
-        this(foreignCalls, descriptor, StampFactory.forKind(Kind.fromJavaClass(descriptor.getResultType())), arguments);
-    }
-
-    public ForeignCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, Stamp stamp, List<ValueNode> arguments) {
-        super(stamp);
         this.arguments = new NodeInputList<>(this, arguments);
         this.descriptor = descriptor;
         this.foreignCalls = foreignCalls;
@@ -107,7 +94,7 @@ public class ForeignCallNode extends AbstractMemoryCheckpoint implements LIRLowe
         } else if (stateAfter() != null && canDeoptimize()) {
             FrameState stateDuring = stateAfter();
             if ((stateDuring.stackSize() > 0 && stateDuring.stackAt(stateDuring.stackSize() - 1) == this) || (stateDuring.stackSize() > 1 && stateDuring.stackAt(stateDuring.stackSize() - 2) == this)) {
-                stateDuring = stateDuring.duplicateModified(stateDuring.bci, stateDuring.rethrowException(), this.getKind());
+                stateDuring = stateDuring.duplicateModified(stateDuring.bci, stateDuring.rethrowException(), this.kind());
             }
             setDeoptimizationState(stateDuring);
             return stateDuring;

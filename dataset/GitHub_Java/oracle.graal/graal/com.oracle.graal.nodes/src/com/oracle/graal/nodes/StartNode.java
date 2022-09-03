@@ -23,23 +23,23 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.extended.*;
 
 /**
  * The start node of a graph.
  */
-@NodeInfo(allowedUsageTypes = {InputType.Memory})
 public class StartNode extends BeginStateSplitNode implements MemoryCheckpoint.Single {
-    public static StartNode create() {
-        return new StartNodeGen();
-    }
-
-    protected StartNode() {
-    }
 
     @Override
     public LocationIdentity getLocationIdentity() {
         return LocationIdentity.ANY_LOCATION;
+    }
+
+    public MemoryCheckpoint asMemoryCheckpoint() {
+        return this;
+    }
+
+    public MemoryPhiNode asMemoryPhi() {
+        return null;
     }
 }
