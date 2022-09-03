@@ -78,7 +78,7 @@ public abstract class Accessor {
 
         public abstract Object importSymbol(Object vm, TruffleLanguage<?> queryingLang, String globalName);
 
-        public abstract void dispatchEvent(Object vm, Object event, int type);
+        public abstract void dispatchEvent(Object vm, Object event);
 
         public abstract boolean isMimeTypeSupported(Object vm, String mimeType);
     }
@@ -270,11 +270,11 @@ public abstract class Accessor {
     private static Assumption oneVM = Truffle.getRuntime().createAssumption();
 
     @TruffleBoundary
-    protected Closeable executionStart(Object vm, @SuppressWarnings("unused") int currentDepth, Object[] debuggerHolder, Source s) {
+    protected Closeable executionStart(Object vm, @SuppressWarnings("unused") int currentDepth, boolean debugger, Source s) {
         CompilerAsserts.neverPartOfCompilation("do not call Accessor.executionStart from compiled code");
         Objects.requireNonNull(vm);
         final Object prev = CURRENT_VM.get();
-        final Closeable debugClose = DEBUG == null ? null : DEBUG.executionStart(vm, prev == null ? 0 : -1, debuggerHolder, s);
+        final Closeable debugClose = DEBUG == null ? null : DEBUG.executionStart(vm, prev == null ? 0 : -1, debugger, s);
         if (!(vm == previousVM.get())) {
             previousVM = new WeakReference<>(vm);
             oneVM.invalidate();

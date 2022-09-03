@@ -117,7 +117,7 @@ public class PolyglotEngine {
     private final Object instrumentationHandler; // new instrumentation
     private final Map<String, Instrument> instruments;
     private final List<Object[]> config;
-    private final Object[] debugger = { null };
+    // private final Object debugger;
     private boolean disposed;
 
     static {
@@ -526,7 +526,7 @@ public class PolyglotEngine {
 
     @SuppressWarnings("try")
     private Object evalImpl(TruffleLanguage<?>[] fillLang, Source s, Language l) throws IOException {
-        try (Closeable d = SPI.executionStart(this, -1, debugger, s)) {
+        try (Closeable d = SPI.executionStart(this, -1, false, s)) {
             TruffleLanguage<?> langImpl = l.getImpl(true);
             fillLang[0] = langImpl;
             return SPIAccessor.langs().eval(langImpl, s, l.cache);
@@ -539,7 +539,7 @@ public class PolyglotEngine {
         Object res;
         CompilerAsserts.neverPartOfCompilation();
         if (executor == null) {
-            try (final Closeable c = SPI.executionStart(PolyglotEngine.this, -1, debugger, null)) {
+            try (final Closeable c = SPI.executionStart(PolyglotEngine.this, -1, false, null)) {
                 final Object[] args = ForeignAccess.getArguments(frame).toArray();
                 res = ForeignAccess.execute(foreignNode, frame, receiver, args);
             }
@@ -564,7 +564,7 @@ public class PolyglotEngine {
             @SuppressWarnings("try")
             @Override
             protected Object compute() throws IOException {
-                try (final Closeable c = SPI.executionStart(PolyglotEngine.this, -1, debugger, null)) {
+                try (final Closeable c = SPI.executionStart(PolyglotEngine.this, -1, false, null)) {
                     final Object[] args = ForeignAccess.getArguments(materialized).toArray();
                     RootNode node = SymbolInvokerImpl.createTemporaryRoot(TruffleLanguage.class, foreignNode, receiver, args.length);
                     final CallTarget target = Truffle.getRuntime().createCallTarget(node);
@@ -651,15 +651,15 @@ public class PolyglotEngine {
     }
 
     @SuppressWarnings("unchecked")
-    void dispatch(Object ev, int type) {
-        if (type == 1) {
-            dispatchExecutionEvent(ev);
-        }
-        if (type == 2) {
+    void dispatch(Object ev) {
+        Class type = ev.getClass();
+        if (type.getSimpleName().equals("SuspendedEvent")) {
             dispatchSuspendedEvent(ev);
         }
-        Class clazz = ev.getClass();
-        dispatch(clazz, ev);
+        if (type.getSimpleName().equals("ExecutionEvent")) {
+            dispatchExecutionEvent(ev);
+        }
+        dispatch(type, ev);
     }
 
     /**
@@ -826,7 +826,7 @@ public class PolyglotEngine {
                 @SuppressWarnings("try")
                 @Override
                 protected Object compute() throws IOException {
-                    try (final Closeable c = SPI.executionStart(PolyglotEngine.this, -1, debugger, null)) {
+                    try (final Closeable c = SPI.executionStart(PolyglotEngine.this, -1, false, null)) {
                         List<Object> arr = new ArrayList<>();
                         arr.addAll(Arrays.asList(args));
                         for (;;) {
@@ -1052,7 +1052,7 @@ public class PolyglotEngine {
         @SuppressWarnings("try")
         public Value getGlobalObject() {
             checkThread();
-            try (Closeable d = SPI.executionStart(PolyglotEngine.this, -1, debugger, null)) {
+            try (Closeable d = SPI.executionStart(PolyglotEngine.this, -1, false, null)) {
                 Object res = SPIAccessor.langs().languageGlobal(getEnv(true));
                 return res == null ? null : new Value(new TruffleLanguage[]{info.getImpl(true)}, res);
             } catch (IOException ex) {
@@ -1138,9 +1138,9 @@ public class PolyglotEngine {
         }
 
         @Override
-        protected Closeable executionStart(Object obj, int currentDepth, Object[] debuggerHolder, Source s) {
+        protected Closeable executionStart(Object obj, int currentDepth, boolean initializeDebugger, Source s) {
             PolyglotEngine vm = (PolyglotEngine) obj;
-            return super.executionStart(vm, -1, debuggerHolder, s);
+            return super.executionStart(vm, -1, initializeDebugger, s);
         }
 
         @Override
@@ -1163,9 +1163,9 @@ public class PolyglotEngine {
             }
 
             @Override
-            public void dispatchEvent(Object obj, Object event, int type) {
+            public void dispatchEvent(Object obj, Object event) {
                 PolyglotEngine vm = (PolyglotEngine) obj;
-                vm.dispatch(event, type);
+                vm.dispatch(event);
             }
 
             @Override

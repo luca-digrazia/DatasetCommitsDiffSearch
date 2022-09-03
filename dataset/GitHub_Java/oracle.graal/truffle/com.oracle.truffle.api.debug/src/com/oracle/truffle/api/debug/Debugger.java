@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.Callable;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -125,7 +126,7 @@ public final class Debugger {
         }
     };
 
-    static Debugger find(PolyglotEngine engine, boolean create) {
+    private static Debugger find(PolyglotEngine engine, boolean create) {
         PolyglotEngine.Instrument instrument = engine.getInstruments().get(DebuggerInstrument.ID);
         if (instrument == null) {
             throw new IllegalStateException();
@@ -870,7 +871,7 @@ public final class Debugger {
             try {
                 // Pass control to the debug client with current execution suspended
                 SuspendedEvent event = new SuspendedEvent(Debugger.this, haltedEventContext.getInstrumentedNode(), haltedFrame, contextStack, recentWarnings);
-                AccessorDebug.engineAccess().dispatchEvent(engine, event, 2);
+                AccessorDebug.engineAccess().dispatchEvent(engine, event);
                 if (event.isKillPrepared()) {
                     trace("KILL");
                     throw new KillException();
@@ -936,7 +937,7 @@ public final class Debugger {
         return count[0] == 0 ? 0 : count[0] + 1;
     }
 
-    void executionStarted(int depth, Source source) {
+    private void executionStarted(int depth, Source source) {
         Source execSource = source;
         if (execSource == null) {
             execSource = lastSource;
@@ -991,18 +992,29 @@ public final class Debugger {
         }
 
         @Override
-        protected Closeable executionStart(Object vm, final int currentDepth, final Object[] debugger, final Source s) {
+        protected Closeable executionStart(Object vm, final int currentDepth, final boolean initializeDebugger, final Source s) {
             final PolyglotEngine engine = (PolyglotEngine) vm;
+            final Debugger[] debugger = {find(engine, initializeDebugger)};
             if (debugger[0] != null) {
-                final Debugger dbg = (Debugger) debugger[0];
-                dbg.executionStarted(currentDepth, s);
+                debugger[0].executionStarted(currentDepth, s);
+                engineAccess().dispatchEvent(engine, new ExecutionEvent(debugger[0]));
+            } else {
+                engineAccess().dispatchEvent(engine, new ExecutionEvent(new Callable<Debugger>() {
+                    @Override
+                    public Debugger call() throws Exception {
+                        if (debugger[0] == null) {
+                            debugger[0] = find(engine, true);
+                            debugger[0].executionStarted(currentDepth, s);
+                        }
+                        return debugger[0];
+                    }
+                }));
             }
-            engineAccess().dispatchEvent(engine, new ExecutionEvent(engine, currentDepth, debugger, s), 1);
             return new Closeable() {
                 @Override
                 public void close() throws IOException {
                     if (debugger[0] != null) {
-                        ((Debugger)debugger[0]).executionEnded();
+                        debugger[0].executionEnded();
                     }
                 }
             };
