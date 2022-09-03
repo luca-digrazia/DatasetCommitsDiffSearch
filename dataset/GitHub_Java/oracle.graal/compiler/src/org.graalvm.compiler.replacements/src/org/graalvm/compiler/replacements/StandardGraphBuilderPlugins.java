@@ -202,10 +202,8 @@ public class StandardGraphBuilderPlugins {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 if (receiver.isConstant()) {
                     String s = snippetReflection.asObject(String.class, (JavaConstant) receiver.get().asConstant());
-                    if (s != null) {
-                        b.addPush(JavaKind.Int, b.add(ConstantNode.forInt(s.hashCode())));
-                        return true;
-                    }
+                    b.addPush(JavaKind.Int, b.add(ConstantNode.forInt(s.hashCode())));
+                    return true;
                 }
                 return false;
             }
@@ -1368,7 +1366,7 @@ public class StandardGraphBuilderPlugins {
                             b.add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.TransferToInterpreter));
                         } else if (falseCount == 0 || trueCount == 0) {
                             boolean expected = falseCount == 0;
-                            LogicNode condition = b.add(
+                            LogicNode condition = b.addWithInputs(
                                             IntegerEqualsNode.create(b.getConstantReflection(), b.getMetaAccess(), b.getOptions(), null, result, b.add(ConstantNode.forBoolean(!expected)),
                                                             NodeView.DEFAULT));
                             b.append(new FixedGuardNode(condition, DeoptimizationReason.UnreachedCode, DeoptimizationAction.InvalidateReprofile, true));

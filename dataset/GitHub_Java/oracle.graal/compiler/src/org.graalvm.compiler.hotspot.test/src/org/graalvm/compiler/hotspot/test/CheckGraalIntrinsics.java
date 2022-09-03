@@ -273,6 +273,8 @@ public class CheckGraalIntrinsics extends GraalTest {
             add(toBeInvestigated,
                             // Some logic and a stub call
                             "com/sun/crypto/provider/CounterMode.implCrypt([BII[BI)I",
+                            // Stub and very little logic
+                            "com/sun/crypto/provider/GHASH.processBlocks([BII[J[J)V",
                             // HotSpot MacroAssembler-based intrinsic
                             "java/lang/Math.fma(DDD)D",
                             // HotSpot MacroAssembler-based intrinsic
@@ -342,7 +344,9 @@ public class CheckGraalIntrinsics extends GraalTest {
             // Compact string support - HotSpot MacroAssembler-based intrinsic or complex C2 logic.
             add(toBeInvestigated,
                             "java/lang/StringCoding.hasNegatives([BII)Z",
-                            "java/lang/StringCoding.implEncodeISOArray([BI[BII)I");
+                            "java/lang/StringCoding.implEncodeISOArray([BI[BII)I",
+                            "java/lang/StringUTF16.getChars([BII[CI)V",
+                            "java/lang/StringUTF16.toBytes([CII)[B");
             add(ignore,
                             // handled through an intrinsic for String.equals itself
                             "java/lang/StringLatin1.equals([B[B)Z",
@@ -384,14 +388,6 @@ public class CheckGraalIntrinsics extends GraalTest {
                             "java/lang/CharacterDataLatin1.isLowerCase(I)Z",
                             "java/lang/CharacterDataLatin1.isUpperCase(I)Z",
                             "java/lang/CharacterDataLatin1.isWhitespace(I)Z");
-        }
-
-        if (isJDK13OrHigher()) {
-            add(toBeInvestigated,
-                            "java/lang/Math.max(DD)D",
-                            "java/lang/Math.max(FF)F",
-                            "java/lang/Math.min(DD)D",
-                            "java/lang/Math.min(FF)F");
         }
 
         if (!config.inlineNotify()) {
@@ -558,10 +554,6 @@ public class CheckGraalIntrinsics extends GraalTest {
 
     private static boolean isJDK12OrHigher() {
         return GraalServices.JAVA_SPECIFICATION_VERSION >= 12;
-    }
-
-    private static boolean isJDK13OrHigher() {
-        return GraalServices.JAVA_SPECIFICATION_VERSION >= 13;
     }
 
     public interface Refiner {
