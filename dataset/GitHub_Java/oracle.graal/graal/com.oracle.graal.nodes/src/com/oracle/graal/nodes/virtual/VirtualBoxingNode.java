@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,17 +22,33 @@
  */
 package com.oracle.graal.nodes.virtual;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.extended.BoxNode;
 
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
+@NodeInfo
 public class VirtualBoxingNode extends VirtualInstanceNode {
 
-    private final Kind boxingKind;
+    public static final NodeClass<VirtualBoxingNode> TYPE = NodeClass.create(VirtualBoxingNode.class);
+    protected final JavaKind boxingKind;
 
-    public VirtualBoxingNode(ResolvedJavaType type, Kind boxingKind) {
-        super(type);
+    public VirtualBoxingNode(ResolvedJavaType type, JavaKind boxingKind) {
+        this(TYPE, type, boxingKind);
+    }
+
+    public VirtualBoxingNode(NodeClass<? extends VirtualBoxingNode> c, ResolvedJavaType type, JavaKind boxingKind) {
+        super(c, type, false);
         this.boxingKind = boxingKind;
+    }
+
+    public JavaKind getBoxingKind() {
+        return boxingKind;
     }
 
     @Override
@@ -41,14 +57,13 @@ public class VirtualBoxingNode extends VirtualInstanceNode {
     }
 
     @Override
-    public boolean hasIdentity() {
-        return false;
+    public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks) {
+        assert entries.length == 1;
+        assert locks == null;
+        return new BoxNode(entries[0], type(), boxingKind);
     }
 
-    @Override
-    public ValueNode getMaterializedRepresentation(ValueNode[] entries, int lockCount) {
-        assert entries.length == 1;
-        assert lockCount == 0;
-        return new BoxNode(entries[0], type(), boxingKind);
+    public ValueNode getBoxedValue(VirtualizerTool tool) {
+        return tool.getEntry(this, 0);
     }
 }

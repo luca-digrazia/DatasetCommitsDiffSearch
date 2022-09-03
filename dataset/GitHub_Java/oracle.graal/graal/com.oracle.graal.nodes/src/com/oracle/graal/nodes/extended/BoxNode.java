@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,44 +22,85 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.java.MethodCallTargetNode.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_100;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_50;
 
+import java.util.Collections;
 
-public final class BoxNode extends AbstractStateSplit implements Node.IterableNodeType {
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.java.MonitorIdNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.VirtualizableAllocation;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.nodes.virtual.VirtualBoxingNode;
 
-    @Input private ValueNode source;
-    @Data private int bci;
-    @Data private CiKind sourceKind;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
-    public BoxNode(ValueNode value, RiResolvedType type, CiKind sourceKind, int bci) {
-        super(StampFactory.exactNonNull(type));
-        this.source = value;
-        this.bci = bci;
-        this.sourceKind = sourceKind;
-        assert value.kind() != CiKind.Object : "can only box from primitive type";
+/**
+ * This node represents the boxing of a primitive value. This corresponds to a call to the valueOf
+ * methods in Integer, Long, etc.
+ */
+@NodeInfo(cycles = CYCLES_100, size = SIZE_50)
+public class BoxNode extends FixedWithNextNode implements VirtualizableAllocation, Lowerable, Canonicalizable.Unary<ValueNode> {
+
+    public static final NodeClass<BoxNode> TYPE = NodeClass.create(BoxNode.class);
+    @Input private ValueNode value;
+    protected final JavaKind boxingKind;
+
+    public BoxNode(ValueNode value, ResolvedJavaType resultType, JavaKind boxingKind) {
+        this(TYPE, value, resultType, boxingKind);
     }
 
-    public ValueNode source() {
-        return source;
+    public BoxNode(NodeClass<? extends BoxNode> c, ValueNode value, ResolvedJavaType resultType, JavaKind boxingKind) {
+        super(c, StampFactory.objectNonNull(TypeReference.createExactTrusted(resultType)));
+        this.value = value;
+        this.boxingKind = boxingKind;
     }
 
-
-    public CiKind getSourceKind() {
-        return sourceKind;
+    public JavaKind getBoxingKind() {
+        return boxingKind;
     }
 
-    public void expand(BoxingMethodPool pool) {
-        RiResolvedMethod boxingMethod = pool.getBoxingMethod(sourceKind);
-        MethodCallTargetNode callTarget = graph().add(new MethodCallTargetNode(InvokeKind.Static, boxingMethod, new ValueNode[]{source}, boxingMethod.signature().returnType(boxingMethod.holder())));
-        InvokeNode invokeNode = graph().add(new InvokeNode(callTarget, bci));
-        invokeNode.setProbability(this.probability());
-        invokeNode.setStateAfter(stateAfter());
-        ((StructuredGraph) graph()).replaceFixedWithFixed(this, invokeNode);
+    @Override
+    public ValueNode getValue() {
+        return value;
+    }
+
+    @Override
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        if (tool.allUsagesAvailable() && hasNoUsages()) {
+            return null;
+        }
+        return this;
+    }
+
+    protected VirtualBoxingNode createVirtualBoxingNode() {
+        return new VirtualBoxingNode(StampTool.typeOrNull(stamp()), boxingKind);
+    }
+
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode alias = tool.getAlias(getValue());
+
+        VirtualBoxingNode newVirtual = createVirtualBoxingNode();
+        assert newVirtual.getFields().length == 1;
+
+        tool.createVirtualObject(newVirtual, new ValueNode[]{alias}, Collections.<MonitorIdNode> emptyList(), false);
+        tool.replaceWithVirtual(newVirtual);
     }
 }
