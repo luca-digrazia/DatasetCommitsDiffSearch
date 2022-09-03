@@ -120,31 +120,10 @@ public final class Context implements AutoCloseable {
         return impl.lookup(getEngine().getLanguage(language).impl, symbol);
     }
 
-    /**
-     * Imports a symbol from the polyglot scope or <code>null</code> if the symbol is not defined.
-     * The polyglot scope is used to exchange symbols between guest languages and also the host
-     * language. Guest languages can put and get symbols through language specific APIs. For
-     * example, in JavaScript symbols of the polyglot scope can be get using
-     * <code>Interop.get("key")</code> and set using <code>Interop.put("key", value)</code>.
-     *
-     * @param the key of the symbol
-     * @since 1.0
-     */
     public Value importSymbol(String key) {
         return impl.importSymbol(key);
     }
 
-    /**
-     * Exports a symbol into the polyglot scope. The polyglot scope is used to exchange symbols
-     * between guest languages and the host language. Guest languages can put and get symbols
-     * through language specific APIs. For example, in JavaScript symbols of the polyglot scope can
-     * be accessed using <code>Interop.get("key")</code> and set using
-     * <code>Interop.put("key", value)</code>. Any Java value or {@link Value} instance is allowed
-     * to be passed as value.
-     *
-     * @param the key of the symbol
-     * @since 1.0
-     */
     public void exportSymbol(String key, Object value) {
         impl.exportSymbol(key, value);
     }
@@ -235,8 +214,7 @@ public final class Context implements AutoCloseable {
         private InputStream in;
         private Map<String, String> options;
         private Map<String, String[]> arguments;
-        private Predicate<String> hostClassFilter;
-        private boolean allowHostAccess;
+        private Predicate<String> classFilter;
 
         Builder(String... onlyLanguages) {
             Objects.requireNonNull(onlyLanguages);
@@ -271,42 +249,18 @@ public final class Context implements AutoCloseable {
         }
 
         /**
-         * Allows guest languages to access the host language by loading new classes. If host
-         * language instances or classes are provided using {@link Context#put(String, Object)} or
-         * by passing it into the language then the language has automatically access to it.
-         *
-         * @since 1.0
-         */
-        public Builder allowHostAccess(boolean enabled) {
-            this.allowHostAccess = enabled;
-            return this;
-        }
-
-        /**
-         * @since 1.0
-         * @deprecated use {@link #hostClassFilter(Predicate)} instead
-         */
-        @Deprecated
-        public Builder javaClassFilter(Predicate<String> classFilter) {
-            Objects.requireNonNull(classFilter);
-            this.hostClassFilter = classFilter;
-            return hostClassFilter(classFilter);
-        }
-
-        /**
-         * Sets a class filter that allows to limit the classes that are allowed to be loaded by
-         * guest languages. If the filter returns <code>true</code> then the class is accessible,
-         * else it is not accessible and throws an guest language error when accessed. In order to
-         * have an effect {@link #allowHostAccess(boolean)} needs to be set to <code>true</code>.
+         * Sets a class filter that allows to limit the classes that guest languages are allowed to
+         * load. If the filter returns <code>true</code> then the class is accessible, else it is
+         * not accessible and throws a guest language error when accessed.
          *
          * @param classFilter a predicate that returns <code>true</code> or <code>false</code> for a
-         *            java qualified class name.
+         *            Java qualified class name.
          *
          * @since 1.0
          */
-        public Builder hostClassFilter(Predicate<String> classFilter) {
+        public Builder javaClassFilter(Predicate<String> classFilter) {
             Objects.requireNonNull(classFilter);
-            this.hostClassFilter = classFilter;
+            this.classFilter = classFilter;
             return this;
         }
 
@@ -395,13 +349,14 @@ public final class Context implements AutoCloseable {
                 }
                 engineBuilder.setBoundEngine(true);
                 engine = engineBuilder.build();
-                return engine.impl.createContext(null, null, null, allowHostAccess, hostClassFilter,
-                                Collections.emptyMap(),
-                                arguments == null ? Collections.emptyMap() : arguments, onlyLanguages);
+                return engine.impl.createContext(null, null, null, classFilter, Collections.emptyMap(),
+                                arguments == null ? Collections.emptyMap() : arguments,
+                                onlyLanguages);
             } else {
-                return engine.impl.createContext(out, err, in, allowHostAccess, hostClassFilter,
+                return engine.impl.createContext(out, err, in, classFilter,
                                 options == null ? Collections.emptyMap() : options,
-                                arguments == null ? Collections.emptyMap() : arguments, onlyLanguages);
+                                arguments == null ? Collections.emptyMap() : arguments,
+                                onlyLanguages);
             }
         }
 
