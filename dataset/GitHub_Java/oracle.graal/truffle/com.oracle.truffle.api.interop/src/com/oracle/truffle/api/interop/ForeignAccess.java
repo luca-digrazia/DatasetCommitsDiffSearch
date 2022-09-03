@@ -29,12 +29,10 @@ import java.util.List;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.impl.ReadOnlyArrayList;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
 
 /**
  * Encapsulates types of access to {@link TruffleObject}. If you want to expose your own objects to
@@ -47,16 +45,10 @@ import com.oracle.truffle.api.nodes.RootNode;
 public final class ForeignAccess {
     private final Factory factory;
     private final Thread initThread;
-    private final RootNode languageCheck;
 
     private ForeignAccess(Factory faf) {
-        this(null, faf);
-    }
-
-    private ForeignAccess(RootNode languageCheck, Factory faf) {
         this.factory = faf;
         this.initThread = Thread.currentThread();
-        this.languageCheck = languageCheck;
         CompilerAsserts.neverPartOfCompilation("do not create a ForeignAccess object from compiled code");
     }
 
@@ -67,74 +59,16 @@ public final class ForeignAccess {
      *            <code>null</code> than the second interface also needs to implement
      *            {@link Factory})
      * @param factory the factory that handles access requests to {@link Message}s known as of
-     *            version 0.10
+     *            version 1.0
      * @return new instance wrapping <code>factory</code>
      * @since 0.8 or earlier
-     * @deprecated Use {@link Factory18} and
-     *             {@link #create(java.lang.Class, com.oracle.truffle.api.interop.ForeignAccess.Factory18)}
      */
-    @Deprecated
     public static ForeignAccess create(final Class<? extends TruffleObject> baseClass, final Factory10 factory) {
         if (baseClass == null) {
             Factory f = (Factory) factory;
             assert f != null;
         }
-        return new ForeignAccess(new DelegatingFactory10(baseClass, factory));
-    }
-
-    /**
-     * Creates new instance of {@link ForeignAccess} that delegates to provided factory.
-     *
-     * @param baseClass the super class of all {@link TruffleObject}s handled by this factory (if
-     *            <code>null</code> than the second interface also needs to implement
-     *            {@link Factory})
-     * @param factory the factory that handles access requests to {@link Message}s known as of
-     *            version 0.18
-     * @return new instance wrapping <code>factory</code>
-     * @since 0.18
-     */
-    public static ForeignAccess create(final Class<? extends TruffleObject> baseClass, final Factory18 factory) {
-        if (baseClass == null) {
-            Factory f = (Factory) factory;
-            assert f != null;
-        }
-        return new ForeignAccess(new DelegatingFactory18(baseClass, factory));
-    }
-
-    /**
-     * Creates new instance of {@link ForeignAccess} that delegates to provided factory.
-     *
-     * @param factory the factory that handles access requests to {@link Message}s known as of
-     *            version 0.10
-     * @param languageCheck a {@link RootNode} that performs the language check on receiver objects
-     * @return new instance wrapping <code>factory</code>
-     * @since 0.13
-     * @deprecated Use {@link Factory18} and
-     *             {@link #create(com.oracle.truffle.api.interop.ForeignAccess.Factory18, com.oracle.truffle.api.nodes.RootNode)
-     *             its associated factory} method
-     */
-    @Deprecated
-    public static ForeignAccess create(final Factory10 factory, final RootNode languageCheck) {
-        return new ForeignAccess(languageCheck, new DelegatingFactory10(null, factory));
-    }
-
-    /**
-     * Creates new instance of {@link ForeignAccess} that delegates to provided factory.
-     *
-     * @param factory the factory that handles access requests to {@link Message}s known as of
-     *            version 0.18
-     * @param languageCheck a {@link RootNode} that performs the language check on receiver objects,
-     *            can be <code>null</code>, but then the factory has to also implement
-     *            {@link Factory} interface
-     * @return new instance wrapping <code>factory</code>
-     * @since 0.18
-     */
-    public static ForeignAccess create(final Factory18 factory, final RootNode languageCheck) {
-        if (languageCheck == null) {
-            Factory f = (Factory) factory;
-            assert f != null;
-        }
-        return new ForeignAccess(languageCheck, new DelegatingFactory18(null, factory));
+        return new ForeignAccess(new DelegatingFactory(baseClass, factory));
     }
 
     /**
@@ -529,10 +463,8 @@ public final class ForeignAccess {
     @Override
     public String toString() {
         Object f;
-        if (factory instanceof DelegatingFactory18) {
-            f = ((DelegatingFactory18) factory).factory;
-        } else if (factory instanceof DelegatingFactory10) {
-            f = ((DelegatingFactory10) factory).factory;
+        if (factory instanceof DelegatingFactory) {
+            f = ((DelegatingFactory) factory).factory;
         } else {
             f = factory;
         }
@@ -548,14 +480,6 @@ public final class ForeignAccess {
         return factory.accessMessage(message);
     }
 
-    CallTarget checkLanguage() {
-        if (languageCheck != null) {
-            return Truffle.getRuntime().createCallTarget((RootNode) languageCheck.deepCopy());
-        } else {
-            return null;
-        }
-    }
-
     boolean canHandle(TruffleObject receiver) {
         checkThread();
         return factory.canHandle(receiver);
@@ -567,8 +491,8 @@ public final class ForeignAccess {
      * a {@code Message}. The {@code TruffleObject} instance provides a {@link ForeignAccess}
      * instance (built via {@link #create(com.oracle.truffle.api.interop.ForeignAccess.Factory)})
      * that provides an AST snippet for a given {@link Message}. Rather than using this generic
-     * {@code Factory}, consider implementing {@link Factory18} interface that captures the set of
-     * messages each language should implement as of Truffle version 0.18.
+     * {@code Factory}, consider implementing {@link Factory10} interface that captures the set of
+     * messages each language should implement as of Truffle version 1.0.
      *
      * @since 0.8 or earlier
      */
@@ -597,146 +521,10 @@ public final class ForeignAccess {
 
     /**
      * Specialized {@link Factory factory} that handles {@link Message messages} known as of release
-     * 0.18 of the Truffle API.
-     *
-     * @since 0.18
-     */
-    public interface Factory18 {
-        /**
-         * Handles {@link Message#IS_NULL} message.
-         *
-         * @return call target to handle the message or <code>null</code> if this message is not
-         *         supported
-         * @since 0.18
-         */
-        CallTarget accessIsNull();
-
-        /**
-         * Handles {@link Message#IS_EXECUTABLE} message.
-         *
-         * @return call target to handle the message or <code>null</code> if this message is not
-         *         supported
-         * @since 0.18
-         */
-        CallTarget accessIsExecutable();
-
-        /**
-         * Handles {@link Message#IS_BOXED} message.
-         *
-         * @return call target to handle the message or <code>null</code> if this message is not
-         *         supported
-         * @since 0.18
-         */
-        CallTarget accessIsBoxed();
-
-        /**
-         * Handles {@link Message#HAS_SIZE} message.
-         *
-         * @return call target to handle the message or <code>null</code> if this message is not
-         *         supported
-         * @since 0.18
-         */
-        CallTarget accessHasSize();
-
-        /**
-         * Handles {@link Message#GET_SIZE} message.
-         *
-         * @return call target to handle the message or <code>null</code> if this message is not
-         *         supported
-         * @since 0.18
-         */
-        CallTarget accessGetSize();
-
-        /**
-         * Handles {@link Message#UNBOX} message.
-         *
-         * @return call target to handle the message or <code>null</code> if this message is not
-         *         supported
-         * @since 0.18
-         */
-        CallTarget accessUnbox();
-
-        /**
-         * Handles {@link Message#READ} message.
-         *
-         * @return call target to handle the message or <code>null</code> if this message is not
-         *         supported
-         * @since 0.18
-         */
-        CallTarget accessRead();
-
-        /**
-         * Handles {@link Message#WRITE} message.
-         *
-         * @return call target to handle the message or <code>null</code> if this message is not
-         *         supported
-         * @since 0.18
-         */
-        CallTarget accessWrite();
-
-        /**
-         * Handles {@link Message#createExecute(int)} messages.
-         *
-         * @param argumentsLength number of parameters the messages has been created for
-         * @return call target to handle the message or <code>null</code> if this message is not
-         *         supported
-         * @since 0.18
-         */
-        CallTarget accessExecute(int argumentsLength);
-
-        /**
-         * Handles {@link Message#createInvoke(int)} messages.
-         *
-         * @param argumentsLength number of parameters the messages has been created for
-         * @return call target to handle the message or <code>null</code> if this message is not
-         *         supported
-         * @since 0.18
-         */
-        CallTarget accessInvoke(int argumentsLength);
-
-        /**
-         * Handles {@link Message#createNew(int)} messages.
-         *
-         * @param argumentsLength number of parameters the messages has been created for
-         * @return call target to handle the message or <code>null</code> if this message is not
-         *         supported
-         * @since 0.18
-         */
-        CallTarget accessNew(int argumentsLength);
-
-        /**
-         * Handles request for access to a message not known in version 0.10. The parameter to the
-         * returned {@link CallTarget} is going to be the object/receiver. The return value is
-         * supposed to be a {@link TruffleObject} that represents an array (responds to
-         * {@link Message#HAS_SIZE} and {@link Message#GET_SIZE} and its element represent
-         * {@link String} names of properties of the receiver.
-         *
-         * @return call target to handle the message or <code>null</code> if this message is not
-         *         supported
-         * @since 0.18
-         */
-        CallTarget accessKeys();
-
-        /**
-         * Handles request for access to a message not known in version 0.18.
-         *
-         * @param unknown the message
-         * @return call target to handle the message or <code>null</code> if this message is not
-         *         supported
-         * @since 0.18
-         */
-        CallTarget accessMessage(Message unknown);
-    }
-
-    /**
-     * Specialized {@link Factory factory} that handles {@link Message messages} known as of release
-     * 0.10 of the Truffle API.
+     * 1.0 of Truffle API.
      *
      * @since 0.8 or earlier
-     * @deprecated extended set of messages is now supported, consider implementing
-     *             {@link Factory18}
      */
-    @Deprecated
     public interface Factory10 {
         /**
          * Handles {@link Message#IS_NULL} message.
@@ -851,11 +639,11 @@ public final class ForeignAccess {
         CallTarget accessMessage(Message unknown);
     }
 
-    private static class DelegatingFactory10 implements Factory {
+    private static class DelegatingFactory implements Factory {
         private final Class<?> baseClass;
         private final Factory10 factory;
 
-        DelegatingFactory10(Class<?> baseClass, Factory10 factory) {
+        DelegatingFactory(Class<?> baseClass, Factory10 factory) {
             this.baseClass = baseClass;
             this.factory = factory;
         }
@@ -870,10 +658,6 @@ public final class ForeignAccess {
 
         @Override
         public CallTarget accessMessage(Message msg) {
-            return accessMessage(factory, msg);
-        }
-
-        private static CallTarget accessMessage(Factory10 factory, Message msg) {
             if (msg instanceof KnownMessage) {
                 switch (msg.hashCode()) {
                     case Execute.EXECUTE:
@@ -904,58 +688,4 @@ public final class ForeignAccess {
         }
     }
 
-    private static class DelegatingFactory18 implements Factory {
-        private final Class<?> baseClass;
-        private final Factory18 factory;
-
-        DelegatingFactory18(Class<?> baseClass, Factory18 factory) {
-            this.baseClass = baseClass;
-            this.factory = factory;
-        }
-
-        @Override
-        public boolean canHandle(TruffleObject obj) {
-            if (baseClass == null) {
-                return ((Factory) factory).canHandle(obj);
-            }
-            return baseClass.isInstance(obj);
-        }
-
-        @Override
-        public CallTarget accessMessage(Message msg) {
-            return accessMessage(factory, msg);
-        }
-
-        private static CallTarget accessMessage(Factory18 factory, Message msg) {
-            if (msg instanceof KnownMessage) {
-                switch (msg.hashCode()) {
-                    case Execute.EXECUTE:
-                        return factory.accessExecute(((Execute) msg).getArity());
-                    case Execute.INVOKE:
-                        return factory.accessInvoke(((Execute) msg).getArity());
-                    case Execute.NEW:
-                        return factory.accessNew(((Execute) msg).getArity());
-                    case GetSize.HASH:
-                        return factory.accessGetSize();
-                    case HasSize.HASH:
-                        return factory.accessHasSize();
-                    case IsBoxed.HASH:
-                        return factory.accessIsBoxed();
-                    case IsExecutable.HASH:
-                        return factory.accessIsExecutable();
-                    case IsNull.HASH:
-                        return factory.accessIsNull();
-                    case Read.HASH:
-                        return factory.accessRead();
-                    case Unbox.HASH:
-                        return factory.accessUnbox();
-                    case Write.HASH:
-                        return factory.accessWrite();
-                    case Keys.HASH:
-                        return factory.accessKeys();
-                }
-            }
-            return factory.accessMessage(msg);
-        }
-    }
 }
