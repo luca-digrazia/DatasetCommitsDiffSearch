@@ -22,12 +22,13 @@
  */
 package com.oracle.truffle.api.dsl.test;
 
-import static com.oracle.truffle.api.dsl.test.TestHelper.*;
-import static org.junit.Assert.*;
+import static com.oracle.truffle.api.dsl.test.TestHelper.createCallTarget;
+import static org.junit.Assert.assertEquals;
 
-import org.junit.*;
+import org.junit.Test;
 
-import com.oracle.truffle.api.dsl.*;
+import com.oracle.truffle.api.dsl.NodeField;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.test.NodeFieldTestFactory.IntFieldNoGetterTestNodeFactory;
 import com.oracle.truffle.api.dsl.test.NodeFieldTestFactory.IntFieldTestNodeFactory;
 import com.oracle.truffle.api.dsl.test.NodeFieldTestFactory.MultipleFieldsTestNodeFactory;
@@ -76,7 +77,8 @@ public class NodeFieldTest {
         assertEquals(42, createCallTarget(MultipleFieldsTestNodeFactory.create(21, 21)).call());
     }
 
-    @NodeFields({@NodeField(name = "field0", type = int.class), @NodeField(name = "field1", type = int.class)})
+    @NodeField(name = "field0", type = int.class)
+    @NodeField(name = "field1", type = int.class)
     abstract static class MultipleFieldsTestNode extends ValueNode {
 
         public abstract int getField0();
@@ -122,7 +124,7 @@ public class NodeFieldTest {
             throw new RuntimeException();
         }
 
-        @Specialization(contains = "alwaysRewrite")
+        @Specialization(replaces = "alwaysRewrite")
         Object returnField() {
             return getField();
         }
