@@ -38,7 +38,7 @@ public final class HotSpotVMConfig extends CompilerObject {
 
     private static final long serialVersionUID = -4744897993263044184L;
 
-    private static final HotSpotDiagnosticMXBean diagnostic = ManagementFactoryHelper.getDiagnosticMXBean();
+    private final HotSpotDiagnosticMXBean diagnostic = ManagementFactoryHelper.getDiagnosticMXBean();
 
     HotSpotVMConfig(CompilerToVM c2vm) {
         c2vm.initializeConfiguration(this);
@@ -52,9 +52,9 @@ public final class HotSpotVMConfig extends CompilerObject {
      * @return value of option
      * @throws IllegalArgumentException if option doesn't exist
      */
-    public static int getVMOptionInt(String name) {
+    private int getVMOptionInt(String name) {
         String value = diagnostic.getVMOption(name).getValue();
-        return Integer.valueOf(value).intValue();
+        return new Integer(value).intValue();
     }
 
     /**
@@ -64,7 +64,7 @@ public final class HotSpotVMConfig extends CompilerObject {
      * @param defaultValue default value if option is not exists (e.g. development options)
      * @return value of option or defaultValue if option doesn't exist
      */
-    public static int getVMOption(String name, int defaultValue) {
+    private int getVMOption(String name, int defaultValue) {
         try {
             return getVMOptionInt(name);
         } catch (IllegalArgumentException e) {
@@ -79,9 +79,9 @@ public final class HotSpotVMConfig extends CompilerObject {
      * @return value of option
      * @throws IllegalArgumentException if option doesn't exist
      */
-    public static boolean getVMOption(String name) {
+    private boolean getVMOption(String name) {
         String value = diagnostic.getVMOption(name).getValue();
-        return Boolean.valueOf(value).booleanValue();
+        return new Boolean(value).booleanValue();
     }
 
     /**
@@ -91,7 +91,7 @@ public final class HotSpotVMConfig extends CompilerObject {
      * @param defaultValue default value if option is not exists (e.g. development options)
      * @return value of option or defaultValue if option doesn't exist
      */
-    public static boolean getVMOption(String name, boolean defaultValue) {
+    private boolean getVMOption(String name, boolean defaultValue) {
         try {
             return getVMOption(name);
         } catch (IllegalArgumentException e) {
@@ -140,7 +140,7 @@ public final class HotSpotVMConfig extends CompilerObject {
 
     // Compressed Oops related values.
     public final boolean useCompressedOops = getVMOption("UseCompressedOops");
-    public final boolean useCompressedClassPointers = getVMOption("UseCompressedClassPointers");
+    public final boolean useCompressedKlassPointers = getVMOption("UseCompressedKlassPointers");
     public final long narrowOopBase = getUninitializedLong();
     public final int narrowOopShift = getUninitializedInt();
     public final int logMinObjAlignment = (int) (Math.log(getVMOptionInt("ObjectAlignmentInBytes")) / Math.log(2));
@@ -244,16 +244,6 @@ public final class HotSpotVMConfig extends CompilerObject {
      * The value of JavaThread::osthread_offset().
      */
     public final int osThreadOffset = getUninitializedInt();
-
-    /**
-     * The value of JavaThread::graal_counters_offset().
-     */
-    public final int graalCountersThreadOffset = getUninitializedInt();
-
-    /**
-     * The length of the JavaThread::_graal_counters array.
-     */
-    public final int graalCountersSize = getUninitializedInt();
 
     /**
      * The value of OSThread::interrupted_offset().
