@@ -57,8 +57,7 @@ public class ArrayDuplicationBenchmark {
     @Benchmark
     @OperationsPerInvocation(TESTSIZE)
     public Object[] normalArraycopy() {
-        int j = 0;
-        for (int i = 0; i < TESTSIZE; i++) {
+        for (int i = 0, j = 0; i < TESTSIZE; i++) {
             dummy[j++] = normalArraycopy(testObjectArray[i]);
         }
         return dummy;
@@ -73,8 +72,7 @@ public class ArrayDuplicationBenchmark {
     @Benchmark
     @OperationsPerInvocation(TESTSIZE)
     public Object[] arraysCopyOf() {
-        int j = 0;
-        for (int i = 0; i < TESTSIZE; i++) {
+        for (int i = 0, j = 0; i < TESTSIZE; i++) {
             dummy[j++] = arraysCopyOf(testObjectArray[i]);
         }
         return dummy;
@@ -87,8 +85,7 @@ public class ArrayDuplicationBenchmark {
     @Benchmark
     @OperationsPerInvocation(TESTSIZE)
     public Object[] cloneObjectArray() {
-        int j = 0;
-        for (int i = 0; i < TESTSIZE; i++) {
+        for (int i = 0, j = 0; i < TESTSIZE; i++) {
             dummy[j++] = arraysClone(testObjectArray[i]);
         }
         return dummy;

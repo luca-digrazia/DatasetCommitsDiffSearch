@@ -22,14 +22,11 @@
  */
 package com.oracle.graal.microbenchmarks.graal;
 
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.annotations.*;
 
-import com.oracle.graal.graph.Graph;
-import com.oracle.graal.microbenchmarks.graal.util.GraalState;
-import com.oracle.graal.microbenchmarks.graal.util.GraphState;
-import com.oracle.graal.microbenchmarks.graal.util.MethodSpec;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.microbenchmarks.graal.util.*;
+import com.oracle.graal.nodes.*;
 
 /**
  * Benchmarks the performance of {@link Graph#copy()}.
@@ -86,13 +83,13 @@ public class GraphCopyBenchmark extends GraalBenchmark {
     static class Entry {
         final String name;
 
-        Entry(String name) {
+        public Entry(String name) {
             this.name = name;
         }
     }
 
     static class EntryWithNext extends Entry {
-        EntryWithNext(String name, Entry next) {
+        public EntryWithNext(String name, Entry next) {
             super(name);
             this.next = next;
         }
