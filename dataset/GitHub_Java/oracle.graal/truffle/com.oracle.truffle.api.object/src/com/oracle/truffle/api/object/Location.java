@@ -32,24 +32,13 @@ import com.oracle.truffle.api.CompilerDirectives;
  * @see Shape
  * @see Property
  * @see DynamicObject
- * @since 0.8 or earlier
  */
 public abstract class Location {
-    /**
-     * Constructor for subclasses.
-     *
-     * @since 0.8 or earlier
-     */
-    protected Location() {
-    }
-
-    /** @since 0.8 or earlier */
     protected static IncompatibleLocationException incompatibleLocation() throws IncompatibleLocationException {
         CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new IncompatibleLocationException();
     }
 
-    /** @since 0.8 or earlier */
     protected static FinalLocationException finalLocation() throws FinalLocationException {
         CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new FinalLocationException();
@@ -59,7 +48,6 @@ public abstract class Location {
      * Get object value as object at this location in store.
      *
      * @param shape the current shape of the object, which must contain this location
-     * @since 0.8 or earlier
      */
     public final Object get(DynamicObject store, Shape shape) {
         return get(store, checkShape(store, shape));
@@ -71,7 +59,6 @@ public abstract class Location {
      *
      * @param condition the result of a shape check or {@code false}
      * @see #get(DynamicObject, Shape)
-     * @since 0.8 or earlier
      */
     public Object get(DynamicObject store, boolean condition) {
         return getInternal(store);
@@ -80,7 +67,6 @@ public abstract class Location {
     /**
      * Get object value as object at this location in store.
      *
-     * @since 0.8 or earlier
      */
     public final Object get(DynamicObject store) {
         return get(store, false);
@@ -92,7 +78,6 @@ public abstract class Location {
      * @param shape the current shape of the storage object
      * @throws IncompatibleLocationException for storage type invalidations
      * @throws FinalLocationException for effectively final fields
-     * @since 0.8 or earlier
      */
     public void set(DynamicObject store, Object value, Shape shape) throws IncompatibleLocationException, FinalLocationException {
         setInternal(store, value);
@@ -104,7 +89,6 @@ public abstract class Location {
      * @param oldShape the shape before the transition
      * @param newShape new shape after the transition
      * @throws IncompatibleLocationException if value is of non-assignable type
-     * @since 0.8 or earlier
      */
     public final void set(DynamicObject store, Object value, Shape oldShape, Shape newShape) throws IncompatibleLocationException {
         if (canStore(value)) {
@@ -124,13 +108,11 @@ public abstract class Location {
      *
      * @throws IncompatibleLocationException for storage type invalidations
      * @throws FinalLocationException for effectively final fields
-     * @since 0.8 or earlier
      */
     public final void set(DynamicObject store, Object value) throws IncompatibleLocationException, FinalLocationException {
         set(store, value, null);
     }
 
-    /** @since 0.8 or earlier */
     protected abstract Object getInternal(DynamicObject store);
 
     /**
@@ -139,7 +121,6 @@ public abstract class Location {
      * with predefined properties.
      *
      * @throws IncompatibleLocationException if value is of non-assignable type
-     * @since 0.8 or earlier
      */
     protected abstract void setInternal(DynamicObject store, Object value) throws IncompatibleLocationException;
 
@@ -148,7 +129,6 @@ public abstract class Location {
      *
      * @param store the receiver object
      * @param value the value in question
-     * @since 0.8 or earlier
      */
     public boolean canSet(DynamicObject store, Object value) {
         return canStore(value);
@@ -158,7 +138,6 @@ public abstract class Location {
      * Returns {@code true} if the location can be set to the value.
      *
      * @param value the value in question
-     * @since 0.8 or earlier
      */
     public boolean canSet(Object value) {
         return canStore(value);
@@ -171,7 +150,6 @@ public abstract class Location {
      * false.
      *
      * @param value the value in question
-     * @since 0.8 or earlier
      */
     public boolean canStore(Object value) {
         return true;
@@ -179,8 +157,6 @@ public abstract class Location {
 
     /**
      * Returns {@code true} if this is a final location, i.e. readonly once set.
-     *
-     * @since 0.8 or earlier
      */
     public boolean isFinal() {
         return false;
@@ -188,33 +164,25 @@ public abstract class Location {
 
     /**
      * Returns {@code true} if this is an immutable constant location.
-     *
-     * @since 0.8 or earlier
      */
     public boolean isConstant() {
         return false;
     }
 
-    /**
+    /*
      * Abstract to force overriding.
-     *
-     * @since 0.8 or earlier
      */
     @Override
     public abstract int hashCode();
 
-    /**
+    /*
      * Abstract to force overriding.
-     *
-     * @since 0.8 or earlier
      */
     @Override
     public abstract boolean equals(Object obj);
 
     /**
      * Equivalent to {@link Shape#check(DynamicObject)}.
-     *
-     * @since 0.8 or earlier
      */
     protected static boolean checkShape(DynamicObject store, Shape shape) {
         return store.getShape() == shape;
