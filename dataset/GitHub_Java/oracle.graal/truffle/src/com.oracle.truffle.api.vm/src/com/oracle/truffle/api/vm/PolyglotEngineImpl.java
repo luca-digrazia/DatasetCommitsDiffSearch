@@ -282,10 +282,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
         Map<String, PolyglotLanguageImpl> langs = new LinkedHashMap<>();
         Map<String, LanguageCache> cachedLanguages = LanguageCache.languages();
         Set<LanguageCache> uniqueLanguages = new LinkedHashSet<>();
-        LanguageCache hostCache = createHostLanguageCache();
-        if (hostCache != null) {
-            uniqueLanguages.add(hostCache);
-        }
+        uniqueLanguages.add(createHostLanguageCache());
         uniqueLanguages.addAll(cachedLanguages.values());
 
         int index = 0;
