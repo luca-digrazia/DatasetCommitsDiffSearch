@@ -168,7 +168,7 @@ public class VM extends NativeEnv {
 
         boolean first = true;
         if (method.getAnnotation(JniImpl.class) != null) {
-            sb.append(NativeSimpleType.SINT64); // Prepend JNIEnv*;
+            sb.append(NativeSimpleType.POINTER); // Prepend JNIEnv*;
             first = false;
         }
 
@@ -217,8 +217,9 @@ public class VM extends NativeEnv {
         int extraArg = (m.getAnnotation(JniImpl.class) != null) ? 1 : 0;
 
         return new Callback(m.getParameterCount() + extraArg, args -> {
+
+            assert unwrapPointer(args[0]) == jniEnv.getNativePointer() : "Calling JVM_ method " + m + " from alien JniEnv";
             if (m.getAnnotation(JniImpl.class) != null) {
-                assert (long) args[0] == jniEnv.getNativePointer() : "Calling JVM_ method " + m + " from alien JniEnv";
                 args = Arrays.copyOfRange(args, 1, args.length); // Strip JNIEnv* pointer, replace
                                                                  // by VM (this) receiver.
             }
@@ -572,18 +573,16 @@ public class VM extends NativeEnv {
 
     @VmImpl
     public long JVM_FindLibraryEntry(long libHandle, String name) {
+        TruffleObject function = NativeLibrary.lookup(handle2Lib.get(libHandle), name);
         try {
-            TruffleObject function = NativeLibrary.lookup(handle2Lib.get(libHandle), name);
             long handle = (long) ForeignAccess.sendUnbox(Message.UNBOX.createNode(), function);
             if (!handle2Sym.contains(handle)) {
                 handle2Sym.put(handle, function);
             }
             return handle;
         } catch (UnsupportedMessageException e) {
-            throw EspressoError.shouldNotReachHere(e);
-        } catch (UnknownIdentifierException e) {
-            return 0; // not found
         }
+        return 0;
     }
 
     @VmImpl
@@ -597,8 +596,8 @@ public class VM extends NativeEnv {
 
     @VmImpl
     public long JVM_LoadLibrary(String name) {
+        TruffleObject lib = NativeLibrary.loadLibrary(name);
         try {
-            TruffleObject lib = NativeLibrary.loadLibrary(name);
             Field f = lib.getClass().getDeclaredField("handle");
             f.setAccessible(true);
             long handle = (long) f.get(lib);
@@ -607,8 +606,9 @@ public class VM extends NativeEnv {
             }
             return handle;
         } catch (IllegalAccessException | NoSuchFieldException e) {
-            throw EspressoError.shouldNotReachHere(e);
+            e.printStackTrace();
         }
+        return 0;
     }
 
     @VmImpl
