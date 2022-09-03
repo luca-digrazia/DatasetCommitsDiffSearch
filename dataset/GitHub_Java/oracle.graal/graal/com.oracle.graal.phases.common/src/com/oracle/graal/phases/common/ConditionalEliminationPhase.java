@@ -52,9 +52,12 @@ public class ConditionalEliminationPhase extends Phase {
     private static final DebugMetric metricObjectEqualsRemoved = Debug.metric("ObjectEqualsRemoved");
     private static final DebugMetric metricGuardsRemoved = Debug.metric("GuardsRemoved");
 
+    private final MetaAccessProvider metaAccess;
+
     private StructuredGraph graph;
 
-    public ConditionalEliminationPhase() {
+    public ConditionalEliminationPhase(MetaAccessProvider metaAccess) {
+        this.metaAccess = metaAccess;
     }
 
     @Override
@@ -148,7 +151,7 @@ public class ConditionalEliminationPhase extends Phase {
                         break;
                     }
                 }
-                if (type != null && !type.equals(StampTool.typeOrNull(node))) {
+                if (type != null && type != StampTool.typeOrNull(node)) {
                     newKnownTypes.put(node, type);
                 }
             }
@@ -235,11 +238,11 @@ public class ConditionalEliminationPhase extends Phase {
         }
 
         public boolean isNull(ValueNode value) {
-            return StampTool.isPointerAlwaysNull(value) || knownNull.contains(GraphUtil.unproxify(value));
+            return StampTool.isObjectAlwaysNull(value) || knownNull.contains(GraphUtil.unproxify(value));
         }
 
         public boolean isNonNull(ValueNode value) {
-            return StampTool.isPointerNonNull(value) || knownNonNull.contains(GraphUtil.unproxify(value));
+            return StampTool.isObjectNonNull(value) || knownNonNull.contains(GraphUtil.unproxify(value));
         }
 
         @Override
@@ -699,7 +702,7 @@ public class ConditionalEliminationPhase extends Phase {
                     PiNode piNode;
                     if (isNull) {
                         ConstantNode nullObject = ConstantNode.defaultForKind(Kind.Object, graph);
-                        piNode = graph.unique(PiNode.create(nullObject, nullObject.stamp(), replacementAnchor.asNode()));
+                        piNode = graph.unique(PiNode.create(nullObject, StampFactory.forConstant(nullObject.asJavaConstant(), metaAccess), replacementAnchor.asNode()));
                     } else {
                         piNode = graph.unique(PiNode.create(object, StampFactory.declaredTrusted(type, nonNull), replacementAnchor.asNode()));
                     }

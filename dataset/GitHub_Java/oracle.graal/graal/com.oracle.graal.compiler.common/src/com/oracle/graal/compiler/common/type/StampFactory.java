@@ -31,14 +31,13 @@ public class StampFactory {
     // JaCoCo Exclude
 
     private static final Stamp[] stampCache = new Stamp[Kind.values().length];
+    private static final Stamp[] pointerStampCache = new Stamp[PointerType.values().length];
     private static final Stamp[] illegalStampCache = new Stamp[Kind.values().length];
     private static final Stamp objectStamp = new ObjectStamp(null, false, false, false);
     private static final Stamp objectNonNullStamp = new ObjectStamp(null, false, true, false);
     private static final Stamp objectAlwaysNullStamp = new ObjectStamp(null, false, false, true);
     private static final Stamp nodeIntrinsicStamp = new ObjectStamp(null, false, false, false);
     private static final Stamp positiveInt = forInteger(Kind.Int, 0, Integer.MAX_VALUE, 0, Integer.MAX_VALUE);
-    private static final Stamp booleanTrue = forInteger(Kind.Boolean, -1, -1, 1, 1);
-    private static final Stamp booleanFalse = forInteger(Kind.Boolean, 0, 0, 0, 0);
 
     private static void setCache(Kind kind, Stamp stamp) {
         stampCache[kind.ordinal()] = stamp;
@@ -80,14 +79,13 @@ public class StampFactory {
                 illegalStampCache[k.ordinal()] = IllegalStamp.getInstance();
             }
         }
-    }
 
-    public static Stamp tautology() {
-        return booleanTrue;
-    }
-
-    public static Stamp contradiction() {
-        return booleanFalse;
+        pointerStampCache[PointerType.Object.ordinal()] = objectStamp;
+        for (PointerType t : PointerType.values()) {
+            if (t != PointerType.Object) {
+                pointerStampCache[t.ordinal()] = new PointerStamp(t);
+            }
+        }
     }
 
     /**
@@ -96,6 +94,14 @@ public class StampFactory {
     public static Stamp forKind(Kind kind) {
         assert stampCache[kind.ordinal()] != null : "unexpected forKind(" + kind + ")";
         return stampCache[kind.ordinal()];
+    }
+
+    /**
+     * Return a stamp for a pointer.
+     */
+    public static Stamp forPointer(PointerType type) {
+        assert pointerStampCache[type.ordinal()] != null;
+        return pointerStampCache[type.ordinal()];
     }
 
     /**

@@ -211,7 +211,7 @@ public class InliningUtil {
             return "the invoke is marked to be not used for inlining";
         }
         ValueNode receiver = callTarget.receiver();
-        if (receiver != null && receiver.isConstant() && receiver.isNullConstant()) {
+        if (receiver != null && receiver.isConstant() && receiver.asJavaConstant().isNull()) {
             return "receiver is null";
         }
         return null;
@@ -500,7 +500,7 @@ public class InliningUtil {
         assert !callTarget.isStatic() : callTarget.targetMethod();
         StructuredGraph graph = callTarget.graph();
         ValueNode firstParam = callTarget.arguments().get(0);
-        if (firstParam.getKind() == Kind.Object && !StampTool.isPointerNonNull(firstParam)) {
+        if (firstParam.getKind() == Kind.Object && !StampTool.isObjectNonNull(firstParam)) {
             IsNullNode condition = graph.unique(IsNullNode.create(firstParam));
             Stamp stamp = firstParam.stamp().join(objectNonNull());
             GuardingPiNode nonNullReceiver = graph.add(GuardingPiNode.create(firstParam, condition, true, NullCheckException, InvalidateReprofile, stamp));
@@ -526,7 +526,7 @@ public class InliningUtil {
     public static FixedWithNextNode inlineMacroNode(Invoke invoke, ResolvedJavaMethod concrete, Class<? extends FixedWithNextNode> macroNodeClass) throws GraalInternalError {
         StructuredGraph graph = invoke.asNode().graph();
         if (!concrete.equals(((MethodCallTargetNode) invoke.callTarget()).targetMethod())) {
-            assert ((MethodCallTargetNode) invoke.callTarget()).invokeKind().hasReceiver();
+            assert ((MethodCallTargetNode) invoke.callTarget()).invokeKind() != InvokeKind.Static;
             InliningUtil.replaceInvokeCallTarget(invoke, graph, InvokeKind.Special, concrete);
         }
 

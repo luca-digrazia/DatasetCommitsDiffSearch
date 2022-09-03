@@ -45,7 +45,11 @@ public class UnsafeTypeCastMacroNode extends NeverPartOfCompilationNode implemen
     private static final int NONNULL_ARGUMENT_INDEX = 3;
     private static final int ARGUMENT_COUNT = 4;
 
-    public UnsafeTypeCastMacroNode(Invoke invoke) {
+    public static UnsafeTypeCastMacroNode create(Invoke invoke) {
+        return new UnsafeTypeCastMacroNode(invoke);
+    }
+
+    protected UnsafeTypeCastMacroNode(Invoke invoke) {
         super(invoke, "The class of the unsafe cast could not be reduced to a compile time constant.");
         assert arguments.size() == ARGUMENT_COUNT;
     }
@@ -57,7 +61,7 @@ public class UnsafeTypeCastMacroNode extends NeverPartOfCompilationNode implemen
         if (classArgument.isConstant() && nonNullArgument.isConstant()) {
             ValueNode objectArgument = arguments.get(OBJECT_ARGUMENT_INDEX);
             ValueNode conditionArgument = arguments.get(CONDITION_ARGUMENT_INDEX);
-            ResolvedJavaType lookupJavaType = tool.getConstantReflection().asJavaType(classArgument.asConstant());
+            ResolvedJavaType lookupJavaType = tool.getConstantReflection().asJavaType(classArgument.asJavaConstant());
             tool.addToWorkList(usages());
             if (lookupJavaType == null) {
                 replaceAtUsages(objectArgument);
@@ -65,8 +69,8 @@ public class UnsafeTypeCastMacroNode extends NeverPartOfCompilationNode implemen
             } else {
                 Stamp piStamp = StampFactory.declaredTrusted(lookupJavaType, nonNullArgument.asJavaConstant().asInt() != 0);
                 ConditionAnchorNode valueAnchorNode = graph().add(
-                                new ConditionAnchorNode(CompareNode.createCompareNode(graph(), Condition.EQ, conditionArgument, ConstantNode.forBoolean(true, graph()))));
-                PiNode piCast = graph().unique(new PiNode(objectArgument, piStamp, valueAnchorNode));
+                                ConditionAnchorNode.create(CompareNode.createCompareNode(graph(), Condition.EQ, conditionArgument, ConstantNode.forBoolean(true, graph()))));
+                PiNode piCast = graph().unique(PiNode.create(objectArgument, piStamp, valueAnchorNode));
                 replaceAtUsages(piCast);
                 graph().replaceFixedWithFixed(this, valueAnchorNode);
             }
