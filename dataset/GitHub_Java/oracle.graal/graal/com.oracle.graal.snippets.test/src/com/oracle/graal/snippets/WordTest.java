@@ -30,7 +30,7 @@ import com.oracle.graal.api.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.compiler.tests.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.snippets.Snippet.InliningPolicy;
 
@@ -63,38 +63,12 @@ public class WordTest extends GraalCompilerTest implements SnippetsInterface {
                 test("plus_int", word, -addend);
                 test("minus_int", word, addend);
                 test("minus_int", word, -addend);
-                test("plus_long", word, (long) addend);
-                test("plus_long", word, (long) -addend);
-                test("minus_long", word, (long) addend);
-                test("minus_long", word, (long) -addend);
-
-                test("and_int", word, addend);
-                test("and_int", word, -addend);
-                test("or_int", word, addend);
-                test("or_int", word, -addend);
-                test("and_long", word, (long) addend);
-                test("and_long", word, (long) -addend);
-                test("or_long", word, (long) addend);
-                test("or_long", word, (long) -addend);
             }
             for (long addend : words) {
                 test("plus_int", word, (int) addend);
                 test("minus_int", word, (int) addend);
                 test("plus_int", word, -((int) addend));
                 test("minus_int", word, -((int) addend));
-                test("plus_long", word, addend);
-                test("minus_long", word, addend);
-                test("plus_long", word, -addend);
-                test("minus_long", word, -addend);
-
-                test("and_int", word, (int) addend);
-                test("or_int", word, (int) addend);
-                test("and_int", word, -((int) addend));
-                test("or_int", word, -((int) addend));
-                test("and_long", word, addend);
-                test("or_long", word, addend);
-                test("and_long", word, -addend);
-                test("or_long", word, -addend);
             }
         }
     }
@@ -134,17 +108,7 @@ public class WordTest extends GraalCompilerTest implements SnippetsInterface {
 
     @Snippet
     public static long minus_int(long word, int addend) {
-        return Word.fromLong(word).minus(addend).toLong();
-    }
-
-    @Snippet
-    public static long plus_long(long word, long addend) {
         return Word.fromLong(word).plus(addend).toLong();
-    }
-
-    @Snippet
-    public static long minus_long(long word, long addend) {
-        return Word.fromLong(word).minus(addend).toLong();
     }
 
     @Snippet
@@ -171,24 +135,5 @@ public class WordTest extends GraalCompilerTest implements SnippetsInterface {
     public static int fromToObject(Object o1, Object o2) {
         return Word.fromObject(o1).toObject().hashCode() + Word.fromObject(o2).toObject().hashCode();
     }
-
-    @Snippet
-    public static long and_int(long word, int addend) {
-        return Word.fromLong(word).and(addend).toLong();
-    }
-
-    @Snippet
-    public static long or_int(long word, int addend) {
-        return Word.fromLong(word).or(addend).toLong();
-    }
-
-    @Snippet
-    public static long and_long(long word, long addend) {
-        return Word.fromLong(word).and(addend).toLong();
-    }
-
-    @Snippet
-    public static long or_long(long word, long addend) {
-        return Word.fromLong(word).or(addend).toLong();
-    }
 }
+
