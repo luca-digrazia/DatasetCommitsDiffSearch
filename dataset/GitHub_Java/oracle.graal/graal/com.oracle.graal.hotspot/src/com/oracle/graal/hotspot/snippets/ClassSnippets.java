@@ -27,7 +27,6 @@ import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
 
 import java.lang.reflect.*;
 
-import com.oracle.graal.nodes.*;
 import com.oracle.graal.snippets.*;
 import com.oracle.graal.snippets.ClassSubstitution.MethodSubstitution;
 
@@ -108,10 +107,4 @@ public class ClassSnippets implements SnippetsInterface {
         }
         return null;
     }
-
-    @MethodSubstitution(isStatic = false)
-    public static boolean isInstance(final Class<?> thisObj, Object obj) {
-        return MaterializeNode.isInstance(thisObj, obj);
-    }
-
 }

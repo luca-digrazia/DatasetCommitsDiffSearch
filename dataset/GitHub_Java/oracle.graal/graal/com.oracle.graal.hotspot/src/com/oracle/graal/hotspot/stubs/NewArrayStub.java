@@ -35,7 +35,6 @@ import com.oracle.graal.snippets.*;
 import com.oracle.graal.snippets.Snippet.ConstantParameter;
 import com.oracle.graal.snippets.Snippet.Parameter;
 import com.oracle.graal.snippets.SnippetTemplate.Key;
-import com.oracle.graal.word.*;
 
 /**
  * Stub implementing the fast path for TLAB refill during instance class allocation.
@@ -79,14 +78,14 @@ public class NewArrayStub extends Stub {
         log(log, "newArray: element kind %d\n", elementKind);
         log(log, "newArray: array length %d\n", length);
         log(log, "newArray: array size %d\n", sizeInBytes);
-        log(log, "newArray: hub=%p\n", hub);
+        log(log, "newArray: hub=%p\n", hub.toLong());
 
         // check that array length is small enough for fast path.
         if (length <= MAX_ARRAY_FAST_PATH_ALLOCATION_LENGTH) {
             Word memory = refillAllocate(intArrayHub, sizeInBytes, log);
             if (memory != Word.zero()) {
-                log(log, "newArray: allocated new array at %p\n", memory);
-                formatArray(hub, sizeInBytes, length, headerSize, memory, Word.unsigned(arrayPrototypeMarkWord()), true);
+                log(log, "newArray: allocated new array at %p\n", memory.toLong());
+                formatArray(hub, sizeInBytes, length, headerSize, memory, Word.fromLong(arrayPrototypeMarkWord()), true);
                 return verifyOop(memory.toObject());
             }
         }

@@ -26,6 +26,8 @@ import static com.oracle.graal.snippets.Word.Opcode.*;
 
 import java.lang.annotation.*;
 
+//JaCoCo Exclude
+
 /**
  * Special type for use in snippets to represent machine word sized data.
  */
@@ -53,6 +55,13 @@ public final class Word {
         W2I,
         PLUS,
         MINUS,
+        OR,
+        AND,
+        XOR,
+        READ_INT,
+        READ_WORD,
+        READ_OBJECT,
+        READ_FINAL_OBJECT,
         BELOW,
         BELOW_EQUAL,
         ABOVE,
@@ -177,4 +186,75 @@ public final class Word {
         assert object == null;
         return new Word(value - addend.value, null);
     }
+
+    @Operation(OR)
+    public Word or(int other) {
+        assert object == null;
+        return new Word(value | other, null);
+    }
+
+    @Operation(OR)
+    public Word or(long other) {
+        assert object == null;
+        return new Word(value | other, null);
+    }
+
+    @Operation(OR)
+    public Word or(Word other) {
+        assert object == null;
+        return new Word(value | other.value, null);
+    }
+
+    @Operation(AND)
+    public Word and(int other) {
+        assert object == null;
+        return new Word(value & other, null);
+    }
+
+    @Operation(AND)
+    public Word and(long other) {
+        assert object == null;
+        return new Word(value & other, null);
+    }
+
+    @Operation(AND)
+    public Word and(Word other) {
+        assert object == null;
+        return new Word(value & other.value, null);
+    }
+
+    @Operation(XOR)
+    public Word xor(int other) {
+        assert object == null;
+        return new Word(value | other, null);
+    }
+
+    @Operation(XOR)
+    public Word xor(long other) {
+        assert object == null;
+        return new Word(value | other, null);
+    }
+
+    @Operation(XOR)
+    public Word xor(Word other) {
+        assert object == null;
+        return new Word(value | other.value, null);
+    }
+
+    @Operation(READ_INT)
+    public native int readInt(int offset);
+
+    @Operation(READ_WORD)
+    public native Word readWord(int offset);
+
+    @Operation(READ_OBJECT)
+    public native Object readObject(int offset);
+
+    /**
+     * Reads an object value from a location that is guaranteed not be to modified after this read.
+     *
+     * @param offset the offset from this base address of the location to be read
+     */
+    @Operation(READ_FINAL_OBJECT)
+    public native Object readFinalObject(int offset);
 }

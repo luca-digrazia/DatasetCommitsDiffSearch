@@ -23,15 +23,16 @@
 package com.oracle.graal.snippets;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.calc.ConvertNode.Op;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.util.*;
 import com.oracle.graal.snippets.Word.Opcode;
 import com.oracle.graal.snippets.Word.Operation;
 
@@ -42,17 +43,17 @@ import com.oracle.graal.snippets.Word.Operation;
  */
 public class WordTypeRewriterPhase extends Phase {
 
-    private final Kind wordKind;
-    private final ResolvedJavaType wordType;
+    public static final String WordClassName = MetaUtil.toInternalName(Word.class.getName());
 
-    public WordTypeRewriterPhase(Kind wordKind, ResolvedJavaType wordType) {
+    private final Kind wordKind;
+
+    public WordTypeRewriterPhase(Kind wordKind) {
         this.wordKind = wordKind;
-        this.wordType = wordType;
     }
 
     @Override
     protected void run(StructuredGraph graph) {
-        for (Node n : graph.getNodes()) {
+        for (Node n : GraphOrder.forwardGraph(graph)) {
             if (n instanceof ValueNode) {
                 ValueNode valueNode = (ValueNode) n;
                 if (isWord(valueNode)) {
@@ -79,6 +80,13 @@ public class WordTypeRewriterPhase extends Phase {
             }
         }
 
+        // Replace ObjectEqualsNodes with IntegerEqualsNodes where the values being compared are words
+        for (LoadIndexedNode load : graph.getNodes().filter(LoadIndexedNode.class).snapshot()) {
+            if (isWord(load)) {
+                load.setStamp(StampFactory.forKind(wordKind));
+            }
+        }
+
         for (MethodCallTargetNode callTargetNode : graph.getNodes(MethodCallTargetNode.class).snapshot()) {
             ResolvedJavaMethod targetMethod = callTargetNode.targetMethod();
             Operation operation = targetMethod.getAnnotation(Word.Operation.class);
@@ -91,47 +99,74 @@ public class WordTypeRewriterPhase extends Phase {
                 switch (opcode) {
                     case ZERO: {
                         assert arguments.size() == 0;
-                        invoke.intrinsify(wordKind.isLong() ? ConstantNode.forLong(0L, graph) : ConstantNode.forInt(0, graph));
+                        replace(invoke, wordKind == Kind.Long ? ConstantNode.forLong(0L, graph) : ConstantNode.forInt(0, graph));
                         break;
                     }
 
                     case ABOVE: {
                         assert arguments.size() == 2;
-                        invoke.intrinsify(compare(Condition.AT, graph, arguments.first(), arguments.last()));
+                        replace(invoke, compare(Condition.AT, graph, arguments.first(), arguments.last()));
                         break;
                     }
 
                     case ABOVE_EQUAL: {
                         assert arguments.size() == 2;
-                        invoke.intrinsify(compare(Condition.AE, graph, arguments.first(), arguments.last()));
+                        replace(invoke, compare(Condition.AE, graph, arguments.first(), arguments.last()));
                         break;
                     }
 
                     case BELOW: {
                         assert arguments.size() == 2;
-                        invoke.intrinsify(compare(Condition.BT, graph, arguments.first(), arguments.last()));
+                        replace(invoke, compare(Condition.BT, graph, arguments.first(), arguments.last()));
                         break;
                     }
 
                     case BELOW_EQUAL: {
                         assert arguments.size() == 2;
-                        invoke.intrinsify(compare(Condition.BE, graph, arguments.first(), arguments.last()));
+                        replace(invoke, compare(Condition.BE, graph, arguments.first(), arguments.last()));
                         break;
                     }
 
                     case PLUS: {
                         ValueNode addend = asWordKind(graph, arguments.last());
                         IntegerAddNode op = graph.unique(new IntegerAddNode(wordKind, arguments.first(), addend));
-                        invoke.intrinsify(op);
+                        replace(invoke, op);
+                        break;
+                    }
+
+                    case MINUS: {
+                        ValueNode addend = asWordKind(graph, arguments.last());
+                        IntegerSubNode op = graph.unique(new IntegerSubNode(wordKind, arguments.first(), addend));
+                        replace(invoke, op);
+                        break;
+                    }
+
+                    case AND: {
+                        ValueNode operand = asWordKind(graph, arguments.last());
+                        AndNode op = graph.unique(new AndNode(wordKind, arguments.first(), operand));
+                        replace(invoke, op);
+                        break;
+                    }
+
+                    case OR: {
+                        ValueNode operand = asWordKind(graph, arguments.last());
+                        OrNode op = graph.unique(new OrNode(wordKind, arguments.first(), operand));
+                        replace(invoke, op);
+                        break;
+                    }
+
+                    case XOR: {
+                        ValueNode operand = asWordKind(graph, arguments.last());
+                        XorNode op = graph.unique(new XorNode(wordKind, arguments.first(), operand));
+                        replace(invoke, op);
                         break;
                     }
 
                     case W2A: {
                         assert arguments.size() == 1;
                         ValueNode value = arguments.first();
-                        ResolvedJavaType targetType = (ResolvedJavaType) targetMethod.signature().returnType(targetMethod.holder());
-                        UnsafeCastNode cast = graph.unique(new UnsafeCastNode(value, targetType));
-                        invoke.intrinsify(cast);
+                        UnsafeCastNode cast = graph.unique(new UnsafeCastNode(value, ((ValueNode) invoke).stamp()));
+                        replace(invoke, cast);
                         break;
                     }
 
@@ -139,7 +174,7 @@ public class WordTypeRewriterPhase extends Phase {
                         assert arguments.size() == 1;
                         ValueNode value = arguments.first();
                         ValueNode intValue = fromWordKindTo(graph, value, Kind.Int);
-                        invoke.intrinsify(intValue);
+                        replace(invoke, intValue);
                         break;
                     }
 
@@ -147,7 +182,7 @@ public class WordTypeRewriterPhase extends Phase {
                         assert arguments.size() == 1;
                         ValueNode value = arguments.first();
                         ValueNode longValue = fromWordKindTo(graph, value, Kind.Long);
-                        invoke.intrinsify(longValue);
+                        replace(invoke, longValue);
                         break;
                     }
 
@@ -155,8 +190,8 @@ public class WordTypeRewriterPhase extends Phase {
                         assert arguments.size() == 1;
                         ValueNode value = arguments.first();
                         assert value.kind() == Kind.Object : value + ", " + targetMethod;
-                        UnsafeCastNode cast = graph.unique(new UnsafeCastNode(value, wordType));
-                        invoke.intrinsify(cast);
+                        UnsafeCastNode cast = graph.unique(new UnsafeCastNode(value, StampFactory.forKind(wordKind)));
+                        replace(invoke, cast);
                         break;
                     }
 
@@ -165,7 +200,7 @@ public class WordTypeRewriterPhase extends Phase {
                         ValueNode value = arguments.first();
                         assert value.kind() == Kind.Long;
                         ValueNode wordValue = asWordKind(graph, value);
-                        invoke.intrinsify(wordValue);
+                        replace(invoke, wordValue);
                         break;
                     }
 
@@ -173,7 +208,19 @@ public class WordTypeRewriterPhase extends Phase {
                         assert arguments.size() == 1;
                         ValueNode value = arguments.first();
                         assert value.kind() == Kind.Int;
-                        invoke.intrinsify(asWordKind(graph, value));
+                        replace(invoke, asWordKind(graph, value));
+                        break;
+                    }
+
+                    case READ_INT:
+                    case READ_OBJECT:
+                    case READ_WORD: {
+                        replaceRead(graph, arguments, invoke, LocationNode.ANY_LOCATION);
+                        break;
+                    }
+
+                    case READ_FINAL_OBJECT: {
+                        replaceRead(graph, arguments, invoke, LocationNode.FINAL_LOCATION);
                         break;
                     }
 
@@ -183,6 +230,25 @@ public class WordTypeRewriterPhase extends Phase {
                 }
             }
         }
+    }
+
+    protected void replaceRead(StructuredGraph graph, NodeInputList<ValueNode> arguments, Invoke invoke, Object locationIdentity) {
+        assert arguments.size() == 2;
+        ValueNode base = arguments.first();
+        IndexedLocationNode location = IndexedLocationNode.create(locationIdentity, invoke.node().kind(), 0, arguments.last(), graph, false);
+        ReadNode read = graph.add(new ReadNode(base, location, invoke.node().stamp()));
+        graph.addBeforeFixed(invoke.node(), read);
+        // The read must not float outside its block otherwise it may float above an explicit zero check on its base address
+        read.dependencies().add(BeginNode.prevBegin(invoke.node()));
+        replace(invoke, read);
+    }
+
+    protected void replace(Invoke invoke, ValueNode value) {
+        FixedNode next = invoke.next();
+        invoke.setNext(null);
+        invoke.node().replaceAtPredecessor(next);
+        invoke.node().replaceAtUsages(value);
+        GraphUtil.killCFG(invoke.node());
     }
 
     /**
@@ -218,12 +284,12 @@ public class WordTypeRewriterPhase extends Phase {
     private ValueNode asWordKind(StructuredGraph graph, ValueNode value) {
         if (value.kind() != wordKind) {
             Op op;
-            if (wordKind.isLong()) {
-                assert value.kind().isInt();
+            if (wordKind == Kind.Long) {
+                assert value.kind().getStackKind() == Kind.Int;
                 op = Op.I2L;
             } else {
-                assert wordKind.isInt();
-                assert value.kind().isLong();
+                assert wordKind.getStackKind() == Kind.Int;
+                assert value.kind() == Kind.Long;
                 op = Op.L2I;
             }
             return graph.unique(new ConvertNode(op, value));
@@ -235,10 +301,10 @@ public class WordTypeRewriterPhase extends Phase {
         Kind from = value.kind();
         if (from != to) {
             Op op;
-            if (from.isLong()) {
+            if (from == Kind.Long) {
                 op = Op.L2I;
             } else {
-                assert from.isInt();
+                assert from.getStackKind() == Kind.Int;
                 op = Op.I2L;
             }
             return graph.unique(new ConvertNode(op, value));
@@ -247,32 +313,28 @@ public class WordTypeRewriterPhase extends Phase {
     }
 
     public static boolean isWord(ValueNode node) {
-        if (node.kind().isObject()) {
+        node.inferStamp();
+        if (node.stamp() == StampFactory.forWord()) {
+            return true;
+        }
+        if (node instanceof LoadIndexedNode) {
+            return isWord(((LoadIndexedNode) node).array().objectStamp().type().getComponentType());
+        }
+        if (node.kind() == Kind.Object) {
             return isWord(node.objectStamp().type());
         }
         return false;
     }
 
     public static boolean isWord(ResolvedJavaType type) {
-        if (type != null && type.toJava() == Word.class) {
+        if (type != null && type.getName().equals(WordClassName)) {
             return true;
         }
         return false;
     }
 
     private void changeToWord(ValueNode valueNode) {
-        assert !(valueNode instanceof ConstantNode);
+        assert !(valueNode instanceof ConstantNode) : "boxed Word constants should not appear in a snippet graph: " + valueNode + ", stamp: " + valueNode.stamp();
         valueNode.setStamp(StampFactory.forKind(wordKind));
-
-        // Propagate word kind.
-        for (Node n : valueNode.usages()) {
-            if (n instanceof PhiNode) {
-                changeToWord((ValueNode) n);
-                PhiNode phi = (PhiNode) n;
-                assert phi.type() == PhiType.Value;
-            } else if (n instanceof ReturnNode) {
-                changeToWord((ValueNode) n);
-            }
-        }
     }
 }

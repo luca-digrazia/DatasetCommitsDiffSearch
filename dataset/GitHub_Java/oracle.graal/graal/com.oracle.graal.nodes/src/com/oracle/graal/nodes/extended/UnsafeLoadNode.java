@@ -28,6 +28,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * Load of a value from a location specified as an offset relative to an object.
@@ -54,14 +55,19 @@ public class UnsafeLoadNode extends UnsafeAccessNode implements Lowerable, Virtu
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        State state = tool.getObjectState(object());
-        if (state != null && state.getState() == EscapeState.Virtual) {
+        VirtualObjectNode virtual = tool.getVirtualState(object());
+        if (virtual != null) {
             ValueNode indexValue = tool.getReplacedValue(offset());
             if (indexValue.isConstant()) {
-                long offset = indexValue.asConstant().asLong() + displacement();
-                int entryIndex = state.getVirtualObject().entryIndexForOffset(offset);
-                if (entryIndex != -1 && state.getVirtualObject().entryKind(entryIndex) == accessKind()) {
-                    tool.replaceWith(state.getEntry(entryIndex));
+                int fieldIndex = virtual.fieldIndexForOffset(indexValue.asConstant().asLong());
+                if (fieldIndex != -1) {
+                    ValueNode result = tool.getVirtualEntry(virtual, fieldIndex);
+                    VirtualObjectNode virtualResult = tool.getVirtualState(result);
+                    if (virtualResult != null) {
+                        tool.replaceWithVirtual(virtualResult);
+                    } else {
+                        tool.replaceWithValue(result);
+                    }
                 }
             }
         }
