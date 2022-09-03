@@ -204,14 +204,12 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
     @Override
     public Stamp getValueStampForSuccessor(AbstractBeginNode beginNode) {
         Stamp result = null;
-        if (beginNode != defaultSuccessor()) {
-            for (int i = 0; i < keyCount(); i++) {
-                if (keySuccessor(i) == beginNode) {
-                    if (result == null) {
-                        result = StampFactory.objectNonNull(TypeReference.createExactTrusted(typeAt(i)));
-                    } else {
-                        result = result.meet(StampFactory.objectNonNull(TypeReference.createExactTrusted(typeAt(i))));
-                    }
+        for (int i = 0; i < keyCount(); i++) {
+            if (keySuccessor(i) == beginNode) {
+                if (result == null) {
+                    result = StampFactory.objectNonNull(TypeReference.createExactTrusted(typeAt(i)));
+                } else {
+                    result = result.meet(StampFactory.objectNonNull(TypeReference.createExactTrusted(typeAt(i))));
                 }
             }
         }

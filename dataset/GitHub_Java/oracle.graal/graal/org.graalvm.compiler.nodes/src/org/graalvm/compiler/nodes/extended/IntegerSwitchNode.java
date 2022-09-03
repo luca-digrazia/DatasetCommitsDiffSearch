@@ -40,7 +40,6 @@ import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.FixedGuardNode;
-import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.ValueNode;
@@ -142,7 +141,7 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
             killOtherSuccessors(tool, successorIndexAtKey(value().asJavaConstant().asInt()));
         } else if (tryOptimizeEnumSwitch(tool)) {
             return;
-        } else if (tryRemoveUnreachableKeys(tool, value().stamp())) {
+        } else if (tryRemoveUnreachableKeys(tool)) {
             return;
         }
     }
@@ -163,11 +162,11 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
      * Remove unreachable keys from the switch based on the stamp of the value, i.e., based on the
      * known range of the switch value.
      */
-    public boolean tryRemoveUnreachableKeys(SimplifierTool tool, Stamp valueStamp) {
-        if (!(valueStamp instanceof IntegerStamp)) {
+    private boolean tryRemoveUnreachableKeys(SimplifierTool tool) {
+        if (!(value().stamp() instanceof IntegerStamp)) {
             return false;
         }
-        IntegerStamp integerStamp = (IntegerStamp) valueStamp;
+        IntegerStamp integerStamp = (IntegerStamp) value().stamp();
         if (integerStamp.isUnrestricted()) {
             return false;
         }
@@ -185,9 +184,7 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
             return false;
 
         } else if (newKeyDatas.size() == 0) {
-            if (tool != null) {
-                tool.addToWorkList(defaultSuccessor());
-            }
+            tool.addToWorkList(defaultSuccessor());
             graph().removeSplitPropagate(this, defaultSuccessor());
             return true;
 
@@ -351,9 +348,7 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
         for (int i = 0; i < blockSuccessorCount(); i++) {
             AbstractBeginNode successor = blockSuccessor(i);
             if (!newSuccessors.contains(successor)) {
-                FixedNode fixedBranch = successor;
-                fixedBranch.predecessor().replaceFirstSuccessor(fixedBranch, null);
-                GraphUtil.killCFG(fixedBranch, tool);
+                tool.deleteBranch(successor);
             }
             setBlockSuccessor(i, null);
         }

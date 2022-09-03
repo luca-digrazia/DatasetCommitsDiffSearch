@@ -388,14 +388,14 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
             } else if (condition instanceof BinaryOpLogicNode) {
                 BinaryOpLogicNode binaryOpLogicNode = (BinaryOpLogicNode) condition;
                 ValueNode x = binaryOpLogicNode.getX();
-                ValueNode y = binaryOpLogicNode.getY();
                 if (!x.isConstant() && maybeMultipleUsages(x)) {
-                    Stamp newStampX = binaryOpLogicNode.getSucceedingStampForX(negated, x.stamp(), getSafeStamp(y));
+                    Stamp newStampX = binaryOpLogicNode.getSucceedingStampForX(negated);
                     registerNewStamp(x, newStampX, guard);
                 }
 
+                ValueNode y = binaryOpLogicNode.getY();
                 if (!y.isConstant() && maybeMultipleUsages(y)) {
-                    Stamp newStampY = binaryOpLogicNode.getSucceedingStampForY(negated, getSafeStamp(x), y.stamp());
+                    Stamp newStampY = binaryOpLogicNode.getSucceedingStampForY(negated);
                     registerNewStamp(y, newStampY, guard);
                 }
                 if (condition instanceof IntegerEqualsNode && guard instanceof DeoptimizingGuard && !negated) {
@@ -449,13 +449,6 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
                 }
             }
             return null;
-        }
-
-        private static Stamp getSafeStamp(ValueNode x) {
-            if (x.isConstant()) {
-                return x.stamp();
-            }
-            return x.stamp().unrestricted();
         }
 
         /**
@@ -666,13 +659,13 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
                 }
                 if (thisGuard != null) {
                     if (!x.isConstant()) {
-                        Stamp newStampX = binaryOpLogicNode.getSucceedingStampForX(thisGuard.isNegated(), x.stamp(), getSafeStamp(y));
+                        Stamp newStampX = binaryOpLogicNode.getSucceedingStampForX(thisGuard.isNegated());
                         if (newStampX != null && foldPendingTest(thisGuard, x, newStampX, rewireGuardFunction)) {
                             return true;
                         }
                     }
                     if (!y.isConstant()) {
-                        Stamp newStampY = binaryOpLogicNode.getSucceedingStampForY(thisGuard.isNegated(), getSafeStamp(x), y.stamp());
+                        Stamp newStampY = binaryOpLogicNode.getSucceedingStampForY(thisGuard.isNegated());
                         if (newStampY != null && foldPendingTest(thisGuard, y, newStampY, rewireGuardFunction)) {
                             return true;
                         }
