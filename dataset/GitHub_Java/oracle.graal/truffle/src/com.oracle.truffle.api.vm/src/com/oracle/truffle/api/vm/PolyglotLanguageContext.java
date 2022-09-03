@@ -358,11 +358,8 @@ final class PolyglotLanguageContext implements VMObject {
                     return true;
                 }
                 return false;
-            } catch (Throwable t) {
-                if (t instanceof ThreadDeath) {
-                    throw t;
-                }
-                throw PolyglotImpl.wrapGuestException(this, t);
+            } catch (Exception | Error ex) {
+                throw PolyglotImpl.wrapGuestException(this, ex);
             }
         } else {
             return true;
