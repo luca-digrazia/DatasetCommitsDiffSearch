@@ -63,7 +63,6 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.EventConsumer;
 import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.api.vm.PolyglotEngine.Value;
-import org.junit.After;
 
 public class SLDebugTest {
     private Debugger debugger;
@@ -96,13 +95,6 @@ public class SLDebugTest {
             }
         }).build();
         run.clear();
-    }
-
-    @After
-    public void dispose() {
-        if (engine != null) {
-            engine.dispose();
-        }
     }
 
     private static Source createFactorial() {
