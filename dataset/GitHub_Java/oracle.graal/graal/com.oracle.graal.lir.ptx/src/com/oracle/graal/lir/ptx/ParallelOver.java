@@ -25,7 +25,6 @@ package com.oracle.graal.lir.ptx;
 import static com.oracle.graal.lir.ptx.ThreadDimension.*;
 
 import java.lang.annotation.*;
-
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.PARAMETER})
 public @interface ParallelOver {
@@ -34,3 +33,4 @@ public @interface ParallelOver {
 
     ThreadDimension dimension() default X;
 }
+

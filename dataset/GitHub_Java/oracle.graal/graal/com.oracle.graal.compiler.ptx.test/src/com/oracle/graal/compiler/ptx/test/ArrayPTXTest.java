@@ -35,9 +35,15 @@ public class ArrayPTXTest extends PTXTestBase {
 
     @Test
     public void testArray() {
-        int[] array1 = {1, 2, 3, 4, 5, 6, 7, 8, 9};
-        int[] array2 = {1, 2, 3, 4, 5, 6, 7, 8, 9};
-        int[] array3 = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+        int[] array1 = {
+            1, 2, 3, 4, 5, 6, 7, 8, 9
+        };
+        int[] array2 = {
+            1, 2, 3, 4, 5, 6, 7, 8, 9
+        };
+        int[] array3 = {
+            1, 2, 3, 4, 5, 6, 7, 8, 9
+        };
 
         invoke(compile("testStoreArray1I"), array1, 2);
         printReport("testStoreArray1I: " + Arrays.toString(array1));
@@ -54,12 +60,21 @@ public class ArrayPTXTest extends PTXTestBase {
         array[i] = 42;
     }
 
-    public static void testStoreArrayWarp0(int[] array, @Warp(dimension = X) int i) {
+    public static void testStoreArrayWarp0(int[] array,
+                                           @Warp(dimension = X) int i) {
         array[i] = 42;
     }
 
-    public static void testStoreArrayWarp1I(@ParallelOver(dimension = X) int[] array, @Warp(dimension = X) int i) {
+    public static void testStoreArrayWarp1I(@ParallelOver(dimension = X) int[] array,
+                                            @Warp(dimension = X) int i) {
         array[i] = 42;
+    }
+
+
+    public static void printReport(String message) {
+        // CheckStyle: stop system..print check
+        System.out.println(message);
+        // CheckStyle: resume system..print check
     }
 
     public static void main(String[] args) {
