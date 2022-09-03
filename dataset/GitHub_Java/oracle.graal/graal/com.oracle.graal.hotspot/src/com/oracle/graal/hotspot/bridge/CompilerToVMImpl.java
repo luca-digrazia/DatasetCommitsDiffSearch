@@ -24,7 +24,6 @@
 package com.oracle.graal.hotspot.bridge;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 
@@ -142,13 +141,7 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native void invalidateInstalledCode(HotSpotInstalledCode hotspotInstalledCode);
 
     @Override
-    public native Class<?> getJavaMirror(long metaspaceKlass);
-
-    @Override
-    public native NodeClass getNodeClass(Class<?> c);
-
-    @Override
-    public native void setNodeClass(Class<?> c, NodeClass nodeClass);
+    public native Object readUnsafeUncompressedPointer(Object o, long displacement);
 
     @Override
     public native long readUnsafeKlassPointer(Object o);

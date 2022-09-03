@@ -27,24 +27,29 @@ import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 public class DefaultInliningPolicy implements TruffleInliningPolicy {
 
     private static final String REASON_RECURSION = "recursion";
-    private static final String REASON_MAXIMUM_NODE_COUNT = "deepNodeCount * callSites  > " + TruffleInliningMaxCallerSize.getValue();
+    private static final String REASON_MAXIMUM_NODE_COUNT = "nodeCount * callSites  > " + TruffleInliningMaxCallerSize.getValue();
     private static final String REASON_MAXIMUM_TOTAL_NODE_COUNT = "totalNodeCount > " + TruffleInliningMaxCallerSize.getValue();
 
     public double calculateScore(TruffleInliningProfile profile) {
         return profile.getFrequency() / profile.getDeepNodeCount();
     }
 
-    public boolean isAllowed(TruffleInliningProfile profile, int currentNodeCount) {
-        if (profile.isRecursiveCall()) {
-            profile.setFailedReason(REASON_RECURSION);
-            return false;
+    public boolean isAllowed(TruffleInliningResult state, TruffleInliningProfile profile, int nodeCountBudget) {
+        TruffleCallPath callPath = profile.getCallPath();
+        OptimizedCallTarget inlineTarget = callPath.getCallTarget();
+        for (TruffleCallPath path : callPath.getParent().toList()) {
+            if (path.getCallTarget() == inlineTarget) {
+                // recursive call found
+                profile.setFailedReason(REASON_RECURSION);
+                return false;
+            }
         }
 
         if (profile.isForced()) {
             return true;
         }
 
-        if (currentNodeCount + profile.getDeepNodeCount() > TruffleInliningMaxCallerSize.getValue()) {
+        if (nodeCountBudget - profile.getDeepNodeCount() < 0) {
             profile.setFailedReason(REASON_MAXIMUM_TOTAL_NODE_COUNT);
             return false;
         }
@@ -57,4 +62,9 @@ public class DefaultInliningPolicy implements TruffleInliningPolicy {
 
         return true;
     }
+
+    public boolean isAllowedDeep(TruffleInliningResult state, TruffleInliningProfile profile, int nodeCountBudget) {
+        return true;
+    }
+
 }

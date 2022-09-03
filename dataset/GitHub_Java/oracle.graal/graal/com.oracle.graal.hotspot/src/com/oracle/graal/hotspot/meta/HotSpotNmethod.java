@@ -28,6 +28,7 @@ import java.lang.reflect.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.hotspot.bridge.*;
 
 /**
  * Implementation of {@link InstalledCode} for code installed as an nmethod. The nmethod stores a
@@ -89,6 +90,12 @@ public final class HotSpotNmethod extends HotSpotInstalledCode {
     @Override
     public String toString() {
         return String.format("InstalledNmethod[method=%s, codeBlob=0x%x, isDefault=%b, name=%s]", method, getCodeBlob(), isDefault, name);
+    }
+
+    @Override
+    public Object execute(Object arg1, Object arg2, Object arg3) throws InvalidInstalledCodeException {
+        assert checkThreeObjectArgs();
+        return runtime().getCompilerToVM().executeCompiledMethod(arg1, arg2, arg3, this);
     }
 
     protected boolean checkThreeObjectArgs() {
