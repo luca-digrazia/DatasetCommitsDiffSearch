@@ -135,12 +135,9 @@ public final class JavaInterop {
      *
      * @param <T> type of requested and returned value
      * @param type interface modeling structure of <code>foreignObject</code> in <b>Java</b>
-     * @param foreignObject object coming from a {@link TruffleObject Truffle language}, can be
-     *            <code>null</code>, in such case the returned value will likely be
-     *            <code>null</code> as well
+     * @param foreignObject object coming from a {@link TruffleObject Truffle language}
      * @return instance of requested interface granting access to specified
-     *         <code>foreignObject</code>, can be <code>null</code>, if the foreignObject parameter
-     *         was <code>null</code>
+     *         <code>foreignObject</code>
      */
     public static <T> T asJavaObject(Class<T> type, TruffleObject foreignObject) {
         return asJavaObject(type, null, foreignObject);
@@ -153,9 +150,6 @@ public final class JavaInterop {
         } else {
             if (!clazz.isInterface()) {
                 throw new IllegalArgumentException();
-            }
-            if (foreignObject == null) {
-                return null;
             }
             if (clazz == List.class && Boolean.TRUE.equals(message(Message.HAS_SIZE, foreignObject))) {
                 Class<?> elementType = Object.class;
@@ -366,7 +360,8 @@ public final class JavaInterop {
             }
 
             if (Message.createExecute(0).equals(message)) {
-                List<Object> copy = new ArrayList<>(args.length);
+                List<Object> copy = new ArrayList<>(args.length + 1);
+                // copy.add(obj);
                 copy.addAll(Arrays.asList(args));
                 message = Message.createExecute(copy.size());
                 val = message(message, obj, copy.toArray());
@@ -375,9 +370,9 @@ public final class JavaInterop {
 
             if (Message.createInvoke(0).equals(message)) {
                 List<Object> copy = new ArrayList<>(args.length + 1);
-                copy.add(name);
+                copy.add(obj);
                 copy.addAll(Arrays.asList(args));
-                message = Message.createInvoke(args.length);
+                message = Message.createInvoke(copy.size());
                 val = message(message, obj, copy.toArray());
                 return toJava(val, method);
             }
@@ -394,7 +389,7 @@ public final class JavaInterop {
                     List<Object> callArgs = new ArrayList<>(args.length);
                     callArgs.add(name);
                     callArgs.addAll(Arrays.asList(args));
-                    ret = message(Message.createInvoke(args.length), obj, callArgs.toArray());
+                    ret = message(Message.createInvoke(callArgs.size()), obj, callArgs.toArray());
                 } catch (IllegalArgumentException ex) {
                     val = message(Message.READ, obj, name);
                     if (isPrimitive(val)) {
@@ -408,7 +403,7 @@ public final class JavaInterop {
                         throw new IllegalArgumentException(attr + " cannot be invoked with " + args.length + " parameters");
                     }
                     List<Object> callArgs = new ArrayList<>(args.length + 1);
-                    callArgs.add(attr);
+                    // callArgs.add(attr);
                     callArgs.addAll(Arrays.asList(args));
                     ret = message(Message.createExecute(callArgs.size()), attr, callArgs.toArray());
                 }
