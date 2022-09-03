@@ -36,7 +36,6 @@ import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Env;
 import com.oracle.truffle.api.nodes.NodeCost;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.tools.profiler.impl.CPUTracerInstrument;
 import com.oracle.truffle.tools.profiler.impl.ProfilerToolFactory;
 
@@ -76,18 +75,6 @@ public final class CPUTracer implements Closeable {
     private EventBinding<?> activeBinding;
 
     private final Map<SourceSection, Payload> payloadMap = new ConcurrentHashMap<>();
-
-
-    /**
-     * Finds {@link CPUTracer} associated with given engine.
-     *
-     * @param engine the engine to find debugger for
-     * @return an instance of associated {@link CPUTracer}
-     * @since 0.30
-     */
-    public static CPUTracer find(PolyglotEngine engine) {
-        return CPUTracerInstrument.getSampler(engine);
-    }
 
     /**
      * Controls whether the tracer is collecting data or not.

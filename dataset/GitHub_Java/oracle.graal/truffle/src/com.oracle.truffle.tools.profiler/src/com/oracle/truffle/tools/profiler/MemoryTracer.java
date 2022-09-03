@@ -34,7 +34,6 @@ import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.tools.profiler.impl.MemoryTracerInstrument;
 import com.oracle.truffle.tools.profiler.impl.ProfilerToolFactory;
 
@@ -110,17 +109,6 @@ public final class MemoryTracer implements Closeable {
         this.stacksBinding = this.shadowStack.install(env.getInstrumenter(), f, false);
 
         this.activeBinding = env.getInstrumenter().attachAllocationListener(AllocationEventFilter.ANY, new Listener());
-    }
-
-    /**
-     * Finds {@link MemoryTracer} associated with given engine.
-     *
-     * @param engine the engine to find debugger for
-     * @return an instance of associated {@link MemoryTracer}
-     * @since 0.30
-     */
-    public static MemoryTracer find(PolyglotEngine engine) {
-        return MemoryTracerInstrument.getSampler(engine);
     }
 
     /**

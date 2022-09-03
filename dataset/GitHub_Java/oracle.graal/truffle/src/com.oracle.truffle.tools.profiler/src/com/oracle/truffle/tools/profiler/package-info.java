@@ -23,12 +23,6 @@
  * questions.
  */
 
-/*
- @ApiInfo(
- group="To Review"
- )
- */
-
 /**
  * Package containing classes implementing the Truffle Profiler.
  *

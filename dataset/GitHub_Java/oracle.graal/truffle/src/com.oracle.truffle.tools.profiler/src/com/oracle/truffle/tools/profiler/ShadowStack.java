@@ -127,16 +127,8 @@ final class ShadowStack {
 
         @Override
         protected void onReturnValue(VirtualFrame frame, Object result) {
-            if (compiled) {
-                if (CompilerDirectives.inCompiledCode()) {
-                    if (isAttachedToRootNode && !CompilerDirectives.inCompilationRoot()) {
-                        return;
-                    }
-                } else {
-                    if (getStack().getStack()[cachedStack.stackIndex] != location) {
-                        return;
-                    }
-                }
+            if (CompilerDirectives.inCompiledCode() && compiled && isAttachedToRootNode && !CompilerDirectives.inCompilationRoot()) {
+                return;
             }
             doOnReturnValue();
         }
