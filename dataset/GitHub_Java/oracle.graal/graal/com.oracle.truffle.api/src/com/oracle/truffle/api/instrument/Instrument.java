@@ -133,13 +133,11 @@ public abstract class Instrument {
      *
      * @param resultListener optional client callback for results/failure notification
      * @param rootFactory provider of AST fragments on behalf of the client
-     * @param requiredResultType optional requirement, any non-assignable result is reported to the
-     *            the listener, if any, as a failure
      * @param instrumentInfo optional description of the instrument's role, intended for debugging.
      * @return a new instrument, ready for attachment at a probe
      */
-    public static Instrument create(AdvancedInstrumentResultListener resultListener, AdvancedInstrumentRootFactory rootFactory, Class<?> requiredResultType, String instrumentInfo) {
-        return new AdvancedInstrument(resultListener, rootFactory, requiredResultType, instrumentInfo);
+    public static Instrument create(AdvancedInstrumentResultListener resultListener, AdvancedInstrumentRootFactory rootFactory, String instrumentInfo) {
+        return new AdvancedInstrument(resultListener, rootFactory, instrumentInfo);
     }
 
     // TODO (mlvdv) experimental
@@ -385,14 +383,16 @@ public abstract class Instrument {
     private static final class AdvancedInstrument extends Instrument {
 
         private final AdvancedInstrumentResultListener resultListener;
+        /**
+         * Client-provided supplier of new node instances to attach.
+         */
         private final AdvancedInstrumentRootFactory rootFactory;
-        private final Class<?> requiredResultType;
 
-        private AdvancedInstrument(AdvancedInstrumentResultListener resultListener, AdvancedInstrumentRootFactory rootFactory, Class<?> requiredResultType, String instrumentInfo) {
+        private AdvancedInstrument(AdvancedInstrumentResultListener resultListener, AdvancedInstrumentRootFactory rootFactory, String instrumentInfo) {
             super(instrumentInfo);
             this.resultListener = resultListener;
             this.rootFactory = rootFactory;
-            this.requiredResultType = requiredResultType;
+
         }
 
         @Override
@@ -448,7 +448,6 @@ public abstract class Instrument {
                     try {
                         final Object result = instrumentRoot.executeRoot(node, vFrame);
                         if (resultListener != null) {
-                            checkResultType(result);
                             resultListener.notifyResult(node, vFrame, result);
                         }
                     } catch (RuntimeException ex) {
@@ -459,15 +458,6 @@ public abstract class Instrument {
                 }
                 if (nextInstrumentNode != null) {
                     nextInstrumentNode.enter(node, vFrame);
-                }
-            }
-
-            private void checkResultType(Object result) {
-                if (requiredResultType == null) {
-                    return;
-                }
-                if (result == null || !(requiredResultType.isAssignableFrom(result.getClass()))) {
-                    throw new RuntimeException("Instrument result " + result.toString() + " not assignable to " + requiredResultType.getSimpleName());
                 }
             }
 
