@@ -30,6 +30,7 @@ import org.junit.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
+import com.oracle.graal.lir.LIRInstruction.ValuePositionProcedure;
 import com.oracle.graal.lir.asm.*;
 
 /**
@@ -127,26 +128,39 @@ public class CompositeValueReplacementTest3 {
         LIRInstruction op1 = new TestOp(compValue1);
         LIRInstruction op2 = new TestOp(compValue1);
 
-        op1.forEachInputPos((instruction, position) -> {
-            Value value = position.get(instruction);
-            assertEquals(dummyValue1, value);
-            position.set(instruction, dummyValue2);
+        op1.forEachInput(new ValuePositionProcedure() {
+
+            @Override
+            public void doValue(LIRInstruction instruction, ValuePosition position) {
+                Value value = position.get(instruction);
+                assertEquals(dummyValue1, value);
+                position.set(instruction, dummyValue2);
+            }
         });
 
-        op2.forEachInputPos((instruction, position) -> {
-            Value value = position.get(instruction);
-            assertEquals(dummyValue1, value);
-            position.set(instruction, dummyValue3);
+        op2.forEachInput(new ValuePositionProcedure() {
+            @Override
+            public void doValue(LIRInstruction instruction, ValuePosition position) {
+                Value value = position.get(instruction);
+                assertEquals(dummyValue1, value);
+                position.set(instruction, dummyValue3);
+            }
         });
 
-        op1.forEachInputPos((instruction, position) -> {
-            Value value = position.get(instruction);
-            assertEquals(dummyValue2, value);
+        op1.forEachInput(new ValuePositionProcedure() {
+            @Override
+            public void doValue(LIRInstruction instruction, ValuePosition position) {
+                Value value = position.get(instruction);
+                assertEquals(dummyValue2, value);
+            }
         });
 
-        op2.forEachInputPos((instruction, position) -> {
-            Value value = position.get(instruction);
-            assertEquals(dummyValue3, value);
+        op2.forEachInput(new ValuePositionProcedure() {
+            @Override
+            public void doValue(LIRInstruction instruction, ValuePosition position) {
+                Value value = position.get(instruction);
+                assertEquals(dummyValue3, value);
+            }
         });
     }
 
@@ -159,26 +173,39 @@ public class CompositeValueReplacementTest3 {
         LIRInstruction op1 = new TestOp(compValue1);
         LIRInstruction op2 = new TestOp(compValue1);
 
-        op1.forEachInputPos((instruction, position) -> {
-            Value value = position.get(instruction);
-            assertEquals(dummyValue1, value);
-            position.set(instruction, dummyValue2);
+        op1.forEachInput(new ValuePositionProcedure() {
+
+            @Override
+            public void doValue(LIRInstruction instruction, ValuePosition position) {
+                Value value = position.get(instruction);
+                assertEquals(dummyValue1, value);
+                position.set(instruction, dummyValue2);
+            }
         });
 
-        op2.forEachInputPos((instruction, position) -> {
-            Value value = position.get(instruction);
-            assertEquals(dummyValue1, value);
-            position.set(instruction, dummyValue3);
+        op2.forEachInput(new ValuePositionProcedure() {
+            @Override
+            public void doValue(LIRInstruction instruction, ValuePosition position) {
+                Value value = position.get(instruction);
+                assertEquals(dummyValue1, value);
+                position.set(instruction, dummyValue3);
+            }
         });
 
-        op1.forEachInputPos((instruction, position) -> {
-            Value value = position.get(instruction);
-            assertEquals(dummyValue2, value);
+        op1.forEachInput(new ValuePositionProcedure() {
+            @Override
+            public void doValue(LIRInstruction instruction, ValuePosition position) {
+                Value value = position.get(instruction);
+                assertEquals(dummyValue2, value);
+            }
         });
 
-        op2.forEachInputPos((instruction, position) -> {
-            Value value = position.get(instruction);
-            assertEquals(dummyValue3, value);
+        op2.forEachInput(new ValuePositionProcedure() {
+            @Override
+            public void doValue(LIRInstruction instruction, ValuePosition position) {
+                Value value = position.get(instruction);
+                assertEquals(dummyValue3, value);
+            }
         });
     }
 }
