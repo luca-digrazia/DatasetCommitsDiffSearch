@@ -35,18 +35,22 @@ import com.oracle.graal.nodes.virtual.*;
 public final class MaterializeObjectNode extends FixedWithNextNode implements EscapeAnalyzable, Lowerable, Node.IterableNodeType, Canonicalizable {
 
     @Input private final NodeInputList<ValueNode> values;
-    @Input private final VirtualObjectNode virtualObject;
     private final ResolvedJavaType type;
+    private final EscapeField[] fields;
 
-    public MaterializeObjectNode(ResolvedJavaType type, VirtualObjectNode virtualObject) {
+    public MaterializeObjectNode(ResolvedJavaType type, EscapeField[] fields) {
         super(StampFactory.exactNonNull(type));
         this.type = type;
-        this.virtualObject = virtualObject;
-        this.values = new NodeInputList<>(this, virtualObject.fields().length);
+        this.fields = fields;
+        this.values = new NodeInputList<>(this, fields.length);
     }
 
     public ResolvedJavaType type() {
         return type;
+    }
+
+    public EscapeField[] getFields() {
+        return fields;
     }
 
     public NodeInputList<ValueNode> values() {
@@ -56,7 +60,6 @@ public final class MaterializeObjectNode extends FixedWithNextNode implements Es
     @Override
     public void lower(LoweringTool tool) {
         StructuredGraph graph = (StructuredGraph) graph();
-        EscapeField[] fields = virtualObject.fields();
         if (type.isArrayClass()) {
             ResolvedJavaType element = type.componentType();
             NewArrayNode newArray;
@@ -115,7 +118,7 @@ public final class MaterializeObjectNode extends FixedWithNextNode implements Es
 
         @Override
         public EscapeField[] fields() {
-            return virtualObject.fields();
+            return fields;
         }
 
         @Override

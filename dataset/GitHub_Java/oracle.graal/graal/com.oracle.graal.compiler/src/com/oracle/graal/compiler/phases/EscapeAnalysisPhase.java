@@ -153,7 +153,7 @@ public class EscapeAnalysisPhase extends Phase {
                 fields.put(escapeFields[i].representation(), i);
             }
             assert node.objectStamp().isExactType();
-            final VirtualObjectNode virtual = graph.add(new VirtualObjectNode(id, node.objectStamp().type(), escapeFields));
+            final VirtualObjectNode virtual = graph.add(new VirtualObjectNode(id, node.objectStamp().type(), escapeFields.length));
             Debug.log("new virtual object: " + virtual);
             node.replaceAtUsages(virtual);
             FixedNode next = node.next();
@@ -167,7 +167,7 @@ public class EscapeAnalysisPhase extends Phase {
                 }
             }
 
-            if (virtual.fields().length > 0) {
+            if (virtual.fieldsCount() > 0) {
                 final BlockExitState startState = new BlockExitState(escapeFields, virtual);
                 new PostOrderNodeIterator<BlockExitState>(next, startState) {
 
