@@ -1,42 +1,26 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.oracle.truffle.api.nodes;
 
@@ -168,18 +152,13 @@ public final class NodeUtil {
             } else if (nodeClass.isChildrenField(field)) {
                 Object[] children = (Object[]) nodeClass.getFieldObject(field, orig);
                 if (children != null) {
-                    Object[] clonedChildren;
-                    if (children.length > 0) {
-                        clonedChildren = (Object[]) Array.newInstance(children.getClass().getComponentType(), children.length);
-                        for (int i = 0; i < children.length; i++) {
-                            if (children[i] != null) {
-                                Node clonedChild = ((Node) children[i]).deepCopy();
-                                clonedChild.setParent(clone);
-                                clonedChildren[i] = clonedChild;
-                            }
+                    Object[] clonedChildren = (Object[]) Array.newInstance(children.getClass().getComponentType(), children.length);
+                    for (int i = 0; i < children.length; i++) {
+                        if (children[i] != null) {
+                            Node clonedChild = ((Node) children[i]).deepCopy();
+                            clonedChild.setParent(clone);
+                            clonedChildren[i] = clonedChild;
                         }
-                    } else {
-                        clonedChildren = children;
                     }
                     nodeClass.putFieldObject(field, clone, clonedChildren);
                 }
@@ -268,40 +247,6 @@ public final class NodeUtil {
             }
         }
 
-    }
-
-    /*
-     * Slow version of child adoption. Unlike the adoptChildrenHelper this method traverses (and
-     * counts) all nodes, i.e. including the ones already adopted.
-     */
-    static int adoptChildrenAndCountHelper(Node currentNode) {
-        int count = 0;
-        NodeClass clazz = currentNode.getNodeClass();
-        for (Object field : clazz.getNodeFields()) {
-            if (clazz.isChildField(field)) {
-                Object child = clazz.getFieldObject(field, currentNode);
-                if (child != null) {
-                    Node node = (Node) child;
-                    count += currentNode.adoptAndCountHelper(node);
-                }
-            } else if (clazz.isChildrenField(field)) {
-                Object arrayObject = clazz.getFieldObject(field, currentNode);
-                if (arrayObject == null) {
-                    continue;
-                }
-                Object[] array = (Object[]) arrayObject;
-                for (int i = 0; i < array.length; i++) {
-                    Object child = array[i];
-                    if (child != null) {
-                        Node node = (Node) child;
-                        count += currentNode.adoptAndCountHelper(node);
-                    }
-                }
-            } else if (clazz.nodeFieldsOrderedByKind()) {
-                break;
-            }
-        }
-        return count;
     }
 
     static boolean replaceChild(Node parent, Node oldChild, Node newChild, boolean adopt) {
