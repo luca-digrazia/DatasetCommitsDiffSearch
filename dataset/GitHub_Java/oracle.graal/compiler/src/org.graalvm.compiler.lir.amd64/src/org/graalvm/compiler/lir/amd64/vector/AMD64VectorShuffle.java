@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,33 +25,31 @@ package org.graalvm.compiler.lir.amd64.vector;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
 import static jdk.vm.ci.code.ValueUtil.isStackSlot;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexMRIOp.VEXTRACTF128;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexMRIOp.VEXTRACTI128;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexMRIOp.VPEXTRB;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexMRIOp.VPEXTRD;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexMRIOp.VPEXTRQ;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexMRIOp.VPEXTRW;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexMoveOp.VMOVD;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexMoveOp.VMOVQ;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRMIOp.VPSHUFD;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRVMIOp.VINSERTF128;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRVMIOp.VINSERTI128;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRVMIOp.VSHUFPD;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRVMIOp.VSHUFPS;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRVMOp.VPSHUFB;
+import static org.graalvm.compiler.asm.amd64.AMD64VectorAssembler.VexMRIOp.VEXTRACTF128;
+import static org.graalvm.compiler.asm.amd64.AMD64VectorAssembler.VexMRIOp.VEXTRACTI128;
+import static org.graalvm.compiler.asm.amd64.AMD64VectorAssembler.VexMRIOp.VPEXTRB;
+import static org.graalvm.compiler.asm.amd64.AMD64VectorAssembler.VexMRIOp.VPEXTRD;
+import static org.graalvm.compiler.asm.amd64.AMD64VectorAssembler.VexMRIOp.VPEXTRQ;
+import static org.graalvm.compiler.asm.amd64.AMD64VectorAssembler.VexMRIOp.VPEXTRW;
+import static org.graalvm.compiler.asm.amd64.AMD64VectorAssembler.VexMoveOp.VMOVD;
+import static org.graalvm.compiler.asm.amd64.AMD64VectorAssembler.VexMoveOp.VMOVQ;
+import static org.graalvm.compiler.asm.amd64.AMD64VectorAssembler.VexRVMIOp.VINSERTF128;
+import static org.graalvm.compiler.asm.amd64.AMD64VectorAssembler.VexRVMIOp.VINSERTI128;
+import static org.graalvm.compiler.asm.amd64.AMD64VectorAssembler.VexRVMIOp.VSHUFPD;
+import static org.graalvm.compiler.asm.amd64.AMD64VectorAssembler.VexRVMIOp.VSHUFPS;
+import static org.graalvm.compiler.asm.amd64.AMD64VectorAssembler.VexRVMOp.VPSHUFB;
 import static org.graalvm.compiler.asm.amd64.AVXKind.AVXSize.XMM;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.REG;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.STACK;
 
 import org.graalvm.compiler.asm.amd64.AMD64Address;
-import org.graalvm.compiler.asm.amd64.AMD64Assembler.VexMRIOp;
-import org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRMIOp;
-import org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRVMIOp;
-import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
+import org.graalvm.compiler.asm.amd64.AMD64VectorAssembler;
+import org.graalvm.compiler.asm.amd64.AMD64VectorAssembler.VexMRIOp;
+import org.graalvm.compiler.asm.amd64.AMD64VectorAssembler.VexRMIOp;
+import org.graalvm.compiler.asm.amd64.AMD64VectorAssembler.VexRVMIOp;
 import org.graalvm.compiler.asm.amd64.AVXKind;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.lir.LIRInstructionClass;
-import org.graalvm.compiler.lir.amd64.AMD64LIRInstruction;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
 
 import jdk.vm.ci.amd64.AMD64;
@@ -63,7 +59,7 @@ import jdk.vm.ci.meta.AllocatableValue;
 
 public class AMD64VectorShuffle {
 
-    public static final class IntToVectorOp extends AMD64LIRInstruction {
+    public static final class IntToVectorOp extends AMD64VectorLIRInstruction {
         public static final LIRInstructionClass<IntToVectorOp> TYPE = LIRInstructionClass.create(IntToVectorOp.class);
 
         @Def({REG}) protected AllocatableValue result;
@@ -77,17 +73,17 @@ public class AMD64VectorShuffle {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        public void emitCode(CompilationResultBuilder crb, AMD64VectorAssembler vasm) {
             if (isRegister(value)) {
-                VMOVD.emit(masm, XMM, asRegister(result), asRegister(value));
+                VMOVD.emit(vasm, XMM, asRegister(result), asRegister(value));
             } else {
                 assert isStackSlot(value);
-                VMOVD.emit(masm, XMM, asRegister(result), (AMD64Address) crb.asAddress(value));
+                VMOVD.emit(vasm, XMM, asRegister(result), (AMD64Address) crb.asAddress(value));
             }
         }
     }
 
-    public static final class LongToVectorOp extends AMD64LIRInstruction {
+    public static final class LongToVectorOp extends AMD64VectorLIRInstruction {
         public static final LIRInstructionClass<LongToVectorOp> TYPE = LIRInstructionClass.create(LongToVectorOp.class);
         @Def({REG}) protected AllocatableValue result;
         @Use({REG, STACK}) protected AllocatableValue value;
@@ -100,17 +96,17 @@ public class AMD64VectorShuffle {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        public void emitCode(CompilationResultBuilder crb, AMD64VectorAssembler vasm) {
             if (isRegister(value)) {
-                VMOVQ.emit(masm, XMM, asRegister(result), asRegister(value));
+                VMOVQ.emit(vasm, XMM, asRegister(result), asRegister(value));
             } else {
                 assert isStackSlot(value);
-                VMOVQ.emit(masm, XMM, asRegister(result), (AMD64Address) crb.asAddress(value));
+                VMOVQ.emit(vasm, XMM, asRegister(result), (AMD64Address) crb.asAddress(value));
             }
         }
     }
 
-    public static final class ShuffleBytesOp extends AMD64LIRInstruction {
+    public static final class ShuffleBytesOp extends AMD64VectorLIRInstruction {
         public static final LIRInstructionClass<ShuffleBytesOp> TYPE = LIRInstructionClass.create(ShuffleBytesOp.class);
         @Def({REG}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue source;
@@ -124,18 +120,18 @@ public class AMD64VectorShuffle {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        public void emitCode(CompilationResultBuilder crb, AMD64VectorAssembler vasm) {
             AMD64Kind kind = (AMD64Kind) result.getPlatformKind();
             if (isRegister(selector)) {
-                VPSHUFB.emit(masm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source), asRegister(selector));
+                VPSHUFB.emit(vasm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source), asRegister(selector));
             } else {
                 assert isStackSlot(selector);
-                VPSHUFB.emit(masm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source), (AMD64Address) crb.asAddress(selector));
+                VPSHUFB.emit(vasm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source), (AMD64Address) crb.asAddress(selector));
             }
         }
     }
 
-    public static final class ConstShuffleBytesOp extends AMD64LIRInstruction {
+    public static final class ConstShuffleBytesOp extends AMD64VectorLIRInstruction {
         public static final LIRInstructionClass<ConstShuffleBytesOp> TYPE = LIRInstructionClass.create(ConstShuffleBytesOp.class);
         @Def({REG}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue source;
@@ -150,14 +146,14 @@ public class AMD64VectorShuffle {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        public void emitCode(CompilationResultBuilder crb, AMD64VectorAssembler vasm) {
             AMD64Kind kind = (AMD64Kind) result.getPlatformKind();
             AMD64Address address = (AMD64Address) crb.recordDataReferenceInCode(selector, selector.length);
-            VPSHUFB.emit(masm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source), address);
+            VPSHUFB.emit(vasm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source), address);
         }
     }
 
-    public static class ShuffleWordOp extends AMD64LIRInstruction {
+    public static class ShuffleWordOp extends AMD64VectorLIRInstruction {
         public static final LIRInstructionClass<ShuffleWordOp> TYPE = LIRInstructionClass.create(ShuffleWordOp.class);
         private final VexRMIOp op;
         @Def({REG}) protected AllocatableValue result;
@@ -173,17 +169,17 @@ public class AMD64VectorShuffle {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        public void emitCode(CompilationResultBuilder crb, AMD64VectorAssembler vasm) {
             AMD64Kind kind = (AMD64Kind) source.getPlatformKind();
             if (isRegister(source)) {
-                op.emit(masm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source), selector);
+                op.emit(vasm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source), selector);
             } else {
-                op.emit(masm, AVXKind.getRegisterSize(kind), asRegister(result), (AMD64Address) crb.asAddress(source), selector);
+                op.emit(vasm, AVXKind.getRegisterSize(kind), asRegister(result), (AMD64Address) crb.asAddress(source), selector);
             }
         }
     }
 
-    public static class ShuffleFloatOp extends AMD64LIRInstruction {
+    public static class ShuffleFloatOp extends AMD64VectorLIRInstruction {
         public static final LIRInstructionClass<ShuffleFloatOp> TYPE = LIRInstructionClass.create(ShuffleFloatOp.class);
         @Def({REG}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue source1;
@@ -199,7 +195,7 @@ public class AMD64VectorShuffle {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        public void emitCode(CompilationResultBuilder crb, AMD64VectorAssembler vasm) {
             AMD64Kind kind = (AMD64Kind) result.getPlatformKind();
 
             VexRVMIOp op;
@@ -215,15 +211,15 @@ public class AMD64VectorShuffle {
             }
 
             if (isRegister(source2)) {
-                op.emit(masm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source1), asRegister(source2), selector);
+                op.emit(vasm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source1), asRegister(source2), selector);
             } else {
                 assert isStackSlot(source2);
-                op.emit(masm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source1), (AMD64Address) crb.asAddress(source2), selector);
+                op.emit(vasm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source1), (AMD64Address) crb.asAddress(source2), selector);
             }
         }
     }
 
-    public static final class Extract128Op extends AMD64LIRInstruction {
+    public static final class Extract128Op extends AMD64VectorLIRInstruction {
         public static final LIRInstructionClass<Extract128Op> TYPE = LIRInstructionClass.create(Extract128Op.class);
         @Def({REG, STACK}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue source;
@@ -237,7 +233,7 @@ public class AMD64VectorShuffle {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        public void emitCode(CompilationResultBuilder crb, AMD64VectorAssembler vasm) {
             AMD64Kind kind = (AMD64Kind) source.getPlatformKind();
 
             VexMRIOp op;
@@ -255,48 +251,15 @@ public class AMD64VectorShuffle {
             }
 
             if (isRegister(result)) {
-                op.emit(masm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source), selector);
+                op.emit(vasm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source), selector);
             } else {
                 assert isStackSlot(result);
-                op.emit(masm, AVXKind.getRegisterSize(kind), (AMD64Address) crb.asAddress(result), asRegister(source), selector);
+                op.emit(vasm, AVXKind.getRegisterSize(kind), (AMD64Address) crb.asAddress(result), asRegister(source), selector);
             }
         }
     }
 
-    public static final class Extract64Op extends AMD64LIRInstruction {
-        public static final LIRInstructionClass<Extract64Op> TYPE = LIRInstructionClass.create(Extract64Op.class);
-        @Def({REG}) protected AllocatableValue result;
-        @Use({REG, STACK}) protected AllocatableValue source;
-        private final int selector;
-
-        public Extract64Op(AllocatableValue result, AllocatableValue source, int selector) {
-            super(TYPE);
-            this.result = result;
-            this.source = source;
-            this.selector = selector;
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            AMD64Kind kind = (AMD64Kind) source.getPlatformKind();
-            AMD64 arch = (AMD64) crb.target.arch;
-            assert kind.getSizeInBytes() * 8 == 128 || (kind.getSizeInBytes() * 8 == 256 && arch.getFeatures().contains(CPUFeature.AVX2));
-
-            VexRMIOp op = VPSHUFD;
-            assert selector == 0 || selector == 1;
-            // select doublewords 1 and 0, or 3 and 2
-            int order = selector == 0 ? 0b01_00 : 0b11_10;
-
-            if (isRegister(source)) {
-                op.emit(masm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source), order);
-            } else {
-                assert isStackSlot(source);
-                op.emit(masm, AVXKind.getRegisterSize(kind), asRegister(result), (AMD64Address) crb.asAddress(source), order);
-            }
-        }
-    }
-
-    public static final class Insert128Op extends AMD64LIRInstruction {
+    public static final class Insert128Op extends AMD64VectorLIRInstruction {
         public static final LIRInstructionClass<Insert128Op> TYPE = LIRInstructionClass.create(Insert128Op.class);
         @Def({REG}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue source1;
@@ -312,7 +275,7 @@ public class AMD64VectorShuffle {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        public void emitCode(CompilationResultBuilder crb, AMD64VectorAssembler vasm) {
             AMD64Kind kind = (AMD64Kind) result.getPlatformKind();
 
             VexRVMIOp op;
@@ -331,15 +294,15 @@ public class AMD64VectorShuffle {
             }
 
             if (isRegister(source2)) {
-                op.emit(masm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source1), asRegister(source2), selector);
+                op.emit(vasm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source1), asRegister(source2), selector);
             } else {
                 assert isStackSlot(source2);
-                op.emit(masm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source1), (AMD64Address) crb.asAddress(source2), selector);
+                op.emit(vasm, AVXKind.getRegisterSize(kind), asRegister(result), asRegister(source1), (AMD64Address) crb.asAddress(source2), selector);
             }
         }
     }
 
-    public static final class ExtractByteOp extends AMD64LIRInstruction {
+    public static final class ExtractByteOp extends AMD64VectorLIRInstruction {
         public static final LIRInstructionClass<ExtractByteOp> TYPE = LIRInstructionClass.create(ExtractByteOp.class);
         @Def({REG}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue vector;
@@ -355,12 +318,12 @@ public class AMD64VectorShuffle {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            VPEXTRB.emit(masm, XMM, asRegister(result), asRegister(vector), selector);
+        public void emitCode(CompilationResultBuilder crb, AMD64VectorAssembler vasm) {
+            VPEXTRB.emit(vasm, XMM, asRegister(result), asRegister(vector), selector);
         }
     }
 
-    public static final class ExtractShortOp extends AMD64LIRInstruction {
+    public static final class ExtractShortOp extends AMD64VectorLIRInstruction {
         public static final LIRInstructionClass<ExtractShortOp> TYPE = LIRInstructionClass.create(ExtractShortOp.class);
         @Def({REG}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue vector;
@@ -376,12 +339,12 @@ public class AMD64VectorShuffle {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            VPEXTRW.emit(masm, XMM, asRegister(result), asRegister(vector), selector);
+        public void emitCode(CompilationResultBuilder crb, AMD64VectorAssembler vasm) {
+            VPEXTRW.emit(vasm, XMM, asRegister(result), asRegister(vector), selector);
         }
     }
 
-    public static final class ExtractIntOp extends AMD64LIRInstruction {
+    public static final class ExtractIntOp extends AMD64VectorLIRInstruction {
         public static final LIRInstructionClass<ExtractIntOp> TYPE = LIRInstructionClass.create(ExtractIntOp.class);
         @Def({REG, STACK}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue vector;
@@ -397,25 +360,25 @@ public class AMD64VectorShuffle {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        public void emitCode(CompilationResultBuilder crb, AMD64VectorAssembler vasm) {
             if (isRegister(result)) {
                 if (selector == 0) {
-                    VMOVD.emitReverse(masm, XMM, asRegister(result), asRegister(vector));
+                    VMOVD.emitReverse(vasm, XMM, asRegister(result), asRegister(vector));
                 } else {
-                    VPEXTRD.emit(masm, XMM, asRegister(result), asRegister(vector), selector);
+                    VPEXTRD.emit(vasm, XMM, asRegister(result), asRegister(vector), selector);
                 }
             } else {
                 assert isStackSlot(result);
                 if (selector == 0) {
-                    VMOVD.emit(masm, XMM, (AMD64Address) crb.asAddress(result), asRegister(vector));
+                    VMOVD.emit(vasm, XMM, (AMD64Address) crb.asAddress(result), asRegister(vector));
                 } else {
-                    VPEXTRD.emit(masm, XMM, (AMD64Address) crb.asAddress(result), asRegister(vector), selector);
+                    VPEXTRD.emit(vasm, XMM, (AMD64Address) crb.asAddress(result), asRegister(vector), selector);
                 }
             }
         }
     }
 
-    public static final class ExtractLongOp extends AMD64LIRInstruction {
+    public static final class ExtractLongOp extends AMD64VectorLIRInstruction {
         public static final LIRInstructionClass<ExtractLongOp> TYPE = LIRInstructionClass.create(ExtractLongOp.class);
         @Def({REG, STACK}) protected AllocatableValue result;
         @Use({REG}) protected AllocatableValue vector;
@@ -431,19 +394,19 @@ public class AMD64VectorShuffle {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        public void emitCode(CompilationResultBuilder crb, AMD64VectorAssembler vasm) {
             if (isRegister(result)) {
                 if (selector == 0) {
-                    VMOVQ.emitReverse(masm, XMM, asRegister(result), asRegister(vector));
+                    VMOVQ.emitReverse(vasm, XMM, asRegister(result), asRegister(vector));
                 } else {
-                    VPEXTRQ.emit(masm, XMM, asRegister(result), asRegister(vector), selector);
+                    VPEXTRQ.emit(vasm, XMM, asRegister(result), asRegister(vector), selector);
                 }
             } else {
                 assert isStackSlot(result);
                 if (selector == 0) {
-                    VMOVQ.emit(masm, XMM, (AMD64Address) crb.asAddress(result), asRegister(vector));
+                    VMOVQ.emit(vasm, XMM, (AMD64Address) crb.asAddress(result), asRegister(vector));
                 } else {
-                    VPEXTRQ.emit(masm, XMM, (AMD64Address) crb.asAddress(result), asRegister(vector), selector);
+                    VPEXTRQ.emit(vasm, XMM, (AMD64Address) crb.asAddress(result), asRegister(vector), selector);
                 }
             }
         }

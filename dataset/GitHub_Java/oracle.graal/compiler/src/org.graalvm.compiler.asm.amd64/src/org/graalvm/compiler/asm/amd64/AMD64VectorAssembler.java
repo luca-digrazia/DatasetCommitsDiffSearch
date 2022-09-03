@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -234,8 +232,6 @@ public class AMD64VectorAssembler extends AMD64MacroAssembler {
     private static final OpAssertion XMM_XMM_CPU = new OpAssertion(CPUFeature.AVX, null, AMD64.XMM, AMD64.XMM, AMD64.CPU, null);
     private static final OpAssertion CPU_XMM = new OpAssertion(CPUFeature.AVX, null, AMD64.CPU, null, AMD64.XMM, null);
 
-    private static final OpAssertion AVX1_2_CPU_XMM = new OpAssertion(CPUFeature.AVX, CPUFeature.AVX2, AMD64.CPU, null, AMD64.XMM, null);
-
     private static final class OpAssertion {
         private final CPUFeature avx128feature;
         private final CPUFeature avx256feature;
@@ -374,7 +370,6 @@ public class AMD64VectorAssembler extends AMD64MacroAssembler {
         public static final VexRMOp VPBROADCASTW   = new VexRMOp("VPBROADCASTW",   P_66, M_0F38, W0,  0x79, AVX2);
         public static final VexRMOp VPBROADCASTD   = new VexRMOp("VPBROADCASTD",   P_66, M_0F38, W0,  0x58, AVX2);
         public static final VexRMOp VPBROADCASTQ   = new VexRMOp("VPBROADCASTQ",   P_66, M_0F38, W0,  0x59, AVX2);
-        public static final VexRMOp VPMOVMSKB      = new VexRMOp("VPMOVMSKB",      P_66, M_0F,   WIG, 0xD7, AVX1_2_CPU_XMM);
         public static final VexRMOp VPMOVSXBW      = new VexRMOp("VPMOVSXBW",      P_66, M_0F38, WIG, 0x20);
         public static final VexRMOp VPMOVSXBD      = new VexRMOp("VPMOVSXBD",      P_66, M_0F38, WIG, 0x21);
         public static final VexRMOp VPMOVSXBQ      = new VexRMOp("VPMOVSXBQ",      P_66, M_0F38, WIG, 0x22);

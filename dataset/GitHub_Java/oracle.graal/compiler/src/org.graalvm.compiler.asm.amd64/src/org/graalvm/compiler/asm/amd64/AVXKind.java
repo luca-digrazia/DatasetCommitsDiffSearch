@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,7 +26,6 @@ import static org.graalvm.compiler.asm.amd64.AVXKind.AVXSize.DWORD;
 import static org.graalvm.compiler.asm.amd64.AVXKind.AVXSize.QWORD;
 import static org.graalvm.compiler.asm.amd64.AVXKind.AVXSize.XMM;
 import static org.graalvm.compiler.asm.amd64.AVXKind.AVXSize.YMM;
-import static org.graalvm.compiler.asm.amd64.AVXKind.AVXSize.ZMM;
 
 import jdk.vm.ci.meta.Value;
 import org.graalvm.compiler.debug.GraalError;
@@ -44,8 +41,7 @@ public final class AVXKind {
         DWORD,
         QWORD,
         XMM,
-        YMM,
-        ZMM;
+        YMM;
 
         public int getBytes() {
             switch (this) {
@@ -57,8 +53,6 @@ public final class AVXKind {
                     return 16;
                 case YMM:
                     return 32;
-                case ZMM:
-                    return 64;
                 default:
                     return 0;
             }
@@ -88,8 +82,6 @@ public final class AVXKind {
                 return XMM;
             case 32:
                 return YMM;
-            case 64:
-                return ZMM;
             default:
                 throw GraalError.shouldNotReachHere("unsupported kind: " + kind);
         }
@@ -97,10 +89,7 @@ public final class AVXKind {
 
     public static AVXSize getRegisterSize(AMD64Kind kind) {
         assert kind.isXMM() : "unexpected kind " + kind;
-        int size = kind.getSizeInBytes();
-        if (size > 32) {
-            return ZMM;
-        } else if (size > 16) {
+        if (kind.getSizeInBytes() > 16) {
             return YMM;
         } else {
             return XMM;
