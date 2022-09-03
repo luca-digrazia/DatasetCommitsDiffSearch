@@ -194,7 +194,6 @@ public class IntegerStamp extends Stamp {
     public int hashCode() {
         final int prime = 31;
         int result = 1;
-        result = prime * result + kind().hashCode();
         result = prime * result + (int) (lowerBound ^ (lowerBound >>> 32));
         result = prime * result + (int) (upperBound ^ (upperBound >>> 32));
         result = prime * result + (int) (downMask ^ (downMask >>> 32));
@@ -211,7 +210,7 @@ public class IntegerStamp extends Stamp {
             return false;
         }
         IntegerStamp other = (IntegerStamp) obj;
-        if (lowerBound != other.lowerBound || upperBound != other.upperBound || downMask != other.downMask || upMask != other.upMask || kind() != other.kind()) {
+        if (lowerBound != other.lowerBound || upperBound != other.upperBound || downMask != other.downMask || upMask != other.upMask) {
             return false;
         }
         return true;
