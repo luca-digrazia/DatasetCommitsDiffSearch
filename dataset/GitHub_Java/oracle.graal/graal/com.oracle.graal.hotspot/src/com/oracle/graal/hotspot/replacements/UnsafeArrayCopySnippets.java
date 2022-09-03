@@ -139,55 +139,47 @@ public class UnsafeArrayCopySnippets implements Snippets {
 
     @Snippet
     public static void arraycopyByte(byte[] src, int srcPos, byte[] dest, int destPos, int length) {
-        Kind kind = Kind.Byte;
-        vectorizedCopy(src, srcPos, dest, destPos, length, kind, getArrayLocation(kind));
+        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Byte, getArrayLocation(Kind.Byte));
     }
 
     @Snippet
     public static void arraycopyBoolean(boolean[] src, int srcPos, boolean[] dest, int destPos, int length) {
-        Kind kind = Kind.Boolean;
-        vectorizedCopy(src, srcPos, dest, destPos, length, kind, getArrayLocation(kind));
+        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Boolean, getArrayLocation(Kind.Boolean));
     }
 
     @Snippet
     public static void arraycopyChar(char[] src, int srcPos, char[] dest, int destPos, int length) {
-        Kind kind = Kind.Char;
-        vectorizedCopy(src, srcPos, dest, destPos, length, kind, getArrayLocation(kind));
+        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Char, getArrayLocation(Kind.Char));
     }
 
     @Snippet
     public static void arraycopyShort(short[] src, int srcPos, short[] dest, int destPos, int length) {
-        Kind kind = Kind.Short;
-        vectorizedCopy(src, srcPos, dest, destPos, length, kind, getArrayLocation(kind));
+        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Short, getArrayLocation(Kind.Short));
     }
 
     @Snippet
     public static void arraycopyInt(int[] src, int srcPos, int[] dest, int destPos, int length) {
-        Kind kind = Kind.Int;
-        vectorizedCopy(src, srcPos, dest, destPos, length, kind, getArrayLocation(kind));
+        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Int, getArrayLocation(Kind.Int));
     }
 
     @Snippet
     public static void arraycopyFloat(float[] src, int srcPos, float[] dest, int destPos, int length) {
-        Kind kind = Kind.Float;
-        vectorizedCopy(src, srcPos, dest, destPos, length, kind, getArrayLocation(kind));
+        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Float, getArrayLocation(Kind.Float));
     }
 
     @Snippet
     public static void arraycopyLong(long[] src, int srcPos, long[] dest, int destPos, int length) {
-        Kind kind = Kind.Long;
-        vectorizedCopy(src, srcPos, dest, destPos, length, kind, getArrayLocation(kind));
+        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Long, getArrayLocation(Kind.Long));
     }
 
     @Snippet
     public static void arraycopyDouble(double[] src, int srcPos, double[] dest, int destPos, int length) {
-        Kind kind = Kind.Double;
         /*
          * TODO atomicity problem on 32-bit architectures: The JVM spec requires double values to be
          * copied atomically, but not long values. For example, on Intel 32-bit this code is not
          * atomic as long as the vector kind remains Kind.Long.
          */
-        vectorizedCopy(src, srcPos, dest, destPos, length, kind, getArrayLocation(kind));
+        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Double, getArrayLocation(Kind.Double));
     }
 
     /**
@@ -198,21 +190,20 @@ public class UnsafeArrayCopySnippets implements Snippets {
      */
     @Snippet
     public static void arraycopyObject(Object[] src, int srcPos, Object[] dest, int destPos, int length) {
-        Kind kind = Kind.Object;
-        final int scale = arrayIndexScale(kind);
-        int arrayBaseOffset = arrayBaseOffset(kind);
-        LocationIdentity arrayLocation = getArrayLocation(kind);
+        final int scale = arrayIndexScale(Kind.Object);
+        int arrayBaseOffset = arrayBaseOffset(Kind.Object);
+        LocationIdentity arrayLocation = getArrayLocation(Kind.Object);
         if (src == dest && srcPos < destPos) { // bad aliased case
             long start = (long) (length - 1) * scale;
             for (long i = start; i >= 0; i -= scale) {
-                Object a = UnsafeLoadNode.load(src, arrayBaseOffset + i + (long) srcPos * scale, kind, arrayLocation);
-                DirectObjectStoreNode.storeObject(dest, arrayBaseOffset, i + (long) destPos * scale, a, getArrayLocation(kind));
+                Object a = UnsafeLoadNode.load(src, arrayBaseOffset + i + (long) srcPos * scale, Kind.Object, arrayLocation);
+                DirectObjectStoreNode.storeObject(dest, arrayBaseOffset, i + (long) destPos * scale, a, getArrayLocation(Kind.Object));
             }
         } else {
             long end = (long) length * scale;
             for (long i = 0; i < end; i += scale) {
-                Object a = UnsafeLoadNode.load(src, arrayBaseOffset + i + (long) srcPos * scale, kind, arrayLocation);
-                DirectObjectStoreNode.storeObject(dest, arrayBaseOffset, i + (long) destPos * scale, a, getArrayLocation(kind));
+                Object a = UnsafeLoadNode.load(src, arrayBaseOffset + i + (long) srcPos * scale, Kind.Object, arrayLocation);
+                DirectObjectStoreNode.storeObject(dest, arrayBaseOffset, i + (long) destPos * scale, a, getArrayLocation(Kind.Object));
             }
         }
     }
