@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.truffle;
 
-import com.oracle.jvmci.code.InstalledCode;
-import com.oracle.jvmci.code.BailoutException;
-
 import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
 import java.io.*;
@@ -33,10 +30,10 @@ import java.util.*;
 import java.util.concurrent.atomic.*;
 import java.util.stream.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.truffle.debug.*;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.meta.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.*;
@@ -103,10 +100,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             this.compilationProfile = new CompilationProfile();
         }
         this.nodeRewritingAssumption = new CyclicAssumption("nodeRewritingAssumption of " + rootNode.toString());
-    }
-
-    public final void log(String message) {
-        runtime.log(message);
     }
 
     public final boolean isCompiling() {
@@ -524,7 +517,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         try {
             return OptimizedCallTarget.class.getDeclaredMethod("callDirect", Object[].class);
         } catch (NoSuchMethodException | SecurityException e) {
-            throw new JVMCIError(e);
+            throw new GraalInternalError(e);
         }
     }
 
@@ -532,7 +525,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         try {
             return OptimizedCallTarget.class.getDeclaredMethod("callInlined", Object[].class);
         } catch (NoSuchMethodException | SecurityException e) {
-            throw new JVMCIError(e);
+            throw new GraalInternalError(e);
         }
     }
 

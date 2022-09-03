@@ -22,20 +22,15 @@
  */
 package com.oracle.graal.truffle;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.ReplaceObserver;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.LoopNode;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RepeatingNode;
-import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.nodes.*;
 
 public final class OptimizedOSRLoopNode extends LoopNode implements ReplaceObserver {
 
+    private static final int OSR_THRESHOLD = TruffleCompilerOptions.TruffleOSRCompilationThreshold.getValue();
+
     private int interpreterLoopCount;
-    private int lastLoopCount;
     private OptimizedCallTarget compiledTarget;
 
     @Child private RepeatingNode repeatableNode;
@@ -80,8 +75,7 @@ public final class OptimizedOSRLoopNode extends LoopNode implements ReplaceObser
     }
 
     private boolean profilingLoop(VirtualFrame frame) {
-        int osrThreshold = TruffleCompilerOptions.TruffleOSRCompilationThreshold.getValue();
-        int overflowLoopCount = Integer.MAX_VALUE - osrThreshold + interpreterLoopCount;
+        int overflowLoopCount = Integer.MAX_VALUE - OSR_THRESHOLD + interpreterLoopCount;
         try {
             while (repeatableNode.executeRepeating(frame)) {
                 try {
@@ -92,7 +86,7 @@ public final class OptimizedOSRLoopNode extends LoopNode implements ReplaceObser
                 }
             }
         } finally {
-            reportLoopCount(overflowLoopCount - Integer.MAX_VALUE + osrThreshold - interpreterLoopCount);
+            reportLoopCount(overflowLoopCount - Integer.MAX_VALUE + OSR_THRESHOLD - interpreterLoopCount);
         }
         return true;
     }
@@ -106,7 +100,6 @@ public final class OptimizedOSRLoopNode extends LoopNode implements ReplaceObser
                     return false;
                 } else if (target.isValid()) {
                     Object result = target.callDirect(new Object[]{frame});
-                    iterations = lastLoopCount;
                     if (result == Boolean.TRUE) {
                         // loop is done. No further repetitions necessary.
                         return true;
@@ -159,7 +152,6 @@ public final class OptimizedOSRLoopNode extends LoopNode implements ReplaceObser
 
     private void reportLoopCount(int reportIterations) {
         if (reportIterations != 0) {
-            lastLoopCount = reportIterations;
             interpreterLoopCount += reportIterations;
             getRootNode().reportLoopCount(reportIterations);
         }
@@ -192,7 +184,7 @@ public final class OptimizedOSRLoopNode extends LoopNode implements ReplaceObser
         @Child private OptimizedOSRLoopNode loopNode;
 
         public OSRRootNode(OptimizedOSRLoopNode loop) {
-            super(TruffleLanguage.class, loop.getSourceSection(), loop.getRootNode().getFrameDescriptor());
+            super(loop.getSourceSection(), loop.getRootNode().getFrameDescriptor());
             this.loopNode = loop;
         }
 
