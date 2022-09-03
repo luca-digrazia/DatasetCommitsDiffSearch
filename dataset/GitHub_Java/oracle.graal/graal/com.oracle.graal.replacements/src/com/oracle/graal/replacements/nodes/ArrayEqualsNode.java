@@ -22,19 +22,21 @@
  */
 package com.oracle.graal.replacements.nodes;
 
+import java.util.*;
+
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * Compares two arrays with the same length.
  */
-public class ArrayEqualsNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable, Virtualizable, MemoryAccess {
+public class ArrayEqualsNode extends FixedWithNextNode implements LIRGenLowerable, Canonicalizable {
 
     /** {@link Kind} of the arrays to compare. */
     private final Kind kind;
@@ -63,45 +65,42 @@ public class ArrayEqualsNode extends FixedWithNextNode implements LIRLowerable, 
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (usages().isEmpty()) {
-            return null;
+        if (!array1.isConstant() || !array2.isConstant()) {
+            return this;
         }
-        if (GraphUtil.unproxify(array1) == GraphUtil.unproxify(array2)) {
-            return ConstantNode.forBoolean(true);
-        }
-        return this;
-    }
 
-    public void virtualize(VirtualizerTool tool) {
-        State state1 = tool.getObjectState(array1);
-        if (state1 != null) {
-            State state2 = tool.getObjectState(array2);
-            if (state2 != null) {
-                if (state1.getVirtualObject() == state2.getVirtualObject()) {
-                    // the same virtual objects will always have the same contents
-                    tool.replaceWithValue(ConstantNode.forBoolean(true, graph()));
-                } else if (state1.getVirtualObject().entryCount() == state2.getVirtualObject().entryCount()) {
-                    int entryCount = state1.getVirtualObject().entryCount();
-                    boolean allEqual = true;
-                    for (int i = 0; i < entryCount; i++) {
-                        ValueNode entry1 = state1.getEntry(i);
-                        ValueNode entry2 = state2.getEntry(i);
-                        if (entry1 != entry2) {
-                            // the contents might be different
-                            allEqual = false;
-                        }
-                        if (entry1.stamp().alwaysDistinct(entry2.stamp())) {
-                            // the contents are different
-                            tool.replaceWithValue(ConstantNode.forBoolean(false, graph()));
-                            return;
-                        }
-                    }
-                    if (allEqual) {
-                        tool.replaceWithValue(ConstantNode.forBoolean(true, graph()));
-                    }
-                }
-            }
+        Object a1 = array1.asConstant().asObject();
+        Object a2 = array2.asConstant().asObject();
+        boolean x;
+        switch (kind) {
+            case Boolean:
+                x = Arrays.equals((boolean[]) a1, (boolean[]) a2);
+                break;
+            case Byte:
+                x = Arrays.equals((byte[]) a1, (byte[]) a2);
+                break;
+            case Char:
+                x = Arrays.equals((char[]) a1, (char[]) a2);
+                break;
+            case Short:
+                x = Arrays.equals((short[]) a1, (short[]) a2);
+                break;
+            case Int:
+                x = Arrays.equals((int[]) a1, (int[]) a2);
+                break;
+            case Long:
+                x = Arrays.equals((long[]) a1, (long[]) a2);
+                break;
+            case Float:
+                x = Arrays.equals((float[]) a1, (float[]) a2);
+                break;
+            case Double:
+                x = Arrays.equals((double[]) a1, (double[]) a2);
+                break;
+            default:
+                throw GraalInternalError.shouldNotReachHere("unknown kind " + kind);
         }
+        return ConstantNode.forBoolean(x, graph());
     }
 
     @NodeIntrinsic
@@ -129,12 +128,9 @@ public class ArrayEqualsNode extends FixedWithNextNode implements LIRLowerable, 
     public static native boolean equals(double[] array1, double[] array2, int length);
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        Value result = gen.getLIRGeneratorTool().emitArrayEquals(kind, gen.operand(array1), gen.operand(array2), gen.operand(length));
+    public void generate(LIRGenerator gen) {
+        Variable result = gen.newVariable(Kind.Int);
+        gen.emitArrayEquals(kind, result, gen.operand(array1), gen.operand(array2), gen.operand(length));
         gen.setResult(this, result);
-    }
-
-    public LocationIdentity getLocationIdentity() {
-        return NamedLocationIdentity.getArrayLocation(kind);
     }
 }
