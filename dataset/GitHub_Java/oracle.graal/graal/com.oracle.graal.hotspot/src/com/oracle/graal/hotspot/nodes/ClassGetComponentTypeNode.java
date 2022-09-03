@@ -39,7 +39,11 @@ import com.oracle.graal.replacements.nodes.*;
 @NodeInfo
 public class ClassGetComponentTypeNode extends MacroNode implements Canonicalizable {
 
-    public ClassGetComponentTypeNode(Invoke invoke) {
+    public static ClassGetComponentTypeNode create(Invoke invoke) {
+        return new ClassGetComponentTypeNode(invoke);
+    }
+
+    protected ClassGetComponentTypeNode(Invoke invoke) {
         super(invoke);
     }
 
@@ -51,7 +55,7 @@ public class ClassGetComponentTypeNode extends MacroNode implements Canonicaliza
     public Node canonical(CanonicalizerTool tool) {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
-            HotSpotObjectConstant c = (HotSpotObjectConstant) javaClass.asConstant();
+            HotSpotObjectConstant c = (HotSpotObjectConstant) javaClass.asJavaConstant();
             JavaConstant componentType = c.getComponentType();
             if (componentType != null) {
                 return ConstantNode.forConstant(componentType, tool.getMetaAccess());
