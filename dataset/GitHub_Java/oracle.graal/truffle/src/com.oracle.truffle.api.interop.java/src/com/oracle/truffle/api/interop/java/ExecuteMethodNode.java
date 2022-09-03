@@ -42,14 +42,12 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.ConditionProfile;
 import com.oracle.truffle.api.profiles.ValueProfile;
 
-@SuppressWarnings("deprecation")
 abstract class ExecuteMethodNode extends Node {
     static final int LIMIT = 3;
     private static final Class<?>[] EMPTY_CLASS_ARRAY = new Class<?>[0];
@@ -609,7 +607,7 @@ abstract class ExecuteMethodNode extends Node {
             value = ((JavaObject) argument).obj;
         }
         if (!parameterType.isPrimitive()) {
-            return value == null || (parameterType.isInstance(value) && !(value instanceof TruffleObject));
+            return value == null || parameterType.isInstance(value);
         } else {
             if (value != null) {
                 Class<?> boxedToPrimitive = boxedTypeToPrimitiveType(value.getClass());

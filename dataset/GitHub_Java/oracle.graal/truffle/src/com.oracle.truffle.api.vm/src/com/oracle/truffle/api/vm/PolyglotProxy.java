@@ -31,6 +31,7 @@ import org.graalvm.polyglot.proxy.ProxyExecutable;
 import org.graalvm.polyglot.proxy.ProxyInstantiable;
 import org.graalvm.polyglot.proxy.ProxyNativeObject;
 import org.graalvm.polyglot.proxy.ProxyObject;
+import org.graalvm.polyglot.proxy.ProxyPrimitive;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -49,7 +50,6 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 
-@SuppressWarnings("deprecation")
 final class PolyglotProxy {
 
     public static boolean isProxyGuestObject(TruffleObject value) {
@@ -115,7 +115,7 @@ final class PolyglotProxy {
             if (proxy instanceof ProxyInstantiable) {
                 return context.toGuestValue(((ProxyInstantiable) proxy).newInstance(context.toHostValues(arguments, 1)));
             } else {
-                throw UnsupportedMessageException.raise(Message.NEW);
+                throw UnsupportedMessageException.raise(Message.createNew(0));
             }
         }
     }
@@ -136,7 +136,7 @@ final class PolyglotProxy {
             if (proxy instanceof ProxyExecutable) {
                 return context.toGuestValue(((ProxyExecutable) proxy).execute(context.toHostValues(arguments, 1)));
             } else {
-                throw UnsupportedMessageException.raise(Message.EXECUTE);
+                throw UnsupportedMessageException.raise(Message.createExecute(0));
             }
         }
     }
@@ -174,7 +174,7 @@ final class PolyglotProxy {
 
         @Override
         Object executeProxy(PolyglotLanguageContext context, Proxy proxy, Object[] arguments) {
-            return proxy instanceof org.graalvm.polyglot.proxy.ProxyPrimitive;
+            return proxy instanceof ProxyPrimitive;
         }
     }
 
@@ -183,15 +183,15 @@ final class PolyglotProxy {
         @Override
         @TruffleBoundary
         Object executeProxy(PolyglotLanguageContext context, Proxy proxy, Object[] arguments) {
-            if (proxy instanceof org.graalvm.polyglot.proxy.ProxyPrimitive) {
-                Object primitive = ((org.graalvm.polyglot.proxy.ProxyPrimitive) proxy).asPrimitive();
+            if (proxy instanceof ProxyPrimitive) {
+                Object primitive = ((ProxyPrimitive) proxy).asPrimitive();
                 if (primitive instanceof String || primitive instanceof Boolean || //
                                 primitive instanceof Character || primitive instanceof Byte || primitive instanceof Short ||
                                 primitive instanceof Integer || primitive instanceof Long || primitive instanceof Float || primitive instanceof Double) {
                     return primitive;
                 } else {
                     throw new IllegalStateException(String.format("Invalid return value for %s. Only Java primitive values or String is allowed as return value fo asPrimitive().",
-                                    org.graalvm.polyglot.proxy.ProxyPrimitive.class.getSimpleName()));
+                                    ProxyPrimitive.class.getSimpleName()));
                 }
             } else {
                 throw UnsupportedMessageException.raise(Message.UNBOX);
@@ -271,7 +271,8 @@ final class PolyglotProxy {
 
     private static final class ProxyKeyInfoNode extends ProxyRootNode {
 
-        static final Integer KEY = KeyInfo.READABLE | KeyInfo.MODIFIABLE | KeyInfo.REMOVABLE;
+        static final Integer KEY = KeyInfo.newBuilder().setReadable(true).setWritable(true).build();
+        static final Integer NO_KEY = 0;
 
         @Override
         Object executeProxy(PolyglotLanguageContext context, Proxy proxy, Object[] arguments) {
@@ -283,7 +284,7 @@ final class PolyglotProxy {
                     return keyInfo((ProxyArray) proxy, (Number) key);
                 }
             }
-            return KeyInfo.NONE;
+            return NO_KEY;
         }
 
         @TruffleBoundary
@@ -293,7 +294,7 @@ final class PolyglotProxy {
             if (index >= 0 && index < size) {
                 return KEY;
             } else {
-                return KeyInfo.INSERTABLE;
+                return NO_KEY;
             }
         }
 
@@ -302,7 +303,7 @@ final class PolyglotProxy {
             if (proxy.hasMember(key)) {
                 return KEY;
             } else {
-                return KeyInfo.INSERTABLE;
+                return NO_KEY;
             }
         }
     }
@@ -318,11 +319,11 @@ final class PolyglotProxy {
                 }
             }
             CompilerDirectives.transferToInterpreter();
-            throw UnsupportedMessageException.raise(Message.INVOKE);
+            throw UnsupportedMessageException.raise(Message.createInvoke(0));
         }
 
         @Child private Node isExecutable = Message.IS_EXECUTABLE.createNode();
-        @Child private Node executeNode = Message.EXECUTE.createNode();
+        @Child private Node executeNode = Message.createExecute(0).createNode();
 
         @TruffleBoundary
         Object invoke(PolyglotLanguageContext context, ProxyObject object, String key, Object[] arguments) {

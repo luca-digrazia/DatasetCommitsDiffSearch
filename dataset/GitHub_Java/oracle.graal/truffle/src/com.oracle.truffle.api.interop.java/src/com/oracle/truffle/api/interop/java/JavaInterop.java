@@ -30,6 +30,7 @@ import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.Proxy;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -547,6 +548,7 @@ public final class JavaInterop {
         return toGuestObject(obj, languageContext);
     }
 
+    @TruffleBoundary
     static Object toGuestObject(Object obj, Object languageContext) {
         assert !isPrimitive(obj);
         EngineSupport engine = ACCESSOR.engine();

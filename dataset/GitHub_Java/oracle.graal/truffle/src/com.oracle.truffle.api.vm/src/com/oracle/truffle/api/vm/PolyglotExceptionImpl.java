@@ -45,9 +45,11 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractExceptionImpl;
 
 import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.TruffleStackTraceElement;
+import com.oracle.truffle.api.interop.java.JavaInterop;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.vm.PolyglotImpl.VMObject;
 
-@SuppressWarnings("deprecation")
-final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.oracle.truffle.api.vm.PolyglotImpl.VMObject {
+final class PolyglotExceptionImpl extends AbstractExceptionImpl implements VMObject {
 
     private static final String CAUSE_CAPTION = "Caused by host exception: ";
 
@@ -87,7 +89,11 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.o
             this.exit = truffleException.isExit();
             this.exitStatus = this.exit ? truffleException.getExitStatus() : 0;
 
-            com.oracle.truffle.api.source.SourceSection section = truffleException.getSourceLocation();
+            Node location = truffleException.getLocation();
+            com.oracle.truffle.api.source.SourceSection section = null;
+            if (location != null) {
+                section = location.getEncapsulatingSourceSection();
+            }
             if (section != null) {
                 com.oracle.truffle.api.source.Source truffleSource = section.getSource();
                 String language = truffleSource.getLanguage();
@@ -345,8 +351,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.o
 
         private static final String POLYGLOT_PACKAGE = Engine.class.getName().substring(0, Engine.class.getName().lastIndexOf('.') + 1);
         private static final String PROXY_PACKAGE = PolyglotProxy.class.getName();
-        private static final String JAVA_INTEROP_PACKAGE = com.oracle.truffle.api.interop.java.JavaInterop.class.getName().substring(0,
-                        com.oracle.truffle.api.interop.java.JavaInterop.class.getName().lastIndexOf('.') + 1);
+        private static final String JAVA_INTEROP_PACKAGE = JavaInterop.class.getName().substring(0, JavaInterop.class.getName().lastIndexOf('.') + 1);
         private static final String[] JAVA_INTEROP_HOST_TO_GUEST = {
                         JAVA_INTEROP_PACKAGE + "TruffleMap",
                         JAVA_INTEROP_PACKAGE + "TruffleList",

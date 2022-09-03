@@ -51,7 +51,6 @@ import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.SourceSection;
 import org.graalvm.polyglot.TypeLiteral;
 import org.graalvm.polyglot.Value;
-import org.graalvm.polyglot.io.FileSystem;
 
 @SuppressWarnings("unused")
 public abstract class AbstractPolyglotImpl {
@@ -219,6 +218,12 @@ public abstract class AbstractPolyglotImpl {
             }
         }
 
+        public abstract Value lookup(String language, String key);
+
+        public abstract Value importSymbol(String key);
+
+        public abstract void exportSymbol(String key, Object value);
+
         public abstract boolean initializeLanguage(String languageId);
 
         public abstract Value eval(String language, Object sourceImpl);
@@ -233,9 +238,6 @@ public abstract class AbstractPolyglotImpl {
 
         public abstract void explicitLeave();
 
-        public abstract Value getBindings(String language);
-
-        public abstract Value getPolyglotBindings();
     }
 
     public abstract static class AbstractEngineImpl {
@@ -261,10 +263,7 @@ public abstract class AbstractPolyglotImpl {
         public abstract OptionDescriptors getOptions();
 
         public abstract Context createContext(OutputStream out, OutputStream err, InputStream in, boolean allowHostAccess,
-                        boolean allowCreateThread, boolean allowHostIO, boolean allowHostClassLoading, Predicate<String> classFilter, Map<String, String> options, Map<String, String[]> arguments,
-                        String[] onlyLanguages, FileSystem fileSystem);
-
-        public abstract String getImplementationName();
+                        boolean allowCreateThread, Predicate<String> classFilter, Map<String, String> options, Map<String, String[]> arguments, String[] onlyLanguages);
 
     }
 
@@ -365,6 +364,8 @@ public abstract class AbstractPolyglotImpl {
         public abstract OptionDescriptors getOptions();
 
         public abstract Engine getEngineAPI();
+
+        public abstract boolean isHost();
 
     }
 
