@@ -142,17 +142,6 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
             nativeImage.addCustomJavaArgs(headArg);
             return true;
         }
-        String optionKeyPrefix = "-V";
-        if (headArg.startsWith(optionKeyPrefix)) {
-            args.poll();
-            String keyValueStr = headArg.substring(optionKeyPrefix.length());
-            String[] keyValue = keyValueStr.split("=");
-            if (keyValue.length != 2) {
-                throw NativeImage.showError("Use " + optionKeyPrefix + "<key>=<value>");
-            }
-            nativeImage.addOptionKeyValue(keyValue[0], keyValue[1]);
-            return true;
-        }
         if (headArg.startsWith("-J")) {
             args.poll();
             if (headArg.equals("-J")) {
@@ -183,6 +172,7 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
             if (mainClass == null) {
                 NativeImage.showError("No main manifest attribute, in " + filePath);
             }
+            nativeImage.addImageClasspath(filePath);
             nativeImage.addPlainImageBuilderArg(NativeImage.oHClass + mainClass);
             String jarFileName = filePath.getFileName().toString();
             String jarSuffix = ".jar";
@@ -207,7 +197,6 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                     nativeImage.addImageProvidedClasspath(manifestClassPath);
                 }
             }
-            nativeImage.addImageClasspath(filePath);
         } catch (NativeImage.NativeImageError ex) {
             throw ex;
         } catch (Throwable ex) {
