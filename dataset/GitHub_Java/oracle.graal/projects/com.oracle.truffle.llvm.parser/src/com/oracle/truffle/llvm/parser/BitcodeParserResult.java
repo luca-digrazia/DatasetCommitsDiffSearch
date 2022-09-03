@@ -76,8 +76,8 @@ public final class BitcodeParserResult {
     public static BitcodeParserResult getFromSource(ByteBuffer bytes) {
         final ModelModule model = LLVMScanner.parse(bytes);
 
-        // extract SourceSection and LLVMSourceType objects from metadata
-        SourceModel.generate(model, source);
+        // set ValueInstruction#sourceVariable
+        SourceModel.generate(model);
 
         final LLVMPhiManager phis = LLVMPhiManager.generate(model);
         final StackAllocation stackAllocation = StackAllocation.generate(model);
