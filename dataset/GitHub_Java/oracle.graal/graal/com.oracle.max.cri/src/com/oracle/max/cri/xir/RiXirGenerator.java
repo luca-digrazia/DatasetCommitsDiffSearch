@@ -22,38 +22,18 @@
  */
 package com.oracle.max.cri.xir;
 
-import java.util.*;
-
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
-import com.oracle.max.cri.ri.RiType.*;
+import com.oracle.max.cri.ri.RiType.Representation;
 
 /**
  * Represents the interface through which the compiler requests the XIR for a given bytecode from the runtime system.
  */
 public interface RiXirGenerator {
 
-    /**
-     * Note: may return {@code null}.
-     */
-    XirSnippet genPrologue(XirSite site, RiResolvedMethod method);
-
-    /**
-     * Note: may return {@code null} in which case the compiler will not emit a return instruction.
-     */
-    XirSnippet genEpilogue(XirSite site, RiResolvedMethod method);
-
-    XirSnippet genSafepointPoll(XirSite site);
-
-    XirSnippet genExceptionObject(XirSite site);
-
-    XirSnippet genResolveClass(XirSite site, RiType type, Representation representation);
-
-    XirSnippet genIntrinsic(XirSite site, XirArgument[] arguments, RiMethod method);
-
     XirSnippet genInvokeInterface(XirSite site, XirArgument receiver, RiMethod method);
 
-    XirSnippet genInvokeVirtual(XirSite site, XirArgument receiver, RiMethod method);
+    XirSnippet genInvokeVirtual(XirSite site, XirArgument receiver, RiMethod method, boolean megamorph);
 
     XirSnippet genInvokeSpecial(XirSite site, XirArgument receiver, RiMethod method);
 
@@ -63,61 +43,35 @@ public interface RiXirGenerator {
 
     XirSnippet genMonitorExit(XirSite site, XirArgument receiver, XirArgument lockAddress);
 
-    XirSnippet genGetField(XirSite site, XirArgument receiver, RiField field);
-
-    XirSnippet genPutField(XirSite site, XirArgument receiver, RiField field, XirArgument value);
-
-    XirSnippet genGetStatic(XirSite site, XirArgument staticTuple, RiField field);
-
-    XirSnippet genPutStatic(XirSite site, XirArgument staticTuple, RiField field, XirArgument value);
-
     XirSnippet genNewInstance(XirSite site, RiType type);
 
     XirSnippet genNewArray(XirSite site, XirArgument length, CiKind elementKind, RiType componentType, RiType arrayType);
 
-    XirSnippet genNewObjectArrayClone(XirSite site, XirArgument newLength, XirArgument referenceArray);
-
     XirSnippet genNewMultiArray(XirSite site, XirArgument[] lengths, RiType type);
 
-    XirSnippet genCheckCast(XirSite site, XirArgument receiver, XirArgument hub, RiType type);
+    XirSnippet genCheckCast(XirSite site, XirArgument receiver, XirArgument hub, RiResolvedType type, RiResolvedType[] hints, boolean hintsExact);
 
-    XirSnippet genInstanceOf(XirSite site, XirArgument receiver, XirArgument hub, RiType type);
+    XirSnippet genInstanceOf(XirSite site, XirArgument receiver, XirArgument hub, RiType type, RiResolvedType[] hints, boolean hintsExact);
 
-    XirSnippet genMaterializeInstanceOf(XirSite site, XirArgument receiver, XirArgument hub, XirArgument trueValue, XirArgument falseValue, RiType type);
-
-    XirSnippet genArrayLoad(XirSite site, XirArgument array, XirArgument index, CiKind elementKind, RiType elementType);
-
-    XirSnippet genArrayStore(XirSite site, XirArgument array, XirArgument index, XirArgument value, CiKind elementKind, RiType elementType);
-
-    XirSnippet genArrayLength(XirSite site, XirArgument array);
-
-    XirSnippet genWriteBarrier(XirArgument object);
-
-    XirSnippet genArrayCopy(XirSite site, XirArgument src, XirArgument srcPos, XirArgument dest, XirArgument destPos, XirArgument length, RiType elementType, boolean inputsSame, boolean inputsDifferent);
-
-    XirSnippet genCurrentThread(XirSite site);
-
-    XirSnippet genGetClass(XirSite site, XirArgument xirArgument);
+    XirSnippet genMaterializeInstanceOf(XirSite site, XirArgument receiver, XirArgument hub, XirArgument trueValue, XirArgument falseValue, RiType type, RiResolvedType[] hints, boolean hintsExact);
 
     /**
      * Generates code that checks that the {@linkplain Representation#ObjectHub hub} of
      * an object is identical to a given hub constant. In pseudo code:
      * <pre>
      *     if (object.getHub() != hub) {
-     *         uncommonTrap();
+     *       jump(falseSuccessor)
      *     }
      * </pre>
      * This snippet should only be used when the object is guaranteed not to be null.
      */
-    XirSnippet genTypeCheck(XirSite site, XirArgument object, XirArgument hub, RiType type);
+    XirSnippet genTypeBranch(XirSite site, XirArgument thisHub, XirArgument otherHub, RiType type);
 
     /**
-     * Gets the list of XIR templates, using the given XIR assembler to create them if
-     * they haven't yet been created.
+     * Initializes the XIR generator for the given XIR assembler.
      *
      * @param asm the XIR assembler
-     * @return the list of templates
      */
-    List<XirTemplate> makeTemplates(CiXirAssembler asm);
+    void initialize(CiXirAssembler asm);
 
 }
