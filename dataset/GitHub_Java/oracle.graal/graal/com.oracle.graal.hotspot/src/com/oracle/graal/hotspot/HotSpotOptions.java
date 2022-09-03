@@ -47,8 +47,6 @@ public class HotSpotOptions {
     private static native void parseVMOptions();
 
     static {
-        parseVMOptions();
-
         assert !Debug.Initialization.isDebugInitialized() : "The class " + Debug.class.getName() + " must not be initialized before the Graal runtime has been initialized. " +
                         "This can be fixed by placing a call to " + Graal.class.getName() + ".runtime() on the path that triggers initialization of " + Debug.class.getName();
         if (areDebugScopePatternsEnabled()) {
