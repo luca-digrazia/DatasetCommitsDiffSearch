@@ -52,16 +52,16 @@ public class FloatingReadPhase extends Phase {
         private final Map<LocationIdentity, MemoryNode> lastMemorySnapshot;
 
         public MemoryMapImpl(MemoryMapImpl memoryMap) {
-            lastMemorySnapshot = new HashMap<>(memoryMap.lastMemorySnapshot);
+            lastMemorySnapshot = newIdentityMap(memoryMap.lastMemorySnapshot);
         }
 
         public MemoryMapImpl(StartNode start) {
-            lastMemorySnapshot = new HashMap<>();
+            lastMemorySnapshot = newIdentityMap();
             lastMemorySnapshot.put(ANY_LOCATION, start);
         }
 
         public MemoryMapImpl() {
-            lastMemorySnapshot = new HashMap<>();
+            lastMemorySnapshot = newIdentityMap();
         }
 
         @Override

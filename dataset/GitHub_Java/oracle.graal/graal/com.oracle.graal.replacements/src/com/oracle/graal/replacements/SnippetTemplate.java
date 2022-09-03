@@ -25,6 +25,7 @@ package com.oracle.graal.replacements;
 import static com.oracle.graal.api.meta.LocationIdentity.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.debug.Debug.*;
+import static com.oracle.graal.graph.util.CollectionsAccess.*;
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.*;
 import static com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates.*;
 import static java.util.FormattableFlags.*;
@@ -241,7 +242,6 @@ public class SnippetTemplate {
         protected final SnippetInfo info;
         protected final CacheKey cacheKey;
         protected final Object[] values;
-        protected final Stamp[] constStamps;
 
         protected int nextParamIdx;
 
@@ -249,7 +249,6 @@ public class SnippetTemplate {
             this.info = info;
             this.cacheKey = new CacheKey(info, guardsStage, loweringStage);
             this.values = new Object[info.getParameterCount()];
-            this.constStamps = new Stamp[info.getParameterCount()];
         }
 
         public Arguments add(String name, Object value) {
@@ -260,13 +259,8 @@ public class SnippetTemplate {
         }
 
         public Arguments addConst(String name, Object value) {
-            return addConst(name, value, null);
-        }
-
-        public Arguments addConst(String name, Object value, Stamp stamp) {
             assert check(name, true, false);
             values[nextParamIdx] = value;
-            constStamps[nextParamIdx] = stamp;
             cacheKey.setParam(nextParamIdx, value);
             nextParamIdx++;
             return this;
@@ -568,7 +562,7 @@ public class SnippetTemplate {
 
         // Copy snippet graph, replacing constant parameters with given arguments
         final StructuredGraph snippetCopy = new StructuredGraph(snippetGraph.name, snippetGraph.method());
-        Map<Node, Node> nodeReplacements = Node.newIdentityMap();
+        Map<Node, Node> nodeReplacements = newNodeIdentityMap();
         nodeReplacements.put(snippetGraph.start(), snippetCopy.start());
 
         MetaAccessProvider metaAccess = providers.getMetaAccess();
@@ -581,19 +575,13 @@ public class SnippetTemplate {
             if (args.info.isConstantParameter(i)) {
                 Object arg = args.values[i];
                 Kind kind = signature.getParameterKind(i);
-                ConstantNode constantNode;
-                if (arg instanceof Constant) {
-                    Stamp stamp = args.constStamps[i];
-                    if (stamp == null) {
-                        assert arg instanceof JavaConstant : "could not determine type of constant " + arg;
-                        constantNode = ConstantNode.forConstant((JavaConstant) arg, metaAccess, snippetCopy);
-                    } else {
-                        constantNode = ConstantNode.forConstant(stamp, (Constant) arg, metaAccess, snippetCopy);
-                    }
+                JavaConstant constantArg;
+                if (arg instanceof JavaConstant) {
+                    constantArg = (JavaConstant) arg;
                 } else {
-                    constantNode = ConstantNode.forConstant(snippetReflection.forBoxed(kind, arg), metaAccess, snippetCopy);
+                    constantArg = snippetReflection.forBoxed(kind, arg);
                 }
-                nodeReplacements.put(snippetGraph.getParameter(i), constantNode);
+                nodeReplacements.put(snippetGraph.getParameter(i), ConstantNode.forConstant(constantArg, metaAccess, snippetCopy));
             } else if (args.info.isVarargsParameter(i)) {
                 Varargs varargs = (Varargs) args.values[i];
                 VarargsPlaceholderNode placeholder = snippetCopy.unique(VarargsPlaceholderNode.create(varargs, providers.getMetaAccess()));
@@ -862,7 +850,7 @@ public class SnippetTemplate {
      * @return the map that will be used to bind arguments to parameters when inlining this template
      */
     private Map<Node, Node> bind(StructuredGraph replaceeGraph, MetaAccessProvider metaAccess, Arguments args) {
-        Map<Node, Node> replacements = Node.newIdentityMap();
+        Map<Node, Node> replacements = newNodeIdentityMap();
         assert args.info.getParameterCount() == parameters.length : "number of args (" + args.info.getParameterCount() + ") != number of parameters (" + parameters.length + ")";
         for (int i = 0; i < parameters.length; i++) {
             Object parameter = parameters[i];

@@ -119,16 +119,26 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerable, Canon
     public static ValueNode canonicalizeRead(ValueNode read, LocationNode location, ValueNode object, CanonicalizerTool tool) {
         MetaAccessProvider metaAccess = tool.getMetaAccess();
         if (tool.canonicalizeReads()) {
-            if (metaAccess != null && object != null && object.isConstant() && !object.isNullConstant()) {
+            if (metaAccess != null && object != null && object.isConstant()) {
                 if ((location.getLocationIdentity().isImmutable()) && location instanceof ConstantLocationNode) {
                     long displacement = ((ConstantLocationNode) location).getDisplacement();
-                    Constant constant = read.stamp().readConstant(tool.getConstantReflection().getMemoryAccessProvider(), object.asConstant(), displacement);
-                    if (constant != null) {
-                        return ConstantNode.forConstant(read.stamp(), constant, metaAccess);
+                    JavaConstant base = object.asJavaConstant();
+                    if (base != null) {
+                        JavaConstant constant;
+                        if (read.stamp() instanceof PrimitiveStamp) {
+                            PrimitiveStamp stamp = (PrimitiveStamp) read.stamp();
+                            constant = tool.getConstantReflection().readRawConstant(stamp.getStackKind(), base, displacement, stamp.getBits());
+                        } else {
+                            assert read.stamp() instanceof ObjectStamp;
+                            constant = tool.getConstantReflection().readUnsafeConstant(Kind.Object, base, displacement);
+                        }
+                        if (constant != null) {
+                            return ConstantNode.forConstant(read.stamp(), constant, metaAccess);
+                        }
                     }
                 }
             }
-            if (location.getLocationIdentity().equals(LocationIdentity.ARRAY_LENGTH_LOCATION)) {
+            if (location.getLocationIdentity() == LocationIdentity.ARRAY_LENGTH_LOCATION) {
                 ValueNode length = GraphUtil.arrayLength(object);
                 if (length != null) {
                     // TODO Does this need a PiCastNode to the positive range?

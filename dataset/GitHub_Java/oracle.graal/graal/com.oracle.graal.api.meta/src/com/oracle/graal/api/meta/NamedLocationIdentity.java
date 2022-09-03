@@ -27,82 +27,35 @@ import java.util.*;
 /**
  * A {@link LocationIdentity} with a name.
  */
-public final class NamedLocationIdentity implements LocationIdentity {
-
-    /**
-     * Canonicalizing map for {@link NamedLocationIdentity} instances. This is in a separate class
-     * to work around class initialization issues.
-     */
-    static class DB {
-        private static final HashMap<String, NamedLocationIdentity> map = new HashMap<>();
-
-        static synchronized NamedLocationIdentity register(NamedLocationIdentity identity) {
-            NamedLocationIdentity oldValue = map.put(identity.name, identity);
-            if (oldValue != null) {
-                throw new IllegalArgumentException("identity " + identity + " already exists");
-            }
-            return identity;
-        }
-
-        static synchronized NamedLocationIdentity lookup(String name) {
-            return map.get(name);
-        }
-    }
+public class NamedLocationIdentity implements LocationIdentity {
 
     protected final String name;
 
     protected final boolean immutable;
 
-    private NamedLocationIdentity(String name, boolean immutable) {
+    /**
+     * Creates a named unique location identity for read and write operations.
+     *
+     * @param name the name of the new location identity
+     */
+    public NamedLocationIdentity(String name) {
+        this.name = name;
+        this.immutable = false;
+    }
+
+    /**
+     * Creates a named unique location identity for read and write operations.
+     *
+     * @param name the name of the new location identity
+     */
+    public NamedLocationIdentity(String name, boolean immutable) {
         this.name = name;
         this.immutable = immutable;
     }
 
-    /**
-     * Creates a named unique location identity for read and write operations.
-     *
-     * @param name the name of the new location identity
-     */
-    public static NamedLocationIdentity create(String name) {
-        return create(name, false);
-    }
-
-    /**
-     * Creates a named unique location identity for read and write operations.
-     *
-     * @param name the name of the new location identity
-     */
-    public static NamedLocationIdentity create(String name, boolean immutable) {
-        return DB.register(new NamedLocationIdentity(name, immutable));
-    }
-
-    /**
-     * Gets the unique {@link NamedLocationIdentity} (if any) for a given name.
-     */
-    public static NamedLocationIdentity lookup(String name) {
-        return DB.lookup(name);
-    }
-
-    @Override
-    public int hashCode() {
-        return name.hashCode();
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == this) {
-            return true;
-        }
-        if (obj instanceof NamedLocationIdentity) {
-            NamedLocationIdentity that = (NamedLocationIdentity) obj;
-            return this.name.equals(that.name);
-        }
-        return false;
-    }
-
     @Override
     public String toString() {
-        return name + (immutable ? ":immutable" : ":mutable");
+        return name;
     }
 
     public boolean isImmutable() {
@@ -123,7 +76,7 @@ public final class NamedLocationIdentity implements LocationIdentity {
     private static EnumMap<Kind, LocationIdentity> initArrayLocations() {
         EnumMap<Kind, LocationIdentity> result = new EnumMap<>(Kind.class);
         for (Kind kind : Kind.values()) {
-            result.put(kind, NamedLocationIdentity.create("Array: " + kind.getJavaName()));
+            result.put(kind, new NamedLocationIdentity("Array: " + kind.getJavaName()));
         }
         return result;
     }
