@@ -454,12 +454,12 @@ public final class LinearScan {
             }
 
             case OneSpillStore: {
-                // the interval is spilled more then once
-                interval.setSpillState(SpillState.MultipleSpills);
+                // the interval is spilled more then once, so it is better to store it to
+                // memory at the definition
+                interval.setSpillState(SpillState.StoreAtDefinition);
                 break;
             }
 
-            case MultipleSpills:
             case StoreAtDefinition:
             case StartInMemory:
             case NoOptimization:
@@ -1887,7 +1887,7 @@ public final class LinearScan {
 
     private void findSpillPosition() {
         for (Interval interval : intervals) {
-            if (interval != null && interval.isSplitParent() && interval.spillState() == SpillState.MultipleSpills) {
+            if (interval != null && interval.isSplitParent() && interval.spillState() == SpillState.StoreAtDefinition) {
                 AbstractBlock<?> defBlock = blockForId(interval.spillDefinitionPos());
                 AbstractBlock<?> spillBlock = null;
                 try (Indent indent = Debug.logAndIndent("interval %s (%s)", interval, defBlock)) {
@@ -1904,14 +1904,12 @@ public final class LinearScan {
                             }
                         }
                     }
-                    if (spillBlock == null || defBlock.equals(spillBlock)) {
-                        // no spill interval
-                        interval.setSpillState(SpillState.StoreAtDefinition);
-                    } else {
-                        assert dominates(defBlock, spillBlock);
+                    assert spillBlock != null;
+                    assert dominates(defBlock, spillBlock);
+                    if (!defBlock.equals(spillBlock)) {
                         betterSpillPos.increment();
-                        Debug.log("Better spill position found (Block %s)", spillBlock);
-                        interval.setSpillDefinitionPos(getFirstLirInstructionId(spillBlock));
+                        int pos = getFirstLirInstructionId(spillBlock);
+                        Debug.log("Better spill position found (Block %s, %d)", spillBlock, pos);
                     }
                 }
             }
