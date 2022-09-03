@@ -130,7 +130,7 @@ public class WriteBarrierSnippets implements Snippets {
         } else {
             base = base.add(Word.unsigned(cardTableStart()));
         }
-        base.writeByte(displacement, (byte) 0);
+        base.writeWord(displacement, Word.zero());
     }
 
     @Snippet
@@ -145,7 +145,7 @@ public class WriteBarrierSnippets implements Snippets {
         } else {
             base = base.add(Word.unsigned(cardTableStart()));
         }
-        base.writeByte(displacement, (byte) 0);
+        base.writeWord(displacement, Word.zero());
     }
 
     public static class Templates extends AbstractTemplates<WriteBarrierSnippets> {
@@ -167,8 +167,8 @@ public class WriteBarrierSnippets implements Snippets {
             ResolvedJavaMethod method = serialArrayWriteBarrier;
             Key key = new Key(method);
             Arguments arguments = new Arguments();
-            arguments.add("object", arrayWriteBarrier.getObject());
-            arguments.add("location", arrayWriteBarrier.getLocation());
+            arguments.add("object", arrayWriteBarrier.object());
+            arguments.add("location", arrayWriteBarrier.location());
             SnippetTemplate template = cache.get(key, assumptions);
             template.instantiate(runtime, arrayWriteBarrier, DEFAULT_REPLACER, arguments);
         }
@@ -177,7 +177,7 @@ public class WriteBarrierSnippets implements Snippets {
             ResolvedJavaMethod method = serialFieldWriteBarrier;
             Key key = new Key(method);
             Arguments arguments = new Arguments();
-            arguments.add("object", fieldWriteBarrier.getObject());
+            arguments.add("object", fieldWriteBarrier.object());
             SnippetTemplate template = cache.get(key, assumptions);
             template.instantiate(runtime, fieldWriteBarrier, DEFAULT_REPLACER, arguments);
         }
