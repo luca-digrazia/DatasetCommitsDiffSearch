@@ -29,16 +29,20 @@
  */
 package uk.ac.man.cs.llvm.ir.module;
 
-import java.util.Arrays;
 import java.util.List;
 
+import com.oracle.truffle.llvm.runtime.LLVMLogger;
+import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 import uk.ac.man.cs.llvm.ir.module.records.MetadataRecord;
+import uk.ac.man.cs.llvm.ir.SymbolGenerator;
+import uk.ac.man.cs.llvm.ir.model.MetadataBlock;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataBasicType;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataCompileUnit;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataCompositeType;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataDerivedType;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataEnumerator;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataFile;
+import uk.ac.man.cs.llvm.ir.model.metadata.MetadataFnNode;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataGlobalVariable;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataLexicalBlock;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataLexicalBlockFile;
@@ -46,17 +50,19 @@ import uk.ac.man.cs.llvm.ir.model.metadata.MetadataLocalVariable;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataNode;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataSubprogram;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataSubrange;
+import uk.ac.man.cs.llvm.ir.model.metadata.MetadataTemplateTypeParameter;
+import uk.ac.man.cs.llvm.ir.module.records.DwLangNameRecord;
 import uk.ac.man.cs.llvm.ir.module.records.DwTagRecord;
 import uk.ac.man.cs.llvm.ir.types.IntegerConstantType;
 import uk.ac.man.cs.llvm.ir.types.MetadataConstantType;
+import uk.ac.man.cs.llvm.ir.types.MetadataConstantPointerType;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
 public class MetadataV32 extends Metadata {
-    public MetadataV32(Types types, List<Type> symbols) {
-        super(types, symbols);
+    public MetadataV32(Types types, List<Type> symbols, SymbolGenerator generator) {
+        super(types, symbols, generator);
         // it seem's like there is a different offset of the id in LLVM 3.2 and LLVM 3.8
         metadata.setStartIndex(0);
-        idx = 0; // TODO: remove
     }
 
     protected boolean asInt1(Type t) {
@@ -69,10 +75,6 @@ public class MetadataV32 extends Metadata {
 
     protected long asInt64(Type t) {
         return ((IntegerConstantType) t).getValue();
-    }
-
-    protected int asMetadata(Type t) {
-        return (int) ((IntegerConstantType) t).getValue(); // TODO
     }
 
     @Override
@@ -93,9 +95,9 @@ public class MetadataV32 extends Metadata {
                 return;
         }
 
-        // printMetadataDebugMsg(); // Enable to allow debugging of the metadata parser
-
-        idx++;
+        if (LLVMBaseOptionFacade.verboseEnabled()) {
+            printMetadataDebugMsg();
+        }
     }
 
     protected void createOldNode(long[] args) {
@@ -116,12 +118,11 @@ public class MetadataV32 extends Metadata {
              */
             int ident = asInt32(parsedArgs.next());
             DwTagRecord record = DwTagRecord.decode(ident);
-
             /*
              * How the data is stored: http://llvm.org/releases/3.2/docs/SourceLevelDebugging.html
              */
             switch (record) {
-                case DW_TAG_GLOBAL_VARIABLE:
+                case DW_TAG_VARIABLE:
                     createDwTagGlobalVariable(parsedArgs);
                     break;
 
@@ -133,7 +134,7 @@ public class MetadataV32 extends Metadata {
                     createDwTagFileType(parsedArgs);
                     break;
 
-                case DW_TAG_BASIC_TYPE:
+                case DW_TAG_BASE_TYPE:
                     createDwTagBasicType(parsedArgs);
                     break;
 
@@ -144,6 +145,7 @@ public class MetadataV32 extends Metadata {
                 case DW_TAG_VECTOR_TYPE:
                 case DW_TAG_SUBROUTINE_TYPE:
                 case DW_TAG_INHERITANCE:
+                case DW_TAG_CLASS_TYPE: // TODO: correct?
                     createDwCompositeType(parsedArgs);
                     break;
 
@@ -154,7 +156,7 @@ public class MetadataV32 extends Metadata {
                 case DW_TAG_TYPEDEF:
                 case DW_TAG_CONST_TYPE:
                 case DW_TAG_VOLATILE_TYPE:
-                case DW_TAG_RESTRICTED_TYPE:
+                case DW_TAG_RESTRICT_TYPE:
                     createDwDerivedType(parsedArgs);
                     break;
 
@@ -180,30 +182,43 @@ public class MetadataV32 extends Metadata {
                     createDwTagLexicalBlock(parsedArgs);
                     break;
 
+                case DW_TAG_TEMPLATE_TYPE_PARAMETER:
+                    createDwTagTemplateTypeParameter(parsedArgs);
+                    break;
+
                 case DW_TAG_UNKNOWN:
                     parsedArgs.rewind();
                     createDwNode(parsedArgs); // TODO: we need to know the type of the node
                     break;
 
                 default:
-                    System.out.println("!" + idx + " - TODO: #" + record);
+                    metadata.add(null);
+                    LLVMLogger.info("! - TODO: #" + record + " - " + ident);
                     break;
             }
         } else {
             parsedArgs.rewind();
-            System.out.println("!" + idx + " - " + MetadataRecord.OLD_NODE + ": " + parsedArgs);
+            metadata.add(null);
+            LLVMLogger.info("! - TODO: #" + MetadataRecord.OLD_NODE + ": " + parsedArgs);
         }
     }
 
     protected void createOldFnNode(long[] args) {
-        // TODO: implement
+        MetadataArgumentParser parsedArgs = new MetadataArgumentParser(types, symbols, args);
+
+        metadata.add(new MetadataFnNode((MetadataConstantPointerType) parsedArgs.next()));
     }
 
     protected void createDwNode(MetadataArgumentParser args) {
         MetadataNode node = new MetadataNode();
 
         while (args.hasNext()) {
-            node.add(metadata.getReference(args.next()));
+            Type next = args.next();
+            if (next instanceof MetadataConstantType) {
+                node.add(metadata.getReference(next));
+            } else {
+                node.add(MetadataBlock.voidRef); // TODO: implement
+            }
         }
 
         metadata.add(node);
@@ -217,11 +232,14 @@ public class MetadataV32 extends Metadata {
         node.setName(metadata.getReference(args.next()));
         node.setDisplayName(metadata.getReference(args.next()));
         node.setLinkageName(metadata.getReference(args.next()));
+        node.setFile(metadata.getReference(args.next()));
         node.setLine(asInt32(args.next()));
         node.setType(metadata.getReference(args.next()));
         node.setLocalToCompileUnit(asInt1(args.next()));
         node.setDefinedInCompileUnit(asInt1(args.next()));
-        args.next(); // TODO: Reference to the global variable
+        // TODO: Reference to the global variable, can be MetadataConstant but also
+        // MetadataConstantPointer
+        args.next();
 
         metadata.add(node);
     }
@@ -230,11 +248,11 @@ public class MetadataV32 extends Metadata {
         MetadataCompileUnit node = new MetadataCompileUnit();
 
         args.next(); // Unused
-        node.setLanguage(asInt32(args.next()));
+        node.setLanguage(DwLangNameRecord.decode(asInt32(args.next())));
         node.setFile(metadata.getReference(args.next()));
         node.setDirectory(metadata.getReference(args.next()));
         node.setProducer(metadata.getReference(args.next()));
-        args.next(); // TODO: Main Compile Unit
+        asInt1(args.next()); // TODO: Main Compile Unit
         node.setOptimized(asInt1(args.next()));
         node.setFlags(metadata.getReference(args.next()));
         node.setRuntimeVersion(asInt32(args.next()));
@@ -259,15 +277,25 @@ public class MetadataV32 extends Metadata {
     protected void createDwTagBasicType(MetadataArgumentParser args) {
         MetadataBasicType node = new MetadataBasicType();
 
-        args.next(); // Reference to context
-        node.setName(metadata.getReference(args.next()));
-        node.setFile(metadata.getReference(args.next()));
-        node.setLine(asInt32(args.next()));
-        node.setSize(asInt64(args.next()));
-        node.setAlign(asInt64(args.next()));
-        node.setOffset(asInt64(args.next()));
-        node.setFlags(asInt32(args.next()));
-        node.setEncoding(asInt32(args.next()));
+        if (args.hasNext()) {
+            metadata.getReference(args.next()); // Reference to context
+            node.setName(metadata.getReference(args.next()));
+            node.setFile(metadata.getReference(args.next()));
+            node.setLine(asInt32(args.next()));
+            node.setSize(asInt64(args.next()));
+            node.setAlign(asInt64(args.next()));
+            node.setOffset(asInt64(args.next()));
+            node.setFlags(asInt32(args.next()));
+            node.setEncoding(asInt32(args.next()));
+        } else {
+            /*
+             * I don't know why, but there is the possibility for an empty DwTagBaseType
+             *
+             * example file which reproduces this special case:
+             *
+             * - test-suite-3.2.src/SingleSource/Regression/C++/2003-06-08-VirtualFunctions.cpp
+             */
+        }
 
         metadata.add(node);
     }
@@ -284,8 +312,18 @@ public class MetadataV32 extends Metadata {
         node.setOffset(asInt64(args.next()));
         node.setFlags(asInt32(args.next()));
         node.setDerivedFrom(metadata.getReference(args.next()));
-        node.setMemberDescriptors(metadata.getReference(args.next()));
-        node.setRuntimeLanguage(asInt32(args.next()));
+        if (args.hasNext()) {
+            node.setMemberDescriptors(metadata.getReference(args.next()));
+            node.setRuntimeLanguage(asInt32(args.next()));
+        } else {
+            /*
+             * I don't know why, but there is the possibility for an pre ended DwTagComposizeType
+             *
+             * example file which reproduces this special case:
+             *
+             * - test-suite-3.2.src/SingleSource/Regression/C++/2003-06-08-VirtualFunctions.cpp
+             */
+        }
 
         metadata.add(node);
     }
@@ -303,7 +341,7 @@ public class MetadataV32 extends Metadata {
         MetadataSubprogram node = new MetadataSubprogram();
 
         args.next(); // Unused
-        args.next(); // context
+        metadata.getReference(args.next()); // context
         node.setName(metadata.getReference(args.next()));
         node.setDisplayName(metadata.getReference(args.next()));
         node.setLinkageName(metadata.getReference(args.next()));
@@ -312,17 +350,16 @@ public class MetadataV32 extends Metadata {
         node.setType(metadata.getReference(args.next()));
         node.setLocalToUnit(asInt1(args.next()));
         node.setDefinedInCompileUnit(asInt1(args.next()));
-        node.setScopeLine(asInt32(args.next()));
         node.setVirtuallity(asInt32(args.next()));
-        args.next(); // node.setVirtualIndex(asInt32(args.next())); // TODO: MetadataConstantType
-        args.next(); // metadata, ;; indicates which base type contains the vtable pointer...
-        node.setFlags(metadata.getReference(args.next()));
+        node.setVirtualIndex(asInt32(args.next()));
+        metadata.getReference(args.next()); // which base type contains the vtable pointer...
+        node.setFlags(asInt32(args.next()));
         node.setOptimized(asInt1(args.next()));
         args.next(); // Function *,;; Pointer to LLVM function
         node.setTemplateParams(metadata.getReference(args.next()));
         node.setDeclaration(metadata.getReference(args.next()));
-        args.next(); // node.setVariables(metadata.getReference(args.next())); // TODO: Invalid
-                     // reference type
+        node.setVariables(metadata.getReference(args.next()));
+        node.setScopeLine(asInt32(args.next())); // TODO: correct?
 
         metadata.add(node);
     }
@@ -370,7 +407,7 @@ public class MetadataV32 extends Metadata {
             case DW_LEXICAL_BLOCK_FILE_LENGTH: {
                 MetadataLexicalBlockFile node = new MetadataLexicalBlockFile();
 
-                args.next(); // metadata ;; Reference to the scope we're annotating...
+                metadata.getReference(args.next()); // Reference to the scope we're annotating...
                 node.setFile(metadata.getReference(args.next()));
 
                 metadata.add(node);
@@ -380,11 +417,11 @@ public class MetadataV32 extends Metadata {
             case DW_LEXICAL_BLOCK_LENGTH: {
                 MetadataLexicalBlock node = new MetadataLexicalBlock();
 
-                args.next(); // metadata,;; Reference to context descriptor
+                metadata.getReference(args.next()); // Reference to context descriptor
                 node.setLine(asInt32(args.next()));
                 node.setColumn(asInt32(args.next()));
                 node.setFile(metadata.getReference(args.next()));
-                args.next(); // i32 ;; Unique ID to identify blocks from a template function
+                asInt32(args.next()); // Unique ID to identify blocks from a template function
 
                 metadata.add(node);
                 break;
@@ -398,7 +435,7 @@ public class MetadataV32 extends Metadata {
     protected void createDwDerivedType(MetadataArgumentParser args) {
         MetadataDerivedType node = new MetadataDerivedType();
 
-        args.next(); // Context
+        metadata.getReference(args.next()); // Context
         node.setName(metadata.getReference(args.next()));
         node.setFile(metadata.getReference(args.next()));
         node.setLine(asInt32(args.next()));
@@ -414,4 +451,15 @@ public class MetadataV32 extends Metadata {
         metadata.add(node);
     }
 
+    private void createDwTagTemplateTypeParameter(MetadataArgumentParser args) {
+        MetadataTemplateTypeParameter node = new MetadataTemplateTypeParameter();
+
+        metadata.getReference(args.next()); // Context?
+        node.setName(metadata.getReference(args.next()));
+        node.setBaseType(metadata.getReference(args.next()));
+        args.next(); // TODO: Unknown
+        args.next(); // TODO: Unknown
+
+        metadata.add(node);
+    }
 }
