@@ -221,11 +221,6 @@ public class IndirectCallSiteTest extends TestWithSynchronousCompiling {
 
     static final String LOREM_IPSUM = "Lorem ipsum!";
 
-    /*
-     * Tests that a CallTarget will not deoptimize if it calls (using an IndirectCallNode) a target
-     * previously compiled with a different argument assumption and also inlined into another
-     * compiled target.
-     */
     @Test
     public void testIndirectCallNodeDoesNotDeopOnTypeChangeWithInlining1() {
         try (TruffleCompilerOptions.TruffleOptionsOverrideScope scope = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleFunctionInlining, true)) {
@@ -278,12 +273,10 @@ public class IndirectCallSiteTest extends TestWithSynchronousCompiling {
         }
     }
 
-    /*
-     * Same as previous but has the indirectCallNode explicitly call it's target. This causes the
-     * saveArgumentToGlobalState argument assumption to invalidate targetWithIndirectCall for some
-     * reason
-     */
     @Test
+    // Same as previous but has the indirectCallNode explicitly call it's target.
+    // This causes the saveArgumentToGlobalState argument assumption to invalidate
+    // targetWithIndirectCall for some reason
     public void testIndirectCallNodeDoesNotDeopOnTypeChangeWithInlining2() {
         try (TruffleCompilerOptions.TruffleOptionsOverrideScope scope = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleFunctionInlining, true)) {
             final int compilationThreshold = TruffleCompilerOptions.getValue(TruffleCompilationThreshold);
