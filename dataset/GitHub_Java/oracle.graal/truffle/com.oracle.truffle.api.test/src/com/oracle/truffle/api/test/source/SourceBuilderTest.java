@@ -125,36 +125,6 @@ public class SourceBuilderTest {
     }
 
     @Test
-    public void mimeTypeIsDetectedFromALocator() throws IOException {
-        File file = File.createTempFile("Hello", ".locme").getCanonicalFile();
-        file.deleteOnExit();
-
-        String text;
-        try (FileWriter w = new FileWriter(file)) {
-            text = "// Hello";
-            w.write(text);
-        }
-
-        Source source = Source.newBuilder(file).build();
-        assertEquals("application/x-locator", source.getMimeType());
-    }
-
-    @Test
-    public void mimeTypeIsDetectedForURIFromALocator() throws IOException {
-        File file = File.createTempFile("Hello", ".locme").getCanonicalFile();
-        file.deleteOnExit();
-
-        String text;
-        try (FileWriter w = new FileWriter(file)) {
-            text = "// Hello";
-            w.write(text);
-        }
-
-        Source source = Source.newBuilder(file.toURI().toURL()).build();
-        assertEquals("application/x-locator", source.getMimeType());
-    }
-
-    @Test
     public void mimeTypeIsDetectedRandomBytes() throws IOException {
         File file = File.createTempFile("Hello", ".bin").getCanonicalFile();
         file.deleteOnExit();
@@ -401,10 +371,11 @@ public class SourceBuilderTest {
     }
 
     @Test
-    public void normalSourceIsNotInternal() {
+    public void normalSourceIsNotInter() {
         Source source = Source.newBuilder("anything").mimeType("text/plain").name("anyname").build();
 
         assertFalse("Not internal", source.isInternal());
+        assertFalse("Not interactive", source.isInteractive());
     }
 
     @Test
@@ -412,6 +383,13 @@ public class SourceBuilderTest {
         Source source = Source.newBuilder("anything internal").mimeType("text/plain").name("internalsrc").internal().build();
 
         assertTrue("This source is internal", source.isInternal());
+    }
+
+    @Test
+    public void markSourceAsInteractive() {
+        Source source = Source.newBuilder("anything interactive").mimeType("text/plain").name("interactivesrc").interactive().build();
+
+        assertTrue("This source is interactive", source.isInteractive());
     }
 
     public void subSourceHashAndEquals() {
