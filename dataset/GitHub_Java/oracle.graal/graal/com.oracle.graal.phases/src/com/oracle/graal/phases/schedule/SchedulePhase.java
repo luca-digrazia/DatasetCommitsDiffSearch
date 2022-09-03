@@ -91,7 +91,7 @@ public final class SchedulePhase extends Phase {
         }
 
         @Override
-        protected HashSet<FloatingReadNode> merge(Block merge, List<HashSet<FloatingReadNode>> states) {
+        protected HashSet<FloatingReadNode> merge(MergeNode merge, List<HashSet<FloatingReadNode>> states) {
             HashSet<FloatingReadNode> state = new HashSet<>(states.get(0));
             for (int i = 1; i < states.size(); i++) {
                 state.retainAll(states.get(i));
@@ -100,7 +100,7 @@ public final class SchedulePhase extends Phase {
         }
 
         @Override
-        protected HashSet<FloatingReadNode> cloneState(HashSet<FloatingReadNode> oldState) {
+        protected HashSet<FloatingReadNode> afterSplit(FixedNode node, HashSet<FloatingReadNode> oldState) {
             return new HashSet<>(oldState);
         }
 
@@ -580,45 +580,41 @@ public final class SchedulePhase extends Phase {
     }
 
     private void addToEarliestSorting(Block b, ScheduledNode i, List<ScheduledNode> sortedInstructions, NodeBitMap visited) {
-        ScheduledNode instruction = i;
-        while (true) {
-            if (instruction == null || visited.isMarked(instruction) || cfg.getNodeToBlock().get(instruction) != b || instruction instanceof PhiNode || instruction instanceof LocalNode) {
-                return;
-            }
+        if (i == null || visited.isMarked(i) || cfg.getNodeToBlock().get(i) != b || i instanceof PhiNode || i instanceof LocalNode) {
+            return;
+        }
 
-            visited.mark(instruction);
-            for (Node usage : instruction.usages()) {
-                if (usage instanceof VirtualState) {
-                    // only fixed nodes can have VirtualState -> no need to schedule them
-                } else {
-                    if (instruction instanceof LoopExitNode && usage instanceof ProxyNode) {
-                        // value proxies should be scheduled before the loopexit, not after
-                    } else {
-                        addToEarliestSorting(b, (ScheduledNode) usage, sortedInstructions, visited);
-                    }
-                }
-            }
-
-            if (instruction instanceof BeginNode) {
-                ArrayList<ProxyNode> proxies = (instruction instanceof LoopExitNode) ? new ArrayList<ProxyNode>() : null;
-                for (ScheduledNode inBlock : blockToNodesMap.get(b)) {
-                    if (!visited.isMarked(inBlock)) {
-                        if (inBlock instanceof ProxyNode) {
-                            proxies.add((ProxyNode) inBlock);
-                        } else {
-                            addToEarliestSorting(b, inBlock, sortedInstructions, visited);
-                        }
-                    }
-                }
-                sortedInstructions.add(instruction);
-                if (proxies != null) {
-                    sortedInstructions.addAll(proxies);
-                }
-                break;
+        visited.mark(i);
+        for (Node usage : i.usages()) {
+            if (usage instanceof VirtualState) {
+                // only fixed nodes can have VirtualState -> no need to schedule them
             } else {
-                sortedInstructions.add(instruction);
-                instruction = (ScheduledNode) instruction.predecessor();
+                if (i instanceof LoopExitNode && usage instanceof ProxyNode) {
+                    // value proxies should be scheduled before the loopexit, not after
+                } else {
+                    addToEarliestSorting(b, (ScheduledNode) usage, sortedInstructions, visited);
+                }
             }
+        }
+
+        if (i instanceof BeginNode) {
+            ArrayList<ProxyNode> proxies = (i instanceof LoopExitNode) ? new ArrayList<ProxyNode>() : null;
+            for (ScheduledNode inBlock : blockToNodesMap.get(b)) {
+                if (!visited.isMarked(inBlock)) {
+                    if (inBlock instanceof ProxyNode) {
+                        proxies.add((ProxyNode) inBlock);
+                    } else {
+                        addToEarliestSorting(b, inBlock, sortedInstructions, visited);
+                    }
+                }
+            }
+            sortedInstructions.add(i);
+            if (proxies != null) {
+                sortedInstructions.addAll(proxies);
+            }
+        } else {
+            sortedInstructions.add(i);
+            addToEarliestSorting(b, (ScheduledNode) i.predecessor(), sortedInstructions, visited);
         }
     }
 }

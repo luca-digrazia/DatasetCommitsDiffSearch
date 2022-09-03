@@ -29,18 +29,15 @@ import com.oracle.graal.nodes.spi.*;
 /**
  * The {@code MonitorEnterNode} represents the acquisition of a monitor.
  */
-public final class MonitorEnterNode extends AccessMonitorNode implements Lowerable, MonitorEnter, MonitorReference {
-
-    private int lockDepth;
+public final class MonitorEnterNode extends AccessMonitorNode implements Lowerable, MonitorEnter {
 
     /**
      * Creates a new MonitorEnterNode.
      * 
      * @param object the instruction producing the object
      */
-    public MonitorEnterNode(ValueNode object, int lockDepth) {
+    public MonitorEnterNode(ValueNode object) {
         super(object);
-        this.lockDepth = lockDepth;
     }
 
     @Override
@@ -48,15 +45,7 @@ public final class MonitorEnterNode extends AccessMonitorNode implements Lowerab
         return new Object[]{LocationNode.ANY_LOCATION};
     }
 
-    public void lower(LoweringTool tool, LoweringType loweringType) {
+    public void lower(LoweringTool tool) {
         tool.getRuntime().lower(this, tool);
-    }
-
-    public int getLockDepth() {
-        return lockDepth;
-    }
-
-    public void setLockDepth(int lockDepth) {
-        this.lockDepth = lockDepth;
     }
 }

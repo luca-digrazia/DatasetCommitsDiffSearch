@@ -30,18 +30,15 @@ import com.oracle.graal.graph.*;
 /**
  * The {@code MonitorEnterNode} represents a monitor release.
  */
-public final class MonitorExitNode extends AccessMonitorNode implements Lowerable, Node.IterableNodeType, MonitorExit, MonitorReference {
-
-    private int lockDepth;
+public final class MonitorExitNode extends AccessMonitorNode implements Lowerable, Node.IterableNodeType, MonitorExit {
 
     /**
      * Creates a new MonitorExitNode.
      * 
      * @param object the instruction produces the object value
      */
-    public MonitorExitNode(ValueNode object, int lockDepth) {
+    public MonitorExitNode(ValueNode object) {
         super(object);
-        this.lockDepth = lockDepth;
     }
 
     @Override
@@ -49,15 +46,7 @@ public final class MonitorExitNode extends AccessMonitorNode implements Lowerabl
         return new Object[]{LocationNode.ANY_LOCATION};
     }
 
-    public void lower(LoweringTool tool, LoweringType loweringType) {
+    public void lower(LoweringTool tool) {
         tool.getRuntime().lower(this, tool);
-    }
-
-    public int getLockDepth() {
-        return lockDepth;
-    }
-
-    public void setLockDepth(int lockDepth) {
-        this.lockDepth = lockDepth;
     }
 }
