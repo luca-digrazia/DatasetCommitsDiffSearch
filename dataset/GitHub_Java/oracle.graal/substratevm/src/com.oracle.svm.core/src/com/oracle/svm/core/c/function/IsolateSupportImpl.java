@@ -33,16 +33,11 @@ import org.graalvm.nativeimage.Isolates.IsolateException;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.impl.IsolateSupport;
 
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.c.function.CEntryPointNativeFunctions.IsolatePointer;
 import com.oracle.svm.core.c.function.CEntryPointNativeFunctions.IsolateThreadPointer;
-import com.oracle.svm.core.option.SubstrateOptionsParser;
 
 public final class IsolateSupportImpl implements IsolateSupport {
-    private static final String ISOLATES_DISABLED_MESSAGE = "Spawning of multiple isolates is disabled, use " +
-                    SubstrateOptionsParser.commandArgument(SubstrateOptions.SpawnIsolates, "+") + " option.";
-
     static void initialize() {
         ImageSingletons.add(IsolateSupport.class, new IsolateSupportImpl());
     }
@@ -52,10 +47,6 @@ public final class IsolateSupportImpl implements IsolateSupport {
 
     @Override
     public IsolateThread createIsolate(CreateIsolateParameters parameters) throws IsolateException {
-        if (!SubstrateOptions.SpawnIsolates.getValue()) {
-            throw new IsolateException(ISOLATES_DISABLED_MESSAGE);
-        }
-
         CEntryPointCreateIsolateParameters params = StackValue.get(CEntryPointCreateIsolateParameters.class);
         params.setReservedSpaceSize(parameters.getReservedAddressSpaceSize());
         params.setVersion(1);
@@ -90,11 +81,7 @@ public final class IsolateSupportImpl implements IsolateSupport {
 
     @Override
     public void tearDownIsolate(IsolateThread thread) throws IsolateException {
-        if (SubstrateOptions.SpawnIsolates.getValue()) {
-            throwOnError(CEntryPointNativeFunctions.tearDownIsolate(getIsolate(thread)));
-        } else {
-            throw new IsolateException(ISOLATES_DISABLED_MESSAGE);
-        }
+        throwOnError(CEntryPointNativeFunctions.tearDownIsolate(getIsolate(thread)));
     }
 
     private static void throwOnError(int code) {
