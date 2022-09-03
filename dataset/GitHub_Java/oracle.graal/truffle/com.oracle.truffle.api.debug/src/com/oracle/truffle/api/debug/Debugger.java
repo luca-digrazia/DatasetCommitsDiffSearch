@@ -51,6 +51,7 @@ import com.oracle.truffle.api.instrumentation.StandardTags.StatementTag;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Env;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.LineLocation;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine;
 
@@ -208,10 +209,9 @@ public final class Debugger {
      *             instead. You can install a breakpoint with
      *             {@link DebuggerSession#install(Breakpoint)}.
      */
-    @SuppressWarnings("deprecation")
     @TruffleBoundary
     @Deprecated
-    public Breakpoint setLineBreakpoint(int ignoreCount, com.oracle.truffle.api.source.LineLocation lineLocation, boolean oneShot) throws IOException {
+    public Breakpoint setLineBreakpoint(int ignoreCount, LineLocation lineLocation, boolean oneShot) throws IOException {
         return setLineBreakpointImpl(ignoreCount, lineLocation.getSource(), lineLocation.getLineNumber(), oneShot);
     }
 
@@ -240,7 +240,7 @@ public final class Debugger {
     }
 
     private Breakpoint setLineBreakpointImpl(int ignoreCount, Object key, int line, boolean oneShot) throws IOException {
-        Breakpoint breakpoint = breakpointPerLocation.get(new BreakpointLocation(key, line));
+        Breakpoint breakpoint = breakpointPerLocation.get(new BreakpointLocation(key, line, -1));
         if (breakpoint != null) {
             if (ignoreCount == breakpoint.getIgnoreCount()) {
                 throw new IOException("Breakpoint already set for " + key + " line: " + line);
@@ -337,7 +337,6 @@ public final class Debugger {
 
             @SuppressWarnings("deprecation")
             @Override
-            @TruffleBoundary
             public void executionStarted(Object vm) {
                 final PolyglotEngine engine = (PolyglotEngine) vm;
                 dispatchEvent(engine, new ExecutionEvent(engine), EngineSupport.EXECUTION_EVENT);
