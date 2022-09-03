@@ -41,15 +41,14 @@
 package com.oracle.truffle.sl.runtime;
 
 import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.math.BigInteger;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.ExecutionContext;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -88,24 +87,22 @@ import com.oracle.truffle.sl.nodes.local.SLReadArgumentNode;
  * However, if two separate scripts run in one Java VM at the same time, they have a different
  * context. Therefore, the context is not a singleton.
  */
-public final class SLContext {
+public final class SLContext extends ExecutionContext {
 
     private static final Source BUILTIN_SOURCE = Source.newBuilder("").name("SL builtin").mimeType(SLLanguage.MIME_TYPE).build();
     private static final Layout LAYOUT = Layout.createLayout();
 
-    private final Env env;
     private final BufferedReader input;
     private final PrintWriter output;
     private final SLFunctionRegistry functionRegistry;
     private final Shape emptyShape;
-    private final SLLanguage language;
+    private final TruffleLanguage.Env env;
 
-    public SLContext(SLLanguage language, TruffleLanguage.Env env) {
+    public SLContext(TruffleLanguage.Env env, BufferedReader input, PrintWriter output) {
+        this.input = input;
+        this.output = output;
         this.env = env;
-        this.input = new BufferedReader(new InputStreamReader(env.in()));
-        this.output = new PrintWriter(env.out(), true);
-        this.language = language;
-        this.functionRegistry = new SLFunctionRegistry(language);
+        this.functionRegistry = new SLFunctionRegistry();
         installBuiltins();
 
         this.emptyShape = LAYOUT.createShape(SLObjectType.SINGLETON);
@@ -171,7 +168,7 @@ public final class SLContext {
             argumentNodes[i] = new SLReadArgumentNode(i);
         }
         /* Instantiate the builtin node. This node performs the actual functionality. */
-        SLBuiltinNode builtinBodyNode = factory.createNode((Object) argumentNodes);
+        SLBuiltinNode builtinBodyNode = factory.createNode(argumentNodes, this);
         builtinBodyNode.addRootTag();
         /* The name of the builtin function is specified via an annotation on the node class. */
         String name = lookupNodeInfo(builtinBodyNode.getClass()).shortName();
@@ -179,7 +176,7 @@ public final class SLContext {
         builtinBodyNode.setSourceSection(srcSection);
 
         /* Wrap the builtin in a RootNode. Truffle requires all AST to start with a RootNode. */
-        SLRootNode rootNode = new SLRootNode(language, new FrameDescriptor(), builtinBodyNode, srcSection, name);
+        SLRootNode rootNode = new SLRootNode(new FrameDescriptor(), builtinBodyNode, srcSection, name);
 
         /* Register the builtin function in our function registry. */
         getFunctionRegistry().register(name, rootNode);

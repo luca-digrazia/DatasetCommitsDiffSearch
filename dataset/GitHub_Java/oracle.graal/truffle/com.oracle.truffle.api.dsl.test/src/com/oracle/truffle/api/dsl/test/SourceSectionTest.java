@@ -22,12 +22,10 @@
  */
 package com.oracle.truffle.api.dsl.test;
 
-import static com.oracle.truffle.api.dsl.test.TestHelper.createRoot;
+import com.oracle.truffle.api.CompilerDirectives;
 import static com.oracle.truffle.api.dsl.test.TestHelper.createRootPrefix;
 import static com.oracle.truffle.api.dsl.test.TestHelper.executeWith;
-import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.sameInstance;
-import static org.junit.Assert.assertThat;
 
 import org.junit.Test;
 import org.junit.experimental.theories.DataPoints;
@@ -35,7 +33,6 @@ import org.junit.experimental.theories.Theories;
 import org.junit.experimental.theories.Theory;
 import org.junit.runner.RunWith;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.CreateCast;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
@@ -47,6 +44,10 @@ import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+import static com.oracle.truffle.api.dsl.test.TestHelper.createRoot;
+import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
 
 @RunWith(Theories.class)
 public class SourceSectionTest {
@@ -120,6 +121,7 @@ public class SourceSectionTest {
     @Test
     public void testCreateCast() {
         SourceSection section = Source.newBuilder("").name("a").mimeType("").build().createUnavailableSection();
+        assertNull(section.getSource());
         TestRootNode<NodeWithFixedSourceSection> root = createRootPrefix(SourceSectionTestFactory.NodeWithFixedSourceSectionFactory.getInstance(), true, section);
         expectSourceSection(root.getNode(), section);
         assertThat((int) executeWith(root, 1), is(1));

@@ -57,7 +57,7 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
     private void testLoadSourceImpl(int runTimes) throws IOException {
         Instrument instrument = engine.getInstruments().get("testLoadSource1");
         Source source1 = lines("STATEMENT(EXPRESSION, EXPRESSION)");
-        // running the same source multipel times should not have any effect on the test result.
+        // running the same source multiple times should not have any effect on the test result.
         for (int i = 0; i < runTimes; i++) {
             run(source1);
         }
@@ -104,15 +104,15 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
 
         @Override
         protected void onCreate(Env env) {
-            env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.newBuilder().build(), new LoadSourceEventListener() {
-                public void onLoad(Source source) {
-                    onlyNewEvents.add(source);
+            env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.ANY, new LoadSourceListener() {
+                public void onLoad(LoadSourceEvent event) {
+                    onlyNewEvents.add(event.getSource());
                 }
             }, false);
 
-            env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.newBuilder().build(), new LoadSourceEventListener() {
-                public void onLoad(Source source) {
-                    allEvents.add(source);
+            env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.ANY, new LoadSourceListener() {
+                public void onLoad(LoadSourceEvent event) {
+                    allEvents.add(event.getSource());
                 }
             }, true);
             env.registerService(this);
@@ -138,8 +138,8 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
 
         @Override
         protected void onCreate(Env env) {
-            env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.newBuilder().build(), new LoadSourceEventListener() {
-                public void onLoad(Source source) {
+            env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.ANY, new LoadSourceListener() {
+                public void onLoad(LoadSourceEvent source) {
                     throw new TestLoadSourceExceptionClass();
                 }
             }, true);
@@ -168,8 +168,8 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
 
         @Override
         protected void onCreate(Env env) {
-            LoadSourceEventListener dummySourceListener = new LoadSourceEventListener() {
-                public void onLoad(Source source) {
+            LoadSourceListener dummySourceListener = new LoadSourceListener() {
+                public void onLoad(LoadSourceEvent source) {
                 }
             };
             env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.newBuilder().sourceIs(lines("")).build(), dummySourceListener, true);
@@ -185,12 +185,13 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
                 env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.newBuilder().indexNotIn(IndexRange.between(1, 2)).build(), dummySourceListener, true);
             } catch (IllegalArgumentException e) {
             }
+            SourceSection unavailable = Source.newBuilder("").name("a").mimeType("").build().createUnavailableSection();
             try {
-                env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.newBuilder().sourceSectionEquals(SourceSection.createUnavailable(null, null)).build(), dummySourceListener, true);
+                env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.newBuilder().sourceSectionEquals(unavailable).build(), dummySourceListener, true);
             } catch (IllegalArgumentException e) {
             }
             try {
-                env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.newBuilder().rootSourceSectionEquals(SourceSection.createUnavailable(null, null)).build(), dummySourceListener,
+                env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.newBuilder().rootSourceSectionEquals(unavailable).build(), dummySourceListener,
                                 true);
             } catch (IllegalArgumentException e) {
             }

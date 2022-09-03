@@ -43,6 +43,7 @@ import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.instrumentation.Instrumenter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
 import com.oracle.truffle.api.nodes.Node;
@@ -53,6 +54,7 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.api.vm.PolyglotEngine.Language;
 import com.oracle.truffle.api.vm.PolyglotEngine.Value;
 import com.oracle.truffle.tools.debug.shell.client.SimpleREPLClient;
+import com.oracle.truffle.tools.debug.shell.server.InstrumentationUtils.ASTPrinter;
 import com.oracle.truffle.tools.debug.shell.server.InstrumentationUtils.LocationPrinter;
 
 /**
@@ -82,6 +84,7 @@ public final class REPLServer {
     private final SimpleREPLClient replClient;
     private final String statusPrefix;
     private final Map<String, REPLHandler> handlerMap = new HashMap<>();
+    private final ASTPrinter astPrinter;
     private final LocationPrinter locationPrinter = new InstrumentationUtils.LocationPrinter();
     private final REPLVisualizer visualizer = new REPLVisualizer();
 
@@ -114,6 +117,7 @@ public final class REPLServer {
         for (Language language : engineLanguages) {
             nameToLanguage.put(language.getName().toLowerCase(), language);
         }
+        astPrinter = new REPLASTPrinter(engine);
         statusPrefix = "";
     }
 
@@ -176,6 +180,8 @@ public final class REPLServer {
         add(REPLHandler.STEP_INTO_HANDLER);
         add(REPLHandler.STEP_OUT_HANDLER);
         add(REPLHandler.STEP_OVER_HANDLER);
+        add(REPLHandler.TRUFFLE_HANDLER);
+        add(REPLHandler.TRUFFLE_NODE_HANDLER);
         add(REPLHandler.UNSET_BREAK_CONDITION_HANDLER);
 
         this.currentServerContext = new Context(null, null, defaultLanguage);
@@ -184,6 +190,10 @@ public final class REPLServer {
     @SuppressWarnings("static-method")
     public String getWelcome() {
         return "GraalVM Polyglot Debugger 0.9\n" + "Copyright (c) 2013-6, Oracle and/or its affiliates";
+    }
+
+    public ASTPrinter getASTPrinter() {
+        return astPrinter;
     }
 
     public LocationPrinter getLocationPrinter() {
@@ -637,12 +647,7 @@ public final class REPLServer {
         }
 
         String getCondition() {
-            Source source = null;
-            if (breakpoint == null) {
-                source = conditionSource;
-            } else if (breakpoint.getCondition() != null) {
-                return breakpoint.getCondition();
-            }
+            final Source source = breakpoint == null ? conditionSource : breakpoint.getCondition();
             return source == null ? null : source.getCode();
         }
 
@@ -695,7 +700,7 @@ public final class REPLServer {
             if (section == null) {
                 return "<error: source location>";
             }
-            return InstrumentationUtils.getShortDescription(section) + (estimated ? "~" : "");
+            return section.getShortDescription() + (estimated ? "~" : "");
         }
 
         /**
@@ -737,6 +742,34 @@ public final class REPLServer {
          */
         String displayIdentifier(FrameSlot slot) {
             return slot.getIdentifier().toString();
+        }
+    }
+
+    private static class REPLASTPrinter extends InstrumentationUtils.ASTPrinter {
+
+        private final Instrumenter instrumenter;
+
+        REPLASTPrinter(PolyglotEngine engine) {
+            this.instrumenter = engine.getInstruments().get(REPL_SERVER_INSTRUMENT).lookup(Instrumenter.class);
+        }
+
+        @Override
+        protected String displayTags(final Object objectNode) {
+            if (objectNode instanceof Node) {
+                Node node = (Node) objectNode;
+                final SourceSection sourceSection = node.getSourceSection();
+                if (sourceSection != null) {
+                    final StringBuilder sb = new StringBuilder("[");
+                    String sep = "";
+                    for (Class<?> tag : instrumenter.queryTags(node)) {
+                        sb.append(sep).append(tag.getSimpleName());
+                        sep = ",";
+                    }
+                    sb.append("]");
+                    return sb.toString();
+                }
+            }
+            return "";
         }
     }
 
