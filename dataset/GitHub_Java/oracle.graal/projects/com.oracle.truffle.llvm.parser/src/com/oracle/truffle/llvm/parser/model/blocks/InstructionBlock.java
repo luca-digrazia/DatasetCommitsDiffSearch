@@ -147,8 +147,8 @@ public final class InstructionBlock implements ValueSymbol {
         addInstruction(LandingpadInstruction.generate(function.getSymbols(), type, isCleanup, clauseTypes, clauseTODO));
     }
 
-    public void createResume(@SuppressWarnings("unused") Type type) {
-        addInstruction(ResumeInstruction.generate());
+    public void createResume(@SuppressWarnings("unused") Type type, int value) {
+        addInstruction(ResumeInstruction.fromSymbols(function.getSymbols(), value));
     }
 
     public void createCast(Type type, int opcode, int value) {
@@ -167,7 +167,7 @@ public final class InstructionBlock implements ValueSymbol {
         addInstruction(ExtractValueInstruction.fromSymbols(function.getSymbols(), type, aggregate, index));
     }
 
-    public void createGetElementPointer(Type type, int pointer, List<Integer> indices, boolean isInbounds) {
+    public void createGetElementPointer(Type type, int pointer, int[] indices, boolean isInbounds) {
         addInstruction(GetElementPointerInstruction.fromSymbols(function.getSymbols(), type, pointer, indices, isInbounds));
     }
 
