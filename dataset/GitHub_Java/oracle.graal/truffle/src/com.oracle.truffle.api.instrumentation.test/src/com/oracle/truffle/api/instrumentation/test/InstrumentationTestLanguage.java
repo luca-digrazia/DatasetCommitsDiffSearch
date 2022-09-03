@@ -627,16 +627,11 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Context>
 
         @Override
         public Object execute(VirtualFrame frame) {
-            sleep();
-            return null;
-        }
-
-        @TruffleBoundary
-        private void sleep() {
             try {
                 Thread.sleep(timeToSleep);
             } catch (InterruptedException e) {
             }
+            return null;
         }
     }
 
