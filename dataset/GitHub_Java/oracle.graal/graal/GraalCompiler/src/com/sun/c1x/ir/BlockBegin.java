@@ -95,6 +95,7 @@ public final class BlockBegin extends StateSplit {
         StandardEntry,
         ExceptionEntry,
         BackwardBranchTarget,
+        IsOnWorkList,
         WasVisited,
         ParserLoopHeader,
         LinearScanLoopHeader,
@@ -464,6 +465,14 @@ public final class BlockBegin extends StateSplit {
 
     public void setExceptionEntry() {
         setBlockFlag(BlockFlag.ExceptionEntry);
+    }
+
+    public boolean isOnWorkList() {
+        return checkBlockFlag(BlockFlag.IsOnWorkList);
+    }
+
+    public void setOnWorkList(boolean value) {
+        setBlockFlag(BlockFlag.IsOnWorkList, value);
     }
 
     public boolean wasVisited() {
