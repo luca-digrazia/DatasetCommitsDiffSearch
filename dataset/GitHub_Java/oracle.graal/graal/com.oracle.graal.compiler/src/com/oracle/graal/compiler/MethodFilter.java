@@ -22,11 +22,10 @@
  */
 package com.oracle.graal.compiler;
 
-import com.oracle.jvmci.meta.JavaType;
-import com.oracle.jvmci.meta.JavaMethod;
-import com.oracle.jvmci.meta.Signature;
 import java.util.*;
 import java.util.regex.*;
+
+import com.oracle.graal.api.meta.*;
 
 /**
  * This class implements a method filter that can filter based on class name, method name and
@@ -175,7 +174,7 @@ public class MethodFilter {
         } else if (pattern.contains(".")) {
             return Pattern.compile(createGlobString(pattern));
         } else {
-            return Pattern.compile("([^\\.\\$]*[\\.\\$])*" + createGlobString(pattern));
+            return Pattern.compile("([^\\.]*\\.)*" + createGlobString(pattern));
         }
     }
 
