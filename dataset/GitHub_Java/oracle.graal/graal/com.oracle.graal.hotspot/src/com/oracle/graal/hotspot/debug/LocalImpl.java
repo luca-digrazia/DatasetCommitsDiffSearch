@@ -23,38 +23,31 @@
 package com.oracle.graal.hotspot.debug;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.meta.*;
 
 public class LocalImpl implements Local {
 
     private final String name;
-    private final int bciStart;
-    private final int bciEnd;
+    private final int startBci;
+    private final int endBci;
     private final int slot;
-    private final ResolvedJavaType resolvedType;
+    private final JavaType type;
 
-    public LocalImpl(String name, String type, HotSpotResolvedObjectType holder, int bciStart, int bciEnd, int slot) {
+    public LocalImpl(String name, JavaType type, int startBci, int endBci, int slot) {
         this.name = name;
-        this.bciStart = bciStart;
-        this.bciEnd = bciEnd;
+        this.startBci = startBci;
+        this.endBci = endBci;
         this.slot = slot;
-        JavaType t = HotSpotGraalRuntime.getInstance().lookupType(type, holder, true);
-        if (t instanceof ResolvedJavaType) {
-            this.resolvedType = (ResolvedJavaType) HotSpotGraalRuntime.getInstance().lookupType(type, holder, false);
-        } else {
-            throw new AssertionError(t.getClass() + " is not a ResolvedJavaType");
-        }
+        this.type = type;
     }
 
     @Override
     public int getStartBCI() {
-        return bciStart;
+        return startBci;
     }
 
     @Override
     public int getEndBCI() {
-        return bciEnd;
+        return endBci;
     }
 
     @Override
@@ -63,12 +56,31 @@ public class LocalImpl implements Local {
     }
 
     @Override
-    public ResolvedJavaType getType() {
-        return resolvedType;
+    public JavaType getType() {
+        return type;
     }
 
     @Override
     public int getSlot() {
         return slot;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (!(obj instanceof LocalImpl)) {
+            return false;
+        }
+        LocalImpl that = (LocalImpl) obj;
+        return this.name.equals(that.name) && this.startBci == that.startBci && this.endBci == that.endBci && this.slot == that.slot && this.type.equals(that.type);
+    }
+
+    @Override
+    public int hashCode() {
+        return super.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "LocalImpl<name=" + name + ", type=" + type + ", startBci=" + startBci + ", endBci=" + endBci + ", slot=" + slot + ">";
     }
 }
