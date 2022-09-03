@@ -81,7 +81,6 @@ public final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhas
     private final FrameMapBuilder frameMapBuilder;
     private final OptionValues options;
     private final RegisterAllocationConfig registerAllocationConfig;
-    private final LIRGenerationResult res;
 
     private void setValueBlocked(Value location, int direction) {
         assert direction == 1 || direction == -1 : "out of bounds";
@@ -158,7 +157,6 @@ public final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhas
         FrameMap frameMap = frameMapBuilderTool.getFrameMap();
         this.firstVirtualStackIndex = !frameMap.frameNeedsAllocating() ? 0 : frameMap.currentFrameSize() + 1;
         this.options = res.getLIR().getOptions();
-        this.res = res;
     }
 
     private boolean checkEmpty() {
@@ -316,18 +314,16 @@ public final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhas
         insertIdx = -1;
     }
 
-    private LIRInstruction insertMove(Value fromOperand, AllocatableValue toOperand) {
+    private void insertMove(Value fromOperand, AllocatableValue toOperand) {
         assert !fromOperand.equals(toOperand) : "from and to are equal: " + fromOperand + " vs. " + toOperand;
         assert LIRKind.verifyMoveKinds(fromOperand.getValueKind(), fromOperand.getValueKind(), registerAllocationConfig) : "move between different types";
         assert insertIdx != -1 : "must setup insert position first";
 
-        LIRInstruction move = createMove(fromOperand, toOperand);
-        insertionBuffer.append(insertIdx, move);
+        insertionBuffer.append(insertIdx, createMove(fromOperand, toOperand));
 
         if (Debug.isLogEnabled()) {
             Debug.log("insert move from %s to %s at %d", fromOperand, toOperand, insertIdx);
         }
-        return move;
     }
 
     /**
@@ -367,8 +363,7 @@ public final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhas
                     AllocatableValue toLocation = mappingTo.get(i);
                     if (safeToProcessMove(fromLocation, toLocation)) {
                         // this interval can be processed because target is free
-                        LIRInstruction move = insertMove(fromLocation, toLocation);
-                        move.setComment(res, "TraceGlobalMoveResolver: resolveMapping");
+                        insertMove(fromLocation, toLocation);
                         unblock(fromLocation);
                         if (isStackSlotValue(toLocation)) {
                             if (busySpillSlots == null) {
@@ -427,8 +422,7 @@ public final class TraceGlobalMoveResolver extends TraceGlobalMoveResolutionPhas
                 cycleBreakingSlotsAllocated.increment();
                 Debug.log("created new slot for spilling: %s", spillSlot);
                 // insert a move from register to stack and update the mapping
-                LIRInstruction move = insertMove(from, spillSlot);
-                move.setComment(res, "TraceGlobalMoveResolver: breakCycle");
+                insertMove(from, spillSlot);
             }
             block(spillSlot);
             mappingFrom.set(spillCandidate, spillSlot);

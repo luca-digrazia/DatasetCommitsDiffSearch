@@ -37,7 +37,7 @@ import org.graalvm.compiler.core.common.alloc.RegisterAllocationConfig;
 import org.graalvm.compiler.core.common.alloc.Trace;
 import org.graalvm.compiler.core.common.alloc.TraceBuilderResult;
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
-import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.Indent;
 import org.graalvm.compiler.lir.LIR;
 import org.graalvm.compiler.lir.LIRInstruction;
@@ -67,9 +67,7 @@ public final class TraceGlobalMoveResolutionPhase {
     }
 
     public static void resolve(TargetDescription target, LIRGenerationResult lirGenRes, TraceAllocationContext context) {
-        LIR lir = lirGenRes.getLIR();
-        DebugContext debug = lir.getDebug();
-        debug.dump(DebugContext.VERBOSE_LEVEL, lir, "Before TraceGlobalMoveResultion");
+        Debug.dump(Debug.VERBOSE_LEVEL, lirGenRes.getLIR(), "Before TraceGlobalMoveResultion");
         MoveFactory spillMoveFactory = context.spillMoveFactory;
         resolveGlobalDataFlow(context.resultTraces, lirGenRes, spillMoveFactory, target.arch, context.livenessInfo, context.registerAllocationConfig);
     }
@@ -81,60 +79,33 @@ public final class TraceGlobalMoveResolutionPhase {
         /* Resolve trace global data-flow mismatch. */
         TraceGlobalMoveResolver moveResolver = new TraceGlobalMoveResolver(lirGenRes, spillMoveFactory, registerAllocationConfig, arch);
 
-        DebugContext debug = lir.getDebug();
-        try (Indent indent = debug.logAndIndent("Trace global move resolution")) {
+        try (Indent indent = Debug.logAndIndent("Trace global move resolution")) {
             for (Trace trace : resultTraces.getTraces()) {
-                resolveTrace(resultTraces, livenessInfo, lir, moveResolver, trace);
-            }
-        }
-    }
+                for (AbstractBlockBase<?> fromBlock : trace.getBlocks()) {
+                    for (AbstractBlockBase<?> toBlock : fromBlock.getSuccessors()) {
+                        if (resultTraces.getTraceForBlock(fromBlock) != resultTraces.getTraceForBlock(toBlock)) {
+                            try (Indent indent0 = Debug.logAndIndent("Handle trace edge from %s (Trace%d) to %s (Trace%d)", fromBlock, resultTraces.getTraceForBlock(fromBlock).getId(), toBlock,
+                                            resultTraces.getTraceForBlock(toBlock).getId())) {
 
-    private static void resolveTrace(TraceBuilderResult resultTraces, GlobalLivenessInfo livenessInfo, LIR lir, TraceGlobalMoveResolver moveResolver, Trace trace) {
-        AbstractBlockBase<?>[] traceBlocks = trace.getBlocks();
-        int traceLength = traceBlocks.length;
-        // all but the last block
-        AbstractBlockBase<?> nextBlock = traceBlocks[0];
-        for (int i = 1; i < traceLength; i++) {
-            AbstractBlockBase<?> fromBlock = nextBlock;
-            nextBlock = traceBlocks[i];
-            if (fromBlock.getSuccessorCount() > 1) {
-                for (AbstractBlockBase<?> toBlock : fromBlock.getSuccessors()) {
-                    if (toBlock != nextBlock) {
-                        interTraceEdge(resultTraces, livenessInfo, lir, moveResolver, fromBlock, toBlock);
+                                final ArrayList<LIRInstruction> instructions;
+                                final int insertIdx;
+                                if (fromBlock.getSuccessorCount() == 1) {
+                                    instructions = lir.getLIRforBlock(fromBlock);
+                                    insertIdx = instructions.size() - 1;
+                                } else {
+                                    assert toBlock.getPredecessorCount() == 1;
+                                    instructions = lir.getLIRforBlock(toBlock);
+                                    insertIdx = 1;
+                                }
+
+                                moveResolver.setInsertPosition(instructions, insertIdx);
+                                resolveEdge(lir, livenessInfo, moveResolver, fromBlock, toBlock);
+                                moveResolver.resolveAndAppendMoves();
+                            }
+                        }
                     }
                 }
             }
-        }
-        // last block
-        assert nextBlock == traceBlocks[traceLength - 1];
-        for (AbstractBlockBase<?> toBlock : nextBlock.getSuccessors()) {
-            if (resultTraces.getTraceForBlock(nextBlock) != resultTraces.getTraceForBlock(toBlock)) {
-                interTraceEdge(resultTraces, livenessInfo, lir, moveResolver, nextBlock, toBlock);
-            }
-        }
-    }
-
-    @SuppressWarnings("try")
-    private static void interTraceEdge(TraceBuilderResult resultTraces, GlobalLivenessInfo livenessInfo, LIR lir, TraceGlobalMoveResolver moveResolver, AbstractBlockBase<?> fromBlock,
-                    AbstractBlockBase<?> toBlock) {
-        DebugContext debug = lir.getDebug();
-        try (Indent indent0 = debug.logAndIndent("Handle trace edge from %s (Trace%d) to %s (Trace%d)", fromBlock, resultTraces.getTraceForBlock(fromBlock).getId(), toBlock,
-                        resultTraces.getTraceForBlock(toBlock).getId())) {
-
-            final ArrayList<LIRInstruction> instructions;
-            final int insertIdx;
-            if (fromBlock.getSuccessorCount() == 1) {
-                instructions = lir.getLIRforBlock(fromBlock);
-                insertIdx = instructions.size() - 1;
-            } else {
-                assert toBlock.getPredecessorCount() == 1;
-                instructions = lir.getLIRforBlock(toBlock);
-                insertIdx = 1;
-            }
-
-            moveResolver.setInsertPosition(instructions, insertIdx);
-            resolveEdge(lir, livenessInfo, moveResolver, fromBlock, toBlock);
-            moveResolver.resolveAndAppendMoves();
         }
     }
 
