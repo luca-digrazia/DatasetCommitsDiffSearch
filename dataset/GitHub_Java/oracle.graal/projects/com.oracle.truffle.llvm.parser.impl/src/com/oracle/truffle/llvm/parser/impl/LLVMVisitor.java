@@ -125,6 +125,7 @@ import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMStatementNode;
+import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionBodyNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionStartNode;
@@ -801,15 +802,14 @@ public class LLVMVisitor implements LLVMParserRuntime {
         LLVMExpressionNode resultAggregate = allocateFunctionLifetime(resolve(aggregate.getType()));
         LLVMExpressionNode sourceAggregate = visitValueRef(aggregate.getRef(), aggregate.getType());
         LLVMExpressionNode valueToInsert = visitValueRef(element.getRef(), element.getType());
-        List<Integer> constants = new ArrayList<>();
+        List<LLVMI32Node> indexNodes = new ArrayList<>();
         for (Constant c : indices) {
-            constants.add((Integer) LLVMConstantEvaluator.evaluateConstant(this, c));
+            LLVMExpressionNode constantNode = visitConstant(c, c);
+            indexNodes.add((LLVMI32Node) constantNode);
         }
-        if (constants.size() != 0) {
-            throw new AssertionError(constants);
-        }
-        int index = constants.get(0);
+        int index = indexNodes.get(0).executeI32(null);
         int offset = LLVMTypeHelper.goIntoTypeGetLengthByte(resolve(aggregate.getType()), index);
+        assert indexNodes.size() == 1;
         LLVMBaseType llvmType = getLLVMType(element);
         return factoryFacade.createInsertValue(resultAggregate, sourceAggregate, size, offset, valueToInsert, llvmType);
     }
