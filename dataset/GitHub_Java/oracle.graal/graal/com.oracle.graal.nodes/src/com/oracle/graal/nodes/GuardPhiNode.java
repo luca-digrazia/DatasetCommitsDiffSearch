@@ -22,21 +22,39 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.NodeInputList;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.extended.GuardingNode;
 
+/**
+ * Guard {@link PhiNode}s merge guard dependencies at control flow merges.
+ */
 @NodeInfo(nameTemplate = "GuardPhi({i#values})", allowedUsageTypes = {InputType.Guard})
-public class GuardPhiNode extends PhiNode implements GuardingNode {
+public final class GuardPhiNode extends PhiNode implements GuardingNode {
 
-    @Input(InputType.Guard) final NodeInputList<ValueNode> values = new NodeInputList<>(this);
+    public static final NodeClass<GuardPhiNode> TYPE = NodeClass.create(GuardPhiNode.class);
+    @OptionalInput(InputType.Guard) NodeInputList<ValueNode> values;
 
-    public GuardPhiNode(MergeNode merge) {
-        super(StampFactory.forVoid(), merge);
+    public GuardPhiNode(AbstractMergeNode merge) {
+        super(TYPE, StampFactory.forVoid(), merge);
+        this.values = new NodeInputList<>(this);
+    }
+
+    public GuardPhiNode(AbstractMergeNode merge, ValueNode[] values) {
+        super(TYPE, StampFactory.forVoid(), merge);
+        this.values = new NodeInputList<>(this, values);
     }
 
     @Override
     public NodeInputList<ValueNode> values() {
         return values;
+    }
+
+    @Override
+    public boolean hasValidInput() {
+        return true;
     }
 }
