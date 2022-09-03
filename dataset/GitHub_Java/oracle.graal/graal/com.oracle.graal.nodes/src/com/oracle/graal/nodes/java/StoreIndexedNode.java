@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,43 +22,81 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.graal.cri.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.InputType.State;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_8;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_8;
+
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.StateSplit;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.nodes.virtual.VirtualArrayNode;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * The {@code StoreIndexedNode} represents a write to an array element.
  */
-public final class StoreIndexedNode extends AccessIndexedNode implements Lowerable, LIRLowerable {
+@NodeInfo(cycles = CYCLES_8, size = SIZE_8)
+public final class StoreIndexedNode extends AccessIndexedNode implements StateSplit, Lowerable, Virtualizable {
 
-    @Input private ValueNode value;
+    public static final NodeClass<StoreIndexedNode> TYPE = NodeClass.create(StoreIndexedNode.class);
+    @Input ValueNode value;
+    @OptionalInput(State) FrameState stateAfter;
+
+    @Override
+    public FrameState stateAfter() {
+        return stateAfter;
+    }
+
+    @Override
+    public void setStateAfter(FrameState x) {
+        assert x == null || x.isAlive() : "frame state must be in a graph";
+        updateUsages(stateAfter, x);
+        stateAfter = x;
+    }
+
+    @Override
+    public boolean hasSideEffect() {
+        return true;
+    }
 
     public ValueNode value() {
         return value;
     }
 
-    /**
-     * Creates a new StoreIndexedNode.
-     * @param array the node producing the array
-     * @param index the node producing the index
-     * @param length the node producing the length
-     * @param elementKind the element type
-     * @param value the value to store into the array
-     */
-    public StoreIndexedNode(ValueNode array, ValueNode index, ValueNode length, CiKind elementKind, ValueNode value) {
-        super(StampFactory.illegal(), array, index, length, elementKind);
+    public StoreIndexedNode(ValueNode array, ValueNode index, JavaKind elementKind, ValueNode value) {
+        super(TYPE, StampFactory.forVoid(), array, index, elementKind);
         this.value = value;
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.visitStoreIndexed(this);
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode alias = tool.getAlias(array());
+        if (alias instanceof VirtualObjectNode) {
+            ValueNode indexValue = tool.getAlias(index());
+            int idx = indexValue.isConstant() ? indexValue.asJavaConstant().asInt() : -1;
+            VirtualArrayNode virtual = (VirtualArrayNode) alias;
+            if (idx >= 0 && idx < virtual.entryCount()) {
+                ResolvedJavaType componentType = virtual.type().getComponentType();
+                if (componentType.isPrimitive() || StampTool.isPointerAlwaysNull(value) || componentType.getSuperclass() == null ||
+                                (StampTool.typeReferenceOrNull(value) != null && componentType.isAssignableFrom(StampTool.typeOrNull(value)))) {
+                    tool.setVirtualEntry(virtual, idx, value(), false);
+                    tool.delete();
+                }
+            }
+        }
     }
 
-    @Override
-    public void lower(CiLoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
+    public FrameState getState() {
+        return stateAfter;
     }
 }

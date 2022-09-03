@@ -22,98 +22,51 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.*;
+import static com.oracle.graal.nodeinfo.InputType.Association;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.IterableNodeType;
 import com.oracle.graal.graph.Node.ValueNumberable;
-import com.oracle.graal.nodes.PhiNode.PhiType;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.extended.GuardingNode;
 
 /**
- * A value proxy that is inserted in the frame state of a loop exit for any value that is created
- * inside the loop (i.e. was not live on entry to the loop) and is (potentially) used after the
- * loop.
+ * A proxy is inserted at loop exits for any value that is created inside the loop (i.e. was not
+ * live on entry to the loop) and is (potentially) used after the loop.
  */
-@NodeInfo(nameTemplate = "{p#type/s}Proxy")
-public class ProxyNode extends FloatingNode implements Node.IterableNodeType, ValueNumberable, Canonicalizable, Virtualizable, LIRLowerable {
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+public abstract class ProxyNode extends FloatingNode implements IterableNodeType, ValueNumberable {
 
-    @Input(notDataflow = true) private AbstractBeginNode proxyPoint;
-    @Input private ValueNode value;
-    private final PhiType type;
-    private final Object identity;
+    public static final NodeClass<ProxyNode> TYPE = NodeClass.create(ProxyNode.class);
+    @Input(Association) LoopExitNode loopExit;
 
-    public ProxyNode(ValueNode value, AbstractBeginNode exit, PhiType type, Object identity) {
-        super(type == PhiType.Value ? value.stamp() : type.stamp);
-        this.type = type;
-        this.identity = identity;
-        assert exit != null;
-        this.proxyPoint = exit;
-        this.value = value;
+    protected ProxyNode(NodeClass<? extends ProxyNode> c, Stamp stamp, LoopExitNode proxyPoint) {
+        super(c, stamp);
+        assert proxyPoint != null;
+        this.loopExit = proxyPoint;
     }
 
-    public ValueNode value() {
-        return value;
-    }
+    public abstract ValueNode value();
 
-    @Override
-    public boolean inferStamp() {
-        return updateStamp(value.stamp());
-    }
-
-    @Override
-    public Stamp stamp() {
-        return value().stamp();
-    }
-
-    public AbstractBeginNode proxyPoint() {
-        return proxyPoint;
-    }
-
-    public PhiType type() {
-        return type;
-    }
-
-    public Object getIdentity() {
-        assert type != PhiType.Value;
-        return identity;
+    public LoopExitNode proxyPoint() {
+        return loopExit;
     }
 
     @Override
     public boolean verify() {
-        assert value != null;
-        assert proxyPoint != null;
+        assert !(value() instanceof ProxyNode) || ((ProxyNode) value()).loopExit != loopExit;
         return super.verify();
     }
 
-    @Override
-    public void generate(LIRGeneratorTool generator) {
-        assert type == PhiType.Memory;
+    public static ValueProxyNode forValue(ValueNode value, LoopExitNode exit, StructuredGraph graph) {
+        return graph.unique(new ValueProxyNode(value, exit));
     }
 
-    @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (type == PhiType.Value && value.isConstant()) {
-            return value;
-        }
-        return this;
+    public static GuardProxyNode forGuard(GuardingNode value, LoopExitNode exit, StructuredGraph graph) {
+        return graph.unique(new GuardProxyNode(value, exit));
     }
-
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        if (type == PhiType.Value) {
-            State state = tool.getObjectState(value);
-            if (state != null && state.getState() == EscapeState.Virtual) {
-                tool.replaceWithVirtual(state.getVirtualObject());
-            }
-        }
-    }
-
-    public static ProxyNode forValue(ValueNode value, AbstractBeginNode exit, StructuredGraph graph) {
-        return graph.unique(new ProxyNode(value, exit, PhiType.Value, null));
-    }
-
-    public static ProxyNode forMemory(ValueNode value, AbstractBeginNode exit, Object location, StructuredGraph graph) {
-        return graph.unique(new ProxyNode(value, exit, PhiType.Memory, location));
-    }
-
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,32 +22,55 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.InputType.Memory;
+import static com.oracle.graal.nodeinfo.InputType.State;
+import static com.oracle.graal.nodeinfo.InputType.Value;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_30;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_8;
+
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.lir.gen.LIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.StateSplit;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.memory.FixedAccessNode;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.memory.address.AddressNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.Value;
 
 /**
  * Represents the lowered version of an atomic compare-and-swap operation{@code CompareAndSwapNode}.
  */
-public class LoweredCompareAndSwapNode extends AccessNode implements StateSplit, LIRLowerable, MemoryCheckpoint.Single, IterableNodeType {
+@NodeInfo(allowedUsageTypes = {Value, Memory}, cycles = CYCLES_30, size = SIZE_8)
+public final class LoweredCompareAndSwapNode extends FixedAccessNode implements StateSplit, LIRLowerable, MemoryCheckpoint.Single {
 
-    @Input private ValueNode expectedValue;
-    @Input private ValueNode newValue;
-    @Input(notDataflow = true) private FrameState stateAfter;
+    public static final NodeClass<LoweredCompareAndSwapNode> TYPE = NodeClass.create(LoweredCompareAndSwapNode.class);
+    @Input ValueNode expectedValue;
+    @Input ValueNode newValue;
+    @OptionalInput(State) FrameState stateAfter;
 
+    @Override
     public FrameState stateAfter() {
         return stateAfter;
     }
 
+    @Override
     public void setStateAfter(FrameState x) {
         assert x == null || x.isAlive() : "frame state must be in a graph";
         updateUsages(stateAfter, x);
         stateAfter = x;
     }
 
+    @Override
     public boolean hasSideEffect() {
         return true;
     }
@@ -60,20 +83,28 @@ public class LoweredCompareAndSwapNode extends AccessNode implements StateSplit,
         return newValue;
     }
 
-    public LoweredCompareAndSwapNode(ValueNode object, LocationNode location, ValueNode expectedValue, ValueNode newValue, BarrierType barrierType, boolean compressible) {
-        super(object, location, StampFactory.forKind(Kind.Boolean.getStackKind()), barrierType, compressible);
-        assert expectedValue.kind() == newValue.kind();
+    public LoweredCompareAndSwapNode(AddressNode address, LocationIdentity location, ValueNode expectedValue, ValueNode newValue, BarrierType barrierType) {
+        super(TYPE, address, location, StampFactory.forKind(JavaKind.Boolean.getStackKind()), barrierType);
+        assert expectedValue.getStackKind() == newValue.getStackKind();
         this.expectedValue = expectedValue;
         this.newValue = newValue;
     }
 
     @Override
-    public LocationIdentity getLocationIdentity() {
-        return location().getLocationIdentity();
+    public boolean canNullCheck() {
+        return false;
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.visitCompareAndSwap(this, location().generateAddress(gen, gen.operand(object())));
+    public void generate(NodeLIRBuilderTool gen) {
+        assert getNewValue().stamp().isCompatible(getExpectedValue().stamp());
+        LIRGeneratorTool tool = gen.getLIRGeneratorTool();
+
+        LIRKind resultKind = tool.getLIRKind(stamp());
+        Value trueResult = tool.emitConstant(resultKind, JavaConstant.TRUE);
+        Value falseResult = tool.emitConstant(resultKind, JavaConstant.FALSE);
+        Value result = tool.emitCompareAndSwap(gen.operand(getAddress()), gen.operand(getExpectedValue()), gen.operand(getNewValue()), trueResult, falseResult);
+
+        gen.setResult(this, result);
     }
 }

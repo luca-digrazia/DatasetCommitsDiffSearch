@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,63 +22,113 @@
  */
 package com.oracle.graal.nodes.virtual;
 
-import java.util.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
 
-import com.oracle.max.cri.ri.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.graph.IterableNodeType;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
-public class VirtualObjectNode extends ValueNode implements LIRLowerable {
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+public abstract class VirtualObjectNode extends ValueNode implements LIRLowerable, IterableNodeType {
 
-    @Data private RiType type;
-    private EscapeField[] fields;
-    private int fieldsCount;
+    public static final NodeClass<VirtualObjectNode> TYPE = NodeClass.create(VirtualObjectNode.class);
+    protected boolean hasIdentity;
+    private int objectId = -1;
 
-    public VirtualObjectNode(RiType type, EscapeField[] fields) {
-        super(StampFactory.illegal());
-        this.type = type;
-        this.fields = fields;
-        this.fieldsCount = fields.length;
+    protected VirtualObjectNode(NodeClass<? extends VirtualObjectNode> c, ResolvedJavaType type, boolean hasIdentity) {
+        super(c, StampFactory.objectNonNull(TypeReference.createExactTrusted(type)));
+        this.hasIdentity = hasIdentity;
     }
 
-    public VirtualObjectNode(RiType type, int fieldCount) {
-        super(StampFactory.illegal());
-        this.type = type;
-        this.fieldsCount = fieldCount;
+    public final int getObjectId() {
+        return objectId;
     }
 
-    public RiType type() {
-        return type;
+    public final void resetObjectId() {
+        this.objectId = -1;
     }
 
-    public EscapeField[] fields() {
-        return fields;
+    public final void setObjectId(int objectId) {
+        assert objectId != -1;
+        this.objectId = objectId;
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
+    protected void afterClone(Node other) {
+        super.afterClone(other);
+        resetObjectId();
+    }
+
+    /**
+     * The type of object described by this {@link VirtualObjectNode}. In case of arrays, this is
+     * the array type (and not the component type).
+     */
+    public abstract ResolvedJavaType type();
+
+    /**
+     * The number of entries this virtual object has. Either the number of fields or the number of
+     * array elements.
+     */
+    public abstract int entryCount();
+
+    /**
+     * Returns the name of the entry at the given index. Only used for debugging purposes.
+     */
+    public abstract String entryName(int i);
+
+    /**
+     * If the given index denotes an entry in this virtual object, the index of this entry is
+     * returned. If no such entry can be found, this method returns -1.
+     *
+     * @param constantOffset offset, where the value is placed.
+     * @param expectedEntryKind Specifies which type is expected at this offset (Is important when
+     *            doing implicit casts, especially on big endian systems.
+     */
+    public abstract int entryIndexForOffset(long constantOffset, JavaKind expectedEntryKind);
+
+    /**
+     * Returns the {@link JavaKind} of the entry at the given index.
+     */
+    public abstract JavaKind entryKind(int index);
+
+    /**
+     * Returns an exact duplicate of this virtual object node, which has not been added to the graph
+     * yet.
+     */
+    public abstract VirtualObjectNode duplicate();
+
+    /**
+     * Specifies whether this virtual object has an object identity. If not, then the result of a
+     * comparison of two virtual objects is determined by comparing their contents.
+     */
+    public boolean hasIdentity() {
+        return hasIdentity;
+    }
+
+    public void setIdentity(boolean identity) {
+        this.hasIdentity = identity;
+    }
+
+    /**
+     * Returns a node that can be used to materialize this virtual object. If this returns an
+     * {@link AllocatedObjectNode} then this node will be attached to a {@link CommitAllocationNode}
+     * , otherwise the node will just be added to the graph.
+     */
+    public abstract ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks);
+
+    @Override
+    public void generate(NodeLIRBuilderTool gen) {
         // nothing to do...
-    }
-
-    @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> properties = super.getDebugProperties();
-        properties.put("type", type);
-        return properties;
-    }
-
-    @Override
-    public String toString(Verbosity verbosity) {
-        if (verbosity == Verbosity.Name) {
-            return super.toString(Verbosity.Name) + " " + type.name();
-        } else {
-            return super.toString(verbosity);
-        }
-    }
-
-    public int fieldsCount() {
-        return fieldsCount;
     }
 }

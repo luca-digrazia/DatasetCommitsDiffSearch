@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,56 +22,97 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_2;
+
+import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable.BinaryCommutative;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.BinaryOpLogicNode;
+import com.oracle.graal.nodes.LogicConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+
+import jdk.vm.ci.meta.TriState;
 
 /**
  * This node will perform a "test" operation on its arguments. Its result is equivalent to the
  * expression "(x &amp; y) == 0", meaning that it will return true if (and only if) no bit is set in
  * both x and y.
  */
-public class IntegerTestNode extends LogicNode implements Canonicalizable, LIRLowerable {
+@NodeInfo(cycles = CYCLES_2, size = SIZE_2)
+public final class IntegerTestNode extends BinaryOpLogicNode implements BinaryCommutative<ValueNode> {
+    public static final NodeClass<IntegerTestNode> TYPE = NodeClass.create(IntegerTestNode.class);
 
-    @Input private ValueNode x;
-    @Input private ValueNode y;
-
-    public ValueNode x() {
-        return x;
-    }
-
-    public ValueNode y() {
-        return y;
-    }
-
-    /**
-     * Constructs a new Test instruction.
-     * 
-     * @param x the instruction producing the first input to the instruction
-     * @param y the instruction that produces the second input to this instruction
-     */
     public IntegerTestNode(ValueNode x, ValueNode y) {
-        assert (x == null && y == null) || x.kind() == y.kind();
-        this.x = x;
-        this.y = y;
+        super(TYPE, x, y);
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-    }
-
-    @Override
-    public LogicNode canonical(CanonicalizerTool tool) {
-        if (x().isConstant() && y().isConstant()) {
-            return LogicConstantNode.forBoolean((x().asConstant().asLong() & y().asConstant().asLong()) == 0, graph());
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        if (forX.isConstant() && forY.isConstant()) {
+            return LogicConstantNode.forBoolean((forX.asJavaConstant().asLong() & forY.asJavaConstant().asLong()) == 0);
         }
-        if (x().stamp() instanceof IntegerStamp && y().stamp() instanceof IntegerStamp) {
-            IntegerStamp xStamp = (IntegerStamp) x().stamp();
-            IntegerStamp yStamp = (IntegerStamp) y().stamp();
+        if (forX.stamp() instanceof IntegerStamp && forY.stamp() instanceof IntegerStamp) {
+            IntegerStamp xStamp = (IntegerStamp) forX.stamp();
+            IntegerStamp yStamp = (IntegerStamp) forY.stamp();
             if ((xStamp.upMask() & yStamp.upMask()) == 0) {
-                return LogicConstantNode.tautology(graph());
+                return LogicConstantNode.tautology();
+            } else if ((xStamp.downMask() & yStamp.downMask()) != 0) {
+                return LogicConstantNode.contradiction();
             }
         }
         return this;
+    }
+
+    @Override
+    public Stamp getSucceedingStampForX(boolean negated) {
+        Stamp xStampGeneric = this.getX().stamp();
+        Stamp yStampGeneric = this.getY().stamp();
+        return getSucceedingStamp(negated, xStampGeneric, yStampGeneric);
+    }
+
+    private static Stamp getSucceedingStamp(boolean negated, Stamp xStampGeneric, Stamp otherStampGeneric) {
+        if (xStampGeneric instanceof IntegerStamp && otherStampGeneric instanceof IntegerStamp) {
+            IntegerStamp xStamp = (IntegerStamp) xStampGeneric;
+            IntegerStamp otherStamp = (IntegerStamp) otherStampGeneric;
+            if (negated) {
+                if (Long.bitCount(otherStamp.upMask()) == 1) {
+                    long newDownMask = xStamp.downMask() | otherStamp.upMask();
+                    if (xStamp.downMask() != newDownMask) {
+                        return IntegerStamp.stampForMask(xStamp.getBits(), newDownMask, xStamp.upMask()).join(xStamp);
+                    }
+                }
+            } else {
+                long restrictedUpMask = ((~otherStamp.downMask()) & xStamp.upMask());
+                if (xStamp.upMask() != restrictedUpMask) {
+                    return IntegerStamp.stampForMask(xStamp.getBits(), xStamp.downMask(), restrictedUpMask).join(xStamp);
+                }
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public Stamp getSucceedingStampForY(boolean negated) {
+        Stamp xStampGeneric = this.getX().stamp();
+        Stamp yStampGeneric = this.getY().stamp();
+        return getSucceedingStamp(negated, yStampGeneric, xStampGeneric);
+    }
+
+    @Override
+    public TriState tryFold(Stamp xStampGeneric, Stamp yStampGeneric) {
+        if (xStampGeneric instanceof IntegerStamp && yStampGeneric instanceof IntegerStamp) {
+            IntegerStamp xStamp = (IntegerStamp) xStampGeneric;
+            IntegerStamp yStamp = (IntegerStamp) yStampGeneric;
+            if ((xStamp.upMask() & yStamp.upMask()) == 0) {
+                return TriState.TRUE;
+            } else if ((xStamp.downMask() & yStamp.downMask()) != 0) {
+                return TriState.FALSE;
+            }
+        }
+        return TriState.UNKNOWN;
     }
 }

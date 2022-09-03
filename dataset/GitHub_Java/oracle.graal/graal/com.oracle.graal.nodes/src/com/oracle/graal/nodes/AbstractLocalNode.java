@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,15 +22,23 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodes.calc.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
 
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodeinfo.Verbosity;
+import com.oracle.graal.nodes.calc.FloatingNode;
+
+@NodeInfo(cycles = CYCLES_0, size = SIZE_1)
 public abstract class AbstractLocalNode extends FloatingNode {
 
-    private final int index;
+    public static final NodeClass<AbstractLocalNode> TYPE = NodeClass.create(AbstractLocalNode.class);
+    protected final int index;
 
-    public AbstractLocalNode(int index, Stamp stamp) {
-        super(stamp);
+    protected AbstractLocalNode(NodeClass<? extends AbstractLocalNode> c, int index, Stamp stamp) {
+        super(c, stamp);
         this.index = index;
     }
 

@@ -22,26 +22,32 @@
  */
 package com.oracle.graal.nodes;
 
+import static com.oracle.graal.nodeinfo.InputType.Association;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.calc.FloatingNode;
 import com.oracle.graal.nodes.spi.ValueProxy;
 
 /**
  * Proxy node that is used in OSR. This node drops the stamp information from the value, since the
  * types we see during OSR may be too precise (if a branch was not parsed for example).
  */
-@NodeInfo(nameTemplate = "EntryProxy({i#value})")
-public final class EntryProxyNode extends ProxyNode implements ValueProxy {
+@NodeInfo(nameTemplate = "EntryProxy({i#value})", cycles = CYCLES_0, size = SIZE_0)
+public final class EntryProxyNode extends FloatingNode implements ValueProxy {
 
     public static final NodeClass<EntryProxyNode> TYPE = NodeClass.create(EntryProxyNode.class);
+    @Input(Association) EntryMarkerNode proxyPoint;
     @Input ValueNode value;
 
-    public EntryProxyNode(ValueNode value, AbstractBeginNode proxyPoint) {
-        super(TYPE, value.stamp().unrestricted(), proxyPoint);
+    public EntryProxyNode(ValueNode value, EntryMarkerNode proxyPoint) {
+        super(TYPE, value.stamp().unrestricted());
         this.value = value;
+        this.proxyPoint = proxyPoint;
     }
 
-    @Override
     public ValueNode value() {
         return value;
     }

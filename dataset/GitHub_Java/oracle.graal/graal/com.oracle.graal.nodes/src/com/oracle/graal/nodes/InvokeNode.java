@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,56 +22,91 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.*;
+import static com.oracle.graal.nodeinfo.InputType.Extension;
+import static com.oracle.graal.nodeinfo.InputType.Guard;
+import static com.oracle.graal.nodeinfo.InputType.Memory;
+import static com.oracle.graal.nodeinfo.InputType.State;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_UNKNOWN;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.util.*;
+import java.util.Map;
+
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodeinfo.Verbosity;
+import com.oracle.graal.nodes.extended.ForeignCallNode;
+import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.nodes.java.MethodCallTargetNode;
+import com.oracle.graal.nodes.memory.AbstractMemoryCheckpoint;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.nodes.spi.UncheckedInterfaceProvider;
+import com.oracle.graal.nodes.util.GraphUtil;
+
+import jdk.vm.ci.meta.JavaKind;
 
 /**
  * The {@code InvokeNode} represents all kinds of method calls.
  */
-public final class InvokeNode extends AbstractStateSplit implements Node.IterableNodeType, Invoke, LIRLowerable, MemoryCheckpoint  {
+// @formatter:off
+@NodeInfo(nameTemplate = "Invoke#{p#targetMethod/s}",
+          allowedUsageTypes = {Memory},
+          cycles = CYCLES_UNKNOWN,
+          cyclesRationale = "We cannot estimate the runtime cost of a call, it is a blackhole." +
+                            "However, we can estimate, dyanmically, the cost of the call operation itself based on the type of the call.",
+          size = SIZE_UNKNOWN,
+          sizeRationale = "We can only dyanmically, based on the type of the call (special, static, virtual, interface) decide" +
+                          "how much code is generated for the call.")
+// @formatter:on
+public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, LIRLowerable, MemoryCheckpoint.Single, UncheckedInterfaceProvider {
+    public static final NodeClass<InvokeNode> TYPE = NodeClass.create(InvokeNode.class);
 
-    @Input private final MethodCallTargetNode callTarget;
-    @Data private final int bci;
-    // megamorph should only be true when the compiler is sure that the call site is megamorph, and false when in doubt
-    @Data private boolean megamorph;
-    private boolean useForInlining;
+    @Input(Extension) CallTargetNode callTarget;
+    @OptionalInput(State) FrameState stateDuring;
+    @OptionalInput(Guard) GuardingNode guard;
+    protected final int bci;
+    protected boolean polymorphic;
+    protected boolean useForInlining;
 
-    /**
-     * Constructs a new Invoke instruction.
-     *
-     * @param bci the bytecode index of the original invoke (used for debug infos)
-     * @param opcode the opcode of the invoke
-     * @param target the target method being called
-     * @param args the list of instructions producing arguments to the invocation, including the receiver object
-     */
-    public InvokeNode(MethodCallTargetNode callTarget, int bci) {
-        super(callTarget.returnStamp());
+    public InvokeNode(CallTargetNode callTarget, int bci) {
+        this(callTarget, bci, callTarget.returnStamp().getTrustedStamp());
+    }
+
+    public InvokeNode(CallTargetNode callTarget, int bci, Stamp stamp) {
+        super(TYPE, stamp);
         this.callTarget = callTarget;
         this.bci = bci;
-        this.megamorph = false;
+        this.polymorphic = false;
         this.useForInlining = true;
     }
 
-    public MethodCallTargetNode callTarget() {
+    @Override
+    public CallTargetNode callTarget() {
         return callTarget;
     }
 
-    @Override
-    public boolean megamorph() {
-        return megamorph;
+    void setCallTarget(CallTargetNode callTarget) {
+        updateUsages(this.callTarget, callTarget);
+        this.callTarget = callTarget;
     }
 
     @Override
-    public void setMegamorph(boolean megamorph) {
-        this.megamorph = megamorph;
+    public boolean isPolymorphic() {
+        return polymorphic;
     }
 
+    @Override
+    public void setPolymorphic(boolean value) {
+        this.polymorphic = value;
+    }
+
+    @Override
     public boolean useForInlining() {
         return useForInlining;
     }
@@ -82,16 +117,39 @@ public final class InvokeNode extends AbstractStateSplit implements Node.Iterabl
     }
 
     @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> debugProperties = super.getDebugProperties();
-        if (callTarget != null && callTarget.targetMethod() != null) {
-            debugProperties.put("targetMethod", CiUtil.format("%h.%n(%p)", callTarget.targetMethod()));
+    public boolean isAllowedUsageType(InputType type) {
+        if (!super.isAllowedUsageType(type)) {
+            if (getStackKind() != JavaKind.Void) {
+                if (callTarget instanceof MethodCallTargetNode && ((MethodCallTargetNode) callTarget).targetMethod().getAnnotation(NodeIntrinsic.class) != null) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {
+        Map<Object, Object> debugProperties = super.getDebugProperties(map);
+        if (callTarget != null) {
+            debugProperties.put("targetMethod", callTarget.targetName());
         }
         return debugProperties;
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
+    public LocationIdentity getLocationIdentity() {
+        return LocationIdentity.any();
+    }
+
+    @Override
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
+    }
+
+    @Override
+    public void generate(NodeLIRBuilderTool gen) {
         gen.emitInvoke(this);
     }
 
@@ -100,58 +158,75 @@ public final class InvokeNode extends AbstractStateSplit implements Node.Iterabl
         if (verbosity == Verbosity.Long) {
             return super.toString(Verbosity.Short) + "(bci=" + bci() + ")";
         } else if (verbosity == Verbosity.Name) {
-            if (callTarget == null || callTarget.targetMethod() == null) {
-                return "Invoke#??Invalid!";
-            }
-            return "Invoke#" + callTarget.targetMethod().name();
+            return "Invoke#" + (callTarget == null ? "null" : callTarget().targetName());
         } else {
             return super.toString(verbosity);
         }
     }
 
+    @Override
     public int bci() {
         return bci;
     }
 
     @Override
-    public FixedNode node() {
-        return this;
+    public void intrinsify(Node node) {
+        assert !(node instanceof ValueNode) || node.isAllowedUsageType(InputType.Value) == isAllowedUsageType(InputType.Value) : "replacing " + this + " with " + node;
+        CallTargetNode call = callTarget;
+        FrameState currentStateAfter = stateAfter();
+        if (node instanceof StateSplit) {
+            StateSplit stateSplit = (StateSplit) node;
+            stateSplit.setStateAfter(currentStateAfter);
+        }
+        if (node instanceof ForeignCallNode) {
+            ForeignCallNode foreign = (ForeignCallNode) node;
+            foreign.setBci(bci());
+        }
+        if (node instanceof FixedWithNextNode) {
+            graph().replaceFixedWithFixed(this, (FixedWithNextNode) node);
+        } else if (node instanceof ControlSinkNode) {
+            this.replaceAtPredecessor(node);
+            this.replaceAtUsages(null);
+            GraphUtil.killCFG(this);
+            return;
+        } else {
+            graph().replaceFixed(this, node);
+        }
+        GraphUtil.killWithUnusedFloatingInputs(call);
+        if (currentStateAfter.hasNoUsages()) {
+            GraphUtil.killWithUnusedFloatingInputs(currentStateAfter);
+        }
+    }
+
+    @Override
+    public boolean canDeoptimize() {
+        return true;
     }
 
     @Override
     public FrameState stateDuring() {
-        FrameState stateAfter = stateAfter();
-        FrameState stateDuring = stateAfter.duplicateModified(bci(), stateAfter.rethrowException(), this.callTarget.targetMethod().signature().returnKind(false));
-        stateDuring.setDuringCall(true);
         return stateDuring;
     }
 
     @Override
-    public void intrinsify(Node node) {
-        MethodCallTargetNode call = callTarget;
-        FrameState stateAfter = stateAfter();
-        if (node instanceof StateSplit) {
-            StateSplit stateSplit = (StateSplit) node;
-            stateSplit.setStateAfter(stateAfter);
-        }
-        if (node == null) {
-            assert kind() == CiKind.Void && usages().isEmpty();
-            ((StructuredGraph) graph()).removeFixed(this);
-        } else {
-            if (node instanceof FixedWithNextNode) {
-                ((StructuredGraph) graph()).replaceFixedWithFixed(this, (FixedWithNextNode) node);
-            } else if (node instanceof DeoptimizeNode) {
-                this.replaceAtPredecessors(node);
-                this.replaceAtUsages(null);
-                GraphUtil.killCFG(this);
-                return;
-            } else {
-                ((StructuredGraph) graph()).replaceFixed(this, node);
-            }
-        }
-        call.safeDelete();
-        if (stateAfter.usages().isEmpty()) {
-            stateAfter.safeDelete();
-        }
+    public void setStateDuring(FrameState stateDuring) {
+        updateUsages(this.stateDuring, stateDuring);
+        this.stateDuring = stateDuring;
+    }
+
+    @Override
+    public GuardingNode getGuard() {
+        return guard;
+    }
+
+    @Override
+    public void setGuard(GuardingNode guard) {
+        updateUsagesInterface(this.guard, guard);
+        this.guard = guard;
+    }
+
+    @Override
+    public Stamp uncheckedStamp() {
+        return this.callTarget.returnStamp().getUncheckedStamp();
     }
 }

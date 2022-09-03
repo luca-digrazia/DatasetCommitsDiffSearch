@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,41 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_4;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.word.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.HeapAccess.BarrierType;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.hotspot.word.KlassPointer;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.FloatingGuardedNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.ConvertNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
- * Read Klass::_java_mirror and incorporate non-null type information into stamp. This is also used
- * by {@link ClassGetHubNode} to eliminate chains of klass._java_mirror._klass.
+ * Read {@code Klass::_java_mirror} and incorporate non-null type information into stamp. This is
+ * also used by {@link ClassGetHubNode} to eliminate chains of {@code klass._java_mirror._klass}.
  */
-@NodeInfo
-public class HubGetClassNode extends FloatingGuardedNode implements Lowerable, Canonicalizable {
+@NodeInfo(cycles = CYCLES_4, size = SIZE_1)
+public final class HubGetClassNode extends FloatingGuardedNode implements Lowerable, Canonicalizable, ConvertNode {
+    public static final NodeClass<HubGetClassNode> TYPE = NodeClass.create(HubGetClassNode.class);
     @Input protected ValueNode hub;
 
-    public static HubGetClassNode create(ValueNode hub) {
-        return new HubGetClassNode(hub);
-    }
-
-    protected HubGetClassNode(ValueNode hub) {
-        super(StampFactory.declaredNonNull(runtime().fromClass(Class.class)), null);
+    public HubGetClassNode(@InjectedNodeParameter MetaAccessProvider metaAccess, ValueNode hub) {
+        super(TYPE, StampFactory.objectNonNull(TypeReference.createWithoutAssumptions(metaAccess.lookupJavaType(Class.class))), null);
         this.hub = hub;
     }
 
@@ -60,14 +66,14 @@ public class HubGetClassNode extends FloatingGuardedNode implements Lowerable, C
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (usages().isEmpty()) {
+        if (tool.allUsagesAvailable() && hasNoUsages()) {
             return null;
         } else {
             MetaAccessProvider metaAccess = tool.getMetaAccess();
-            if (metaAccess != null) {
-                if (hub.isConstant()) {
-                    ResolvedJavaType exactType = tool.getConstantReflection().asJavaType(hub.asJavaConstant());
-                    return ConstantNode.forConstant(exactType.getJavaClass(), metaAccess);
+            if (metaAccess != null && hub.isConstant()) {
+                ResolvedJavaType exactType = tool.getConstantReflection().asJavaType(hub.asConstant());
+                if (exactType != null) {
+                    return ConstantNode.forConstant(tool.getConstantReflection().asJavaClass(exactType), metaAccess);
                 }
             }
             return this;
@@ -76,18 +82,43 @@ public class HubGetClassNode extends FloatingGuardedNode implements Lowerable, C
 
     @Override
     public void lower(LoweringTool tool) {
-        if (tool.getLoweringStage() == LoweringTool.StandardLoweringStage.HIGH_TIER) {
-            return;
-        }
-
-        HotSpotVMConfig config = runtime().getConfig();
-        LocationNode location = ConstantLocationNode.create(CLASS_MIRROR_LOCATION, Kind.Object, config.classMirrorOffset, graph());
-        assert !hub.isConstant();
-        FloatingReadNode read = graph().unique(FloatingReadNode.create(hub, location, null, stamp(), getGuard(), BarrierType.NONE));
-        graph().replaceFloating(this, read);
+        tool.getLowerer().lower(this, tool);
     }
 
     @NodeIntrinsic
     public static native Class<?> readClass(KlassPointer hub);
 
+    @Override
+    public ValueNode getValue() {
+        return hub;
+    }
+
+    @Override
+    public Constant convert(Constant c, ConstantReflectionProvider constantReflection) {
+        if (JavaConstant.NULL_POINTER.equals(c)) {
+            return c;
+        }
+        return constantReflection.asJavaClass(constantReflection.asJavaType(c));
+    }
+
+    @Override
+    public Constant reverse(Constant c, ConstantReflectionProvider constantReflection) {
+        if (JavaConstant.NULL_POINTER.equals(c)) {
+            return c;
+        }
+        ResolvedJavaType type = constantReflection.asJavaType(c);
+        if (type.isPrimitive()) {
+            return JavaConstant.NULL_POINTER;
+        } else {
+            return constantReflection.asObjectHub(type);
+        }
+    }
+
+    @Override
+    public boolean isLossless() {
+        /*
+         * Any concrete Klass* has a corresponding java.lang.Class
+         */
+        return true;
+    }
 }

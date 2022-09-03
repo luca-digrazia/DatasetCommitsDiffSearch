@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,69 +22,112 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_3;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.compiler.common.type.PrimitiveStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.UnaryNode;
+import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
 
 /**
- * Searches a value for the most-significant set bit.
+ * Determines the index of the most significant "1" bit. Note that the result is undefined if the
+ * input is zero.
  */
-public class BitScanReverseNode extends FloatingNode implements LIRGenLowerable, Canonicalizable {
+@NodeInfo(cycles = CYCLES_3, size = SIZE_1)
+public final class BitScanReverseNode extends UnaryNode implements ArithmeticLIRLowerable {
 
-    @Input private ValueNode value;
+    public static final NodeClass<BitScanReverseNode> TYPE = NodeClass.create(BitScanReverseNode.class);
 
     public BitScanReverseNode(ValueNode value) {
-        super(StampFactory.forInteger(Kind.Int, 0, value.kind().getBitCount()));
-        this.value = value;
+        super(TYPE, StampFactory.forInteger(JavaKind.Int, 0, ((PrimitiveStamp) value.stamp()).getBits()), value);
+        assert value.getStackKind() == JavaKind.Int || value.getStackKind() == JavaKind.Long;
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (value.isConstant()) {
-            long v = value.asConstant().asLong();
-            if (value.kind().getStackKind() == Kind.Int) {
-                return ConstantNode.forInt(31 - Integer.numberOfLeadingZeros((int) v), graph());
-            } else if (value.kind() == Kind.Long) {
-                return ConstantNode.forInt(63 - Long.numberOfLeadingZeros(v), graph());
+    public Stamp foldStamp(Stamp newStamp) {
+        assert newStamp.isCompatible(getValue().stamp());
+        IntegerStamp valueStamp = (IntegerStamp) newStamp;
+        int min;
+        int max;
+        long mask = CodeUtil.mask(valueStamp.getBits());
+        int lastAlwaysSetBit = scan(valueStamp.downMask() & mask);
+        if (lastAlwaysSetBit == -1) {
+            int firstMaybeSetBit = BitScanForwardNode.scan(valueStamp.upMask() & mask);
+            min = firstMaybeSetBit;
+        } else {
+            min = lastAlwaysSetBit;
+        }
+        int lastMaybeSetBit = scan(valueStamp.upMask() & mask);
+        max = lastMaybeSetBit;
+        return StampFactory.forInteger(JavaKind.Int, min, max);
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        if (forValue.isConstant()) {
+            JavaConstant c = forValue.asJavaConstant();
+            if (c.asLong() != 0) {
+                return ConstantNode.forInt(forValue.getStackKind() == JavaKind.Int ? scan(c.asInt()) : scan(c.asLong()));
             }
         }
         return this;
     }
 
-    @NodeIntrinsic
-    public static int scan(int v) {
-        if (v == 0) {
-            return -1;
-        }
-        int index = 31;
-        while (((1 << index) & v) == 0) {
-            --index;
-        }
-        return index;
+    /**
+     * Utility method with defined return value for 0.
+     *
+     * @param v
+     * @return index of first set bit or -1 if {@code v} == 0.
+     */
+    public static int scan(long v) {
+        return 63 - Long.numberOfLeadingZeros(v);
     }
 
-    @NodeIntrinsic
-    public static int scan(long v) {
-        if (v == 0) {
-            return -1;
-        }
-        int index = 63;
-        while (((1L << index) & v) == 0) {
-            --index;
-        }
-        return index;
+    /**
+     * Utility method with defined return value for 0.
+     *
+     * @param v
+     * @return index of first set bit or -1 if {@code v} == 0.
+     */
+    public static int scan(int v) {
+        return 31 - Integer.numberOfLeadingZeros(v);
     }
+
+    /**
+     * Raw intrinsic for bsr instruction.
+     *
+     * @param v
+     * @return index of first set bit or an undefined value if {@code v} == 0.
+     */
+    @NodeIntrinsic
+    public static native int unsafeScan(int v);
+
+    /**
+     * Raw intrinsic for bsr instruction.
+     *
+     * @param v
+     * @return index of first set bit or an undefined value if {@code v} == 0.
+     */
+    @NodeIntrinsic
+    public static native int unsafeScan(long v);
 
     @Override
-    public void generate(LIRGenerator gen) {
-        Variable result = gen.newVariable(Kind.Int);
-        gen.emitBitScanReverse(result, gen.operand(value));
-        gen.setResult(this, result);
+    public void generate(NodeLIRBuilderTool builder, ArithmeticLIRGeneratorTool gen) {
+        builder.setResult(this, gen.emitBitScanReverse(builder.operand(getValue())));
     }
 
 }

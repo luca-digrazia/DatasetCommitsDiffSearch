@@ -22,51 +22,61 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.graph.iterators.NodePredicates.*;
+import static com.oracle.graal.nodeinfo.InputType.Association;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
 
-import java.util.*;
+import java.util.List;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.iterators.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.graph.IterableNodeType;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.NodeInputList;
+import com.oracle.graal.graph.iterators.NodeIterable;
+import com.oracle.graal.graph.spi.Simplifiable;
+import com.oracle.graal.graph.spi.SimplifierTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.nodes.util.GraphUtil;
 
 /**
  * Denotes the merging of multiple control-flow paths.
  */
-@NodeInfo(allowedUsageTypes = {InputType.Association})
-public class AbstractMergeNode extends BeginStateSplitNode implements IterableNodeType, LIRLowerable {
-    public AbstractMergeNode() {
+@NodeInfo(allowedUsageTypes = Association, cycles = CYCLES_0, size = SIZE_0)
+public abstract class AbstractMergeNode extends BeginStateSplitNode implements IterableNodeType, Simplifiable, LIRLowerable {
+    public static final NodeClass<AbstractMergeNode> TYPE = NodeClass.create(AbstractMergeNode.class);
+
+    protected AbstractMergeNode(NodeClass<? extends AbstractMergeNode> c) {
+        super(c);
     }
 
-    @Input(InputType.Association) protected NodeInputList<AbstractEndNode> ends = new NodeInputList<>(this);
+    @Input(Association) protected NodeInputList<EndNode> ends = new NodeInputList<>(this);
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
         gen.visitMerge(this);
     }
 
-    public int forwardEndIndex(AbstractEndNode end) {
+    public int forwardEndIndex(EndNode end) {
         return ends.indexOf(end);
     }
 
-    public void addForwardEnd(AbstractEndNode end) {
+    public void addForwardEnd(EndNode end) {
         ends.add(end);
     }
 
-    public int forwardEndCount() {
+    public final int forwardEndCount() {
         return ends.size();
     }
 
-    public AbstractEndNode forwardEndAt(int index) {
+    public final EndNode forwardEndAt(int index) {
         return ends.get(index);
     }
 
     @Override
-    public NodeIterable<AbstractEndNode> cfgPredecessors() {
+    public NodeIterable<EndNode> cfgPredecessors() {
         return ends;
     }
 
@@ -96,7 +106,7 @@ public class AbstractMergeNode extends BeginStateSplitNode implements IterableNo
             }
             ValueNode removedValue = phi.valueAt(predIndex);
             phi.removeInput(predIndex);
-            if (removedValue != null && removedValue.isAlive() && removedValue.hasNoUsages() && GraphUtil.isFloatingNode().apply(removedValue)) {
+            if (removedValue != null && removedValue.isAlive() && removedValue.hasNoUsages() && GraphUtil.isFloatingNode(removedValue)) {
                 GraphUtil.killWithUnusedFloatingInputs(removedValue);
             }
         }
@@ -110,7 +120,7 @@ public class AbstractMergeNode extends BeginStateSplitNode implements IterableNo
         ends.clear();
     }
 
-    public NodeInputList<AbstractEndNode> forwardEnds() {
+    public NodeInputList<EndNode> forwardEnds() {
         return ends;
     }
 
@@ -119,7 +129,7 @@ public class AbstractMergeNode extends BeginStateSplitNode implements IterableNo
     }
 
     public int phiPredecessorIndex(AbstractEndNode pred) {
-        return forwardEndIndex(pred);
+        return forwardEndIndex((EndNode) pred);
     }
 
     public AbstractEndNode phiPredecessorAt(int index) {
@@ -128,6 +138,10 @@ public class AbstractMergeNode extends BeginStateSplitNode implements IterableNo
 
     public NodeIterable<PhiNode> phis() {
         return this.usages().filter(PhiNode.class).filter(this::isPhiAtMerge);
+    }
+
+    public NodeIterable<ValuePhiNode> valuePhis() {
+        return this.usages().filter(ValuePhiNode.class).filter(this::isPhiAtMerge);
     }
 
     @Override
@@ -158,8 +172,10 @@ public class AbstractMergeNode extends BeginStateSplitNode implements IterableNo
                 return;
             }
             for (PhiNode phi : phis()) {
-                if (phi.usages().filter(isNotA(VirtualState.class)).and(node -> !merge.isPhiAtMerge(node)).isNotEmpty()) {
-                    return;
+                for (Node usage : phi.usages()) {
+                    if (!(usage instanceof VirtualState) && !merge.isPhiAtMerge(usage)) {
+                        return;
+                    }
                 }
             }
             Debug.log("Split %s into ends for %s.", this, merge);
@@ -173,8 +189,9 @@ public class AbstractMergeNode extends BeginStateSplitNode implements IterableNo
                 if (merge instanceof LoopBeginNode) {
                     newEnd = graph().add(new LoopEndNode((LoopBeginNode) merge));
                 } else {
-                    newEnd = graph().add(new EndNode());
-                    merge.addForwardEnd(newEnd);
+                    EndNode tmpEnd = graph().add(new EndNode());
+                    merge.addForwardEnd(tmpEnd);
+                    newEnd = tmpEnd;
                 }
                 for (PhiNode phi : merge.phis()) {
                     ValueNode v = phi.valueAt(origLoopEnd);
@@ -202,16 +219,16 @@ public class AbstractMergeNode extends BeginStateSplitNode implements IterableNo
             }
             List<PhiNode> phis = phis().snapshot();
             for (PhiNode phi : phis) {
-                for (Node usage : phi.usages().filter(isNotA(FrameState.class))) {
-                    if (usage != returnNode) {
+                for (Node usage : phi.usages()) {
+                    if (usage != returnNode && !(usage instanceof FrameState)) {
                         return;
                     }
                 }
             }
 
             ValuePhiNode returnValuePhi = returnNode.result() == null || !isPhiAtMerge(returnNode.result()) ? null : (ValuePhiNode) returnNode.result();
-            List<AbstractEndNode> endNodes = forwardEnds().snapshot();
-            for (AbstractEndNode end : endNodes) {
+            List<EndNode> endNodes = forwardEnds().snapshot();
+            for (EndNode end : endNodes) {
                 ReturnNode newReturn = graph().add(new ReturnNode(returnValuePhi == null ? returnNode.result() : returnValuePhi.valueAt(end)));
                 if (tool != null) {
                     tool.addToWorkList(end.predecessor());
@@ -219,11 +236,11 @@ public class AbstractMergeNode extends BeginStateSplitNode implements IterableNo
                 end.replaceAtPredecessor(newReturn);
             }
             GraphUtil.killCFG(this);
-            for (AbstractEndNode end : endNodes) {
+            for (EndNode end : endNodes) {
                 end.safeDelete();
             }
             for (PhiNode phi : phis) {
-                if (phi.isAlive() && phi.hasNoUsages()) {
+                if (tool.allUsagesAvailable() && phi.isAlive() && phi.hasNoUsages()) {
                     GraphUtil.killWithUnusedFloatingInputs(phi);
                 }
             }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,41 +22,53 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import java.lang.invoke.*;
+import com.oracle.graal.compiler.common.type.StampPair;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.InvokeNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.replacements.nodes.MacroStateSplitNode;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.replacements.nodes.*;
+import jdk.vm.ci.hotspot.HotSpotObjectConstant;
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-public class CallSiteTargetNode extends MacroNode implements Canonicalizable, Lowerable {
+@NodeInfo
+public final class CallSiteTargetNode extends MacroStateSplitNode implements Canonicalizable, Lowerable {
 
-    public CallSiteTargetNode(Invoke invoke) {
-        super(invoke);
+    public static final NodeClass<CallSiteTargetNode> TYPE = NodeClass.create(CallSiteTargetNode.class);
+
+    public CallSiteTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, StampPair returnStamp, ValueNode receiver) {
+        super(TYPE, invokeKind, targetMethod, bci, returnStamp, receiver);
     }
 
     private ValueNode getCallSite() {
         return arguments.get(0);
     }
 
-    private ConstantNode getConstantCallTarget(MetaAccessProvider metaAccessProvider, Assumptions assumptions) {
-        if (getCallSite().isConstant() && !getCallSite().isNullConstant()) {
-            CallSite callSite = (CallSite) getCallSite().asConstant().asObject();
-            if (callSite instanceof ConstantCallSite) {
-                return ConstantNode.forObject(callSite.getTarget(), metaAccessProvider, graph());
-            } else if (callSite instanceof MutableCallSite || callSite instanceof VolatileCallSite && assumptions != null && assumptions.useOptimisticAssumptions()) {
-                MethodHandle target = callSite.getTarget();
-                assumptions.record(new Assumptions.CallSiteTargetValue(callSite, target));
-                return ConstantNode.forObject(target, metaAccessProvider, graph());
+    public static ConstantNode tryFold(ValueNode callSite, MetaAccessProvider metaAccess, Assumptions assumptions) {
+        if (callSite != null && callSite.isConstant() && !callSite.isNullConstant()) {
+            HotSpotObjectConstant c = (HotSpotObjectConstant) callSite.asConstant();
+            JavaConstant target = c.getCallSiteTarget(assumptions);
+            if (target != null) {
+                return ConstantNode.forConstant(target, metaAccess);
             }
         }
         return null;
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        ConstantNode target = getConstantCallTarget(tool.runtime(), tool.assumptions());
+    public Node canonical(CanonicalizerTool tool) {
+        ConstantNode target = tryFold(getCallSite(), tool.getMetaAccess(), graph().getAssumptions());
         if (target != null) {
             return target;
         }
@@ -66,13 +78,14 @@ public class CallSiteTargetNode extends MacroNode implements Canonicalizable, Lo
 
     @Override
     public void lower(LoweringTool tool) {
-        StructuredGraph graph = (StructuredGraph) graph();
-        ConstantNode target = getConstantCallTarget(tool.getRuntime(), tool.assumptions());
+        ConstantNode target = tryFold(getCallSite(), tool.getMetaAccess(), graph().getAssumptions());
 
         if (target != null) {
-            graph.replaceFixedWithFloating(this, target);
+            graph().replaceFixedWithFloating(this, target);
         } else {
-            graph.replaceFixedWithFixed(this, createInvoke());
+            InvokeNode invoke = createInvoke();
+            graph().replaceFixedWithFixed(this, invoke);
+            invoke.lower(tool);
         }
     }
 }

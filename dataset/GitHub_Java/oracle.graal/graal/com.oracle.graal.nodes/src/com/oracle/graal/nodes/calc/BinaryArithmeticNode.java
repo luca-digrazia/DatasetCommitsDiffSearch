@@ -22,71 +22,108 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import java.io.Serializable;
+import java.util.function.Function;
+
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
-import com.oracle.graal.graph.iterators.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.graph.Graph;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.iterators.NodePredicate;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ArithmeticOperation;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.ValuePhiNode;
+import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
+import com.oracle.graal.nodes.spi.NodeValueMap;
 
-@NodeInfo
-public abstract class BinaryArithmeticNode extends BinaryNode implements ArithmeticLIRLowerable {
+import jdk.vm.ci.meta.Constant;
 
-    private final BinaryOp op;
+@NodeInfo(cycles = CYCLES_1, size = SIZE_1)
+public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements ArithmeticOperation, ArithmeticLIRLowerable, Canonicalizable.Binary<ValueNode> {
 
-    public BinaryArithmeticNode(BinaryOp op, ValueNode x, ValueNode y) {
-        super(op.foldStamp(x.stamp(), y.stamp()), x, y);
-        this.op = op;
+    @SuppressWarnings("rawtypes") public static final NodeClass<BinaryArithmeticNode> TYPE = NodeClass.create(BinaryArithmeticNode.class);
+
+    protected interface SerializableBinaryFunction<T> extends Function<ArithmeticOpTable, BinaryOp<T>>, Serializable {
     }
 
-    public BinaryOp getOp() {
-        return op;
+    protected final SerializableBinaryFunction<OP> getOp;
+
+    protected BinaryArithmeticNode(NodeClass<? extends BinaryArithmeticNode<OP>> c, SerializableBinaryFunction<OP> getOp, ValueNode x, ValueNode y) {
+        super(c, getOp.apply(ArithmeticOpTable.forStamp(x.stamp())).foldStamp(x.stamp(), y.stamp()), x, y);
+        this.getOp = getOp;
+    }
+
+    protected final BinaryOp<OP> getOp(ValueNode forX, ValueNode forY) {
+        ArithmeticOpTable table = ArithmeticOpTable.forStamp(forX.stamp());
+        assert table.equals(ArithmeticOpTable.forStamp(forY.stamp()));
+        return getOp.apply(table);
     }
 
     @Override
-    public Constant evalConst(Constant... inputs) {
-        assert inputs.length == 2;
-        return op.foldConstant(inputs[0], inputs[1]);
+    public final BinaryOp<OP> getArithmeticOp() {
+        return getOp(getX(), getY());
+    }
+
+    public boolean isAssociative() {
+        return getArithmeticOp().isAssociative();
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        if (forX.isConstant() && forY.isConstant()) {
-            Constant ret = op.foldConstant(forX.asConstant(), forY.asConstant());
-            return ConstantNode.forPrimitive(stamp(), ret);
+        ValueNode result = tryConstantFold(getOp(forX, forY), forX, forY, stamp());
+        if (result != null) {
+            return result;
         }
         return this;
     }
 
+    public static <OP> ConstantNode tryConstantFold(BinaryOp<OP> op, ValueNode forX, ValueNode forY, Stamp stamp) {
+        if (forX.isConstant() && forY.isConstant()) {
+            Constant ret = op.foldConstant(forX.asConstant(), forY.asConstant());
+            return ConstantNode.forPrimitive(stamp, ret);
+        }
+        return null;
+    }
+
     @Override
-    public boolean inferStamp() {
-        return updateStamp(op.foldStamp(getX().stamp(), getY().stamp()));
+    public Stamp foldStamp(Stamp stampX, Stamp stampY) {
+        assert stampX.isCompatible(x.stamp()) && stampY.isCompatible(y.stamp());
+        return getArithmeticOp().foldStamp(stampX, stampY);
     }
 
     public static AddNode add(StructuredGraph graph, ValueNode v1, ValueNode v2) {
-        return graph.unique(AddNode.create(v1, v2));
+        return graph.unique(new AddNode(v1, v2));
     }
 
     public static AddNode add(ValueNode v1, ValueNode v2) {
-        return AddNode.create(v1, v2);
+        return new AddNode(v1, v2);
     }
 
     public static MulNode mul(StructuredGraph graph, ValueNode v1, ValueNode v2) {
-        return graph.unique(MulNode.create(v1, v2));
+        return graph.unique(new MulNode(v1, v2));
     }
 
     public static MulNode mul(ValueNode v1, ValueNode v2) {
-        return MulNode.create(v1, v2);
+        return new MulNode(v1, v2);
     }
 
     public static SubNode sub(StructuredGraph graph, ValueNode v1, ValueNode v2) {
-        return graph.unique(SubNode.create(v1, v2));
+        return graph.unique(new SubNode(v1, v2));
     }
 
     public static SubNode sub(ValueNode v1, ValueNode v2) {
-        return SubNode.create(v1, v2);
+        return new SubNode(v1, v2);
     }
 
     private enum ReassociateMatch {
@@ -100,7 +137,7 @@ public abstract class BinaryArithmeticNode extends BinaryNode implements Arithme
                 case y:
                     return binary.getY();
                 default:
-                    throw GraalInternalError.shouldNotReachHere();
+                    throw GraalError.shouldNotReachHere();
             }
         }
 
@@ -111,16 +148,12 @@ public abstract class BinaryArithmeticNode extends BinaryNode implements Arithme
                 case y:
                     return binary.getX();
                 default:
-                    throw GraalInternalError.shouldNotReachHere();
+                    throw GraalError.shouldNotReachHere();
             }
         }
     }
 
-    public static boolean canTryReassociate(BinaryNode node) {
-        return (node instanceof BinaryArithmeticNode && ((BinaryArithmeticNode) node).getOp().isAssociative()) || node instanceof AndNode || node instanceof OrNode || node instanceof XorNode;
-    }
-
-    public static ReassociateMatch findReassociate(BinaryNode binary, NodePredicate criterion) {
+    private static ReassociateMatch findReassociate(BinaryNode binary, NodePredicate criterion) {
         boolean resultX = criterion.apply(binary.getX());
         boolean resultY = criterion.apply(binary.getY());
         if (resultX && !resultY) {
@@ -152,14 +185,14 @@ public abstract class BinaryArithmeticNode extends BinaryNode implements Arithme
      * Tries to re-associate values which satisfy the criterion. For example with a constantness
      * criterion: {@code (a + 2) + 1 => a + (1 + 2)}
      * <p>
-     * This method accepts only {@linkplain #canTryReassociate(BinaryNode) reassociable} operations
-     * such as +, -, *, &amp;, | and ^
+     * This method accepts only {@linkplain BinaryOp#isAssociative() associative} operations such as
+     * +, -, *, &amp;, | and ^
      *
      * @param forY
      * @param forX
      */
-    public static BinaryNode reassociate(BinaryNode node, NodePredicate criterion, ValueNode forX, ValueNode forY) {
-        assert canTryReassociate(node);
+    public static BinaryArithmeticNode<?> reassociate(BinaryArithmeticNode<?> node, NodePredicate criterion, ValueNode forX, ValueNode forY) {
+        assert node.getOp(forX, forY).isAssociative();
         ReassociateMatch match1 = findReassociate(node, criterion);
         if (match1 == null) {
             return node;
@@ -220,13 +253,63 @@ public abstract class BinaryArithmeticNode extends BinaryNode implements Arithme
         } else if (node instanceof MulNode) {
             return BinaryArithmeticNode.mul(a, AddNode.mul(m1, m2));
         } else if (node instanceof AndNode) {
-            return BitLogicNode.and(a, BitLogicNode.and(m1, m2));
+            return new AndNode(a, new AndNode(m1, m2));
         } else if (node instanceof OrNode) {
-            return BitLogicNode.or(a, BitLogicNode.or(m1, m2));
+            return new OrNode(a, new OrNode(m1, m2));
         } else if (node instanceof XorNode) {
-            return BitLogicNode.xor(a, BitLogicNode.xor(m1, m2));
+            return new XorNode(a, new XorNode(m1, m2));
         } else {
-            throw GraalInternalError.shouldNotReachHere();
+            throw GraalError.shouldNotReachHere();
         }
     }
+
+    /**
+     * Ensure a canonical ordering of inputs for commutative nodes to improve GVN results. Order the
+     * inputs by increasing {@link Node#id} and call {@link Graph#findDuplicate(Node)} on the node
+     * if it's currently in a graph. It's assumed that if there was a constant on the left it's been
+     * moved to the right by other code and that ordering is left alone.
+     *
+     * @return the original node or another node with the same input ordering
+     */
+    @SuppressWarnings("deprecation")
+    public BinaryNode maybeCommuteInputs() {
+        assert this instanceof BinaryCommutative;
+        if (!y.isConstant() && x.getId() > y.getId()) {
+            ValueNode tmp = x;
+            x = y;
+            y = tmp;
+            if (graph() != null) {
+                // See if this node already exists
+                BinaryNode duplicate = graph().findDuplicate(this);
+                if (duplicate != null) {
+                    return duplicate;
+                }
+            }
+        }
+        return this;
+    }
+
+    /**
+     * Determines if it would be better to swap the inputs in order to produce better assembly code.
+     * First we try to pick a value which is dead after this use. If both values are dead at this
+     * use then we try pick an induction variable phi to encourage the phi to live in a single
+     * register.
+     *
+     * @param nodeValueMap
+     * @return true if inputs should be swapped, false otherwise
+     */
+    protected boolean shouldSwapInputs(NodeValueMap nodeValueMap) {
+        final boolean xHasOtherUsages = getX().hasUsagesOtherThan(this, nodeValueMap);
+        final boolean yHasOtherUsages = getY().hasUsagesOtherThan(this, nodeValueMap);
+
+        if (!getY().isConstant() && !yHasOtherUsages) {
+            if (xHasOtherUsages == yHasOtherUsages) {
+                return getY() instanceof ValuePhiNode && getY().inputs().contains(this);
+            } else {
+                return true;
+            }
+        }
+        return false;
+    }
+
 }

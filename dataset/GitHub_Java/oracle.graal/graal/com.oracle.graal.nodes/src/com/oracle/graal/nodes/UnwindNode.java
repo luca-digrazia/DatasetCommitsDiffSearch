@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,30 +22,45 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_8;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_4;
+
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+import jdk.vm.ci.meta.JavaKind;
 
 /**
- * Unwind takes an exception object, destroys the current stack frame and passes the exception object to the system's exception dispatch code.
+ * Unwinds the current frame to an exception handler in the caller frame.
  */
-public final class UnwindNode extends FixedNode implements LIRLowerable, Node.IterableNodeType {
+@NodeInfo(cycles = CYCLES_8, size = SIZE_4)
+public final class UnwindNode extends ControlSinkNode implements Lowerable, LIRLowerable {
 
-    @Input private ValueNode exception;
+    public static final NodeClass<UnwindNode> TYPE = NodeClass.create(UnwindNode.class);
+    @Input ValueNode exception;
 
     public ValueNode exception() {
         return exception;
     }
 
     public UnwindNode(ValueNode exception) {
-        super(StampFactory.forKind(CiKind.Object));
-        assert exception == null || exception.kind() == CiKind.Object;
+        super(TYPE, StampFactory.forVoid());
+        assert exception.getStackKind() == JavaKind.Object;
         this.exception = exception;
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.emitCall(CiRuntimeCall.UnwindException, false, gen.operand(exception()));
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
+    }
+
+    @Override
+    public void generate(NodeLIRBuilderTool gen) {
+        gen.getLIRGeneratorTool().emitUnwind(gen.operand(exception()));
     }
 }

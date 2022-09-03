@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,62 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ci.*;
+import static com.oracle.graal.nodeinfo.InputType.Memory;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_10;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_8;
+
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.AbstractBeginNode;
+import com.oracle.graal.nodes.BeginStateSplitNode;
+import com.oracle.graal.nodes.InvokeWithExceptionNode;
+import com.oracle.graal.nodes.KillingBeginNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+
+import jdk.vm.ci.meta.MetaAccessProvider;
 
 /**
- * The {@code ExceptionObject} instruction represents the incoming exception object to an exception handler.
+ * The entry to an exception handler with the exception coming from a call (as opposed to a local
+ * throw instruction or implicit exception).
  */
-public class ExceptionObjectNode extends AbstractStateSplit implements StateSplit, LIRLowerable, MemoryCheckpoint {
+@NodeInfo(allowedUsageTypes = Memory, cycles = CYCLES_10, size = SIZE_8)
+public final class ExceptionObjectNode extends BeginStateSplitNode implements Lowerable, MemoryCheckpoint.Single {
+    public static final NodeClass<ExceptionObjectNode> TYPE = NodeClass.create(ExceptionObjectNode.class);
 
-    /**
-     * Constructs a new ExceptionObject instruction.
-     */
-    public ExceptionObjectNode() {
-        super(StampFactory.forKind(CiKind.Object));
+    public ExceptionObjectNode(MetaAccessProvider metaAccess) {
+        super(TYPE, StampFactory.objectNonNull(TypeReference.createTrustedWithoutAssumptions(metaAccess.lookupJavaType(Throwable.class))));
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.visitExceptionObject(this);
+    public LocationIdentity getLocationIdentity() {
+        return LocationIdentity.any();
+    }
+
+    @Override
+    public void lower(LoweringTool tool) {
+        if (graph().getGuardsStage() == StructuredGraph.GuardsStage.FIXED_DEOPTS) {
+            /*
+             * Now the lowering to BeginNode+LoadExceptionNode can be performed, since no more
+             * deopts can float in between the begin node and the load exception node.
+             */
+            LocationIdentity locationsKilledByInvoke = ((InvokeWithExceptionNode) predecessor()).getLocationIdentity();
+            AbstractBeginNode entry = graph().add(new KillingBeginNode(locationsKilledByInvoke));
+            LoadExceptionObjectNode loadException = graph().add(new LoadExceptionObjectNode(stamp()));
+
+            loadException.setStateAfter(stateAfter());
+            replaceAtUsages(InputType.Value, loadException);
+            graph().replaceFixedWithFixed(this, entry);
+            entry.graph().addAfterFixed(entry, loadException);
+
+            loadException.lower(tool);
+        }
     }
 
     @Override

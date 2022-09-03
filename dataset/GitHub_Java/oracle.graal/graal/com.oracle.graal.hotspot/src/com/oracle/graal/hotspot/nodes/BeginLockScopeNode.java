@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,29 +22,41 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.snippets.*;
+import static com.oracle.graal.nodeinfo.InputType.Memory;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.hotspot.HotSpotLIRGenerator;
+import com.oracle.graal.lir.VirtualStackSlot;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.extended.MonitorEnter;
+import com.oracle.graal.nodes.memory.AbstractMemoryCheckpoint;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.word.Word;
+import com.oracle.graal.word.WordTypes;
+
+import jdk.vm.ci.meta.Value;
 
 /**
- * Intrinsic for opening a scope binding a stack-based lock with an object.
- * A lock scope must be closed with an {@link EndLockScopeNode}.
- * The frame state after this node denotes that the object is locked
- * (ensuring the GC sees and updates the object) so it must come
- * after any null pointer check on the object.
+ * Intrinsic for opening a scope binding a stack-based lock with an object. A lock scope must be
+ * closed with an {@link EndLockScopeNode}. The frame state after this node denotes that the object
+ * is locked (ensuring the GC sees and updates the object) so it must come after any null pointer
+ * check on the object.
  */
-public final class BeginLockScopeNode extends AbstractStateSplit implements LIRGenLowerable, MonitorEnter {
+@NodeInfo(allowedUsageTypes = Memory, cycles = CYCLES_2, size = SIZE_1)
+public final class BeginLockScopeNode extends AbstractMemoryCheckpoint implements LIRLowerable, MonitorEnter, MemoryCheckpoint.Single {
 
-    private final boolean eliminated;
+    public static final NodeClass<BeginLockScopeNode> TYPE = NodeClass.create(BeginLockScopeNode.class);
+    protected int lockDepth;
 
-    public BeginLockScopeNode(boolean eliminated, Kind wordKind) {
-        super(StampFactory.forWord(wordKind, true));
-        this.eliminated = eliminated;
+    public BeginLockScopeNode(@InjectedNodeParameter WordTypes wordTypes, int lockDepth) {
+        super(TYPE, StampFactory.forKind(wordTypes.getWordKind()));
+        this.lockDepth = lockDepth;
     }
 
     @Override
@@ -53,18 +65,19 @@ public final class BeginLockScopeNode extends AbstractStateSplit implements LIRG
     }
 
     @Override
-    public void generate(LIRGenerator gen) {
-        gen.lock();
-        StackSlot lockData = gen.peekLock();
-        Value result = eliminated ? new Constant(gen.target().wordKind, 0L) : gen.emitLea(lockData);
-        FrameState stateAfter = stateAfter();
-        assert stateAfter != null;
+    public LocationIdentity getLocationIdentity() {
+        return LocationIdentity.any();
+    }
+
+    @Override
+    public void generate(NodeLIRBuilderTool gen) {
+        assert lockDepth != -1;
+        HotSpotLIRGenerator hsGen = (HotSpotLIRGenerator) gen.getLIRGeneratorTool();
+        VirtualStackSlot slot = hsGen.getLockSlot(lockDepth);
+        Value result = gen.getLIRGeneratorTool().emitAddress(slot);
         gen.setResult(this, result);
     }
 
-    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static Word beginLockScope(@ConstantNodeParameter boolean eliminated, @ConstantNodeParameter Kind wordKind) {
-        throw new UnsupportedOperationException();
-    }
+    public static native Word beginLockScope(@ConstantNodeParameter int lockDepth);
 }

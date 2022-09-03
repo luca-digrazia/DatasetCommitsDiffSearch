@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,44 @@
  */
 package com.oracle.graal.truffle.nodes;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.replacements.nodes.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
 
-@NodeInfo
-public class IsCompilationConstantNode extends MacroStateSplitNode implements Canonicalizable {
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.extended.BoxNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
 
-    public static IsCompilationConstantNode create(Invoke invoke) {
-        return new IsCompilationConstantNode(invoke);
-    }
+import jdk.vm.ci.meta.JavaKind;
 
-    protected IsCompilationConstantNode(Invoke invoke) {
-        super(invoke);
-        assert arguments.size() == 1;
+@NodeInfo(cycles = CYCLES_0, size = SIZE_1)
+public final class IsCompilationConstantNode extends FloatingNode implements Lowerable, Canonicalizable {
+
+    public static final NodeClass<IsCompilationConstantNode> TYPE = NodeClass.create(IsCompilationConstantNode.class);
+
+    @Input ValueNode value;
+
+    public IsCompilationConstantNode(ValueNode value) {
+        super(TYPE, StampFactory.forKind(JavaKind.Boolean));
+        this.value = value;
     }
 
     @Override
     public void lower(LoweringTool tool) {
-        /* Invoke will return false. */
-        replaceWithInvoke().lower(tool);
+        replaceAtUsagesAndDelete(ConstantNode.forBoolean(false, graph()));
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        ValueNode arg0 = arguments.get(0);
+        ValueNode arg0 = value;
         if (arg0 instanceof BoxNode) {
             arg0 = ((BoxNode) arg0).getValue();
         }
@@ -59,4 +68,7 @@ public class IsCompilationConstantNode extends MacroStateSplitNode implements Ca
         }
         return this;
     }
+
+    @NodeIntrinsic
+    public static native boolean check(Object value);
 }

@@ -22,18 +22,25 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodes.*;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
 
 /**
  * The {@code UnaryNode} class is the base of arithmetic and bit logic operations with exactly one
  * input.
  */
+@NodeInfo(size = SIZE_1)
 public abstract class UnaryNode extends FloatingNode implements Canonicalizable.Unary<ValueNode> {
 
-    @Input private ValueNode value;
+    public static final NodeClass<UnaryNode> TYPE = NodeClass.create(UnaryNode.class);
+    @Input protected ValueNode value;
 
+    @Override
     public ValueNode getValue() {
         return value;
     }
@@ -44,8 +51,24 @@ public abstract class UnaryNode extends FloatingNode implements Canonicalizable.
      * @param stamp the result type of this instruction
      * @param value the input instruction
      */
-    public UnaryNode(Stamp stamp, ValueNode value) {
-        super(stamp);
+    protected UnaryNode(NodeClass<? extends UnaryNode> c, Stamp stamp, ValueNode value) {
+        super(c, stamp);
         this.value = value;
+    }
+
+    @Override
+    public boolean inferStamp() {
+        return updateStamp(foldStamp(value.stamp()));
+    }
+
+    /**
+     * Compute an improved for this node using the passed in stamp. The stamp must be compatible
+     * with the current value of {@link #value}. This code is used to provide the default
+     * implementation of {@link #inferStamp()} and may be used by external optimizations.
+     *
+     * @param newStamp
+     */
+    public Stamp foldStamp(Stamp newStamp) {
+        return stamp();
     }
 }

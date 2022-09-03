@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,32 @@
  */
 package com.oracle.graal.nodes.java;
 
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_80;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_80;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.memory.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.ObjectStamp;
+import com.oracle.graal.graph.IterableNodeType;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.extended.MonitorEnter;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
 
 /**
- * The {@code MonitorEnterNode} represents the acquisition of a monitor. The object needs already be
- * non-null and the hub is an additional parameter to the node.
+ * The {@code RawMonitorEnterNode} represents the acquisition of a monitor. The object needs to
+ * already be non-null and the hub is an additional parameter to the node.
  */
-@NodeInfo
+// @formatter:off
+@NodeInfo(cycles = CYCLES_80,
+          cyclesRationale = "Rough estimation of the enter operation",
+          size = SIZE_80)
+// @formatter:on
 public final class RawMonitorEnterNode extends AccessMonitorNode implements Virtualizable, Lowerable, IterableNodeType, MonitorEnter, MemoryCheckpoint.Single {
 
     public static final NodeClass<RawMonitorEnterNode> TYPE = NodeClass.create(RawMonitorEnterNode.class);
@@ -61,10 +72,13 @@ public final class RawMonitorEnterNode extends AccessMonitorNode implements Virt
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        State state = tool.getObjectState(object());
-        if (state != null && state.getState() == EscapeState.Virtual && state.getVirtualObject().hasIdentity()) {
-            state.addLock(getMonitorId());
-            tool.delete();
+        ValueNode alias = tool.getAlias(object());
+        if (alias instanceof VirtualObjectNode) {
+            VirtualObjectNode virtual = (VirtualObjectNode) alias;
+            if (virtual.hasIdentity()) {
+                tool.addLock(virtual, getMonitorId());
+                tool.delete();
+            }
         }
     }
 

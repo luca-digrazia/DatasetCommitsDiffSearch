@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,22 +22,94 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import java.io.Serializable;
+import java.util.function.Function;
+
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.ShiftOp;
+import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ArithmeticOperation;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
+
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
 
 /**
  * The {@code ShiftOp} class represents shift operations.
  */
-public abstract class ShiftNode extends BinaryNode {
+@NodeInfo(cycles = CYCLES_1, size = SIZE_1)
+public abstract class ShiftNode<OP> extends BinaryNode implements ArithmeticOperation, ArithmeticLIRLowerable, NarrowableArithmeticNode {
+
+    @SuppressWarnings("rawtypes") public static final NodeClass<ShiftNode> TYPE = NodeClass.create(ShiftNode.class);
+
+    protected interface SerializableShiftFunction<T> extends Function<ArithmeticOpTable, ShiftOp<T>>, Serializable {
+    }
+
+    protected final SerializableShiftFunction<OP> getOp;
 
     /**
      * Creates a new shift operation.
+     *
      * @param x the first input value
      * @param s the second input value
      */
-    public ShiftNode(Kind kind, ValueNode x, ValueNode s) {
-        super(kind, x, s);
-        // TODO (cwimmer) Why check for null here - what is a shift with no left operand?
-        assert x == null || x.kind() == kind;
+    protected ShiftNode(NodeClass<? extends ShiftNode<OP>> c, SerializableShiftFunction<OP> getOp, ValueNode x, ValueNode s) {
+        super(c, getOp.apply(ArithmeticOpTable.forStamp(x.stamp())).foldStamp(x.stamp(), (IntegerStamp) s.stamp()), x, s);
+        assert ((IntegerStamp) s.stamp()).getBits() == 32;
+        this.getOp = getOp;
+    }
+
+    protected final ShiftOp<OP> getOp(ValueNode forValue) {
+        return getOp.apply(ArithmeticOpTable.forStamp(forValue.stamp()));
+    }
+
+    @Override
+    public final ShiftOp<OP> getArithmeticOp() {
+        return getOp(getX());
+    }
+
+    @Override
+    public Stamp foldStamp(Stamp stampX, Stamp stampY) {
+        return getArithmeticOp().foldStamp(stampX, (IntegerStamp) stampY);
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        if (forX.isConstant() && forY.isConstant()) {
+            JavaConstant amount = forY.asJavaConstant();
+            assert amount.getJavaKind() == JavaKind.Int;
+            return ConstantNode.forPrimitive(stamp(), getOp(forX).foldConstant(forX.asConstant(), amount.asInt()));
+        }
+        return this;
+    }
+
+    public int getShiftAmountMask() {
+        return getArithmeticOp().getShiftAmountMask(stamp());
+    }
+
+    @Override
+    public boolean isNarrowable(int resultBits) {
+        assert CodeUtil.isPowerOf2(resultBits);
+        int narrowMask = resultBits - 1;
+        int wideMask = getShiftAmountMask();
+        assert (wideMask & narrowMask) == narrowMask : String.format("wideMask %x should be wider than narrowMask %x", wideMask, narrowMask);
+
+        /*
+         * Shifts are special because narrowing them also changes the implicit mask of the shift
+         * amount. We can narrow only if (y & wideMask) == (y & narrowMask) for all possible values
+         * of y.
+         */
+        IntegerStamp yStamp = (IntegerStamp) getY().stamp();
+        return (yStamp.upMask() & (wideMask & ~narrowMask)) == 0;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,30 +22,28 @@
  */
 package com.oracle.graal.nodes.java;
 
-import java.util.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_20;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_20;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.DeoptimizingFixedWithNextNode;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
 
 /**
  * The {@code AbstractNewObjectNode} is the base class for the new instance and new array nodes.
  */
-public class AbstractNewObjectNode extends DeoptimizingFixedWithNextNode implements Simplifiable, Lowerable {
+@NodeInfo(cycles = CYCLES_20, size = SIZE_20)
+public abstract class AbstractNewObjectNode extends DeoptimizingFixedWithNextNode implements Lowerable {
 
-    private final boolean fillContents;
+    public static final NodeClass<AbstractNewObjectNode> TYPE = NodeClass.create(AbstractNewObjectNode.class);
+    protected final boolean fillContents;
 
-    /**
-     * Constructs a new AbstractNewObjectNode.
-     *
-     * @param stamp the stamp of the newly created object
-     * @param fillContents determines if the object's contents should be initialized to zero/null.
-     */
-    protected AbstractNewObjectNode(Stamp stamp, boolean fillContents) {
-        super(stamp);
+    protected AbstractNewObjectNode(NodeClass<? extends AbstractNewObjectNode> c, Stamp stamp, boolean fillContents, FrameState stateBefore) {
+        super(c, stamp, stateBefore);
         this.fillContents = fillContents;
     }
 
@@ -54,37 +52,6 @@ public class AbstractNewObjectNode extends DeoptimizingFixedWithNextNode impleme
      */
     public boolean fillContents() {
         return fillContents;
-    }
-
-    @Override
-    public void simplify(SimplifierTool tool) {
-        // poor man's escape analysis: check if the object can be trivially removed
-        for (Node usage : usages()) {
-            if (usage instanceof FixedValueAnchorNode) {
-                if (((FixedValueAnchorNode) usage).usages().isNotEmpty()) {
-                    return;
-                }
-            } else if (usage instanceof WriteNode) {
-                if (((WriteNode) usage).object() != this || usage.usages().isNotEmpty()) {
-                    // we would need to fix up the memory graph if the write has usages
-                    return;
-                }
-            } else {
-                return;
-            }
-        }
-        for (Node usage : usages().distinct().snapshot()) {
-            List<Node> snapshot = usage.inputs().snapshot();
-            graph().removeFixed((FixedWithNextNode) usage);
-            for (Node input : snapshot) {
-                tool.removeIfUnused(input);
-            }
-        }
-        List<Node> snapshot = inputs().snapshot();
-        graph().removeFixed(this);
-        for (Node input : snapshot) {
-            tool.removeIfUnused(input);
-        }
     }
 
     @Override

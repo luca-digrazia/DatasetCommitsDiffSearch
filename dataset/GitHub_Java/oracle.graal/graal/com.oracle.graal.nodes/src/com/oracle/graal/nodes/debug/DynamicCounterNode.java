@@ -22,126 +22,104 @@
  */
 package com.oracle.graal.nodes.debug;
 
-import java.io.*;
-import java.util.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_20;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_10;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.gen.LIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
  * This node can be used to add a counter to the code that will estimate the dynamic number of calls
  * by adding an increment to the compiled code. This should of course only be used for
- * debugging/testing purposes, and is not 100% accurate (because of concurrency issues while
- * accessing the counters).
- * 
- * A unique counter will be created for each unique String passed to the constructor.
+ * debugging/testing purposes.
+ *
+ * A unique counter will be created for each unique name passed to the constructor. Depending on the
+ * value of withContext, the name of the root method is added to the counter's name.
  */
-public class DynamicCounterNode extends FixedWithNextNode implements Lowerable {
+@NodeInfo(size = SIZE_10, cycles = CYCLES_20)
+public class DynamicCounterNode extends FixedWithNextNode implements LIRLowerable {
 
-    private static final int MAX_COUNTERS = 10 * 1024;
-    private static final long[] COUNTERS = new long[MAX_COUNTERS];
-    private static final HashMap<String, Integer> INDEXES = new HashMap<>();
-    public static String excludedClassPrefix = null;
-    public static boolean enabled = false;
+    public static final NodeClass<DynamicCounterNode> TYPE = NodeClass.create(DynamicCounterNode.class);
+    @Input ValueNode increment;
 
-    private final String name;
-    private final long increment;
-    private final boolean addContext;
+    protected final String name;
+    protected final String group;
+    protected final boolean withContext;
 
-    public DynamicCounterNode(String name, long increment, boolean addContext) {
-        super(StampFactory.forVoid());
-        if (!enabled) {
-            throw new GraalInternalError("dynamic counters not enabled");
-        }
+    public DynamicCounterNode(String name, String group, ValueNode increment, boolean withContext) {
+        this(TYPE, name, group, increment, withContext);
+    }
+
+    protected DynamicCounterNode(NodeClass<? extends DynamicCounterNode> c, String name, String group, ValueNode increment, boolean withContext) {
+        super(c, StampFactory.forVoid());
         this.name = name;
+        this.group = group;
         this.increment = increment;
-        this.addContext = addContext;
+        this.withContext = withContext;
+    }
+
+    public ValueNode getIncrement() {
+        return increment;
     }
 
     public String getName() {
         return name;
     }
 
-    public long getIncrement() {
-        return increment;
+    public String getGroup() {
+        return group;
     }
 
-    public boolean isAddContext() {
-        return addContext;
+    public boolean isWithContext() {
+        return withContext;
     }
 
-    private static synchronized int getIndex(String name) {
-        Integer index = INDEXES.get(name);
-        if (index == null) {
-            index = INDEXES.size();
-            INDEXES.put(name, index);
-            if (index >= MAX_COUNTERS) {
-                throw new GraalInternalError("too many dynamic counters");
-            }
-            return index;
-        } else {
-            return index;
-        }
+    public static void addCounterBefore(String group, String name, long increment, boolean withContext, FixedNode position) {
+        StructuredGraph graph = position.graph();
+        graph.addBeforeFixed(position, position.graph().add(new DynamicCounterNode(name, group, ConstantNode.forLong(increment, position.graph()), withContext)));
     }
 
-    public static synchronized void dump(PrintStream out, double seconds) {
-        TreeMap<Long, String> sorted = new TreeMap<>();
-
-        long sum = 0;
-        for (int i = 0; i < MAX_COUNTERS; i++) {
-            sum += COUNTERS[i];
-        }
-        long cutoff = sum / 1000;
-        int cnt = 0;
-        for (Map.Entry<String, Integer> entry : INDEXES.entrySet()) {
-            if (COUNTERS[entry.getValue()] > cutoff) {
-                sorted.put(COUNTERS[entry.getValue()] * MAX_COUNTERS + cnt++, entry.getKey());
-            }
-        }
-
-        out.println("=========== dynamic counters, time = " + seconds + " s");
-        for (Map.Entry<Long, String> entry : sorted.entrySet()) {
-            long counter = entry.getKey() / MAX_COUNTERS;
-            out.println((int) (counter / seconds) + "/s \t" + (counter * 100 / sum) + "% \t" + entry.getValue());
-        }
-        out.println((int) (sum / seconds) + "/s: total");
-        out.println("============================");
-
-        clear();
-    }
-
-    public static void clear() {
-        Arrays.fill(COUNTERS, 0);
-    }
+    @NodeIntrinsic
+    public static native void counter(@ConstantNodeParameter String name, @ConstantNodeParameter String group, long increment, @ConstantNodeParameter boolean addContext);
 
     @Override
-    public void lower(LoweringTool tool) {
-        StructuredGraph graph = (StructuredGraph) graph();
-        if (excludedClassPrefix == null || !graph.method().getDeclaringClass().getName().startsWith(excludedClassPrefix)) {
-            int index = addContext ? getIndex(name + " @ " + MetaUtil.format("%h.%n", ((StructuredGraph) graph()).method())) : getIndex(name);
+    public void generate(NodeLIRBuilderTool generator) {
+        LIRGeneratorTool lirGen = generator.getLIRGeneratorTool();
+        String nameWithContext;
+        if (isWithContext()) {
+            nameWithContext = getName() + " @ ";
+            if (graph().method() != null) {
+                StackTraceElement stackTraceElement = graph().method().asStackTraceElement(0);
+                if (stackTraceElement != null) {
+                    nameWithContext += " " + stackTraceElement.toString();
+                } else {
+                    nameWithContext += graph().method().format("%h.%n");
+                }
+            }
+            if (graph().name != null) {
+                nameWithContext += " (" + graph().name + ")";
+            }
 
-            ConstantNode arrayConstant = ConstantNode.forObject(COUNTERS, tool.getRuntime(), graph);
-            ConstantNode indexConstant = ConstantNode.forInt(index, graph);
-            LoadIndexedNode load = graph.add(new LoadIndexedNode(arrayConstant, indexConstant, Kind.Long));
-            IntegerAddNode add = graph.add(new IntegerAddNode(Kind.Long, load, ConstantNode.forLong(increment, graph)));
-            StoreIndexedNode store = graph.add(new StoreIndexedNode(arrayConstant, indexConstant, Kind.Long, add));
-
-            graph.addBeforeFixed(this, load);
-            graph.addBeforeFixed(this, store);
+        } else {
+            nameWithContext = getName();
         }
-        graph.removeFixed(this);
+        LIRInstruction counterOp = lirGen.createBenchmarkCounter(nameWithContext, getGroup(), generator.operand(increment));
+        if (counterOp != null) {
+            lirGen.append(counterOp);
+        } else {
+            throw GraalError.unimplemented("Benchmark counters not enabled or not implemented by the back end.");
+        }
     }
 
-    public static void addCounterBefore(String name, long increment, boolean addContext, FixedNode position) {
-        if (enabled) {
-            StructuredGraph graph = (StructuredGraph) position.graph();
-            DynamicCounterNode counter = graph.add(new DynamicCounterNode(name, increment, addContext));
-            graph.addBeforeFixed(position, counter);
-        }
-    }
 }

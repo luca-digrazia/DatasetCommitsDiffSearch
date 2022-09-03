@@ -22,18 +22,25 @@
  */
 package com.oracle.graal.nodes.debug;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_UNKNOWN;
 
-@NodeInfo
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+@NodeInfo(cycles = CYCLES_UNKNOWN, cyclesRationale = "Node is literally a blackhole", size = SIZE_UNKNOWN)
 public final class BlackholeNode extends FixedWithNextNode implements LIRLowerable {
 
+    public static final NodeClass<BlackholeNode> TYPE = NodeClass.create(BlackholeNode.class);
     @Input ValueNode value;
 
     public BlackholeNode(ValueNode value) {
-        super(StampFactory.forVoid());
+        super(TYPE, StampFactory.forVoid());
         this.value = value;
     }
 
@@ -41,31 +48,4 @@ public final class BlackholeNode extends FixedWithNextNode implements LIRLowerab
     public void generate(NodeLIRBuilderTool gen) {
         gen.getLIRGeneratorTool().emitBlackhole(gen.operand(value));
     }
-
-    @NodeIntrinsic
-    public static native void consume(boolean v);
-
-    @NodeIntrinsic
-    public static native void consume(byte v);
-
-    @NodeIntrinsic
-    public static native void consume(short v);
-
-    @NodeIntrinsic
-    public static native void consume(char v);
-
-    @NodeIntrinsic
-    public static native void consume(int v);
-
-    @NodeIntrinsic
-    public static native void consume(long v);
-
-    @NodeIntrinsic
-    public static native void consume(float v);
-
-    @NodeIntrinsic
-    public static native void consume(double v);
-
-    @NodeIntrinsic
-    public static native void consume(Object v);
 }

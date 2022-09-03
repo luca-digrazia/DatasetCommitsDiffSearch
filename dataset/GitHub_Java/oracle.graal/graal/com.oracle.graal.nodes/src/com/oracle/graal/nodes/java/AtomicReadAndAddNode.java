@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,67 +22,56 @@
  */
 package com.oracle.graal.nodes.java;
 
-import static com.oracle.graal.graph.UnsafeAccess.*;
+import static com.oracle.graal.nodeinfo.InputType.Association;
+import static com.oracle.graal.nodeinfo.InputType.Memory;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_10;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_3;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.memory.AbstractMemoryCheckpoint;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.memory.address.AddressNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-import sun.misc.*;
+import jdk.vm.ci.meta.Value;
+import sun.misc.Unsafe;
 
 /**
  * Represents an atomic read-and-add operation like {@link Unsafe#getAndAddInt(Object, long, int)}.
  */
-@NodeInfo(allowedUsageTypes = {InputType.Memory})
-public class AtomicReadAndAddNode extends AbstractMemoryCheckpoint implements LIRLowerable, MemoryCheckpoint.Single {
+@NodeInfo(allowedUsageTypes = Memory, cycles = CYCLES_10, size = SIZE_3)
+public final class AtomicReadAndAddNode extends AbstractMemoryCheckpoint implements LIRLowerable, MemoryCheckpoint.Single {
 
-    @Input private ValueNode object;
-    @Input private ValueNode offset;
-    @Input private ValueNode delta;
+    public static final NodeClass<AtomicReadAndAddNode> TYPE = NodeClass.create(AtomicReadAndAddNode.class);
+    @Input(Association) AddressNode address;
+    @Input ValueNode delta;
 
-    private final LocationIdentity locationIdentity;
+    protected final LocationIdentity locationIdentity;
 
-    public AtomicReadAndAddNode(ValueNode object, ValueNode offset, ValueNode delta, LocationIdentity locationIdentity) {
-        super(StampFactory.forKind(delta.getKind()));
-        this.object = object;
-        this.offset = offset;
+    public AtomicReadAndAddNode(AddressNode address, ValueNode delta, LocationIdentity locationIdentity) {
+        super(TYPE, StampFactory.forKind(delta.getStackKind()));
+        this.address = address;
         this.delta = delta;
         this.locationIdentity = locationIdentity;
-    }
-
-    public ValueNode object() {
-        return object;
-    }
-
-    public ValueNode offset() {
-        return offset;
     }
 
     public ValueNode delta() {
         return delta;
     }
 
+    @Override
     public LocationIdentity getLocationIdentity() {
         return locationIdentity;
     }
 
+    @Override
     public void generate(NodeLIRBuilderTool gen) {
-        LocationNode location = IndexedLocationNode.create(getLocationIdentity(), delta.getKind(), 0, offset, graph(), 1);
-        Value address = location.generateAddress(gen, gen.getLIRGeneratorTool(), gen.operand(object()));
-        Value result = gen.getLIRGeneratorTool().emitAtomicReadAndAdd(address, gen.operand(delta));
+        Value result = gen.getLIRGeneratorTool().emitAtomicReadAndAdd(gen.operand(address), gen.operand(delta));
         gen.setResult(this, result);
-    }
-
-    @NodeIntrinsic
-    public static int getAndAddInt(Object object, long offset, int delta, @ConstantNodeParameter @SuppressWarnings("unused") LocationIdentity locationIdentity) {
-        return unsafe.getAndAddInt(object, offset, delta);
-    }
-
-    @NodeIntrinsic
-    public static long getAndAddLong(Object object, long offset, long delta, @ConstantNodeParameter @SuppressWarnings("unused") LocationIdentity locationIdentity) {
-        return unsafe.getAndAddLong(object, offset, delta);
     }
 }

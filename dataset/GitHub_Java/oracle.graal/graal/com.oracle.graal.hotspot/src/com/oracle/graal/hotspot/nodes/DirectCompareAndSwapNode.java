@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,81 +22,82 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.amd64.AMD64Move.CompareAndSwapOp;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.snippets.*;
-import com.oracle.max.asm.*;
-import com.oracle.max.asm.target.amd64.*;
+import static com.oracle.graal.nodeinfo.InputType.Association;
+import static com.oracle.graal.nodeinfo.InputType.Memory;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_30;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_8;
+
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.hotspot.HotSpotNodeLIRBuilder;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.StateSplit;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.java.CompareAndSwapNode;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.memory.address.AddressNode;
+import com.oracle.graal.nodes.memory.address.AddressNode.Address;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.word.Word;
 
 /**
- * A special purpose store node that differs from {@link CompareAndSwapNode} in that
- * it is not a {@link StateSplit} and it {@linkplain #compareAndSwap(Object, long, Word, Word) returns}
- * either the expected value or the compared against value instead of a boolean.
+ * A special purpose store node that differs from {@link CompareAndSwapNode} in that it is not a
+ * {@link StateSplit} and it {@linkplain #compareAndSwap(Address, Word, Word, LocationIdentity)}
+ * returns either the expected value or the compared against value instead of a boolean.
  */
-public class DirectCompareAndSwapNode extends FixedWithNextNode implements LIRGenLowerable, MemoryCheckpoint {
+@NodeInfo(allowedUsageTypes = Memory, cycles = CYCLES_30, size = SIZE_8)
+public final class DirectCompareAndSwapNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Single {
 
-    @Input private ValueNode object;
-    @Input private ValueNode offset;
-    @Input private ValueNode expectedValue;
-    @Input private ValueNode newValue;
+    public static final NodeClass<DirectCompareAndSwapNode> TYPE = NodeClass.create(DirectCompareAndSwapNode.class);
+    @Input(Association) AddressNode address;
+    @Input ValueNode expectedValue;
+    @Input ValueNode newValue;
 
-    public DirectCompareAndSwapNode(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue) {
-        super(expected.stamp());
-        this.object = object;
-        this.offset = offset;
+    protected final LocationIdentity locationIdentity;
+
+    public DirectCompareAndSwapNode(ValueNode address, ValueNode expected, ValueNode newValue, LocationIdentity locationIdentity) {
+        super(TYPE, expected.stamp());
+        this.address = (AddressNode) address;
         this.expectedValue = expected;
         this.newValue = newValue;
+        this.locationIdentity = locationIdentity;
     }
 
+    public AddressNode getAddress() {
+        return address;
+    }
+
+    public ValueNode expectedValue() {
+        return expectedValue;
+    }
+
+    public ValueNode newValue() {
+        return newValue;
+    }
 
     @Override
-    public void generate(LIRGenerator gen) {
-        Kind kind = newValue.kind();
-        assert kind == expectedValue.kind();
+    public LocationIdentity getLocationIdentity() {
+        return locationIdentity;
+    }
 
-        Value expected = gen.loadNonConst(gen.operand(expectedValue));
-        Variable newVal = gen.load(gen.operand(newValue));
-
-        int disp = 0;
-        Address address;
-        Value index = gen.operand(this.offset);
-        if (ValueUtil.isConstant(index) && NumUtil.isInt(ValueUtil.asConstant(index).asLong() + disp)) {
-            disp += (int) ValueUtil.asConstant(index).asLong();
-            address = new Address(kind, gen.load(gen.operand(this.object)), disp);
-        } else {
-            address = new Address(kind, gen.load(gen.operand(this.object)), gen.load(index), Address.Scale.Times1, disp);
-        }
-
-        RegisterValue rax = AMD64.rax.asValue(kind);
-        gen.emitMove(expected, rax);
-        gen.append(new CompareAndSwapOp(rax, address, rax, newVal));
-
-        Variable result = gen.newVariable(kind());
-        gen.emitMove(rax, result);
-        gen.setResult(this, result);
+    @Override
+    public void generate(NodeLIRBuilderTool gen) {
+        ((HotSpotNodeLIRBuilder) gen).visitDirectCompareAndSwap(this);
     }
 
     /**
-     * Compares an expected value with the actual value in a location denoted by an object and a given offset.
-     * Iff they are same, {@code newValue} is placed into the location and the {@code expectedValue} is returned.
-     * Otherwise, the actual value is returned.
-     * All of the above is performed in one atomic hardware transaction.
+     * Compares an expected value with the actual value in a location denoted by an address. Iff
+     * they are same, {@code newValue} is placed into the location and the {@code expectedValue} is
+     * returned. Otherwise, the actual value is returned. All of the above is performed in one
+     * atomic hardware transaction.
      *
-     * @param object the object containing a field to be atomically tested and updated
-     * @param offset offset from {@code object} of the field
+     * @param address the address to be atomically tested and updated
      * @param expectedValue if this value is currently in the field, perform the swap
      * @param newValue the new value to put into the field
      * @return either {@code expectedValue} or the actual value
      */
     @NodeIntrinsic
-    public static Word compareAndSwap(Object object, long offset, Word expectedValue, Word newValue) {
-        throw new UnsupportedOperationException();
-    }
+    public static native Word compareAndSwap(Address address, Word expectedValue, Word newValue, @ConstantNodeParameter LocationIdentity locationIdentity);
 }

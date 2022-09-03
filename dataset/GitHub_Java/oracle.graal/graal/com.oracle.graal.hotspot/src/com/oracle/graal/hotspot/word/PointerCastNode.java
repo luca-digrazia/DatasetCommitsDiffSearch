@@ -22,28 +22,33 @@
  */
 package com.oracle.graal.hotspot.word;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+import jdk.vm.ci.meta.Value;
 
 /**
- * Cast between Word and metaspace pointers that is introduced by the
- * {@link HotSpotWordTypeRewriterPhase}.
+ * Cast between Word and metaspace pointers exposed by the {@link HotspotOpcode#FROM_POINTER} and
+ * {@link HotspotOpcode#TO_KLASS_POINTER} operations.
  */
-@NodeInfo
-public class PointerCastNode extends FloatingNode implements LIRLowerable {
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+public final class PointerCastNode extends FloatingNode implements LIRLowerable, Node.ValueNumberable {
 
+    public static final NodeClass<PointerCastNode> TYPE = NodeClass.create(PointerCastNode.class);
     @Input ValueNode input;
 
-    public static PointerCastNode create(Stamp stamp, ValueNode input) {
-        return new PointerCastNode(stamp, input);
-    }
-
-    protected PointerCastNode(Stamp stamp, ValueNode input) {
-        super(stamp);
+    public PointerCastNode(Stamp stamp, ValueNode input) {
+        super(TYPE, stamp);
         this.input = input;
     }
 
@@ -54,7 +59,7 @@ public class PointerCastNode extends FloatingNode implements LIRLowerable {
     @Override
     public void generate(NodeLIRBuilderTool generator) {
         Value value = generator.operand(input);
-        assert value.getLIRKind().equals(generator.getLIRGeneratorTool().getLIRKind(stamp())) : "PointerCastNode shouldn't change the LIRKind";
+        assert value.getValueKind().equals(generator.getLIRGeneratorTool().getLIRKind(stamp())) : "PointerCastNode shouldn't change the LIRKind";
 
         generator.setResult(this, value);
     }

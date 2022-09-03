@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,31 +23,61 @@
 //JaCoCo Exclude
 package com.oracle.graal.hotspot.replacements.arraycopy;
 
-import static com.oracle.graal.api.meta.LocationIdentity.*;
+import static com.oracle.graal.nodeinfo.InputType.Memory;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_UNKNOWN;
+import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayBaseOffset;
+import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayIndexScale;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.runtime.*;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
+import com.oracle.graal.hotspot.meta.HotSpotHostForeignCallsProvider;
+import com.oracle.graal.hotspot.nodes.GetObjectAddressNode;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.NamedLocationIdentity;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.AddNode;
+import com.oracle.graal.nodes.calc.IntegerConvertNode;
+import com.oracle.graal.nodes.calc.LeftShiftNode;
+import com.oracle.graal.nodes.extended.ForeignCallNode;
+import com.oracle.graal.nodes.memory.AbstractMemoryCheckpoint;
+import com.oracle.graal.nodes.memory.MemoryAccess;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.memory.MemoryNode;
+import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
 
-@NodeInfo(allowedUsageTypes = {InputType.Memory})
-public class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single {
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.PrimitiveConstant;
 
-    @Input ValueNode src;
-    @Input ValueNode srcPos;
-    @Input ValueNode dest;
-    @Input ValueNode destPos;
-    @Input ValueNode length;
+@NodeInfo(allowedUsageTypes = {Memory}, cycles = CYCLES_UNKNOWN, size = SIZE_UNKNOWN)
+public final class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single, MemoryAccess, Canonicalizable {
 
-    protected Kind elementKind;
+    public static final NodeClass<ArrayCopyCallNode> TYPE = NodeClass.create(ArrayCopyCallNode.class);
+    @Input protected ValueNode src;
+    @Input protected ValueNode srcPos;
+    @Input protected ValueNode dest;
+    @Input protected ValueNode destPos;
+    @Input protected ValueNode length;
+
+    @OptionalInput(Memory) MemoryNode lastLocationAccess;
+
+    protected final JavaKind elementKind;
+    protected final LocationIdentity locationIdentity;
 
     /**
      * Aligned means that the offset of the copy is heap word aligned.
@@ -58,14 +88,19 @@ public class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements Lower
 
     protected final HotSpotGraalRuntimeProvider runtime;
 
-    public static ArrayCopyCallNode create(@InjectedNodeParameter HotSpotGraalRuntimeProvider runtime, ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length,
-                    Kind elementKind, boolean aligned, boolean disjoint, boolean uninitialized) {
-        return new ArrayCopyCallNode(src, srcPos, dest, destPos, length, elementKind, aligned, disjoint, uninitialized, runtime);
+    public ArrayCopyCallNode(@InjectedNodeParameter HotSpotGraalRuntimeProvider runtime, ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, JavaKind elementKind,
+                    boolean aligned, boolean disjoint, boolean uninitialized) {
+        this(runtime, src, srcPos, dest, destPos, length, elementKind, null, aligned, disjoint, uninitialized);
     }
 
-    protected ArrayCopyCallNode(ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, Kind elementKind, boolean aligned, boolean disjoint, boolean uninitialized,
-                    HotSpotGraalRuntimeProvider runtime) {
-        super(StampFactory.forVoid());
+    public ArrayCopyCallNode(@InjectedNodeParameter HotSpotGraalRuntimeProvider runtime, ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, JavaKind elementKind,
+                    boolean disjoint) {
+        this(runtime, src, srcPos, dest, destPos, length, elementKind, null, false, disjoint, false);
+    }
+
+    protected ArrayCopyCallNode(@InjectedNodeParameter HotSpotGraalRuntimeProvider runtime, ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, JavaKind elementKind,
+                    LocationIdentity locationIdentity, boolean aligned, boolean disjoint, boolean uninitialized) {
+        super(TYPE, StampFactory.forVoid());
         assert elementKind != null;
         this.src = src;
         this.srcPos = srcPos;
@@ -73,15 +108,11 @@ public class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements Lower
         this.destPos = destPos;
         this.length = length;
         this.elementKind = elementKind;
+        this.locationIdentity = (locationIdentity != null ? locationIdentity : NamedLocationIdentity.getArrayLocation(elementKind));
         this.aligned = aligned;
         this.disjoint = disjoint;
         this.uninitialized = uninitialized;
         this.runtime = runtime;
-    }
-
-    public static ArrayCopyCallNode create(@InjectedNodeParameter HotSpotGraalRuntimeProvider runtime, ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length,
-                    Kind elementKind, boolean disjoint) {
-        return new ArrayCopyCallNode(src, srcPos, dest, destPos, length, elementKind, false, disjoint, false, runtime);
     }
 
     public ValueNode getSource() {
@@ -104,57 +135,78 @@ public class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements Lower
         return length;
     }
 
-    public Kind getElementKind() {
+    public JavaKind getElementKind() {
         return elementKind;
     }
 
     private ValueNode computeBase(ValueNode base, ValueNode pos) {
-        FixedWithNextNode basePtr = graph().add(GetObjectAddressNode.create(base));
+        FixedWithNextNode basePtr = graph().add(new GetObjectAddressNode(base));
         graph().addBeforeFixed(this, basePtr);
-        ValueNode loc = IndexedLocationNode.create(getLocationIdentity(), runtime.getArrayBaseOffset(elementKind), pos, graph(), runtime.getArrayIndexScale(elementKind));
-        return graph().unique(ComputeAddressNode.create(basePtr, loc, StampFactory.forKind(Kind.Long)));
+        Stamp wordStamp = StampFactory.forKind(runtime.getTarget().wordJavaKind);
+        ValueNode wordPos = IntegerConvertNode.convert(pos, wordStamp, graph());
+        int shift = CodeUtil.log2(getArrayIndexScale(elementKind));
+        ValueNode scaledIndex = graph().unique(new LeftShiftNode(wordPos, ConstantNode.forInt(shift, graph())));
+        ValueNode offset = graph().unique(new AddNode(scaledIndex, ConstantNode.forIntegerStamp(wordStamp, getArrayBaseOffset(elementKind), graph())));
+        return graph().unique(new OffsetAddressNode(basePtr, offset));
     }
 
     @Override
     public void lower(LoweringTool tool) {
-        if (graph().getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
+        if (graph().getGuardsStage().areFrameStatesAtDeopts()) {
             updateAlignedDisjoint();
-            ForeignCallDescriptor desc = HotSpotHostForeignCallsProvider.lookupArraycopyDescriptor(elementKind, isAligned(), isDisjoint(), isUninitialized());
+            ForeignCallDescriptor desc = HotSpotHostForeignCallsProvider.lookupArraycopyDescriptor(elementKind, isAligned(), isDisjoint(), isUninitialized(),
+                            locationIdentity.equals(LocationIdentity.any()));
             StructuredGraph graph = graph();
             ValueNode srcAddr = computeBase(getSource(), getSourcePosition());
             ValueNode destAddr = computeBase(getDestination(), getDestinationPosition());
             ValueNode len = getLength();
-            if (len.stamp().getStackKind() != Kind.Long) {
-                len = IntegerConvertNode.convert(len, StampFactory.forKind(Kind.Long), graph());
+            if (len.stamp().getStackKind() != JavaKind.Long) {
+                len = IntegerConvertNode.convert(len, StampFactory.forKind(JavaKind.Long), graph());
             }
-            ForeignCallNode call = graph.add(ForeignCallNode.create(Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getForeignCalls(), desc, srcAddr, destAddr, len));
+            ForeignCallNode call = graph.add(new ForeignCallNode(runtime.getHostBackend().getForeignCalls(), desc, srcAddr, destAddr, len));
             call.setStateAfter(stateAfter());
             graph.replaceFixedWithFixed(this, call);
-
         }
     }
 
     @Override
+    public MemoryNode getLastLocationAccess() {
+        return lastLocationAccess;
+    }
+
+    @Override
+    public void setLastLocationAccess(MemoryNode lla) {
+        updateUsagesInterface(lastLocationAccess, lla);
+        lastLocationAccess = lla;
+    }
+
+    @Override
     public LocationIdentity getLocationIdentity() {
-        if (elementKind != null) {
-            return NamedLocationIdentity.getArrayLocation(elementKind);
-        }
-        return ANY_LOCATION;
+        return locationIdentity;
     }
 
     @NodeIntrinsic
-    private static native void arraycopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantNodeParameter Kind elementKind, @ConstantNodeParameter boolean aligned,
+    private static native void arraycopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantNodeParameter JavaKind elementKind, @ConstantNodeParameter boolean aligned,
                     @ConstantNodeParameter boolean disjoint, @ConstantNodeParameter boolean uninitialized);
 
-    public static void arraycopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantNodeParameter Kind elementKind, boolean aligned, boolean disjoint) {
-        arraycopy(src, srcPos, dest, destPos, length, elementKind, aligned, disjoint, false);
+    @NodeIntrinsic
+    private static native void arraycopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantNodeParameter JavaKind elementKind,
+                    @ConstantNodeParameter LocationIdentity locationIdentity, @ConstantNodeParameter boolean aligned, @ConstantNodeParameter boolean disjoint,
+                    @ConstantNodeParameter boolean uninitialized);
+
+    public static void arraycopyObjectKillsAny(Object src, int srcPos, Object dest, int destPos, int length) {
+        arraycopy(src, srcPos, dest, destPos, length, JavaKind.Object, LocationIdentity.any(), false, false, false);
     }
 
-    public static void disjointArraycopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantNodeParameter Kind elementKind) {
+    public static void arraycopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantNodeParameter JavaKind elementKind) {
+        arraycopy(src, srcPos, dest, destPos, length, elementKind, false, false, false);
+    }
+
+    public static void disjointArraycopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantNodeParameter JavaKind elementKind) {
         arraycopy(src, srcPos, dest, destPos, length, elementKind, false, true, false);
     }
 
-    public static void disjointUninitializedArraycopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantNodeParameter Kind elementKind) {
+    public static void disjointUninitializedArraycopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantNodeParameter JavaKind elementKind) {
         arraycopy(src, srcPos, dest, destPos, length, elementKind, false, true, true);
     }
 
@@ -170,12 +222,12 @@ public class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements Lower
         return uninitialized;
     }
 
-    boolean isHeapWordAligned(JavaConstant value, Kind kind) {
-        return (runtime.getArrayBaseOffset(kind) + (long) value.asInt() * runtime.getArrayIndexScale(kind)) % runtime.getConfig().heapWordSize == 0;
+    boolean isHeapWordAligned(JavaConstant value, JavaKind kind) {
+        return (getArrayBaseOffset(kind) + (long) value.asInt() * getArrayIndexScale(kind)) % runtime.getVMConfig().heapWordSize == 0;
     }
 
     public void updateAlignedDisjoint() {
-        Kind componentKind = elementKind;
+        JavaKind componentKind = elementKind;
         if (srcPos == destPos) {
             // Can treat as disjoint
             disjoint = true;
@@ -191,5 +243,16 @@ public class ArrayCopyCallNode extends AbstractMemoryCheckpoint implements Lower
                 disjoint = true;
             }
         }
+    }
+
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        if (getLength().isConstant() && getLength().asConstant().isDefaultForKind()) {
+            if (lastLocationAccess != null) {
+                replaceAtUsages(InputType.Memory, lastLocationAccess.asNode());
+            }
+            return null;
+        }
+        return this;
     }
 }

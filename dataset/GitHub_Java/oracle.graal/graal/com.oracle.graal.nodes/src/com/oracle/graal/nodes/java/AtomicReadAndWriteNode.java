@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,31 +22,39 @@
  */
 package com.oracle.graal.nodes.java;
 
-import static com.oracle.graal.graph.UnsafeAccess.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_10;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_4;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.memory.AbstractMemoryCheckpoint;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
 
-import sun.misc.*;
+import jdk.vm.ci.meta.JavaKind;
+import sun.misc.Unsafe;
 
 /**
  * Represents an atomic read-and-write operation like {@link Unsafe#getAndSetInt(Object, long, int)}
  * .
  */
-public class AtomicReadAndWriteNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single {
+@NodeInfo(cycles = CYCLES_10, size = SIZE_4)
+public final class AtomicReadAndWriteNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single {
 
-    @Input private ValueNode object;
-    @Input private ValueNode offset;
-    @Input private ValueNode newValue;
+    public static final NodeClass<AtomicReadAndWriteNode> TYPE = NodeClass.create(AtomicReadAndWriteNode.class);
+    @Input ValueNode object;
+    @Input ValueNode offset;
+    @Input ValueNode newValue;
 
-    private final Kind valueKind;
-    private final LocationIdentity locationIdentity;
+    protected final JavaKind valueKind;
+    protected final LocationIdentity locationIdentity;
 
-    public AtomicReadAndWriteNode(ValueNode object, ValueNode offset, ValueNode newValue, Kind valueKind, LocationIdentity locationIdentity) {
-        super(StampFactory.forKind(newValue.getKind()));
+    public AtomicReadAndWriteNode(ValueNode object, ValueNode offset, ValueNode newValue, JavaKind valueKind, LocationIdentity locationIdentity) {
+        super(TYPE, StampFactory.forKind(newValue.getStackKind()));
         this.object = object;
         this.offset = offset;
         this.newValue = newValue;
@@ -66,34 +74,17 @@ public class AtomicReadAndWriteNode extends AbstractMemoryCheckpoint implements 
         return newValue;
     }
 
-    public Kind getValueKind() {
+    public JavaKind getValueKind() {
         return valueKind;
     }
 
+    @Override
     public LocationIdentity getLocationIdentity() {
         return locationIdentity;
     }
 
+    @Override
     public void lower(LoweringTool tool) {
         tool.getLowerer().lower(this, tool);
     }
-
-    @NodeIntrinsic
-    public static int getAndSetInt(Object object, long offset, int newValue, @SuppressWarnings("unused") @ConstantNodeParameter Kind valueKind,
-                    @ConstantNodeParameter @SuppressWarnings("unused") LocationIdentity locationIdentity) {
-        return unsafe.getAndSetInt(object, offset, newValue);
-    }
-
-    @NodeIntrinsic
-    public static long getAndSetLong(Object object, long offset, long newValue, @SuppressWarnings("unused") @ConstantNodeParameter Kind valueKind,
-                    @ConstantNodeParameter @SuppressWarnings("unused") LocationIdentity locationIdentity) {
-        return unsafe.getAndSetLong(object, offset, newValue);
-    }
-
-    @NodeIntrinsic
-    public static Object getAndSetObject(Object object, long offset, Object newValue, @SuppressWarnings("unused") @ConstantNodeParameter Kind valueKind,
-                    @ConstantNodeParameter @SuppressWarnings("unused") LocationIdentity locationIdentity) {
-        return unsafe.getAndSetObject(object, offset, newValue);
-    }
-
 }

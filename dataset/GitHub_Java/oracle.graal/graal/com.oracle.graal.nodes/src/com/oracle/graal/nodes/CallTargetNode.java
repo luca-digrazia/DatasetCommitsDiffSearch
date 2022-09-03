@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,30 +22,117 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.InputType.Extension;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
 
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.StampPair;
+import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.NodeInputList;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
+@NodeInfo(allowedUsageTypes = Extension, cycles = CYCLES_0, size = SIZE_0)
 public abstract class CallTargetNode extends ValueNode implements LIRLowerable {
-    @Input protected final NodeInputList<ValueNode> arguments;
+    public static final NodeClass<CallTargetNode> TYPE = NodeClass.create(CallTargetNode.class);
 
-    public CallTargetNode(ValueNode[] arguments) {
-        super(StampFactory.illegal());
+    public enum InvokeKind {
+        Interface(false),
+        Special(true),
+        Static(true),
+        Virtual(false);
+
+        InvokeKind(boolean direct) {
+            this.direct = direct;
+        }
+
+        private final boolean direct;
+
+        public boolean hasReceiver() {
+            return this != Static;
+        }
+
+        public boolean isDirect() {
+            return direct;
+        }
+
+        public boolean isIndirect() {
+            return !direct;
+        }
+
+        public boolean isInterface() {
+            return this == InvokeKind.Interface;
+        }
+    }
+
+    @Input protected NodeInputList<ValueNode> arguments;
+    protected ResolvedJavaMethod targetMethod;
+    protected InvokeKind invokeKind;
+    protected final StampPair returnStamp;
+
+    protected CallTargetNode(NodeClass<? extends CallTargetNode> c, ValueNode[] arguments, ResolvedJavaMethod targetMethod, InvokeKind invokeKind, StampPair returnStamp) {
+        super(c, StampFactory.forVoid());
+        this.targetMethod = targetMethod;
+        this.invokeKind = invokeKind;
         this.arguments = new NodeInputList<>(this, arguments);
+        this.returnStamp = returnStamp;
     }
 
     public NodeInputList<ValueNode> arguments() {
         return arguments;
     }
 
-    public abstract RiType returnType();
+    public static Stamp createReturnStamp(Assumptions assumptions, JavaType returnType) {
+        JavaKind kind = returnType.getJavaKind();
+        if (kind == JavaKind.Object && returnType instanceof ResolvedJavaType) {
+            return StampFactory.object(TypeReference.create(assumptions, (ResolvedJavaType) returnType));
+        } else {
+            return StampFactory.forKind(kind);
+        }
+    }
 
-    public abstract CiKind returnKind();
+    public StampPair returnStamp() {
+        return this.returnStamp;
+    }
+
+    /**
+     * A human-readable representation of the target, used for debug printing only.
+     */
+    public abstract String targetName();
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        //nop
+    public void generate(NodeLIRBuilderTool gen) {
+        // nop
+    }
+
+    public void setTargetMethod(ResolvedJavaMethod method) {
+        targetMethod = method;
+    }
+
+    /**
+     * Gets the target method for this invocation instruction.
+     *
+     * @return the target method
+     */
+    public ResolvedJavaMethod targetMethod() {
+        return targetMethod;
+    }
+
+    public InvokeKind invokeKind() {
+        return invokeKind;
+    }
+
+    public void setInvokeKind(InvokeKind kind) {
+        this.invokeKind = kind;
     }
 }

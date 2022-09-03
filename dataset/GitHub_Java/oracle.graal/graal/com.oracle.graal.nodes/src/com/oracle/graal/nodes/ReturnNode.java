@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,30 +22,71 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.InputType.Extension;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_UNKNOWN;
 
-public final class ReturnNode extends FixedNode implements LIRLowerable, Node.IterableNodeType {
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.IterableNodeType;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.memory.MemoryMapNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-    @Input private ValueNode result;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.JavaKind;
+
+@NodeInfo(cycles = CYCLES_UNKNOWN, size = SIZE_UNKNOWN)
+public final class ReturnNode extends ControlSinkNode implements LIRLowerable, IterableNodeType {
+
+    public static final NodeClass<ReturnNode> TYPE = NodeClass.create(ReturnNode.class);
+    @OptionalInput ValueNode result;
+    @OptionalInput(Extension) MemoryMapNode memoryMap;
 
     public ValueNode result() {
         return result;
     }
 
-    /**
-     * Constructs a new Return instruction.
-     * @param result the instruction producing the result for this return; {@code null} if this is a void return
-     */
     public ReturnNode(ValueNode result) {
-        super(StampFactory.forKind(result == null ? CiKind.Void : result.kind()));
+        this(result, null);
+    }
+
+    public ReturnNode(ValueNode result, MemoryMapNode memoryMap) {
+        super(TYPE, StampFactory.forVoid());
         this.result = result;
+        this.memoryMap = memoryMap;
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.visitReturn(this);
+    public void generate(NodeLIRBuilderTool gen) {
+        assert verifyReturn(gen.getLIRGeneratorTool().target());
+        if (result == null) {
+            gen.getLIRGeneratorTool().emitReturn(JavaKind.Void, null);
+        } else {
+            gen.getLIRGeneratorTool().emitReturn(result.getStackKind(), gen.operand(result));
+        }
+    }
+
+    public void setMemoryMap(MemoryMapNode memoryMap) {
+        updateUsages(this.memoryMap, memoryMap);
+        this.memoryMap = memoryMap;
+    }
+
+    public MemoryMapNode getMemoryMap() {
+        return memoryMap;
+    }
+
+    private boolean verifyReturn(TargetDescription target) {
+        if (graph().method() != null) {
+            JavaKind actual = result == null ? JavaKind.Void : result.getStackKind();
+            JavaKind expected = graph().method().getSignature().getReturnKind().getStackKind();
+            if (actual == target.wordJavaKind && expected == JavaKind.Object) {
+                // OK, we're compiling a snippet that returns a Word
+                return true;
+            }
+            assert actual == expected : "return kind doesn't match: actual " + actual + ", expected: " + expected;
+        }
+        return true;
     }
 }

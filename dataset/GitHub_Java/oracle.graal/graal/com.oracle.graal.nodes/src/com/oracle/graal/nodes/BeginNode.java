@@ -22,32 +22,38 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.iterators.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Simplifiable;
+import com.oracle.graal.graph.spi.SimplifierTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
 
-public class BeginNode extends AbstractStateSplit implements LIRLowerable, Simplifiable, Node.IterableNodeType {
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+public final class BeginNode extends AbstractBeginNode implements Simplifiable {
+
+    public static final NodeClass<BeginNode> TYPE = NodeClass.create(BeginNode.class);
+
     public BeginNode() {
-        super(StampFactory.illegal());
+        super(TYPE, StampFactory.forVoid());
     }
 
-    public static BeginNode begin(FixedNode with) {
-        if (with instanceof BeginNode) {
-            return (BeginNode) with;
+    public BeginNode(Stamp stamp) {
+        super(TYPE, stamp);
+    }
+
+    public void trySimplify() {
+        FixedNode prev = (FixedNode) this.predecessor();
+        if (prev instanceof ControlSplitNode) {
+            // This begin node is necessary.
+        } else {
+            // This begin node can be removed and all guards moved up to the preceding begin node.
+            prepareDelete();
+            graph().removeFixed(this);
         }
-        BeginNode begin =  with.graph().add(new BeginNode());
-        begin.setNext(with);
-        return begin;
-    }
-
-    @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> debugProperties = super.getDebugProperties();
-        debugProperties.put("shortName", "B");
-        return debugProperties;
     }
 
     @Override
@@ -59,43 +65,18 @@ public class BeginNode extends AbstractStateSplit implements LIRLowerable, Simpl
             // This begin node is necessary.
         } else {
             // This begin node can be removed and all guards moved up to the preceding begin node.
-            if (!usages().isEmpty()) {
-                Node prevBegin = prev;
-                while (!(prevBegin instanceof BeginNode)) {
-                    prevBegin = prevBegin.predecessor();
-                }
-                for (Node usage : usages()) {
-                    tool.addToWorkList(usage);
-                }
-                replaceAtUsages(prevBegin);
-            }
-            ((StructuredGraph) graph()).removeFixed(this);
+            prepareDelete();
+            tool.addToWorkList(next());
+            graph().removeFixed(this);
         }
     }
 
-    public void evacuateGuards() {
-        if (!usages().isEmpty()) {
-            Node prevBegin = predecessor();
-            assert prevBegin != null;
-            while (!(prevBegin instanceof BeginNode)) {
-                prevBegin = prevBegin.predecessor();
-            }
-            replaceAtUsages(prevBegin);
+    public static AbstractBeginNode begin(FixedNode with) {
+        if (with instanceof AbstractBeginNode) {
+            return (AbstractBeginNode) with;
         }
-    }
-
-    @Override
-    public boolean verify() {
-        assertTrue(predecessor() != null || this == ((StructuredGraph) graph()).start() || this instanceof MergeNode, "begin nodes must be connected");
-        return super.verify();
-    }
-
-    @Override
-    public void generate(LIRGeneratorTool gen) {
-        // nop
-    }
-
-    public NodeIterable<GuardNode> guards() {
-        return usages().filter(GuardNode.class);
+        BeginNode begin = with.graph().add(new BeginNode());
+        begin.setNext(with);
+        return begin;
     }
 }

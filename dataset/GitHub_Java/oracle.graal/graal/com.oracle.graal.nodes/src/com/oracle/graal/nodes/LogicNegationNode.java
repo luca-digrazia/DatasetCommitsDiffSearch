@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,30 +22,59 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.spi.*;
+import static com.oracle.graal.nodeinfo.InputType.Condition;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
 
 /**
  * Logic node that negates its argument.
  */
-public class LogicNegationNode extends LogicNode implements Canonicalizable, IterableNodeType {
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+public final class LogicNegationNode extends LogicNode implements Canonicalizable.Unary<LogicNode> {
 
-    @Input private LogicNode input;
+    public static final NodeClass<LogicNegationNode> TYPE = NodeClass.create(LogicNegationNode.class);
+    @Input(Condition) LogicNode value;
 
-    public LogicNegationNode(LogicNode input) {
-        this.input = input;
+    public LogicNegationNode(LogicNode value) {
+        super(TYPE);
+        this.value = value;
     }
 
-    public LogicNode getInput() {
-        return input;
-    }
-
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (input instanceof LogicNegationNode) {
-            return ((LogicNegationNode) input).getInput();
-        } else {
-            return this;
+    public static LogicNode create(LogicNode value) {
+        LogicNode synonym = findSynonym(value);
+        if (synonym != null) {
+            return synonym;
         }
+        return new LogicNegationNode(value);
+    }
+
+    private static LogicNode findSynonym(LogicNode value) {
+        if (value instanceof LogicConstantNode) {
+            LogicConstantNode logicConstantNode = (LogicConstantNode) value;
+            return LogicConstantNode.forBoolean(!logicConstantNode.getValue());
+        } else if (value instanceof LogicNegationNode) {
+            return ((LogicNegationNode) value).getValue();
+        }
+        return null;
+    }
+
+    @Override
+    public LogicNode getValue() {
+        return value;
+    }
+
+    @Override
+    public LogicNode canonical(CanonicalizerTool tool, LogicNode forValue) {
+        LogicNode synonym = findSynonym(forValue);
+        if (synonym != null) {
+            return synonym;
+        }
+        return this;
     }
 
 }

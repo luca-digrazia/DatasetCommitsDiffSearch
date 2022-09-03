@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,17 +22,25 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_UNKNOWN;
+
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.memory.AbstractMemoryCheckpoint;
 
 /**
  * Base class for nodes that modify a range of an array.
  */
-public abstract class ArrayRangeWriteNode extends AbstractStateSplit implements Node.IterableNodeType {
+@NodeInfo(cycles = CYCLES_UNKNOWN, size = SIZE_UNKNOWN)
+public abstract class ArrayRangeWriteNode extends AbstractMemoryCheckpoint {
 
-    protected ArrayRangeWriteNode(Stamp stamp) {
-        super(stamp);
+    public static final NodeClass<ArrayRangeWriteNode> TYPE = NodeClass.create(ArrayRangeWriteNode.class);
+
+    protected ArrayRangeWriteNode(NodeClass<? extends ArrayRangeWriteNode> c, Stamp stamp) {
+        super(c, stamp);
     }
 
     /**
@@ -54,4 +62,11 @@ public abstract class ArrayRangeWriteNode extends AbstractStateSplit implements 
      * Return true if the written array is an object array, false if it is a primitive array.
      */
     public abstract boolean isObjectArray();
+
+    /**
+     * Returns whether this write is the initialization of the written location. If it is true, the
+     * old value of the memory location is either uninitialized or zero. If it is false, the memory
+     * location is guaranteed to contain a valid value or zero.
+     */
+    public abstract boolean isInitialization();
 }

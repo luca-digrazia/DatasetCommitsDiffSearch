@@ -23,6 +23,8 @@
 package com.oracle.graal.nodes.memory;
 
 import static com.oracle.graal.nodeinfo.InputType.Guard;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
 
 import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.compiler.common.LocationIdentity;
@@ -46,7 +48,7 @@ import com.oracle.graal.nodes.spi.VirtualizerTool;
 /**
  * Writes a given {@linkplain #value() value} a {@linkplain FixedAccessNode memory location}.
  */
-@NodeInfo(nameTemplate = "Write#{p#location/s}")
+@NodeInfo(nameTemplate = "Write#{p#location/s}", cycles = CYCLES_2, size = SIZE_1)
 public class WriteNode extends AbstractWriteNode implements LIRLowerable, Simplifiable, Virtualizable {
 
     public static final NodeClass<WriteNode> TYPE = NodeClass.create(WriteNode.class);

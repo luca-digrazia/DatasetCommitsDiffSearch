@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,48 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.graal.cri.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.InputType.Memory;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_30;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_8;
+
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.memory.AbstractMemoryCheckpoint;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+
+import jdk.vm.ci.meta.JavaKind;
 
 /**
- * Represents an atomic compare-and-swap operation
- * The result is a boolean that contains whether the value matched the expected value.
+ * Represents an atomic compare-and-swap operation The result is a boolean that contains whether the
+ * value matched the expected value.
  */
-public class CompareAndSwapNode extends AbstractStateSplit implements LIRLowerable, Lowerable, MemoryCheckpoint {
+@NodeInfo(allowedUsageTypes = Memory, cycles = CYCLES_30, size = SIZE_8)
+public final class CompareAndSwapNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single {
 
-    @Input private ValueNode object;
-    @Input private ValueNode offset;
-    @Input private ValueNode expected;
-    @Input private ValueNode newValue;
+    public static final NodeClass<CompareAndSwapNode> TYPE = NodeClass.create(CompareAndSwapNode.class);
+    @Input ValueNode object;
+    @Input ValueNode offset;
+    @Input ValueNode expected;
+    @Input ValueNode newValue;
+
+    protected final JavaKind valueKind;
+    protected final LocationIdentity locationIdentity;
+
+    public CompareAndSwapNode(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue, JavaKind valueKind, LocationIdentity locationIdentity) {
+        super(TYPE, StampFactory.forKind(JavaKind.Boolean.getStackKind()));
+        assert expected.stamp().isCompatible(newValue.stamp());
+        this.object = object;
+        this.offset = offset;
+        this.expected = expected;
+        this.newValue = newValue;
+        this.valueKind = valueKind;
+        this.locationIdentity = locationIdentity;
+    }
 
     public ValueNode object() {
         return object;
@@ -56,41 +81,17 @@ public class CompareAndSwapNode extends AbstractStateSplit implements LIRLowerab
         return newValue;
     }
 
-    public CompareAndSwapNode(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue) {
-        super(StampFactory.forKind(CiKind.Boolean.stackKind()));
-        assert expected.kind() == newValue.kind();
-        this.object = object;
-        this.offset = offset;
-        this.expected = expected;
-        this.newValue = newValue;
+    public JavaKind getValueKind() {
+        return valueKind;
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.visitCompareAndSwap(this);
+    public LocationIdentity getLocationIdentity() {
+        return locationIdentity;
     }
 
     @Override
-    public void lower(CiLoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
-    }
-
-    // specialized on value type until boxing/unboxing is sorted out in intrinsification
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static boolean compareAndSwap(Object object, long offset, Object expected, Object newValue) {
-        throw new UnsupportedOperationException();
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static boolean compareAndSwap(Object object, long offset, long expected, long newValue) {
-        throw new UnsupportedOperationException();
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static boolean compareAndSwap(Object object, long offset, int expected, int newValue) {
-        throw new UnsupportedOperationException();
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
     }
 }

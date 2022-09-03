@@ -66,7 +66,8 @@ public enum NodeCycles {
     CYCLES_80(80),
     CYCLES_100(100),
     CYCLES_200(200),
-    CYCLES_500(500);
+    CYCLES_500(500),
+    CYCLES_INFINITY(1000);
 
     final int estimatedCPUCycles;
 

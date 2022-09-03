@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,57 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_100;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_100;
+
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.graph.IterableNodeType;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.extended.MonitorEnter;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
 
 /**
  * The {@code MonitorEnterNode} represents the acquisition of a monitor.
  */
-public final class MonitorEnterNode extends AccessMonitorNode implements Lowerable, MonitorEnter {
+@NodeInfo(cycles = CYCLES_100, size = SIZE_100)
+public class MonitorEnterNode extends AccessMonitorNode implements Virtualizable, Lowerable, IterableNodeType, MonitorEnter, MemoryCheckpoint.Single {
 
-    /**
-     * Creates a new MonitorEnterNode.
-     *
-     * @param object the instruction producing the object
-     */
-    public MonitorEnterNode(ValueNode object) {
-        super(object);
+    public static final NodeClass<MonitorEnterNode> TYPE = NodeClass.create(MonitorEnterNode.class);
+
+    public MonitorEnterNode(ValueNode object, MonitorIdNode monitorId) {
+        this(TYPE, object, monitorId);
     }
 
+    public MonitorEnterNode(NodeClass<? extends MonitorEnterNode> c, ValueNode object, MonitorIdNode monitorId) {
+        super(c, object, monitorId);
+    }
+
+    @Override
+    public LocationIdentity getLocationIdentity() {
+        return LocationIdentity.any();
+    }
+
+    @Override
     public void lower(LoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
+        tool.getLowerer().lower(this, tool);
+    }
+
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode alias = tool.getAlias(object());
+        if (alias instanceof VirtualObjectNode) {
+            VirtualObjectNode virtual = (VirtualObjectNode) alias;
+            if (virtual.hasIdentity()) {
+                tool.addLock(virtual, getMonitorId());
+                tool.delete();
+            }
+        }
     }
 }

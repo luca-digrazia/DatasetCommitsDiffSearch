@@ -22,25 +22,27 @@
  */
 package com.oracle.graal.nodes.virtual;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
 
-public abstract class EscapeObjectState extends VirtualState implements Node.IterableNodeType, LIRLowerable {
+import com.oracle.graal.graph.Node.ValueNumberable;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.VirtualState;
 
-    @Input private VirtualObjectNode object;
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+public abstract class EscapeObjectState extends VirtualState implements ValueNumberable {
+    public static final NodeClass<EscapeObjectState> TYPE = NodeClass.create(EscapeObjectState.class);
+
+    @Input protected VirtualObjectNode object;
 
     public VirtualObjectNode object() {
         return object;
     }
 
-    public EscapeObjectState(VirtualObjectNode object) {
+    public EscapeObjectState(NodeClass<? extends EscapeObjectState> c, VirtualObjectNode object) {
+        super(c);
         this.object = object;
-    }
-
-    @Override
-    public void generate(LIRGeneratorTool generator) {
-        // Nothing to do, virtual object states are processed as part of the handling of StateSplit nodes.
     }
 
     @Override

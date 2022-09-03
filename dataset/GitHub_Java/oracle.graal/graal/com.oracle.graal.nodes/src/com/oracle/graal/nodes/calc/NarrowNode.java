@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,41 +22,49 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
+
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp.Narrow;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.IntegerConvertOp.SignExtend;
+import com.oracle.graal.compiler.common.type.PrimitiveStamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
  * The {@code NarrowNode} converts an integer to a narrower integer.
  */
-public class NarrowNode extends IntegerConvertNode implements Simplifiable {
+@NodeInfo(cycles = CYCLES_1)
+public final class NarrowNode extends IntegerConvertNode<Narrow, SignExtend> {
+
+    public static final NodeClass<NarrowNode> TYPE = NodeClass.create(NarrowNode.class);
 
     public NarrowNode(ValueNode input, int resultBits) {
-        super(StampTool.narrowingConversion(input.stamp(), resultBits), input, resultBits);
+        this(input, PrimitiveStamp.getBits(input.stamp()), resultBits);
+        assert 0 < resultBits && resultBits <= PrimitiveStamp.getBits(input.stamp());
     }
 
-    public static long narrow(long value, int resultBits) {
-        return value & IntegerStamp.defaultMask(resultBits);
+    public NarrowNode(ValueNode input, int inputBits, int resultBits) {
+        super(TYPE, ArithmeticOpTable::getNarrow, ArithmeticOpTable::getSignExtend, inputBits, resultBits, input);
     }
 
-    @Override
-    public Constant convert(Constant c) {
-        return Constant.forPrimitiveInt(getResultBits(), narrow(c.asLong(), getResultBits()));
+    public static ValueNode create(ValueNode input, int resultBits) {
+        return create(input, PrimitiveStamp.getBits(input.stamp()), resultBits);
     }
 
-    @Override
-    public Constant reverse(Constant input) {
-        IntegerStamp stamp = (IntegerStamp) stamp();
-        long result;
-        if (stamp.isUnsigned()) {
-            result = ZeroExtendNode.zeroExtend(input.asLong(), getResultBits());
+    public static ValueNode create(ValueNode input, int inputBits, int resultBits) {
+        IntegerConvertOp<Narrow> signExtend = ArithmeticOpTable.forStamp(input.stamp()).getNarrow();
+        ValueNode synonym = findSynonym(signExtend, input, inputBits, resultBits, signExtend.foldStamp(inputBits, resultBits, input.stamp()));
+        if (synonym != null) {
+            return synonym;
         } else {
-            result = SignExtendNode.signExtend(input.asLong(), getResultBits());
+            return new NarrowNode(input, inputBits, resultBits);
         }
-        return Constant.forPrimitiveInt(getInputBits(), result);
     }
 
     @Override
@@ -64,79 +72,52 @@ public class NarrowNode extends IntegerConvertNode implements Simplifiable {
         return false;
     }
 
-    private ValueNode tryCanonicalize() {
-        ValueNode ret = canonicalConvert();
-        if (ret != null) {
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        ValueNode ret = super.canonical(tool, forValue);
+        if (ret != this) {
             return ret;
         }
 
-        if (getInput() instanceof NarrowNode) {
+        if (forValue instanceof NarrowNode) {
             // zzzzzzzz yyyyxxxx -(narrow)-> yyyyxxxx -(narrow)-> xxxx
             // ==> zzzzzzzz yyyyxxxx -(narrow)-> xxxx
-            NarrowNode other = (NarrowNode) getInput();
-            return graph().unique(new NarrowNode(other.getInput(), getResultBits()));
-        } else if (getInput() instanceof IntegerConvertNode) {
+            NarrowNode other = (NarrowNode) forValue;
+            return new NarrowNode(other.getValue(), other.getInputBits(), getResultBits());
+        } else if (forValue instanceof IntegerConvertNode) {
             // SignExtendNode or ZeroExtendNode
-            IntegerConvertNode other = (IntegerConvertNode) getInput();
+            IntegerConvertNode<?, ?> other = (IntegerConvertNode<?, ?>) forValue;
+            if (other.getValue().getUsageCount() == 1 && other.getUsageCount() > 1) {
+                // Do not perform if this will introduce a new live value.
+                // If the original value's usage count is > 1, there is already another user.
+                // If the convert's usage count is <=1, it will be dead code eliminated.
+                return this;
+            }
             if (getResultBits() == other.getInputBits()) {
                 // xxxx -(extend)-> yyyy xxxx -(narrow)-> xxxx
                 // ==> no-op
-                return other.getInput();
+                return other.getValue();
             } else if (getResultBits() < other.getInputBits()) {
                 // yyyyxxxx -(extend)-> zzzzzzzz yyyyxxxx -(narrow)-> xxxx
                 // ==> yyyyxxxx -(narrow)-> xxxx
-                return graph().unique(new NarrowNode(other.getInput(), getResultBits()));
+                return new NarrowNode(other.getValue(), other.getInputBits(), getResultBits());
             } else {
                 if (other instanceof SignExtendNode) {
                     // sxxx -(sign-extend)-> ssssssss sssssxxx -(narrow)-> sssssxxx
                     // ==> sxxx -(sign-extend)-> sssssxxx
-                    return graph().unique(new SignExtendNode(other.getInput(), getResultBits()));
+                    return new SignExtendNode(other.getValue(), other.getInputBits(), getResultBits());
                 } else if (other instanceof ZeroExtendNode) {
                     // xxxx -(zero-extend)-> 00000000 00000xxx -(narrow)-> 0000xxxx
                     // ==> xxxx -(zero-extend)-> 0000xxxx
-                    return graph().unique(new ZeroExtendNode(other.getInput(), getResultBits()));
+                    return new ZeroExtendNode(other.getValue(), other.getInputBits(), getResultBits());
                 }
             }
         }
-
-        return null;
-    }
-
-    private boolean tryNarrow(SimplifierTool tool, Stamp stamp, ValueNode node) {
-        boolean canNarrow = node instanceof NarrowableArithmeticNode && node.usages().count() == 1;
-
-        if (canNarrow) {
-            for (Node inputNode : node.inputs().snapshot()) {
-                ValueNode input = (ValueNode) inputNode;
-                if (!tryNarrow(tool, stamp, input)) {
-                    ValueNode narrow = graph().unique(new NarrowNode(input, getResultBits()));
-                    node.replaceFirstInput(input, narrow);
-                    tool.addToWorkList(narrow);
-                }
-            }
-            node.setStamp(stamp);
-        }
-
-        return canNarrow;
+        return this;
     }
 
     @Override
-    public void simplify(SimplifierTool tool) {
-        ValueNode ret = tryCanonicalize();
-        if (ret != null) {
-            graph().replaceFloating(this, ret);
-        } else if (tryNarrow(tool, stamp().unrestricted(), getInput())) {
-            graph().replaceFloating(this, getInput());
-        }
-    }
-
-    @Override
-    public boolean inferStamp() {
-        return updateStamp(StampTool.narrowingConversion(getInput().stamp(), getResultBits()));
-    }
-
-    @Override
-    public void generate(ArithmeticLIRGenerator gen) {
-        gen.setResult(this, gen.emitNarrow(gen.operand(getInput()), getResultBits()));
+    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+        nodeValueMap.setResult(this, gen.emitNarrow(nodeValueMap.operand(getValue()), getResultBits()));
     }
 }

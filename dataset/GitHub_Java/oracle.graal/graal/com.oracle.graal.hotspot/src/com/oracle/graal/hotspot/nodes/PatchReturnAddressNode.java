@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,36 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.word.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.hotspot.HotSpotNodeLIRBuilder;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.word.Word;
 
 /**
  * Modifies the return address of the current frame.
  */
-public class PatchReturnAddressNode extends FixedWithNextNode implements LIRLowerable {
+@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
+public final class PatchReturnAddressNode extends FixedWithNextNode implements LIRLowerable {
 
-    @Input private ValueNode address;
+    public static final NodeClass<PatchReturnAddressNode> TYPE = NodeClass.create(PatchReturnAddressNode.class);
+    @Input ValueNode address;
 
     public PatchReturnAddressNode(ValueNode address) {
-        super(StampFactory.forVoid());
+        super(TYPE, StampFactory.forVoid());
         this.address = address;
     }
 
     @Override
-    public void generate(NodeLIRGeneratorTool gen) {
-        ((HotSpotNodeLIRGenerator) gen).emitPatchReturnAddress(address);
+    public void generate(NodeLIRBuilderTool gen) {
+        ((HotSpotNodeLIRBuilder) gen).emitPatchReturnAddress(address);
     }
 
     @NodeIntrinsic

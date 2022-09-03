@@ -22,35 +22,50 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import java.util.Arrays;
+import java.util.Collections;
 
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.IterableNodeType;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
 public abstract class AbstractEndNode extends FixedNode implements IterableNodeType, LIRLowerable {
 
-    protected AbstractEndNode() {
-        super(StampFactory.forVoid());
+    public static final NodeClass<AbstractEndNode> TYPE = NodeClass.create(AbstractEndNode.class);
+
+    protected AbstractEndNode(NodeClass<? extends AbstractEndNode> c) {
+        super(c, StampFactory.forVoid());
     }
 
     @Override
-    public void generate(NodeLIRGeneratorTool gen) {
+    public void generate(NodeLIRBuilderTool gen) {
         gen.visitEndNode(this);
     }
 
-    public MergeNode merge() {
-        return (MergeNode) usages().first();
+    public AbstractMergeNode merge() {
+        return (AbstractMergeNode) usages().first();
     }
 
     @Override
     public boolean verify() {
-        assertTrue(usages().count() <= 1, "at most one usage");
+        assertTrue(getUsageCount() <= 1, "at most one usage");
         return super.verify();
     }
 
     @Override
     public Iterable<? extends Node> cfgSuccessors() {
-        return Arrays.asList(merge());
+        AbstractMergeNode merge = merge();
+        if (merge != null) {
+            return Arrays.asList(merge);
+        }
+        return Collections.emptyList();
     }
 }

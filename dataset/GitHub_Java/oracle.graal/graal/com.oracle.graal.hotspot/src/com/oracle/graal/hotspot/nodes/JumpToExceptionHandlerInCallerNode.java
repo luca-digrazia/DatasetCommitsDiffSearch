@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,32 +22,42 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.word.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_15;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_8;
+
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.hotspot.HotSpotBackend;
+import com.oracle.graal.hotspot.HotSpotNodeLIRBuilder;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ControlSinkNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.word.Word;
 
 /**
  * Sets up the {@linkplain HotSpotBackend#EXCEPTION_HANDLER_IN_CALLER arguments} expected by an
  * exception handler in the caller's frame, removes the current frame and jumps to said handler.
  */
-public class JumpToExceptionHandlerInCallerNode extends ControlSinkNode implements LIRLowerable {
+@NodeInfo(cycles = CYCLES_15, size = SIZE_8)
+public final class JumpToExceptionHandlerInCallerNode extends ControlSinkNode implements LIRLowerable {
 
-    @Input private ValueNode handlerInCallerPc;
-    @Input private ValueNode exception;
-    @Input private ValueNode exceptionPc;
+    public static final NodeClass<JumpToExceptionHandlerInCallerNode> TYPE = NodeClass.create(JumpToExceptionHandlerInCallerNode.class);
+    @Input ValueNode handlerInCallerPc;
+    @Input ValueNode exception;
+    @Input ValueNode exceptionPc;
 
     public JumpToExceptionHandlerInCallerNode(ValueNode handlerInCallerPc, ValueNode exception, ValueNode exceptionPc) {
-        super(StampFactory.forVoid());
+        super(TYPE, StampFactory.forVoid());
         this.handlerInCallerPc = handlerInCallerPc;
         this.exception = exception;
         this.exceptionPc = exceptionPc;
     }
 
     @Override
-    public void generate(NodeLIRGeneratorTool gen) {
-        ((HotSpotNodeLIRGenerator) gen).emitJumpToExceptionHandlerInCaller(handlerInCallerPc, exception, exceptionPc);
+    public void generate(NodeLIRBuilderTool gen) {
+        ((HotSpotNodeLIRBuilder) gen).emitJumpToExceptionHandlerInCaller(handlerInCallerPc, exception, exceptionPc);
     }
 
     @NodeIntrinsic

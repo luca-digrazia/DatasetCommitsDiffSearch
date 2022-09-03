@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,31 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.spi.*;
+import static com.oracle.graal.nodeinfo.InputType.Association;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.graph.IterableNodeType;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
- * This node will be inserted at point specified by {@link StructuredGraph#getEntryBCI()}, usually by the graph builder.
+ * This node will be inserted at point specified by {@link StructuredGraph#getEntryBCI()}, usually
+ * by the graph builder.
  */
-public class EntryMarkerNode extends BeginNode implements Node.IterableNodeType, Simplifiable, LIRLowerable {
+@NodeInfo(allowedUsageTypes = Association, cycles = CYCLES_0, size = SIZE_0)
+public final class EntryMarkerNode extends BeginStateSplitNode implements IterableNodeType, LIRLowerable {
+    public static final NodeClass<EntryMarkerNode> TYPE = NodeClass.create(EntryMarkerNode.class);
 
-    @Override
-    public void simplify(SimplifierTool tool) {
-        // this node should not be removed, this overrides BeginNode.simplify
+    public EntryMarkerNode() {
+        super(TYPE);
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        throw new GraalInternalError("OnStackReplacementNode should not survive");
+    public void generate(NodeLIRBuilderTool gen) {
+        throw new GraalError("OnStackReplacementNode should not survive");
     }
 }

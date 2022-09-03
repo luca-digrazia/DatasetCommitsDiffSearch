@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,16 +22,23 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.extended.*;
+import static com.oracle.graal.nodeinfo.InputType.Memory;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
 
-@NodeInfo(allowedUsageTypes = {InputType.Memory})
-public class KillingBeginNode extends AbstractBeginNode implements MemoryCheckpoint.Single {
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
 
-    private LocationIdentity locationIdentity;
+@NodeInfo(allowedUsageTypes = {Memory}, cycles = CYCLES_0, size = SIZE_0)
+public final class KillingBeginNode extends AbstractBeginNode implements MemoryCheckpoint.Single {
+
+    public static final NodeClass<KillingBeginNode> TYPE = NodeClass.create(KillingBeginNode.class);
+    protected LocationIdentity locationIdentity;
 
     public KillingBeginNode(LocationIdentity locationIdentity) {
+        super(TYPE);
         this.locationIdentity = locationIdentity;
     }
 
@@ -47,13 +54,5 @@ public class KillingBeginNode extends AbstractBeginNode implements MemoryCheckpo
     @Override
     public LocationIdentity getLocationIdentity() {
         return locationIdentity;
-    }
-
-    public MemoryCheckpoint asMemoryCheckpoint() {
-        return this;
-    }
-
-    public MemoryPhiNode asMemoryPhi() {
-        return null;
     }
 }

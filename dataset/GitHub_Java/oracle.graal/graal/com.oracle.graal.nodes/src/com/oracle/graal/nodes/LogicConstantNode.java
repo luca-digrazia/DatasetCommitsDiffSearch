@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,31 +22,48 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.spi.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+
+import com.oracle.graal.graph.Graph;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
  * The {@code LogicConstantNode} represents a boolean constant.
  */
-@NodeInfo(nameTemplate = "{p#value}")
-public class LogicConstantNode extends LogicNode implements LIRLowerable {
+@NodeInfo(nameTemplate = "{p#value}", cycles = CYCLES_0, size = SIZE_0)
+public final class LogicConstantNode extends LogicNode implements LIRLowerable {
 
-    public final boolean value;
+    public static final NodeClass<LogicConstantNode> TYPE = NodeClass.create(LogicConstantNode.class);
+    protected final boolean value;
 
-    protected LogicConstantNode(boolean value) {
-        super();
+    public LogicConstantNode(boolean value) {
+        super(TYPE);
         this.value = value;
     }
 
     /**
      * Returns a node for a boolean constant.
-     * 
+     *
      * @param v the boolean value for which to create the instruction
      * @param graph
      * @return a node representing the boolean
      */
     public static LogicConstantNode forBoolean(boolean v, Graph graph) {
         return graph.unique(new LogicConstantNode(v));
+    }
+
+    /**
+     * Returns a node for a boolean constant.
+     *
+     * @param v the boolean value for which to create the instruction
+     * @return a node representing the boolean
+     */
+    public static LogicConstantNode forBoolean(boolean v) {
+        return new LogicConstantNode(v);
     }
 
     /**
@@ -63,12 +80,26 @@ public class LogicConstantNode extends LogicNode implements LIRLowerable {
         return forBoolean(false, graph);
     }
 
+    /**
+     * Gets a constant for {@code true}.
+     */
+    public static LogicConstantNode tautology() {
+        return forBoolean(true);
+    }
+
+    /**
+     * Gets a constant for {@code false}.
+     */
+    public static LogicConstantNode contradiction() {
+        return forBoolean(false);
+    }
+
     public boolean getValue() {
         return value;
     }
 
     @Override
-    public void generate(NodeLIRGeneratorTool generator) {
+    public void generate(NodeLIRBuilderTool generator) {
         // nothing to do
     }
 }

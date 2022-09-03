@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,14 +22,23 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
 
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+
+@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
 public final class StoreHubNode extends FixedWithNextNode implements Lowerable {
 
-    @Input private ValueNode value;
-    @Input private ValueNode object;
+    public static final NodeClass<StoreHubNode> TYPE = NodeClass.create(StoreHubNode.class);
+    @Input ValueNode value;
+    @Input ValueNode object;
 
     public ValueNode getValue() {
         return value;
@@ -39,15 +48,15 @@ public final class StoreHubNode extends FixedWithNextNode implements Lowerable {
         return object;
     }
 
-    private StoreHubNode(ValueNode object, ValueNode value) {
-        super(StampFactory.forVoid());
+    public StoreHubNode(ValueNode object, ValueNode value) {
+        super(TYPE, StampFactory.forVoid());
         this.value = value;
         this.object = object;
     }
 
     @Override
-    public void lower(LoweringTool tool, LoweringType loweringType) {
-        tool.getRuntime().lower(this, tool);
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
     }
 
     @NodeIntrinsic

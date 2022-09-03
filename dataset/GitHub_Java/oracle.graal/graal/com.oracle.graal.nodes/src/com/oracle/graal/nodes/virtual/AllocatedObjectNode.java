@@ -22,23 +22,33 @@
  */
 package com.oracle.graal.nodes.virtual;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.InputType.Extension;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.spi.ArrayLengthProvider;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
 
 /**
  * Selects one object from a {@link CommitAllocationNode}. The object is identified by its
  * {@link VirtualObjectNode}.
  */
-public class AllocatedObjectNode extends FloatingNode implements Virtualizable, ArrayLengthProvider {
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+public final class AllocatedObjectNode extends FloatingNode implements Virtualizable, ArrayLengthProvider {
 
-    @Input private VirtualObjectNode virtualObject;
-    @Input(InputType.Association) private CommitAllocationNode commit;
+    public static final NodeClass<AllocatedObjectNode> TYPE = NodeClass.create(AllocatedObjectNode.class);
+    @Input VirtualObjectNode virtualObject;
+    @Input(Extension) CommitAllocationNode commit;
 
     public AllocatedObjectNode(VirtualObjectNode virtualObject) {
-        super(StampFactory.exactNonNull(virtualObject.type()));
+        super(TYPE, StampFactory.objectNonNull(TypeReference.createExactTrusted(virtualObject.type())));
         this.virtualObject = virtualObject;
     }
 
@@ -60,6 +70,7 @@ public class AllocatedObjectNode extends FloatingNode implements Virtualizable, 
         tool.replaceWithVirtual(getVirtualObject());
     }
 
+    @Override
     public ValueNode length() {
         if (virtualObject instanceof ArrayLengthProvider) {
             return ((ArrayLengthProvider) virtualObject).length();

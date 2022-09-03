@@ -22,32 +22,39 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_3;
+
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.hotspot.HotSpotLIRGenerator;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ControlSinkNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
 
 /**
  * Removes the current frame and tail calls the uncommon trap routine.
  */
-@NodeInfo(shortName = "DeoptCaller", nameTemplate = "DeoptCaller {p#reason/s}")
-public class DeoptimizeCallerNode extends ControlSinkNode implements LIRLowerable {
+@NodeInfo(shortName = "DeoptCaller", nameTemplate = "DeoptCaller {p#reason/s}", cycles = CYCLES_1, size = SIZE_3)
+public final class DeoptimizeCallerNode extends ControlSinkNode implements LIRLowerable {
 
-    private final DeoptimizationAction action;
-    private final DeoptimizationReason reason;
+    public static final NodeClass<DeoptimizeCallerNode> TYPE = NodeClass.create(DeoptimizeCallerNode.class);
+    protected final DeoptimizationAction action;
+    protected final DeoptimizationReason reason;
 
     public DeoptimizeCallerNode(DeoptimizationAction action, DeoptimizationReason reason) {
-        super(StampFactory.forVoid());
+        super(TYPE, StampFactory.forVoid());
         this.action = action;
         this.reason = reason;
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        ((HotSpotLIRGenerator) gen).emitDeoptimizeCaller(action, reason);
+    public void generate(NodeLIRBuilderTool gen) {
+        ((HotSpotLIRGenerator) gen.getLIRGeneratorTool()).emitDeoptimizeCaller(action, reason);
     }
 
     @NodeIntrinsic

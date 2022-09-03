@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,22 +22,36 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.InputType.Association;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.IterableNodeType;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
  * This node describes one locking scope; it ties the monitor enter, monitor exit and the frame
  * states together. It is thus referenced from the {@link MonitorEnterNode}, from the
  * {@link MonitorExitNode} and from the {@link FrameState}.
  */
+@NodeInfo(allowedUsageTypes = Association, cycles = CYCLES_0, size = SIZE_0)
 public class MonitorIdNode extends ValueNode implements IterableNodeType, LIRLowerable {
 
-    private int lockDepth;
+    public static final NodeClass<MonitorIdNode> TYPE = NodeClass.create(MonitorIdNode.class);
+    protected int lockDepth;
 
     public MonitorIdNode(int lockDepth) {
-        super(StampFactory.dependency());
+        this(TYPE, lockDepth);
+    }
+
+    protected MonitorIdNode(NodeClass<? extends MonitorIdNode> c, int lockDepth) {
+        super(c, StampFactory.forVoid());
         this.lockDepth = lockDepth;
     }
 
@@ -49,7 +63,8 @@ public class MonitorIdNode extends ValueNode implements IterableNodeType, LIRLow
         this.lockDepth = lockDepth;
     }
 
-    public void generate(NodeLIRGeneratorTool generator) {
+    @Override
+    public void generate(NodeLIRBuilderTool generator) {
         // nothing to do
     }
 }

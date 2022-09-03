@@ -30,7 +30,6 @@ import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.FixedWithNextNode;
 import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.debug.ControlFlowAnchored;
 import com.oracle.graal.nodes.spi.Lowerable;
 import com.oracle.graal.nodes.spi.LoweringTool;
 
@@ -41,7 +40,7 @@ import jdk.vm.ci.meta.JavaKind;
  * moved next to any uses to avoid creating a derived pointer that is live across a safepoint.
  */
 @NodeInfo(cycles = CYCLES_3, size = SIZE_2)
-public final class ComputeObjectAddressNode extends FixedWithNextNode implements Lowerable, ControlFlowAnchored {
+public final class ComputeObjectAddressNode extends FixedWithNextNode implements Lowerable {
     public static final NodeClass<ComputeObjectAddressNode> TYPE = NodeClass.create(ComputeObjectAddressNode.class);
 
     @Input ValueNode object;

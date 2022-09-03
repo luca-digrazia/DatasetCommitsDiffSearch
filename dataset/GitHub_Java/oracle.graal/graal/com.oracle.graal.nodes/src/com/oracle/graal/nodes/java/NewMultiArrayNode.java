@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,32 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.spi.types.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_50;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_50;
+
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.NodeInputList;
+import com.oracle.graal.graph.NodeList;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.DeoptimizingFixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.ArrayLengthProvider;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
- * The {@code NewMultiArrayNode} represents an allocation of a multi-dimensional object
- * array.
+ * The {@code NewMultiArrayNode} represents an allocation of a multi-dimensional object array.
  */
-public final class NewMultiArrayNode extends FixedWithNextNode implements LIRLowerable, TypeFeedbackProvider {
+@NodeInfo(cycles = CYCLES_50, size = SIZE_50)
+public class NewMultiArrayNode extends DeoptimizingFixedWithNextNode implements Lowerable, ArrayLengthProvider {
 
-    @Input private final NodeInputList<ValueNode> dimensions;
-    @Data private final RiResolvedType type;
+    public static final NodeClass<NewMultiArrayNode> TYPE = NodeClass.create(NewMultiArrayNode.class);
+    @Input protected NodeInputList<ValueNode> dimensions;
+    protected final ResolvedJavaType type;
 
     public ValueNode dimension(int index) {
         return dimensions.get(index);
@@ -48,34 +57,37 @@ public final class NewMultiArrayNode extends FixedWithNextNode implements LIRLow
         return dimensions.size();
     }
 
-    /**
-     * Constructs a new NewMultiArrayNode.
-     * @param elementType the element type of the array
-     * @param dimensions the node which produce the dimensions for this array
-     * @param cpi the constant pool index for resolution
-     * @param riConstantPool the constant pool for resolution
-     */
-    public NewMultiArrayNode(RiResolvedType type, ValueNode[] dimensions) {
-        super(StampFactory.exactNonNull(type));
+    public NodeList<ValueNode> dimensions() {
+        return dimensions;
+    }
+
+    public NewMultiArrayNode(ResolvedJavaType type, ValueNode[] dimensions) {
+        this(TYPE, type, dimensions);
+    }
+
+    protected NewMultiArrayNode(NodeClass<? extends NewMultiArrayNode> c, ResolvedJavaType type, ValueNode[] dimensions) {
+        super(c, StampFactory.objectNonNull(TypeReference.createExactTrusted(type)));
         this.type = type;
         this.dimensions = new NodeInputList<>(this, dimensions);
-        assert dimensions.length > 0 && type.isArrayClass();
+        assert dimensions.length > 0 && type.isArray();
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.visitNewMultiArray(this);
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
     }
 
-    public RiResolvedType type() {
+    public ResolvedJavaType type() {
         return type;
     }
 
     @Override
-    public void typeFeedback(TypeFeedbackTool tool) {
-        for (ValueNode length : dimensions) {
-            assert length.kind() == CiKind.Int;
-            tool.addScalar(length).constantBound(Condition.GE, CiConstant.INT_0);
-        }
+    public boolean canDeoptimize() {
+        return true;
+    }
+
+    @Override
+    public ValueNode length() {
+        return dimension(0);
     }
 }

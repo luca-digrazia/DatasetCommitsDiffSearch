@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,34 @@
  */
 package com.oracle.graal.lir.jtt;
 
-import java.lang.annotation.*;
-import java.lang.reflect.*;
-import java.util.stream.*;
+import static com.oracle.graal.lir.LIRValueUtil.isVariable;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_IGNORED;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_IGNORED;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.graphbuilderconf.MethodIdMap.Receiver;
-import com.oracle.graal.jtt.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.stream.Stream;
+
+import com.oracle.graal.api.replacements.SnippetReflectionProvider;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.NodeInputList;
+import com.oracle.graal.jtt.JTTTest;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
+import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.Value;
 
 /**
  * Base class for LIR tests.
@@ -48,107 +59,15 @@ import com.oracle.graal.nodes.spi.*;
  */
 public abstract class LIRTest extends JTTTest {
 
-    protected abstract static class LIRTestSpecification {
-        private Value result;
+    @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+    private static final class LIRTestNode extends FixedWithNextNode implements LIRLowerable {
 
-        void generate(LIRGeneratorTool gen, Value arg0) {
-            defaultHandler(gen, arg0);
-        }
-
-        void generate(LIRGeneratorTool gen, Value arg0, Value arg1) {
-            defaultHandler(gen, arg0, arg1);
-        }
-
-        void generate(LIRGeneratorTool gen, Value arg0, Value arg1, Value arg2) {
-            defaultHandler(gen, arg0, arg1, arg2);
-        }
-
-        void generate(LIRGeneratorTool gen, Value arg0, Value arg1, Value arg2, Value arg3) {
-            defaultHandler(gen, arg0, arg1, arg2, arg3);
-        }
-
-        void generate(LIRGeneratorTool gen, Value arg0, Value arg1, Value arg2, Value arg3, Value arg4) {
-            defaultHandler(gen, arg0, arg1, arg2, arg3, arg4);
-        }
-
-        private static void defaultHandler(@SuppressWarnings("unused") LIRGeneratorTool gen, Value... args) {
-            throw new GraalInternalError("LIRTestSpecification cannot handle generate() with %d arguments", args.length);
-        }
-
-        void generate(LIRGeneratorTool gen, Value[] values) {
-            if (values.length == 1) {
-                generate(gen, values[0]);
-            } else if (values.length == 2) {
-                generate(gen, values[0], values[1]);
-            } else if (values.length == 3) {
-                generate(gen, values[0], values[1], values[2]);
-            } else if (values.length == 4) {
-                generate(gen, values[0], values[1], values[2], values[3]);
-            } else if (values.length == 5) {
-                generate(gen, values[0], values[1], values[2], values[3], values[4]);
-            } else {
-                GraalInternalError.unimplemented();
-            }
-
-        }
-
-        public void setResult(Value value) {
-            result = value;
-        }
-
-        public Value getResult() {
-            assert result != null : "Result not set (using setResult())";
-            return result;
-        }
-    }
-
-    @NodeInfo
-    private static final class FixedLIRTestNode extends FixedWithNextNode implements LIRLowerable {
-
-        public static final NodeClass<FixedLIRTestNode> TYPE = NodeClass.create(FixedLIRTestNode.class);
+        public static final NodeClass<LIRTestNode> TYPE = NodeClass.create(LIRTestNode.class);
         @Input protected ValueNode opsNode;
         @Input protected NodeInputList<ValueNode> values;
         public final SnippetReflectionProvider snippetReflection;
 
-        public FixedLIRTestNode(SnippetReflectionProvider snippetReflection, ValueNode opsNode, ValueNode[] values) {
-            super(TYPE, StampFactory.forVoid());
-            this.opsNode = opsNode;
-            this.values = new NodeInputList<>(this, values);
-            this.snippetReflection = snippetReflection;
-        }
-
-        public NodeInputList<ValueNode> values() {
-            return values;
-        }
-
-        public ValueNode getLIROpsNode() {
-            return opsNode;
-        }
-
-        @Override
-        public void generate(NodeLIRBuilderTool gen) {
-            LIRTestSpecification ops = getLIROperations();
-            Stream<Value> v = values().stream().map(node -> gen.operand(node));
-
-            ops.generate(gen.getLIRGeneratorTool(), v.toArray(size -> new Value[size]));
-        }
-
-        private LIRTestSpecification getLIROperations() {
-            assert getLIROpsNode().isConstant();
-            LIRTestSpecification spec = snippetReflection.asObject(LIRTestSpecification.class, getLIROpsNode().asJavaConstant());
-            return spec;
-        }
-    }
-
-    @NodeInfo
-    private static final class FloatingLIRTestNode extends FloatingNode implements LIRLowerable {
-
-        public static final NodeClass<FloatingLIRTestNode> TYPE = NodeClass.create(FloatingLIRTestNode.class);
-        @Input protected ValueNode opsNode;
-        @Input protected NodeInputList<ValueNode> values;
-        public final SnippetReflectionProvider snippetReflection;
-
-        public FloatingLIRTestNode(SnippetReflectionProvider snippetReflection, Kind kind, ValueNode opsNode, ValueNode[] values) {
+        protected LIRTestNode(SnippetReflectionProvider snippetReflection, JavaKind kind, ValueNode opsNode, ValueNode[] values) {
             super(TYPE, StampFactory.forKind(kind));
             this.opsNode = opsNode;
             this.values = new NodeInputList<>(this, values);
@@ -169,67 +88,104 @@ public abstract class LIRTest extends JTTTest {
             Stream<Value> v = values().stream().map(node -> gen.operand(node));
 
             ops.generate(gen.getLIRGeneratorTool(), v.toArray(size -> new Value[size]));
-            gen.setResult(this, ops.getResult());
+            Value result = ops.getResult();
+            if (result != null) {
+                gen.setResult(this, result);
+            }
         }
 
-        private LIRTestSpecification getLIROperations() {
+        public LIRTestSpecification getLIROperations() {
             assert getLIROpsNode().isConstant();
             LIRTestSpecification spec = snippetReflection.asObject(LIRTestSpecification.class, getLIROpsNode().asJavaConstant());
             return spec;
         }
     }
 
-    private InvocationPlugin fixedLIRNodePlugin = new InvocationPlugin() {
+    @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+    private static final class LIRValueNode extends FixedWithNextNode implements LIRLowerable {
+
+        public static final NodeClass<LIRValueNode> TYPE = NodeClass.create(LIRValueNode.class);
+        @Input protected ValueNode opsNode;
+        @Input protected ValueNode name;
+        public final SnippetReflectionProvider snippetReflection;
+
+        protected LIRValueNode(SnippetReflectionProvider snippetReflection, JavaKind kind, ValueNode opsNode, ValueNode name) {
+            super(TYPE, StampFactory.forKind(kind));
+            this.opsNode = opsNode;
+            this.name = name;
+            this.snippetReflection = snippetReflection;
+        }
+
+        public ValueNode getLIROpsNode() {
+            return opsNode;
+        }
+
+        @Override
+        public void generate(NodeLIRBuilderTool gen) {
+            LIRTestSpecification spec = getLIROperations();
+            Value output = spec.getOutput(getName());
+            gen.setResult(this, isVariable(output) ? output : gen.getLIRGeneratorTool().emitMove(output));
+        }
+
+        private String getName() {
+            assert name.isConstant();
+            return snippetReflection.asObject(String.class, name.asJavaConstant());
+        }
+
+        private LIRTestSpecification getLIROperations() {
+            assert getLIROpsNode().isConstant();
+            return snippetReflection.asObject(LIRTestSpecification.class, getLIROpsNode().asJavaConstant());
+        }
+
+    }
+
+    private InvocationPlugin lirTestPlugin = new InvocationPlugin() {
+        @Override
         public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode spec) {
-            b.add(new FixedLIRTestNode(getSnippetReflection(), spec, new ValueNode[]{}));
+            JavaKind returnKind = targetMethod.getSignature().getReturnKind();
+            LIRTestNode node = new LIRTestNode(getSnippetReflection(), returnKind, spec, new ValueNode[]{});
+            addNode(b, returnKind, node);
             return true;
         }
 
+        @Override
         public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode spec, ValueNode arg0) {
-            b.add(new FixedLIRTestNode(getSnippetReflection(), spec, new ValueNode[]{arg0}));
+            JavaKind returnKind = targetMethod.getSignature().getReturnKind();
+            LIRTestNode node = new LIRTestNode(getSnippetReflection(), returnKind, spec, new ValueNode[]{arg0});
+            addNode(b, returnKind, node);
             return true;
         }
 
+        @Override
         public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode spec, ValueNode arg0, ValueNode arg1) {
-            b.add(new FixedLIRTestNode(getSnippetReflection(), spec, new ValueNode[]{arg0, arg1}));
+            JavaKind returnKind = targetMethod.getSignature().getReturnKind();
+            LIRTestNode node = new LIRTestNode(getSnippetReflection(), returnKind, spec, new ValueNode[]{arg0, arg1});
+            addNode(b, returnKind, node);
             return true;
         }
 
+        @Override
         public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode spec, ValueNode arg0, ValueNode arg1, ValueNode arg2) {
-            b.add(new FixedLIRTestNode(getSnippetReflection(), spec, new ValueNode[]{arg0, arg1, arg2}));
+            JavaKind returnKind = targetMethod.getSignature().getReturnKind();
+            LIRTestNode node = new LIRTestNode(getSnippetReflection(), returnKind, spec, new ValueNode[]{arg0, arg1, arg2});
+            addNode(b, returnKind, node);
             return true;
         }
 
+        @Override
         public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode spec, ValueNode arg0, ValueNode arg1, ValueNode arg2, ValueNode arg3) {
-            b.add(new FixedLIRTestNode(getSnippetReflection(), spec, new ValueNode[]{arg0, arg1, arg2, arg3}));
-            return true;
-        }
-    };
-
-    private InvocationPlugin floatingLIRNodePlugin = new InvocationPlugin() {
-        public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode spec) {
-            b.addPush(new FloatingLIRTestNode(getSnippetReflection(), targetMethod.getSignature().getReturnKind(), spec, new ValueNode[]{}));
+            JavaKind returnKind = targetMethod.getSignature().getReturnKind();
+            LIRTestNode node = new LIRTestNode(getSnippetReflection(), returnKind, spec, new ValueNode[]{arg0, arg1, arg2, arg3});
+            addNode(b, returnKind, node);
             return true;
         }
 
-        public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode spec, ValueNode arg0) {
-            b.addPush(new FloatingLIRTestNode(getSnippetReflection(), targetMethod.getSignature().getReturnKind(), spec, new ValueNode[]{arg0}));
-            return true;
-        }
-
-        public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode spec, ValueNode arg0, ValueNode arg1) {
-            b.addPush(new FloatingLIRTestNode(getSnippetReflection(), targetMethod.getSignature().getReturnKind(), spec, new ValueNode[]{arg0, arg1}));
-            return true;
-        }
-
-        public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode spec, ValueNode arg0, ValueNode arg1, ValueNode arg2) {
-            b.addPush(new FloatingLIRTestNode(getSnippetReflection(), targetMethod.getSignature().getReturnKind(), spec, new ValueNode[]{arg0, arg1, arg2}));
-            return true;
-        }
-
-        public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode spec, ValueNode arg0, ValueNode arg1, ValueNode arg2, ValueNode arg3) {
-            b.addPush(new FloatingLIRTestNode(getSnippetReflection(), targetMethod.getSignature().getReturnKind(), spec, new ValueNode[]{arg0, arg1, arg2, arg3}));
-            return true;
+        private void addNode(GraphBuilderContext b, JavaKind returnKind, LIRTestNode node) {
+            if (returnKind.equals(JavaKind.Void)) {
+                b.add(node);
+            } else {
+                b.addPush(returnKind, node);
+            }
         }
 
     };
@@ -244,16 +200,57 @@ public abstract class LIRTest extends JTTTest {
                 assert Modifier.isStatic(m.getModifiers());
                 Class<?>[] p = m.getParameterTypes();
                 assert p.length > 0;
-                assert p[0].equals(LIRTestSpecification.class);
+                assert LIRTestSpecification.class.isAssignableFrom(p[0]);
 
-                if (m.getReturnType().equals(void.class)) {
-                    invocationPlugins.register(fixedLIRNodePlugin, c, m.getName(), p);
-                } else {
-                    invocationPlugins.register(floatingLIRNodePlugin, c, m.getName(), p);
-                }
+                invocationPlugins.register(lirTestPlugin, c, m.getName(), p);
             }
         }
+        InvocationPlugin outputPlugin = new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode spec, ValueNode name, ValueNode expected) {
+                JavaKind returnKind = targetMethod.getSignature().getReturnKind();
+                b.addPush(returnKind, new LIRValueNode(getSnippetReflection(), returnKind, spec, name));
+                return true;
+            }
+        };
+        invocationPlugins.register(outputPlugin, LIRTest.class, "getOutput", new Class<?>[]{LIRTestSpecification.class, String.class, Object.class});
+        invocationPlugins.register(outputPlugin, LIRTest.class, "getOutput", new Class<?>[]{LIRTestSpecification.class, String.class, int.class});
         return super.editGraphBuilderConfiguration(conf);
+    }
+
+    @SuppressWarnings("unused")
+    public static byte getOutput(LIRTestSpecification spec, String name, byte expected) {
+        return expected;
+    }
+
+    @SuppressWarnings("unused")
+    public static short getOutput(LIRTestSpecification spec, String name, short expected) {
+        return expected;
+    }
+
+    @SuppressWarnings("unused")
+    public static int getOutput(LIRTestSpecification spec, String name, int expected) {
+        return expected;
+    }
+
+    @SuppressWarnings("unused")
+    public static long getOutput(LIRTestSpecification spec, String name, long expected) {
+        return expected;
+    }
+
+    @SuppressWarnings("unused")
+    public static float getOutput(LIRTestSpecification spec, String name, float expected) {
+        return expected;
+    }
+
+    @SuppressWarnings("unused")
+    public static double getOutput(LIRTestSpecification spec, String name, double expected) {
+        return expected;
+    }
+
+    @SuppressWarnings("unused")
+    public static Object getOutput(LIRTestSpecification spec, String name, Object expected) {
+        return expected;
     }
 
     @java.lang.annotation.Retention(RetentionPolicy.RUNTIME)

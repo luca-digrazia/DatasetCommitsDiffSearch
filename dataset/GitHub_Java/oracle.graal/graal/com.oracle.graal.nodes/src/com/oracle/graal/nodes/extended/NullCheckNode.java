@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,17 +22,26 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.InputType.Guard;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_2;
 
-public class NullCheckNode extends DeoptimizingFixedWithNextNode implements LIRLowerable, GuardingNode {
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.DeoptimizingFixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-    @Input public ValueNode object;
+@NodeInfo(allowedUsageTypes = Guard, cycles = CYCLES_2, size = SIZE_2)
+public final class NullCheckNode extends DeoptimizingFixedWithNextNode implements LIRLowerable, GuardingNode {
+
+    public static final NodeClass<NullCheckNode> TYPE = NodeClass.create(NullCheckNode.class);
+    @Input ValueNode object;
 
     public NullCheckNode(ValueNode object) {
-        super(StampFactory.dependency());
+        super(TYPE, StampFactory.forVoid());
         this.object = object;
     }
 
@@ -41,8 +50,8 @@ public class NullCheckNode extends DeoptimizingFixedWithNextNode implements LIRL
     }
 
     @Override
-    public void generate(LIRGeneratorTool generator) {
-        generator.emitNullCheck(object, this);
+    public void generate(NodeLIRBuilderTool generator) {
+        generator.getLIRGeneratorTool().emitNullCheck(generator.operand(object), generator.state(this));
     }
 
     @Override
@@ -50,13 +59,6 @@ public class NullCheckNode extends DeoptimizingFixedWithNextNode implements LIRL
         return true;
     }
 
-    @Override
-    public DeoptimizationReason getDeoptimizationReason() {
-        return DeoptimizationReason.NullCheckException;
-    }
-
-    @Override
-    public ValueNode asNode() {
-        return this;
-    }
+    @NodeIntrinsic
+    public static native void nullCheck(Object object);
 }

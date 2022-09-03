@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,64 +22,72 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodeinfo.Verbosity;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.Value;
 
 /**
  * Access the value of a specific register.
  */
-@NodeInfo(nameTemplate = "ReadRegister %{p#register}")
-public final class ReadRegisterNode extends FixedWithNextNode implements LIRGenLowerable {
+@NodeInfo(nameTemplate = "ReadRegister %{p#register}", cycles = CYCLES_1, size = SIZE_1)
+public final class ReadRegisterNode extends FixedWithNextNode implements LIRLowerable {
 
+    public static final NodeClass<ReadRegisterNode> TYPE = NodeClass.create(ReadRegisterNode.class);
     /**
      * The fixed register to access.
      */
-    private final Register register;
+    protected final Register register;
 
     /**
      * When true, subsequent uses of this node use the fixed register; when false, the value is
      * moved into a new virtual register so that the fixed register is not seen by uses.
      */
-    private final boolean directUse;
+    protected final boolean directUse;
 
     /**
      * When true, this node is also an implicit definition of the value for the register allocator,
      * i.e., the register is an implicit incoming value; when false, the register must be defined in
      * the same method or must be an register excluded from register allocation.
      */
-    private final boolean incoming;
+    protected final boolean incoming;
 
-    public ReadRegisterNode(Register register, Kind kind, boolean directUse, boolean incoming) {
-        super(StampFactory.forKind(kind));
+    public ReadRegisterNode(Register register, JavaKind kind, boolean directUse, boolean incoming) {
+        super(TYPE, StampFactory.forKind(kind));
+        assert register != null;
         this.register = register;
         this.directUse = directUse;
         this.incoming = incoming;
     }
 
-    /**
-     * Constructor to be used by node intrinsics where the stamp is inferred from the intrinsic
-     * definition.
-     */
     public ReadRegisterNode(Register register, boolean directUse, boolean incoming) {
-        super(StampFactory.forNodeIntrinsic());
+        super(TYPE, StampFactory.forNodeIntrinsic());
+        assert register != null;
         this.register = register;
         this.directUse = directUse;
         this.incoming = incoming;
     }
 
     @Override
-    public void generate(LIRGenerator generator) {
-        Value result = register.asValue(kind());
+    public void generate(NodeLIRBuilderTool generator) {
+        LIRKind kind = generator.getLIRGeneratorTool().getLIRKind(stamp());
+        Value result = register.asValue(kind);
         if (incoming) {
-            generator.emitIncomingValues(new Value[]{result});
+            generator.getLIRGeneratorTool().emitIncomingValues(new Value[]{result});
         }
         if (!directUse) {
-            result = generator.emitMove(result);
+            result = generator.getLIRGeneratorTool().emitMove(result);
         }
         generator.setResult(this, result);
     }

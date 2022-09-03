@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,24 +22,29 @@
  */
 package com.oracle.graal.nodes.debug;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_30;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_50;
+
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
 
 /**
  * A node for platform dependent verification of the Java heap. Intended to be used for debugging
  * heap corruption issues.
  */
-@NodeInfo
-public class VerifyHeapNode extends FixedWithNextNode implements Lowerable {
+@NodeInfo(cycles = CYCLES_30, size = SIZE_50)
+public final class VerifyHeapNode extends FixedWithNextNode implements Lowerable {
 
-    public static VerifyHeapNode create() {
-        return new VerifyHeapNode();
-    }
+    public static final NodeClass<VerifyHeapNode> TYPE = NodeClass.create(VerifyHeapNode.class);
 
-    protected VerifyHeapNode() {
-        super(StampFactory.forVoid());
+    public VerifyHeapNode() {
+        super(TYPE, StampFactory.forVoid());
     }
 
     @Override
@@ -49,12 +54,12 @@ public class VerifyHeapNode extends FixedWithNextNode implements Lowerable {
 
     public static void addBefore(FixedNode position) {
         StructuredGraph graph = position.graph();
-        graph.addBeforeFixed(position, graph.add(VerifyHeapNode.create()));
+        graph.addBeforeFixed(position, graph.add(new VerifyHeapNode()));
     }
 
     public static void addAfter(FixedWithNextNode position) {
         StructuredGraph graph = position.graph();
-        graph.addAfterFixed(position, graph.add(VerifyHeapNode.create()));
+        graph.addAfterFixed(position, graph.add(new VerifyHeapNode()));
     }
 
 }

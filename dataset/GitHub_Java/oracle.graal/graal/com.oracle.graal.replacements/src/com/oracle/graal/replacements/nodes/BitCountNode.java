@@ -26,6 +26,7 @@ import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_3;
 import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
 
 import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.compiler.common.type.PrimitiveStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.graph.NodeClass;
@@ -48,18 +49,13 @@ public final class BitCountNode extends UnaryNode implements ArithmeticLIRLowera
     public static final NodeClass<BitCountNode> TYPE = NodeClass.create(BitCountNode.class);
 
     public BitCountNode(ValueNode value) {
-        super(TYPE, computeStamp(value.stamp(), value), value);
+        super(TYPE, StampFactory.forInteger(JavaKind.Int, 0, ((PrimitiveStamp) value.stamp()).getBits()), value);
         assert value.getStackKind() == JavaKind.Int || value.getStackKind() == JavaKind.Long;
     }
 
     @Override
     public Stamp foldStamp(Stamp newStamp) {
-        ValueNode theValue = getValue();
-        return computeStamp(newStamp, theValue);
-    }
-
-    static Stamp computeStamp(Stamp newStamp, ValueNode theValue) {
-        assert newStamp.isCompatible(theValue.stamp());
+        assert newStamp.isCompatible(getValue().stamp());
         IntegerStamp valueStamp = (IntegerStamp) newStamp;
         assert (valueStamp.downMask() & CodeUtil.mask(valueStamp.getBits())) == valueStamp.downMask();
         assert (valueStamp.upMask() & CodeUtil.mask(valueStamp.getBits())) == valueStamp.upMask();

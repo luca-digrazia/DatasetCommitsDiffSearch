@@ -22,50 +22,33 @@
  */
 package com.oracle.graal.nodes.debug;
 
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
 
-@NodeInfo
-public class OpaqueNode extends FloatingNode implements LIRLowerable {
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-    @Input ValueNode value;
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+public final class OpaqueNode extends FloatingNode implements LIRLowerable {
+
+    public static final NodeClass<OpaqueNode> TYPE = NodeClass.create(OpaqueNode.class);
+    @Input protected ValueNode value;
 
     public OpaqueNode(ValueNode value) {
-        super(value.stamp().unrestricted());
+        super(TYPE, value.stamp().unrestricted());
         this.value = value;
+    }
+
+    public ValueNode getValue() {
+        return value;
     }
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
         gen.setResult(this, gen.operand(value));
     }
-
-    @NodeIntrinsic
-    public static native boolean opaque(boolean v);
-
-    @NodeIntrinsic
-    public static native byte opaque(byte v);
-
-    @NodeIntrinsic
-    public static native short opaque(short v);
-
-    @NodeIntrinsic
-    public static native char opaque(char v);
-
-    @NodeIntrinsic
-    public static native int opaque(int v);
-
-    @NodeIntrinsic
-    public static native long opaque(long v);
-
-    @NodeIntrinsic
-    public static native float opaque(float v);
-
-    @NodeIntrinsic
-    public static native double opaque(double v);
-
-    @NodeIntrinsic
-    public static native <T> T opaque(T v);
 }

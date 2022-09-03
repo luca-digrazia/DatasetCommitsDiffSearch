@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,24 +22,58 @@
  */
 package com.oracle.graal.truffle.nodes.asserts;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.replacements.nodes.*;
+import static com.oracle.graal.nodeinfo.InputType.State;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
 
-public class NeverPartOfCompilationNode extends MacroNode implements IterableNodeType {
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.IterableNodeType;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.VerificationError;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ControlSinkNode;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.StateSplit;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.util.GraphUtil;
 
-    private final String message;
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+public final class NeverPartOfCompilationNode extends ControlSinkNode implements StateSplit, IterableNodeType {
 
-    public NeverPartOfCompilationNode(Invoke invoke) {
-        this(invoke, "This code path should never be part of a compilation.");
-    }
+    public static final NodeClass<NeverPartOfCompilationNode> TYPE = NodeClass.create(NeverPartOfCompilationNode.class);
+    protected final String message;
+    @OptionalInput(State) protected FrameState stateAfter;
 
-    public NeverPartOfCompilationNode(Invoke invoke, String message) {
-        super(invoke);
+    public NeverPartOfCompilationNode(String message) {
+        super(TYPE, StampFactory.forVoid());
         this.message = message;
     }
 
-    public final String getMessage() {
+    public String getMessage() {
         return message;
+    }
+
+    @Override
+    public FrameState stateAfter() {
+        return stateAfter;
+    }
+
+    @Override
+    public void setStateAfter(FrameState x) {
+        assert x == null || x.isAlive() : "frame state must be in a graph";
+        updateUsages(stateAfter, x);
+        stateAfter = x;
+    }
+
+    @Override
+    public boolean hasSideEffect() {
+        return true;
+    }
+
+    public static void verifyNotFoundIn(final StructuredGraph graph) {
+        for (NeverPartOfCompilationNode neverPartOfCompilationNode : graph.getNodes(NeverPartOfCompilationNode.TYPE)) {
+            Throwable exception = new VerificationError(neverPartOfCompilationNode.getMessage());
+            throw GraphUtil.approxSourceException(neverPartOfCompilationNode, exception);
+        }
     }
 }

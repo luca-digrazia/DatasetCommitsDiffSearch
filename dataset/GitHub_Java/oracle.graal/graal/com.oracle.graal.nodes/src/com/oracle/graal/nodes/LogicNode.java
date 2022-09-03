@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,28 +22,57 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.InputType.Condition;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
 
-public abstract class LogicNode extends FloatingNode {
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.Node.IndirectCanonicalization;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.calc.FloatingNode;
 
-    public LogicNode(ValueNode... dependencies) {
-        super(StampFactory.condition(), dependencies);
+@NodeInfo(allowedUsageTypes = {Condition}, size = SIZE_1)
+public abstract class LogicNode extends FloatingNode implements IndirectCanonicalization {
+
+    public static final NodeClass<LogicNode> TYPE = NodeClass.create(LogicNode.class);
+
+    public LogicNode(NodeClass<? extends LogicNode> c) {
+        super(c, StampFactory.forVoid());
     }
 
-    /**
-     * Tells all usages of this node to negate their effect. For example, IfNodes should switch
-     * their true and false successors.
-     */
-    public void negateUsages() {
-        for (Node n : usages().snapshot()) {
-            assert n instanceof Negatable;
-            ((Negatable) n).negate();
+    public static LogicNode and(LogicNode a, LogicNode b, double shortCircuitProbability) {
+        return and(a, false, b, false, shortCircuitProbability);
+    }
+
+    public static LogicNode and(LogicNode a, boolean negateA, LogicNode b, boolean negateB, double shortCircuitProbability) {
+        StructuredGraph graph = a.graph();
+        ShortCircuitOrNode notAorNotB = graph.unique(new ShortCircuitOrNode(a, !negateA, b, !negateB, shortCircuitProbability));
+        return graph.unique(new LogicNegationNode(notAorNotB));
+    }
+
+    public static LogicNode or(LogicNode a, LogicNode b, double shortCircuitProbability) {
+        return or(a, false, b, false, shortCircuitProbability);
+    }
+
+    public static LogicNode or(LogicNode a, boolean negateA, LogicNode b, boolean negateB, double shortCircuitProbability) {
+        return a.graph().unique(new ShortCircuitOrNode(a, negateA, b, negateB, shortCircuitProbability));
+    }
+
+    public final boolean isTautology() {
+        if (this instanceof LogicConstantNode) {
+            LogicConstantNode logicConstantNode = (LogicConstantNode) this;
+            return logicConstantNode.getValue();
         }
+
+        return false;
     }
 
-    // forces all subclasses to canonicalize to BooleanNode instances
-    public abstract LogicNode canonical(CanonicalizerTool tool);
+    public final boolean isContradiction() {
+        if (this instanceof LogicConstantNode) {
+            LogicConstantNode logicConstantNode = (LogicConstantNode) this;
+            return !logicConstantNode.getValue();
+        }
+
+        return false;
+    }
 }

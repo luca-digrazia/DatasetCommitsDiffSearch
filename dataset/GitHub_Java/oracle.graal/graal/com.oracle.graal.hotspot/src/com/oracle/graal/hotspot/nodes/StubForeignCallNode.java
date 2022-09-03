@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,32 +22,48 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.code.*;
+import static com.oracle.graal.nodeinfo.InputType.Memory;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_UNKNOWN;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import java.util.Arrays;
+
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
+import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
+import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.NodeInputList;
+import com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodeinfo.Verbosity;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.Value;
 
 /**
  * Node for a {@linkplain ForeignCallDescriptor foreign} call from within a stub.
  */
-@NodeInfo(nameTemplate = "StubForeignCall#{p#descriptor/s}")
-public class StubForeignCallNode extends FixedWithNextNode implements DeoptimizingNode, LIRLowerable, MemoryCheckpoint {
+@NodeInfo(nameTemplate = "StubForeignCall#{p#descriptor/s}", allowedUsageTypes = Memory, cycles = CYCLES_UNKNOWN, size = SIZE_UNKNOWN)
+public final class StubForeignCallNode extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Multi {
 
-    @Input private final NodeInputList<ValueNode> arguments;
-    private final MetaAccessProvider runtime;
-    @Input private FrameState deoptState;
+    public static final NodeClass<StubForeignCallNode> TYPE = NodeClass.create(StubForeignCallNode.class);
+    @Input NodeInputList<ValueNode> arguments;
+    protected final ForeignCallsProvider foreignCalls;
 
-    private final ForeignCallDescriptor descriptor;
+    protected final ForeignCallDescriptor descriptor;
 
-    public StubForeignCallNode(MetaAccessProvider runtime, ForeignCallDescriptor descriptor, ValueNode... arguments) {
-        super(StampFactory.forKind(Kind.fromJavaClass(descriptor.getResultType())));
+    public StubForeignCallNode(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ForeignCallDescriptor descriptor, ValueNode... arguments) {
+        super(TYPE, StampFactory.forKind(JavaKind.fromJavaClass(descriptor.getResultType())));
         this.arguments = new NodeInputList<>(this, arguments);
         this.descriptor = descriptor;
-        this.runtime = runtime;
+        this.foreignCalls = foreignCalls;
     }
 
     public ForeignCallDescriptor getDescriptor() {
@@ -56,10 +72,13 @@ public class StubForeignCallNode extends FixedWithNextNode implements Deoptimizi
 
     @Override
     public LocationIdentity[] getLocationIdentities() {
-        return runtime.getKilledLocations(descriptor);
+        LocationIdentity[] killedLocations = foreignCalls.getKilledLocations(descriptor);
+        killedLocations = Arrays.copyOf(killedLocations, killedLocations.length + 1);
+        killedLocations[killedLocations.length - 1] = HotSpotReplacementsUtil.PENDING_EXCEPTION_LOCATION;
+        return killedLocations;
     }
 
-    protected Value[] operands(LIRGeneratorTool gen) {
+    protected Value[] operands(NodeLIRBuilderTool gen) {
         Value[] operands = new Value[arguments.size()];
         for (int i = 0; i < operands.length; i++) {
             operands[i] = gen.operand(arguments.get(i));
@@ -68,11 +87,11 @@ public class StubForeignCallNode extends FixedWithNextNode implements Deoptimizi
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
+    public void generate(NodeLIRBuilderTool gen) {
         assert graph().start() instanceof StubStartNode;
-        ForeignCallLinkage linkage = gen.getRuntime().lookupForeignCall(descriptor);
+        ForeignCallLinkage linkage = foreignCalls.lookupForeignCall(descriptor);
         Value[] operands = operands(gen);
-        Value result = gen.emitForeignCall(linkage, this, operands);
+        Value result = gen.getLIRGeneratorTool().emitForeignCall(linkage, null, operands);
         if (result != null) {
             gen.setResult(this, result);
         }
@@ -84,24 +103,5 @@ public class StubForeignCallNode extends FixedWithNextNode implements Deoptimizi
             return super.toString(verbosity) + "#" + descriptor;
         }
         return super.toString(verbosity);
-    }
-
-    @Override
-    public boolean canDeoptimize() {
-        return false;
-    }
-
-    @Override
-    public FrameState getDeoptimizationState() {
-        return null;
-    }
-
-    @Override
-    public void setDeoptimizationState(FrameState state) {
-    }
-
-    @Override
-    public DeoptimizationReason getDeoptimizationReason() {
-        return null;
     }
 }

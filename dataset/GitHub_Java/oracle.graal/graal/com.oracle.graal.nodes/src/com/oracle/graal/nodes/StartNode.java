@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,11 +22,32 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.nodes.extended.*;
+import static com.oracle.graal.nodeinfo.InputType.Memory;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
 
 /**
  * The start node of a graph.
  */
-public class StartNode extends BeginStateSplitNode implements MemoryCheckpoint{
+@NodeInfo(allowedUsageTypes = {Memory}, nameTemplate = "Start", cycles = CYCLES_0, size = SIZE_0)
+public class StartNode extends BeginStateSplitNode implements MemoryCheckpoint.Single {
+    public static final NodeClass<StartNode> TYPE = NodeClass.create(StartNode.class);
 
+    protected StartNode(NodeClass<? extends StartNode> c) {
+        super(c);
+    }
+
+    public StartNode() {
+        super(TYPE);
+    }
+
+    @Override
+    public LocationIdentity getLocationIdentity() {
+        return LocationIdentity.any();
+    }
 }

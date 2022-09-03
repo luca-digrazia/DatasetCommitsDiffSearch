@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,34 +22,32 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.compiler.common.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_30;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.UnaryOp.Sqrt;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
  * Square root.
  */
-@NodeInfo
-public class SqrtNode extends UnaryArithmeticNode<Sqrt> implements ArithmeticLIRLowerable, NarrowableArithmeticNode {
+@NodeInfo(cycles = CYCLES_30, size = SIZE_1)
+public final class SqrtNode extends UnaryArithmeticNode<Sqrt> implements ArithmeticLIRLowerable {
 
-    public static SqrtNode create(ValueNode x) {
-        return new SqrtNode(x);
-    }
+    public static final NodeClass<SqrtNode> TYPE = NodeClass.create(SqrtNode.class);
 
-    protected SqrtNode(ValueNode x) {
-        super(ArithmeticOpTable::getSqrt, x);
+    public SqrtNode(ValueNode x) {
+        super(TYPE, ArithmeticOpTable::getSqrt, x);
     }
 
     @Override
-    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        builder.setResult(this, gen.emitMathSqrt(builder.operand(getValue())));
-    }
-
-    @NodeIntrinsic
-    public static double sqrt(double n) {
-        return Math.sqrt(n);
+    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+        nodeValueMap.setResult(this, gen.emitMathSqrt(nodeValueMap.operand(getValue())));
     }
 }

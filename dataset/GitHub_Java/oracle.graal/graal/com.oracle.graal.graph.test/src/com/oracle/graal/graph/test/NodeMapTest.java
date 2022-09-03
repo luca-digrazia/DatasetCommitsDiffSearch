@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,15 +22,30 @@
  */
 package com.oracle.graal.graph.test;
 
-import static org.junit.Assert.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_IGNORED;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_IGNORED;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
-import org.junit.*;
+import org.junit.Before;
+import org.junit.Test;
 
-import com.oracle.graal.graph.*;
+import com.oracle.graal.api.test.Graal;
+import com.oracle.graal.graph.Graph;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.NodeMap;
+import com.oracle.graal.nodeinfo.NodeInfo;
 
 public class NodeMapTest {
 
-    private static class TestNode extends Node {
+    @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+    static final class TestNode extends Node {
+        public static final NodeClass<TestNode> TYPE = NodeClass.create(TestNode.class);
+
+        protected TestNode() {
+            super(TYPE);
+        }
     }
 
     private Graph graph;
@@ -39,6 +54,9 @@ public class NodeMapTest {
 
     @Before
     public void before() {
+        // Need to initialize HotSpotGraalRuntime before any Node class is initialized.
+        Graal.getRuntime();
+
         graph = new Graph();
         for (int i = 0; i < nodes.length; i++) {
             nodes[i] = graph.add(new TestNode());
@@ -89,24 +107,45 @@ public class NodeMapTest {
         }
     }
 
-    @Test(expected = AssertionError.class)
+    @SuppressWarnings("all")
+    private static boolean assertionsEnabled() {
+        boolean assertionsEnabled = false;
+        assert assertionsEnabled = true;
+        return assertionsEnabled;
+    }
+
+    @Test
     public void testNewGet() {
         /*
          * Failing here is not required, but if this behavior changes, usages of get need to be
          * checked for compatibility.
          */
         TestNode newNode = graph.add(new TestNode());
-        map.get(newNode);
+        try {
+            map.get(newNode);
+            fail("expected " + (assertionsEnabled() ? AssertionError.class.getSimpleName() : ArrayIndexOutOfBoundsException.class.getSimpleName()));
+        } catch (AssertionError ae) {
+            // thrown when assertions are enabled
+        } catch (ArrayIndexOutOfBoundsException e) {
+            // thrown when assertions are disabled
+        }
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void testNewSet() {
         /*
          * Failing here is not required, but if this behavior changes, usages of set need to be
          * checked for compatibility.
          */
         TestNode newNode = graph.add(new TestNode());
-        map.set(newNode, 1);
+        try {
+            map.set(newNode, 1);
+            fail("expected " + (assertionsEnabled() ? AssertionError.class.getSimpleName() : ArrayIndexOutOfBoundsException.class.getSimpleName()));
+        } catch (AssertionError ae) {
+            // thrown when assertions are enabled
+        } catch (ArrayIndexOutOfBoundsException e) {
+            // thrown when assertions are disabled
+        }
     }
 
     @Test
@@ -120,18 +159,5 @@ public class NodeMapTest {
         TestNode newNode = graph.add(new TestNode());
         map.setAndGrow(newNode, 1);
         assertEquals((Integer) 1, map.get(newNode));
-    }
-
-    @Test(expected = AssertionError.class)
-    public void testNewSetAndGrowMultiple() {
-        TestNode newNode = graph.add(new TestNode());
-        map.setAndGrow(newNode, 1);
-        assertEquals((Integer) 1, map.get(newNode));
-        /*
-         * Failing here is not required, but if this behavior changes, usages of getAndGrow and
-         * setAndGrow need to be checked for compatibility.
-         */
-        TestNode newNode2 = graph.add(new TestNode());
-        map.get(newNode2);
     }
 }

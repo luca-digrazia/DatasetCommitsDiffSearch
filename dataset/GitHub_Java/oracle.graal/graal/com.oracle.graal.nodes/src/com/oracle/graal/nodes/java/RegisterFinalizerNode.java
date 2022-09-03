@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,58 +22,109 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.InputType.State;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_20;
+import static com.oracle.graal.nodes.java.ForeignCallDescriptors.REGISTER_FINALIZER;
+
+import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
+import com.oracle.graal.compiler.common.type.ObjectStamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.AbstractStateSplit;
+import com.oracle.graal.nodes.DeoptimizingNode;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.Assumptions.AssumptionResult;
 
 /**
- * This node is used to perform the finalizer registration at the end of the java.lang.Object constructor.
+ * This node is used to perform the finalizer registration at the end of the java.lang.Object
+ * constructor.
  */
-public final class RegisterFinalizerNode extends AbstractStateSplit implements StateSplit, Canonicalizable, LIRLowerable {
+// @formatter:off
+@NodeInfo(cycles = CYCLES_UNKNOWN,
+          cyclesRationale = "We cannot estimate the time of a runtime call.",
+          size = SIZE_20,
+          sizeRationale = "Rough estimation for register handling & calling")
+// @formatter:on
+public final class RegisterFinalizerNode extends AbstractStateSplit implements Canonicalizable.Unary<ValueNode>, LIRLowerable, Virtualizable, DeoptimizingNode.DeoptAfter {
 
-    @Input private ValueNode object;
+    public static final NodeClass<RegisterFinalizerNode> TYPE = NodeClass.create(RegisterFinalizerNode.class);
+    @OptionalInput(State) FrameState deoptState;
+    @Input ValueNode value;
 
-    public ValueNode object() {
-        return object;
-    }
-
-    public RegisterFinalizerNode(ValueNode object) {
-        super(StampFactory.illegal());
-        this.object = object;
+    public RegisterFinalizerNode(ValueNode value) {
+        super(TYPE, StampFactory.forVoid());
+        this.value = value;
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.emitCall(CiRuntimeCall.RegisterFinalizer, true, gen.operand(object()));
+    public ValueNode getValue() {
+        return value;
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        RiResolvedType declaredType = object.declaredType();
-        RiResolvedType exactType = object.exactType();
-        if (exactType == null && declaredType != null) {
-            exactType = declaredType.exactType();
-        }
+    public void generate(NodeLIRBuilderTool gen) {
+        // Note that an unconditional call to the runtime routine is made without
+        // checking that the object actually has a finalizer. This requires the
+        // runtime routine to do the check.
+        ForeignCallLinkage linkage = gen.getLIRGeneratorTool().getForeignCalls().lookupForeignCall(REGISTER_FINALIZER);
+        gen.getLIRGeneratorTool().emitForeignCall(linkage, gen.state(this), gen.operand(getValue()));
+    }
 
-        boolean needsCheck = true;
-        if (exactType != null) {
-            // we have an exact type
-            needsCheck = exactType.hasFinalizer();
-        } else {
-            // if either the declared type of receiver or the holder can be assumed to have no finalizers
-            if (declaredType != null && !declaredType.hasFinalizableSubclass()) {
-                if (tool.assumptions() != null && tool.assumptions().recordNoFinalizableSubclassAssumption(declaredType)) {
-                    needsCheck = false;
-                }
+    /**
+     * Determines if the compiler should emit code to test whether a given object has a finalizer
+     * that must be registered with the runtime upon object initialization.
+     */
+    public static boolean mayHaveFinalizer(ValueNode object, Assumptions assumptions) {
+        ObjectStamp objectStamp = (ObjectStamp) object.stamp();
+        if (objectStamp.isExactType()) {
+            return objectStamp.type().hasFinalizer();
+        } else if (objectStamp.type() != null) {
+            AssumptionResult<Boolean> result = objectStamp.type().hasFinalizableSubclass();
+            if (result.canRecordTo(assumptions)) {
+                result.recordTo(assumptions);
+                return result.getResult();
             }
         }
+        return true;
+    }
 
-        if (!needsCheck) {
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        if (!(forValue.stamp() instanceof ObjectStamp)) {
+            return this;
+        }
+        if (!mayHaveFinalizer(forValue, graph().getAssumptions())) {
             return null;
         }
 
         return this;
     }
+
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode alias = tool.getAlias(getValue());
+        if (alias instanceof VirtualObjectNode && !((VirtualObjectNode) alias).type().hasFinalizer()) {
+            tool.delete();
+        }
+    }
+
+    @Override
+    public boolean canDeoptimize() {
+        return true;
+    }
+
+    @NodeIntrinsic
+    public static native void register(Object thisObj);
 }

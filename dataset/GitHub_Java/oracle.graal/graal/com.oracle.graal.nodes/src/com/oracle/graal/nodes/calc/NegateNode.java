@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,53 +22,49 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.UnaryOp.Neg;
+import com.oracle.graal.compiler.common.type.FloatStamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
  * The {@code NegateNode} node negates its operand.
  */
-public final class NegateNode extends FloatingNode implements Canonicalizable, LIRLowerable {
+@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
+public final class NegateNode extends UnaryArithmeticNode<Neg> implements NarrowableArithmeticNode {
 
-    @Input private ValueNode x;
+    public static final NodeClass<NegateNode> TYPE = NodeClass.create(NegateNode.class);
 
-    public ValueNode x() {
-        return x;
-    }
-
-    /**
-     * Creates new NegateOp instance.
-     *
-     * @param x the instruction producing the value that is input to this instruction
-     */
-    public NegateNode(ValueNode x) {
-        super(StampFactory.forKind(x.kind()));
-        this.x = x;
+    public NegateNode(ValueNode value) {
+        super(TYPE, ArithmeticOpTable::getNeg, value);
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (x().isConstant()) {
-            switch (x().kind()) {
-                case Int:
-                    return ConstantNode.forInt(-x().asConstant().asInt(), graph());
-                case Long:
-                    return ConstantNode.forLong(-x().asConstant().asLong(), graph());
-                case Float:
-                    return ConstantNode.forFloat(-x().asConstant().asFloat(), graph());
-                case Double:
-                    return ConstantNode.forDouble(-x().asConstant().asDouble(), graph());
-            }
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        ValueNode ret = super.canonical(tool, forValue);
+        if (ret != this) {
+            return ret;
         }
-        if (x() instanceof NegateNode) {
-            return ((NegateNode) x()).x();
+        if (forValue instanceof NegateNode) {
+            return ((NegateNode) forValue).getValue();
+        }
+        if (forValue instanceof SubNode && !(forValue.stamp() instanceof FloatStamp)) {
+            SubNode sub = (SubNode) forValue;
+            return new SubNode(sub.getY(), sub.getX());
         }
         return this;
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.setResult(this, gen.emitNegate(gen.operand(x())));
+    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+        nodeValueMap.setResult(this, gen.emitNegate(nodeValueMap.operand(getValue())));
     }
 }

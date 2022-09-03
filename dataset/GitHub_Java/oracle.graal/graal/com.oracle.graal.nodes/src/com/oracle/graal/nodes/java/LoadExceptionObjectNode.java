@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,22 +22,27 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_10;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_8;
 
-/**
- * Loads an exception object passed by the runtime from a callee to an exception handler in a
- * caller. The node is only produced when lowering an {@link ExceptionObjectNode}.
- */
-public class LoadExceptionObjectNode extends AbstractStateSplit implements Lowerable {
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.AbstractStateSplit;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+
+@NodeInfo(cycles = CYCLES_10, size = SIZE_8)
+public final class LoadExceptionObjectNode extends AbstractStateSplit implements Lowerable {
+
+    public static final NodeClass<LoadExceptionObjectNode> TYPE = NodeClass.create(LoadExceptionObjectNode.class);
 
     public LoadExceptionObjectNode(Stamp stamp) {
-        super(stamp);
+        super(TYPE, stamp);
     }
 
     @Override
     public void lower(LoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
+        tool.getLowerer().lower(this, tool);
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,35 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+
+import com.oracle.graal.compiler.common.calc.Condition;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.iterators.NodePredicates;
+import com.oracle.graal.graph.spi.Simplifiable;
+import com.oracle.graal.graph.spi.SimplifierTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedGuardNode;
+import com.oracle.graal.nodes.IfNode;
+import com.oracle.graal.nodes.ReturnNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.ConditionalNode;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.calc.IntegerEqualsNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
 
 /**
  * Instances of this node class will look for a preceding if node and put the given probability into
  * the if node's taken probability. Then the branch probability node will be removed. This node is
  * intended primarily for snippets, so that they can define their fast and slow paths.
  */
-public class BranchProbabilityNode extends FloatingNode implements Canonicalizable, Lowerable {
+@NodeInfo(cycles = CYCLES_0, cyclesRationale = "Artificial Node", size = SIZE_0)
+public final class BranchProbabilityNode extends FloatingNode implements Simplifiable, Lowerable {
 
+    public static final NodeClass<BranchProbabilityNode> TYPE = NodeClass.create(BranchProbabilityNode.class);
     public static final double LIKELY_PROBABILITY = 0.6;
     public static final double NOT_LIKELY_PROBABILITY = 1 - LIKELY_PROBABILITY;
 
@@ -46,11 +63,11 @@ public class BranchProbabilityNode extends FloatingNode implements Canonicalizab
     public static final double VERY_FAST_PATH_PROBABILITY = 0.999;
     public static final double VERY_SLOW_PATH_PROBABILITY = 1 - VERY_FAST_PATH_PROBABILITY;
 
-    @Input private ValueNode probability;
-    @Input private ValueNode condition;
+    @Input ValueNode probability;
+    @Input ValueNode condition;
 
     public BranchProbabilityNode(ValueNode probability, ValueNode condition) {
-        super(condition.stamp());
+        super(TYPE, condition.stamp());
         this.probability = probability;
         this.condition = condition;
     }
@@ -64,66 +81,76 @@ public class BranchProbabilityNode extends FloatingNode implements Canonicalizab
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
+    public void simplify(SimplifierTool tool) {
         if (probability.isConstant()) {
-            double probabilityValue = probability.asConstant().asDouble();
+            double probabilityValue = probability.asJavaConstant().asDouble();
             if (probabilityValue < 0.0) {
-                throw new GraalInternalError("A negative probability of " + probabilityValue + " is not allowed!");
+                throw new GraalError("A negative probability of " + probabilityValue + " is not allowed!");
             } else if (probabilityValue > 1.0) {
-                throw new GraalInternalError("A probability of more than 1.0 (" + probabilityValue + ") is not allowed!");
+                throw new GraalError("A probability of more than 1.0 (" + probabilityValue + ") is not allowed!");
+            } else if (Double.isNaN(probabilityValue)) {
+                /*
+                 * We allow NaN if the node is in unreachable code that will eventually fall away,
+                 * or else an error will be thrown during lowering since we keep the node around.
+                 */
+                return;
             }
-            boolean couldSet = false;
+            boolean usageFound = false;
             for (IntegerEqualsNode node : this.usages().filter(IntegerEqualsNode.class)) {
                 if (node.condition() == Condition.EQ) {
-                    ValueNode other = node.x();
-                    if (node.x() == this) {
-                        other = node.y();
+                    ValueNode other = node.getX();
+                    if (node.getX() == this) {
+                        other = node.getY();
                     }
                     if (other.isConstant()) {
                         double probabilityToSet = probabilityValue;
-                        if (other.asConstant().asInt() == 0) {
+                        if (other.asJavaConstant().asInt() == 0) {
                             probabilityToSet = 1.0 - probabilityToSet;
                         }
                         for (IfNode ifNodeUsages : node.usages().filter(IfNode.class)) {
-                            couldSet = true;
+                            usageFound = true;
                             ifNodeUsages.setTrueSuccessorProbability(probabilityToSet);
+                        }
+                        if (!usageFound) {
+                            usageFound = node.usages().filter(NodePredicates.isA(FixedGuardNode.class).or(ConditionalNode.class)).isNotEmpty();
                         }
                     }
                 }
             }
-            if (!couldSet) {
-                if (isSubstitutionGraph()) {
-                    return this;
+            if (usageFound) {
+                ValueNode currentCondition = condition;
+                replaceAndDelete(currentCondition);
+                if (tool != null) {
+                    tool.addToWorkList(currentCondition.usages());
                 }
-                throw new GraalInternalError("Wrong usage of branch probability injection!");
+            } else {
+                if (!isSubstitutionGraph()) {
+                    throw new GraalError("Wrong usage of branch probability injection!");
+                }
             }
-            return condition;
         }
-        return this;
     }
 
     private boolean isSubstitutionGraph() {
-        return usages().count() == 1 && usages().first() instanceof ReturnNode;
+        return getUsageCount() == 1 && usages().first() instanceof ReturnNode;
     }
 
     /**
      * This intrinsic should only be used for the condition of an if statement. The parameter
      * condition should also only denote a simple condition and not a combined condition involving
-     * && or || operators. It injects the probability of the condition into the if statement.
-     * 
+     * &amp;&amp; or || operators. It injects the probability of the condition into the if
+     * statement.
+     *
      * @param probability the probability that the given condition is true as a double value between
      *            0.0 and 1.0.
-     * @param condition the simple condition without any && or || operators
+     * @param condition the simple condition without any &amp;&amp; or || operators
      * @return the condition
      */
     @NodeIntrinsic
-    public static boolean probability(double probability, boolean condition) {
-        assert probability >= 0.0 && probability <= 1.0;
-        return condition;
-    }
+    public static native boolean probability(double probability, boolean condition);
 
     @Override
-    public void lower(LoweringTool tool, LoweringType loweringType) {
-        throw new GraalInternalError("Branch probability could not be injected, because the probability value did not reduce to a constant value.");
+    public void lower(LoweringTool tool) {
+        throw new GraalError("Branch probability could not be injected, because the probability value did not reduce to a constant value.");
     }
 }

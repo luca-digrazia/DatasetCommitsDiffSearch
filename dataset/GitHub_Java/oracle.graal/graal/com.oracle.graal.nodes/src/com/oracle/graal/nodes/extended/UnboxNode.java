@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,71 +22,103 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_100;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_50;
 
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
 
-public final class UnboxNode extends FixedWithNextNode implements Node.IterableNodeType, Canonicalizable {
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
-    @Input private ValueNode source;
-    @Data private CiKind destinationKind;
+@NodeInfo(cycles = CYCLES_100, size = SIZE_50)
+public final class UnboxNode extends FixedWithNextNode implements Virtualizable, Lowerable, Canonicalizable.Unary<ValueNode> {
 
-    public UnboxNode(CiKind kind, ValueNode source) {
-        super(StampFactory.forKind(kind));
-        this.source = source;
-        this.destinationKind = kind;
-        assert kind != CiKind.Object : "can only unbox to primitive";
-        assert source.kind() == CiKind.Object : "can only unbox objects";
+    public static final NodeClass<UnboxNode> TYPE = NodeClass.create(UnboxNode.class);
+    @Input protected ValueNode value;
+    protected final JavaKind boxingKind;
+
+    @Override
+    public ValueNode getValue() {
+        return value;
     }
 
-    public ValueNode source() {
-        return source;
+    public UnboxNode(ValueNode value, JavaKind boxingKind) {
+        super(TYPE, StampFactory.forKind(boxingKind.getStackKind()));
+        this.value = value;
+        this.boxingKind = boxingKind;
     }
 
-    public CiKind destinationKind() {
-        return destinationKind;
+    public static ValueNode create(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ValueNode value, JavaKind boxingKind) {
+        ValueNode synonym = findSynonym(metaAccess, constantReflection, value, boxingKind);
+        if (synonym != null) {
+            return synonym;
+        }
+        return new UnboxNode(value, boxingKind);
     }
 
-    public void expand(BoxingMethodPool pool) {
-        RiResolvedField field = pool.getBoxField(kind());
-        LoadFieldNode loadField = graph().add(new LoadFieldNode(source, field));
-        loadField.setProbability(probability());
-        ((StructuredGraph) graph()).replaceFixedWithFixed(this, loadField);
+    public JavaKind getBoxingKind() {
+        return boxingKind;
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (source.isConstant()) {
-            CiConstant constant = source.asConstant();
-            Object o = constant.asObject();
-            if (o != null) {
-                switch (destinationKind) {
-                    case Boolean:
-                        return ConstantNode.forBoolean((Boolean) o, graph());
-                    case Byte:
-                        return ConstantNode.forByte((Byte) o, graph());
-                    case Char:
-                        return ConstantNode.forChar((Character) o, graph());
-                    case Short:
-                        return ConstantNode.forShort((Short) o, graph());
-                    case Int:
-                        return ConstantNode.forInt((Integer) o, graph());
-                    case Long:
-                        return ConstantNode.forLong((Long) o, graph());
-                    case Float:
-                        return ConstantNode.forFloat((Long) o, graph());
-                    case Double:
-                        return ConstantNode.forDouble((Long) o, graph());
-                    default:
-                        ValueUtil.shouldNotReachHere();
-                }
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
+    }
+
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode alias = tool.getAlias(getValue());
+        if (alias instanceof VirtualObjectNode) {
+            VirtualObjectNode virtual = (VirtualObjectNode) alias;
+            ResolvedJavaType objectType = virtual.type();
+            ResolvedJavaType expectedType = tool.getMetaAccessProvider().lookupJavaType(boxingKind.toBoxedJavaClass());
+            if (objectType.equals(expectedType)) {
+                tool.replaceWithValue(tool.getEntry(virtual, 0));
             }
         }
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        if (tool.allUsagesAvailable() && hasNoUsages() && StampTool.isPointerNonNull(forValue)) {
+            return null;
+        }
+        ValueNode synonym = findSynonym(tool.getMetaAccess(), tool.getConstantReflection(), forValue, boxingKind);
+        if (synonym != null) {
+            return synonym;
+        }
         return this;
+    }
+
+    private static ValueNode findSynonym(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ValueNode forValue, JavaKind boxingKind) {
+        if (forValue.isConstant()) {
+            JavaConstant constant = forValue.asJavaConstant();
+            JavaConstant unboxed = constantReflection.unboxPrimitive(constant);
+            if (unboxed != null && unboxed.getJavaKind() == boxingKind) {
+                return ConstantNode.forConstant(unboxed, metaAccess);
+            }
+        } else if (forValue instanceof BoxNode) {
+            BoxNode box = (BoxNode) forValue;
+            if (boxingKind == box.getBoxingKind()) {
+                return box.getValue();
+            }
+        }
+        return null;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,42 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.InputType.Condition;
+import static com.oracle.graal.nodeinfo.InputType.Guard;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
 
-@NodeInfo(nameTemplate = "ConditionGuard(!={p#negated})")
-public final class ConditionAnchorNode extends FixedWithNextNode implements Canonicalizable, Lowerable, GuardingNode {
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodeinfo.Verbosity;
+import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.nodes.extended.ValueAnchorNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
 
-    @Input private LogicNode condition;
-    private boolean negated;
+@NodeInfo(nameTemplate = "ConditionAnchor(!={p#negated})", allowedUsageTypes = Guard, cycles = CYCLES_0, size = SIZE_0)
+public final class ConditionAnchorNode extends FixedWithNextNode implements Canonicalizable.Unary<Node>, Lowerable, GuardingNode {
+
+    public static final NodeClass<ConditionAnchorNode> TYPE = NodeClass.create(ConditionAnchorNode.class);
+    @Input(Condition) LogicNode condition;
+    protected boolean negated;
 
     public ConditionAnchorNode(LogicNode condition) {
         this(condition, false);
     }
 
     public ConditionAnchorNode(LogicNode condition, boolean negated) {
-        super(StampFactory.dependency());
+        super(TYPE, StampFactory.forVoid());
         this.negated = negated;
         this.condition = condition;
     }
 
     public LogicNode condition() {
         return condition;
-    }
-
-    private void setCondition(LogicNode x) {
-        updateUsages(condition, x);
-        condition = x;
     }
 
     public boolean isNegated() {
@@ -67,23 +74,22 @@ public final class ConditionAnchorNode extends FixedWithNextNode implements Cano
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
-        if (condition instanceof LogicNegationNode) {
-            LogicNegationNode negation = (LogicNegationNode) condition;
-            setCondition(negation.getInput());
-            negated = !negated;
+    public Node canonical(CanonicalizerTool tool, Node forValue) {
+        if (forValue instanceof LogicNegationNode) {
+            LogicNegationNode negation = (LogicNegationNode) forValue;
+            return new ConditionAnchorNode(negation.getValue(), !negated);
         }
-
-        if (condition instanceof LogicConstantNode) {
-            LogicConstantNode c = (LogicConstantNode) condition;
+        if (forValue instanceof LogicConstantNode) {
+            LogicConstantNode c = (LogicConstantNode) forValue;
             if (c.getValue() != negated) {
-                this.replaceAtUsages(null);
                 return null;
             } else {
-                return graph().add(new ValueAnchorNode(null));
+                return new ValueAnchorNode(null);
             }
         }
-
+        if (tool.allUsagesAvailable() && this.hasNoUsages()) {
+            return null;
+        }
         return this;
     }
 
@@ -93,5 +99,10 @@ public final class ConditionAnchorNode extends FixedWithNextNode implements Cano
             ValueAnchorNode newAnchor = graph().add(new ValueAnchorNode(null));
             graph().replaceFixedWithFixed(this, newAnchor);
         }
+    }
+
+    @Override
+    public Node getValue() {
+        return condition;
     }
 }

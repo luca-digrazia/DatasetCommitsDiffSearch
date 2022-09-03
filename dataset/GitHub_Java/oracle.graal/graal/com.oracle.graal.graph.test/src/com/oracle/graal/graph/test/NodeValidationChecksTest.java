@@ -22,6 +22,9 @@
  */
 package com.oracle.graal.graph.test;
 
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_UNKNOWN;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -32,14 +35,14 @@ import com.oracle.graal.nodeinfo.NodeInfo;
 
 public class NodeValidationChecksTest {
 
-    @NodeInfo
+    @NodeInfo(cycles = CYCLES_UNKNOWN, size = SIZE_UNKNOWN)
     static final class TestNode extends Node {
         public static final NodeClass<TestNode> TYPE = NodeClass.create(TestNode.class);
 
         @Input TestNode input;
         @Successor TestNode successor;
 
-        public TestNode(TestNode input, TestNode successor) {
+        protected TestNode(TestNode input, TestNode successor) {
             super(TYPE);
             this.input = input;
             this.successor = successor;
@@ -53,7 +56,7 @@ public class NodeValidationChecksTest {
         try {
             graph.add(new TestNode(node, null));
             Assert.fail("Exception expected.");
-        } catch (IllegalStateException e) {
+        } catch (AssertionError e) {
             Assert.assertTrue(e.getMessage().contains("Input"));
             Assert.assertTrue(e.getMessage().contains("not alive"));
         }
@@ -66,7 +69,7 @@ public class NodeValidationChecksTest {
         try {
             graph.add(new TestNode(null, node));
             Assert.fail("Exception expected.");
-        } catch (IllegalStateException e) {
+        } catch (AssertionError e) {
             Assert.assertTrue(e.getMessage().contains("Successor"));
             Assert.assertTrue(e.getMessage().contains("not alive"));
         }

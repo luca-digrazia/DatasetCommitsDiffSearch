@@ -22,20 +22,28 @@
  */
 package com.oracle.graal.replacements.nodes.arithmetic;
 
-import java.util.function.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_2;
 
-import jdk.internal.jvmci.meta.*;
+import java.util.function.BiFunction;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.BinaryNode;
+import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-@NodeInfo(shortName = "*H")
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.Value;
+
+@NodeInfo(shortName = "*H", cycles = CYCLES_2, size = SIZE_2)
 public final class IntegerMulHighNode extends BinaryNode implements ArithmeticLIRLowerable {
     public static final NodeClass<IntegerMulHighNode> TYPE = NodeClass.create(IntegerMulHighNode.class);
 
@@ -51,19 +59,19 @@ public final class IntegerMulHighNode extends BinaryNode implements ArithmeticLI
      * Determines the minimum and maximum result of this node for the given inputs and returns the
      * result of the given BiFunction on the minimum and maximum values.
      */
-    private <T> T processExtremes(ValueNode forX, ValueNode forY, BiFunction<Long, Long, T> op) {
-        IntegerStamp xStamp = (IntegerStamp) forX.stamp();
-        IntegerStamp yStamp = (IntegerStamp) forY.stamp();
+    private <T> T processExtremes(Stamp forX, Stamp forY, BiFunction<Long, Long, T> op) {
+        IntegerStamp xStamp = (IntegerStamp) forX;
+        IntegerStamp yStamp = (IntegerStamp) forY;
 
-        Kind kind = getKind();
-        assert kind == Kind.Int || kind == Kind.Long;
+        JavaKind kind = getStackKind();
+        assert kind == JavaKind.Int || kind == JavaKind.Long;
         long[] xExtremes = {xStamp.lowerBound(), xStamp.upperBound()};
         long[] yExtremes = {yStamp.lowerBound(), yStamp.upperBound()};
         long min = Long.MAX_VALUE;
         long max = Long.MIN_VALUE;
         for (long a : xExtremes) {
             for (long b : yExtremes) {
-                long result = kind == Kind.Int ? multiplyHigh((int) a, (int) b) : multiplyHigh(a, b);
+                long result = kind == JavaKind.Int ? multiplyHigh((int) a, (int) b) : multiplyHigh(a, b);
                 min = Math.min(min, result);
                 max = Math.max(max, result);
             }
@@ -72,18 +80,18 @@ public final class IntegerMulHighNode extends BinaryNode implements ArithmeticLI
     }
 
     @Override
-    public boolean inferStamp() {
-        return updateStamp(processExtremes(getX(), getY(), (min, max) -> StampFactory.forInteger(getKind(), min, max)));
+    public Stamp foldStamp(Stamp stampX, Stamp stampY) {
+        return processExtremes(stampX, stampY, (min, max) -> StampFactory.forInteger(getStackKind(), min, max));
     }
 
     @SuppressWarnings("cast")
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        return processExtremes(forX, forY, (min, max) -> min == (long) max ? ConstantNode.forIntegerKind(getKind(), min) : this);
+        return processExtremes(forX.stamp(), forY.stamp(), (min, max) -> min == (long) max ? ConstantNode.forIntegerKind(getStackKind(), min) : this);
     }
 
     @Override
-    public void generate(NodeValueMap nodeValueMap, ArithmeticLIRGenerator gen) {
+    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
         Value a = nodeValueMap.operand(getX());
         Value b = nodeValueMap.operand(getY());
         nodeValueMap.setResult(this, gen.emitMulHigh(a, b));

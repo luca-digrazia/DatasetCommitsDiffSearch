@@ -22,24 +22,33 @@
  */
 package com.oracle.graal.truffle.nodes.frame;
 
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
 
-public class ForceMaterializeNode extends FixedWithNextNode implements LIRGenLowerable {
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-    @Input private ValueNode object;
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+public final class ForceMaterializeNode extends FixedWithNextNode implements LIRLowerable {
+    public static final NodeClass<ForceMaterializeNode> TYPE = NodeClass.create(ForceMaterializeNode.class);
+
+    @Input ValueNode object;
 
     public ForceMaterializeNode(ValueNode object) {
-        super(StampFactory.forVoid());
+        super(TYPE, StampFactory.forVoid());
         this.object = object;
     }
 
-    public void generate(NodeLIRBuilder generator) {
+    @Override
+    public void generate(NodeLIRBuilderTool generator) {
         // nothing to do
     }
 
     @NodeIntrinsic
-    public native static void force(Object object);
+    public static native void force(Object object);
 }

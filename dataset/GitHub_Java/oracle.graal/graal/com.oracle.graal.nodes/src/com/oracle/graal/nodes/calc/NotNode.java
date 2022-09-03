@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,56 +22,45 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.UnaryOp.Not;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
  * Binary negation of long or integer values.
  */
-public final class NotNode extends FloatingNode implements Canonicalizable, ArithmeticLIRLowerable {
+@NodeInfo(cycles = CYCLES_1, size = SIZE_1)
+public final class NotNode extends UnaryArithmeticNode<Not> implements ArithmeticLIRLowerable, NarrowableArithmeticNode {
 
-    @Input private ValueNode x;
+    public static final NodeClass<NotNode> TYPE = NodeClass.create(NotNode.class);
 
-    public ValueNode x() {
-        return x;
-    }
-
-    @Override
-    public boolean inferStamp() {
-        return updateStamp(StampTool.not(x().stamp()));
-    }
-
-    /**
-     * Creates new NegateNode instance.
-     * 
-     * @param x the instruction producing the value that is input to this instruction
-     */
     public NotNode(ValueNode x) {
-        super(StampTool.not(x.stamp()));
-        assert x.kind() == Kind.Int || x.kind() == Kind.Long;
-        this.x = x;
+        super(TYPE, ArithmeticOpTable::getNot, x);
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (x().isConstant()) {
-            switch (x().kind()) {
-                case Int:
-                    return ConstantNode.forInt(~x().asConstant().asInt(), graph());
-                case Long:
-                    return ConstantNode.forLong(~x().asConstant().asLong(), graph());
-            }
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        ValueNode ret = super.canonical(tool, forValue);
+        if (ret != this) {
+            return ret;
         }
-        if (x() instanceof NotNode) {
-            return ((NotNode) x()).x();
+        if (forValue instanceof NotNode) {
+            return ((NotNode) forValue).getValue();
         }
         return this;
     }
 
     @Override
-    public void generate(ArithmeticLIRGenerator gen) {
-        gen.setResult(this, gen.emitNot(gen.operand(x())));
+    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+        nodeValueMap.setResult(this, gen.emitNot(nodeValueMap.operand(getValue())));
     }
 }

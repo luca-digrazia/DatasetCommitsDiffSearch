@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,32 +22,46 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.snippets.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.hotspot.HotSpotLIRGenerator;
+import com.oracle.graal.lir.VirtualStackSlot;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.word.Word;
+import com.oracle.graal.word.WordTypes;
+
+import jdk.vm.ci.meta.Value;
 
 /**
  * Intrinsic for getting the lock in the current {@linkplain BeginLockScopeNode lock scope}.
  */
-public final class CurrentLockNode extends FixedWithNextNode implements LIRGenLowerable {
+@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
+public final class CurrentLockNode extends FixedWithNextNode implements LIRLowerable {
+    public static final NodeClass<CurrentLockNode> TYPE = NodeClass.create(CurrentLockNode.class);
 
-    public CurrentLockNode(Kind wordKind) {
-        super(StampFactory.forWord(wordKind, true));
+    protected int lockDepth;
+
+    public CurrentLockNode(@InjectedNodeParameter WordTypes wordTypes, int lockDepth) {
+        super(TYPE, StampFactory.forKind(wordTypes.getWordKind()));
+        this.lockDepth = lockDepth;
     }
 
     @Override
-    public void generate(LIRGenerator gen) {
+    public void generate(NodeLIRBuilderTool gen) {
+        assert lockDepth != -1;
+        HotSpotLIRGenerator hsGen = (HotSpotLIRGenerator) gen.getLIRGeneratorTool();
+        VirtualStackSlot slot = hsGen.getLockSlot(lockDepth);
         // The register allocator cannot handle stack -> register moves so we use an LEA here
-        Value result = gen.emitMove(gen.emitLea(gen.peekLock()));
+        Value result = gen.getLIRGeneratorTool().emitAddress(slot);
         gen.setResult(this, result);
     }
 
-    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static Word currentLock(@ConstantNodeParameter Kind wordKind) {
-        throw new UnsupportedOperationException();
-    }
+    public static native Word currentLock(@ConstantNodeParameter int lockDepth);
 }

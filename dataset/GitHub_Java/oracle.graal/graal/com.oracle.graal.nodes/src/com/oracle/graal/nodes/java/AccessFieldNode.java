@@ -22,24 +22,30 @@
  */
 package com.oracle.graal.nodes.java;
 
-import java.lang.reflect.*;
-import java.util.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_15;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_10;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.graal.cri.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodeinfo.Verbosity;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+
+import jdk.vm.ci.meta.ResolvedJavaField;
 
 /**
  * The base class of all instructions that access fields.
  */
-public abstract class AccessFieldNode extends AbstractStateSplit implements Lowerable {
+@NodeInfo(cycles = CYCLES_15, size = SIZE_10)
+public abstract class AccessFieldNode extends FixedWithNextNode implements Lowerable {
 
-    @Input private ValueNode object;
+    public static final NodeClass<AccessFieldNode> TYPE = NodeClass.create(AccessFieldNode.class);
+    @OptionalInput ValueNode object;
 
-    @Data protected final RiResolvedField field;
+    protected final ResolvedJavaField field;
 
     public ValueNode object() {
         return object;
@@ -47,51 +53,61 @@ public abstract class AccessFieldNode extends AbstractStateSplit implements Lowe
 
     /**
      * Constructs a new access field object.
-     * @param kind the result kind of the access
+     *
      * @param object the instruction producing the receiver object
      * @param field the compiler interface representation of the field
-     * @param graph
      */
-    public AccessFieldNode(Stamp stamp, ValueNode object, RiResolvedField field) {
-        super(stamp);
+    public AccessFieldNode(NodeClass<? extends AccessFieldNode> c, Stamp stamp, ValueNode object, ResolvedJavaField field) {
+        super(c, stamp);
         this.object = object;
         this.field = field;
-        assert field.holder().isInitialized();
+        assert field.getDeclaringClass().isInitialized();
     }
 
     /**
      * Gets the compiler interface field for this field access.
+     *
      * @return the compiler interface field for this field access
      */
-    public RiResolvedField field() {
+    public ResolvedJavaField field() {
         return field;
     }
 
     /**
      * Checks whether this field access is an access to a static field.
+     *
      * @return {@code true} if this field access is to a static field
      */
     public boolean isStatic() {
-        return Modifier.isStatic(field.accessFlags());
+        return field.isStatic();
     }
 
     /**
      * Checks whether this field is declared volatile.
+     *
      * @return {@code true} if the field is resolved and declared volatile
      */
     public boolean isVolatile() {
-        return Modifier.isVolatile(field.accessFlags());
+        return field.isVolatile();
     }
 
     @Override
-    public void lower(CiLoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
     }
 
     @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> debugProperties = super.getDebugProperties();
-        debugProperties.put("field", CiUtil.format("%h.%n", field));
-        return debugProperties;
+    public String toString(Verbosity verbosity) {
+        if (verbosity == Verbosity.Name) {
+            return super.toString(verbosity) + "#" + field.getName();
+        } else {
+            return super.toString(verbosity);
+        }
+    }
+
+    @Override
+    public boolean verify() {
+        assertTrue((object == null) == isStatic(), "static field must not have object, instance field must have object");
+        return super.verify();
     }
 }

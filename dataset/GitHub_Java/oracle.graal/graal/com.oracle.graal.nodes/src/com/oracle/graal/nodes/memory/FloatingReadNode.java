@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,36 @@
  */
 package com.oracle.graal.nodes.memory;
 
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.memory.address.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.jvmci.meta.*;
+import static com.oracle.graal.nodeinfo.InputType.Memory;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.debug.DebugCloseable;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.PiNode;
+import com.oracle.graal.nodes.ValueNodeUtil;
+import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.nodes.memory.address.AddressNode;
+import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
  * A floating read of a value from memory specified in terms of an object base and an object
  * relative location. This node does not null check the object.
  */
-@NodeInfo
+@NodeInfo(nameTemplate = "Read#{p#location/s}", cycles = CYCLES_2, size = SIZE_1)
 public final class FloatingReadNode extends FloatingAccessNode implements LIRLowerable, Canonicalizable {
     public static final NodeClass<FloatingReadNode> TYPE = NodeClass.create(FloatingReadNode.class);
 
-    @OptionalInput(InputType.Memory) MemoryNode lastLocationAccess;
+    @OptionalInput(Memory) MemoryNode lastLocationAccess;
 
     public FloatingReadNode(AddressNode address, LocationIdentity location, MemoryNode lastLocationAccess, Stamp stamp) {
         this(address, location, lastLocationAccess, stamp, null, BarrierType.NONE);
@@ -55,10 +66,12 @@ public final class FloatingReadNode extends FloatingAccessNode implements LIRLow
         this.lastLocationAccess = lastLocationAccess;
     }
 
+    @Override
     public MemoryNode getLastLocationAccess() {
         return lastLocationAccess;
     }
 
+    @Override
     public void setLastLocationAccess(MemoryNode newlla) {
         updateUsages(ValueNodeUtil.asNode(lastLocationAccess), ValueNodeUtil.asNode(newlla));
         lastLocationAccess = newlla;
@@ -67,24 +80,35 @@ public final class FloatingReadNode extends FloatingAccessNode implements LIRLow
     @Override
     public void generate(NodeLIRBuilderTool gen) {
         LIRKind readKind = gen.getLIRGeneratorTool().getLIRKind(stamp());
-        gen.setResult(this, gen.getLIRGeneratorTool().emitLoad(readKind, gen.operand(address), null));
+        gen.setResult(this, gen.getLIRGeneratorTool().getArithmetic().emitLoad(readKind, gen.operand(address), null));
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (getAddress() instanceof OffsetAddressNode) {
             OffsetAddressNode objAddress = (OffsetAddressNode) getAddress();
-            if (objAddress.getBase() instanceof PiNode && ((PiNode) objAddress.getBase()).getGuard() == getGuard()) {
-                OffsetAddressNode newAddress = new OffsetAddressNode(((PiNode) objAddress.getBase()).getOriginalNode(), objAddress.getOffset());
-                return new FloatingReadNode(newAddress, getLocationIdentity(), getLastLocationAccess(), stamp(), getGuard(), getBarrierType());
+            if (objAddress.getBase() instanceof PiNode) {
+                PiNode piBase = (PiNode) objAddress.getBase();
+                /*
+                 * If the Pi and the read have the same guard or the read is unguarded, use the
+                 * guard of the Pi along with the original value. This encourages a canonical form
+                 * guarded reads.
+                 */
+                if (piBase.getGuard() == getGuard() || getGuard() == null) {
+                    OffsetAddressNode newAddress = new OffsetAddressNode(piBase.getOriginalNode(), objAddress.getOffset());
+                    return new FloatingReadNode(newAddress, getLocationIdentity(), getLastLocationAccess(), stamp(), getGuard() == null ? piBase.getGuard() : getGuard(), getBarrierType());
+                }
             }
         }
         return ReadNode.canonicalizeRead(this, getAddress(), getLocationIdentity(), tool);
     }
 
+    @SuppressWarnings("try")
     @Override
     public FixedAccessNode asFixedNode() {
-        return graph().add(new ReadNode(getAddress(), getLocationIdentity(), stamp(), getGuard(), getBarrierType()));
+        try (DebugCloseable position = withNodeSourcePosition()) {
+            return graph().add(new ReadNode(getAddress(), getLocationIdentity(), stamp(), getGuard(), getBarrierType()));
+        }
     }
 
     @Override

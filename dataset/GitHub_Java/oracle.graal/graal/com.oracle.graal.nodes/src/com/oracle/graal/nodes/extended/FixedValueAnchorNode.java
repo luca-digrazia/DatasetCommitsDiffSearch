@@ -22,22 +22,30 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
 
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+import com.oracle.graal.nodes.spi.ValueProxy;
+
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
 public final class FixedValueAnchorNode extends FixedWithNextNode implements LIRLowerable, ValueProxy {
+    public static final NodeClass<FixedValueAnchorNode> TYPE = NodeClass.create(FixedValueAnchorNode.class);
 
-    @Input private ValueNode object;
+    @Input ValueNode object;
 
     public ValueNode object() {
         return object;
     }
 
     public FixedValueAnchorNode(ValueNode object) {
-        super(StampFactory.forNodeIntrinsic());
+        super(TYPE, object.stamp());
         this.object = object;
-
     }
 
     @Override
@@ -46,15 +54,15 @@ public final class FixedValueAnchorNode extends FixedWithNextNode implements LIR
     }
 
     @NodeIntrinsic
-    public static native <T> T getObject(Object object);
+    public static native Object getObject(Object object);
 
     @Override
-    public void generate(NodeLIRGeneratorTool generator) {
+    public void generate(NodeLIRBuilderTool generator) {
         generator.setResult(this, generator.operand(object));
     }
 
     @Override
-    public ValueNode getOriginalValue() {
+    public ValueNode getOriginalNode() {
         return object;
     }
 

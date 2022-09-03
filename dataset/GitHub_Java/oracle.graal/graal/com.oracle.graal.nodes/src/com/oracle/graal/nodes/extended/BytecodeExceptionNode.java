@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,24 +22,42 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_20;
+
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.NodeInputList;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodeinfo.Verbosity;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.memory.AbstractMemoryCheckpoint;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+
+import jdk.vm.ci.meta.MetaAccessProvider;
 
 /**
  * A node that represents an exception thrown implicitly by a Java bytecode. It can be lowered to
  * either a {@linkplain ForeignCallDescriptor foreign} call or a pre-allocated exception object.
  */
-public class BytecodeExceptionNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single {
+// @formatter:off
+@NodeInfo(cycles = CYCLES_UNKNOWN,
+          cyclesRationale = "Node will be lowered to a foreign call.",
+          size = SIZE_20)
+// @formatter:on
+public final class BytecodeExceptionNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single {
 
-    private final Class<? extends Throwable> exceptionClass;
-    @Input private final NodeInputList<ValueNode> arguments;
-    @Input private FrameState deoptState;
+    public static final NodeClass<BytecodeExceptionNode> TYPE = NodeClass.create(BytecodeExceptionNode.class);
+    protected final Class<? extends Throwable> exceptionClass;
+    @Input NodeInputList<ValueNode> arguments;
 
     public BytecodeExceptionNode(MetaAccessProvider metaAccess, Class<? extends Throwable> exceptionClass, ValueNode... arguments) {
-        super(StampFactory.exactNonNull(metaAccess.lookupJavaType(exceptionClass)));
+        super(TYPE, StampFactory.objectNonNull(TypeReference.createExactTrusted(metaAccess.lookupJavaType(exceptionClass))));
         this.exceptionClass = exceptionClass;
         this.arguments = new NodeInputList<>(this, arguments);
     }
@@ -56,10 +74,12 @@ public class BytecodeExceptionNode extends AbstractMemoryCheckpoint implements L
         return super.toString(verbosity);
     }
 
+    @Override
     public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.ANY_LOCATION;
+        return LocationIdentity.any();
     }
 
+    @Override
     public void lower(LoweringTool tool) {
         tool.getLowerer().lower(this, tool);
     }
