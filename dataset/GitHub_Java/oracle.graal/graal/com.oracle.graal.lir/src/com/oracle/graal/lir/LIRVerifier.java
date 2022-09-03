@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,28 +22,20 @@
  */
 package com.oracle.graal.lir;
 
-import static com.oracle.graal.lir.LIRValueUtil.asVariable;
-import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
-import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
-import static com.oracle.graal.lir.LIRValueUtil.isVariable;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.isIllegal;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
+import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.lir.LIRValueUtil.*;
 
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.EnumSet;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.GraalError;
-import com.oracle.graal.debug.TTY;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.framemap.FrameMap;
-import com.oracle.graal.lir.ssa.SSAUtil;
-
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.meta.Value;
+import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.ssa.*;
 
 public final class LIRVerifier {
 
@@ -64,7 +56,7 @@ public final class LIRVerifier {
     }
 
     private int maxRegisterNum() {
-        return frameMap.getTarget().arch.getRegisters().size();
+        return frameMap.getTarget().arch.getRegisters().length;
     }
 
     private boolean isAllocatableRegister(Value value) {
@@ -93,7 +85,7 @@ public final class LIRVerifier {
         this.beforeRegisterAllocation = beforeRegisterAllocation;
         this.lir = lir;
         this.frameMap = frameMap;
-        this.blockLiveOut = new BitSet[lir.linearScanOrder().length];
+        this.blockLiveOut = new BitSet[lir.linearScanOrder().size()];
         this.variableDefinitions = new Object[lir.numVariables()];
     }
 
@@ -138,7 +130,7 @@ public final class LIRVerifier {
                 assert last instanceof StandardOp.JumpOp : "block with successor must end with unconditional jump";
             }
             if (block.getPredecessorCount() > 1) {
-                SSAUtil.verifyPhi(lir, block);
+                SSAUtils.verifyPhi(lir, block);
             }
 
             for (LIRInstruction op : lir.getLIRforBlock(block)) {
@@ -177,7 +169,7 @@ public final class LIRVerifier {
                     TTY.println("definition of %s: %s", value, variableDefinitions[variableIdx]);
                 }
                 TTY.println("ERROR: Use of variable %s that is not defined in dominator", value);
-                throw GraalError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
             }
 
         } else if (isAllocatableRegister(value)) {
@@ -190,7 +182,7 @@ public final class LIRVerifier {
                 TTY.println("block %s  instruction %s", curBlock, curInstruction);
                 TTY.println("live registers: %s", Arrays.toString(curRegistersLive));
                 TTY.println("ERROR: Use of fixed register %s that is not defined in this block", value);
-                throw GraalError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
             }
         }
     }
@@ -207,7 +199,7 @@ public final class LIRVerifier {
                 TTY.println("live variables: %s", curVariablesLive);
                 TTY.println("definition of %s: %s", value, variableDefinitions[variableIdx]);
                 TTY.println("ERROR: Variable %s defined multiple times", value);
-                throw GraalError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
             }
             assert curInstruction != null;
             variableDefinitions[variableIdx] = curInstruction;
@@ -221,7 +213,7 @@ public final class LIRVerifier {
             if (curRegistersDefined.get(regNum)) {
                 TTY.println("block %s  instruction %s", curBlock, curInstruction);
                 TTY.println("ERROR: Same register defined twice in the same instruction: %s", value);
-                throw GraalError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
             }
             curRegistersDefined.set(regNum);
 
@@ -240,11 +232,11 @@ public final class LIRVerifier {
         if ((isVariable(value) && flags.contains(OperandFlag.REG)) ||
             (isRegister(value) && flags.contains(OperandFlag.REG)) ||
             (isStackSlotValue(value) && flags.contains(OperandFlag.STACK)) ||
-            (isJavaConstant(value) && flags.contains(OperandFlag.CONST) && mode != OperandMode.DEF) ||
+            (isConstant(value) && flags.contains(OperandFlag.CONST) && mode != OperandMode.DEF) ||
             (isIllegal(value) && flags.contains(OperandFlag.ILLEGAL))) {
             return;
         }
-        throw new GraalError("Invalid LIR%n  Instruction: %s%n  Mode: %s%n  Flags: %s%n  Unexpected value: %s %s",
+        throw new GraalInternalError("Invalid LIR%n  Instruction: %s%n  Mode: %s%n  Flags: %s%n  Unexpected value: %s %s",
                         op, mode, flags, value.getClass().getSimpleName(), value);
     }
     // @formatter:on
