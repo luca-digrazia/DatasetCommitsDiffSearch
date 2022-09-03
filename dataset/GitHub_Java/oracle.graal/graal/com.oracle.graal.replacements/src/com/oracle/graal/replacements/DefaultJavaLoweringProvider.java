@@ -67,7 +67,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
     public void initialize(Providers providers, SnippetReflectionProvider snippetReflection) {
         boxingSnippets = new BoxingSnippets.Templates(providers, snippetReflection, target);
-        providers.getReplacements().registerSnippetTemplateCache(new SnippetCounterNode.SnippetCounterSnippets.Templates(providers, snippetReflection, target));
     }
 
     @Override
@@ -328,15 +327,11 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         Stamp loadStamp = loadStamp(read.stamp(), valueKind, read.isCompressible());
 
         ReadNode memoryRead = graph.add(new ReadNode(read.object(), read.location(), loadStamp, read.getBarrierType()));
-        GuardingNode guard = read.getGuard();
+        // An unsafe read must not float otherwise it may float above
+        // a test guaranteeing the read is safe.
+        memoryRead.setForceFixed(true);
         ValueNode readValue = implicitLoadConvert(graph, valueKind, memoryRead, read.isCompressible());
-        if (guard == null) {
-            // An unsafe read must not float otherwise it may float above
-            // a test guaranteeing the read is safe.
-            memoryRead.setForceFixed(true);
-        } else {
-            memoryRead.setGuard(guard);
-        }
+        memoryRead.setGuard(read.getGuard());
         read.replaceAtUsages(readValue);
         graph.replaceFixed(read, memoryRead);
     }
