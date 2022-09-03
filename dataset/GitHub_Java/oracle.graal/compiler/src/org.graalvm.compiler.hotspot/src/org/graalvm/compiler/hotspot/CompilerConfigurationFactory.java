@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -219,8 +219,6 @@ public abstract class CompilerConfigurationFactory implements Comparable<Compile
                 factory = candidates.get(0);
             }
         }
-        assert factory != null;
-
         ShowConfigurationLevel level = Options.ShowConfiguration.getValue(options);
         if (level != ShowConfigurationLevel.none) {
             switch (level) {
