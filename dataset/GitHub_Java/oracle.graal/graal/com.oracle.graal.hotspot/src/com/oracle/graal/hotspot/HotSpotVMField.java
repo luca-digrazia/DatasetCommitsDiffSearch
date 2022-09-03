@@ -38,11 +38,5 @@ public @interface HotSpotVMField {
 
     Type get();
 
-    /**
-     * List of architectures where this constant is required. Names are derived from
-     * {@link HotSpotVMConfig#getHostArchitectureName()}.
-     */
-    String[] archs() default {};
-
     boolean optional() default false;
 }
