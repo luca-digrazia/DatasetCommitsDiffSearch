@@ -22,21 +22,18 @@
  */
 package com.oracle.graal.hotspot.ptx;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
-public class PTXHotSpotLoweringProvider implements HotSpotLoweringProvider {
+public class PTXHotSpotLoweringProvider extends HotSpotHostLoweringProvider {
 
-    private final LoweringProvider host;
-
-    public PTXHotSpotLoweringProvider(LoweringProvider host) {
-        this.host = host;
+    public PTXHotSpotLoweringProvider(HotSpotGraalRuntime runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls) {
+        super(runtime, metaAccess, foreignCalls);
     }
 
     @Override
@@ -49,18 +46,7 @@ public class PTXHotSpotLoweringProvider implements HotSpotLoweringProvider {
             // So, there is no need to lower the operation.
             return;
         } else {
-            host.lower(n, tool);
+            super.lower(n, tool);
         }
-    }
-
-    public ValueNode reconstructArrayIndex(LocationNode location) {
-        throw GraalInternalError.unimplemented();
-    }
-
-    public void initialize(HotSpotProviders providers, HotSpotVMConfig config) {
-    }
-
-    public int getScalingFactor(Kind elementKind) {
-        throw GraalInternalError.unimplemented();
     }
 }
