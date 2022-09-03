@@ -497,15 +497,11 @@ public final class Meta {
 
         public StaticObject allocateInstance() {
             assert !klass.isArray();
-            return klass.getContext().getInterpreterToVM().newObject(klass);
+            return klass.getContext().getVm().newObject(klass);
         }
 
         public String getName() {
             return MetaUtil.internalNameToJava(klass.getName(), true, true);
-        }
-
-        public String getInternalName() {
-            return klass.getName();
         }
 
         public boolean isArray() {
@@ -517,11 +513,11 @@ public final class Meta {
         }
 
         public Object allocateArray(int length) {
-            return klass.getContext().getInterpreterToVM().newArray(klass, length);
+            return klass.getContext().getVm().newArray(klass, length);
         }
 
         public Object allocateArray(int length, IntFunction<Object> generator) {
-            StaticObjectArray arr = (StaticObjectArray) klass.getContext().getInterpreterToVM().newArray(klass, length);
+            StaticObjectArray arr = (StaticObjectArray) klass.getContext().getVm().newArray(klass, length);
             // TODO(peterssen): Store check is missing.
             Arrays.setAll(arr.getWrapped(), generator);
             return arr;
@@ -812,7 +808,7 @@ public final class Meta {
         }
 
         public Object get(StaticObject self) {
-            InterpreterToVM vm = field.getDeclaringClass().getContext().getInterpreterToVM();
+            InterpreterToVM vm = field.getDeclaringClass().getContext().getVm();
             switch (field.getKind()) {
                 case Boolean:
                     return vm.getFieldBoolean(self, field);
@@ -842,7 +838,7 @@ public final class Meta {
         }
 
         public void set(StaticObject self, Object value) {
-            InterpreterToVM vm = field.getDeclaringClass().getContext().getInterpreterToVM();
+            InterpreterToVM vm = field.getDeclaringClass().getContext().getVm();
             switch (field.getKind()) {
                 case Boolean:
                     vm.setFieldBoolean((boolean) value, self, field);

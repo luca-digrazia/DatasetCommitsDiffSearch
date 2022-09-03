@@ -43,7 +43,6 @@ import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.MetaUtil;
 import com.oracle.truffle.espresso.types.SignatureDescriptors;
 import com.oracle.truffle.espresso.types.TypeDescriptors;
-import com.oracle.truffle.espresso.vm.VM;
 
 public class EspressoContext {
 
@@ -52,7 +51,7 @@ public class EspressoContext {
     private final TruffleLanguage.Env env;
 
     // Must be initialized after the context instance creation.
-    private InterpreterToVM interpreterToVM;
+    private InterpreterToVM vm;
     private final StringTable strings;
     private final ClassRegistries registries;
     private boolean initialized = false;
@@ -67,7 +66,6 @@ public class EspressoContext {
     private final ConcurrentHashMap<Long, TruffleObject> nativeLibraries = new ConcurrentHashMap<>();
     private final AtomicLong nativeHandleCount = new AtomicLong();
     private JniEnv jniEnv;
-    private VM vm;
 
     public long addNativeLibrary(TruffleObject library) {
         long handle = nativeHandleCount.incrementAndGet();
@@ -161,15 +159,13 @@ public class EspressoContext {
     }
 
     private void createVm() {
+        this.vm = new InterpreterToVM(language);
+
         // FIXME(peterssen): Contextualize the JniENv, even if shared libraries are isolated,
         // currently
         // we assume a singleton context.
-        ; // initialize native context
-
-        // TODO(peterssen): Combine these 2.
-        this.interpreterToVM = new InterpreterToVM(language);
-        // Spawn JNI first, then the VM.
-        this.vm = VM.create(getJNI());
+        JniEnv.touch();
+        getJniEnv(); // initialize native context
 
         initializeClass(Object.class);
 
@@ -181,12 +177,12 @@ public class EspressoContext {
         }
 
         for (Class<?> clazz : new Class<?>[]{
-                String.class,
-                System.class,
-                ThreadGroup.class,
-                Thread.class,
-                Class.class,
-                Method.class}) {
+                        String.class,
+                        System.class,
+                        ThreadGroup.class,
+                        Thread.class,
+                        Class.class,
+                        Method.class}) {
             initializeClass(clazz);
         }
 
@@ -198,14 +194,14 @@ public class EspressoContext {
 
         // System exceptions.
         for (Class<?> clazz : new Class<?>[]{
-                OutOfMemoryError.class,
-                NullPointerException.class,
-                ClassCastException.class,
-                ArrayStoreException.class,
-                ArithmeticException.class,
-                StackOverflowError.class,
-                IllegalMonitorStateException.class,
-                IllegalArgumentException.class}) {
+                        OutOfMemoryError.class,
+                        NullPointerException.class,
+                        ClassCastException.class,
+                        ArrayStoreException.class,
+                        ArithmeticException.class,
+                        StackOverflowError.class,
+                        IllegalMonitorStateException.class,
+                        IllegalArgumentException.class}) {
             initializeClass(clazz);
         }
 
@@ -226,11 +222,7 @@ public class EspressoContext {
         return initialized;
     }
 
-    public InterpreterToVM getInterpreterToVM() {
-        return interpreterToVM;
-    }
-
-    public VM getVM() {
+    public InterpreterToVM getVm() {
         return vm;
     }
 
@@ -262,14 +254,10 @@ public class EspressoContext {
         return nativeLibraries;
     }
 
-    public JniEnv getJNI() {
+    public JniEnv getJniEnv() {
         if (jniEnv == null) {
             jniEnv = JniEnv.create();
         }
         return jniEnv;
-    }
-
-    public void disposeContext() {
-        getJNI().dispose();
     }
 }
