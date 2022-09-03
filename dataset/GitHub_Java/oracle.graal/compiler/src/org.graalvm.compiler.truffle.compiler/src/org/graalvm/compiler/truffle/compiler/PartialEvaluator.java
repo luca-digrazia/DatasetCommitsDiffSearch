@@ -269,7 +269,7 @@ public abstract class PartialEvaluator {
         @Override
         public InlineInfo shouldInlineInvoke(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments) {
             TruffleCompilerRuntime rt = TruffleCompilerRuntime.getRuntime();
-            InlineInfo inlineInfo = rt.getInlineInfo(original, true);
+            InlineInfo inlineInfo = rt.getInlineInfo(original);
             if (!inlineInfo.allowsInlining()) {
                 return inlineInfo;
             }
@@ -345,7 +345,7 @@ public abstract class PartialEvaluator {
             }
 
             TruffleCompilerRuntime rt = TruffleCompilerRuntime.getRuntime();
-            InlineInfo inlineInfo = rt.getInlineInfo(original, true);
+            InlineInfo inlineInfo = rt.getInlineInfo(original);
             if (!inlineInfo.allowsInlining()) {
                 return inlineInfo;
             }
@@ -376,9 +376,6 @@ public abstract class PartialEvaluator {
     protected PEGraphDecoder createGraphDecoder(StructuredGraph graph, final HighTierContext tierContext, LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins,
                     InlineInvokePlugin[] inlineInvokePlugins, ParameterPlugin parameterPlugin, NodePlugin[] nodePluginList, ResolvedJavaMethod callInlined) {
         final GraphBuilderConfiguration newConfig = configForParsing.copy();
-        if (newConfig.trackNodeSourcePosition()) {
-            graph.setTrackNodeSourcePosition();
-        }
         InvocationPlugins parsingInvocationPlugins = newConfig.getPlugins().getInvocationPlugins();
 
         Plugins plugins = newConfig.getPlugins();
@@ -412,7 +409,7 @@ public abstract class PartialEvaluator {
         }
 
         PEGraphDecoder decoder = createGraphDecoder(graph, tierContext, loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin, nodePlugins, callInlinedMethod);
-        decoder.decode(graph.method(), graph.trackNodeSourcePosition());
+        decoder.decode(graph.method());
 
         if (TruffleCompilerOptions.getValue(PrintTruffleExpansionHistogram)) {
             histogramPlugin.print(compilable);
@@ -460,7 +457,7 @@ public abstract class PartialEvaluator {
         new ConvertDeoptimizeToGuardPhase().apply(graph, tierContext);
 
         for (MethodCallTargetNode methodCallTargetNode : graph.getNodes(MethodCallTargetNode.TYPE)) {
-            StructuredGraph inlineGraph = providers.getReplacements().getSubstitution(methodCallTargetNode.targetMethod(), methodCallTargetNode.invoke().bci(), graph.trackNodeSourcePosition());
+            StructuredGraph inlineGraph = providers.getReplacements().getSubstitution(methodCallTargetNode.targetMethod(), methodCallTargetNode.invoke().bci());
             if (inlineGraph != null) {
                 InliningUtil.inline(methodCallTargetNode.invoke(), inlineGraph, true, methodCallTargetNode.targetMethod());
             }
@@ -517,7 +514,7 @@ public abstract class PartialEvaluator {
         if (!TruffleCompilerOptions.getValue(TruffleInlineAcrossTruffleBoundary)) {
             // Do not inline across Truffle boundaries.
             for (MethodCallTargetNode mct : graph.getNodes(MethodCallTargetNode.TYPE)) {
-                InlineInfo inlineInfo = rt.getInlineInfo(mct.targetMethod(), false);
+                InlineInfo inlineInfo = rt.getInlineInfo(mct.targetMethod());
                 if (!inlineInfo.allowsInlining()) {
                     mct.invoke().setUseForInlining(false);
                 }
@@ -617,7 +614,7 @@ public abstract class PartialEvaluator {
                     continue; // native methods cannot be inlined
                 }
                 TruffleCompilerRuntime runtime = TruffleCompilerRuntime.getRuntime();
-                if (runtime.getInlineInfo(call.targetMethod(), true).getMethodToInline() != null) {
+                if (runtime.getInlineInfo(call.targetMethod()).getMethodToInline() != null) {
                     logPerformanceWarning(target.getName(), Arrays.asList(call), String.format("not inlined %s call to %s (%s)", call.invokeKind(), call.targetMethod(), call), null);
                     warnings.add(call);
                 }
