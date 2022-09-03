@@ -36,6 +36,8 @@ final class ContextStoreProfile {
 
     private final Assumption dynamicStoreAssumption = Truffle.getRuntime().createAssumption("constant context store");
     private final Assumption constantStoreAssumption = Truffle.getRuntime().createAssumption("dynamic context store");
+    private final Assumption seenDynamicStore = Truffle.getRuntime().createAssumption("constant context store");
+    private final Assumption seenThreadLocalStore = Truffle.getRuntime().createAssumption("constant context store");
 
     @CompilationFinal private ContextStore constantStore;
 
@@ -59,7 +61,7 @@ final class ContextStoreProfile {
             store = dynamicStore;
         } else {
             // multiple context multiple threads
-            store = getThreadLocalStore();
+            store = getThreadLocalStore(threadStore);
         }
         return store;
     }
@@ -67,28 +69,43 @@ final class ContextStoreProfile {
     void enter(ContextStore store) {
         assert store != null;
         // fast path
-        if (constantStore == store) {
+        if (constantStoreAssumption.isValid() && constantStore == store) {
             return;
         }
 
+        if (seenDynamicStore.isValid()) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            seenDynamicStore.invalidate();
+        }
+
         // fast path single thread
-        if (Thread.currentThread() == singleThread && dynamicStore != UNINTIALIZED_STORE) {
+        if (dynamicStoreAssumption.isValid() && Thread.currentThread() == singleThread && dynamicStore != UNINTIALIZED_STORE) {
             dynamicStore = store;
             return;
+        }
+
+        if (seenThreadLocalStore.isValid()) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            seenThreadLocalStore.invalidate();
         }
 
         // fast path multiple threads
         ThreadLocal<ContextStore> tlstore = threadStore;
         if (tlstore != null) {
-            ContextStore currentstore = tlstore.get();
+            ContextStore currentstore = getThreadLocalStore(tlstore);
             if (currentstore != store) {
-                tlstore.set(store);
+                setThreadLocalStore(tlstore, store);
             }
             return;
         }
 
         // everything else
         slowPathProfile(store);
+    }
+
+    @TruffleBoundary
+    private static void setThreadLocalStore(ThreadLocal<ContextStore> tlstore, ContextStore store) {
+        tlstore.set(store);
     }
 
     @TruffleBoundary
@@ -133,8 +150,8 @@ final class ContextStoreProfile {
     }
 
     @TruffleBoundary
-    private ContextStore getThreadLocalStore() {
-        return threadStore.get();
+    private static ContextStore getThreadLocalStore(ThreadLocal<ContextStore> tls) {
+        return tls.get();
     }
 
 }
