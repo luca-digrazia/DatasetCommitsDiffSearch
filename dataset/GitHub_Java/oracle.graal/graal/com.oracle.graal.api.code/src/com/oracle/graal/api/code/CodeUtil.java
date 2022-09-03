@@ -227,17 +227,10 @@ public class CodeUtil {
         return sb;
     }
 
-    public interface RefMapFormatter {
-
-        String formatStackSlot(int frameRefMapIndex);
-
-        String formatRegister(int regRefMapIndex);
-    }
-
     /**
      * Formats a location present in a register or frame reference map.
      */
-    public static class DefaultRefMapFormatter implements RefMapFormatter {
+    public static class RefMapFormatter {
 
         /**
          * The size of a stack slot.
@@ -259,7 +252,7 @@ public class CodeUtil {
          */
         public final int refMapToFPOffset;
 
-        public DefaultRefMapFormatter(Architecture arch, int slotSize, Register fp, int refMapToFPOffset) {
+        public RefMapFormatter(Architecture arch, int slotSize, Register fp, int refMapToFPOffset) {
             this.arch = arch;
             this.slotSize = slotSize;
             this.fp = fp;
@@ -290,16 +283,25 @@ public class CodeUtil {
      */
     public static StringBuilder append(StringBuilder sb, DebugInfo info, RefMapFormatter formatter) {
         String nl = NEW_LINE;
-        ReferenceMap refMap = info.getReferenceMap();
-        if (refMap != null && refMap.hasRegisterRefMap()) {
+        if (info.hasRegisterRefMap()) {
             sb.append("  reg-ref-map:");
-            refMap.appendRegisterMap(sb, formatter);
-            sb.append(nl);
+            BitSet bm = info.getRegisterRefMap();
+            if (formatter != null) {
+                for (int reg = bm.nextSetBit(0); reg >= 0; reg = bm.nextSetBit(reg + 1)) {
+                    sb.append(" " + formatter.formatRegister(reg));
+                }
+            }
+            sb.append(' ').append(bm).append(nl);
         }
-        if (refMap != null && refMap.hasFrameRefMap()) {
+        if (info.hasStackRefMap()) {
             sb.append("frame-ref-map:");
-            refMap.appendFrameMap(sb, formatter);
-            sb.append(nl);
+            BitSet bm = info.getFrameRefMap();
+            if (formatter != null) {
+                for (int i = bm.nextSetBit(0); i >= 0; i = bm.nextSetBit(i + 1)) {
+                    sb.append(" " + formatter.formatStackSlot(i));
+                }
+            }
+            sb.append(' ').append(bm).append(nl);
         }
         RegisterSaveLayout calleeSaveInfo = info.getCalleeSaveInfo();
         if (calleeSaveInfo != null) {

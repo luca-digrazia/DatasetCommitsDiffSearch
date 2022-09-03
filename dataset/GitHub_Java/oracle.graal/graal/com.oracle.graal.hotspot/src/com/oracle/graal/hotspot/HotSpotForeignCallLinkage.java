@@ -31,6 +31,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.word.*;
 
@@ -125,7 +126,7 @@ public class HotSpotForeignCallLinkage implements ForeignCallLinkage, InvokeTarg
         CallingConvention incomingCc = incomingCcType == null ? null : createCallingConvention(descriptor, incomingCcType);
         HotSpotForeignCallLinkage linkage = new HotSpotForeignCallLinkage(descriptor, address, effect, transition, outgoingCc, incomingCc, reexecutable, killedLocations);
         if (outgoingCcType == Type.NativeCall) {
-            linkage.temporaries = runtime().getNativeABICallerSaveRegisters();
+            linkage.temporaries = graalRuntime().getNativeABICallerSaveRegisters();
         }
         return linkage;
     }
@@ -135,23 +136,22 @@ public class HotSpotForeignCallLinkage implements ForeignCallLinkage, InvokeTarg
      */
     public static CallingConvention createCallingConvention(ForeignCallDescriptor descriptor, Type ccType) {
         assert ccType != null;
-        MetaAccessProvider metaAccess = runtime().getProviders().getMetaAccess();
+        HotSpotRuntime runtime = graalRuntime().getRuntime();
         Class<?>[] argumentTypes = descriptor.getArgumentTypes();
         JavaType[] parameterTypes = new JavaType[argumentTypes.length];
         for (int i = 0; i < parameterTypes.length; ++i) {
-            parameterTypes[i] = asJavaType(argumentTypes[i], metaAccess);
+            parameterTypes[i] = asJavaType(argumentTypes[i], runtime);
         }
-        TargetDescription target = runtime().getTarget();
-        JavaType returnType = asJavaType(descriptor.getResultType(), metaAccess);
-        RegisterConfig regConfig = runtime().getProviders().getCodeCache().getRegisterConfig();
-        return regConfig.getCallingConvention(ccType, returnType, parameterTypes, target, false);
+        TargetDescription target = graalRuntime().getTarget();
+        JavaType returnType = asJavaType(descriptor.getResultType(), runtime);
+        return runtime.getRegisterConfig().getCallingConvention(ccType, returnType, parameterTypes, target, false);
     }
 
-    private static JavaType asJavaType(Class type, MetaAccessProvider metaAccess) {
+    private static JavaType asJavaType(Class type, HotSpotRuntime runtime) {
         if (WordBase.class.isAssignableFrom(type)) {
-            return metaAccess.lookupJavaType(wordKind().toJavaClass());
+            return runtime.lookupJavaType(wordKind().toJavaClass());
         } else {
-            return metaAccess.lookupJavaType(type);
+            return runtime.lookupJavaType(type);
         }
     }
 
@@ -206,7 +206,7 @@ public class HotSpotForeignCallLinkage implements ForeignCallLinkage, InvokeTarg
     }
 
     public long getMaxCallTargetOffset() {
-        return runtime().getCompilerToVM().getMaxCallTargetOffset(address);
+        return graalRuntime().getCompilerToVM().getMaxCallTargetOffset(address);
     }
 
     public ForeignCallDescriptor getDescriptor() {
