@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,24 +23,23 @@
 package com.oracle.max.graal.compiler.phases;
 
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.observer.*;
 import com.oracle.max.graal.compiler.schedule.*;
-import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.nodes.*;
-import com.sun.cri.ci.*;
+import com.oracle.max.graal.graph.Graph;
 
 public abstract class Phase {
 
     private final String name;
+    private static final ThreadLocal<Phase> currentPhase = new ThreadLocal<Phase>();
     private final boolean shouldVerify;
-    protected GraalContext context;
 
     protected Phase() {
         this.name = this.getClass().getSimpleName();
-        this.shouldVerify = GraalOptions.VerifyPhases;
+        this.shouldVerify = GraalOptions.Verify;
     }
 
     protected Phase(String name) {
-        this(name, GraalOptions.VerifyPhases);
+        this(name, true);
     }
 
     protected Phase(String name, boolean shouldVerify) {
@@ -52,75 +51,68 @@ public abstract class Phase {
         return getName();
     }
 
-    public final void apply(StructuredGraph graph) {
-        apply(graph, GraalContext.EMPTY_CONTEXT);
+    public final void apply(Graph graph) {
+        apply(graph, true, true);
     }
 
-    public final void apply(StructuredGraph graph, GraalContext context) {
-        apply(graph, context, true, true);
-    }
-
-    public final void apply(StructuredGraph graph, boolean plotOnError, boolean plot) {
-        apply(graph,  GraalContext.EMPTY_CONTEXT, plotOnError, plot);
-    }
-
-    public final void apply(StructuredGraph graph, GraalContext context, boolean plotOnError, boolean plot) {
-
-        this.context = context;
-        try {
-            assert graph != null && !shouldVerify || graph.verify();
-        } catch (GraalInternalError e) {
-            throw e.addContext("start of phase", getDetailedName());
-        }
+    public final void apply(Graph graph, boolean plotOnError, boolean plot) {
+        assert graph != null && (!shouldVerify || graph.verify());
 
         int startDeletedNodeCount = graph.getDeletedNodeCount();
         int startNodeCount = graph.getNodeCount();
-        if (context != null) {
-            context.timers.startScope(getName());
+        Phase oldCurrentPhase = null;
+        if (GraalOptions.Time) {
+            oldCurrentPhase = currentPhase.get();
+            currentPhase.set(this);
+            if (oldCurrentPhase != null) {
+                GraalTimers.get(oldCurrentPhase.getName()).stop();
+            }
+            GraalTimers.get(getName()).start();
         }
+        //System.out.println("Starting Phase " + getName());
         try {
-            try {
-                run(graph);
-            } catch (CiBailout bailout) {
-                throw bailout;
-            } catch (AssertionError e) {
-                throw new GraalInternalError(e);
-            } catch (RuntimeException e) {
-                throw new GraalInternalError(e);
-            } finally {
-                if (context != null) {
-                    context.timers.endScope();
-                }
+            run(graph);
+        } catch (AssertionError t) {
+            GraalCompilation compilation = GraalCompilation.compilation();
+            if (compilation.compiler.isObserved() && plotOnError) {
+                compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "AssertionError in " + getDetailedName(), graph, true, false, true));
             }
-        } catch (GraalInternalError e) {
-            throw e.addContext(graph).addContext("phase", getDetailedName());
+            throw t;
+        } catch (RuntimeException t) {
+            GraalCompilation compilation = GraalCompilation.compilation();
+            if (compilation.compiler.isObserved() && plotOnError) {
+                compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "RuntimeException in " + getDetailedName(), graph, true, false, true));
+            }
+            throw t;
+        }
+        //System.out.println("Finished Phase " + getName());
+        if (GraalOptions.Time) {
+            GraalTimers.get(getName()).stop();
+            if (oldCurrentPhase != null) {
+                GraalTimers.get(oldCurrentPhase.getName()).start();
+            }
+            currentPhase.set(oldCurrentPhase);
+        }
+        if (GraalOptions.Meter) {
+            int deletedNodeCount = graph.getDeletedNodeCount() - startDeletedNodeCount;
+            int createdNodeCount = graph.getNodeCount() - startNodeCount + deletedNodeCount;
+            GraalMetrics.get(getName().concat(".executed")).increment();
+            GraalMetrics.get(getName().concat(".deletedNodes")).increment(deletedNodeCount);
+            GraalMetrics.get(getName().concat(".createdNodes")).increment(createdNodeCount);
+        }
+        GraalCompilation compilation = GraalCompilation.compilation();
+        if (compilation.compiler.isObserved() && this.getClass() != IdentifyBlocksPhase.class && (plot || GraalOptions.PlotVerbose)) {
+            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "After " + getDetailedName(), graph, true, false));
         }
 
-        if (context != null) {
-            if (GraalOptions.Meter) {
-                int deletedNodeCount = graph.getDeletedNodeCount() - startDeletedNodeCount;
-                int createdNodeCount = graph.getNodeCount() - startNodeCount + deletedNodeCount;
-                context.metrics.get(getName().concat(".executed")).increment();
-                context.metrics.get(getName().concat(".deletedNodes")).increment(deletedNodeCount);
-                context.metrics.get(getName().concat(".createdNodes")).increment(createdNodeCount);
-            }
+        assert !shouldVerify || graph.verify();
 
-            boolean shouldFireCompilationEvents = context.isObserved() && this.getClass() != IdentifyBlocksPhase.class && (plot || GraalOptions.PlotVerbose);
-            if (shouldFireCompilationEvents && context.timers.currentLevel() < GraalOptions.PlotLevel) {
-                context.observable.fireCompilationEvent("After " + getName(), graph);
-            }
-        }
-
-        try {
-            assert !shouldVerify || graph.verify();
-        } catch (GraalInternalError e) {
-            throw e.addContext("end of phase", getDetailedName());
-        }
+        // (Item|Graph|Phase|Value)
     }
 
     public final String getName() {
         return name;
     }
 
-    protected abstract void run(StructuredGraph graph);
+    protected abstract void run(Graph graph);
 }
