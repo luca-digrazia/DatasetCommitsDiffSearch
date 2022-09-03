@@ -29,19 +29,48 @@
  */
 package com.oracle.truffle.llvm.parser;
 
-import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
-import java.util.Map;
+import java.util.List;
 
-public interface LLVMParserResult {
+import com.oracle.truffle.llvm.parser.model.functions.FunctionSymbol;
+import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
 
-    RootCallTarget getMainFunction();
+public final class LLVMParserResult {
 
-    Map<LLVMFunctionDescriptor, RootCallTarget> getParsedFunctions();
+    private final LLVMParserRuntime runtime;
+    private final List<FunctionSymbol> externalFunctions;
+    private final List<GlobalVariable> definedGlobals;
+    private final List<GlobalVariable> externalGlobals;
+    private final List<String> importedSymbols;
 
-    RootCallTarget getStaticInits();
+    LLVMParserResult(LLVMParserRuntime runtime,
+                    List<FunctionSymbol> externalFunctions,
+                    List<GlobalVariable> definedGlobals,
+                    List<GlobalVariable> externalGlobals,
+                    List<String> importedSymbols) {
+        this.runtime = runtime;
+        this.externalFunctions = externalFunctions;
+        this.definedGlobals = definedGlobals;
+        this.externalGlobals = externalGlobals;
+        this.importedSymbols = importedSymbols;
+    }
 
-    RootCallTarget getStaticDestructors();
+    public LLVMParserRuntime getRuntime() {
+        return runtime;
+    }
 
-    RootCallTarget getDestructorFunctions();
+    public List<FunctionSymbol> getExternalFunctions() {
+        return externalFunctions;
+    }
+
+    public List<GlobalVariable> getDefinedGlobals() {
+        return definedGlobals;
+    }
+
+    public List<GlobalVariable> getExternalGlobals() {
+        return externalGlobals;
+    }
+
+    public List<String> getImportedSymbols() {
+        return importedSymbols;
+    }
 }

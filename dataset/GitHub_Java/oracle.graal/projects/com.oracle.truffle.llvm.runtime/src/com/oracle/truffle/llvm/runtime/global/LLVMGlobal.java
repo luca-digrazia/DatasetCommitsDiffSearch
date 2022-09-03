@@ -49,8 +49,8 @@ import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceSymbol;
-import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalFactory.GetFrameNodeGen;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalFactory.GetGlobalValueNodeGen;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalFactory.GetNativePointerNodeGen;
@@ -442,24 +442,13 @@ public final class LLVMGlobal implements LLVMSymbol, LLVMObjectNativeLibrary.Pro
         if (pointeeType instanceof PrimitiveType) {
             switch (((PrimitiveType) pointeeType).getPrimitiveKind()) {
                 case DOUBLE:
-                    if (value instanceof Double) {
-                        memory.putDouble(a, (double) value);
-                    } else if (value instanceof Long) {
-                        memory.putI64(a, (long) value);
-                    }
+                    memory.putDouble(a, (double) value);
                     break;
                 case FLOAT:
-                    if (value instanceof Float) {
-                        memory.putFloat(a, (float) value);
-                    } else if (value instanceof Integer) {
-                        memory.putI32(a, (int) value);
-                    }
+                    memory.putFloat(a, (float) value);
                     break;
                 case I1:
                     memory.putI1(a, (boolean) value);
-                    break;
-                case I8:
-                    memory.putI8(a, (byte) value);
                     break;
                 case I16:
                     memory.putI16(a, (short) (int) value);
@@ -469,6 +458,9 @@ public final class LLVMGlobal implements LLVMSymbol, LLVMObjectNativeLibrary.Pro
                     break;
                 case I64:
                     memory.putI64(a, (long) value);
+                    break;
+                case I8:
+                    memory.putI8(a, (byte) value);
                     break;
                 default:
                     putOther(memory, context, a, value);

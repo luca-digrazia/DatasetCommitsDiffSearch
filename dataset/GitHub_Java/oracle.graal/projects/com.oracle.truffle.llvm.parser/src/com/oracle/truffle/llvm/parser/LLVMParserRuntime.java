@@ -34,7 +34,6 @@ import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMScope;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
-import com.oracle.truffle.llvm.runtime.NodeFactory;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 
 public final class LLVMParserRuntime {
@@ -70,24 +69,24 @@ public final class LLVMParserRuntime {
         return context.getGlobalScope();
     }
 
-    public LLVMFunctionDescriptor lookupFunction(String name, boolean useGlobalScope) {
-        return getScope(useGlobalScope).getFunction(name);
+    public LLVMFunctionDescriptor lookupFunction(String name, boolean isExported) {
+        return getScope(isExported).getFunction(name);
     }
 
-    public LLVMGlobal lookupGlobal(String name, boolean useGlobalScope) {
-        return getScope(useGlobalScope).getGlobalVariable(name);
+    public LLVMGlobal lookupGlobal(String name, boolean isExported) {
+        return getScope(isExported).getGlobalVariable(name);
     }
 
-    public LLVMSymbol lookupSymbol(String name, boolean useGlobalScope) {
-        LLVMSymbol symbol = getScope(useGlobalScope).get(name);
+    public LLVMSymbol lookupSymbol(String name, boolean isExported) {
+        LLVMSymbol symbol = getScope(isExported).get(name);
         if (symbol != null) {
             return symbol;
         }
         throw new IllegalStateException("Unknown symbol: " + name);
     }
 
-    private LLVMScope getScope(boolean useGlobalScope) {
-        if (useGlobalScope) {
+    private LLVMScope getScope(boolean isExported) {
+        if (isExported) {
             return getGlobalScope();
         } else {
             return fileScope;

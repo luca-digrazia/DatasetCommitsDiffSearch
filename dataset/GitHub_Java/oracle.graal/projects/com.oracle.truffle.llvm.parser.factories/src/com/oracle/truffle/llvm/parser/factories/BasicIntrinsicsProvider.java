@@ -134,29 +134,24 @@ import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleWriteFactory.
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleWriteFactory.LLVMTruffleWriteToNameNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleWriteManagedToGlobalNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMVirtualMallocNodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.typed.LLVMArrayTypeIDNode;
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.typed.LLVMPolyglotAsTyped;
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.typed.LLVMPolyglotFromTyped;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.typed.LLVMTypeIDNode;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsicRootNodeFactory.LLVMIntrinsicExpressionNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMMemoryIntrinsicFactory.LLVMCallocNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMMemoryIntrinsicFactory.LLVMFreeNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMMemoryIntrinsicFactory.LLVMMallocNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMMemoryIntrinsicFactory.LLVMReallocNodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMComplexDoubleDiv;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMComplexDoubleMul;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMComplexFloatDiv;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMComplexFloatMul;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMComplexDiv;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMComplexMul;
+import com.oracle.truffle.llvm.nodes.intrinsics.rust.LLVMLangStartNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.rust.LLVMPanicNodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.rust.LLVMStartFactory.LLVMLangStartInternalNodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.rust.LLVMStartFactory.LLVMLangStartNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.sulong.LLVMPrintStackTraceNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.sulong.LLVMRunDestructorFunctionsNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.sulong.LLVMShouldPrintStackTraceOnAbortNodeGen;
+import com.oracle.truffle.llvm.parser.NodeFactory;
 import com.oracle.truffle.llvm.runtime.ContextExtension;
 import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMIntrinsicProvider;
-import com.oracle.truffle.llvm.runtime.NodeFactory;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -1110,47 +1105,9 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider, ContextEx
 
         //
 
-        factories.put("@__polyglot_as_typeid", new LLVMNativeIntrinsicFactory(true, true) {
-
-            @Override
-            protected LLVMExpressionNode generate(FunctionType type) {
-                return LLVMTypeIDNode.create(LLVMArgNodeGen.create(1));
-            }
-        });
-
-        factories.put("@polyglot_as_typed", new LLVMNativeIntrinsicFactory(true, true) {
-
-            @Override
-            protected LLVMExpressionNode generate(FunctionType type) {
-                return LLVMPolyglotAsTyped.create(LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2));
-            }
-        });
-
-        factories.put("@polyglot_from_typed", new LLVMNativeIntrinsicFactory(true, true) {
-
-            @Override
-            protected LLVMExpressionNode generate(FunctionType type) {
-                return LLVMPolyglotFromTyped.create(LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2));
-            }
-        });
-
-        factories.put("@polyglot_array_typeid", new LLVMNativeIntrinsicFactory(true, true) {
-
-            @Override
-            protected LLVMExpressionNode generate(FunctionType type) {
-                return LLVMArrayTypeIDNode.create(LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2));
-            }
-        });
-
-        /*
-         * For binary compatibility with bitcode files compiled with polyglot.h from 1.0-RC2 or
-         * earlier.
-         */
-
         factories.put("@__polyglot_as_typed", new LLVMNativeIntrinsicFactory(true, true) {
 
             @Override
-            @SuppressWarnings("deprecation")
             protected LLVMExpressionNode generate(FunctionType type) {
                 return LLVMPolyglotAsTyped.createStruct(LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2));
             }
@@ -1159,7 +1116,6 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider, ContextEx
         factories.put("@__polyglot_as_typed_array", new LLVMNativeIntrinsicFactory(true, true) {
 
             @Override
-            @SuppressWarnings("deprecation")
             protected LLVMExpressionNode generate(FunctionType type) {
                 return LLVMPolyglotAsTyped.createArray(LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2));
             }
@@ -1168,7 +1124,6 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider, ContextEx
         factories.put("@__polyglot_from_typed", new LLVMNativeIntrinsicFactory(true, true) {
 
             @Override
-            @SuppressWarnings("deprecation")
             protected LLVMExpressionNode generate(FunctionType type) {
                 return LLVMPolyglotFromTyped.createStruct(LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2));
             }
@@ -1177,7 +1132,6 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider, ContextEx
         factories.put("@__polyglot_from_typed_array", new LLVMNativeIntrinsicFactory(true, true) {
 
             @Override
-            @SuppressWarnings("deprecation")
             protected LLVMExpressionNode generate(FunctionType type) {
                 return LLVMPolyglotFromTyped.createArray(LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2), LLVMArgNodeGen.create(3));
             }
@@ -1279,13 +1233,6 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider, ContextEx
             @Override
             protected LLVMExpressionNode generate(FunctionType type) {
                 return LLVMLangStartNodeGen.create(LLVMArgNodeGen.create(0), LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2), LLVMArgNodeGen.create(3));
-            }
-        });
-        factories.put("@std::rt::lang_start_internal", new LLVMNativeIntrinsicFactory(true, false) {
-
-            @Override
-            protected LLVMExpressionNode generate(FunctionType type) {
-                return LLVMLangStartInternalNodeGen.create(LLVMArgNodeGen.create(0), LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2), LLVMArgNodeGen.create(3), LLVMArgNodeGen.create(4));
             }
         });
         factories.put("@std::process::exit", new LLVMNativeIntrinsicFactory(true, false) {
@@ -1699,31 +1646,16 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider, ContextEx
     }
 
     public void registerComplexNumberIntrinsics() {
-        // float functions return a vector of <2x float>
-        factories.put("@__divsc3", new LLVMNativeIntrinsicFactory(true, false) {
-            @Override
-            protected LLVMExpressionNode generate(FunctionType type) {
-                return new LLVMComplexFloatDiv(LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2), LLVMArgNodeGen.create(3), LLVMArgNodeGen.create(4));
-            }
-        });
-        factories.put("@__mulsc3", new LLVMNativeIntrinsicFactory(true, false) {
-            @Override
-            protected LLVMExpressionNode generate(FunctionType type) {
-                return new LLVMComplexFloatMul(LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2), LLVMArgNodeGen.create(3), LLVMArgNodeGen.create(4));
-            }
-        });
-
-        // double functions store their double results in the structure that is passed as arg1
         factories.put("@__divdc3", new LLVMNativeIntrinsicFactory(true, false) {
             @Override
             protected LLVMExpressionNode generate(FunctionType type) {
-                return new LLVMComplexDoubleDiv(LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2), LLVMArgNodeGen.create(3), LLVMArgNodeGen.create(4), LLVMArgNodeGen.create(5));
+                return new LLVMComplexDiv(LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2), LLVMArgNodeGen.create(3), LLVMArgNodeGen.create(4), LLVMArgNodeGen.create(5));
             }
         });
         factories.put("@__muldc3", new LLVMNativeIntrinsicFactory(true, false) {
             @Override
             protected LLVMExpressionNode generate(FunctionType type) {
-                return new LLVMComplexDoubleMul(LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2), LLVMArgNodeGen.create(3), LLVMArgNodeGen.create(4), LLVMArgNodeGen.create(5));
+                return new LLVMComplexMul(LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2), LLVMArgNodeGen.create(3), LLVMArgNodeGen.create(4), LLVMArgNodeGen.create(5));
             }
         });
     }

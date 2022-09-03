@@ -47,7 +47,6 @@ import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
-import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
 import com.oracle.truffle.llvm.runtime.interop.nfi.LLVMNativeWrapper;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
@@ -350,7 +349,7 @@ public final class NFIContextExtension implements ContextExtension {
         if (result != null) {
             return bindNativeFunction(result.getObject(), signature);
         }
-        throw new LLVMLinkerException(String.format("External function %s cannot be found.", name));
+        throw new LinkageError(String.format("External function %s cannot be found.", name));
     }
 
     public String getNativeSignature(FunctionType type, int skipArguments) throws UnsupportedNativeTypeException {
