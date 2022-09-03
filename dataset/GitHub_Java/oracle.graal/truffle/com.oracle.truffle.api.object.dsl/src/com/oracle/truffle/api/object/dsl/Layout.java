@@ -385,7 +385,6 @@ public @interface Layout {
             // END: inheritanceuse
         }
 
-        // Checkstyle: stop
         // BEGIN: customid
         @Layout
         interface CustomIdentifierLayout {
@@ -396,7 +395,6 @@ public @interface Layout {
 
         }
         // END: customid
-        // Checkstyle: resume
 
     }
 
