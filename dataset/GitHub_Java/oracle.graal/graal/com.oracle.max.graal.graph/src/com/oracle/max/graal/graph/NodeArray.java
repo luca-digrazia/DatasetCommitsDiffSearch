@@ -143,13 +143,16 @@ public class NodeArray extends AbstractList<Node> {
             } else {
                 assert self().successors == this;
                 if (old != null) {
-                    old.predecessors.remove(self());
+                    for (int i = 0; i < old.predecessors.size(); ++i) {
+                        Node cur = old.predecessors.get(i);
+                        if (cur == self()) {
+                            old.predecessors.remove(i);
+                            break;
+                        }
+                    }
                 }
                 if (node != null) {
                     node.predecessors.add(self());
-                    if (node.predecessors.size() > 1 && node.getClass().getName().contains("EndNode")) {
-                        assert false;
-                    }
                 }
             }
         }

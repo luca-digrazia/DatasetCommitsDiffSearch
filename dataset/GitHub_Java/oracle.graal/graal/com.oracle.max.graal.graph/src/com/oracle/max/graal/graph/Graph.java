@@ -33,8 +33,6 @@ import java.util.Map.Entry;
 
 public class Graph {
 
-    public static final List<VerificationListener> verificationListeners = new ArrayList<VerificationListener>(4);
-
     private final ArrayList<Node> nodes;
     private final StartNode start;
     int nextId;
@@ -65,37 +63,37 @@ public class Graph {
         return Collections.unmodifiableList(nodes);
     }
 
-    public class TypedNodeIterator<T> implements Iterator<T> {
+    public static class TypedNodeIterator<T> implements Iterator<T> {
         private final Class<T> type;
-        private int index;
+        private final Iterator<Node> iter;
+        private Node nextNode;
 
-        public TypedNodeIterator(Class<T> type) {
+        public TypedNodeIterator(Class<T> type, Iterator<Node> iter) {
             this.type = type;
-            this.index = -1;
+            this.iter = iter;
             forward();
         }
 
         private void forward() {
-            if (index < nodes.size()) {
-                do {
-                    index++;
-                } while (index < nodes.size() && !type.isInstance(nodes.get(index)));
-                if (index >= nodes.size()) {
-                    index = Integer.MAX_VALUE;
+            do {
+                if (!iter.hasNext()) {
+                    nextNode = null;
+                    return;
                 }
-            }
+                nextNode = iter.next();
+            } while (nextNode == null || !type.isInstance(nextNode));
         }
 
         @Override
         public boolean hasNext() {
-            return index < nodes.size();
+            return nextNode != null;
         }
 
         @Override
         @SuppressWarnings("unchecked")
         public T next() {
             try {
-                return (T) nodes.get(index);
+                return (T) nextNode;
             } finally {
                 forward();
             }
@@ -111,7 +109,7 @@ public class Graph {
         return new Iterable<T>() {
             @Override
             public Iterator<T> iterator() {
-                return new TypedNodeIterator<T>(type);
+                return new TypedNodeIterator<T>(type, nodes.iterator());
             }
         };
     }
@@ -149,13 +147,6 @@ public class Graph {
 
     public NodeWorkList createNodeWorkList(boolean fill, int iterationLimitPerNode) {
         return new NodeWorkList(this, fill, iterationLimitPerNode);
-    }
-
-    public boolean verify() {
-        for (Node n : getNodes()) {
-            assert n == Node.Null || n.verify();
-        }
-        return true;
     }
 
     public Map<Node, Node> addDuplicate(Collection<Node> nodes, Map<Node, Node> replacements) {

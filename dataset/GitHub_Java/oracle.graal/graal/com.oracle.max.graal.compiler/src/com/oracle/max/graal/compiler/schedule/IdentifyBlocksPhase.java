@@ -65,6 +65,39 @@ public class IdentifyBlocksPhase extends Phase {
         return b;
     }
 
+    private Block assignBlock(Node n) {
+        Block curBlock = nodeToBlock.get(n);
+        if (curBlock == null) {
+            curBlock = createBlock();
+            return assignBlock(n, curBlock);
+        }
+        return curBlock;
+    }
+
+
+    private Block assignBlock(Node n, Block b) {
+        assert nodeToBlock.get(n) == null;
+        nodeToBlock.set(n, b);
+        for (Node input : n.inputs()) {
+            if (input instanceof FrameState) {
+                assert nodeToBlock.get(n) == null;
+                nodeToBlock.set(n, b);
+            }
+        }
+
+        if (b.firstNode() == null) {
+            b.setFirstNode(n);
+            b.setLastNode(n);
+        } else {
+            if (b.lastNode() != null) {
+                b.getInstructions().add(b.lastNode());
+            }
+            b.setLastNode(n);
+        }
+        b.setLastNode(n);
+        return b;
+    }
+
     private Block assignBlockNew(Node n, Block b) {
         if (b == null) {
             b = createBlock();
@@ -90,7 +123,7 @@ public class IdentifyBlocksPhase extends Phase {
     }
 
     public static boolean isBlockEnd(Node n) {
-        return trueSuccessorCount(n) > 1 || n instanceof Return || n instanceof Unwind || n instanceof Deoptimize;
+        return trueSuccessorCount(n) > 1 || n instanceof Anchor || n instanceof Return || n instanceof Unwind;
     }
 
     private void identifyBlocks() {
@@ -122,6 +155,11 @@ public class IdentifyBlocksPhase extends Phase {
         for (Block block : blocks) {
             Node n = block.firstNode();
             if (n instanceof Merge) {
+                for (Node usage : n.usages()) {
+                    if (usage instanceof Phi || usage instanceof LoopCounter) {
+                        nodeToBlock.set(usage, block);
+                    }
+                }
                 Merge m = (Merge) n;
                 for (int i = 0; i < m.endCount(); ++i) {
                     EndNode end = m.endAt(i);
@@ -134,6 +172,20 @@ public class IdentifyBlocksPhase extends Phase {
                         Block predBlock = nodeToBlock.get(pred);
                         predBlock.addSuccessor(block);
                     }
+                }
+            }
+        }
+
+        for (Node n : graph.getNodes()) {
+            if (n instanceof FrameState) {
+                FrameState f = (FrameState) n;
+                if (f.predecessors().size() == 1) {
+                    Block predBlock = nodeToBlock.get(f.predecessors().get(0));
+                    assert predBlock != null;
+                    nodeToBlock.set(f, predBlock);
+                    predBlock.getInstructions().add(f);
+                } else {
+                    assert f.predecessors().size() == 0;
                 }
             }
         }
@@ -226,21 +278,9 @@ public class IdentifyBlocksPhase extends Phase {
             return null;
         }
 
-        assert !n.isDeleted();
-
         Block prevBlock = nodeToBlock.get(n);
         if (prevBlock != null) {
             return prevBlock;
-        }
-
-        if (n instanceof Phi) {
-            Block block = nodeToBlock.get(((Phi) n).merge());
-            nodeToBlock.set(n, block);
-        }
-
-        if (n instanceof LoopCounter) {
-            Block block = nodeToBlock.get(((LoopCounter) n).loopBegin());
-            nodeToBlock.set(n, block);
         }
 
         Block block = null;
@@ -272,7 +312,7 @@ public class IdentifyBlocksPhase extends Phase {
                 }
             } else if (usage instanceof LoopCounter) {
                 LoopCounter counter = (LoopCounter) usage;
-                if (n == counter.init() || n == counter.stride()) {
+                if (n == counter.init()) {
                     LoopBegin loopBegin = counter.loopBegin();
                     Block mergeBlock = nodeToBlock.get(loopBegin);
                     block = getCommonDominator(block, mergeBlock.dominator());
@@ -308,24 +348,27 @@ public class IdentifyBlocksPhase extends Phase {
 
     private void sortNodesWithinBlocks(Block b, NodeBitMap map) {
         List<Node> instructions = b.getInstructions();
-        List<Node> sortedInstructions = new ArrayList<Node>(instructions.size() + 2);
-
+        List<Node> sortedInstructions = new ArrayList<Node>();
         assert !map.isMarked(b.firstNode()) && nodeToBlock.get(b.firstNode()) == b;
-        assert !instructions.contains(b.firstNode());
-        assert !instructions.contains(b.lastNode());
-        assert !map.isMarked(b.lastNode()) && nodeToBlock.get(b.lastNode()) == b;
 
-        addToSorting(b, b.firstNode(), sortedInstructions, map);
+        boolean scheduleFirst = true;
+        assert !instructions.contains(b.lastNode());
+        assert !instructions.contains(b.firstNode());
+
+        if (b.firstNode() == b.lastNode()) {
+            Node node = b.firstNode();
+            if (!(node instanceof Merge) || node instanceof LoopEnd) {
+                scheduleFirst = false;
+            }
+        }
+        if (scheduleFirst) {
+            addToSorting(b, b.firstNode(), sortedInstructions, map);
+        }
         for (Node i : instructions) {
             addToSorting(b, i, sortedInstructions, map);
         }
         addToSorting(b, b.lastNode(), sortedInstructions, map);
-
-        // Make sure that last node gets really last (i.e. when a frame state successor hangs off it).
-        sortedInstructions.remove(b.lastNode());
-        sortedInstructions.add(b.lastNode());
-
-        assert sortedInstructions.get(sortedInstructions.size() - 1) == b.lastNode() : " lastNode=" + b.lastNode() + ", firstNode=" + b.firstNode() + ", sorted(sz-1)=" + sortedInstructions.get(sortedInstructions.size() - 1);
+        assert sortedInstructions.get(sortedInstructions.size() - 1) == b.lastNode() : "lastNode=" + b.lastNode() + ", firstNode=" + b.firstNode() + ", sorted(sz-1)=" + sortedInstructions.get(sortedInstructions.size() - 1);
         b.setInstructions(sortedInstructions);
     }
 
@@ -336,11 +379,11 @@ public class IdentifyBlocksPhase extends Phase {
 
         FrameState state = null;
         for (Node input : i.inputs()) {
-            if (input instanceof FrameState) {
-                state = (FrameState) input;
-            } else {
+//            if (input instanceof FrameState) {
+//               state = (FrameState) input;
+//            } else {
                 addToSorting(b, input, sortedInstructions, map);
-            }
+//            }
         }
 
         for (Node pred : i.predecessors()) {
@@ -349,14 +392,14 @@ public class IdentifyBlocksPhase extends Phase {
 
         map.mark(i);
 
+        if (state != null) {
+            addToSorting(b, state, sortedInstructions, map);
+        }
+
         for (Node succ : i.successors()) {
             if (succ instanceof FrameState) {
                 addToSorting(b, succ, sortedInstructions, map);
             }
-        }
-
-        if (state != null) {
-            addToSorting(b, state, sortedInstructions, map);
         }
 
         // Now predecessors and inputs are scheduled => we can add this node.
