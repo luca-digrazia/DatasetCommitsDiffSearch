@@ -122,11 +122,6 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
     SaveRbp saveRbp;
 
-    /**
-     * Helper instruction to reserve a stack slot for the whole method. Note that the actual users
-     * of the stack slot might be inserted after stack slot allocation. This dummy instruction
-     * ensures that the stack slot is alive and gets a real stack slot assigned.
-     */
     private static final class RescueSlotDummyOp extends LIRInstruction {
         public static final LIRInstructionClass<RescueSlotDummyOp> TYPE = LIRInstructionClass.create(RescueSlotDummyOp.class);
 
@@ -149,16 +144,17 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     private RescueSlotDummyOp rescueSlotOp;
 
     private StackSlotValue getOrInitRescueSlot() {
-        RescueSlotDummyOp op = getOrInitRescueSlotOp();
-        return op.getSlot();
-    }
-
-    private RescueSlotDummyOp getOrInitRescueSlotOp() {
         if (rescueSlotOp == null) {
             // create dummy instruction to keep the rescue slot alive
             rescueSlotOp = new RescueSlotDummyOp(getResult().getFrameMapBuilder(), getLIRKindTool().getWordKind());
+            // insert dummy instruction into the start block
+            LIR lir = getResult().getLIR();
+            List<LIRInstruction> instructions = lir.getLIRforBlock(lir.getControlFlowGraph().getStartBlock());
+            // Note: we do not insert at position 1 to avoid interference with the save rpb op
+            instructions.add(instructions.size() - 1, rescueSlotOp);
+            Debug.dump(lir, "created rescue dummy op");
         }
-        return rescueSlotOp;
+        return rescueSlotOp.getSlot();
     }
 
     /**
@@ -192,7 +188,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
     private Register findPollOnReturnScratchRegister() {
         RegisterConfig regConfig = getProviders().getCodeCache().getRegisterConfig();
-        for (Register r : regConfig.getAllocatableRegisters()) {
+        for (Register r : regConfig.getAllocatableRegisters(Kind.Long)) {
             if (!r.equals(regConfig.getReturnRegister(Kind.Long)) && !r.equals(AMD64.rbp)) {
                 return r;
             }
@@ -485,12 +481,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         }
         if (BenchmarkCounters.enabled) {
             // ensure that the rescue slot is available
-            LIRInstruction op = getOrInitRescueSlotOp();
-            // insert dummy instruction into the start block
-            LIR lir = getResult().getLIR();
-            List<LIRInstruction> instructions = lir.getLIRforBlock(lir.getControlFlowGraph().getStartBlock());
-            instructions.add(1, op);
-            Debug.dump(lir, "created rescue dummy op");
+            getOrInitRescueSlot();
         }
     }
 
@@ -736,16 +727,16 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     public void emitNullCheck(Value address, LIRFrameState state) {
         if (address.getLIRKind().getPlatformKind() == Kind.Int) {
             CompressEncoding encoding = config.getOopEncoding();
-            Value uncompressed;
             if (encoding.shift <= 3) {
-                uncompressed = emitAddress(getProviders().getRegisters().getHeapBaseRegister().asValue(), 0, load(address), 1 << encoding.shift);
+                AMD64AddressValue uncompressionAddress = emitAddress(getProviders().getRegisters().getHeapBaseRegister().asValue(), 0, load(address), 1 << encoding.shift);
+                append(new AMD64HotSpotMove.CompressedNullCheckOp(uncompressionAddress, state));
             } else {
-                uncompressed = emitUncompress(address, encoding, false);
+                Value uncompress = emitUncompress(address, encoding, false);
+                append(new AMD64Move.NullCheckOp(load(uncompress), state));
             }
-            append(new AMD64Move.NullCheckOp(asAddressValue(uncompressed), state));
         } else {
             assert address.getKind() == Kind.Object || address.getKind() == Kind.Long : address + " - " + address.getKind() + " not a pointer!";
-            append(new AMD64Move.NullCheckOp(asAddressValue(address), state));
+            append(new AMD64Move.NullCheckOp(load(address), state));
         }
     }
 

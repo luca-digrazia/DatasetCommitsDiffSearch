@@ -73,10 +73,9 @@ import com.oracle.graal.phases.util.*;
 /**
  * This class implements the AMD64 specific portion of the LIR generator.
  */
-public abstract class AMD64LIRGenerator extends LIRGenerator implements AMD64ArithmeticLIRGenerator {
+public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     private static final RegisterValue RCX_I = AMD64.rcx.asValue(LIRKind.value(Kind.Int));
-    private AMD64SpillMoveFactory moveFactory;
 
     private class AMD64SpillMoveFactory implements LIRGeneratorTool.SpillMoveFactory {
 
@@ -91,10 +90,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator implements AMD64Ari
     }
 
     public SpillMoveFactory getSpillMoveFactory() {
-        if (moveFactory == null) {
-            moveFactory = new AMD64SpillMoveFactory();
-        }
-        return moveFactory;
+        return new AMD64SpillMoveFactory();
     }
 
     @Override

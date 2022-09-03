@@ -182,23 +182,23 @@ public class AMD64Move {
     public static final class NullCheckOp extends AMD64LIRInstruction implements NullCheck {
         public static final LIRInstructionClass<NullCheckOp> TYPE = LIRInstructionClass.create(NullCheckOp.class);
 
-        @Use({COMPOSITE}) protected AMD64AddressValue address;
+        @Use({REG}) protected AllocatableValue input;
         @State protected LIRFrameState state;
 
-        public NullCheckOp(AMD64AddressValue address, LIRFrameState state) {
+        public NullCheckOp(Variable input, LIRFrameState state) {
             super(TYPE);
-            this.address = address;
+            this.input = input;
             this.state = state;
         }
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
             crb.recordImplicitException(masm.position(), state);
-            masm.nullCheck(address.toAddress());
+            masm.nullCheck(asRegister(input));
         }
 
         public Value getCheckedValue() {
-            return address.base;
+            return input;
         }
 
         public LIRFrameState getState() {
