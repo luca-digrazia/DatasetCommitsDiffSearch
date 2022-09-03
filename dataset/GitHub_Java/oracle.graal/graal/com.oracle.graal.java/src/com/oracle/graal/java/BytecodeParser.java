@@ -1344,7 +1344,6 @@ public class BytecodeParser implements GraphBuilderContext {
             }
         }
 
-        InlineInfo inlineInfo = null;
         try {
             currentInvokeReturnType = returnType;
             currentInvokeKind = invokeKind;
@@ -1363,8 +1362,7 @@ public class BytecodeParser implements GraphBuilderContext {
                     return;
                 }
 
-                inlineInfo = tryInline(args, targetMethod, returnType);
-                if (inlineInfo == SUCCESSFULLY_INLINED) {
+                if (tryInline(args, targetMethod, returnType)) {
                     return;
                 }
             }
@@ -1380,7 +1378,7 @@ public class BytecodeParser implements GraphBuilderContext {
         MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, targetMethod, args, returnType, profile));
 
         Invoke invoke;
-        if (omitInvokeExceptionEdge(callTarget, inlineInfo)) {
+        if (omitInvokeExceptionEdge(callTarget)) {
             invoke = createInvoke(callTarget, resultType);
         } else {
             invoke = createInvokeWithException(callTarget, resultType);
@@ -1400,7 +1398,7 @@ public class BytecodeParser implements GraphBuilderContext {
      *
      * @param callTarget The call target.
      */
-    protected boolean omitInvokeExceptionEdge(MethodCallTargetNode callTarget, InlineInfo lastInlineInfo) {
+    protected boolean omitInvokeExceptionEdge(MethodCallTargetNode callTarget) {
         if (lastInlineInfo == InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION) {
             return false;
         } else if (lastInlineInfo == InlineInfo.DO_NOT_INLINE_NO_EXCEPTION || graphBuilderConfig.omitAllExceptionEdges()) {
@@ -1498,40 +1496,30 @@ public class BytecodeParser implements GraphBuilderContext {
         return false;
     }
 
-    private static final InlineInfo SUCCESSFULLY_INLINED = new InlineInfo(null, false);
+    InlineInfo lastInlineInfo;
 
-    /**
-     * Try to inline a method. If the method was inlined, returns {@link #SUCCESSFULLY_INLINED}.
-     * Otherwise, it returns the {@link InlineInfo} that lead to the decision to not inline it, or
-     * {@code null} if there is no {@link InlineInfo} for this method.
-     */
-    private InlineInfo tryInline(ValueNode[] args, ResolvedJavaMethod targetMethod, JavaType returnType) {
+    private boolean tryInline(ValueNode[] args, ResolvedJavaMethod targetMethod, JavaType returnType) {
         boolean canBeInlined = forceInliningEverything || parsingIntrinsic() || targetMethod.canBeInlined();
         if (!canBeInlined) {
-            return null;
+            return false;
         }
 
         if (forceInliningEverything) {
-            if (inline(targetMethod, targetMethod, false, args)) {
-                return SUCCESSFULLY_INLINED;
-            } else {
-                return null;
-            }
+            return inline(targetMethod, targetMethod, false, args);
         }
 
         for (InlineInvokePlugin plugin : graphBuilderConfig.getPlugins().getInlineInvokePlugins()) {
-            InlineInfo inlineInfo = plugin.shouldInlineInvoke(this, targetMethod, args, returnType);
-            if (inlineInfo != null) {
-                if (inlineInfo.getMethodToInline() != null) {
-                    if (inline(targetMethod, inlineInfo.getMethodToInline(), inlineInfo.isIntrinsic(), args)) {
-                        return SUCCESSFULLY_INLINED;
-                    }
+            lastInlineInfo = plugin.shouldInlineInvoke(this, targetMethod, args, returnType);
+            if (lastInlineInfo != null) {
+                if (lastInlineInfo.getMethodToInline() == null) {
+                    /* Do not inline, and do not ask the remaining plugins. */
+                    return false;
+                } else {
+                    return inline(targetMethod, lastInlineInfo.getMethodToInline(), lastInlineInfo.isIntrinsic(), args);
                 }
-                /* Do not inline, and do not ask the remaining plugins. */
-                return inlineInfo;
             }
         }
-        return null;
+        return false;
     }
 
     public void intrinsify(ResolvedJavaMethod targetMethod, ResolvedJavaMethod substitute, ValueNode[] args) {
