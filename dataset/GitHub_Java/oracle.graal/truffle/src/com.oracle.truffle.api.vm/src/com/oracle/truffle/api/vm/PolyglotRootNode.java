@@ -51,6 +51,8 @@ import com.oracle.truffle.api.vm.PolyglotEngine.Language;
 
 abstract class PolyglotRootNode extends RootNode {
 
+    private static final CallTarget VOID_TARGET = Truffle.getRuntime().createCallTarget(new VoidRootNode());
+
     final PolyglotEngine engine;
 
     PolyglotRootNode(PolyglotEngine engine) {
@@ -75,7 +77,7 @@ abstract class PolyglotRootNode extends RootNode {
         RootNode symbolNode;
         if (isPrimitiveType(type)) {
             // no conversion necessary just return value
-            return Truffle.getRuntime().createCallTarget(new VoidRootNode());
+            return VOID_TARGET;
         } else {
             symbolNode = new ForeignExecuteRootNode(engine, (Class<? extends TruffleObject>) type);
         }
@@ -87,7 +89,7 @@ abstract class PolyglotRootNode extends RootNode {
         RootNode symbolNode;
         if (isPrimitiveType(type)) {
             // no conversion necessary just return value
-            return Truffle.getRuntime().createCallTarget(new VoidRootNode());
+            return VOID_TARGET;
         } else {
             symbolNode = new AsJavaRootNode(engine, (Class<? extends TruffleObject>) type);
         }

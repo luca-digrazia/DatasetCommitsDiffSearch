@@ -22,62 +22,51 @@
  */
 package org.graalvm.compiler.truffle;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.impl.TVMCI;
-import com.oracle.truffle.api.nodes.RootNode;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import org.graalvm.compiler.core.common.CompilationIdentifier;
 import static org.graalvm.compiler.core.common.CompilationRequestIdentifier.asCompilationRequest;
-import org.graalvm.compiler.debug.Debug;
-import org.graalvm.compiler.debug.Debug.Scope;
+
+import org.graalvm.compiler.core.common.CompilationIdentifier;
+import org.graalvm.compiler.debug.DebugHandlersFactory;
+import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
+import org.graalvm.compiler.options.OptionValues;
 
-final class GraalTestTVMCI extends TVMCI.Test<GraalTestTVMCI.TestCallTarget> {
+import com.oracle.truffle.api.impl.TVMCI;
+import com.oracle.truffle.api.nodes.RootNode;
+
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+
+final class GraalTestTVMCI extends TVMCI.Test<OptimizedCallTarget> {
 
     private final GraalTruffleRuntime truffleRuntime;
-
-    static final class TestCallTarget implements CallTarget {
-
-        private final String testName;
-        private final OptimizedCallTarget optimizedCallTarget;
-
-        private TestCallTarget(String testName, OptimizedCallTarget optimizedCallTarget) {
-            this.testName = testName;
-            this.optimizedCallTarget = optimizedCallTarget;
-        }
-
-        @Override
-        public Object call(Object... arguments) {
-            return optimizedCallTarget.call(arguments);
-        }
-    }
 
     GraalTestTVMCI(GraalTruffleRuntime truffleRuntime) {
         this.truffleRuntime = truffleRuntime;
     }
 
     @Override
-    public TestCallTarget createTestCallTarget(String testName, RootNode testNode) {
-        return new TestCallTarget(testName, (OptimizedCallTarget) truffleRuntime.createCallTarget(testNode));
+    public OptimizedCallTarget createTestCallTarget(RootNode testNode) {
+        return (OptimizedCallTarget) truffleRuntime.createCallTarget(testNode);
     }
 
     @Override
-    public void finishWarmup(TestCallTarget callTarget) {
+    public void finishWarmup(OptimizedCallTarget callTarget, String testName) {
+        OptionValues options = TruffleCompilerOptions.getOptions();
+        DebugContext debug = DebugContext.create(options, DebugHandlersFactory.LOADER);
         TruffleCompiler compiler = truffleRuntime.getTruffleCompiler();
-        ResolvedJavaMethod rootMethod = compiler.getPartialEvaluator().rootForCallTarget(callTarget.optimizedCallTarget);
-        CompilationIdentifier compilationId = truffleRuntime.getCompilationIdentifier(callTarget.optimizedCallTarget, rootMethod, compiler.backend);
-        StructuredGraph graph = partialEval(callTarget.optimizedCallTarget, AllowAssumptions.YES, compilationId);
-        truffleRuntime.getTruffleCompiler().compileMethodHelper(graph, callTarget.testName, null, callTarget.optimizedCallTarget, asCompilationRequest(compilationId), null);
+        ResolvedJavaMethod rootMethod = compiler.getPartialEvaluator().rootForCallTarget(callTarget);
+        CompilationIdentifier compilationId = truffleRuntime.getCompilationIdentifier(callTarget, rootMethod, compiler.backend);
+        StructuredGraph graph = partialEval(debug, callTarget, AllowAssumptions.YES, compilationId);
+        truffleRuntime.getTruffleCompiler().compileMethodHelper(graph, testName, null, callTarget, asCompilationRequest(compilationId));
     }
 
     @SuppressWarnings("try")
-    protected StructuredGraph partialEval(OptimizedCallTarget compilable, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId) {
-        try (Scope s = Debug.scope("TruffleCompilation", new TruffleDebugJavaMethod(compilable))) {
+    protected StructuredGraph partialEval(DebugContext debug, OptimizedCallTarget compilable, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId) {
+        try (DebugContext.Scope s = debug.scope("TruffleCompilation", new TruffleDebugJavaMethod(compilable))) {
             TruffleCompiler compiler = truffleRuntime.getTruffleCompiler();
-            return compiler.getPartialEvaluator().createGraph(compilable, new TruffleInlining(compilable, new DefaultInliningPolicy()), allowAssumptions, compilationId, null);
+            return compiler.getPartialEvaluator().createGraph(debug, compilable, new TruffleInlining(compilable, new DefaultInliningPolicy()), allowAssumptions, compilationId, null);
         } catch (Throwable e) {
-            throw Debug.handle(e);
+            throw debug.handle(e);
         }
     }
 }
