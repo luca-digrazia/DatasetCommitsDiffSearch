@@ -47,7 +47,6 @@ import org.graalvm.compiler.printer.GraalDebugHandlersFactory;
 
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.infrastructure.SubstitutionProcessor;
-import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.c.GraalAccess;
 import com.oracle.svm.hosted.phases.NoClassInitializationPlugin;
@@ -81,10 +80,8 @@ public class LambdaProxyRenamingSubstitutionProcessor extends SubstitutionProces
     }
 
     static boolean isLambdaType(ResolvedJavaType type) {
-        String typeName = type.getName();
         return type.isFinalFlagSet() &&
-                        typeName.contains("/") && /* isVMAnonymousClass */
-                        typeName.contains("$$Lambda$") && /* shortcut to avoid regex */
+                        type.getName().contains("/") && /* isVMAnonymousClass */
                         lambdaMatcher(type.getName()).find();
     }
 
@@ -115,7 +112,9 @@ public class LambdaProxyRenamingSubstitutionProcessor extends SubstitutionProces
     private static String createStableLambdaName(ResolvedJavaType lambdaType, ResolvedJavaMethod targetMethod) {
         assert lambdaMatcher(lambdaType.getName()).find() : "Stable name should be created only for lambda types.";
         Matcher m = lambdaMatcher(lambdaType.getName());
-        String stableTargetMethod = SubstrateUtil.digest(targetMethod.format("%H.%n(%P)%R"));
+        String stableTargetMethod = targetMethod.format("%H.%n(%P)%R").replaceAll("[$.()]", "_")
+                        .replaceAll("\\[]", "_arr")
+                        .replaceAll(", ", "_");
         return m.replaceFirst("\\$\\$Lambda\\$" + stableTargetMethod);
     }
 

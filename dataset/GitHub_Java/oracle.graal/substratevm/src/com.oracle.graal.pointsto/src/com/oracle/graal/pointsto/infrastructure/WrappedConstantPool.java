@@ -26,12 +26,11 @@ package com.oracle.graal.pointsto.infrastructure;
 
 import static jdk.vm.ci.common.JVMCIError.unimplemented;
 
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 import org.graalvm.compiler.debug.GraalError;
 
-import com.oracle.graal.pointsto.constraints.UnresolvedElementException;
+import com.oracle.graal.pointsto.constraints.UnsupportedFeatureException;
 import com.oracle.graal.pointsto.util.AnalysisError.TypeNotFoundError;
 
 import jdk.vm.ci.meta.ConstantPool;
@@ -87,12 +86,10 @@ public class WrappedConstantPool implements ConstantPool {
             hsLoadReferencedType.invoke(root, cpi, opcode, initialize);
         } catch (Throwable ex) {
             Throwable cause = ex;
-            if (ex instanceof InvocationTargetException && ex.getCause() != null) {
-                cause = ex.getCause();
-            } else if (ex instanceof ExceptionInInitializerError && ex.getCause() != null) {
+            if (ex instanceof ExceptionInInitializerError && ex.getCause() != null) {
                 cause = ex.getCause();
             }
-            throw new UnresolvedElementException("Error loading a referenced type: " + cause.toString(), cause);
+            throw new UnsupportedFeatureException("Error loading a referenced type: " + cause.toString(), cause);
         }
     }
 
