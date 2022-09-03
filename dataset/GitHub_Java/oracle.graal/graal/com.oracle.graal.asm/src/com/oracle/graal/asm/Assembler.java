@@ -216,7 +216,8 @@ public abstract class Assembler {
     public static class LabelHint {
         private Label label;
         private int forPosition;
-        private int capturedTarget = -1;
+        private int capturedTarget;
+        private boolean captured = false;
 
         protected LabelHint(Label label, int lastPosition) {
             super();
@@ -226,6 +227,7 @@ public abstract class Assembler {
 
         protected void capture() {
             this.capturedTarget = label.position();
+            this.captured = true;
         }
 
         public int getTarget() {
@@ -239,7 +241,7 @@ public abstract class Assembler {
         }
 
         public boolean isValid() {
-            return capturedTarget >= 0;
+            return captured;
         }
     }
 }
