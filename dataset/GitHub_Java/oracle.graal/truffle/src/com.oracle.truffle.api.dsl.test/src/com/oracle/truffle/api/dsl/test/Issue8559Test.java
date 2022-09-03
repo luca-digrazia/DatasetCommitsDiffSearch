@@ -54,7 +54,7 @@ public class Issue8559Test {
         }
     }
 
-    public abstract static class BaseNode extends Node {
+    public static abstract class BaseNode extends Node {
 
         public abstract Object execute(VirtualFrame frame);
 
