@@ -41,17 +41,17 @@ public class PTXHotSpotGraalRuntime extends HotSpotGraalRuntime {
      * Called from C++ code to retrieve the singleton instance, creating it first if necessary.
      */
     public static HotSpotGraalRuntime makeInstance() {
-        HotSpotGraalRuntime runtime = runtime();
-        if (runtime == null) {
+        HotSpotGraalRuntime graalRuntime = graalRuntime();
+        if (graalRuntime == null) {
             HotSpotGraalRuntimeFactory factory = findFactory("PTX");
             if (factory != null) {
-                runtime = factory.createRuntime();
+                graalRuntime = factory.createRuntime();
             } else {
-                runtime = new PTXHotSpotGraalRuntime();
+                graalRuntime = new PTXHotSpotGraalRuntime();
             }
-            runtime.completeInitialization();
+            graalRuntime.completeInitialization();
         }
-        return runtime;
+        return graalRuntime;
     }
 
     @Override

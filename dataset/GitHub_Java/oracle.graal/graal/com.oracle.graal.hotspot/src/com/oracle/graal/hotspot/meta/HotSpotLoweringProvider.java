@@ -59,7 +59,7 @@ import com.oracle.graal.replacements.*;
  */
 public class HotSpotLoweringProvider implements LoweringProvider {
 
-    protected final HotSpotGraalRuntime runtime;
+    protected final HotSpotGraalRuntime graalRuntime;
     protected final MetaAccessProvider metaAccess;
     protected final ForeignCallsProvider foreignCalls;
 
@@ -72,15 +72,15 @@ public class HotSpotLoweringProvider implements LoweringProvider {
     private LoadExceptionObjectSnippets.Templates exceptionObjectSnippets;
     private UnsafeLoadSnippets.Templates unsafeLoadSnippets;
 
-    public HotSpotLoweringProvider(HotSpotGraalRuntime runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls) {
-        this.runtime = runtime;
+    public HotSpotLoweringProvider(HotSpotGraalRuntime graalRuntime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls) {
+        this.graalRuntime = graalRuntime;
         this.metaAccess = metaAccess;
         this.foreignCalls = foreignCalls;
     }
 
     public void initialize() {
-        HotSpotVMConfig c = runtime.getConfig();
-        HotSpotProviders providers = runtime.getProviders();
+        HotSpotVMConfig c = graalRuntime.getConfig();
+        HotSpotProviders providers = graalRuntime.getProviders();
         Replacements r = providers.getReplacements();
 
         r.registerSubstitutions(ObjectSubstitutions.class);
@@ -93,24 +93,24 @@ public class HotSpotLoweringProvider implements LoweringProvider {
         r.registerSubstitutions(CRC32Substitutions.class);
         r.registerSubstitutions(ReflectionSubstitutions.class);
 
-        checkcastDynamicSnippets = new CheckCastDynamicSnippets.Templates(providers, runtime.getTarget());
-        instanceofSnippets = new InstanceOfSnippets.Templates(providers, runtime.getTarget());
-        newObjectSnippets = new NewObjectSnippets.Templates(providers, runtime.getTarget());
-        monitorSnippets = new MonitorSnippets.Templates(providers, runtime.getTarget(), c.useFastLocking);
-        writeBarrierSnippets = new WriteBarrierSnippets.Templates(providers, runtime.getTarget());
-        boxingSnippets = new BoxingSnippets.Templates(providers, runtime.getTarget());
-        exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(providers, runtime.getTarget());
-        unsafeLoadSnippets = new UnsafeLoadSnippets.Templates(providers, runtime.getTarget());
+        checkcastDynamicSnippets = new CheckCastDynamicSnippets.Templates(providers, graalRuntime.getTarget());
+        instanceofSnippets = new InstanceOfSnippets.Templates(providers, graalRuntime.getTarget());
+        newObjectSnippets = new NewObjectSnippets.Templates(providers, graalRuntime.getTarget());
+        monitorSnippets = new MonitorSnippets.Templates(providers, graalRuntime.getTarget(), c.useFastLocking);
+        writeBarrierSnippets = new WriteBarrierSnippets.Templates(providers, graalRuntime.getTarget());
+        boxingSnippets = new BoxingSnippets.Templates(providers, graalRuntime.getTarget());
+        exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(providers, graalRuntime.getTarget());
+        unsafeLoadSnippets = new UnsafeLoadSnippets.Templates(providers, graalRuntime.getTarget());
 
-        r.registerSnippetTemplateCache(new UnsafeArrayCopySnippets.Templates(providers, runtime.getTarget()));
+        r.registerSnippetTemplateCache(new UnsafeArrayCopySnippets.Templates(providers, graalRuntime.getTarget()));
     }
 
     @Override
     public void lower(Node n, LoweringTool tool) {
-        HotSpotVMConfig config = runtime.getConfig();
+        HotSpotVMConfig config = graalRuntime.getConfig();
         StructuredGraph graph = (StructuredGraph) n.graph();
 
-        Kind wordKind = runtime.getTarget().wordKind;
+        Kind wordKind = graalRuntime.getTarget().wordKind;
         if (n instanceof ArrayLengthNode) {
             ArrayLengthNode arrayLengthNode = (ArrayLengthNode) n;
             ValueNode array = arrayLengthNode.array();
@@ -413,7 +413,7 @@ public class HotSpotLoweringProvider implements LoweringProvider {
             }
         } else if (n instanceof DynamicCounterNode) {
             if (graph.getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
-                BenchmarkCounters.lower((DynamicCounterNode) n, runtime.getProviders().getRegisters(), runtime.getConfig(), wordKind);
+                BenchmarkCounters.lower((DynamicCounterNode) n, graalRuntime.getProviders().getRegisters(), graalRuntime.getConfig(), wordKind);
             }
         } else if (n instanceof CheckCastDynamicNode) {
             checkcastDynamicSnippets.lower((CheckCastDynamicNode) n);
@@ -540,14 +540,14 @@ public class HotSpotLoweringProvider implements LoweringProvider {
     }
 
     private FloatingReadNode createReadHub(StructuredGraph graph, Kind wordKind, ValueNode object, GuardingNode guard) {
-        HotSpotVMConfig config = runtime.getConfig();
+        HotSpotVMConfig config = graalRuntime.getConfig();
         LocationNode location = ConstantLocationNode.create(FINAL_LOCATION, wordKind, config.hubOffset, graph);
         assert !object.isConstant() || object.asConstant().isNull();
         return graph.unique(new FloatingReadNode(object, location, null, StampFactory.forKind(wordKind), guard, BarrierType.NONE, config.useCompressedClassPointers));
     }
 
     private WriteNode createWriteHub(StructuredGraph graph, Kind wordKind, ValueNode object, ValueNode value) {
-        HotSpotVMConfig config = runtime.getConfig();
+        HotSpotVMConfig config = graalRuntime.getConfig();
         LocationNode location = ConstantLocationNode.create(HUB_LOCATION, wordKind, config.hubOffset, graph);
         assert !object.isConstant() || object.asConstant().isNull();
         return graph.add(new WriteNode(object, value, location, BarrierType.NONE, config.useCompressedClassPointers));
@@ -614,9 +614,9 @@ public class HotSpotLoweringProvider implements LoweringProvider {
 
     public int getScalingFactor(Kind kind) {
         if (useCompressedOops() && kind == Kind.Object) {
-            return this.runtime.getTarget().arch.getSizeInBytes(Kind.Int);
+            return this.graalRuntime.getTarget().arch.getSizeInBytes(Kind.Int);
         } else {
-            return this.runtime.getTarget().arch.getSizeInBytes(kind);
+            return this.graalRuntime.getTarget().arch.getSizeInBytes(kind);
         }
     }
 
@@ -670,7 +670,7 @@ public class HotSpotLoweringProvider implements LoweringProvider {
         ValueNode arrayLength = readArrayLength(array, tool.getConstantReflection());
         if (arrayLength == null) {
             Stamp stamp = StampFactory.positiveInt();
-            ReadNode readArrayLength = g.add(new ReadNode(array, ConstantLocationNode.create(FINAL_LOCATION, Kind.Int, runtime.getConfig().arrayLengthOffset, g), stamp, BarrierType.NONE, false));
+            ReadNode readArrayLength = g.add(new ReadNode(array, ConstantLocationNode.create(FINAL_LOCATION, Kind.Int, graalRuntime.getConfig().arrayLengthOffset, g), stamp, BarrierType.NONE, false));
             g.addBeforeFixed(n, readArrayLength);
             tool.createNullCheckGuard(readArrayLength, array);
             arrayLength = readArrayLength;

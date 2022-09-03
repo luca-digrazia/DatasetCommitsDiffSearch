@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.meta.HotSpotHostForeignCallsProvider.*;
+import static com.oracle.graal.hotspot.meta.HotSpotForeignCallsProvider.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.nodes.PiNode.*;
 import static com.oracle.graal.replacements.SnippetTemplate.*;
@@ -34,7 +34,6 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.Snippet.*;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
@@ -52,8 +51,8 @@ public class LoadExceptionObjectSnippets implements Snippets {
     private static final boolean USE_C_RUNTIME = Boolean.getBoolean("graal.loadExceptionObject.useCRuntime");
 
     @Snippet
-    public static Object loadException(@ConstantParameter Register threadRegister) {
-        Word thread = registerAsWord(threadRegister);
+    public static Object loadException() {
+        Word thread = thread();
         Object exception = readExceptionOop(thread);
         writeExceptionOop(thread, null);
         writeExceptionPc(thread, Word.zero());
@@ -68,9 +67,10 @@ public class LoadExceptionObjectSnippets implements Snippets {
             super(providers, target);
         }
 
-        public void lower(LoadExceptionObjectNode loadExceptionObject, HotSpotRegistersProvider registers) {
+        public void lower(LoadExceptionObjectNode loadExceptionObject) {
             if (USE_C_RUNTIME) {
                 StructuredGraph graph = loadExceptionObject.graph();
+                HotSpotRegistersProvider registers = ((HotSpotProviders) providers).getRegisters();
                 ReadRegisterNode thread = graph.add(new ReadRegisterNode(registers.getThreadRegister(), true, false));
                 graph.addBeforeFixed(loadExceptionObject, thread);
                 ForeignCallNode loadExceptionC = graph.add(new ForeignCallNode(providers.getForeignCalls(), LOAD_AND_CLEAR_EXCEPTION, thread));
@@ -78,7 +78,6 @@ public class LoadExceptionObjectSnippets implements Snippets {
                 graph.replaceFixedWithFixed(loadExceptionObject, loadExceptionC);
             } else {
                 Arguments args = new Arguments(loadException, loadExceptionObject.graph().getGuardsStage());
-                args.addConst("threadRegister", registers.getThreadRegister());
                 template(args).instantiate(providers.getMetaAccess(), loadExceptionObject, DEFAULT_REPLACER, args);
             }
         }
