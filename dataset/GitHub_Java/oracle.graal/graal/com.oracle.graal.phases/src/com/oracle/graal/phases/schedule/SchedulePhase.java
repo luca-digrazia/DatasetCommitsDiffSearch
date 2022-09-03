@@ -314,7 +314,7 @@ public final class SchedulePhase extends Phase {
         }
         FixedNode endNode = b.getEndNode();
         FixedNode fixedEndNode = null;
-        if (isFixedEnd(endNode)) {
+        if (endNode instanceof ControlSplitNode || endNode instanceof AbstractEndNode) {
             // Only if the end node is either a control split or an end node, we need to force it to
             // be the last node in the schedule.
             fixedEndNode = endNode;
@@ -497,10 +497,8 @@ public final class SchedulePhase extends Phase {
         // Start analysis with control flow ends.
         for (Block b : cfg.postOrder()) {
             FixedNode endNode = b.getEndNode();
-            if (isFixedEnd(endNode)) {
-                stack.push(endNode);
-                nodeToBlock.set(endNode, b);
-            }
+            stack.push(endNode);
+            nodeToBlock.set(endNode, b);
         }
 
         processStack(cfg, blockToNodes, nodeToBlock, visited, floatingReads, stack);
@@ -547,10 +545,8 @@ public final class SchedulePhase extends Phase {
         // Add end nodes as the last nodes in each block.
         for (Block b : cfg.getBlocks()) {
             FixedNode endNode = b.getEndNode();
-            if (isFixedEnd(endNode)) {
-                if (endNode != b.getBeginNode()) {
-                    addNode(blockToNodes, b, endNode);
-                }
+            if (endNode != b.getBeginNode()) {
+                addNode(blockToNodes, b, endNode);
             }
         }
 
@@ -563,10 +559,6 @@ public final class SchedulePhase extends Phase {
         }
 
         assert MemoryScheduleVerification.check(cfg.getStartBlock(), blockToNodes);
-    }
-
-    private static boolean isFixedEnd(FixedNode endNode) {
-        return endNode instanceof ControlSplitNode || endNode instanceof ControlSinkNode || endNode instanceof AbstractEndNode;
     }
 
     private static void resortEarliestWithinBlock(Block b, BlockMap<List<Node>> blockToNodes, NodeMap<Block> nodeToBlock, NodeBitMap unprocessed) {
