@@ -81,8 +81,9 @@ public class CheckCastSnippets implements Snippets {
             }
             exactHit.inc();
         }
-        /* make sure that the unsafeCast is done *after* the check above,
-         * cf. ReadAfterCheckCast */
+        /**
+         * make sure that the unsafeCast is done *after* the check above,
+         * cf. {@link ReadAfterCheckCast}*/
         BeginNode anchorNode = BeginNode.anchor(StampFactory.forNodeIntrinsic());
         return unsafeCast(verifyOop(object), StampFactory.forNodeIntrinsic(), anchorNode);
     }

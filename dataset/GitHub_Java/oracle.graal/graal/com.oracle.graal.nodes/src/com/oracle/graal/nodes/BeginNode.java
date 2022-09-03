@@ -73,8 +73,6 @@ public class BeginNode extends FixedWithNextNode implements StateSplit, LIRLower
             // This is the start node.
         } else if (prev instanceof ControlSplitNode) {
             // This begin node is necessary.
-        } else if (this.stateAfter() != null) {
-            // Begin node necessary to preserve state.
         } else {
             // This begin node can be removed and all guards moved up to the preceding begin node.
             prepareDelete();
@@ -188,5 +186,5 @@ public class BeginNode extends FixedWithNextNode implements StateSplit, LIRLower
     }
 
     @NodeIntrinsic
-    public static native BeginNode anchor(@ConstantNodeParameter Stamp stamp);
+    public static native <T> T anchor(@ConstantNodeParameter Stamp stamp);
 }
