@@ -31,8 +31,6 @@ package com.oracle.truffle.llvm.parser;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
-
-import java.util.List;
 import java.util.Map;
 
 public interface LLVMParserResult {
@@ -41,11 +39,7 @@ public interface LLVMParserResult {
 
     Map<LLVMFunctionDescriptor, RootCallTarget> getParsedFunctions();
 
-    RootCallTarget getGlobalVarInits();
+    RootCallTarget getStaticInits();
 
-    RootCallTarget getGlobalVarDeallocs();
-
-    List<RootCallTarget> getConstructorFunctions();
-
-    List<RootCallTarget> getDestructorFunctions();
+    RootCallTarget getStaticDestructors();
 }
