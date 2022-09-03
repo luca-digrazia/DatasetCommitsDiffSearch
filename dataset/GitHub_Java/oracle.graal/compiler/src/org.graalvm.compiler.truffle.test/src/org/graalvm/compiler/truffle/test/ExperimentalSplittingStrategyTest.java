@@ -1,3 +1,25 @@
+/*
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
 package org.graalvm.compiler.truffle.test;
 
 import com.oracle.truffle.api.RootCallTarget;
@@ -57,7 +79,7 @@ public class ExperimentalSplittingStrategyTest extends AbstractSplittingStrategy
         }
 
         @Fallback
-        static int do3(VirtualFrame frame, Object value) {
+        static int do3(@SuppressWarnings("unused") VirtualFrame frame, @SuppressWarnings("unused") Object value) {
             return 0;
         }
     }
@@ -76,7 +98,7 @@ public class ExperimentalSplittingStrategyTest extends AbstractSplittingStrategy
         }
 
         @Fallback
-        int do3(VirtualFrame frame, Object value) {
+        int do3(@SuppressWarnings("unused") VirtualFrame frame, @SuppressWarnings("unused") Object value) {
             return 0;
         }
     }
@@ -95,7 +117,7 @@ public class ExperimentalSplittingStrategyTest extends AbstractSplittingStrategy
         }
 
         @Fallback
-        int do3(VirtualFrame frame, Object value) {
+        int do3(@SuppressWarnings("unused") VirtualFrame frame, @SuppressWarnings("unused") Object value) {
             return 0;
         }
     }
@@ -124,9 +146,10 @@ public class ExperimentalSplittingStrategyTest extends AbstractSplittingStrategy
     @NodeChild
     @ReportPolymorphism
     abstract static class HasInlineCacheNode extends SplittingTestNode {
+
         @Specialization(limit = "2", //
                         guards = "target.getRootNode() == cachedNode")
-        protected static Object doDirect(RootCallTarget target, @Cached("target.getRootNode()") RootNode cachedNode) {
+        protected static Object doDirect(RootCallTarget target, @Cached("target.getRootNode()") @SuppressWarnings("unused") RootNode cachedNode) {
             return target.call(noArguments);
         }
 
@@ -175,7 +198,7 @@ public class ExperimentalSplittingStrategyTest extends AbstractSplittingStrategy
         testSplitsDirectCallsHelper(callTarget, new Object[]{1}, new Object[]{0});
     }
 
-    private void testSplitsDirectCallsHelper(OptimizedCallTarget callTarget, Object[] firstArgs, Object[] secondArgs) {
+    private static void testSplitsDirectCallsHelper(OptimizedCallTarget callTarget, Object[] firstArgs, Object[] secondArgs) {
         // two callers for a target are needed
         runtime.createDirectCallNode(callTarget);
         final DirectCallNode directCallNode = runtime.createDirectCallNode(callTarget);
@@ -310,5 +333,72 @@ public class ExperimentalSplittingStrategyTest extends AbstractSplittingStrategy
 
         directCallNode.call(new Object[]{0});
         Assert.assertFalse("Target needs split after first execution", getNeedsSplit(callTarget));
+    }
+
+    @Test
+    public void testIncreaseInPolymorphism() {
+        OptimizedCallTarget callTarget = (OptimizedCallTarget) runtime.createCallTarget(
+                        new SplittingTestRootNode(ExperimentalSplittingStrategyTestFactory.TurnsPolymorphicOnZeroNodeGen.create(new ReturnsArgumentNode())));
+        final RootCallTarget outerTarget = runtime.createCallTarget(new CallsInnerNode(callTarget));
+        Object[] firstArgs = new Object[]{1};
+        outerTarget.call(firstArgs);
+        Assert.assertFalse("Target needs split before the node went polymorphic", getNeedsSplit(callTarget));
+        outerTarget.call(firstArgs);
+        Assert.assertFalse("Target needs split before the node went polymorphic", getNeedsSplit(callTarget));
+        Object[] secondArgs = new Object[]{0};
+        // Turns polymorphic
+        outerTarget.call(secondArgs);
+        Assert.assertFalse("Target needs split even though there is only 1 caller", getNeedsSplit(callTarget));
+
+        // Add second caller
+        final DirectCallNode directCallNode = runtime.createDirectCallNode(callTarget);
+        outerTarget.call(secondArgs);
+        Assert.assertFalse("Target needs split with no increase in polymorphism", getNeedsSplit(callTarget));
+
+        outerTarget.call(new Object[]{"foo"});
+        Assert.assertTrue("Target does not need split after increase in polymorphism", getNeedsSplit(callTarget));
+
+        // Test new dirrectCallNode will split
+        outerTarget.call(firstArgs);
+        directCallNode.call(firstArgs);
+        Assert.assertTrue("new call node to \"needs split\" target is not split", directCallNode.isCallTargetCloned());
+    }
+
+    class ExposesReportPolymorphicSpecializeNode extends Node {
+        void report() {
+            reportPolymorphicSpecialize();
+        }
+    }
+
+    @Test
+    public void testUnadopted() {
+        final ExposesReportPolymorphicSpecializeNode node = new ExposesReportPolymorphicSpecializeNode();
+        node.report();
+    }
+
+    class ExposesReportPolymorphicSpecializeRootNode extends RootNode {
+
+        @Child ExposesReportPolymorphicSpecializeNode node = new ExposesReportPolymorphicSpecializeNode();
+
+        protected ExposesReportPolymorphicSpecializeRootNode() {
+            super(null);
+        }
+
+        void report() {
+            node.report();
+        }
+
+        @Override
+        public Object execute(VirtualFrame frame) {
+            return null;
+        }
+    }
+
+    @Test
+    public void testSoloTarget() {
+        final ExposesReportPolymorphicSpecializeRootNode rootNode = new ExposesReportPolymorphicSpecializeRootNode();
+        final RootCallTarget callTarget = runtime.createCallTarget(rootNode);
+        callTarget.call(noArguments);
+        rootNode.report();
     }
 }
