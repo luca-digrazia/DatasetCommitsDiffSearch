@@ -23,7 +23,6 @@
 package com.oracle.graal.truffle.nodes.arithmetic;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
@@ -39,47 +38,44 @@ import com.oracle.truffle.api.*;
 public class IntegerAddExactNode extends IntegerAddNode implements Canonicalizable, IntegerExactArithmeticNode {
 
     public IntegerAddExactNode(ValueNode x, ValueNode y) {
-        super(x, y);
-        assert x.stamp().isCompatible(y.stamp()) && x.stamp() instanceof IntegerStamp;
+        super(x.kind(), x, y);
+        assert x.kind() == y.kind() && (x.kind() == Kind.Int || x.kind() == Kind.Long);
     }
 
     @Override
     public boolean inferStamp() {
-        // TODO Should probably use a specialized version which understands that it can't overflow
-        return updateStamp(StampTool.add(getX().stamp(), getY().stamp()));
+        // TODO Should probably use a specialised version which understands that it can't overflow
+        return updateStamp(StampTool.add(x().stamp(), y().stamp()));
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (getX().isConstant() && !getY().isConstant()) {
-            return graph().unique(new IntegerAddExactNode(getY(), getX()));
+        if (x().isConstant() && !y().isConstant()) {
+            return graph().unique(new IntegerAddExactNode(y(), x()));
         }
-        if (getX().isConstant()) {
-            Constant xConst = getX().asConstant();
-            Constant yConst = getY().asConstant();
-            assert xConst.getKind() == yConst.getKind();
+        if (x().isConstant()) {
             try {
-                if (xConst.getKind() == Kind.Int) {
-                    return ConstantNode.forInt(ExactMath.addExact(xConst.asInt(), yConst.asInt()), graph());
+                if (kind() == Kind.Int) {
+                    return ConstantNode.forInt(ExactMath.addExact(x().asConstant().asInt(), y().asConstant().asInt()), graph());
                 } else {
-                    assert xConst.getKind() == Kind.Long;
-                    return ConstantNode.forLong(ExactMath.addExact(xConst.asLong(), yConst.asLong()), graph());
+                    assert kind() == Kind.Long;
+                    return ConstantNode.forLong(ExactMath.addExact(x().asConstant().asLong(), y().asConstant().asLong()), graph());
                 }
             } catch (ArithmeticException ex) {
                 // The operation will result in an overflow exception, so do not canonicalize.
             }
-        } else if (getY().isConstant()) {
-            long c = getY().asConstant().asLong();
+        } else if (y().isConstant()) {
+            long c = y().asConstant().asLong();
             if (c == 0) {
-                return getX();
+                return x();
             }
         }
         return this;
     }
 
     @Override
-    public IntegerExactArithmeticSplitNode createSplit(BeginNode next, BeginNode deopt) {
-        return graph().add(new IntegerAddExactSplitNode(stamp(), getX(), getY(), next, deopt));
+    public IntegerExactArithmeticSplitNode createSplit(AbstractBeginNode next, AbstractBeginNode deopt) {
+        return graph().add(new IntegerAddExactSplitNode(stamp(), x(), y(), next, deopt));
     }
 
     @Override
