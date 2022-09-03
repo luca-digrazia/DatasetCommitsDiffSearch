@@ -939,12 +939,12 @@ public class NodeParser extends AbstractParser<NodeData> {
         boolean changed = false;
         Map<String, Integer> counts = new HashMap<>();
         for (String s1 : signatures) {
-            Integer count = counts.get(s1.toLowerCase());
+            Integer count = counts.get(s1);
             if (count == null) {
                 count = 0;
             }
             count++;
-            counts.put(s1.toLowerCase(), count);
+            counts.put(s1, count);
         }
 
         for (String s : counts.keySet()) {
@@ -954,7 +954,7 @@ public class NodeParser extends AbstractParser<NodeData> {
                 int number = 0;
                 for (ListIterator<String> iterator = signatures.listIterator(); iterator.hasNext();) {
                     String s2 = iterator.next();
-                    if (s.equalsIgnoreCase(s2)) {
+                    if (s.equals(s2)) {
                         iterator.set(s2 + number);
                         number++;
                     }
