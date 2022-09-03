@@ -24,7 +24,6 @@ package com.oracle.graal.printer;
 
 import java.io.*;
 import java.util.*;
-import java.util.concurrent.atomic.*;
 
 import com.oracle.graal.alloc.util.*;
 import com.oracle.graal.api.code.*;
@@ -47,7 +46,6 @@ import com.oracle.max.criutils.*;
 public class CFGPrinterObserver implements DebugDumpHandler {
 
     private CFGPrinter cfgPrinter;
-    private File cfgFile;
     private ResolvedJavaMethod curMethod;
     private List<String> curDecorators = Collections.emptyList();
 
@@ -65,7 +63,7 @@ public class CFGPrinterObserver implements DebugDumpHandler {
      * in the current debug scope and opens a new compilation scope if this pair
      * does not match the current method and decorator pair.
      */
-    private boolean checkMethodScope() {
+    private void checkMethodScope() {
         ResolvedJavaMethod method = null;
         ArrayList<String> decorators = new ArrayList<>();
         for (Object o : Debug.context()) {
@@ -85,21 +83,13 @@ public class CFGPrinterObserver implements DebugDumpHandler {
             }
         }
 
-        if (method == null) {
-            return false;
-        }
-
         if (method != curMethod || !curDecorators.equals(decorators)) {
             cfgPrinter.printCompilation(method);
-            TTY.println("CFGPrinter: Dumping method %s to %s", method, cfgFile);
+            TTY.println("CFGPrinter: Dumping method %s", method);
             curMethod = method;
             curDecorators = decorators;
         }
-        return true;
     }
-
-    private static final long timestamp = System.currentTimeMillis();
-    private static final AtomicInteger uniqueId = new AtomicInteger();
 
     public void dumpSandboxed(Object object, String message) {
         GraalCompiler compiler = Debug.contextLookup(GraalCompiler.class);
@@ -108,19 +98,17 @@ public class CFGPrinterObserver implements DebugDumpHandler {
         }
 
         if (cfgPrinter == null) {
-            cfgFile = new File("compilations-" + timestamp + "_" + uniqueId.incrementAndGet() + ".cfg");
+            File file = new File("compilations-" + System.currentTimeMillis() + ".cfg");
             try {
-                OutputStream out = new BufferedOutputStream(new FileOutputStream(cfgFile));
+                OutputStream out = new BufferedOutputStream(new FileOutputStream(file));
                 cfgPrinter = new CFGPrinter(out);
             } catch (FileNotFoundException e) {
-                throw new GraalInternalError("Could not open " + cfgFile.getAbsolutePath());
+                throw new GraalInternalError("Could not open " + file.getAbsolutePath());
             }
-            TTY.println("CFGPrinter: Output to file %s", cfgFile);
+            TTY.println("CFGPrinter: Output to file %s", file);
         }
 
-        if (!checkMethodScope()) {
-            return;
-        }
+        checkMethodScope();
 
         cfgPrinter.target = compiler.target;
         if (object instanceof LIR) {
@@ -138,9 +126,7 @@ public class CFGPrinterObserver implements DebugDumpHandler {
         if (object instanceof BciBlockMapping) {
             BciBlockMapping blockMap = (BciBlockMapping) object;
             cfgPrinter.printCFG(message, blockMap);
-            if (blockMap.method.code() != null) {
-                cfgPrinter.printBytecodes(new BytecodeDisassembler(false).disassemble(blockMap.method));
-            }
+            cfgPrinter.printBytecodes(runtime.disassemble(blockMap.method));
 
         } else if (object instanceof LIR) {
             cfgPrinter.printCFG(message, cfgPrinter.lir.codeEmittingOrder());

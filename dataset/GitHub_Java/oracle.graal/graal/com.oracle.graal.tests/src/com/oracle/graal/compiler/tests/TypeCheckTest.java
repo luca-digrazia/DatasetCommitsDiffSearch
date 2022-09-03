@@ -29,20 +29,18 @@ import com.oracle.graal.nodes.*;
 /**
  * Base class for checkcast and instanceof test classes.
  */
-public abstract class TypeCheckTest extends GraalCompilerTest {
+public abstract class TypeCheckTest extends GraphTest {
 
     protected abstract void replaceProfile(StructuredGraph graph, JavaTypeProfile profile);
 
     protected JavaTypeProfile currentProfile;
 
     @Override
-    protected InstalledCode getCode(final ResolvedJavaMethod method, final StructuredGraph graph) {
-        boolean forceCompile = false;
+    protected InstalledCode compile(final ResolvedJavaMethod method, final StructuredGraph graph) {
         if (currentProfile != null) {
             replaceProfile(graph, currentProfile);
-            forceCompile = true;
         }
-        return super.getCode(method, graph, forceCompile);
+        return super.compile(method, graph);
     }
 
     protected JavaTypeProfile profile(Class... types) {
