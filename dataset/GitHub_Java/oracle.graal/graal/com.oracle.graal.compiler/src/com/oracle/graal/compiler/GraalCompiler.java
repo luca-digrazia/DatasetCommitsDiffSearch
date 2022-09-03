@@ -132,7 +132,7 @@ public class GraalCompiler {
 
                 if (GraalOptions.ConditionalElimination && GraalOptions.OptCanonicalizer) {
                     new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
-                    new IterativeConditionalEliminationPhase().apply(graph, highTierContext);
+                    new IterativeConditionalEliminationPhase(runtime, assumptions).apply(graph);
                 }
             }
         }
@@ -169,7 +169,7 @@ public class GraalCompiler {
         }
 
         if (GraalOptions.ConditionalElimination && GraalOptions.OptCanonicalizer) {
-            new IterativeConditionalEliminationPhase().apply(graph, highTierContext);
+            new IterativeConditionalEliminationPhase(runtime, assumptions).apply(graph);
         }
 
         if (GraalOptions.OptEliminatePartiallyRedundantGuards) {

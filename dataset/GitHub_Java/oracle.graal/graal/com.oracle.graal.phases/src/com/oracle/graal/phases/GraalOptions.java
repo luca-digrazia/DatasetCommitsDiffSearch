@@ -44,11 +44,11 @@ public final class GraalOptions {
     public static boolean Intrinsify                         = true;
            static boolean InlineMonomorphicCalls             = true;
            static boolean InlinePolymorphicCalls             = true;
-           static boolean InlineMegamorphicCalls             = true;
-    public static double  MegamorphicInliningMinTypeProbability = 0.1;
-    public static double  MegamorphicInliningMinMethodProbability = 0.25;
+           static boolean InlineMegamorphicCalls             = ____;
     public static int     MaximumDesiredSize                 = 5000;
     public static int     MaximumRecursiveInlining           = 1;
+    public static boolean LimitInlinedProbability            = ____;
+    public static boolean LimitInlinedRelevance              = true;
     public static float   BoostInliningForEscapeAnalysis     = 2f;
     public static float   RelevanceCapForInlining            = 1f;
     public static boolean IterativeInlining                  = ____;
@@ -74,6 +74,9 @@ public final class GraalOptions {
 
     public static double  TailDuplicationProbability         = 0.5;
     public static int     TailDuplicationTrivialSize         = 1;
+
+    // absolute probability analysis
+    public static boolean ProbabilityAnalysis                = true;
 
     // profiling information
     public static int     DeoptsToDisableOptimisticOptimization = 40;
@@ -111,7 +114,7 @@ public final class GraalOptions {
     // debugging settings
     public static boolean ZapStackOnMethodEntry              = ____;
     public static boolean DeoptALot                          = ____;
-    public static boolean VerifyPhases                       = false;
+    public static boolean VerifyPhases                       = true;
 
     public static String  PrintFilter                        = null;
 
