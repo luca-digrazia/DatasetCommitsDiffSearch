@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,22 +24,25 @@
  */
 package com.oracle.svm.junit;
 
+import org.junit.runner.Description;
+
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.RecomputeFieldValue.CustomFieldValueComputer;
 import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import org.junit.runner.Description;
 
-@TargetClass(value = Description.class, onlyWith = JUnitFeature.IsEnabled.class)
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaField;
+
+@TargetClass(className = "org.junit.runner.Description", onlyWith = JUnitFeature.IsEnabled.class)
 public final class Target_org_junit_runner_Description {
 
     public static final class TestClassComputer implements CustomFieldValueComputer {
 
         @Override
-        public Object compute(ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
+        public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
             Description description = (Description) receiver;
             return description.getTestClass();
         }

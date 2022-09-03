@@ -82,10 +82,10 @@ public class DeclarativeSubstitutionProcessor extends AnnotationSubstitutionProc
 
     public static class Options {
         @Option(help = "Comma-separated list of file names with declarative substitutions", type = OptionType.User)//
-        public static final HostedOptionKey<String[]> SubstitutionFiles = new HostedOptionKey<>(new String[0]);
+        public static final HostedOptionKey<String> SubstitutionFiles = new HostedOptionKey<>("");
 
         @Option(help = "Comma-separated list of resource file names with declarative substitutions", type = OptionType.User)//
-        public static final HostedOptionKey<String[]> SubstitutionResources = new HostedOptionKey<>(new String[0]);
+        public static final HostedOptionKey<String> SubstitutionResources = new HostedOptionKey<>("");
     }
 
     private final Map<Class<?>, ClassDescriptor> classDescriptors;
@@ -99,7 +99,7 @@ public class DeclarativeSubstitutionProcessor extends AnnotationSubstitutionProc
         methodDescriptors = new HashMap<>();
         fieldDescriptors = new HashMap<>();
 
-        for (String substitutionFileName : Options.SubstitutionFiles.getValue()) {
+        for (String substitutionFileName : Options.SubstitutionFiles.getValue().split(",")) {
             try {
                 if (!substitutionFileName.isEmpty()) {
                     loadFile(new FileReader(substitutionFileName));
@@ -110,7 +110,7 @@ public class DeclarativeSubstitutionProcessor extends AnnotationSubstitutionProc
                 throw UserError.abort("Could not parse substitution file " + substitutionFileName + ": " + ex.getMessage());
             }
         }
-        for (String substitutionResourceName : Options.SubstitutionResources.getValue()) {
+        for (String substitutionResourceName : Options.SubstitutionResources.getValue().split(",")) {
             if (!substitutionResourceName.isEmpty()) {
                 try {
                     InputStream substitutionStream = imageClassLoader.findResourceAsStreamByName(substitutionResourceName);
