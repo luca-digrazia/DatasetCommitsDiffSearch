@@ -50,7 +50,6 @@ import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.lir.StandardOp.ParametersOp;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.DeoptimizeNode.DeoptAction;
@@ -65,6 +64,8 @@ import com.oracle.max.graal.nodes.virtual.*;
  * This class traverses the HIR instructions and generates LIR instructions from them.
  */
 public abstract class LIRGenerator extends LIRGeneratorTool {
+    public final GraalContext context;
+
     protected final Graph graph;
     protected final RiRuntime runtime;
     protected final CiTarget target;
@@ -138,7 +139,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     private LockScope curLocks;
 
 
-    public LIRGenerator(Graph graph, RiRuntime runtime, CiTarget target, FrameMap frameMap, RiResolvedMethod method, LIR lir, RiXirGenerator xir) {
+    public LIRGenerator(GraalContext context, Graph graph, RiRuntime runtime, CiTarget target, FrameMap frameMap, RiResolvedMethod method, LIR lir, RiXirGenerator xir) {
+        this.context = context;
         this.graph = graph;
         this.runtime = runtime;
         this.target = target;
@@ -416,9 +418,15 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         }
         currentInstruction = instr;
 
-        Debug.log("Visiting %s", instr);
+        if (GraalOptions.TraceLIRVisit) {
+            TTY.println("Visiting    " + instr);
+        }
+
         emitNode(instr);
-        Debug.log("Operand for %s = %s", instr, operand(instr));
+
+        if (GraalOptions.TraceLIRVisit) {
+            TTY.println("Operand for " + instr + " = " + operand(instr));
+        }
     }
 
     protected void emitNode(ValueNode node) {
@@ -1296,7 +1304,9 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
                     inputOperandArray, tempOperandArray, inputOperandIndicesArray, tempOperandIndicesArray,
                     (allocatedResultOperand == IllegalValue) ? -1 : resultOperand.index,
                     info, infoAfter, trueSuccessor, falseSuccessor);
-            Debug.metric("LIRXIRInstructions").increment();
+            if (GraalOptions.Meter) {
+                context.metrics.LIRXIRInstructions++;
+            }
         }
 
         return operandsArray[resultOperand.index];

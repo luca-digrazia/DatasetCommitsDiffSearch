@@ -24,15 +24,18 @@ package com.oracle.max.graal.compiler.tests;
 
 import java.lang.reflect.*;
 
+import org.junit.*;
+
 import junit.framework.Assert;
 
 import com.oracle.max.cri.ri.*;
+import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.compiler.phases.PhasePlan.*;
 import com.oracle.max.graal.cri.*;
-import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.java.*;
 import com.oracle.max.graal.nodes.*;
+import com.oracle.max.graal.printer.*;
 
 /**
  * Base class for Graal compiler unit tests. These are white box tests
@@ -48,20 +51,28 @@ import com.oracle.max.graal.nodes.*;
  * <p>
  * The tests can be run in Eclipse with the "Compiler Unit Test" Eclipse
  * launch configuration found in the top level of this project or by
- * running {@code mx unittest} on the command line.
+ * running {@code mx gcut} on the command line.
  */
 public abstract class GraphTest {
 
     protected final GraalRuntime runtime;
+    private static IdealGraphPrinterObserver observer;
 
     public GraphTest() {
         this.runtime = GraalRuntimeAccess.getGraalRuntime();
     }
 
+    @BeforeClass
+    public static void init() {
+        IdealGraphPrinterObserver o = new IdealGraphPrinterObserver(GraalOptions.PrintIdealGraphAddress, GraalOptions.PrintIdealGraphPort);
+        if (o.networkAvailable()) {
+            observer = o;
+        }
+    }
+
     protected void assertEquals(StructuredGraph expected, StructuredGraph graph) {
         if (expected.getNodeCount() != graph.getNodeCount()) {
-            Debug.dump(expected, "Node count not matching - expected");
-            Debug.dump(graph, "Node count not matching - actual");
+            print("Node count not matching", expected, graph);
             Assert.fail("Graphs do not have the same number of nodes");
         }
     }
@@ -134,5 +145,17 @@ public abstract class GraphTest {
         PhasePlan plan = new PhasePlan();
         plan.addPhase(PhasePosition.AFTER_PARSING, new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getSnippetDefault()));
         return plan;
+    }
+
+    protected void print(String title, StructuredGraph... graphs) {
+        if (observer != null) {
+            observer.printGraphs(getClass().getSimpleName() + ": " + title, graphs);
+        }
+    }
+
+    protected void print(StructuredGraph graph) {
+        if (observer != null) {
+            observer.printSingleGraph(getClass().getSimpleName(), graph);
+        }
     }
 }
