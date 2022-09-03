@@ -30,7 +30,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-/** Avoid using directly. Only public for the needs of unit testing. */
+/** Only public for unit testing */
 public final class Versions {
     static final Versions VERSIONS;
     static {
@@ -42,7 +42,8 @@ public final class Versions {
 
     public Versions(Path home) {
         Map<Object, Object> map = new HashMap<>();
-        ASSIGN: try {
+        ASSIGN:
+        try {
             Path info = findReleaseInfo(home);
             if (info == null) {
                 break ASSIGN;
