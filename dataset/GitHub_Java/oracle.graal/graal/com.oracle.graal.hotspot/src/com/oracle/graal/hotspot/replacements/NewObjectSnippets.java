@@ -22,15 +22,7 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import com.oracle.jvmci.code.Register;
-import com.oracle.jvmci.code.CodeUtil;
-import com.oracle.jvmci.code.TargetDescription;
-import com.oracle.jvmci.meta.NamedLocationIdentity;
-import com.oracle.jvmci.meta.ResolvedJavaType;
-import com.oracle.jvmci.meta.LocationIdentity;
-import com.oracle.jvmci.meta.ForeignCallDescriptor;
-import com.oracle.jvmci.meta.Kind;
-import static com.oracle.jvmci.code.UnsignedMath.*;
+import static com.oracle.graal.api.code.UnsignedMath.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.hotspot.nodes.CStringNode.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
@@ -39,10 +31,13 @@ import static com.oracle.graal.nodes.PiArrayNode.*;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 import static com.oracle.graal.replacements.SnippetTemplate.*;
 import static com.oracle.graal.replacements.nodes.ExplodeLoopNode.*;
-import static com.oracle.jvmci.hotspot.HotSpotMetaAccessProvider.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
@@ -54,9 +49,9 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.debug.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.memory.address.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.options.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.Snippet.VarargsParameter;
@@ -65,10 +60,6 @@ import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.hotspot.*;
-import com.oracle.jvmci.options.*;
 
 /**
  * Snippets used for implementing NEW, ANEWARRAY and NEWARRAY.
@@ -108,7 +99,7 @@ public class NewObjectSnippets implements Snippets {
             case Total:
                 return "bytes";
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
     }
 
@@ -136,7 +127,7 @@ public class NewObjectSnippets implements Snippets {
             int distance = config().allocatePrefetchDistance;
             ExplodeLoopNode.explodeLoop();
             for (int i = 0; i < lines; i++) {
-                PrefetchAllocateNode.prefetch(OffsetAddressNode.address(address, distance));
+                PrefetchAllocateNode.prefetch(address, Word.signed(distance));
                 distance += stepSize;
             }
         }
@@ -266,6 +257,22 @@ public class NewObjectSnippets implements Snippets {
         Word prototypeMarkWord = hub.readWord(prototypeMarkWordOffset(), PROTOTYPE_MARK_WORD_LOCATION);
 
         return allocateArrayImpl(klass, length, prototypeMarkWord, headerSize, log2ElementSize, fillContents, threadRegister, false, "dynamic type", true);
+    }
+
+    /**
+     * Computes the size of the memory chunk allocated for an array. This size accounts for the
+     * array header size, body size and any padding after the last element to satisfy object
+     * alignment requirements.
+     *
+     * @param length the number of elements in the array
+     * @param alignment the object alignment requirement
+     * @param headerSize the size of the array header
+     * @param log2ElementSize log2 of the size of an element in the array
+     */
+    public static int computeArrayAllocationSize(int length, int alignment, int headerSize, int log2ElementSize) {
+        int size = (length << log2ElementSize) + headerSize + (alignment - 1);
+        int mask = ~(alignment - 1);
+        return size & mask;
     }
 
     /**
@@ -439,7 +446,7 @@ public class NewObjectSnippets implements Snippets {
             HotSpotResolvedObjectType arrayType = (HotSpotResolvedObjectType) elementType.getArrayClass();
             Kind elementKind = elementType.getKind();
             ConstantNode hub = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), arrayType.klass(), providers.getMetaAccess(), graph);
-            final int headerSize = runtime.getJVMCIRuntime().getArrayBaseOffset(elementKind);
+            final int headerSize = runtime.getArrayBaseOffset(elementKind);
             HotSpotLoweringProvider lowerer = (HotSpotLoweringProvider) providers.getLowerer();
             int log2ElementSize = CodeUtil.log2(lowerer.arrayScalingFactor(elementKind));
 
