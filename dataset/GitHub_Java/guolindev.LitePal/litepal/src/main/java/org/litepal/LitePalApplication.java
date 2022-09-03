@@ -44,7 +44,7 @@ public class LitePalApplication extends Application {
 	/**
 	 * Global application context.
 	 */
-	static Context sContext;
+	private static Context sContext;
 
 	/**
 	 * Construct of LitePalApplication. Initialize application context.
@@ -54,11 +54,13 @@ public class LitePalApplication extends Application {
 	}
 
     /**
-     * Deprecated. Use {@link LitePal#initialize(Context)} instead.
+     * Initialize to make LitePal ready to work. If you didn't configure LitePalApplication
+	 * in the AndroidManifest.xml, make sure you call this method as soon as possible. In
+	 * Application's onCreate() method will be fine.
+	 *
      * @param context
 	 * 		Application context.
      */
-	@Deprecated
     public static void initialize(Context context) {
         sContext = context;
     }

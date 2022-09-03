@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, LitePal Framework Open Source Project
+ * Copyright (C)  Tony Green, Litepal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,13 @@
 
 package org.litepal.tablemanager;
 
+import org.litepal.LitePalApplication;
+import org.litepal.util.SharedUtil;
+
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteDatabase.CursorFactory;
 import android.database.sqlite.SQLiteOpenHelper;
-
-import org.litepal.LitePalApplication;
-import org.litepal.parser.LitePalAttr;
-import org.litepal.util.SharedUtil;
 
 /**
  * The database helper to generate and manage the tables. It will automate
@@ -86,7 +85,7 @@ class LitePalOpenHelper extends SQLiteOpenHelper {
 	@Override
 	public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
 		Generator.upgrade(db);
-		SharedUtil.updateVersion(LitePalAttr.getInstance().getExtraKeyName(), newVersion);
+		SharedUtil.updateVersion(newVersion);
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, LitePal Framework Open Source Project
+ * Copyright (C)  Tony Green, Litepal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package org.litepal.tablemanager;
 
-import org.litepal.LitePalApplication;
 import org.litepal.exceptions.InvalidAttributesException;
 import org.litepal.parser.LitePalAttr;
 import org.litepal.parser.LitePalParser;
@@ -55,6 +54,8 @@ public class Connector {
 	 * operation. It will be improved in the future.
 	 * 
 	 * @return A writable SQLiteDatabase instance
+	 * 
+	 * @throws org.litepal.exceptions.InvalidAttributesException
 	 */
 	public synchronized static SQLiteDatabase getWritableDatabase() {
 		LitePalOpenHelper litePalHelper = buildConnection();
@@ -71,6 +72,8 @@ public class Connector {
 	 * query. It will be improved in the future.
 	 * 
 	 * @return A readable SQLiteDatabase instance.
+	 * 
+	 * @throws org.litepal.exceptions.InvalidAttributesException
 	 */
 	public synchronized static SQLiteDatabase getReadableDatabase() {
 		LitePalOpenHelper litePalHelper = buildConnection();
@@ -84,6 +87,8 @@ public class Connector {
 	 * This is method is alias of getWritableDatabase.
 	 * 
 	 * @return A writable SQLiteDatabase instance
+	 * 
+	 * @throws org.litepal.exceptions.InvalidAttributesException
 	 */
 	public static SQLiteDatabase getDatabase() {
 		return getWritableDatabase();
@@ -107,15 +112,15 @@ public class Connector {
 			LitePalParser.parseLitePalConfiguration();
 			mLitePalAttr = LitePalAttr.getInstance();
 		}
-		mLitePalAttr.checkSelfValid();
-		if (mLitePalHelper == null) {
-			String dbName = mLitePalAttr.getDbName();
-			if ("external".equalsIgnoreCase(mLitePalAttr.getStorage())) {
-				dbName = LitePalApplication.getContext().getExternalFilesDir("") + "/databases/" + dbName;
+		if (mLitePalAttr.checkSelfValid()) {
+			if (mLitePalHelper == null) {
+				mLitePalHelper = new LitePalOpenHelper(mLitePalAttr.getDbName(),
+						mLitePalAttr.getVersion());
 			}
-			mLitePalHelper = new LitePalOpenHelper(dbName, mLitePalAttr.getVersion());
+			return mLitePalHelper;
+		} else {
+			throw new InvalidAttributesException("Uncaught invalid attributes exception happened");
 		}
-		return mLitePalHelper;
 	}
 
 }

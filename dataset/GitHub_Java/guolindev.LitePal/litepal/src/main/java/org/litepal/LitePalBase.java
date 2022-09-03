@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, LitePal Framework Open Source Project
+ * Copyright (C)  Tony Green, Litepal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package org.litepal;
 
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
@@ -27,12 +26,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.litepal.annotation.Column;
 import org.litepal.crud.model.AssociationsInfo;
 import org.litepal.exceptions.DatabaseGenerateException;
 import org.litepal.parser.LitePalAttr;
 import org.litepal.tablemanager.model.AssociationsModel;
-import org.litepal.tablemanager.model.ColumnModel;
 import org.litepal.tablemanager.model.TableModel;
 import org.litepal.tablemanager.typechange.BooleanOrm;
 import org.litepal.tablemanager.typechange.DateOrm;
@@ -84,12 +81,12 @@ public abstract class LitePalBase {
 
 	/**
 	 * This method is used to get the table model by the class name passed
-	 * in. The principle to generate table model is that each field in the class
-	 * with non-static modifier and has a type among int/Integer, long/Long,
+	 * in.The principle to generate table model is that each field in the class
+	 * with private modifier and has a type among int/Integer, long/Long,
 	 * short/Short, float/Float, double/Double, char/Character, boolean/Boolean
 	 * or String, would generate a column with same name as corresponding field.
-	 * If users don't want some of the fields map a column, declare an ignore
-     * annotation with {@link Column#ignore()}.
+	 * If users don't want some of the fields map a column, declare them as
+	 * protected or default.
 	 * 
 	 * @param className
 	 *            The full name of the class to map in database.
@@ -103,8 +100,20 @@ public abstract class LitePalBase {
 		tableModel.setClassName(className);
 		List<Field> supportedFields = getSupportedFields(className);
 		for (Field field : supportedFields) {
-            ColumnModel columnModel = convertFieldToColumnModel(field);
-            tableModel.addColumnModel(columnModel);
+			String fieldName = field.getName();
+			Class<?> fieldTypeClass = field.getType();
+			String fieldType = fieldTypeClass.getName();
+			String columnName;
+			String columnType;
+			for (OrmChange ormChange : typeChangeRules) {
+				String[] relations = ormChange.object2Relation(className, fieldName, fieldType);
+				if (relations != null) {
+					columnName = relations[0];
+					columnType = relations[1];
+					tableModel.addColumn(columnName, columnType);
+					break;
+				}
+			}
 		}
 		return tableModel;
 	}
@@ -156,7 +165,7 @@ public abstract class LitePalBase {
 	 */
 	protected List<Field> getSupportedFields(String className) {
 		List<Field> supportedFields = new ArrayList<Field>();
-		Class<?> dynamicClass;
+		Class<?> dynamicClass = null;
 		try {
 			dynamicClass = Class.forName(className);
 		} catch (ClassNotFoundException e) {
@@ -164,12 +173,8 @@ public abstract class LitePalBase {
 		}
 		Field[] fields = dynamicClass.getDeclaredFields();
 		for (Field field : fields) {
-            Column annotation = field.getAnnotation(Column.class);
-            if (annotation != null && annotation.ignore()) {
-                continue;
-            }
 			int modifiers = field.getModifiers();
-			if (!Modifier.isStatic(modifiers)) {
+			if (Modifier.isPrivate(modifiers) && !Modifier.isStatic(modifiers)) {
 				Class<?> fieldTypeClass = field.getType();
 				String fieldType = fieldTypeClass.getName();
 				if (BaseUtility.isFieldTypeSupported(fieldType)) {
@@ -239,6 +244,31 @@ public abstract class LitePalBase {
 	}
 
 	/**
+	 * Analyze the two parameters passed in. Return the first one of the two
+	 * class names in alphabetical order as the one who holds foreign key. This
+	 * is only going to work under one2one bidirectional association. When it's
+	 * one2one unidirectional association, the foreign key column will be always
+	 * on the side of the class which declares the association.
+	 * 
+	 * @param className
+	 *            The first class name.
+	 * @param associatedClassName
+	 *            The second class class.
+	 * @return The first one of the two passed in parameters in alphabetical
+	 *         order.
+	 */
+	@Deprecated
+	protected String whoHoldsForeignKey(String className, String associatedClassName) {
+		String tableName = DBUtility.getTableNameByClassName(className);
+		String associatedTableName = DBUtility.getTableNameByClassName(associatedClassName);
+		if (tableName.compareTo(associatedTableName) < 0) {
+			return className;
+		} else {
+			return associatedClassName;
+		}
+	}
+
+	/**
 	 * Introspection of the passed in class. Analyze the fields of current class
 	 * and find out the associations of it.
 	 * 
@@ -249,8 +279,9 @@ public abstract class LitePalBase {
 	 *            {@link org.litepal.LitePalBase#GET_ASSOCIATION_INFO_ACTION}
 	 */
 	private void analyzeClassFields(String className, int action) {
+		Class<?> dynamicClass = null;
 		try {
-            Class<?> dynamicClass = Class.forName(className);
+			dynamicClass = Class.forName(className);
 			Field[] fields = dynamicClass.getDeclaredFields();
 			for (Field field : fields) {
 				if (isPrivateAndNonPrimitive(field)) {
@@ -316,7 +347,7 @@ public abstract class LitePalBase {
 			// class.
 			for (int i = 0; i < reverseFields.length; i++) {
 				Field reverseField = reverseFields[i];
-				if (!Modifier.isStatic(reverseField.getModifiers())) {
+				if (Modifier.isPrivate(reverseField.getModifiers())) {
 					Class<?> reverseFieldTypeClass = reverseField.getType();
 					// If there's the from class name in the
 					// defined class, they are one2one bidirectional
@@ -347,19 +378,19 @@ public abstract class LitePalBase {
 							reverseAssociations = true;
 						}
 					}
+					// If there's no from class in the defined class, they are
+					// one2one unidirectional associations.
+					if ((i == reverseFields.length - 1) && !reverseAssociations) {
+						if (action == GET_ASSOCIATIONS_ACTION) {
+							addIntoAssociationModelCollection(className, fieldTypeClass.getName(),
+									fieldTypeClass.getName(), Const.Model.ONE_TO_ONE);
+						} else if (action == GET_ASSOCIATION_INFO_ACTION) {
+							addIntoAssociationInfoCollection(className, fieldTypeClass.getName(),
+									fieldTypeClass.getName(), field, null, Const.Model.ONE_TO_ONE);
+						}
+					}
 				}
 			}
-            // If there's no from class in the defined class, they are
-            // one2one unidirectional associations.
-            if (!reverseAssociations) {
-                if (action == GET_ASSOCIATIONS_ACTION) {
-                    addIntoAssociationModelCollection(className, fieldTypeClass.getName(),
-                            fieldTypeClass.getName(), Const.Model.ONE_TO_ONE);
-                } else if (action == GET_ASSOCIATION_INFO_ACTION) {
-                    addIntoAssociationInfoCollection(className, fieldTypeClass.getName(),
-                            fieldTypeClass.getName(), field, null, Const.Model.ONE_TO_ONE);
-                }
-            }
 		}
 	}
 
@@ -403,7 +434,7 @@ public abstract class LitePalBase {
 				for (int i = 0; i < reverseFields.length; i++) {
 					Field reverseField = reverseFields[i];
 					// Only map private fields
-					if (!Modifier.isStatic(reverseField.getModifiers())) {
+					if (Modifier.isPrivate(reverseField.getModifiers())) {
 						Class<?> reverseFieldTypeClass = reverseField.getType();
 						// If there's a from class name defined in the reverse
 						// class, they are many2one bidirectional
@@ -434,20 +465,19 @@ public abstract class LitePalBase {
 								reverseAssociations = true;
 							}
 						}
-
+						// If there's no from class in the defined class, they
+						// are many2one unidirectional associations.
+						if ((i == reverseFields.length - 1) && !reverseAssociations) {
+							if (action == GET_ASSOCIATIONS_ACTION) {
+								addIntoAssociationModelCollection(className, genericTypeName,
+										genericTypeName, Const.Model.MANY_TO_ONE);
+							} else if (action == GET_ASSOCIATION_INFO_ACTION) {
+								addIntoAssociationInfoCollection(className, genericTypeName, genericTypeName,
+										field, null, Const.Model.MANY_TO_ONE);
+							}
+						}
 					}
 				}
-                // If there's no from class in the defined class, they
-                // are many2one unidirectional associations.
-                if (!reverseAssociations) {
-                    if (action == GET_ASSOCIATIONS_ACTION) {
-                        addIntoAssociationModelCollection(className, genericTypeName,
-                                genericTypeName, Const.Model.MANY_TO_ONE);
-                    } else if (action == GET_ASSOCIATION_INFO_ACTION) {
-                        addIntoAssociationInfoCollection(className, genericTypeName, genericTypeName,
-                                field, null, Const.Model.MANY_TO_ONE);
-                    }
-                }
 			}
 		}
 	}
@@ -526,39 +556,5 @@ public abstract class LitePalBase {
 		}
 		return null;
 	}
-
-    /**
-     * Convert a field instance into A ColumnModel instance. ColumnModel can provide information
-     * when creating table.
-     * @param field
-     *          A supported field to map into column.
-     * @return ColumnModel instance contains column information.
-     */
-    private ColumnModel convertFieldToColumnModel(Field field) {
-        String columnType = null;
-        String fieldType = field.getType().getName();
-        for (OrmChange ormChange : typeChangeRules) {
-            columnType = ormChange.object2Relation(fieldType);
-            if (columnType != null) {
-                break;
-            }
-        }
-        boolean nullable = true;
-        boolean unique = false;
-        String defaultValue = "";
-        Column annotation = field.getAnnotation(Column.class);
-        if (annotation != null) {
-            nullable = annotation.nullable();
-            unique = annotation.unique();
-            defaultValue = annotation.defaultValue();
-        }
-        ColumnModel columnModel = new ColumnModel();
-        columnModel.setColumnName(field.getName());
-        columnModel.setColumnType(columnType);
-        columnModel.setIsNullable(nullable);
-        columnModel.setIsUnique(unique);
-        columnModel.setDefaultValue(defaultValue);
-        return columnModel;
-    }
 
 }
