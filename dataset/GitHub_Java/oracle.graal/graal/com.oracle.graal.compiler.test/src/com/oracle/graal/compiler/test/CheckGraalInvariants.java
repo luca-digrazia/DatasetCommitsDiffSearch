@@ -33,6 +33,8 @@ import java.util.zip.*;
 import org.junit.*;
 
 import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.compiler.*;
+import com.oracle.graal.compiler.CompilerThreadFactory.DebugConfigAccess;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graphbuilderconf.*;
@@ -46,21 +48,20 @@ import com.oracle.graal.phases.VerifyPhase.VerificationError;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.phases.verify.*;
+import com.oracle.graal.printer.*;
 import com.oracle.graal.runtime.*;
-import com.oracle.graal.test.*;
 import com.oracle.jvmci.code.*;
 import com.oracle.jvmci.code.Register.RegisterCategory;
-import com.oracle.jvmci.compiler.*;
-import com.oracle.jvmci.compiler.CompilerThreadFactory.DebugConfigAccess;
 import com.oracle.jvmci.debug.*;
 import com.oracle.jvmci.meta.*;
+import com.oracle.jvmci.test.*;
 
 /**
  * Checks that all classes in *graal*.jar and *jvmci*.jar entries on the boot class path comply with
  * global invariants such as using {@link Object#equals(Object)} to compare certain types instead of
  * identity comparisons.
  */
-public class CheckGraalInvariants extends GraalTest {
+public class CheckGraalInvariants extends TestBase {
 
     private static boolean shouldVerifyEquals(ResolvedJavaMethod m) {
         if (m.getName().equals("identityEquals")) {
@@ -124,7 +125,7 @@ public class CheckGraalInvariants extends GraalTest {
         String[] filters = property == null ? null : property.split(",");
 
         CompilerThreadFactory factory = new CompilerThreadFactory("CheckInvariantsThread", new DebugConfigAccess() {
-            public JVMCIDebugConfig getDebugConfig() {
+            public GraalDebugConfig getDebugConfig() {
                 return DebugEnvironment.initialize(System.out);
             }
         });
