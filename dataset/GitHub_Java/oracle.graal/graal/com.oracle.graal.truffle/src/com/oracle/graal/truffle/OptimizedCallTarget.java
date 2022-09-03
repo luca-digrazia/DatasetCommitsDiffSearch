@@ -136,7 +136,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
         return call(caller, args);
     }
 
-    private void invalidate(Node oldNode, Node newNode, CharSequence reason) {
+    private void invalidate(Node oldNode, Node newNode, String reason) {
         InstalledCode m = this.installedCode;
         if (m != null) {
             CompilerAsserts.neverPartOfCompilation();
@@ -147,7 +147,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
         cancelInstalledTask(oldNode, newNode, reason);
     }
 
-    private void cancelInstalledTask(Node oldNode, Node newNode, CharSequence reason) {
+    private void cancelInstalledTask(Node oldNode, Node newNode, String reason) {
         Future<InstalledCode> task = this.installedCodeTask;
         if (task != null) {
             task.cancel(true);
@@ -298,7 +298,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
     }
 
     @Override
-    public void nodeReplaced(Node oldNode, Node newNode, CharSequence reason) {
+    public void nodeReplaced(Node oldNode, Node newNode, String reason) {
         compilationProfile.reportNodeReplaced();
         invalidate(oldNode, newNode, reason);
 
@@ -382,7 +382,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
         }
     }
 
-    private static void logOptimizingUnqueued(OptimizedCallTarget target, Node oldNode, Node newNode, CharSequence reason) {
+    private static void logOptimizingUnqueued(OptimizedCallTarget target, Node oldNode, Node newNode, String reason) {
         if (TraceTruffleCompilationDetails.getValue()) {
             Map<String, Object> properties = new LinkedHashMap<>();
             addReplaceProperties(properties, oldNode, newNode);
@@ -405,7 +405,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
         }
     }
 
-    private static void logOptimizedInvalidated(OptimizedCallTarget target, Node oldNode, Node newNode, CharSequence reason) {
+    private static void logOptimizedInvalidated(OptimizedCallTarget target, Node oldNode, Node newNode, String reason) {
         if (TraceTruffleCompilation.getValue()) {
             Map<String, Object> properties = new LinkedHashMap<>();
             addReplaceProperties(properties, oldNode, newNode);
@@ -414,7 +414,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Loop
         }
     }
 
-    private static void logOptimizingFailed(OptimizedCallTarget callSite, CharSequence reason) {
+    private static void logOptimizingFailed(OptimizedCallTarget callSite, String reason) {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("Reason", reason);
         log(0, "opt fail", callSite.toString(), properties);
