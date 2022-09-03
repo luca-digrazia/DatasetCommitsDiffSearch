@@ -1131,20 +1131,12 @@ public class BytecodeParser implements GraphBuilderContext {
         return InstanceOfNode.create(type, object);
     }
 
-    private AnchoringNode createAnchor(JavaTypeProfile profile) {
-        if (profile == null || profile.getNotRecordedProbability() > 0.0) {
-            return null;
-        } else {
-            return append(new ValueAnchorNode(null));
-        }
+    protected LogicNode createInstanceOf(TypeReference type, ValueNode object, JavaTypeProfile profile, AnchoringNode anchor) {
+        return InstanceOfNode.create(type, object, profile, anchor);
     }
 
-    protected LogicNode createInstanceOf(TypeReference type, ValueNode object, JavaTypeProfile profile) {
-        return InstanceOfNode.create(type, object, profile, createAnchor(profile));
-    }
-
-    protected LogicNode createInstanceOfAllowNull(TypeReference type, ValueNode object, JavaTypeProfile profile) {
-        return InstanceOfNode.createAllowNull(type, object, profile, createAnchor(profile));
+    protected LogicNode createInstanceOfAllowNull(TypeReference type, ValueNode object, JavaTypeProfile profile, AnchoringNode anchor) {
+        return InstanceOfNode.createAllowNull(type, object, profile, anchor);
     }
 
     protected ValueNode genConditional(ValueNode x) {
@@ -3006,7 +2998,11 @@ public class BytecodeParser implements GraphBuilderContext {
             }
         }
         if (castNode == null) {
-            LogicNode condition = genUnique(createInstanceOfAllowNull(checkedType, object, profile));
+            ValueAnchorNode anchor = new ValueAnchorNode(null);
+            if (anchor != null) {
+                append(anchor);
+            }
+            LogicNode condition = genUnique(createInstanceOfAllowNull(checkedType, object, profile, anchor));
             if (condition.isTautology()) {
                 castNode = object;
             } else {
@@ -3063,7 +3059,11 @@ public class BytecodeParser implements GraphBuilderContext {
             }
         }
         if (instanceOfNode == null) {
-            instanceOfNode = createInstanceOf(resolvedType, object, profile);
+            ValueAnchorNode anchor = new ValueAnchorNode(null);
+            if (anchor != null) {
+                append(anchor);
+            }
+            instanceOfNode = createInstanceOf(resolvedType, object, profile, anchor);
         }
         frameState.push(JavaKind.Int, append(genConditional(genUnique(instanceOfNode))));
     }

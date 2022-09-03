@@ -22,12 +22,19 @@
  */
 package com.oracle.graal.nodes.calc;
 
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.common.type.AbstractObjectStamp;
 import com.oracle.graal.compiler.common.type.AbstractPointerStamp;
 import com.oracle.graal.compiler.common.type.ObjectStamp;
 import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
 import com.oracle.graal.nodeinfo.NodeInfo;
@@ -39,15 +46,7 @@ import com.oracle.graal.nodes.extended.GetClassNode;
 import com.oracle.graal.nodes.java.InstanceOfNode;
 import com.oracle.graal.nodes.spi.Virtualizable;
 import com.oracle.graal.nodes.spi.VirtualizerTool;
-import com.oracle.graal.nodes.virtual.VirtualBoxingNode;
 import com.oracle.graal.nodes.virtual.VirtualObjectNode;
-
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 @NodeInfo(shortName = "==")
 public final class ObjectEqualsNode extends PointerEqualsNode implements Virtualizable {
@@ -89,21 +88,19 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
     }
 
     private void virtualizeNonVirtualComparison(VirtualObjectNode virtual, ValueNode other, VirtualizerTool tool) {
-        if (virtual instanceof VirtualBoxingNode && other.isConstant()) {
-            VirtualBoxingNode virtualBoxingNode = (VirtualBoxingNode) virtual;
-            if (virtualBoxingNode.getBoxingKind() == JavaKind.Boolean) {
+        if (!virtual.hasIdentity() && virtual.entryKind(0) == JavaKind.Boolean) {
+            if (other.isConstant()) {
                 JavaConstant otherUnboxed = tool.getConstantReflectionProvider().unboxPrimitive(other.asJavaConstant());
                 if (otherUnboxed != null && otherUnboxed.getJavaKind() == JavaKind.Boolean) {
                     int expectedValue = otherUnboxed.asBoolean() ? 1 : 0;
-                    IntegerEqualsNode equals = new IntegerEqualsNode(virtualBoxingNode.getBoxedValue(tool), ConstantNode.forInt(expectedValue, graph()));
+                    IntegerEqualsNode equals = new IntegerEqualsNode(tool.getEntry(virtual, 0), ConstantNode.forInt(expectedValue, graph()));
                     tool.addNode(equals);
                     tool.replaceWithValue(equals);
                 } else {
                     tool.replaceWithValue(LogicConstantNode.contradiction(graph()));
                 }
             }
-        }
-        if (virtual.hasIdentity()) {
+        } else {
             // one of them is virtual: they can never be the same objects
             tool.replaceWithValue(LogicConstantNode.contradiction(graph()));
         }
@@ -158,6 +155,6 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         } else if (newX.stamp() instanceof AbstractPointerStamp && newY.stamp() instanceof AbstractPointerStamp) {
             return new PointerEqualsNode(newX, newY);
         }
-        throw GraalError.shouldNotReachHere();
+        throw JVMCIError.shouldNotReachHere();
     }
 }
