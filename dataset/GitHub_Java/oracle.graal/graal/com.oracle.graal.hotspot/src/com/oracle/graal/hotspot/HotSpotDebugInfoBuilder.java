@@ -26,7 +26,6 @@ import static com.oracle.graal.api.code.BytecodeFrame.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -63,10 +62,7 @@ public class HotSpotDebugInfoBuilder extends DebugInfoBuilder {
 
     @Override
     protected BytecodeFrame computeFrameForState(FrameState state) {
-        if (isPlaceholderBci(state.bci) && state.bci != BytecodeFrame.BEFORE_BCI) {
-            // This is really a hard error since an incorrect state could crash hotspot
-            throw GraalInternalError.shouldNotReachHere("Invalid state " + BytecodeFrame.getPlaceholderBciName(state.bci) + " " + state);
-        }
+        assert !isPlaceholderBci(state.bci) || state.bci == BytecodeFrame.BEFORE_BCI : BytecodeFrame.getPlaceholderBciName(state.bci);
         return super.computeFrameForState(state);
     }
 }
