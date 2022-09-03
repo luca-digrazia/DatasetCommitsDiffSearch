@@ -1064,11 +1064,11 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected ValueNode genLeftShift(ValueNode x, ValueNode y) {
-        return LeftShiftNode.create(x, y);
+        return new LeftShiftNode(x, y);
     }
 
     protected ValueNode genRightShift(ValueNode x, ValueNode y) {
-        return RightShiftNode.create(x, y);
+        return new RightShiftNode(x, y);
     }
 
     protected ValueNode genUnsignedRightShift(ValueNode x, ValueNode y) {
@@ -3194,7 +3194,7 @@ public class BytecodeParser implements GraphBuilderContext {
             default:
                 throw shouldNotReachHere();
         }
-        frameState.push(kind, recursiveAppend(v));
+        frameState.push(kind, append(v));
     }
 
     private void genLogicOp(JavaKind kind, int opcode) {
