@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.phases.common;
 
-import static com.oracle.graal.phases.GraalOptions.*;
-
 import java.util.*;
 
 import com.oracle.graal.graph.Graph.NodeChangedListener;
@@ -46,7 +44,7 @@ public class IterativeConditionalEliminationPhase extends BasePhase<PhaseContext
             if (canonicalizationRoots.isEmpty()) {
                 break;
             }
-            new CanonicalizerPhase.Instance(context.getRuntime(), context.getAssumptions(), OptCanonicalizeReads.getValue(), canonicalizationRoots, null).apply(graph);
+            new CanonicalizerPhase.Instance(context.getRuntime(), context.getAssumptions(), canonicalizationRoots, null).apply(graph);
             canonicalizationRoots.clear();
         }
     }
