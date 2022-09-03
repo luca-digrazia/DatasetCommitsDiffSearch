@@ -112,7 +112,7 @@ public class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    protected void emitCall(RuntimeCallTarget callTarget, Value result, Value[] arguments, Value[] temps, LIRFrameState info) {
+    protected void emitCall(RuntimeCallTarget callTarget, Value result, Value[] arguments, Value[] temps, Value targetAddress, LIRFrameState info) {
         // SPARC: Auto-generated method stub
 
     }
@@ -365,13 +365,7 @@ public class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitUnwind(Value operand) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    public void emitNullCheck(ValueNode v) {
-        // SPARC: Auto-generated method stub
+        // TODO Auto-generated method stub
 
     }
 }
