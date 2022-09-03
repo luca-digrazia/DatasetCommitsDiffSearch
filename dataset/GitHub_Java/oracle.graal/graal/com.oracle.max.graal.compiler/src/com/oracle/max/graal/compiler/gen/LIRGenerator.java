@@ -701,10 +701,6 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitFixedGuard(FixedGuard fixedGuard) {
         Node comp = fixedGuard.node();
-        emitGuardComp(comp);
-    }
-
-    public void emitGuardComp(Node comp) {
         if (comp instanceof IsNonNull) {
             IsNonNull x = (IsNonNull) comp;
             CiValue value = load(x.object());
@@ -712,7 +708,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             lir.nullCheck(value, info);
         } else if (comp instanceof IsType) {
             IsType x = (IsType) comp;
-            load(x.object());
+            CiValue value = load(x.object());
             LIRDebugInfo info = stateFor(x);
             XirArgument clazz = toXirArgument(x.type().getEncoding(Representation.ObjectHub));
             XirSnippet typeCheck = xir.genTypeCheck(site(x), toXirArgument(x.object()), clazz, x.type());
@@ -1422,14 +1418,6 @@ public abstract class LIRGenerator extends ValueVisitor {
         assert merge != null;
         moveToPhi(merge, merge.endIndex(end));
         lir.jump(getLIRBlock(end.merge()));
-    }
-
-    @Override
-    public void visitMemoryRead(MemoryRead memRead) {
-        if (memRead.guard() != null) {
-            emitGuardComp(memRead.guard());
-        }
-        lir.move(new CiAddress(memRead.valueKind(), load(memRead.location()), memRead.displacement()), createResultVariable(memRead), memRead.valueKind());
     }
 
 
