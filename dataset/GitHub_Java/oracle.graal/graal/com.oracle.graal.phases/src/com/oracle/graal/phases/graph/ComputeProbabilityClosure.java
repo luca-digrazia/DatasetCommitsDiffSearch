@@ -153,7 +153,7 @@ public class ComputeProbabilityClosure {
     }
 
     private static boolean doesNotAlwaysDeopt(StructuredGraph graph) {
-        return graph.getNodes(ReturnNode.class).isNotEmpty();
+        return graph.getNodes().filter(ReturnNode.class).iterator().hasNext();
     }
 
     private void computeLoopFactors() {
@@ -169,7 +169,7 @@ public class ComputeProbabilityClosure {
 
         public final NodeMap<Set<LoopInfo>> requires;
 
-        private double loopFrequency = -1.0;
+        private double loopFrequency = -1;
         public boolean ended = false;
 
         public LoopInfo(LoopBeginNode loopBegin) {
@@ -178,8 +178,7 @@ public class ComputeProbabilityClosure {
         }
 
         public double loopFrequency(NodesToDoubles nodeProbabilities) {
-            // loopFrequency is initialized with -1.0
-            if (loopFrequency < 0.0 && ended) {
+            if (loopFrequency == -1 && ended) {
                 double backEdgeProb = 0.0;
                 for (LoopEndNode le : loopBegin.loopEnds()) {
                     double factor = 1;
@@ -220,7 +219,7 @@ public class ComputeProbabilityClosure {
         return r;
     }
 
-    private class Probability extends MergeableState<Probability> implements Cloneable {
+    private class Probability extends MergeableState<Probability> {
 
         public double probability;
         public Set<LoopInfo> loops;
@@ -331,7 +330,7 @@ public class ComputeProbabilityClosure {
         }
     }
 
-    private class LoopCount extends MergeableState<LoopCount> implements Cloneable {
+    private class LoopCount extends MergeableState<LoopCount> {
 
         public double count;
 
