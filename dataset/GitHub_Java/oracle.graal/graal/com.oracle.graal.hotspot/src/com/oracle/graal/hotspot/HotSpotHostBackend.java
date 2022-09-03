@@ -40,11 +40,11 @@ public abstract class HotSpotHostBackend extends HotSpotBackend {
     /**
      * This will be 0 if stack banging is disabled.
      */
-    protected final int pagesToBang;
+    protected final int stackShadowPages;
 
     public HotSpotHostBackend(HotSpotGraalRuntime runtime, HotSpotProviders providers) {
         super(runtime, providers);
-        this.pagesToBang = runtime.getConfig().useStackBanging ? runtime.getConfig().stackShadowPages : 0;
+        this.stackShadowPages = runtime.getConfig().useStackBanging ? runtime.getConfig().stackShadowPages : 0;
     }
 
     @Override
