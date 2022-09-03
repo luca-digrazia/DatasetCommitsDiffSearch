@@ -22,35 +22,35 @@
  */
 package com.oracle.truffle.espresso.jni;
 
+import java.io.File;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
+import com.oracle.truffle.nfi.types.NativeSimpleType;
 
-public abstract class NativeEnv {
+public class NativeEnv {
 
     static final Map<Class<?>, NativeSimpleType> classToNative = buildClassToNative();
 
     static Map<Class<?>, NativeSimpleType> buildClassToNative() {
         Map<Class<?>, NativeSimpleType> map = new HashMap<>();
-        map.put(boolean.class, NativeSimpleType.SINT8);
+        map.put(boolean.class, NativeSimpleType.UINT8);
         map.put(byte.class, NativeSimpleType.SINT8);
         map.put(short.class, NativeSimpleType.SINT16);
-        map.put(char.class, NativeSimpleType.SINT16);
+        map.put(char.class, NativeSimpleType.UINT16);
         map.put(int.class, NativeSimpleType.SINT32);
         map.put(float.class, NativeSimpleType.FLOAT);
         map.put(long.class, NativeSimpleType.SINT64);
@@ -62,7 +62,7 @@ public abstract class NativeEnv {
 
     public static long unwrapPointer(Object nativePointer) {
         try {
-            return InteropLibrary.getFactory().getUncached().asPointer(nativePointer);
+            return ForeignAccess.sendAsPointer(Message.AS_POINTER.createNode(), (TruffleObject) nativePointer);
         } catch (UnsupportedMessageException e) {
             throw new RuntimeException(e);
         }
@@ -140,11 +140,11 @@ public abstract class NativeEnv {
         return StaticObject.NULL;
     }
 
-    public static TruffleObject loadLibrary(List<Path> searchPaths, String name) {
-        for (Path path : searchPaths) {
-            Path libPath = path.resolve(System.mapLibraryName(name));
+    public static TruffleObject loadLibrary(String[] searchPaths, String name) {
+        for (String path : searchPaths) {
+            File libfile = new File(path, System.mapLibraryName(name));
             try {
-                return NativeLibrary.loadLibrary(libPath.toAbsolutePath());
+                return NativeLibrary.loadLibrary(libfile.getAbsolutePath());
             } catch (UnsatisfiedLinkError e) {
                 // continue
             }

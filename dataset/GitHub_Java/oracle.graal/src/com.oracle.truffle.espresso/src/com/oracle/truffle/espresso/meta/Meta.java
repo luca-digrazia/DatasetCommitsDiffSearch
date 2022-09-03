@@ -957,4 +957,8 @@ public final class Meta {
     }
 
     // endregion
+
+    public static boolean isEspressoReference(Object obj) {
+        return (obj != null) && (obj instanceof StaticObject || (obj.getClass().isArray() && obj.getClass().getComponentType().isPrimitive()));
+    }
 }

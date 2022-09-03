@@ -106,7 +106,7 @@ public abstract class Klass implements ModifiersProvider {
         return findDeclaredConcreteMethod(klassName, signature);
     }
 
-    public abstract StaticObject tryInitializeAndGetStatics();
+    public abstract StaticObject getStatics();
 
     /**
      * Checks whether this type has a finalizer method.
