@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,10 +24,9 @@ package com.oracle.truffle.sl.nodes;
 
 import java.math.*;
 
-import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.instrument.*;
+import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.source.*;
 import com.oracle.truffle.sl.nodes.instrument.*;
@@ -68,42 +67,37 @@ public abstract class SLExpressionNode extends SLStatementNode {
      */
 
     public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
-        return SLTypesGen.SLTYPES.expectLong(executeGeneric(frame));
+        return SLTypesGen.expectLong(executeGeneric(frame));
     }
 
     public BigInteger executeBigInteger(VirtualFrame frame) throws UnexpectedResultException {
-        return SLTypesGen.SLTYPES.expectBigInteger(executeGeneric(frame));
+        return SLTypesGen.expectBigInteger(executeGeneric(frame));
     }
 
     public boolean executeBoolean(VirtualFrame frame) throws UnexpectedResultException {
-        return SLTypesGen.SLTYPES.expectBoolean(executeGeneric(frame));
+        return SLTypesGen.expectBoolean(executeGeneric(frame));
     }
 
     public String executeString(VirtualFrame frame) throws UnexpectedResultException {
-        return SLTypesGen.SLTYPES.expectString(executeGeneric(frame));
+        return SLTypesGen.expectString(executeGeneric(frame));
     }
 
     public SLFunction executeFunction(VirtualFrame frame) throws UnexpectedResultException {
-        return SLTypesGen.SLTYPES.expectSLFunction(executeGeneric(frame));
+        return SLTypesGen.expectSLFunction(executeGeneric(frame));
     }
 
     public SLNull executeNull(VirtualFrame frame) throws UnexpectedResultException {
-        return SLTypesGen.SLTYPES.expectSLNull(executeGeneric(frame));
+        return SLTypesGen.expectSLNull(executeGeneric(frame));
     }
 
     @Override
-    public Probe probe(ExecutionContext context) {
-        Node parent = getParent();
-
-        if (parent == null)
-            throw new IllegalStateException("Cannot probe a node without a parent");
-
-        if (parent instanceof SLExpressionWrapper)
-            return ((SLExpressionWrapper) parent).getProbe();
-
-        SLExpressionWrapper wrapper = new SLExpressionWrapper((SLContext) context, this);
-        this.replace(wrapper);
-        wrapper.insertChild();
-        return wrapper.getProbe();
+    public boolean isInstrumentable() {
+        return true;
     }
+
+    @Override
+    public WrapperNode createWrapperNode() {
+        return new SLExpressionWrapperNode(this);
+    }
+
 }

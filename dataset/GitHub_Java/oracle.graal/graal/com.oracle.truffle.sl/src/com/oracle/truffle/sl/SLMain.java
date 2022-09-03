@@ -32,7 +32,6 @@ import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.source.*;
 import com.oracle.truffle.api.tools.*;
-import com.oracle.truffle.api.vm.TruffleVM;
 import com.oracle.truffle.sl.builtins.*;
 import com.oracle.truffle.sl.factory.*;
 import com.oracle.truffle.sl.nodes.*;
@@ -87,7 +86,7 @@ import com.oracle.truffle.sl.runtime.*;
  * {@link SLWhileNode while} with {@link SLBreakNode break} and {@link SLContinueNode continue},
  * {@link SLReturnNode return}.
  * <li>Function calls: {@link SLInvokeNode invocations} are efficiently implemented with
- * {@link SLDispatchNode polymorphic inline caches}.
+ * {@link SLAbstractDispatchNode polymorphic inline caches}.
  * </ul>
  *
  * <p>
@@ -130,13 +129,7 @@ import com.oracle.truffle.sl.runtime.*;
  * <em>default printer</em>.
  *
  */
-@TruffleLanguage.Registration(name = "sl", mimeType = "application/x-sl")
-public class SLMain extends TruffleLanguage {
-    private final SLContext context;
-
-    public SLMain() {
-        this.context = SLContextFactory.create(new BufferedReader(new InputStreamReader(System.in)), new PrintWriter(System.out));
-    }
+public class SLMain {
 
     /* Demonstrate per-type tabulation of node execution counts */
     private static boolean nodeExecCounts = false;
@@ -149,28 +142,29 @@ public class SLMain extends TruffleLanguage {
      * The main entry point. Use the mx command "mx sl" to run it with the correct class path setup.
      */
     public static void main(String[] args) throws IOException {
-        TruffleVM vm = TruffleVM.create();
-        assert vm.getLanguages().containsKey("application/x-sl");
+
+        SLContext context = SLContextFactory.create(new BufferedReader(new InputStreamReader(System.in)), System.out);
+
+        Source source;
+        if (args.length == 0) {
+            source = Source.fromReader(new InputStreamReader(System.in), "stdin");
+        } else {
+            source = Source.fromFileName(args[0]);
+        }
 
         int repeats = 1;
         if (args.length >= 2) {
             repeats = Integer.parseInt(args[1]);
         }
 
-        while (repeats-- > 0) {
-            if (args.length == 0) {
-                vm.eval("application/x-sl", new InputStreamReader(System.in));
-            } else {
-                vm.eval(new File(args[0]).toURI());
-            }
-        }
+        run(context, source, System.out, repeats);
     }
 
     /**
      * Parse and run the specified SL source. Factored out in a separate method so that it can also
      * be used by the unit test harness.
      */
-    public static long run(SLContext context, Source source, PrintWriter logOutput, int repeats) {
+    public static long run(SLContext context, Source source, PrintStream logOutput, int repeats) {
         if (logOutput != null) {
             logOutput.println("== running on " + Truffle.getRuntime().getName());
             // logOutput.println("Source = " + source.getCode());
@@ -260,7 +254,7 @@ public class SLMain extends TruffleLanguage {
      * <p>
      * When printASTToLog is true: prints the ASTs to the console.
      */
-    private static void printScript(String groupName, SLContext context, PrintWriter logOutput, boolean printASTToLog, boolean printSourceAttributionToLog, boolean dumpASTToIGV) {
+    private static void printScript(String groupName, SLContext context, PrintStream logOutput, boolean printASTToLog, boolean printSourceAttributionToLog, boolean dumpASTToIGV) {
         if (dumpASTToIGV) {
             GraphPrintVisitor graphPrinter = new GraphPrintVisitor();
             graphPrinter.beginGroup(groupName);
@@ -345,27 +339,6 @@ public class SLMain extends TruffleLanguage {
             }
         }
         return result.toString();
-    }
-
-    @Override
-    protected Object eval(Source code) throws IOException {
-        context.executeMain(code);
-        return null;
-    }
-
-    @Override
-    protected Object findExportedSymbol(String globalName) {
-        return null;
-    }
-
-    @Override
-    protected Object getLanguageGlobal() {
-        return null;
-    }
-
-    @Override
-    protected boolean isObjectOfLanguage(Object object) {
-        return false;
     }
 
 }

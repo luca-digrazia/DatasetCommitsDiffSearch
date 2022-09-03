@@ -78,16 +78,16 @@ public final class SLStatementWrapperNode extends SLStatementNode implements Wra
     }
 
     @Override
-    public void executeVoid(VirtualFrame vFrame) {
-        probeNode.enter(child, vFrame);
+    public void executeVoid(VirtualFrame frame) {
+        probeNode.enter(child, frame);
 
         try {
-            child.executeVoid(vFrame);
-            probeNode.returnVoid(child, vFrame);
+            child.executeVoid(frame);
+            probeNode.returnVoid(child, frame);
         } catch (KillException e) {
             throw (e);
         } catch (Exception e) {
-            probeNode.returnExceptional(child, vFrame, e);
+            probeNode.returnExceptional(child, frame, e);
             throw (e);
         }
     }
