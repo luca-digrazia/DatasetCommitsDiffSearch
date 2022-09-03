@@ -24,7 +24,6 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -48,7 +47,7 @@ public class IntegerSubNode extends IntegerArithmeticNode implements Canonicaliz
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (x() == y()) {
             return ConstantNode.forIntegerKind(kind(), 0, graph());
         }
@@ -99,10 +98,10 @@ public class IntegerSubNode extends IntegerArithmeticNode implements Canonicaliz
             }
             if (c < 0) {
                 if (kind() == Kind.Int) {
-                    return IntegerArithmeticNode.add(graph(), x(), ConstantNode.forInt((int) -c, graph()));
+                    return IntegerArithmeticNode.add(x(), ConstantNode.forInt((int) -c, graph()));
                 } else {
                     assert kind() == Kind.Long;
-                    return IntegerArithmeticNode.add(graph(), x(), ConstantNode.forLong(-c, graph()));
+                    return IntegerArithmeticNode.add(x(), ConstantNode.forLong(-c, graph()));
                 }
             }
         } else if (x().isConstant()) {
@@ -113,7 +112,7 @@ public class IntegerSubNode extends IntegerArithmeticNode implements Canonicaliz
             return BinaryNode.reassociate(this, ValueNode.isConstantPredicate());
         }
         if (y() instanceof NegateNode) {
-            return IntegerArithmeticNode.add(graph(), x(), ((NegateNode) y()).x());
+            return IntegerArithmeticNode.add(x(), ((NegateNode) y()).x());
         }
         return this;
     }

@@ -24,7 +24,6 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -32,8 +31,8 @@ import com.oracle.graal.nodes.type.*;
 @NodeInfo(shortName = ">>>")
 public final class UnsignedRightShiftNode extends ShiftNode implements Canonicalizable {
 
-    public UnsignedRightShiftNode(Stamp stamp, ValueNode x, ValueNode y) {
-        super(stamp, x, y);
+    public UnsignedRightShiftNode(Kind kind, ValueNode x, ValueNode y) {
+        super(kind, x, y);
     }
 
     @Override
@@ -44,26 +43,26 @@ public final class UnsignedRightShiftNode extends ShiftNode implements Canonical
     @Override
     public Constant evalConst(Constant... inputs) {
         assert inputs.length == 2;
-        if (getKind() == Kind.Int) {
+        if (kind() == Kind.Int) {
             return Constant.forInt(inputs[0].asInt() >>> inputs[1].asInt());
         } else {
-            assert getKind() == Kind.Long;
+            assert kind() == Kind.Long;
             return Constant.forLong(inputs[0].asLong() >>> inputs[1].asLong());
         }
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (x().isConstant() && y().isConstant()) {
             return ConstantNode.forPrimitive(evalConst(x().asConstant(), y().asConstant()), graph());
         } else if (y().isConstant()) {
             int amount = y().asConstant().asInt();
             int originalAmout = amount;
             int mask;
-            if (getKind() == Kind.Int) {
+            if (kind() == Kind.Int) {
                 mask = 0x1f;
             } else {
-                assert getKind() == Kind.Long;
+                assert kind() == Kind.Long;
                 mask = 0x3f;
             }
             amount &= mask;
@@ -77,21 +76,21 @@ public final class UnsignedRightShiftNode extends ShiftNode implements Canonical
                     if (other instanceof UnsignedRightShiftNode) {
                         int total = amount + otherAmount;
                         if (total != (total & mask)) {
-                            return ConstantNode.forIntegerKind(getKind(), 0, graph());
+                            return ConstantNode.forIntegerKind(kind(), 0, graph());
                         }
-                        return graph().unique(new UnsignedRightShiftNode(stamp(), other.x(), ConstantNode.forInt(total, graph())));
+                        return graph().unique(new UnsignedRightShiftNode(kind(), other.x(), ConstantNode.forInt(total, graph())));
                     } else if (other instanceof LeftShiftNode && otherAmount == amount) {
-                        if (getKind() == Kind.Long) {
-                            return graph().unique(new AndNode(stamp(), other.x(), ConstantNode.forLong(-1L >>> amount, graph())));
+                        if (kind() == Kind.Long) {
+                            return graph().unique(new AndNode(kind(), other.x(), ConstantNode.forLong(-1L >>> amount, graph())));
                         } else {
-                            assert getKind() == Kind.Int;
-                            return graph().unique(new AndNode(stamp(), other.x(), ConstantNode.forInt(-1 >>> amount, graph())));
+                            assert kind() == Kind.Int;
+                            return graph().unique(new AndNode(kind(), other.x(), ConstantNode.forInt(-1 >>> amount, graph())));
                         }
                     }
                 }
             }
             if (originalAmout != amount) {
-                return graph().unique(new UnsignedRightShiftNode(stamp(), x(), ConstantNode.forInt(amount, graph())));
+                return graph().unique(new UnsignedRightShiftNode(kind(), x(), ConstantNode.forInt(amount, graph())));
             }
         }
         return this;

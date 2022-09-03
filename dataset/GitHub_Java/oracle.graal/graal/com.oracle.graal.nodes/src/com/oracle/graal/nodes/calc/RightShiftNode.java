@@ -24,7 +24,6 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -32,25 +31,25 @@ import com.oracle.graal.nodes.type.*;
 @NodeInfo(shortName = ">>")
 public final class RightShiftNode extends ShiftNode implements Canonicalizable {
 
-    public RightShiftNode(Stamp stamp, ValueNode x, ValueNode y) {
-        super(stamp, x, y);
+    public RightShiftNode(Kind kind, ValueNode x, ValueNode y) {
+        super(kind, x, y);
     }
 
     @Override
     public Constant evalConst(Constant... inputs) {
         assert inputs.length == 2;
-        if (getKind() == Kind.Int) {
+        if (kind() == Kind.Int) {
             return Constant.forInt(inputs[0].asInt() >> inputs[1].asInt());
         } else {
-            assert getKind() == Kind.Long;
+            assert kind() == Kind.Long;
             return Constant.forLong(inputs[0].asLong() >> inputs[1].asLong());
         }
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (x().stamp() instanceof IntegerStamp && ((IntegerStamp) x().stamp()).isPositive()) {
-            return graph().unique(new UnsignedRightShiftNode(stamp(), x(), y()));
+            return graph().unique(new UnsignedRightShiftNode(kind(), x(), y()));
         }
         if (x().isConstant() && y().isConstant()) {
             return ConstantNode.forPrimitive(evalConst(x().asConstant(), y().asConstant()), graph());
@@ -58,10 +57,10 @@ public final class RightShiftNode extends ShiftNode implements Canonicalizable {
             int amount = y().asConstant().asInt();
             int originalAmout = amount;
             int mask;
-            if (getKind() == Kind.Int) {
+            if (kind() == Kind.Int) {
                 mask = 0x1f;
             } else {
-                assert getKind() == Kind.Long;
+                assert kind() == Kind.Long;
                 mask = 0x3f;
             }
             amount &= mask;
@@ -79,10 +78,10 @@ public final class RightShiftNode extends ShiftNode implements Canonicalizable {
                             IntegerStamp istamp = (IntegerStamp) other.x().stamp();
 
                             if (istamp.isPositive()) {
-                                return ConstantNode.forIntegerKind(getKind(), 0, graph());
+                                return ConstantNode.forIntegerKind(kind(), 0, graph());
                             }
                             if (istamp.isStrictlyNegative()) {
-                                return ConstantNode.forIntegerKind(getKind(), -1L, graph());
+                                return ConstantNode.forIntegerKind(kind(), -1L, graph());
                             }
 
                             /*
@@ -90,14 +89,14 @@ public final class RightShiftNode extends ShiftNode implements Canonicalizable {
                              * full shift for this kind
                              */
                             assert total >= mask;
-                            return graph().unique(new RightShiftNode(stamp(), other.x(), ConstantNode.forInt(mask, graph())));
+                            return graph().unique(new RightShiftNode(kind(), other.x(), ConstantNode.forInt(mask, graph())));
                         }
-                        return graph().unique(new RightShiftNode(stamp(), other.x(), ConstantNode.forInt(total, graph())));
+                        return graph().unique(new RightShiftNode(kind(), other.x(), ConstantNode.forInt(total, graph())));
                     }
                 }
             }
             if (originalAmout != amount) {
-                return graph().unique(new RightShiftNode(stamp(), x(), ConstantNode.forInt(amount, graph())));
+                return graph().unique(new RightShiftNode(kind(), x(), ConstantNode.forInt(amount, graph())));
             }
         }
         return this;

@@ -37,10 +37,10 @@ public final class FloatMulNode extends FloatArithmeticNode implements Canonical
     public Constant evalConst(Constant... inputs) {
         assert inputs.length == 2;
         if (kind() == Kind.Float) {
-            return Constant.forFloat(inputs[0].asFloat() * inputs[1].asFloat());
+            return Constant.forFloat(x().asConstant().asFloat() * y().asConstant().asFloat());
         } else {
             assert kind() == Kind.Double;
-            return Constant.forDouble(inputs[0].asDouble() * inputs[1].asDouble());
+            return Constant.forDouble(x().asConstant().asDouble() * y().asConstant().asDouble());
         }
     }
 

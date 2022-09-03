@@ -24,7 +24,6 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -57,23 +56,22 @@ public final class NegateNode extends FloatingNode implements Canonicalizable, A
 
     public Constant evalConst(Constant... inputs) {
         assert inputs.length == 1;
-        Constant constant = inputs[0];
-        switch (constant.getKind()) {
+        switch (inputs[0].getKind()) {
             case Int:
-                return Constant.forInt(-(constant.asInt()));
+                return Constant.forInt(-inputs[0].asInt());
             case Long:
-                return Constant.forLong(-(constant.asLong()));
+                return Constant.forLong(-inputs[0].asLong());
             case Float:
-                return Constant.forFloat(-(constant.asFloat()));
+                return Constant.forFloat(-inputs[0].asFloat());
             case Double:
-                return Constant.forDouble(-(constant.asDouble()));
+                return Constant.forDouble(-inputs[0].asDouble());
             default:
-                throw GraalInternalError.shouldNotReachHere("unknown kind " + constant.getKind());
+                throw GraalInternalError.shouldNotReachHere();
         }
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (x().isConstant()) {
             return ConstantNode.forPrimitive(evalConst(x.asConstant()), graph());
         }
@@ -82,7 +80,7 @@ public final class NegateNode extends FloatingNode implements Canonicalizable, A
         }
         if (x() instanceof IntegerSubNode) {
             IntegerSubNode sub = (IntegerSubNode) x;
-            return IntegerArithmeticNode.sub(graph(), sub.y(), sub.x());
+            return IntegerArithmeticNode.sub(sub.y(), sub.x());
         }
         return this;
     }
