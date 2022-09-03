@@ -73,8 +73,9 @@ public final class LitePalAttr {
 	}
 
 	/**
-	 * Provide a way to get the instance of LitePalAttr.
-	 * @return the singleton instance of LitePalAttr
+	 * Provide a way to get the object of LitePalAttr class.
+	 * 
+	 * @return the singleton object of LitePalAttr
 	 */
 	public static LitePalAttr getInstance() {
 		if (litePalAttr == null) {
@@ -87,26 +88,11 @@ public final class LitePalAttr {
 		return litePalAttr;
 	}
 
-	/**
-	 * Already has LitePalAttr instance or not.
-	 * @return True if already has LitePalAttr instance. False otherwise.
-     */
-	public static boolean hasInstance() {
-		return litePalAttr != null;
-	}
-
-	/**
-	 * Clean the instance of LitePalAttr.
-	 */
-	public static void cleanInstance() {
-		litePalAttr = null;
-	}
-
 	public int getVersion() {
 		return version;
 	}
 
-	public void setVersion(int version) {
+	void setVersion(int version) {
 		this.version = version;
 	}
 
@@ -114,7 +100,7 @@ public final class LitePalAttr {
 		return dbName;
 	}
 
-	public void setDbName(String dbName) {
+	void setDbName(String dbName) {
 		this.dbName = dbName;
 	}
 
@@ -122,7 +108,7 @@ public final class LitePalAttr {
         return storage;
     }
 
-	public void setStorage(String storage) {
+    void setStorage(String storage) {
         this.storage = storage;
     }
 
@@ -147,19 +133,15 @@ public final class LitePalAttr {
 	 * @param className
 	 *            Full package class name.
 	 */
-	public void addClassName(String className) {
+	void addClassName(String className) {
 		getClassNames().add(className);
-	}
-
-	public void setClassNames(List<String> classNames) {
-		this.classNames = classNames;
 	}
 
 	public String getCases() {
 		return cases;
 	}
 
-	public void setCases(String cases) {
+	void setCases(String cases) {
 		this.cases = cases;
 	}
 
