@@ -27,7 +27,6 @@ import java.util.*;
 
 import com.oracle.graal.graph.Graph.InputChangedListener;
 import com.oracle.graal.graph.NodeClass.*;
-import com.oracle.graal.graph.iterators.*;
 
 
 /**
@@ -51,11 +50,6 @@ public abstract class Node implements Cloneable, Formattable {
     static final int INITIAL_ID = -1;
     static final int ALIVE_ID_START = 0;
 
-    /**
-     * Denotes a node input. This should be applied to exactly the fields of a node that are of type {@link Node}.
-     * Nodes that update their inputs outside of their constructor should call {@link Node#updateUsages(Node, Node)}
-     * just prior to doing the update of the input.
-     */
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.FIELD)
     public static @interface Input {
@@ -80,10 +74,6 @@ public abstract class Node implements Cloneable, Formattable {
      * with an instance of the node class denoted by {@link #value()}.
      * For this reason, the signature of the annotated method must match
      * the signature of a constructor in the node class.
-     * <p>
-     * All methods annotated with this annotation must be declared native
-     * to ensure they throw a {@link UnsatisfiedLinkError} if called by
-     * non-Graal compiled code.
      */
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.METHOD)
@@ -94,12 +84,6 @@ public abstract class Node implements Cloneable, Formattable {
          * (and is assumed to be a {@link Node} subclass).
          */
         Class value() default NodeIntrinsic.class;
-
-        /**
-         * Determines if the stamp of the instantiated intrinsic node has its stamp set
-         * from the return type of the annotated method.
-         */
-        boolean setStampFromReturnType() default false;
     }
 
     public interface ValueNumberable {}
@@ -132,22 +116,22 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     /**
-     * Returns an {@link NodeClassIterable iterable} which can be used to traverse all non-null input edges of this node.
-     * @return an {@link NodeClassIterable iterable} for all non-null input edges.
+     * Returns an {@link NodeInputsIterable iterable} which can be used to traverse all non-null input edges of this node.
+     * @return an {@link NodeInputsIterable iterable} for all non-null input edges.
      */
-    public NodeClassIterable inputs() {
+    public NodeInputsIterable inputs() {
         return getNodeClass().getInputIterable(this);
     }
 
     /**
-     * Returns an {@link NodeClassIterable iterable} which can be used to traverse all non-null successor edges of this node.
-     * @return an {@link NodeClassIterable iterable} for all non-null successor edges.
+     * Returns an {@link NodeSuccessorsIterable iterable} which can be used to traverse all non-null successor edges of this node.
+     * @return an {@link NodeSuccessorsIterable iterable} for all non-null successor edges.
      */
-    public NodeClassIterable successors() {
+    public NodeSuccessorsIterable successors() {
         return getNodeClass().getSuccessorIterable(this);
     }
 
-    public final NodeIterable<Node> usages() {
+    public final NodeUsagesList usages() {
         return usages;
     }
 
@@ -432,19 +416,12 @@ public abstract class Node implements Cloneable, Formattable {
 
     /**
      * Provides a {@link Map} of properties of this node for use in debugging (e.g., to view in the ideal graph
-     * visualizer).
+     * visualizer). Subclasses overriding this method should add to the map returned by their superclass.
      */
     public Map<Object, Object> getDebugProperties() {
-        return getDebugProperties(new HashMap<>());
-    }
-
-
-    /**
-     * Fills a {@link Map} with properties of this node for use in debugging (e.g., to view in the ideal graph
-     * visualizer). Subclasses overriding this method should also fill the map using their superclass.
-     * @param map
-     */
-    public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {
+        Map<Object, Object> map = new HashMap<>();
+        map.put("usageCount", usages.size());
+        map.put("predecessorCount", predecessor == null ? 0 : 1);
         getNodeClass().getDebugProperties(this, map);
         return map;
     }
@@ -552,7 +529,7 @@ public abstract class Node implements Cloneable, Formattable {
         }
 
         if (precision > 0) {
-            if (this.usages.count() > 0) {
+            if (this.usages.size() > 0) {
                 formatter.format(" usages={");
                 int z = 0;
                 for (Node usage : this.usages) {

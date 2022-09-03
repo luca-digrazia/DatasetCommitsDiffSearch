@@ -31,27 +31,25 @@ import java.util.Map.Entry;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.schedule.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.Node.Verbosity;
 import com.oracle.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.graal.graph.NodeClass.Position;
 import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
 
-public class BinaryGraphPrinter implements GraphPrinter{
+public class BinaryGraphPrinter {
     private static final int CONSTANT_POOL_MAX_SIZE = 2000;
 
     private static final int BEGIN_GROUP = 0x00;
     private static final int BEGIN_GRAPH = 0x01;
     private static final int CLOSE_GROUP = 0x02;
 
+    private static final int POOL_NULL = -1;
     private static final int POOL_NEW = 0x00;
     private static final int POOL_STRING = 0x01;
     private static final int POOL_ENUM = 0x02;
     private static final int POOL_CLASS = 0x03;
     private static final int POOL_METHOD = 0x04;
-    private static final int POOL_NULL = 0x05;
-    private static final int POOL_NODE_CLASS = 0x06;
-    private static final int POOL_FIELD = 0x07;
-    private static final int POOL_SIGNATURE = 0x08;
 
     private static final int PROPERTY_POOL = 0x00;
     private static final int PROPERTY_INT = 0x01;
@@ -65,11 +63,54 @@ public class BinaryGraphPrinter implements GraphPrinter{
     private static final int KLASS = 0x00;
     private static final int ENUM_KLASS = 0x01;
 
-    private static final class ConstantPool extends LinkedHashMap<Object, Integer> {
+    protected static class Edge {
+        final int from;
+        final char fromIndex;
+        final int to;
+        final char toIndex;
+        final String label;
+
+        public Edge(int from, char fromIndex, int to, char toIndex, String label) {
+            this.from = from;
+            this.fromIndex = fromIndex;
+            this.to = to;
+            this.toIndex = toIndex;
+            this.label = label;
+        }
+
+        @Override
+        public int hashCode() {
+            int h = from ^ to;
+            h = 3 * h + fromIndex;
+            h = 5 * h + toIndex;
+            if (label != null) {
+                h ^= label.hashCode();
+            }
+            return h;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == this) {
+                return true;
+            }
+            if (obj instanceof Edge) {
+                Edge other = (Edge) obj;
+                return from == other.from
+                        && fromIndex == other.fromIndex
+                        && to == other.to
+                        && toIndex == other.toIndex
+                        && (label == other.label || (label != null && label.equals(other.label)));
+            }
+            return false;
+        }
+    }
+
+    private static final class CosntantPool extends LinkedHashMap<Object, Integer> {
         private final LinkedList<Integer> availableIds;
         private int nextId;
         private static final long serialVersionUID = -2676889957907285681L;
-        public ConstantPool() {
+        public CosntantPool() {
             super(50, 0.65f);
             availableIds = new LinkedList<>();
         }
@@ -96,22 +137,21 @@ public class BinaryGraphPrinter implements GraphPrinter{
         }
     }
 
-    private final ConstantPool constantPool;
+    private final CosntantPool constantPool;
+
+
     private final ByteBuffer buffer;
     private final WritableByteChannel channel;
-    private long bytes;
-    private long newPoolEntry;
+
 
     public BinaryGraphPrinter(WritableByteChannel channel) {
-        constantPool = new ConstantPool();
-        buffer = ByteBuffer.allocateDirect(256 * 1024);
+        constantPool = new CosntantPool();
+        buffer = ByteBuffer.allocateDirect(64 * 1024);
         this.channel = channel;
     }
 
     public void print(Graph graph, String title, SchedulePhase predefinedSchedule) throws IOException {
-        long startBytes = bytes;
-        long startTime = System.currentTimeMillis();
-        long startPool = newPoolEntry;
+        Set<Node> noBlockNodes = new HashSet<>();
         SchedulePhase schedule = predefinedSchedule;
         if (schedule == null) {
             try {
@@ -121,22 +161,22 @@ public class BinaryGraphPrinter implements GraphPrinter{
             }
         }
         ControlFlowGraph cfg =  schedule == null ? null : schedule.getCFG();
+
         BlockMap<List<ScheduledNode>> blockToNodes = schedule == null ? null : schedule.getBlockToNodesMap();
-        Block[] blocks = cfg == null ? null : cfg.getBlocks();
         writeByte(BEGIN_GRAPH);
         writePoolObject(title);
-        writeNodes(graph);
-        writeBlocks(blocks, blockToNodes);
+        int edgeCount = writeNodes(graph, cfg == null ? null : cfg.getNodeToBlock(), noBlockNodes);
+        writeEdges(graph, edgeCount);
+
+
+        Block[] blocks = cfg == null ? null : cfg.getBlocks();
+        writeBlocks(blocks, noBlockNodes, blockToNodes);
         flush();
-        long t = System.currentTimeMillis() - startTime;
-        long b = bytes - startBytes;
-        long pool = newPoolEntry - startPool;
-        System.out.println("Graph printed in " + t + " ms and " + b + " bytes, " + pool + " pool entries created (" + graph.getNodeCount() + " nodes)");
     }
 
     private void flush() throws IOException {
         buffer.flip();
-        bytes += channel.write(buffer);
+        channel.write(buffer);
         buffer.compact();
     }
 
@@ -223,10 +263,6 @@ public class BinaryGraphPrinter implements GraphPrinter{
             writeByte(POOL_NULL);
             return;
         }
-        if (object instanceof ResolvedJavaType) {
-            writePoolObject(((ResolvedJavaType) object).toJava());
-            return;
-        }
         Integer id = constantPool.get(object);
         if (id == null) {
             addPoolEntry(object);
@@ -235,14 +271,8 @@ public class BinaryGraphPrinter implements GraphPrinter{
                 writeByte(POOL_ENUM);
             } else if (object instanceof Class<?>) {
                 writeByte(POOL_CLASS);
-            } else if (object instanceof NodeClass) {
-                writeByte(POOL_NODE_CLASS);
             } else if (object instanceof ResolvedJavaMethod) {
                 writeByte(POOL_METHOD);
-            } else if (object instanceof ResolvedJavaField) {
-                writeByte(POOL_FIELD);
-            } else if (object instanceof Signature) {
-                writeByte(POOL_SIGNATURE);
             } else {
                 writeByte(POOL_STRING);
             }
@@ -251,67 +281,31 @@ public class BinaryGraphPrinter implements GraphPrinter{
     }
 
     private void addPoolEntry(Object object) throws IOException {
-        newPoolEntry++;
         int index = constantPool.add(object);
         writeByte(POOL_NEW);
         writeInt(index);
         if (object instanceof Class<?>) {
             Class<?> klass = (Class< ? >) object;
             writeByte(POOL_CLASS);
-            writeString(klass.getName());
+            writePoolObject(klass.getName());
             if (klass.isEnum()) {
                 writeByte(ENUM_KLASS);
-                Object[] enumConstants = klass.getEnumConstants();
+                Object[] enumConstants = object.getClass().getEnumConstants();
                 writeInt(enumConstants.length);
                 for (Object o : enumConstants) {
                     writePoolObject(((Enum<?>) o).name());
                 }
             } else {
+                writePoolObject(klass.getName());
                 writeByte(KLASS);
             }
         } else if (object instanceof Enum<?>) {
             writeByte(POOL_ENUM);
             writePoolObject(object.getClass());
             writeInt(((Enum) object).ordinal());
-        } else if (object instanceof NodeClass) {
-            NodeClass nodeClass = (NodeClass) object;
-            writeByte(POOL_NODE_CLASS);
-            writeString(nodeClass.getJavaClass().getSimpleName());
-            writeString(nodeClass.getNameTemplate());
-            List<Position> directInputPositions = nodeClass.getFirstLevelInputPositions();
-            writeShort((char) directInputPositions.size());
-            for (Position pos : directInputPositions) {
-                writePoolObject(nodeClass.getName(pos));
-            }
-            List<Position> directSuccessorPositions = nodeClass.getFirstLevelSuccessorPositions();
-            writeShort((char) directSuccessorPositions.size());
-            for (Position pos : directSuccessorPositions) {
-                writePoolObject(nodeClass.getName(pos));
-            }
         } else if (object instanceof ResolvedJavaMethod) {
             writeByte(POOL_METHOD);
-            ResolvedJavaMethod method = ((ResolvedJavaMethod) object);
-            writePoolObject(method.holder());
-            writePoolObject(method.name());
-            writePoolObject(method.signature());
-            writeInt(method.accessFlags());
-            writeBytes(method.code());
-        } else if (object instanceof ResolvedJavaField) {
-            writeByte(POOL_FIELD);
-            ResolvedJavaField field = ((ResolvedJavaField) object);
-            writePoolObject(field.holder());
-            writePoolObject(field.name());
-            writePoolObject(field.type().name());
-            writeInt(field.accessFlags());
-        } else if (object instanceof Signature) {
-            writeByte(POOL_SIGNATURE);
-            Signature signature = ((Signature) object);
-            int args = signature.argumentCount(false);
-            writeShort((char) args);
-            for (int i = 0; i < args; i++) {
-                writePoolObject(signature.argumentTypeAt(i, null).name());
-            }
-            writePoolObject(signature.returnType(null).name());
+            writeBytes(((ResolvedJavaMethod) object).code());
         } else {
             writeByte(POOL_STRING);
             writeString(object.toString());
@@ -337,7 +331,7 @@ public class BinaryGraphPrinter implements GraphPrinter{
             } else {
                 writeByte(PROPERTY_FALSE);
             }
-        } else if (obj != null && obj.getClass().isArray()) {
+        } else if (obj.getClass().isArray()) {
             Class< ? > componentType = obj.getClass().getComponentType();
             if (componentType.isPrimitive()) {
                 if (componentType == Double.TYPE) {
@@ -346,7 +340,7 @@ public class BinaryGraphPrinter implements GraphPrinter{
                     writeDoubles((double[]) obj);
                 } else if (componentType == Integer.TYPE) {
                     writeByte(PROPERTY_ARRAY);
-                    writeByte(PROPERTY_INT);
+                    writeByte(PROPERTY_DOUBLE);
                     writeInts((int[]) obj);
                 } else {
                     writeByte(PROPERTY_POOL);
@@ -368,49 +362,83 @@ public class BinaryGraphPrinter implements GraphPrinter{
     }
 
     @SuppressWarnings("deprecation")
-    private void writeNodes(Graph graph) throws IOException {
+    private int writeNodes(Graph graph, NodeMap<Block> nodeToBlock, Set<Node> noBlockNodes) throws IOException {
+        int edges = 0;
         Map<Object, Object> props = new HashMap<>();
         writeInt(graph.getNodeCount());
         for (Node node : graph.getNodes()) {
-            NodeClass nodeClass = node.getNodeClass();
-            node.getDebugProperties(props);
+            node.getNodeClass().getDebugProperties(node, props);
+            String name = node.toString(Verbosity.Name);
+
             writeInt(node.getId());
-            writePoolObject(nodeClass);
-            writeByte(node.predecessor() == null ? 0 : 1);
-            writeShort((char) props.size());
+            writePoolObject(name);
+            writePoolObject(node.getClass().getSimpleName());
+            Block block = nodeToBlock == null ? null : nodeToBlock.get(node);
+            if (block != null) {
+                writeInt(block.getId());
+            } else {
+                writeInt(-1);
+                noBlockNodes.add(node);
+            }
+            writeByte(node.predecessor() != null ? 1 : 0);
+            writeInt(props.size());
             for (Entry<Object, Object> entry : props.entrySet()) {
                 String key = entry.getKey().toString();
+                String value = entry.getValue() == null ? "null" : entry.getValue().toString();
                 writePoolObject(key);
-                writePropertyObject(entry.getValue());
+                writePropertyObject(value);
             }
-            // successors
-            NodeSuccessorsIterable successors = node.successors();
-            writeShort((char) successors.count());
-            NodeClassIterator suxIt = successors.iterator();
-            while (suxIt.hasNext()) {
-                Position pos = suxIt.nextPosition();
-                Node sux = nodeClass.get(node, pos);
-                writeInt(sux.getId());
-                writeShort((char) pos.index);
-            }
-            //inputs
-            NodeInputsIterable inputs = node.inputs();
-            writeShort((char) inputs.count());
-            NodeClassIterator inIt = inputs.iterator();
-            while (inIt.hasNext()) {
-                Position pos = inIt.nextPosition();
-                Node in = nodeClass.get(node, pos);
-                writeInt(in.getId());
-                writeShort((char) pos.index);
-            }
+            edges += node.successors()/*.nonNull()*/.count();
+            edges += node.inputs()/*.nonNull()*/.count();
             props.clear();
+        }
+
+        return edges;
+    }
+
+    @SuppressWarnings("deprecation")
+    private void writeEdges(Graph graph, int edgeCount) throws IOException {
+        writeInt(edgeCount);
+        for (Node node : graph.getNodes()) {
+            // successors
+            char fromIndex = 0;
+            NodeClassIterator succIter = node.successors().iterator();
+            while (succIter.hasNext()) {
+                Position position = succIter.nextPosition();
+                Node successor = node.getNodeClass().get(node, position);
+                if (successor != null) {
+                    writeShort(fromIndex);
+                    writeInt(node.getId());
+                    writeShort((char) 0);
+                    writeInt(successor.getId());
+                    writePoolObject(node.getNodeClass().getName(position));
+                }
+                fromIndex++;
+            }
+
+            // inputs
+            char toIndex = 1;
+            NodeClassIterator inputIter = node.inputs().iterator();
+            while (inputIter.hasNext()) {
+                Position position = inputIter.nextPosition();
+                Node input = node.getNodeClass().get(node, position);
+                if (input != null) {
+                    writeShort((char) input.successors().count());
+                    writeInt(input.getId());
+                    writeShort(toIndex);
+                    writeInt(node.getId());
+                    writePoolObject(node.getNodeClass().getName(position));
+                }
+                toIndex++;
+            }
         }
     }
 
     @SuppressWarnings("deprecation")
-    private void writeBlocks(Block[] blocks, BlockMap<List<ScheduledNode>> blockToNodes) throws IOException {
+    private void writeBlocks(Block[] blocks, Set<Node> noBlockNodes, BlockMap<List<ScheduledNode>> blockToNodes) throws IOException {
         if (blocks != null) {
-            writeInt(blocks.length);
+            writeInt(blocks.length + (noBlockNodes.isEmpty() ? 0 : 1));
+            int suxCount = 0;
             for (Block block : blocks) {
                 List<ScheduledNode> nodes = blockToNodes.get(block);
                 writeInt(block.getId());
@@ -418,8 +446,19 @@ public class BinaryGraphPrinter implements GraphPrinter{
                 for (Node node : nodes) {
                     writeInt(node.getId());
                 }
-                writeInt(block.getSuccessors().size());
+                suxCount += block.getSuccessors().size();
+            }
+            if (!noBlockNodes.isEmpty()) {
+                writeInt(-1);
+                writeInt(noBlockNodes.size());
+                for (Node node : noBlockNodes) {
+                    writeInt(node.getId());
+                }
+            }
+            writeInt(suxCount);
+            for (Block block : blocks) {
                 for (Block sux : block.getSuccessors()) {
+                    writeInt(block.getId());
                     writeInt(sux.getId());
                 }
             }

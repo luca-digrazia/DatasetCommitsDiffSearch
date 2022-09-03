@@ -25,6 +25,7 @@ package com.oracle.graal.lir.cfg;
 public class CFGVerifier {
     public static boolean verify(ControlFlowGraph cfg) {
         for (Block block : cfg.getBlocks()) {
+            assert block.getId() >= 0;
             assert cfg.getBlocks()[block.getId()] == block;
 
             for (Block pred : block.getPredecessors()) {
@@ -46,7 +47,7 @@ public class CFGVerifier {
                 assert dominated.getDominator() == block;
             }
 
-            assert cfg.getLoops() == null || !block.isLoopHeader() || block.getLoop().header == block;
+            assert cfg.getLoops() == null || !block.isLoopHeader() || block.getLoop().header == block : block.beginNode;
         }
 
         if (cfg.getLoops() != null) {
@@ -58,8 +59,16 @@ public class CFGVerifier {
 
                     Loop blockLoop = block.getLoop();
                     while (blockLoop != loop) {
-                        blockLoop = blockLoop.parent;
                         assert blockLoop != null;
+                        blockLoop = blockLoop.parent;
+                    }
+
+                    if (!(block.isLoopHeader() && block.getLoop() == loop)) {
+                        for (Block pred : block.getPredecessors()) {
+                            if (!loop.blocks.contains(pred)) {
+                                return false;
+                            }
+                        }
                     }
                 }
 

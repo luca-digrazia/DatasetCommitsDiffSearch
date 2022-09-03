@@ -42,6 +42,8 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.StandardOp.ParametersOp;
+import com.oracle.graal.lir.StandardOp.PhiJumpOp;
+import com.oracle.graal.lir.StandardOp.PhiLabelOp;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.asm.TargetMethodAssembler.CallPositionListener;
 import com.oracle.graal.lir.cfg.*;
@@ -107,48 +109,25 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         public final int stateDepth;
 
         /**
-         * The object that is locked.
+         * The monitor enter node, with information about the object that is locked and the elimination status.
          */
-        public final ValueNode object;
-
-        /**
-         * Whether or not the lock is eliminated.
-         */
-        public final boolean eliminated;
+        public final MonitorEnterNode monitor;
 
         /**
          * Space in the stack frame needed by the VM to perform the locking.
          */
         public final StackSlot lockData;
 
-        public LockScope(LockScope outer, InliningIdentifier inliningIdentifier, ValueNode object, boolean eliminated, StackSlot lockData) {
+        public LockScope(LockScope outer, InliningIdentifier inliningIdentifier, MonitorEnterNode monitor, StackSlot lockData) {
             this.outer = outer;
             this.inliningIdentifier = inliningIdentifier;
-            this.object = object;
-            this.eliminated = eliminated;
+            this.monitor = monitor;
             this.lockData = lockData;
             if (outer != null && outer.inliningIdentifier == inliningIdentifier) {
                 this.stateDepth = outer.stateDepth + 1;
             } else {
                 this.stateDepth = 0;
             }
-        }
-
-        @Override
-        public String toString() {
-            InliningIdentifier identifier = inliningIdentifier;
-            StringBuilder sb = new StringBuilder().append(identifier).append(": ");
-            for (LockScope scope = this; scope != null; scope = scope.outer) {
-                if (scope.inliningIdentifier != identifier) {
-                    identifier = scope.inliningIdentifier;
-                    sb.append('\n').append(identifier).append(": ");
-                }
-                if (scope.eliminated) {
-                    sb.append('!');
-                }
-                sb.append(scope.object).append(' ');
-            }
-            return sb.toString();
         }
     }
 
@@ -236,12 +215,12 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     @Override
     public Value setResult(ValueNode x, Value operand) {
-        assert (isVariable(operand) && x.kind() == operand.getKind()) ||
+        assert (isVariable(operand) && x.kind() == operand.kind) ||
                (isRegister(operand) && !attributes(asRegister(operand)).isAllocatable()) ||
-               (isConstant(operand) && x.kind() == operand.getKind().stackKind()) : operand.getKind() + " for node " + x;
+               (isConstant(operand) && x.kind() == operand.kind.stackKind()) : operand.kind + " for node " + x;
         assert operand(x) == null : "operand cannot be set twice";
         assert operand != null && isLegal(operand) : "operand must be legal";
-        assert operand.getKind().stackKind() == x.kind();
+        assert operand.kind.stackKind() == x.kind();
         assert !(x instanceof VirtualObjectNode);
         nodeOperands.set(x, operand);
         return operand;
@@ -269,7 +248,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             return value;
         }
         if (storeKind == Kind.Byte || storeKind == Kind.Boolean) {
-            Variable tempVar = new Variable(value.getKind(), lir.nextVariable(), Register.RegisterFlag.Byte);
+            Variable tempVar = new Variable(value.kind, lir.nextVariable(), Register.RegisterFlag.Byte);
             emitMove(value, tempVar);
             return tempVar;
         }
@@ -340,7 +319,21 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         assert block.lir == null : "LIR list already computed for this block";
         block.lir = new ArrayList<>();
 
-        append(new LabelOp(new Label(), block.align));
+        if (GraalOptions.AllocSSA && block.getBeginNode() instanceof MergeNode) {
+            assert phiValues.isEmpty();
+            MergeNode merge = (MergeNode) block.getBeginNode();
+            for (PhiNode phi : merge.phis()) {
+                if (phi.type() == PhiType.Value) {
+                    Value phiValue = newVariable(phi.kind());
+                    setResult(phi, phiValue);
+                    phiValues.add(phiValue);
+                }
+            }
+            append(new PhiLabelOp(new Label(), block.align, phiValues.toArray(new Value[phiValues.size()])));
+            phiValues.clear();
+        } else {
+            append(new LabelOp(new Label(), block.align));
+        }
 
         if (GraalOptions.TraceLIRGeneratorLevel >= 1) {
             TTY.println("BEGIN Generating LIR for block B" + block.getId());
@@ -536,7 +529,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
         for (LocalNode local : graph.getNodes(LocalNode.class)) {
             Value param = params[local.index()];
-            assert param.getKind() == local.kind().stackKind();
+            assert param.kind == local.kind().stackKind();
             setResult(local, emitMove(param));
         }
     }
@@ -549,30 +542,13 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         setResult(x, operand(x.object()));
     }
 
-    public void lock(ValueNode object, boolean eliminated, StackSlot lock, InliningIdentifier inliningIdentifier) {
-        assert lastState != null : "must have state before instruction";
-        curLocks = new LockScope(curLocks, inliningIdentifier, object, eliminated, lock);
-    }
-
-    public StackSlot peekLock() {
-        assert curLocks.lockData != null;
-        return curLocks.lockData;
-    }
-
-    public void unlock(ValueNode object, boolean eliminated) {
-        if (curLocks == null || curLocks.object != object || curLocks.eliminated != eliminated) {
-            throw new BailoutException("unbalanced monitors: attempting to unlock an object that is not on top of the locking stack");
-        }
-        curLocks = curLocks.outer;
-    }
-
     @Override
     public void visitMonitorEnter(MonitorEnterNode x) {
         StackSlot lockData = frameMap.allocateStackBlock(runtime.sizeOfLockData(), false);
         if (x.eliminated()) {
             // No code is emitted for eliminated locks, but for proper debug information generation we need to
             // register the monitor and its lock data.
-            lock(x.object(), true, lockData, x.stateAfter().inliningIdentifier());
+            curLocks = new LockScope(curLocks, x.stateAfter().inliningIdentifier(), x, lockData);
             return;
         }
 
@@ -581,7 +557,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
         LIRFrameState stateBefore = state();
         // The state before the monitor enter is used for null checks, so it must not contain the newly locked object.
-        lock(x.object(), false, lockData, x.stateAfter().inliningIdentifier());
+        curLocks = new LockScope(curLocks, x.stateAfter().inliningIdentifier(), x, lockData);
         // The state after the monitor enter is used for deoptimization, after the monitor has blocked, so it must contain the newly locked object.
         LIRFrameState stateAfter = stateFor(x.stateAfter(), -1);
 
@@ -591,17 +567,20 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     @Override
     public void visitMonitorExit(MonitorExitNode x) {
+        if (curLocks == null || curLocks.monitor.object() != x.object() || curLocks.monitor.eliminated() != x.eliminated()) {
+            throw new BailoutException("unbalanced monitors: attempting to unlock an object that is not on top of the locking stack");
+        }
         if (x.eliminated()) {
-            unlock(x.object(), true);
+            curLocks = curLocks.outer;
             return;
         }
 
-        Value lockData = peekLock();
+        StackSlot lockData = curLocks.lockData;
         XirArgument obj = toXirArgument(x.object());
         XirArgument lockAddress = lockData == null ? null : toXirArgument(emitLea(lockData));
 
         LIRFrameState stateBefore = state();
-        unlock(x.object(), false);
+        curLocks = curLocks.outer;
 
         XirSnippet snippet = xir.genMonitorExit(site(x, x.object()), obj, lockAddress);
         emitXir(snippet, x, stateBefore, true);
@@ -665,7 +644,21 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     public void visitLoopEnd(LoopEndNode x) {
     }
 
+    private ArrayList<Value> phiValues = new ArrayList<>();
+
     private void moveToPhi(MergeNode merge, EndNode pred) {
+        if (GraalOptions.AllocSSA) {
+            assert phiValues.isEmpty();
+            for (PhiNode phi : merge.phis()) {
+                if (phi.type() == PhiType.Value) {
+                    phiValues.add(operand(phi.valueAt(pred)));
+                }
+            }
+            append(new PhiJumpOp(getLIRBlock(merge), phiValues.toArray(new Value[phiValues.size()])));
+            phiValues.clear();
+            return;
+        }
+
         if (GraalOptions.TraceLIRGeneratorLevel >= 1) {
             TTY.println("MOVE TO PHI from " + pred + " to " + merge);
         }
@@ -933,12 +926,12 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
 
     private static Value toStackKind(Value value) {
-        if (value.getKind().stackKind() != value.getKind()) {
+        if (value.kind.stackKind() != value.kind) {
             // We only have stack-kinds in the LIR, so convert the operand kind for values from the calling convention.
             if (isRegister(value)) {
-                return asRegister(value).asValue(value.getKind().stackKind());
+                return asRegister(value).asValue(value.kind.stackKind());
             } else if (isStackSlot(value)) {
-                return StackSlot.get(value.getKind().stackKind(), asStackSlot(value).rawOffset(), asStackSlot(value).rawAddFrameSize());
+                return StackSlot.get(value.kind.stackKind(), asStackSlot(value).rawOffset(), asStackSlot(value).rawAddFrameSize());
             } else {
                 throw GraalInternalError.shouldNotReachHere();
             }
@@ -1049,7 +1042,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         } else {
             Variable value = load(operand(x.value()));
             LabelRef defaultTarget = x.defaultSuccessor() == null ? null : getLIRBlock(x.defaultSuccessor());
-            if (value.getKind() == Kind.Object || keyCount < GraalOptions.SequentialSwitchLimit) {
+            if (value.kind == Kind.Object || keyCount < GraalOptions.SequentialSwitchLimit) {
                 // only a few entries
                 emitSequentialSwitch(x, value, defaultTarget);
             } else {
@@ -1203,7 +1196,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         }
         Variable variable = load(value);
         if (var.kind == Kind.Byte || var.kind == Kind.Boolean) {
-            Variable tempVar = new Variable(value.getKind(), lir.nextVariable(), Register.RegisterFlag.Byte);
+            Variable tempVar = new Variable(value.kind, lir.nextVariable(), Register.RegisterFlag.Byte);
             emitMove(variable, tempVar);
             variable = tempVar;
         }

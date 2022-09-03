@@ -27,42 +27,53 @@ import java.util.*;
 import java.util.Map.Entry;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.bytecode.*;
+import com.oracle.graal.compiler.schedule.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.Verbosity;
 import com.oracle.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.graal.graph.NodeClass.Position;
-import com.oracle.graal.java.*;
+import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.phases.schedule.*;
 
 /**
- * Generates a representation of {@link Graph Graphs} that can be visualized and inspected with the
- * <a href="http://kenai.com/projects/igv">Ideal Graph Visualizer</a>.
+ * Generates a representation of {@link Graph Graphs} that can be visualized and inspected with the <a
+ * href="http://kenai.com/projects/igv">Ideal Graph Visualizer</a>.
  */
-class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPrinter {
-
+class IdealGraphPrinter extends BasicIdealGraphPrinter {
     /**
      * Creates a new {@link IdealGraphPrinter} that writes to the specified output stream.
      */
     public IdealGraphPrinter(OutputStream stream) {
         super(stream);
-        this.begin();
     }
 
     /**
-     * Starts a new group of graphs with the given name, short name and method byte code index (BCI)
-     * as properties.
+     * Starts a new group of graphs with the given name, short name and method byte code index (BCI) as properties.
      */
-    @Override
     public void beginGroup(String name, String shortName, ResolvedJavaMethod method, int bci) {
         beginGroup();
         beginProperties();
         printProperty("name", name);
         endProperties();
         beginMethod(name, shortName, bci);
-        if (method != null && method.getCode() != null) {
-            printBytecodes(new BytecodeDisassembler(false).disassemble(method));
+        if (method != null) {
+            beginBytecodes();
+            BytecodeStream bytecodes = new BytecodeStream(method.code());
+            while (bytecodes.currentBC() != Bytecodes.END) {
+                int startBCI = bytecodes.currentBCI();
+                String mnemonic = Bytecodes.nameOf(bytecodes.currentBC());
+                int[] extra = null;
+                if (bytecodes.nextBCI() > startBCI + 1) {
+                    extra = new int[bytecodes.nextBCI() - (startBCI + 1)];
+                    for (int i = 0; i < extra.length; i++) {
+                        extra[i] = bytecodes.readUByte(startBCI + 1 + i);
+                    }
+                }
+                printBytecode(startBCI, mnemonic, extra);
+                bytecodes.next();
+            }
+            endBytecodes();
         }
         endMethod();
     }
@@ -72,10 +83,8 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPrinter {
     }
 
     /**
-     * Prints an entire {@link Graph} with the specified title, optionally using short names for
-     * nodes.
+     * Prints an entire {@link Graph} with the specified title, optionally using short names for nodes.
      */
-    @Override
     public void print(Graph graph, String title, SchedulePhase predefinedSchedule) {
         beginGraph(title);
         Set<Node> noBlockNodes = new HashSet<>();
@@ -87,7 +96,7 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPrinter {
             } catch (Throwable t) {
             }
         }
-        ControlFlowGraph cfg = schedule == null ? null : schedule.getCFG();
+        ControlFlowGraph cfg =  schedule == null ? null : schedule.getCFG();
 
         beginNodes();
         List<Edge> edges = printNodes(graph, cfg == null ? null : cfg.getNodeToBlock(), noBlockNodes);
@@ -134,10 +143,9 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPrinter {
             Block block = nodeToBlock == null ? null : nodeToBlock.get(node);
             if (block != null) {
                 printProperty("block", Integer.toString(block.getId()));
-                // if (!(node instanceof PhiNode || node instanceof FrameState || node instanceof
-                // LocalNode) && !block.nodes().contains(node)) {
-                // printProperty("notInOwnBlock", "true");
-                // }
+//                if (!(node instanceof PhiNode || node instanceof FrameState || node instanceof LocalNode) && !block.nodes().contains(node)) {
+//                    printProperty("notInOwnBlock", "true");
+//                }
             } else {
                 printProperty("block", "noBlock");
                 noBlockNodes.add(node);
@@ -165,38 +173,11 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPrinter {
                     printProperty(bit, "true");
                 }
             }
-            if (node.getClass() == BeginNode.class) {
-                printProperty("shortName", "B");
-            } else if (node.getClass() == EndNode.class) {
-                printProperty("shortName", "E");
-            }
-            if (node.predecessor() != null) {
-                printProperty("hasPredecessor", "true");
-            }
 
             for (Entry<Object, Object> entry : props.entrySet()) {
                 String key = entry.getKey().toString();
-                Object value = entry.getValue();
-                String valueString;
-                if (value == null) {
-                    valueString = "null";
-                } else {
-                    Class<?> type = value.getClass();
-                    if (type.isArray()) {
-                        if (!type.getComponentType().isPrimitive()) {
-                            valueString = Arrays.toString((Object[]) value);
-                        } else if (type.getComponentType() == Integer.TYPE) {
-                            valueString = Arrays.toString((int[]) value);
-                        } else if (type.getComponentType() == Double.TYPE) {
-                            valueString = Arrays.toString((double[]) value);
-                        } else {
-                            valueString = toString();
-                        }
-                    } else {
-                        valueString = value.toString();
-                    }
-                }
-                printProperty(key, valueString);
+                String value = entry.getValue() == null ? "null" : entry.getValue().toString();
+                printProperty(key, value);
             }
 
             endProperties();
