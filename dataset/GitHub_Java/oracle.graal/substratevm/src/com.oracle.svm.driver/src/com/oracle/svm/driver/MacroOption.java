@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,24 +26,23 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 final class MacroOption {
     enum MacroOptionKind {
         Language("languages"),
-        Tool("tools");
+        Tool("tools"),
+        Builtin("");
 
         final String subdir;
 
@@ -63,8 +60,11 @@ final class MacroOption {
         }
 
         static MacroOptionKind fromString(String kindName) {
+            /* TODO: Remove once all .properties files use lowercase */
+            String kindNameLowercase = kindName.toLowerCase();
+
             for (MacroOptionKind kind : MacroOptionKind.values()) {
-                if (kind.toString().equals(kindName)) {
+                if (kind.toString().equals(kindNameLowercase)) {
                     return kind;
                 }
             }
@@ -77,8 +77,12 @@ final class MacroOption {
         }
     }
 
-    Path getOptionDirectory() {
+    Path getImageJarsDirectory() {
         return optionDirectory;
+    }
+
+    Path getBuilderJarsDirectory() {
+        return optionDirectory.resolve("builder");
     }
 
     String getOptionName() {
@@ -176,7 +180,28 @@ final class MacroOption {
         }
 
         private String resolvePropertyValue(String val) {
-            return NativeImage.resolvePropertyValue(val, optionArg, getOption().optionDirectory.toString());
+            String resultVal = val;
+            if (optionArg != null) {
+                /* Substitute ${*} -> optionArg in resultVal (always possible) */
+                resultVal = resultVal.replace("${*}", optionArg);
+                /*
+                 * If optionArg consists of "<argName>:<argValue>,..." additionally perform
+                 * substitutions of kind ${<argName>} -> <argValue> on resultVal.
+                 */
+                for (String argNameValue : optionArg.split(",")) {
+                    String[] splitted = argNameValue.split(":");
+                    if (splitted.length == 2) {
+                        String argName = splitted[0];
+                        String argValue = splitted[1];
+                        if (!argName.isEmpty()) {
+                            resultVal = resultVal.replace("${" + argName + "}", argValue);
+                        }
+                    }
+                }
+            }
+            /* Substitute ${.} -> absolute path to optionDirectory */
+            resultVal = resultVal.replace("${.}", getOption().optionDirectory.toString());
+            return resultVal;
         }
 
         String getProperty(String key, String defaultVal) {
@@ -192,7 +217,14 @@ final class MacroOption {
         }
 
         boolean forEachPropertyValue(String propertyKey, Consumer<String> target) {
-            return NativeImage.forEachPropertyValue(option.properties.get(propertyKey), target, this::resolvePropertyValue);
+            String propertyValueRaw = option.properties.get(propertyKey);
+            if (propertyValueRaw != null) {
+                for (String propertyValue : Arrays.asList(propertyValueRaw.split(" "))) {
+                    target.accept(resolvePropertyValue(propertyValue));
+                }
+                return true;
+            }
+            return false;
         }
 
         MacroOption getOption() {
@@ -207,6 +239,9 @@ final class MacroOption {
         private static Map<MacroOptionKind, Map<String, MacroOption>> collectMacroOptions(Path rootDir) throws IOException {
             Map<MacroOptionKind, Map<String, MacroOption>> result = new HashMap<>();
             for (MacroOptionKind kind : MacroOptionKind.values()) {
+                if (kind.subdir.isEmpty()) {
+                    continue;
+                }
                 Path optionDir = rootDir.resolve(kind.subdir);
                 Map<String, MacroOption> collectedOptions = Collections.emptyMap();
                 if (Files.isDirectory(optionDir)) {
@@ -219,25 +254,30 @@ final class MacroOption {
             return result;
         }
 
-        Registry() {
-            for (MacroOptionKind kind : MacroOptionKind.values()) {
-                supported.put(kind, new HashMap<>());
-            }
+        Registry(Path rootDir) {
+            addMacroOptionRoot(rootDir);
         }
 
         void addMacroOptionRoot(Path rootDir) {
             /* Discover MacroOptions and add to supported */
             try {
                 collectMacroOptions(rootDir).forEach((optionKind, optionMap) -> {
-                    supported.get(optionKind).putAll(optionMap);
+                    Map<String, MacroOption> existingOptionMap = supported.get(optionKind);
+                    if (existingOptionMap == null) {
+                        supported.put(optionKind, optionMap);
+                    } else {
+                        existingOptionMap.putAll(optionMap);
+                    }
                 });
             } catch (IOException e) {
                 throw new InvalidMacroException("Error while discovering supported MacroOptions in " + rootDir + ": " + e.getMessage());
             }
         }
 
-        Set<String> getAvailableOptions(MacroOptionKind forKind) {
-            return supported.get(forKind).keySet();
+        MacroOption addBuiltin(String optionName) {
+            MacroOption builtin = new MacroOption(optionName);
+            supported.computeIfAbsent(MacroOptionKind.Builtin, key -> new HashMap<>()).put(optionName, builtin);
+            return builtin;
         }
 
         void showOptions(MacroOptionKind forKind, boolean commandLineStyle, Consumer<String> lineOut) {
@@ -268,11 +308,7 @@ final class MacroOption {
             }
         }
 
-        MacroOption getMacroOption(MacroOptionKind kindPart, String optionName) {
-            return supported.get(kindPart).get(optionName);
-        }
-
-        boolean enableOption(String optionString, HashSet<MacroOption> addedCheck, MacroOption context, Consumer<EnabledOption> enabler) {
+        boolean enableOption(String optionString, HashSet<MacroOption> addedCheck, MacroOption context) {
             String specString;
             if (context == null) {
                 if (optionString.startsWith(macroOptionPrefix)) {
@@ -311,48 +347,45 @@ final class MacroOption {
 
             String[] parts = specNameParts.split("=", 2);
             String optionName = parts[0];
-            MacroOption option = getMacroOption(kindPart, optionName);
+            MacroOption option = supported.get(kindPart).get(optionName);
             if (option != null) {
                 String optionArg = parts.length == 2 ? parts[1] : null;
-                enableResolved(option, optionArg, addedCheck, context, enabler);
+                enableResolved(option, optionArg, addedCheck, context);
             } else {
                 throw new VerboseInvalidMacroException("Unknown name in option specification: " + kindPart + ":" + optionName, kindPart, context);
             }
             return true;
         }
 
-        private void enableResolved(MacroOption option, String optionArg, HashSet<MacroOption> addedCheck, MacroOption context, Consumer<EnabledOption> enabler) {
+        private void enableResolved(MacroOption option, String optionArg, HashSet<MacroOption> addedCheck, MacroOption context) {
             if (addedCheck.contains(option)) {
-                return;
+                if (option.kind.equals(MacroOptionKind.Builtin)) {
+                    return;
+                }
+                throw new AddedTwiceException(option, context);
             }
             addedCheck.add(option);
             EnabledOption enabledOption = new EnabledOption(option, optionArg);
             String requires = enabledOption.getProperty("Requires", "");
             if (!requires.isEmpty()) {
                 for (String specString : requires.split(" ")) {
-                    enableOption(specString, addedCheck, option, enabler);
+                    enableOption(specString, addedCheck, option);
                 }
             }
 
-            MacroOption truffleOption = getMacroOption(MacroOptionKind.Tool, "truffle");
+            MacroOption truffleOption = supported.get(MacroOptionKind.Tool).get("truffle");
             if (option.kind.equals(MacroOptionKind.Language) && !addedCheck.contains(truffleOption)) {
                 /*
                  * Every language requires Truffle. If it is not specified explicitly as a
                  * requirement, add it automatically.
                  */
-                enableResolved(truffleOption, null, addedCheck, context, enabler);
+                enableResolved(truffleOption, null, addedCheck, context);
             }
-            enabler.accept(enabledOption);
             enabled.add(enabledOption);
         }
 
         LinkedHashSet<EnabledOption> getEnabledOptions(MacroOptionKind kind) {
             return enabled.stream().filter(eo -> kind.equals(eo.option.kind)).collect(Collectors.toCollection(LinkedHashSet::new));
-        }
-
-        Stream<EnabledOption> getEnabledOptionsStream(MacroOptionKind kind, MacroOptionKind... otherKinds) {
-            EnumSet<MacroOptionKind> kindSet = EnumSet.of(kind, otherKinds);
-            return enabled.stream().filter(eo -> kindSet.contains(eo.option.kind));
         }
 
         LinkedHashSet<EnabledOption> getEnabledOptions() {
@@ -361,6 +394,32 @@ final class MacroOption {
 
         EnabledOption getEnabledOption(MacroOption option) {
             return enabled.stream().filter(eo -> eo.getOption().equals(option)).findFirst().orElse(null);
+        }
+
+        void applyOptions(NativeImage nativeImage) {
+            for (EnabledOption enabledOption : getEnabledOptions()) {
+                if (enabledOption.getOption().kind.equals(MacroOptionKind.Builtin)) {
+                    continue;
+                }
+
+                if (Files.isDirectory(enabledOption.getOption().getBuilderJarsDirectory())) {
+                    NativeImage.getJars(enabledOption.getOption().getBuilderJarsDirectory()).forEach(nativeImage::addImageBuilderClasspath);
+                }
+                NativeImage.getJars(enabledOption.getOption().getImageJarsDirectory()).forEach(nativeImage::addImageClasspath);
+
+                String imageName = enabledOption.getProperty("ImageName");
+                if (imageName != null) {
+                    nativeImage.addImageBuilderArg(NativeImage.oHName + imageName);
+                }
+
+                String launcherClass = enabledOption.getProperty("LauncherClass");
+                if (launcherClass != null) {
+                    nativeImage.addImageBuilderArg(NativeImage.oHClass + launcherClass);
+                }
+
+                enabledOption.forEachPropertyValue("JavaArgs", nativeImage::addImageBuilderJavaArgs);
+                enabledOption.forEachPropertyValue("Args", nativeImage::addImageBuilderArg);
+            }
         }
     }
 
@@ -382,7 +441,14 @@ final class MacroOption {
         this.kind = MacroOptionKind.fromSubdir(optionDirectory.getParent().getFileName().toString());
         this.optionName = optionDirectory.getFileName().toString();
         this.optionDirectory = optionDirectory;
-        this.properties = NativeImage.loadProperties(optionDirectory.resolve(NativeImage.nativeImageProperties));
+        this.properties = NativeImage.loadProperties(optionDirectory.resolve("native-image.properties"));
+    }
+
+    private MacroOption(String optionName) {
+        this.kind = MacroOptionKind.Builtin;
+        this.optionName = optionName;
+        this.optionDirectory = null;
+        this.properties = Collections.emptyMap();
     }
 
     @Override
