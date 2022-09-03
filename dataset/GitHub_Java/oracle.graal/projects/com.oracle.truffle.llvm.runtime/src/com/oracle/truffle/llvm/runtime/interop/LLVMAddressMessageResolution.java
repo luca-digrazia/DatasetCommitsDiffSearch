@@ -34,6 +34,7 @@ import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
 
 @MessageResolution(receiverType = LLVMAddress.class)
 public class LLVMAddressMessageResolution {
@@ -41,7 +42,7 @@ public class LLVMAddressMessageResolution {
     @Resolve(message = "IS_POINTER")
     public abstract static class ForeignIsPointer extends Node {
         @SuppressWarnings("unused")
-        protected boolean access(VirtualFrame frame, LLVMAddress receiver) {
+        protected boolean access(VirtualFrame frame, LLVMTruffleAddress receiver) {
             return true;
         }
     }

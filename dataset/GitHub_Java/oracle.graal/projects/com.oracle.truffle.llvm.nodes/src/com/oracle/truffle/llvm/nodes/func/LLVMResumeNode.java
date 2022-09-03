@@ -39,7 +39,7 @@ import com.oracle.truffle.api.instrumentation.ProbeNode;
 import com.oracle.truffle.llvm.runtime.LLVMException;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @GenerateWrapper
 public class LLVMResumeNode extends LLVMControlFlowNode implements InstrumentableNode {
@@ -72,7 +72,7 @@ public class LLVMResumeNode extends LLVMControlFlowNode implements Instrumentabl
     }
 
     @Override
-    public LLVMStatementNode getPhiNode(int successorIndex) {
+    public LLVMExpressionNode getPhiNode(int successorIndex) {
         return null;
     }
 

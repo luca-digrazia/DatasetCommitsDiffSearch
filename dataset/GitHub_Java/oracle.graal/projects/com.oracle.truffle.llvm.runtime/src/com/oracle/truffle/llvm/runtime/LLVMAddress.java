@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -131,17 +132,17 @@ public final class LLVMAddress implements LLVMObjectNativeLibrary.Provider, Truf
         }
 
         @Override
-        public boolean isPointer(Object obj) {
+        public boolean isPointer(VirtualFrame frame, Object obj) {
             return true;
         }
 
         @Override
-        public long asPointer(Object obj) throws InteropException {
+        public long asPointer(VirtualFrame frame, Object obj) throws InteropException {
             return ((LLVMAddress) obj).getVal();
         }
 
         @Override
-        public LLVMAddress toNative(Object obj) throws InteropException {
+        public LLVMAddress toNative(VirtualFrame frame, Object obj) throws InteropException {
             return (LLVMAddress) obj;
         }
     }

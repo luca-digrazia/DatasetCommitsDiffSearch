@@ -31,18 +31,16 @@ package com.oracle.truffle.llvm.runtime.nodes.api;
 
 import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.GenerateWrapper;
-import com.oracle.truffle.api.instrumentation.InstrumentableNode;
-import com.oracle.truffle.api.instrumentation.ProbeNode;
+import com.oracle.truffle.api.instrumentation.Instrumentable;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
+import com.oracle.truffle.llvm.runtime.LLVMSharedGlobalVariable;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
@@ -56,18 +54,8 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
  * operation.
  */
 @TypeSystemReference(LLVMTypes.class)
-@GenerateWrapper
-public abstract class LLVMExpressionNode extends LLVMNode implements InstrumentableNode {
-
-    @Override
-    public WrapperNode createWrapper(ProbeNode probe) {
-        return new LLVMExpressionNodeWrapper(this, probe);
-    }
-
-    @Override
-    public boolean isInstrumentable() {
-        return getSourceLocation() != null;
-    }
+@Instrumentable(factory = LLVMExpressionNodeWrapper.class)
+public abstract class LLVMExpressionNode extends LLVMNode {
 
     public static final LLVMExpressionNode[] NO_EXPRESSIONS = {};
 
@@ -170,6 +158,7 @@ public abstract class LLVMExpressionNode extends LLVMNode implements Instrumenta
     }
 
     public static boolean notLLVM(TruffleObject object) {
-        return !(object instanceof LLVMInternalTruffleObject);
+        return !(object instanceof LLVMFunctionDescriptor || object instanceof LLVMAddress ||
+                        object instanceof LLVMTruffleAddress || object instanceof LLVMSharedGlobalVariable);
     }
 }
