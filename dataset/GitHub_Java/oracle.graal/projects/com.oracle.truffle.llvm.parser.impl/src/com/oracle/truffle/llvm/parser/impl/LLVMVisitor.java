@@ -81,6 +81,8 @@ import com.intel.llvm.ireditor.lLVM_IR.Instruction_icmp;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_indirectbr;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_insertelement;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_insertvalue;
+import com.intel.llvm.ireditor.lLVM_IR.Instruction_invoke_nonVoid;
+import com.intel.llvm.ireditor.lLVM_IR.Instruction_landingpad;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_load;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_ret;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_select;
@@ -90,10 +92,13 @@ import com.intel.llvm.ireditor.lLVM_IR.Instruction_switch;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_unreachable;
 import com.intel.llvm.ireditor.lLVM_IR.LocalValue;
 import com.intel.llvm.ireditor.lLVM_IR.LocalValueRef;
+import com.intel.llvm.ireditor.lLVM_IR.MetadataNode;
+import com.intel.llvm.ireditor.lLVM_IR.MetadataNodeElement;
 import com.intel.llvm.ireditor.lLVM_IR.MiddleInstruction;
 import com.intel.llvm.ireditor.lLVM_IR.Model;
 import com.intel.llvm.ireditor.lLVM_IR.NamedMetadata;
 import com.intel.llvm.ireditor.lLVM_IR.NamedMiddleInstruction;
+import com.intel.llvm.ireditor.lLVM_IR.NamedTerminatorInstruction;
 import com.intel.llvm.ireditor.lLVM_IR.Parameter;
 import com.intel.llvm.ireditor.lLVM_IR.Parameters;
 import com.intel.llvm.ireditor.lLVM_IR.SimpleConstant;
@@ -123,12 +128,18 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.llvm.nativeint.NativeLookup;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMMetadataNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMStatementNode;
+import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI1Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
+import com.oracle.truffle.llvm.nodes.impl.exception.LLVMInvokeNode;
+import com.oracle.truffle.llvm.nodes.impl.exception.LLVMLandingPadNode.LLVMAddressLandingPadNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionBodyNode;
 import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionStartNode;
+import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMMemCopyFactory.LLVMMemI32CopyFactory;
 import com.oracle.truffle.llvm.nodes.impl.others.LLVMBlockNode;
 import com.oracle.truffle.llvm.nodes.impl.others.LLVMBlockNode.LLVMBlockControlFlowNode;
 import com.oracle.truffle.llvm.nodes.impl.others.LLVMBlockNode.LLVMBlockNoControlFlowNode;
@@ -166,6 +177,7 @@ import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReaso
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunction;
 import com.oracle.truffle.llvm.types.LLVMFunction.LLVMRuntimeType;
+import com.oracle.truffle.llvm.types.LLVMMetadata;
 import com.oracle.truffle.llvm.types.memory.LLVMHeap;
 import com.oracle.truffle.llvm.types.memory.LLVMMemory;
 import com.oracle.truffle.llvm.types.memory.LLVMStack;
@@ -417,7 +429,8 @@ public class LLVMVisitor implements LLVMParserRuntime {
                         LLVMExpressionNode isVolatileNode = factoryFacade.createLiteral(false, LLVMBaseType.I1);
                         LLVMExpressionNode alignNode = factoryFacade.createLiteral(0, LLVMBaseType.I32);
                         LLVMExpressionNode lengthNode = factoryFacade.createLiteral(byteSize, LLVMBaseType.I32);
-                        storeNode = factoryFacade.createMemCopyNode(globalVarAddress, constant, lengthNode, alignNode, isVolatileNode);
+                        storeNode = LLVMMemI32CopyFactory.create((LLVMAddressNode) globalVarAddress, (LLVMAddressNode) constant, (LLVMI32Node) lengthNode, (LLVMI32Node) alignNode,
+                                        (LLVMI1Node) isVolatileNode);
                     } else {
                         storeNode = getStoreNode(globalVarAddress, constant, globalVariable.getType());
                     }
@@ -738,6 +751,8 @@ public class LLVMVisitor implements LLVMParserRuntime {
             result = visitExtractElement((Instruction_extractelement) instr);
         } else if (instr instanceof Instruction_insertelement) {
             result = visitInsertElement((Instruction_insertelement) instr);
+        } else if (instr instanceof Instruction_landingpad) {
+            result = visitLandingPad((Instruction_landingpad) instr);
         } else if (instr instanceof Instruction_extractvalue) {
             result = visitExtractValue((Instruction_extractvalue) instr);
         } else if (instr instanceof Instruction_shufflevector) {
@@ -777,6 +792,17 @@ public class LLVMVisitor implements LLVMParserRuntime {
         LLVMExpressionNode targetAddress = getConstantElementPtr(aggregate, instr.getAggregate().getType(), indices);
         LLVMBaseType type = getLLVMType(instr);
         return factoryFacade.createExtractValue(type, targetAddress);
+    }
+
+    private LLVMExpressionNode visitLandingPad(Instruction_landingpad instr) {
+        Type resultType = instr.getResultType();
+        LLVMBaseType llvmType = getLLVMType(resultType);
+        switch (llvmType) {
+            case STRUCT:
+                return new LLVMAddressLandingPadNode();
+            default:
+                throw new AssertionError(llvmType);
+        }
     }
 
     private LLVMExpressionNode visitExtractElement(Instruction_extractelement instr) {
@@ -1009,6 +1035,9 @@ public class LLVMVisitor implements LLVMParserRuntime {
         } else if (constant instanceof ArrayConstant) {
             return visitArrayConstantStore((ArrayConstant) constant);
         } else {
+            if (resolve(type).isMetadata()) {
+                return new LLVMMetadataNode(null);
+            }
             if (constant.getRef() instanceof FunctionHeader) {
                 FunctionHeader header = (FunctionHeader) constant.getRef();
                 LLVMFunction function = createLLVMFunctionFromHeader(header);
@@ -1046,10 +1075,26 @@ public class LLVMVisitor implements LLVMParserRuntime {
                 return visitVectorConstant((VectorConstant) constant);
             } else if (constant.getRef() instanceof Alias) {
                 return visitAliasConstant((Alias) constant.getRef());
+            } else if (constant instanceof MetadataNode) {
+                return visitMetadataNode((MetadataNode) constant);
             } else {
                 throw new AssertionError(constant);
             }
         }
+    }
+
+    private static LLVMExpressionNode visitMetadataNode(MetadataNode constant) {
+        EList<MetadataNodeElement> metaDataElements = constant.getElements();
+        List<LLVMMetadata> metaDatas = new ArrayList<>();
+        for (MetadataNodeElement metaData : metaDataElements) {
+            metaDatas.add(visitMetaData(metaData));
+        }
+        assert metaDataElements.size() == 1;
+        return new LLVMMetadataNode(metaDatas.get(0));
+    }
+
+    private static LLVMMetadata visitMetaData(@SuppressWarnings("unused") MetadataNodeElement metaData) {
+        return new LLVMMetadata();
     }
 
     private LLVMExpressionNode visitAliasConstant(Alias ref) {
@@ -1335,9 +1380,21 @@ public class LLVMVisitor implements LLVMParserRuntime {
             return visitSwitch((Instruction_switch) termInstruction);
         } else if (termInstruction instanceof Instruction_indirectbr) {
             return visitIndirectBranch((Instruction_indirectbr) termInstruction);
+        } else if (termInstruction instanceof NamedTerminatorInstruction) {
+            return visitNamedTerminator((NamedTerminatorInstruction) termInstruction);
         } else {
             throw new AssertionError(termInstruction);
         }
+    }
+
+    private LLVMNode visitNamedTerminator(NamedTerminatorInstruction termInstruction) {
+        Instruction_invoke_nonVoid invoke = termInstruction.getInstruction();
+        int normalContinueIndex = getIndexFromBasicBlock(invoke.getToLabel().getRef());
+        int exceptionIndex = getIndexFromBasicBlock(invoke.getExceptionLabel().getRef());
+        Callee callee = invoke.getCallee();
+        EList<Argument> args = invoke.getArgs().getArguments();
+        LLVMNode callInstruction = visitFunctionCall(callee, args, resolve(invoke));
+        return new LLVMInvokeNode(normalContinueIndex, exceptionIndex, callInstruction);
     }
 
     private LLVMNode visitIndirectBranch(Instruction_indirectbr instr) {
