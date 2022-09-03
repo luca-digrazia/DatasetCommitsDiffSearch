@@ -291,7 +291,6 @@ public final class PropertyMap implements Map<Object, Property> {
     }
 
     public PropertyMap putCopy(Property value) {
-        assert !this.containsValue(value);
         return new PropertyMap(this, value);
     }
 
@@ -349,5 +348,10 @@ public final class PropertyMap implements Map<Object, Property> {
 
     public Property getLastProperty() {
         return cdr;
+    }
+
+    @Override
+    public String toString() {
+        return values().toString();
     }
 }
