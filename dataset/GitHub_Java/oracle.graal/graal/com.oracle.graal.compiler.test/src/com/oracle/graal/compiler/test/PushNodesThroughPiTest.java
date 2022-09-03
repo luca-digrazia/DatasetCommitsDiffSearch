@@ -32,7 +32,6 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.Lowerable.*;
 import com.oracle.graal.phases.common.*;
 
 public class PushNodesThroughPiTest extends GraalCompilerTest {
@@ -83,10 +82,10 @@ public class PushNodesThroughPiTest extends GraalCompilerTest {
 
     private StructuredGraph compileTestSnippet(final String snippet) {
         StructuredGraph graph = parse(snippet);
-        new LoweringPhase(null, runtime(), replacements, new Assumptions(false), LoweringType.BEFORE_GUARDS).apply(graph);
-        new CanonicalizerPhase.Instance(runtime(), null).apply(graph);
-        new PushThroughPiPhase().apply(graph);
-        new CanonicalizerPhase.Instance(runtime(), null).apply(graph);
+        new LoweringPhase(null, runtime(), replacements, new Assumptions(false)).apply(graph);
+        new CanonicalizerPhase(runtime(), null).apply(graph);
+        new PushNodesThroughPi().apply(graph);
+        new CanonicalizerPhase(runtime(), null).apply(graph);
 
         return graph;
     }
