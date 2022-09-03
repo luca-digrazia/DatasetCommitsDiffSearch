@@ -34,16 +34,30 @@ import com.sun.cri.ri.*;
  */
 public abstract class AccessField extends StateSplit {
 
-    @NodeInput
-    private Value object;
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_OBJECT = 0;
 
-    public Value object() {
-        return object;
+    private static final int SUCCESSOR_COUNT = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
     }
 
-    public void setObject(Value x) {
-        updateUsages(object, x);
-        object = x;
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
+    /**
+     * The instruction that produces the receiver object of this field access (for instance field accesses).
+     */
+     public Value object() {
+        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
+    }
+
+    public Value setObject(Value n) {
+        return (Value) inputs().set(super.inputCount() + INPUT_OBJECT, n);
     }
 
     protected final RiField field;
@@ -53,10 +67,12 @@ public abstract class AccessField extends StateSplit {
      * @param kind the result kind of the access
      * @param object the instruction producing the receiver object
      * @param field the compiler interface representation of the field
+     * @param inputCount
+     * @param successorCount
      * @param graph
      */
-    public AccessField(CiKind kind, Value object, RiField field, Graph graph) {
-        super(kind, graph);
+    public AccessField(CiKind kind, Value object, RiField field, int inputCount, int successorCount, Graph graph) {
+        super(kind, inputCount + INPUT_COUNT, successorCount + SUCCESSOR_COUNT, graph);
         this.field = field;
         setObject(object);
         assert field.isResolved();
