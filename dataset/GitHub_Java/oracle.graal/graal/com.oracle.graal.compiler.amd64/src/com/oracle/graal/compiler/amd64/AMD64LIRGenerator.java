@@ -23,6 +23,22 @@
 
 package com.oracle.graal.compiler.amd64;
 
+import com.oracle.jvmci.code.RegisterConfig;
+import com.oracle.jvmci.code.Register;
+import com.oracle.jvmci.code.ForeignCallLinkage;
+import com.oracle.jvmci.code.CodeUtil;
+import com.oracle.jvmci.code.Architecture;
+import com.oracle.jvmci.code.StackSlotValue;
+import com.oracle.jvmci.code.CallingConvention;
+import com.oracle.jvmci.code.RegisterValue;
+import com.oracle.jvmci.code.VirtualStackSlot;
+import com.oracle.jvmci.meta.Kind;
+import com.oracle.jvmci.meta.JavaConstant;
+import com.oracle.jvmci.meta.PlatformKind;
+import com.oracle.jvmci.meta.Value;
+import com.oracle.jvmci.meta.AllocatableValue;
+import com.oracle.jvmci.meta.LIRKind;
+import static com.oracle.jvmci.code.ValueUtil.*;
 import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.*;
 import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MOp.*;
 import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64RMOp.*;
@@ -30,11 +46,12 @@ import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64Shift.*;
 import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.*;
 import static com.oracle.graal.lir.amd64.AMD64Arithmetic.*;
 import static com.oracle.graal.lir.amd64.AMD64MathIntrinsicOp.IntrinsicOpcode.*;
-import static com.oracle.jvmci.code.ValueUtil.*;
 
 import java.util.*;
 
+import com.oracle.graal.amd64.*;
 import com.oracle.graal.asm.*;
+import com.oracle.graal.asm.amd64.AMD64Address.Scale;
 import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic;
 import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MIOp;
 import com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MOp;
@@ -70,10 +87,7 @@ import com.oracle.graal.lir.amd64.AMD64Move.StackLeaOp;
 import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.phases.util.*;
-import com.oracle.jvmci.amd64.*;
-import com.oracle.jvmci.code.*;
 import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * This class implements the AMD64 specific portion of the LIR generator.
@@ -208,17 +222,74 @@ public abstract class AMD64LIRGenerator extends LIRGenerator implements AMD64Ari
         append(new LeaDataOp(dst, data));
     }
 
+    @Override
+    public AMD64AddressValue emitAddress(Value base, long displacement, Value index, int scale) {
+        AllocatableValue baseRegister;
+        long finalDisp = displacement;
+        if (isConstant(base)) {
+            if (asConstant(base).isNull()) {
+                baseRegister = Value.ILLEGAL;
+            } else if (asConstant(base).getKind() != Kind.Object && !getCodeCache().needsDataPatch(asConstant(base))) {
+                finalDisp += asConstant(base).asLong();
+                baseRegister = Value.ILLEGAL;
+            } else {
+                baseRegister = load(base);
+            }
+        } else {
+            baseRegister = asAllocatable(base);
+        }
+
+        AllocatableValue indexRegister;
+        Scale scaleEnum;
+        if (!index.equals(Value.ILLEGAL) && scale != 0) {
+            scaleEnum = Scale.fromInt(scale);
+            if (isConstant(index)) {
+                finalDisp += asConstant(index).asLong() * scale;
+                indexRegister = Value.ILLEGAL;
+
+            } else if (scaleEnum == null) {
+                /* Scale value that architecture cannot handle, so scale manually. */
+                Value longIndex = index.getKind() == Kind.Long ? index : emitSignExtend(index, 32, 64);
+                if (CodeUtil.isPowerOf2(scale)) {
+                    indexRegister = emitShl(longIndex, JavaConstant.forLong(CodeUtil.log2(scale)));
+                } else {
+                    indexRegister = emitMul(longIndex, JavaConstant.forLong(scale), false);
+                }
+                scaleEnum = Scale.Times1;
+
+            } else {
+                indexRegister = asAllocatable(index);
+            }
+        } else {
+            indexRegister = Value.ILLEGAL;
+            scaleEnum = Scale.Times1;
+        }
+
+        int displacementInt;
+        if (NumUtil.isInt(finalDisp)) {
+            displacementInt = (int) finalDisp;
+        } else {
+            displacementInt = 0;
+            AllocatableValue displacementRegister = load(JavaConstant.forLong(finalDisp));
+            if (baseRegister.equals(Value.ILLEGAL)) {
+                baseRegister = displacementRegister;
+            } else if (indexRegister.equals(Value.ILLEGAL)) {
+                indexRegister = displacementRegister;
+                scaleEnum = Scale.Times1;
+            } else {
+                baseRegister = emitAdd(baseRegister, displacementRegister, false);
+            }
+        }
+
+        LIRKind resultKind = getAddressKind(base, displacement, index);
+        return new AMD64AddressValue(resultKind, baseRegister, indexRegister, scaleEnum, displacementInt);
+    }
+
     public AMD64AddressValue asAddressValue(Value address) {
         if (address instanceof AMD64AddressValue) {
             return (AMD64AddressValue) address;
         } else {
-            if (address instanceof JavaConstant) {
-                long displacement = ((JavaConstant) address).asLong();
-                if (NumUtil.isInt(displacement)) {
-                    return new AMD64AddressValue(address.getLIRKind(), Value.ILLEGAL, (int) displacement);
-                }
-            }
-            return new AMD64AddressValue(address.getLIRKind(), asAllocatable(address), 0);
+            return emitAddress(address, 0, Value.ILLEGAL, 0);
         }
     }
 
