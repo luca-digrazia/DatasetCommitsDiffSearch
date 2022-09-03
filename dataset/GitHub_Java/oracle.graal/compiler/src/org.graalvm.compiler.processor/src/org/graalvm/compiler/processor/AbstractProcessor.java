@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -30,11 +32,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.annotation.processing.FilerException;
 import javax.annotation.processing.ProcessingEnvironment;
+import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
@@ -49,6 +53,8 @@ import javax.tools.StandardLocation;
 /**
  * {@link javax.annotation.processing.AbstractProcessor} subclass that provides extra functionality.
  */
+@SuppressFBWarnings(value = "NM_SAME_SIMPLE_NAME_AS_SUPERCLASS", //
+                reason = "We want this type to be found when someone is writing a new Graal annotation processor")
 public abstract class AbstractProcessor extends javax.annotation.processing.AbstractProcessor {
 
     /**
@@ -57,6 +63,20 @@ public abstract class AbstractProcessor extends javax.annotation.processing.Abst
     public ProcessingEnvironment env() {
         return processingEnv;
     }
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+        // In JDK 8, each annotation processing round has its own Elements object
+        // so this cache must be cleared at the start of each round. As of JDK9,
+        // a single Elements is preserved across all annotation processing rounds.
+        // However, since both behaviors are compliant with the annotation processing
+        // specification, we unconditionally clear the cache to be safe.
+        types.clear();
+
+        return doProcess(annotations, roundEnv);
+    }
+
+    protected abstract boolean doProcess(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv);
 
     private final Map<String, TypeElement> types = new HashMap<>();
 
@@ -72,7 +92,7 @@ public abstract class AbstractProcessor extends javax.annotation.processing.Abst
     /**
      * Gets the {@link TypeMirror} for a given class name.
      *
-     * @rturn {@code null} if the class cannot be resolved
+     * @return {@code null} if the class cannot be resolved
      */
     public TypeMirror getTypeOrNull(String className) {
         TypeElement element = getTypeElementOrNull(className);

@@ -485,6 +485,7 @@ public class MatchProcessor extends AbstractProcessor {
      * Strip the package off a class name leaving the full class name including any outer classes.
      */
     private String fullClassName(Element element) {
+        assert element.getKind() == ElementKind.CLASS || element.getKind() == ElementKind.INTERFACE : element;
         String pkg = findPackage(element);
         return ((TypeElement) element).getQualifiedName().toString().substring(pkg.length() + 1);
     }
@@ -674,6 +675,7 @@ public class MatchProcessor extends AbstractProcessor {
     private static TypeElement topDeclaringType(Element element) {
         Element enclosing = element.getEnclosingElement();
         if (enclosing == null || enclosing.getKind() == ElementKind.PACKAGE) {
+            assert element.getKind() == ElementKind.CLASS || element.getKind() == ElementKind.INTERFACE;
             return (TypeElement) element;
         }
         return topDeclaringType(enclosing);
@@ -958,7 +960,7 @@ public class MatchProcessor extends AbstractProcessor {
             Set<Element> originatingElementsList = info.originatingElements;
             originatingElementsList.add(method);
             while (enclosing != null) {
-                if (enclosing.getKind() == ElementKind.CLASS || enclosing.getKind() == ElementKind.INTERFACE || enclosing.getKind() == ElementKind.ENUM) {
+                if (enclosing.getKind() == ElementKind.CLASS || enclosing.getKind() == ElementKind.INTERFACE) {
                     if (enclosing.getModifiers().contains(Modifier.PRIVATE)) {
                         printError(method, "MatchRule cannot be declared in a private %s %s", enclosing.getKind().name().toLowerCase(), enclosing);
                         return;
@@ -966,11 +968,8 @@ public class MatchProcessor extends AbstractProcessor {
                     originatingElementsList.add(enclosing);
                     declaringClass = enclosing.getSimpleName() + separator + declaringClass;
                     separator = ".";
-                } else if (enclosing.getKind() == ElementKind.PACKAGE) {
-                    break;
                 } else {
-                    printError(method, "MatchRule cannot be declared in a %s", enclosing.getKind().name().toLowerCase());
-                    return;
+                    assert enclosing.getKind() == ElementKind.PACKAGE;
                 }
                 enclosing = enclosing.getEnclosingElement();
             }
