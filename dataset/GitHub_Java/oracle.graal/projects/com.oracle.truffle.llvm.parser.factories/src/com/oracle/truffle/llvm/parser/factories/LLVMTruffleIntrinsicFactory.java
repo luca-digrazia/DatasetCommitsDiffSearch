@@ -29,217 +29,33 @@
  */
 package com.oracle.truffle.llvm.parser.factories;
 
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.func.LLVMCallNode;
-import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMTruffleReadBytesFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleAddressToFunctionFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleBinaryFactory.LLVMTruffleHasSizeFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleBinaryFactory.LLVMTruffleIsBoxedFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleBinaryFactory.LLVMTruffleIsExecutableFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleBinaryFactory.LLVMTruffleIsNullFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleExecuteFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleGetArgFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleGetSizeFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleHandleToManagedFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleImportCachedFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleImportFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleInvokeFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleIsTruffleObjectFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleManagedMallocFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleManagedToHandleFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleReadFactory.LLVMTruffleReadFromIndexFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleReadFactory.LLVMTruffleReadFromNameFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleReadNBytesFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleReadNStringFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleReadStringFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleReleaseHandleFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleUnboxFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleWriteFactory.LLVMTruffleWriteToIndexFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleWriteFactory.LLVMTruffleWriteToNameFactory;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.ToLLVMNode;
-import com.oracle.truffle.llvm.runtime.types.Type;
+import java.util.HashMap;
+import java.util.Map;
 
-final class LLVMTruffleIntrinsicFactory {
+import com.oracle.truffle.api.dsl.NodeFactory;
+import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.base.LLVMNode;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallNode;
+import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleGetArgFactory;
+
+public final class LLVMTruffleIntrinsicFactory {
+
+    private static final Map<String, NodeFactory<? extends LLVMNode>> factories = new HashMap<>();
+
+    static {
+        factories.put("@truffle_get_arg", LLVMTruffleGetArgFactory.getInstance());
+    }
 
     private LLVMTruffleIntrinsicFactory() {
     }
 
-    private static Object[] append(Object value, Object[] append) {
-        Object[] newArray = new Object[append.length + 1];
-        System.arraycopy(append, 0, newArray, 1, append.length);
-        newArray[0] = value;
-        return newArray;
-    }
-
-    static LLVMExpressionNode create(String functionName, LLVMExpressionNode[] argNodes, Type[] argTypes) {
+    public static LLVMNode create(String functionName, LLVMExpressionNode[] argNodes) {
+        NodeFactory<? extends LLVMNode> factory = factories.get(functionName);
+        if (factory == null) {
+            return null;
+        }
         Object[] realArgNodes = new Object[argNodes.length - LLVMCallNode.ARG_START_INDEX];
         System.arraycopy(argNodes, LLVMCallNode.ARG_START_INDEX, realArgNodes, 0, realArgNodes.length);
-
-        Type[] realArgTypes = new Type[argNodes.length - LLVMCallNode.ARG_START_INDEX];
-        System.arraycopy(argTypes, LLVMCallNode.ARG_START_INDEX, realArgTypes, 0, realArgTypes.length);
-
-        switch (functionName) {
-            // 3 arguments
-            case "@truffle_write":
-            case "@truffle_write_i":
-            case "@truffle_write_l":
-            case "@truffle_write_c":
-            case "@truffle_write_f":
-            case "@truffle_write_d":
-            case "@truffle_write_b":
-                return LLVMTruffleWriteToNameFactory.getInstance().createNode(append(realArgTypes[2], realArgNodes));
-            case "@truffle_write_idx":
-            case "@truffle_write_idx_i":
-            case "@truffle_write_idx_l":
-            case "@truffle_write_idx_c":
-            case "@truffle_write_idx_f":
-            case "@truffle_write_idx_d":
-            case "@truffle_write_idx_b":
-                return LLVMTruffleWriteToIndexFactory.getInstance().createNode(append(realArgTypes[2], realArgNodes));
-            case "@truffle_read":
-                return LLVMTruffleReadFromNameFactory.getInstance().createNode(ToLLVMNode.createNode(TruffleObject.class), realArgNodes[0], realArgNodes[1]);
-            case "@truffle_read_i":
-                return LLVMTruffleReadFromNameFactory.getInstance().createNode(ToLLVMNode.createNode(int.class), realArgNodes[0], realArgNodes[1]);
-            case "@truffle_read_l":
-                return LLVMTruffleReadFromNameFactory.getInstance().createNode(ToLLVMNode.createNode(long.class), realArgNodes[0], realArgNodes[1]);
-            case "@truffle_read_c":
-                return LLVMTruffleReadFromNameFactory.getInstance().createNode(ToLLVMNode.createNode(byte.class), realArgNodes[0], realArgNodes[1]);
-            case "@truffle_read_f":
-                return LLVMTruffleReadFromNameFactory.getInstance().createNode(ToLLVMNode.createNode(float.class), realArgNodes[0], realArgNodes[1]);
-            case "@truffle_read_d":
-                return LLVMTruffleReadFromNameFactory.getInstance().createNode(ToLLVMNode.createNode(double.class), realArgNodes[0], realArgNodes[1]);
-            case "@truffle_read_b":
-                return LLVMTruffleReadFromNameFactory.getInstance().createNode(ToLLVMNode.createNode(boolean.class), realArgNodes[0], realArgNodes[1]);
-            case "@truffle_read_idx":
-                return LLVMTruffleReadFromIndexFactory.getInstance().createNode(ToLLVMNode.createNode(TruffleObject.class), realArgNodes[0], realArgNodes[1]);
-            case "@truffle_read_idx_i":
-                return LLVMTruffleReadFromIndexFactory.getInstance().createNode(ToLLVMNode.createNode(int.class), realArgNodes[0], realArgNodes[1]);
-            case "@truffle_read_idx_l":
-                return LLVMTruffleReadFromIndexFactory.getInstance().createNode(ToLLVMNode.createNode(long.class), realArgNodes[0], realArgNodes[1]);
-            case "@truffle_read_idx_c":
-                return LLVMTruffleReadFromIndexFactory.getInstance().createNode(ToLLVMNode.createNode(byte.class), realArgNodes[0], realArgNodes[1]);
-            case "@truffle_read_idx_f":
-                return LLVMTruffleReadFromIndexFactory.getInstance().createNode(ToLLVMNode.createNode(float.class), realArgNodes[0], realArgNodes[1]);
-            case "@truffle_read_idx_d":
-                return LLVMTruffleReadFromIndexFactory.getInstance().createNode(ToLLVMNode.createNode(double.class), realArgNodes[0], realArgNodes[1]);
-            case "@truffle_read_idx_b":
-                return LLVMTruffleReadFromIndexFactory.getInstance().createNode(ToLLVMNode.createNode(boolean.class), realArgNodes[0], realArgNodes[1]);
-            case "@truffle_unbox_i":
-                assert realArgNodes.length == 1;
-                return LLVMTruffleUnboxFactory.getInstance().createNode(ToLLVMNode.createNode(int.class), realArgNodes[0]);
-            case "@truffle_unbox_l":
-                assert realArgNodes.length == 1;
-                return LLVMTruffleUnboxFactory.getInstance().createNode(ToLLVMNode.createNode(long.class), realArgNodes[0]);
-            case "@truffle_unbox_c":
-                assert realArgNodes.length == 1;
-                return LLVMTruffleUnboxFactory.getInstance().createNode(ToLLVMNode.createNode(byte.class), realArgNodes[0]);
-            case "@truffle_unbox_f":
-                assert realArgNodes.length == 1;
-                return LLVMTruffleUnboxFactory.getInstance().createNode(ToLLVMNode.createNode(float.class), realArgNodes[0]);
-            case "@truffle_unbox_d":
-                assert realArgNodes.length == 1;
-                return LLVMTruffleUnboxFactory.getInstance().createNode(ToLLVMNode.createNode(double.class), realArgNodes[0]);
-            case "@truffle_unbox_b":
-                assert realArgNodes.length == 1;
-                return LLVMTruffleUnboxFactory.getInstance().createNode(ToLLVMNode.createNode(boolean.class), realArgNodes[0]);
-
-            case "@truffle_invoke":
-                return LLVMTruffleInvokeFactory.getInstance().createNode(getInvokeArgs(TruffleObject.class, realArgNodes, realArgTypes));
-            case "@truffle_invoke_i":
-                return LLVMTruffleInvokeFactory.getInstance().createNode(getInvokeArgs(int.class, realArgNodes, realArgTypes));
-            case "@truffle_invoke_l":
-                return LLVMTruffleInvokeFactory.getInstance().createNode(getInvokeArgs(long.class, realArgNodes, realArgTypes));
-            case "@truffle_invoke_c":
-                return LLVMTruffleInvokeFactory.getInstance().createNode(getInvokeArgs(byte.class, realArgNodes, realArgTypes));
-            case "@truffle_invoke_f":
-                return LLVMTruffleInvokeFactory.getInstance().createNode(getInvokeArgs(float.class, realArgNodes, realArgTypes));
-            case "@truffle_invoke_d":
-                return LLVMTruffleInvokeFactory.getInstance().createNode(getInvokeArgs(double.class, realArgNodes, realArgTypes));
-            case "@truffle_invoke_b":
-                return LLVMTruffleInvokeFactory.getInstance().createNode(getInvokeArgs(boolean.class, realArgNodes, realArgTypes));
-            case "@truffle_execute":
-                return LLVMTruffleExecuteFactory.getInstance().createNode(getExecuteArgs(TruffleObject.class, realArgNodes, realArgTypes));
-            case "@truffle_execute_i":
-                return LLVMTruffleExecuteFactory.getInstance().createNode(getExecuteArgs(int.class, realArgNodes, realArgTypes));
-            case "@truffle_execute_l":
-                return LLVMTruffleExecuteFactory.getInstance().createNode(getExecuteArgs(long.class, realArgNodes, realArgTypes));
-            case "@truffle_execute_c":
-                return LLVMTruffleExecuteFactory.getInstance().createNode(getExecuteArgs(byte.class, realArgNodes, realArgTypes));
-            case "@truffle_execute_f":
-                return LLVMTruffleExecuteFactory.getInstance().createNode(getExecuteArgs(float.class, realArgNodes, realArgTypes));
-            case "@truffle_execute_d":
-                return LLVMTruffleExecuteFactory.getInstance().createNode(getExecuteArgs(double.class, realArgNodes, realArgTypes));
-            case "@truffle_execute_b":
-                return LLVMTruffleExecuteFactory.getInstance().createNode(getExecuteArgs(boolean.class, realArgNodes, realArgTypes));
-            case "@truffle_get_arg":
-                return LLVMTruffleGetArgFactory.getInstance().createNode(realArgNodes);
-            case "@truffle_import":
-                return LLVMTruffleImportFactory.getInstance().createNode(realArgNodes);
-            case "@truffle_import_cached":
-                return LLVMTruffleImportCachedFactory.getInstance().createNode(realArgNodes);
-            case "@truffle_address_to_function":
-                return LLVMTruffleAddressToFunctionFactory.getInstance().createNode(realArgNodes);
-            case "@truffle_is_executable":
-                return LLVMTruffleIsExecutableFactory.getInstance().createNode(realArgNodes);
-            case "@truffle_is_null":
-                return LLVMTruffleIsNullFactory.getInstance().createNode(realArgNodes);
-            case "@truffle_has_size":
-                return LLVMTruffleHasSizeFactory.getInstance().createNode(realArgNodes);
-            case "@truffle_is_boxed":
-                return LLVMTruffleIsBoxedFactory.getInstance().createNode(realArgNodes);
-            case "@truffle_get_size":
-                return LLVMTruffleGetSizeFactory.getInstance().createNode(realArgNodes);
-            case "@truffle_read_string":
-                return LLVMTruffleReadStringFactory.getInstance().createNode(realArgNodes);
-            case "@truffle_read_n_string":
-                return LLVMTruffleReadNStringFactory.getInstance().createNode(realArgNodes);
-            case "@truffle_read_bytes":
-                return LLVMTruffleReadBytesFactory.getInstance().createNode(realArgNodes);
-            case "@truffle_read_n_bytes":
-                return LLVMTruffleReadNBytesFactory.getInstance().createNode(realArgNodes);
-            case "@truffle_is_truffle_object":
-                return LLVMTruffleIsTruffleObjectFactory.getInstance().createNode(realArgNodes);
-            case "@truffle_managed_malloc":
-                return LLVMTruffleManagedMallocFactory.getInstance().createNode(realArgNodes);
-            case "@truffle_handle_for_managed":
-                return LLVMTruffleManagedToHandleFactory.getInstance().createNode(realArgNodes);
-            case "@truffle_release_handle":
-                return LLVMTruffleReleaseHandleFactory.getInstance().createNode(realArgNodes);
-            case "@truffle_managed_from_handle":
-                return LLVMTruffleHandleToManagedFactory.getInstance().createNode(realArgNodes);
-            default:
-                return null;
-
-        }
-    }
-
-    private static Object[] getInvokeArgs(Class<?> type, Object[] realArgNodes, Type[] argTypes) {
-        // ToLLVMNode toLLVM, LLVMExpressionNode[] args, LLVMExpressionNode child0,
-        // LLVMExpressionNode child1
-        Object[] args = {ToLLVMNode.createNode(type), getArgumentNodes(realArgNodes, 2), getArgumentTypes(argTypes, 2), realArgNodes[0], realArgNodes[1]};
-        return args;
-    }
-
-    private static Object[] getExecuteArgs(Class<?> type, Object[] realArgNodes, Type[] argTypes) {
-        // ToLLVMNode toLLVM, LLVMExpressionNode[] args, LLVMExpressionNode child0
-        Object[] args = {ToLLVMNode.createNode(type), getArgumentNodes(realArgNodes, 1), getArgumentTypes(argTypes, 1), realArgNodes[0]};
-        return args;
-    }
-
-    private static LLVMExpressionNode[] getArgumentNodes(Object[] realArgNodes, int offset) {
-        LLVMExpressionNode[] args = new LLVMExpressionNode[realArgNodes.length - offset];
-        for (int i = 0; i < args.length; i++) {
-            args[i] = (LLVMExpressionNode) realArgNodes[i + offset];
-        }
-        return args;
-    }
-
-    private static Type[] getArgumentTypes(Type[] realArgNodes, int offset) {
-        Type[] types = new Type[realArgNodes.length - offset];
-        for (int i = 0; i < types.length; i++) {
-            types[i] = realArgNodes[i + offset];
-        }
-        return types;
+        return factory.createNode(realArgNodes);
     }
 }
