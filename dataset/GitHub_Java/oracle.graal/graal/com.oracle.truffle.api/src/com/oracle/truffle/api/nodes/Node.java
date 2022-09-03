@@ -269,7 +269,6 @@ public abstract class Node implements NodeInterface, Cloneable {
 
     final void replaceHelper(Node newNode, CharSequence reason) {
         CompilerAsserts.neverPartOfCompilation();
-        assert inAtomicBlock();
         if (this.getParent() == null) {
             throw new IllegalStateException("This node cannot be replaced, because it does not yet have a parent.");
         }
@@ -574,12 +573,7 @@ public abstract class Node implements NodeInterface, Cloneable {
     public final void atomic(Runnable closure) {
         RootNode rootNode = getRootNode();
         synchronized (rootNode != null ? rootNode : GIL) {
-            assert enterAtomic();
-            try {
-                closure.run();
-            } finally {
-                assert exitAtomic();
-            }
+            closure.run();
         }
     }
 
@@ -587,12 +581,7 @@ public abstract class Node implements NodeInterface, Cloneable {
         try {
             RootNode rootNode = getRootNode();
             synchronized (rootNode != null ? rootNode : GIL) {
-                assert enterAtomic();
-                try {
-                    return closure.call();
-                } finally {
-                    assert exitAtomic();
-                }
+                return closure.call();
             }
         } catch (RuntimeException | Error e) {
             throw e;
@@ -629,28 +618,4 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     private static final Object GIL = new Object();
-
-    private static final ThreadLocal<Integer> IN_ATOMIC_BLOCK = new ThreadLocal<>();
-
-    private static boolean inAtomicBlock() {
-        Integer value = IN_ATOMIC_BLOCK.get();
-        if (value == null) {
-            return false;
-        }
-        return value > 0;
-    }
-
-    private static boolean enterAtomic() {
-        Integer currentValue = IN_ATOMIC_BLOCK.get();
-        if (currentValue == null) {
-            currentValue = 0;
-        }
-        IN_ATOMIC_BLOCK.set(currentValue + 1);
-        return true;
-    }
-
-    private static boolean exitAtomic() {
-        IN_ATOMIC_BLOCK.set(IN_ATOMIC_BLOCK.get() - 1);
-        return true;
-    }
 }
