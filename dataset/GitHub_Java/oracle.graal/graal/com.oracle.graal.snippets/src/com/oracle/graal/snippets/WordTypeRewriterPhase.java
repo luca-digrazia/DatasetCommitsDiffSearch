@@ -43,7 +43,7 @@ import com.oracle.graal.snippets.Word.Operation;
  */
 public class WordTypeRewriterPhase extends Phase {
 
-    public static final String WordClassName = MetaUtil.toInternalName(Word.class.getName());
+    private static final String WordClassName = MetaUtil.toInternalName(Word.class.getName());
 
     private final Kind wordKind;
 
@@ -290,7 +290,6 @@ public class WordTypeRewriterPhase extends Phase {
     }
 
     public static boolean isWord(ValueNode node) {
-        node.inferStamp();
         if (node.stamp() == StampFactory.forWord()) {
             return true;
         }
@@ -311,7 +310,7 @@ public class WordTypeRewriterPhase extends Phase {
     }
 
     private void changeToWord(ValueNode valueNode) {
-        assert !(valueNode instanceof ConstantNode) : "boxed Word constants should not appear in a snippet graph: " + valueNode + ", stamp: " + valueNode.stamp();
+        assert !(valueNode instanceof ConstantNode);
         valueNode.setStamp(StampFactory.forKind(wordKind));
 
         // Propagate word kind.

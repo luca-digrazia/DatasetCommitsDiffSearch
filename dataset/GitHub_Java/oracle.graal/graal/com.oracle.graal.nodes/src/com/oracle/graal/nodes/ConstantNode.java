@@ -31,8 +31,8 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * The {@code ConstantNode} represents a constant such as an integer value, long, float, object
- * reference, address, etc.
+ * The {@code ConstantNode} represents a constant such as an integer value,
+ * long, float, object reference, address, etc.
  */
 @NodeInfo(shortName = "Const", nameTemplate = "Const({p#rawvalue})")
 public class ConstantNode extends BooleanNode implements LIRLowerable {
@@ -46,7 +46,6 @@ public class ConstantNode extends BooleanNode implements LIRLowerable {
 
     /**
      * Constructs a new ConstantNode representing the specified constant.
-     * 
      * @param value the constant
      */
     protected ConstantNode(Constant value, MetaAccessProvider runtime) {
@@ -77,7 +76,6 @@ public class ConstantNode extends BooleanNode implements LIRLowerable {
 
     /**
      * Returns a node for a double constant.
-     * 
      * @param d the double value for which to create the instruction
      * @param graph
      * @return a node for a double constant
@@ -88,7 +86,6 @@ public class ConstantNode extends BooleanNode implements LIRLowerable {
 
     /**
      * Returns a node for a float constant.
-     * 
      * @param f the float value for which to create the instruction
      * @param graph
      * @return a node for a float constant
@@ -99,7 +96,6 @@ public class ConstantNode extends BooleanNode implements LIRLowerable {
 
     /**
      * Returns a node for an long constant.
-     * 
      * @param i the long value for which to create the instruction
      * @param graph
      * @return a node for an long constant
@@ -110,7 +106,6 @@ public class ConstantNode extends BooleanNode implements LIRLowerable {
 
     /**
      * Returns a node for an integer constant.
-     * 
      * @param i the integer value for which to create the instruction
      * @param graph
      * @return a node for an integer constant
@@ -121,7 +116,6 @@ public class ConstantNode extends BooleanNode implements LIRLowerable {
 
     /**
      * Returns a node for a boolean constant.
-     * 
      * @param i the boolean value for which to create the instruction
      * @param graph
      * @return a node representing the boolean
@@ -132,7 +126,6 @@ public class ConstantNode extends BooleanNode implements LIRLowerable {
 
     /**
      * Returns a node for a byte constant.
-     * 
      * @param i the byte value for which to create the instruction
      * @param graph
      * @return a node representing the byte
@@ -143,7 +136,6 @@ public class ConstantNode extends BooleanNode implements LIRLowerable {
 
     /**
      * Returns a node for a char constant.
-     * 
      * @param i the char value for which to create the instruction
      * @param graph
      * @return a node representing the char
@@ -154,7 +146,6 @@ public class ConstantNode extends BooleanNode implements LIRLowerable {
 
     /**
      * Returns a node for a short constant.
-     * 
      * @param i the short value for which to create the instruction
      * @param graph
      * @return a node representing the short
@@ -165,7 +156,6 @@ public class ConstantNode extends BooleanNode implements LIRLowerable {
 
     /**
      * Returns a node for an address (jsr/ret address) constant.
-     * 
      * @param i the address value for which to create the instruction
      * @param graph
      * @return a node representing the address
@@ -176,7 +166,6 @@ public class ConstantNode extends BooleanNode implements LIRLowerable {
 
     /**
      * Returns a node for an object constant.
-     * 
      * @param o the object value for which to create the instruction
      * @param graph
      * @return a node representing the object
@@ -211,7 +200,7 @@ public class ConstantNode extends BooleanNode implements LIRLowerable {
     }
 
     public static ConstantNode defaultForKind(Kind kind, Graph graph) {
-        switch (kind) {
+        switch(kind) {
             case Boolean:
                 return ConstantNode.forBoolean(false, graph);
             case Byte:

@@ -76,7 +76,7 @@ public final class IsNullNode extends BooleanNode implements Canonicalizable, LI
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        if (tool.getObjectState(object) != null) {
+        if (tool.getVirtualState(object()) != null || tool.getMaterializedValue(object()) != null) {
             tool.replaceWithValue(ConstantNode.forBoolean(false, graph()));
         }
     }

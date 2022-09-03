@@ -181,12 +181,7 @@ public final class HotSpotResolvedPrimitiveType extends HotSpotResolvedJavaType 
     }
 
     @Override
-    public String getSourceFileName() {
-        throw GraalInternalError.shouldNotReachHere();
-    }
-
-    @Override
-    public Class< ? > mirror() {
+    public Class<?> mirror() {
         return javaMirror;
     }
 }

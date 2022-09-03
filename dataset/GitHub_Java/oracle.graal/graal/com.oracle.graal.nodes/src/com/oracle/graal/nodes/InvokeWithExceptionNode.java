@@ -33,8 +33,9 @@ import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(nameTemplate = "Invoke!#{p#targetMethod/s}")
 public class InvokeWithExceptionNode extends ControlSplitNode implements Node.IterableNodeType, Invoke, MemoryCheckpoint, LIRLowerable {
-    @Successor private BeginNode next;
-    @Successor private DispatchBeginNode exceptionEdge;
+    public static final int NORMAL_EDGE = 0;
+    public static final int EXCEPTION_EDGE = 1;
+
     @Input private final CallTargetNode callTarget;
     @Input private FrameState stateAfter;
     private final int bci;
@@ -43,8 +44,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     private final long leafGraphId;
 
     public InvokeWithExceptionNode(CallTargetNode callTarget, DispatchBeginNode exceptionEdge, int bci, long leafGraphId) {
-        super(callTarget.returnStamp());
-        this.exceptionEdge = exceptionEdge;
+        super(callTarget.returnStamp(), new BeginNode[]{null, exceptionEdge}, new double[]{1.0, 0.0});
         this.bci = bci;
         this.callTarget = callTarget;
         this.leafGraphId = leafGraphId;
@@ -53,21 +53,19 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     }
 
     public DispatchBeginNode exceptionEdge() {
-        return exceptionEdge;
+        return (DispatchBeginNode) blockSuccessor(EXCEPTION_EDGE);
     }
 
-    public void setExceptionEdge(DispatchBeginNode x) {
-        updatePredecessor(exceptionEdge, x);
-        exceptionEdge = x;
+    public void setExceptionEdge(BeginNode x) {
+        setBlockSuccessor(EXCEPTION_EDGE, x);
     }
 
     public BeginNode next() {
-        return next;
+        return blockSuccessor(NORMAL_EDGE);
     }
 
     public void setNext(BeginNode x) {
-        updatePredecessor(next, x);
-        next = x;
+        setBlockSuccessor(NORMAL_EDGE, x);
     }
 
     public CallTargetNode callTarget() {
@@ -172,9 +170,9 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     }
 
     public void killExceptionEdge() {
-        BeginNode edge = exceptionEdge();
+        BeginNode exceptionEdge = exceptionEdge();
         setExceptionEdge(null);
-        GraphUtil.killCFG(edge);
+        GraphUtil.killCFG(exceptionEdge);
     }
 
     @Override
@@ -189,24 +187,18 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
         }
         if (node == null) {
             assert kind() == Kind.Void && usages().isEmpty();
-            ((StructuredGraph) graph()).removeSplit(this, next());
+            ((StructuredGraph) graph()).removeSplit(this, NORMAL_EDGE);
         } else if (node instanceof DeoptimizeNode) {
             this.replaceAtPredecessor(node);
             this.replaceAtUsages(null);
             GraphUtil.killCFG(this);
             return;
         } else {
-            ((StructuredGraph) graph()).replaceSplit(this, node, next());
+            ((StructuredGraph) graph()).replaceSplit(this, node, NORMAL_EDGE);
         }
         call.safeDelete();
         if (state.usages().isEmpty()) {
             state.safeDelete();
         }
-    }
-
-    private static final double EXCEPTION_PROBA = 1e-5;
-    @Override
-    public double probability(BeginNode successor) {
-        return successor == next ? 1 - EXCEPTION_PROBA : EXCEPTION_PROBA;
     }
 }

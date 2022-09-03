@@ -33,7 +33,8 @@ import com.oracle.graal.nodes.type.*;
  */
 public class UnsafeCastNode extends FloatingNode implements Canonicalizable, LIRLowerable {
 
-    @Input private ValueNode object;
+    @Input
+    private ValueNode object;
 
     public ValueNode object() {
         return object;
@@ -46,20 +47,6 @@ public class UnsafeCastNode extends FloatingNode implements Canonicalizable, LIR
 
     public UnsafeCastNode(ValueNode object, ResolvedJavaType toType, boolean exactType, boolean nonNull) {
         this(object, toType.getKind() == Kind.Object ? StampFactory.object(toType, exactType, nonNull || object.stamp().nonNull()) : StampFactory.forKind(toType.getKind()));
-    }
-
-    @Override
-    public boolean inferStamp() {
-        if (kind() != Kind.Object || object().kind() != Kind.Object) {
-            return false;
-        }
-        if (object().objectStamp().alwaysNull() && objectStamp().nonNull()) {
-            // a null value flowing into a nonNull UnsafeCastNode should be guarded by a type/isNull
-            // guard, but the
-            // compiler might see this situation before the branch is deleted
-            return false;
-        }
-        return updateStamp(stamp().join(object().stamp()));
     }
 
     @Override
@@ -81,7 +68,7 @@ public class UnsafeCastNode extends FloatingNode implements Canonicalizable, LIR
             if (my.nonNull() && !other.nonNull()) {
                 return this;
             }
-            if (!my.type().isAssignableFrom(other.type())) {
+            if (my.type() != other.type() && other.type().isAssignableFrom(my.type())) {
                 return this;
             }
         }
@@ -96,20 +83,15 @@ public class UnsafeCastNode extends FloatingNode implements Canonicalizable, LIR
             generator.emitMove(generator.operand(object), result);
             generator.setResult(this, result);
         } else {
-            // The LIR only cares about the kind of an operand, not the actual type of an object. So
-            // we do not have to
+            // The LIR only cares about the kind of an operand, not the actual type of an object. So we do not have to
             // introduce a new operand when the kind is the same.
             generator.setResult(this, generator.operand(object));
         }
     }
 
     @NodeIntrinsic
-    public static native <T> T unsafeCast(Object object, @ConstantNodeParameter
-    Stamp stamp);
+    public static native <T> T unsafeCast(Object object, @ConstantNodeParameter Stamp stamp);
 
     @NodeIntrinsic
-    public static native <T> T unsafeCast(Object object, @ConstantNodeParameter
-    Class<T> toType, @ConstantNodeParameter
-    boolean exactType, @ConstantNodeParameter
-    boolean nonNull);
+    public static native <T> T unsafeCast(Object object, @ConstantNodeParameter Class<T> toType, @ConstantNodeParameter boolean exactType, @ConstantNodeParameter boolean nonNull);
 }

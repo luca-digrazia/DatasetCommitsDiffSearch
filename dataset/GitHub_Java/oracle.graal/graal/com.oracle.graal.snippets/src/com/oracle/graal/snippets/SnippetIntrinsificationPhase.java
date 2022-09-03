@@ -85,7 +85,7 @@ public class SnippetIntrinsificationPhase extends Phase {
         int count = signature.getParameterCount(false);
         Class<?>[] result = new Class< ? >[count];
         for (int i = 0; i < result.length; ++i) {
-            result[i] = getMirrorOrFail(signature.getParameterType(i, accessingClass).resolve(accessingClass), Thread.currentThread().getContextClassLoader());
+            result[i] = getMirrorOrFail(signature.getParameterType(i, accessingClass).resolve(accessingClass), null);
         }
         return result;
     }
@@ -126,7 +126,7 @@ public class SnippetIntrinsificationPhase extends Phase {
             }
 
             // Call the method
-            Constant constant = callMethod(target.getSignature().getReturnKind(), getMirrorOrFail(declaringClass, Thread.currentThread().getContextClassLoader()), target.getName(), parameterTypes, receiver, arguments);
+            Constant constant = callMethod(target.getSignature().getReturnKind(), getMirrorOrFail(declaringClass, null), target.getName(), parameterTypes, receiver, arguments);
 
             if (constant != null) {
                 // Replace the invoke with the result of the call
@@ -191,7 +191,7 @@ public class SnippetIntrinsificationPhase extends Phase {
     private static Class< ? > getNodeClass(ResolvedJavaMethod target, NodeIntrinsic intrinsic) {
         Class< ? > result = intrinsic.value();
         if (result == NodeIntrinsic.class) {
-            return getMirrorOrFail(target.getDeclaringClass(), Thread.currentThread().getContextClassLoader());
+            return getMirrorOrFail(target.getDeclaringClass(), null);
         }
         assert Node.class.isAssignableFrom(result);
         return result;
@@ -206,13 +206,13 @@ public class SnippetIntrinsificationPhase extends Phase {
                     Type boundType = typeVariable.getBounds()[0];
                     if (boundType instanceof Class && ((Class) boundType).getSuperclass() == null) {
                         // Unbound generic => try boxing elimination
-                        if (node.usages().count() == 2) {
+                        if (node.usages().size() == 2) {
                             if (node instanceof Invoke) {
                                 Invoke invokeNode = (Invoke) node;
                                 MethodCallTargetNode callTarget = invokeNode.methodCallTarget();
                                 if (pool.isBoxingMethod(callTarget.targetMethod())) {
                                     FrameState stateAfter = invokeNode.stateAfter();
-                                    assert stateAfter.usages().count() == 1;
+                                    assert stateAfter.usages().size() == 1;
                                     invokeNode.node().replaceAtUsages(null);
                                     ValueNode result = callTarget.arguments().get(0);
                                     StructuredGraph graph = (StructuredGraph) node.graph();
@@ -221,7 +221,7 @@ public class SnippetIntrinsificationPhase extends Phase {
                                         InvokeWithExceptionNode invokeWithExceptionNode = (InvokeWithExceptionNode) invokeNode;
 
                                         invokeWithExceptionNode.killExceptionEdge();
-                                        graph.removeSplit(invokeWithExceptionNode, invokeWithExceptionNode.next());
+                                        graph.removeSplit(invokeWithExceptionNode, InvokeWithExceptionNode.NORMAL_EDGE);
                                     } else {
                                         graph.removeFixed((InvokeNode) invokeNode);
                                     }
@@ -381,7 +381,7 @@ public class SnippetIntrinsificationPhase extends Phase {
                             InvokeWithExceptionNode invokeWithExceptionNode = (InvokeWithExceptionNode) invokeNode;
 
                             invokeWithExceptionNode.killExceptionEdge();
-                            graph.removeSplit(invokeWithExceptionNode, invokeWithExceptionNode.next());
+                            graph.removeSplit(invokeWithExceptionNode, InvokeWithExceptionNode.NORMAL_EDGE);
                         } else {
                             graph.removeFixed((InvokeNode) invokeNode);
                         }
