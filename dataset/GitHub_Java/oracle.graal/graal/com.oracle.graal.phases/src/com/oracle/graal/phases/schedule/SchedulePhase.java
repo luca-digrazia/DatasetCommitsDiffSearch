@@ -358,18 +358,18 @@ public final class SchedulePhase extends Phase {
 
     private void printSchedule(String desc) {
         if (dumpSchedule) {
-            Debug.printf("=== %s / %s / %s (%s) ===\n", getCFG().getStartBlock().getBeginNode().graph(), selectedStrategy, memsched, desc);
+            TTY.print("=== %s / %s / %s (%s) ===\n", getCFG().getStartBlock().getBeginNode().graph(), selectedStrategy, memsched, desc);
             for (Block b : getCFG().getBlocks()) {
-                Debug.printf("==== b: %s. ", b);
-                Debug.printf("dom: %s. ", b.getDominator());
-                Debug.printf("post-dom: %s. ", b.getPostdominator());
-                Debug.printf("preds: %s. ", b.getPredecessors());
-                Debug.printf("succs: %s ====\n", b.getSuccessors());
+                TTY.print("==== b: %s. ", b);
+                TTY.print("dom: %s. ", b.getDominator());
+                TTY.print("post-dom: %s. ", b.getPostdominator());
+                TTY.print("preds: %s. ", b.getPredecessors());
+                TTY.print("succs: %s ====\n", b.getSuccessors());
                 BlockMap<Map<LocationIdentity, Node>> killMaps = getBlockToKillMap();
                 if (killMaps != null) {
-                    Debug.printf("X block kills: \n");
+                    TTY.print("X block kills: \n");
                     for (LocationIdentity locId : killMaps.get(b).keySet()) {
-                        Debug.printf("X %s killed by %s\n", locId, killMaps.get(b).get(locId));
+                        TTY.print("X %s killed by %s\n", locId, killMaps.get(b).get(locId));
                     }
                 }
 
@@ -383,28 +383,29 @@ public final class SchedulePhase extends Phase {
                     }
                 }
             }
-            Debug.printf("\n\n");
+            TTY.print("\n\n");
+            TTY.flush();
         }
     }
 
     private static void printNode(Node n) {
-        Debug.printf("%s", n);
+        TTY.print("%s", n);
         if (n instanceof MemoryCheckpoint.Single) {
-            Debug.printf(" // kills %s", ((MemoryCheckpoint.Single) n).getLocationIdentity());
+            TTY.print(" // kills %s", ((MemoryCheckpoint.Single) n).getLocationIdentity());
         } else if (n instanceof MemoryCheckpoint.Multi) {
-            Debug.printf(" // kills ");
+            TTY.print(" // kills ");
             for (LocationIdentity locid : ((MemoryCheckpoint.Multi) n).getLocationIdentities()) {
-                Debug.printf("%s, ", locid);
+                TTY.print("%s, ", locid);
             }
         } else if (n instanceof FloatingReadNode) {
             FloatingReadNode frn = (FloatingReadNode) n;
-            Debug.printf(" // from %s", frn.location().getLocationIdentity());
-            Debug.printf(", lastAccess: %s", frn.lastLocationAccess());
-            Debug.printf(", object: %s", frn.object());
+            TTY.print(" // from %s", frn.location().getLocationIdentity());
+            TTY.print(", lastAccess: %s", frn.lastLocationAccess());
+            TTY.print(", object: %s", frn.object());
         } else if (n instanceof GuardNode) {
-            Debug.printf(", guard: %s", ((GuardNode) n).getGuard());
+            TTY.print(", guard: %s", ((GuardNode) n).getGuard());
         }
-        Debug.printf("\n");
+        TTY.print("\n");
     }
 
     public ControlFlowGraph getCFG() {
@@ -540,7 +541,7 @@ public final class SchedulePhase extends Phase {
         Block previousBlock = currentBlock;
 
         if (dumpSchedule) {
-            Debug.printf("processing %s (accessing %s): latest %s, earliest %s, upper bound %s (%s)\n", n, locid, currentBlock, earliestBlock, upperBoundBlock, upperBound);
+            TTY.print("processing %s (accessing %s): latest %s, earliest %s, upper bound %s (%s)\n", n, locid, currentBlock, earliestBlock, upperBoundBlock, upperBound);
         }
 
         int iterations = 0;
@@ -614,7 +615,7 @@ public final class SchedulePhase extends Phase {
 
     private void printIterations(int iterations, String desc) {
         if (dumpSchedule) {
-            Debug.printf("iterations: %d,  %s\n", iterations, desc);
+            TTY.print("iterations: %d,  %s\n", iterations, desc);
         }
     }
 
