@@ -164,7 +164,7 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
         ValueNode result = getReturn("testBadLoopSnippet").result();
         assertEquals(0, graph.getNodes().filter(LoadFieldNode.class).count());
         assertTrue(result instanceof ProxyNode);
-        assertTrue(((ProxyNode) result).value() instanceof ValuePhiNode);
+        assertTrue(((ProxyNode) result).value() instanceof PhiNode);
     }
 
     @SuppressWarnings("all")

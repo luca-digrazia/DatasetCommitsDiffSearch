@@ -27,6 +27,7 @@ import static com.oracle.graal.nodes.PiNode.*;
 
 import java.lang.reflect.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -47,7 +48,7 @@ public class ClassSubstitutions {
             // Class for primitive type
             return Modifier.ABSTRACT | Modifier.FINAL | Modifier.PUBLIC;
         } else {
-            return klass.readInt(klassModifierFlagsOffset(), KLASS_MODIFIER_FLAGS_LOCATION);
+            return klass.readInt(klassModifierFlagsOffset(), LocationIdentity.FINAL_LOCATION);
         }
     }
 
@@ -58,7 +59,7 @@ public class ClassSubstitutions {
         if (klass.equal(0)) {
             return false;
         } else {
-            int accessFlags = klass.readInt(klassAccessFlagsOffset(), KLASS_ACCESS_FLAGS_LOCATION);
+            int accessFlags = klass.readInt(klassAccessFlagsOffset(), LocationIdentity.FINAL_LOCATION);
             return (accessFlags & Modifier.INTERFACE) != 0;
         }
     }
@@ -81,24 +82,21 @@ public class ClassSubstitutions {
         return klass.equal(0);
     }
 
-    @MacroSubstitution(macro = ClassGetClassLoader0Node.class, isStatic = false)
-    public static native ClassLoader getClassLoader0(Class<?> thisObj);
-
     @MacroSubstitution(macro = ClassGetSuperclassNode.class, isStatic = false)
     @MethodSubstitution(isStatic = false)
     public static Class<?> getSuperclass(final Class<?> thisObj) {
         Word klass = loadWordFromObject(thisObj, klassOffset());
         if (klass.notEqual(0)) {
-            int accessFlags = klass.readInt(klassAccessFlagsOffset(), KLASS_ACCESS_FLAGS_LOCATION);
+            int accessFlags = klass.readInt(klassAccessFlagsOffset(), LocationIdentity.FINAL_LOCATION);
             if ((accessFlags & Modifier.INTERFACE) == 0) {
                 if (klassIsArray(klass)) {
                     return Object.class;
                 } else {
-                    Word superKlass = klass.readWord(klassSuperKlassOffset(), KLASS_SUPER_KLASS_LOCATION);
+                    Word superKlass = klass.readWord(klassSuperKlassOffset(), LocationIdentity.FINAL_LOCATION);
                     if (superKlass.equal(0)) {
                         return null;
                     } else {
-                        return piCastExactNonNull(superKlass.readObject(classMirrorOffset(), CLASS_MIRROR_LOCATION), Class.class);
+                        return piCast(superKlass.readObject(classMirrorOffset(), LocationIdentity.FINAL_LOCATION), Class.class, true, true);
                     }
                 }
             }
@@ -112,7 +110,7 @@ public class ClassSubstitutions {
         Word klass = loadWordFromObject(thisObj, klassOffset());
         if (klass.notEqual(0)) {
             if (klassIsArray(klass)) {
-                return piCastExactNonNull(klass.readObject(arrayKlassComponentMirrorOffset(), ARRAY_KLASS_COMPONENT_MIRROR), Class.class);
+                return piCast(klass.readObject(arrayKlassComponentMirrorOffset(), LocationIdentity.FINAL_LOCATION), Class.class, true, true);
             }
         }
         return null;
