@@ -403,8 +403,8 @@ public class Graph {
         }
 
         public void usagesDroppedToZero(Node node) {
-            head.usagesDroppedToZero(node);
-            next.usagesDroppedToZero(node);
+            head.inputChanged(node);
+            next.inputChanged(node);
         }
     }
 
