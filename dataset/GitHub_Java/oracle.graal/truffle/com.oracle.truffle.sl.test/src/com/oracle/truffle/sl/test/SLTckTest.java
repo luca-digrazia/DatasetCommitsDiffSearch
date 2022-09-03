@@ -160,12 +160,9 @@ public class SLTckTest extends TruffleTCK {
 
     @Override
     protected String multiplyCode(String firstName, String secondName) {
-        // @formatter:off
-        return
-            "function multiply(" + firstName + ", " + secondName + ") {\n" +
+        return "function multiply(" + firstName + ", " + secondName + ") {\n" +
             "  return " + firstName + " * " + secondName + ";\n" +
             "}\n";
-        // @formatter:on
     }
 
     @Override
