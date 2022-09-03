@@ -34,7 +34,7 @@ class BasicIdealGraphPrinter {
     /**
      * Edge between two nodes.
      */
-    protected static class Edge {
+    public static class Edge {
         final String from;
         final int fromIndex;
         final String to;
@@ -83,37 +83,37 @@ class BasicIdealGraphPrinter {
     /**
      * Creates a new {@link IdealGraphPrinter} that writes to the specified output stream.
      */
-    protected BasicIdealGraphPrinter(OutputStream stream) {
+    public BasicIdealGraphPrinter(OutputStream stream) {
         this.stream = new PrintStream(stream);
     }
 
     /**
      * Flushes any buffered output.
      */
-    protected void flush() {
+    public void flush() {
         stream.flush();
     }
 
     /**
      * Starts a new graph document.
      */
-    protected void begin() {
+    public void begin() {
         stream.println("<graphDocument>");
     }
 
-    protected void beginGroup() {
+    public void beginGroup() {
         stream.println("<group>");
     }
 
-    protected void beginMethod(String name, String shortName, int bci) {
+    public void beginMethod(String name, String shortName, int bci) {
         stream.printf(" <method name='%s' shortName='%s' bci='%d'>%n", escape(name), escape(shortName), bci);
     }
 
-    protected void beginBytecodes() {
+    public void beginBytecodes() {
         stream.println("  <bytecodes>\n<![CDATA[");
     }
 
-    protected void printBytecode(int bci, String mnemonic, int[] extra) {
+    public void printBytecode(int bci, String mnemonic, int[] extra) {
         stream.print(bci);
         stream.print(' ');
         stream.print(mnemonic);
@@ -126,31 +126,31 @@ class BasicIdealGraphPrinter {
         stream.println();
     }
 
-    protected void endBytecodes() {
+    public void endBytecodes() {
         stream.println("  ]]></bytecodes>");
     }
 
-    protected void endMethod() {
+    public void endMethod() {
         stream.println(" </method>");
     }
 
-    protected void beginGraph(String title) {
+    public void beginGraph(String title) {
         stream.printf(" <graph name='%s'>%n", escape(title));
     }
 
-    protected void beginProperties() {
+    public void beginProperties() {
         stream.print("<properties>");
     }
 
-    protected void printProperty(String name, String value) {
+    public void printProperty(String name, String value) {
         stream.printf("<p name='%s'>%s</p>", escape(name), escape(value));
     }
 
-    protected void endProperties() {
+    public void endProperties() {
         stream.print("</properties>");
     }
 
-    protected void printProperties(Map<String, String> properties) {
+    public void printProperties(Map<String, String> properties) {
         beginProperties();
         for (Entry<String, String> entry : properties.entrySet()) {
             printProperty(entry.getKey(), entry.getValue());
@@ -158,19 +158,19 @@ class BasicIdealGraphPrinter {
         endProperties();
     }
 
-    protected void beginNodes() {
+    public void beginNodes() {
         stream.println("  <nodes>");
     }
 
-    protected void beginNode(String id) {
+    public void beginNode(String id) {
         stream.printf("   <node id='%s'>", escape(id));
     }
 
-    protected void endNode() {
+    public void endNode() {
         stream.println("   </node>");
     }
 
-    protected void printNode(String id, Map<String, String> properties) {
+    public void printNode(String id, Map<String, String> properties) {
         beginNode(id);
         if (properties != null) {
             printProperties(properties);
@@ -178,77 +178,77 @@ class BasicIdealGraphPrinter {
         endNode();
     }
 
-    protected void endNodes() {
+    public void endNodes() {
         stream.println("  </nodes>");
     }
 
-    protected void beginEdges() {
+    public void beginEdges() {
         stream.println("  <edges>");
     }
 
-    protected void printEdge(Edge edge) {
+    public void printEdge(Edge edge) {
         stream.printf("   <edge from='%s' fromIndex='%d' to='%s' toIndex='%d' label='%s' />%n", escape(edge.from), edge.fromIndex, escape(edge.to), edge.toIndex, escape(edge.label));
     }
 
-    protected void endEdges() {
+    public void endEdges() {
         stream.println("  </edges>");
     }
 
-    protected void beginControlFlow() {
+    public void beginControlFlow() {
         stream.println("  <controlFlow>");
     }
 
-    protected void beginBlock(String name) {
+    public void beginBlock(String name) {
         stream.printf("   <block name='%s'>%n", escape(name));
     }
 
-    protected void beginSuccessors() {
+    public void beginSuccessors() {
         stream.println("    <successors>");
     }
 
-    protected void printSuccessor(String name) {
+    public void printSuccessor(String name) {
         stream.printf("     <successor name='%s'/>%n", escape(name));
     }
 
-    protected void endSuccessors() {
+    public void endSuccessors() {
         stream.println("    </successors>");
     }
 
-    protected void beginBlockNodes() {
+    public void beginBlockNodes() {
         stream.println("    <nodes>");
     }
 
-    protected void printBlockNode(String nodeId) {
+    public void printBlockNode(String nodeId) {
         stream.printf("     <node id='%s'/>%n", escape(nodeId));
     }
 
-    protected void endBlockNodes() {
+    public void endBlockNodes() {
         stream.println("    </nodes>");
     }
 
-    protected void endBlock() {
+    public void endBlock() {
         stream.println("   </block>");
     }
 
-    protected void endControlFlow() {
+    public void endControlFlow() {
         stream.println("  </controlFlow>");
     }
 
-    protected void endGraph() {
+    public void endGraph() {
         stream.println(" </graph>");
     }
 
     /**
      * Ends the current group.
      */
-    protected void endGroup() {
+    public void endGroup() {
         stream.println("</group>");
     }
 
     /**
      * Finishes the graph document and flushes the output stream.
      */
-    protected void end() {
+    public void end() {
         stream.println("</graphDocument>");
         flush();
     }

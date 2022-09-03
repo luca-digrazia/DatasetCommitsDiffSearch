@@ -50,10 +50,11 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter {
     /**
      * Starts a new group of graphs with the given name, short name and method byte code index (BCI) as properties.
      */
-    public void beginGroup(String name, String shortName, RiResolvedMethod method, int bci) {
+    public void beginGroup(String name, String shortName, RiResolvedMethod method, int bci, String origin) {
         beginGroup();
         beginProperties();
         printProperty("name", name);
+        printProperty("origin", origin);
         endProperties();
         beginMethod(name, shortName, bci);
         if (method != null) {
