@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,41 +25,42 @@ package com.oracle.max.graal.compiler.target;
 import java.lang.reflect.*;
 
 import com.oracle.max.asm.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
+import com.oracle.max.cri.xir.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.gen.*;
-import com.oracle.max.graal.compiler.globalstub.*;
 import com.oracle.max.graal.compiler.lir.*;
-import com.sun.cri.ci.*;
-import com.sun.cri.ri.*;
-import com.sun.cri.xir.*;
+import com.oracle.max.graal.compiler.stub.*;
 
 /**
- * The {@code Backend} class represents a compiler backend for C1X.
- *
- * @author Ben L. Titzer
+ * The {@code Backend} class represents a compiler backend for Graal.
  */
 public abstract class Backend {
-    public final C1XCompiler compiler;
+    public final GraalCompiler compiler;
 
-    protected Backend(C1XCompiler compiler) {
+    protected Backend(GraalCompiler compiler) {
         this.compiler = compiler;
     }
 
-    public static Backend create(CiArchitecture arch, C1XCompiler compiler) {
+    public static Backend create(CiArchitecture arch, GraalCompiler compiler) {
         String className = arch.getClass().getName().replace("com.oracle.max.asm", "com.oracle.max.graal.compiler") + "Backend";
         try {
             Class<?> c = Class.forName(className);
-            Constructor<?> cons = c.getDeclaredConstructor(C1XCompiler.class);
+            Constructor<?> cons = c.getDeclaredConstructor(GraalCompiler.class);
             return (Backend) cons.newInstance(compiler);
         } catch (Exception e) {
             throw new Error("Could not instantiate " + className, e);
         }
     }
 
-    public abstract FrameMap newFrameMap(RiMethod method, int numberOfLocks);
-    public abstract LIRGenerator newLIRGenerator(C1XCompilation compilation);
-    public abstract LIRAssembler newLIRAssembler(C1XCompilation compilation);
+    public abstract FrameMap newFrameMap(RiRuntime runtime, CiTarget target, RiRegisterConfig registerConfig);
+    public abstract LIRGenerator newLIRGenerator(GraalCompilation compilation, RiXirGenerator xir);
     public abstract AbstractAssembler newAssembler(RiRegisterConfig registerConfig);
-    public abstract GlobalStubEmitter newGlobalStubEmitter();
     public abstract CiXirAssembler newXirAssembler();
+
+    public abstract CompilerStub emit(GraalContext context, CompilerStub.Id stub);
+    public abstract CompilerStub emit(GraalContext context, CiRuntimeCall runtimeCall);
+    public abstract CompilerStub emit(GraalContext context, XirTemplate t);
+
 }

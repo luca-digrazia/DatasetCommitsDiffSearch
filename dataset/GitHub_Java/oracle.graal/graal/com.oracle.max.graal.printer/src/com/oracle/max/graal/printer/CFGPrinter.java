@@ -30,16 +30,15 @@ import java.util.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
-import com.oracle.max.graal.alloc.util.*;
+import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.alloc.*;
 import com.oracle.max.graal.compiler.alloc.Interval.UsePosList;
 import com.oracle.max.graal.compiler.gen.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.graph.Node.Verbosity;
-import com.oracle.max.graal.graph.NodeClass.NodeClassIterator;
-import com.oracle.max.graal.graph.NodeClass.Position;
+import com.oracle.max.graal.graph.Node.*;
+import com.oracle.max.graal.graph.NodeClass.*;
 import com.oracle.max.graal.java.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.calc.*;
@@ -50,21 +49,35 @@ import com.oracle.max.graal.nodes.calc.*;
 class CFGPrinter extends CompilationPrinter {
 
     public final ByteArrayOutputStream buffer;
+    private final LIR lir;
+    private LIRGenerator lirGenerator;
     public final CiTarget target;
     public final RiRuntime runtime;
-    public LIR lir;
-    public LIRGenerator lirGenerator;
 
     /**
      * Creates a control flow graph printer.
      *
      * @param buffer where the output generated via this printer shown be written
+     * @param nodeOperands
      */
-    public CFGPrinter(ByteArrayOutputStream buffer, CiTarget target, RiRuntime runtime) {
+    public CFGPrinter(ByteArrayOutputStream buffer, GraalCompilation compilation) {
         super(buffer);
         this.buffer = buffer;
+        this.lir = compilation.lir();
+        this.target = compilation.compiler.target;
+        this.runtime = compilation.compiler.runtime;
+    }
+
+    public CFGPrinter(ByteArrayOutputStream buffer, GraalCompilation compilation, CiTarget target, RiRuntime runtime) {
+        super(buffer);
+        this.buffer = buffer;
+        this.lir = compilation.lir();
         this.target = target;
         this.runtime = runtime;
+    }
+
+    public void setLIRGenerator(LIRGenerator lirGenerator) {
+        this.lirGenerator = lirGenerator;
     }
 
     /**
@@ -125,17 +138,18 @@ class CFGPrinter extends CompilationPrinter {
      *
      * @param label A label describing the compilation phase that produced the control flow graph.
      * @param blocks The list of blocks to be printed.
+     * @param printNodes If {@code true} the nodes in the block will be printed.
      */
-    public void printCFG(String label, List<? extends Block> blocks) {
+    public void printCFG(String label, List<? extends Block> blocks, boolean printNodes) {
         begin("cfg");
         out.print("name \"").print(label).println('"');
         for (Block block : blocks) {
-            printBlock(block);
+            printBlock(block, printNodes);
         }
         end("cfg");
     }
 
-    private void printBlock(Block block) {
+    private void printBlock(Block block, boolean printNodes) {
         begin("block");
 
         out.print("name \"").print(blockToString(block)).println('"');
@@ -179,7 +193,9 @@ class CFGPrinter extends CompilationPrinter {
         out.print("loop_index ").println(block.loopIndex());
         out.print("loop_depth ").println(block.loopDepth());
 
-        printNodes(block);
+        if (printNodes) {
+            printNodes(block);
+        }
 
         if (block instanceof LIRBlock) {
             printLIR((LIRBlock) block);
@@ -221,14 +237,13 @@ class CFGPrinter extends CompilationPrinter {
         } else if (node instanceof FloatingNode) {
             out.print("f ").print(HOVER_START).print("~").print(HOVER_SEP).print("floating").print(HOVER_END).println(COLUMN_END);
         }
-        out.print("tid ").print(nodeToString(node)).println(COLUMN_END);
-
-        if (lirGenerator != null) {
+        if (lirGenerator != null && lirGenerator.nodeOperands != null && node instanceof ValueNode) {
             CiValue operand = lirGenerator.nodeOperands.get(node);
             if (operand != null) {
                 out.print("result ").print(operand.toString()).println(COLUMN_END);
             }
         }
+        out.print("tid ").print(nodeToString(node)).println(COLUMN_END);
 
         if (node instanceof StateSplit) {
             StateSplit stateSplit = (StateSplit) node;
@@ -348,9 +363,6 @@ class CFGPrinter extends CompilationPrinter {
         if (block.phis != null) {
             CiValue[] results = block.phis.results();
             for (int i = 0; i < results.length; i++) {
-                if (i == 0) {
-                    out.printf("nr %4d ", block.firstLirInstructionId()).print(COLUMN_END);
-                }
                 out.print("instruction PHI ").print(results[i].toString()).print(" = (");
                 String sep = "";
                 for (LIRBlock pred : block.getLIRPredecessors()) {
@@ -464,33 +476,4 @@ class CFGPrinter extends CompilationPrinter {
         out.printf(" \"%s\"", interval.spillState());
         out.println();
     }
-
-    public void printIntervals(String label, IntervalPrinter.Interval[] intervals) {
-        begin("intervals");
-        out.println(String.format("name \"%s\"", label));
-
-        for (IntervalPrinter.Interval interval : intervals) {
-            printInterval(interval);
-        }
-
-        end("intervals");
-    }
-
-    private void printInterval(IntervalPrinter.Interval interval) {
-        out.printf("%s %s \"%s\" %s %s ", interval.name, interval.type, interval.description, interval.variable, "no");
-        if (interval.ranges.size() == 0) {
-            // One range is required in the spec, so output a dummy range.
-            out.printf("[0, 0[ ");
-        } else {
-            for (IntervalPrinter.Range range : interval.ranges) {
-                out.printf("[%d, %d[ ", range.from, range.to);
-            }
-        }
-        for (IntervalPrinter.UsePosition usePos : interval.uses) {
-            out.printf("%d %s ", usePos.pos, usePos.kind);
-        }
-        out.printf("\"%s\"", "no");
-        out.println();
-    }
 }
-

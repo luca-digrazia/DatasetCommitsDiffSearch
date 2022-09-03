@@ -37,7 +37,6 @@ import com.oracle.max.graal.compiler.alloc.Interval.SpillState;
 import com.oracle.max.graal.compiler.alloc.Interval.State;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.oracle.max.graal.compiler.lir.StandardOp.*;
 
 /**
  */
@@ -820,14 +819,14 @@ final class LinearScanWalker extends IntervalWalker {
     }
 
     void initVarsForAlloc(Interval interval) {
-        EnumMap<RegisterFlag, CiRegister[]> categorizedRegs = allocator.frameMap.registerConfig.getCategorizedAllocatableRegisters();
+        EnumMap<RegisterFlag, CiRegister[]> categorizedRegs = allocator.compilation.registerConfig.getCategorizedAllocatableRegisters();
         availableRegs = categorizedRegs.get(asVariable(interval.operand).flag);
     }
 
     static boolean isMove(LIRInstruction op, Interval from, Interval to) {
-        if (op instanceof MoveOp) {
-            MoveOp move = (MoveOp) op;
-            return isVariable(move.getInput()) && isVariable(move.getResult()) && move.getInput() == from.operand && move.getResult() == to.operand;
+        if (op instanceof MoveInstruction) {
+            MoveInstruction move = (MoveInstruction) op;
+            return isVariable(move.getSource()) && isVariable(move.getDest()) && move.getSource() == from.operand && move.getDest() == to.operand;
         }
         return false;
     }

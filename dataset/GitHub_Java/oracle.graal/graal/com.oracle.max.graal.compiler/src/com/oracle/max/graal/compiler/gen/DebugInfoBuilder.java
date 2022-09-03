@@ -27,22 +27,28 @@ import java.util.Map.Entry;
 
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.compiler.gen.LIRGenerator.LockScope;
+import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.lir.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.virtual.*;
 
 public class DebugInfoBuilder {
+    private final boolean disable;
     private final NodeMap<CiValue> nodeOperands;
 
-    public DebugInfoBuilder(NodeMap<CiValue> nodeOperands) {
+    public DebugInfoBuilder(NodeMap<CiValue> nodeOperands, boolean disable) {
         this.nodeOperands = nodeOperands;
+        this.disable = disable;
     }
 
 
     private HashMap<VirtualObjectNode, CiVirtualObject> virtualObjects = new HashMap<>();
 
     public LIRDebugInfo build(FrameState topState, LockScope locks, List<CiStackSlot> pointerSlots, LabelRef exceptionEdge) {
+        if (disable) {
+            return null;
+        }
+
         assert virtualObjects.size() == 0;
         CiFrame frame = computeFrameForState(topState, locks);
 
@@ -135,7 +141,7 @@ public class DebugInfoBuilder {
                 throw new CiBailout("unbalanced monitors: found monitor for unknown frame");
             }
         }
-        CiFrame frame = new CiFrame(caller, state.method(), state.bci, state.rethrowException(), state.duringCall(), values, state.localsSize(), state.stackSize(), numLocks);
+        CiFrame frame = new CiFrame(caller, state.method(), state.bci, state.rethrowException(), values, state.localsSize(), state.stackSize(), numLocks);
         return frame;
     }
 
@@ -154,7 +160,7 @@ public class DebugInfoBuilder {
 
         } else if (value != null) {
             CiValue operand = nodeOperands.get(value);
-            assert operand != null && (operand instanceof Variable || operand instanceof CiConstant);
+            assert operand != null && operand instanceof Variable || operand instanceof CiConstant;
             return operand;
 
         } else {

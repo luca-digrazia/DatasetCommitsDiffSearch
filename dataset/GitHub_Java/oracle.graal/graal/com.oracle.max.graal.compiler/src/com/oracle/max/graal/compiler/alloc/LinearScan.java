@@ -37,13 +37,9 @@ import com.oracle.max.graal.compiler.alloc.Interval.RegisterPriority;
 import com.oracle.max.graal.compiler.alloc.Interval.SpillState;
 import com.oracle.max.graal.compiler.gen.*;
 import com.oracle.max.graal.compiler.lir.*;
-import com.oracle.max.graal.compiler.lir.LIRInstruction.OperandFlag;
-import com.oracle.max.graal.compiler.lir.LIRInstruction.OperandMode;
-import com.oracle.max.graal.compiler.lir.LIRInstruction.ValueProcedure;
+import com.oracle.max.graal.compiler.lir.LIRInstruction.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.nodes.*;
 
 /**
  * An implementation of the linear scan register allocator algorithm described
@@ -52,7 +48,8 @@ import com.oracle.max.graal.nodes.*;
  */
 public final class LinearScan {
 
-    final CiTarget target;
+    final GraalContext context;
+    final GraalCompilation compilation;
     final RiMethod method;
     final LIR ir;
     final LIRGenerator gen;
@@ -120,16 +117,17 @@ public final class LinearScan {
     private final int firstVariableNumber;
 
 
-    public LinearScan(CiTarget target, RiResolvedMethod method, StructuredGraph graph, LIR ir, LIRGenerator gen, FrameMap frameMap) {
-        this.target = target;
-        this.method = method;
+    public LinearScan(GraalCompilation compilation, LIR ir, LIRGenerator gen, FrameMap frameMap) {
+        this.context = compilation.compiler.context;
+        this.method = compilation.method;
+        this.compilation = compilation;
         this.ir = ir;
         this.gen = gen;
         this.frameMap = frameMap;
         this.sortedBlocks = ir.linearScanOrder().toArray(new LIRBlock[ir.linearScanOrder().size()]);
-        this.registerAttributes = frameMap.registerConfig.getAttributesMap();
+        this.registerAttributes = compilation.registerConfig.getAttributesMap();
 
-        this.registers = target.arch.registers;
+        this.registers = compilation.compiler.target.arch.registers;
         this.firstVariableNumber = registers.length;
         this.variables = new ArrayList<>(ir.numVariables() * 3 / 2);
     }
@@ -233,7 +231,7 @@ public final class LinearScan {
         assert isProcessed(operand);
         assert isLegal(operand);
         int operandNumber = operandNumber(operand);
-        Interval interval = new Interval(operand, operandNumber);
+        Interval interval = new Interval(context, operand, operandNumber);
         assert operandNumber < intervalsSize;
         assert intervals[operandNumber] == null;
         intervals[operandNumber] = interval;
@@ -284,7 +282,7 @@ public final class LinearScan {
     }
 
     int numLoops() {
-        return ir.numLoops();
+        return compilation.stats.loopCount;
     }
 
     boolean isIntervalInLoop(int interval, int loop) {
@@ -1035,15 +1033,15 @@ public final class LinearScan {
         }
     }
 
-    void addRegisterHint(final LIRInstruction op, final CiValue targetValue, OperandMode mode, EnumSet<OperandFlag> flags) {
-        if (flags.contains(OperandFlag.RegisterHint) && isVariableOrRegister(targetValue)) {
+    void addRegisterHint(final LIRInstruction op, final CiValue target, OperandMode mode, EnumSet<OperandFlag> flags) {
+        if (flags.contains(OperandFlag.RegisterHint) && isVariableOrRegister(target)) {
 
-            op.forEachRegisterHint(targetValue, mode, new ValueProcedure() {
+            op.forEachRegisterHint(target, mode, new ValueProcedure() {
                 @Override
                 protected CiValue doValue(CiValue registerHint) {
                     if (isVariableOrRegister(registerHint)) {
                         Interval from = intervalFor(registerHint);
-                        Interval to = intervalFor(targetValue);
+                        Interval to = intervalFor(target);
                         if (from != null && to != null) {
                             to.setLocationHint(from);
                             if (GraalOptions.TraceLinearScanLevel >= 4) {
@@ -1063,7 +1061,8 @@ public final class LinearScan {
         intervals = new Interval[intervalsSize + INITIAL_SPLIT_INTERVALS_CAPACITY];
 
         // create a list with all caller-save registers (cpu, fpu, xmm)
-        CiRegister[] callerSaveRegs = frameMap.registerConfig.getCallerSaveRegisters();
+        RiRegisterConfig registerConfig = compilation.registerConfig;
+        CiRegister[] callerSaveRegs = registerConfig.getCallerSaveRegisters();
 
         // iterate all blocks in reverse order
         for (int i = blockCount() - 1; i >= 0; i--) {
@@ -1342,7 +1341,7 @@ public final class LinearScan {
         notPrecoloredIntervals = result.second;
 
         // allocate cpu registers
-        LinearScanWalker lsw = new LinearScanWalker(this, precoloredIntervals, notPrecoloredIntervals, !target.arch.isX86());
+        LinearScanWalker lsw = new LinearScanWalker(this, precoloredIntervals, notPrecoloredIntervals, !compilation.compiler.target.arch.isX86());
         lsw.walk();
         lsw.finishAllocation();
     }
@@ -1545,12 +1544,12 @@ public final class LinearScan {
                 }
 
                 case Float: {
-                    assert !target.arch.isX86() || reg.isFpu() : "not xmm register: " + reg;
+                    assert !compilation.compiler.target.arch.isX86() || reg.isFpu() : "not xmm register: " + reg;
                     break;
                 }
 
                 case Double: {
-                    assert !target.arch.isX86() || reg.isFpu() : "not xmm register: " + reg;
+                    assert !compilation.compiler.target.arch.isX86() || reg.isFpu() : "not xmm register: " + reg;
                     break;
                 }
 
@@ -1615,7 +1614,7 @@ public final class LinearScan {
         // intervals that have no oops inside need not to be processed.
         // to ensure a walking until the last instruction id, add a dummy interval
         // with a high operation id
-        nonOopIntervals = new Interval(CiValue.IllegalValue, -1);
+        nonOopIntervals = new Interval(context, CiValue.IllegalValue, -1);
         nonOopIntervals.addRange(Integer.MAX_VALUE - 2, Integer.MAX_VALUE - 1);
 
         return new IntervalWalker(this, oopIntervals, nonOopIntervals);
@@ -1782,15 +1781,8 @@ public final class LinearScan {
         }
     }
 
-    private static final DebugTimer timerLifetimeAnalysis = Debug.timer("LifetimeAnalysis");
-    private static final DebugTimer timerLinearScan = Debug.timer("LinearScan");
-    private static final DebugTimer timerLinearScanResolution = Debug.timer("LinearScanResolution");
-    private static final DebugTimer timerDebugInfo = Debug.timer("DebugInfo");
-    private static final DebugTimer timerControlFlowOptimizations = Debug.timer("ControlFlowOptimizations");
-
     public void allocate() {
-
-        timerLifetimeAnalysis.start();
+        context.timers.startScope("Lifetime Analysis");
         try {
             numberInstructions();
 
@@ -1802,27 +1794,27 @@ public final class LinearScan {
             buildIntervals();
             sortIntervalsBeforeAllocation();
         } finally {
-            timerLifetimeAnalysis.stop();
+            context.timers.endScope();
         }
 
-        timerLinearScan.start();
+        context.timers.startScope("Linear Scan");
         try {
             printIntervals("Before register allocation");
 
             allocateRegisters();
 
         } finally {
-            timerLinearScan.stop();
+            context.timers.endScope();
         }
 
-        timerLinearScanResolution.start();
+        context.timers.startScope("Resolution");
         try {
             resolveDataFlow();
         } finally {
-            timerLinearScanResolution.stop();
+            context.timers.endScope();
         }
 
-        timerDebugInfo.start();
+        context.timers.startScope("Create Debug Info");
         try {
             frameMap.finish();
 
@@ -1842,17 +1834,17 @@ public final class LinearScan {
                 verifyIntervals();
             }
         } finally {
-            timerDebugInfo.stop();
+            context.timers.endScope();
         }
 
-        timerControlFlowOptimizations.start();
+        context.timers.startScope("Control Flow Optimizations");
         try {
             printLir("After register number assignment", true);
             EdgeMoveOptimizer.optimize(ir.linearScanOrder());
-            ControlFlowOptimizer.optimize(ir);
+            ControlFlowOptimizer.optimize(ir, context);
             printLir("After control flow optimization", false);
         } finally {
-            timerControlFlowOptimizations.stop();
+            context.timers.endScope();
         }
     }
 
@@ -1878,7 +1870,9 @@ public final class LinearScan {
             TTY.println();
         }
 
-        Debug.dump(Arrays.copyOf(intervals, intervalsSize), label);
+        if (context.isObserved()) {
+            context.observable.fireCompilationEvent(label, compilation, this, Arrays.copyOf(intervals, intervalsSize));
+        }
     }
 
     void printLir(String label, boolean hirValid) {
@@ -1889,7 +1883,9 @@ public final class LinearScan {
             TTY.println();
         }
 
-        Debug.dump(ir, label);
+        if (context.isObserved()) {
+            context.observable.fireCompilationEvent(label, compilation, hirValid ? compilation.graph : null, compilation.lir());
+        }
     }
 
     boolean verify() {
@@ -2026,7 +2022,7 @@ public final class LinearScan {
         fixedIntervals = createUnhandledLists(IS_PRECOLORED_INTERVAL, null).first;
         // to ensure a walking until the last instruction id, add a dummy interval
         // with a high operation id
-        otherIntervals = new Interval(CiValue.IllegalValue, -1);
+        otherIntervals = new Interval(context, CiValue.IllegalValue, -1);
         otherIntervals.addRange(Integer.MAX_VALUE - 2, Integer.MAX_VALUE - 1);
         IntervalWalker iw = new IntervalWalker(this, fixedIntervals, otherIntervals);
 

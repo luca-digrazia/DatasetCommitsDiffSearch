@@ -34,7 +34,6 @@ import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.stub.*;
 import com.oracle.max.graal.compiler.stub.CompilerStub.Id;
 import com.oracle.max.graal.compiler.target.*;
-import com.oracle.max.graal.nodes.*;
 
 /**
  * The {@code X86Backend} class represents the backend for the AMD64 architecture.
@@ -55,8 +54,8 @@ public class AMD64Backend extends Backend {
     }
 
     @Override
-    public FrameMap newFrameMap(GraalCompilation compilation) {
-        return new FrameMap(compilation.compiler.runtime, compilation.compiler.target, compilation.registerConfig);
+    public FrameMap newFrameMap(RiRuntime runtime, CiTarget target, RiRegisterConfig registerConfig) {
+        return new FrameMap(runtime, target, registerConfig);
     }
 
     @Override
@@ -71,7 +70,7 @@ public class AMD64Backend extends Backend {
 
     @Override
     public CompilerStub emit(GraalContext context, Id stub) {
-        final GraalCompilation comp = new GraalCompilation(context, compiler, null, new StructuredGraph(), -1, null, DebugInfoLevel.FULL);
+        final GraalCompilation comp = new GraalCompilation(context, compiler, null, -1, null, DebugInfoLevel.FULL);
         try {
             return new AMD64CompilerStubEmitter(comp, stub.arguments, stub.resultKind).emit(stub);
         } finally {
@@ -81,7 +80,7 @@ public class AMD64Backend extends Backend {
 
     @Override
     public CompilerStub emit(GraalContext context, CiRuntimeCall rtCall) {
-        final GraalCompilation comp = new GraalCompilation(context, compiler, null, new StructuredGraph(), -1, null, DebugInfoLevel.FULL);
+        final GraalCompilation comp = new GraalCompilation(context, compiler, null, -1, null, DebugInfoLevel.FULL);
         try {
             return new AMD64CompilerStubEmitter(comp, rtCall.arguments, rtCall.resultKind).emit(rtCall);
         } finally {
@@ -101,7 +100,7 @@ public class AMD64Backend extends Backend {
 
     @Override
     public CompilerStub emit(GraalContext context, XirTemplate t) {
-        final GraalCompilation comp = new GraalCompilation(context, compiler, null, new StructuredGraph(), -1, null, DebugInfoLevel.FULL);
+        final GraalCompilation comp = new GraalCompilation(context, compiler, null, -1, null, DebugInfoLevel.FULL);
         try {
             return new AMD64CompilerStubEmitter(comp, getArgumentKinds(t), t.resultOperand.kind).emit(t);
         } finally {

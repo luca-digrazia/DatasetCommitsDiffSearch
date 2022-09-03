@@ -23,13 +23,11 @@
 
 package com.oracle.max.graal.compiler;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
-
 import java.util.*;
 
 import com.oracle.max.asm.*;
 import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ci.CiCompiler.*;
+import com.oracle.max.cri.ci.CiCompiler.DebugInfoLevel;
 import com.oracle.max.cri.ri.*;
 import com.oracle.max.cri.xir.*;
 import com.oracle.max.criutils.*;
@@ -44,7 +42,6 @@ import com.oracle.max.graal.compiler.phases.PhasePlan.PhasePosition;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
-import com.oracle.max.graal.nodes.virtual.*;
 
 /**
  * This class encapsulates global information about the compilation of a particular method,
@@ -59,7 +56,6 @@ public final class GraalCompilation {
 
     public final StructuredGraph graph;
     public final CiAssumptions assumptions = GraalOptions.OptAssumptions ? new CiAssumptions() : null;
-    public NodeMap<CiValue> nodeOperands;
 
     private FrameMap frameMap;
 
@@ -71,12 +67,11 @@ public final class GraalCompilation {
      * @param context the compilation context
      * @param compiler the compiler
      * @param method the method to be compiled or {@code null} if generating code for a stub
-     * @param graph the initial graph
      * @param osrBCI the bytecode index for on-stack replacement, if requested
      * @param stats externally supplied statistics object to be used if not {@code null}
      * @param debugInfoLevel TODO
      */
-    public GraalCompilation(GraalContext context, GraalCompiler compiler, RiResolvedMethod method, StructuredGraph graph, int osrBCI, CiStatistics stats, DebugInfoLevel debugInfoLevel) {
+    private GraalCompilation(GraalContext context, GraalCompiler compiler, RiResolvedMethod method, StructuredGraph graph, int osrBCI, CiStatistics stats, DebugInfoLevel debugInfoLevel) {
         if (osrBCI != -1) {
             throw new CiBailout("No OSR supported");
         }
@@ -92,27 +87,17 @@ public final class GraalCompilation {
         }
     }
 
+    public GraalCompilation(GraalContext context, GraalCompiler compiler, RiResolvedMethod method, int osrBCI, CiStatistics stats, DebugInfoLevel debugInfoLevel) {
+        this(context, compiler, method, new StructuredGraph(method), osrBCI, stats, debugInfoLevel);
+    }
+
+
     public void close() {
         // TODO(tw): Check if we can delete this method.
     }
 
     public LIR lir() {
         return lir;
-    }
-
-    public CiValue operand(ValueNode valueNode) {
-        if (nodeOperands == null) {
-            return null;
-        }
-        return nodeOperands.get(valueNode);
-    }
-
-    public void setOperand(ValueNode valueNode, CiValue operand) {
-        assert operand(valueNode) == null : "operand cannot be set twice";
-        assert operand != null && isLegal(operand) : "operand must be legal";
-        assert operand.kind.stackKind() == valueNode.kind();
-        assert !(valueNode instanceof VirtualObjectNode);
-        nodeOperands.set(valueNode, operand);
     }
 
     /**
@@ -310,7 +295,7 @@ public final class GraalCompilation {
     }
 
     public void initFrameMap() {
-        frameMap = this.compiler.backend.newFrameMap(this);
+        frameMap = this.compiler.backend.newFrameMap(compiler.runtime, compiler.target, registerConfig);
     }
 
     private void emitLIR(RiXirGenerator xir) {
@@ -318,7 +303,6 @@ public final class GraalCompilation {
         try {
             if (GraalOptions.GenLIR) {
                 context().timers.startScope("Create LIR");
-                nodeOperands = graph.createNodeMap();
                 LIRGenerator lirGenerator = null;
                 try {
                     initFrameMap();
