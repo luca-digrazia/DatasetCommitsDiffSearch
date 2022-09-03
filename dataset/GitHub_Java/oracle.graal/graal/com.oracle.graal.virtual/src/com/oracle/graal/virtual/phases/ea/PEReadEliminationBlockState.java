@@ -33,23 +33,20 @@ public class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadE
 
     final HashMap<ReadCacheEntry, ValueNode> readCache;
 
-    static final class ReadCacheEntry {
+    static class ReadCacheEntry {
 
         public final LocationIdentity identity;
         public final ValueNode object;
-        public final int index;
 
-        public ReadCacheEntry(LocationIdentity identity, ValueNode object, int index) {
+        public ReadCacheEntry(LocationIdentity identity, ValueNode object) {
             this.identity = identity;
             this.object = object;
-            this.index = index;
         }
 
         @Override
         public int hashCode() {
             int result = 31 + ((identity == null) ? 0 : identity.hashCode());
-            result = 31 * result + ((object == null) ? 0 : object.hashCode());
-            return result * 31 + index;
+            return 31 * result + ((object == null) ? 0 : object.hashCode());
         }
 
         @Override
@@ -63,7 +60,7 @@ public class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadE
 
         @Override
         public String toString() {
-            return index == -1 ? (object + ":" + identity) : (object + "[" + index + "]:" + identity);
+            return object + ":" + identity;
         }
     }
 
@@ -86,7 +83,7 @@ public class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadE
         if (virtual instanceof VirtualInstanceNode) {
             VirtualInstanceNode instance = (VirtualInstanceNode) virtual;
             for (int i = 0; i < instance.entryCount(); i++) {
-                readCache.put(new ReadCacheEntry(instance.field(i).getLocationIdentity(), representation, -1), values.get(i));
+                readCache.put(new ReadCacheEntry(instance.field(i).getLocationIdentity(), representation), values.get(i));
             }
         }
     }
@@ -99,7 +96,7 @@ public class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadE
         return super.equivalentTo(other);
     }
 
-    public void addReadCache(ValueNode object, LocationIdentity identity, int index, ValueNode value, PartialEscapeClosure<?> closure) {
+    public void addReadCache(ValueNode object, LocationIdentity identity, ValueNode value, PartialEscapeClosure<?> closure) {
         ValueNode cacheObject;
         ObjectState obj = closure.getObjectState(this, object);
         if (obj != null) {
@@ -108,19 +105,19 @@ public class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadE
         } else {
             cacheObject = object;
         }
-        readCache.put(new ReadCacheEntry(identity, cacheObject, index), value);
+        readCache.put(new ReadCacheEntry(identity, cacheObject), value);
     }
 
-    public ValueNode getReadCache(ValueNode object, LocationIdentity identity, int index, PartialEscapeClosure<?> closure) {
+    public ValueNode getReadCache(ValueNode object, LocationIdentity identity, PartialEscapeClosure<?> closure) {
         ValueNode cacheObject;
         ObjectState obj = closure.getObjectState(this, object);
         if (obj != null) {
-            assert !obj.isVirtual() : object;
+            assert !obj.isVirtual();
             cacheObject = obj.getMaterializedValue();
         } else {
             cacheObject = object;
         }
-        ValueNode cacheValue = readCache.get(new ReadCacheEntry(identity, cacheObject, index));
+        ValueNode cacheValue = readCache.get(new ReadCacheEntry(identity, cacheObject));
         obj = closure.getObjectState(this, cacheValue);
         if (obj != null) {
             assert !obj.isVirtual();
@@ -136,11 +133,11 @@ public class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadE
         readCache.clear();
     }
 
-    public void killReadCache(LocationIdentity identity, int index) {
+    public void killReadCache(LocationIdentity identity) {
         Iterator<Map.Entry<ReadCacheEntry, ValueNode>> iter = readCache.entrySet().iterator();
         while (iter.hasNext()) {
-            ReadCacheEntry entry = iter.next().getKey();
-            if (entry.identity.equals(identity) && (index == -1 || entry.index == -1 || index == entry.index)) {
+            Map.Entry<ReadCacheEntry, ValueNode> entry = iter.next();
+            if (entry.getKey().identity.equals(identity)) {
                 iter.remove();
             }
         }

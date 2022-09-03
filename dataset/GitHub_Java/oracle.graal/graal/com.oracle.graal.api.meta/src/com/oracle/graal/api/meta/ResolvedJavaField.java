@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,37 +26,50 @@ import java.lang.annotation.*;
 import java.lang.reflect.*;
 
 /**
- * Represents a reference to a resolved Java field. Fields, like methods and types, are
- * resolved through {@link ConstantPool constant pools}.
+ * Represents a reference to a resolved Java field. Fields, like methods and types, are resolved
+ * through {@link ConstantPool constant pools}.
  */
-public interface ResolvedJavaField extends JavaField {
+public interface ResolvedJavaField extends JavaField, ModifiersProvider {
 
     /**
-     * Gets the access flags for this field. Only the flags specified in the JVM specification
-     * will be included in the returned mask. The utility methods in the {@link Modifier} class
-     * should be used to query the returned mask for the presence/absence of individual flags.
-     * @return the mask of JVM defined field access flags defined for this field
+     * {@inheritDoc}
+     * <p>
+     * Only the {@linkplain Modifier#fieldModifiers() field flags} specified in the JVM
+     * specification will be included in the returned mask.
      */
-    int accessFlags();
+    int getModifiers();
 
     /**
-     * Gets the constant value of this field if available.
-     * @param receiver object from which this field's value is to be read. This value is ignored if this field is static.
-     * @return the constant value of this field or {@code null} if the constant value is not available
+     * Determines if this field was injected by the VM. Such a field, for example, is not derived
+     * from a class file.
      */
-    Constant constantValue(Constant receiver);
+    boolean isInternal();
 
     /**
-     * Gets the holder of this field as a compiler-runtime interface type.
-     * @return the holder of this field
+     * Determines if this field is a synthetic field as defined by the Java Language Specification.
      */
-    ResolvedJavaType holder();
+    boolean isSynthetic();
 
     /**
-     * Returns this field's annotation of a specified type.
+     * Returns the {@link ResolvedJavaType} object representing the class or interface that declares
+     * this field.
+     */
+    ResolvedJavaType getDeclaringClass();
+
+    /**
+     * Returns the annotation for the specified type of this field, if such an annotation is
+     * present.
      *
      * @param annotationClass the Class object corresponding to the annotation type
-     * @return the annotation of type {@code annotationClass} for this field if present, else null
+     * @return this element's annotation for the specified annotation type if present on this field,
+     *         else {@code null}
      */
     <T extends Annotation> T getAnnotation(Class<T> annotationClass);
+
+    /**
+     * Returns an object representing the unique location identity of this resolved Java field.
+     * 
+     * @return the location identity of the field
+     */
+    LocationIdentity getLocationIdentity();
 }
