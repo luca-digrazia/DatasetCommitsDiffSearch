@@ -47,7 +47,6 @@ import com.oracle.graal.nodes.PiNode;
 import com.oracle.graal.nodes.StateSplit;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
-import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.calc.IsNullNode;
 import com.oracle.graal.nodes.cfg.Block;
@@ -260,9 +259,8 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
     @Override
     protected void run(StructuredGraph graph, MidTierContext context) {
         if (graph.getGuardsStage().allowsFloatingGuards()) {
-            SchedulePhase schedulePhase = new SchedulePhase(SchedulingStrategy.EARLIEST);
-            schedulePhase.apply(graph);
-            ScheduleResult schedule = graph.getLastSchedule();
+            SchedulePhase schedule = new SchedulePhase(SchedulingStrategy.EARLIEST);
+            schedule.apply(graph);
 
             for (Block block : schedule.getCFG().getBlocks()) {
                 processBlock(block, schedule, context != null ? context.getTarget().implicitNullCheckLimit : 0);
@@ -278,7 +276,7 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
         return true;
     }
 
-    private static void processBlock(Block block, ScheduleResult schedule, int implicitNullCheckLimit) {
+    private static void processBlock(Block block, SchedulePhase schedule, int implicitNullCheckLimit) {
         if (OptImplicitNullChecks.getValue() && implicitNullCheckLimit > 0) {
             new UseImplicitNullChecks(implicitNullCheckLimit).processNodes(block, schedule);
         }

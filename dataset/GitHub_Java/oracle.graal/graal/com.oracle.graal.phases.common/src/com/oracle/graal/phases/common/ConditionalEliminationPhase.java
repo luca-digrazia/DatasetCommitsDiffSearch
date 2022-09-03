@@ -383,10 +383,10 @@ public class ConditionalEliminationPhase extends Phase {
         @Override
         public void finished() {
             if (trueConstant.hasNoUsages()) {
-                trueConstant.safeDelete();
+                graph.removeFloating(trueConstant);
             }
             if (falseConstant.hasNoUsages()) {
-                falseConstant.safeDelete();
+                graph.removeFloating(falseConstant);
             }
             super.finished();
         }

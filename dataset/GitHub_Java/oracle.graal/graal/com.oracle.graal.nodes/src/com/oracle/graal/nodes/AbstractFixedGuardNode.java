@@ -22,31 +22,49 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.util.*;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaConstant;
 
-public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNode implements Simplifiable, GuardingNode {
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Simplifiable;
+import com.oracle.graal.graph.spi.SimplifierTool;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodeinfo.Verbosity;
+import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.nodes.util.GraphUtil;
 
-    @Input private LogicNode condition;
-    private final DeoptimizationReason reason;
-    private final DeoptimizationAction action;
-    private boolean negated;
+@NodeInfo
+public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNode implements Simplifiable, GuardingNode, DeoptimizingGuard {
 
-    public LogicNode condition() {
+    public static final NodeClass<AbstractFixedGuardNode> TYPE = NodeClass.create(AbstractFixedGuardNode.class);
+    @Input(InputType.Condition) protected LogicNode condition;
+    protected final DeoptimizationReason reason;
+    protected final DeoptimizationAction action;
+    protected JavaConstant speculation;
+    protected boolean negated;
+
+    public LogicNode getCondition() {
         return condition;
     }
 
-    public void setCondition(LogicNode x) {
-        updateUsages(condition, x);
-        condition = x;
+    public LogicNode condition() {
+        return getCondition();
     }
 
-    protected AbstractFixedGuardNode(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated) {
-        super(StampFactory.dependency());
+    public void setCondition(LogicNode x, boolean negated) {
+        updateUsages(condition, x);
+        condition = x;
+        this.negated = negated;
+    }
+
+    protected AbstractFixedGuardNode(NodeClass<? extends AbstractFixedGuardNode> c, LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, JavaConstant speculation,
+                    boolean negated) {
+        super(c, StampFactory.forVoid());
         this.action = action;
+        this.speculation = speculation;
         this.negated = negated;
         this.condition = condition;
         this.reason = deoptReason;
@@ -58,6 +76,10 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
 
     public DeoptimizationAction getAction() {
         return action;
+    }
+
+    public JavaConstant getSpeculation() {
+        return speculation;
     }
 
     public boolean isNegated() {
@@ -77,23 +99,22 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
     public void simplify(SimplifierTool tool) {
         while (condition instanceof LogicNegationNode) {
             LogicNegationNode negation = (LogicNegationNode) condition;
-            setCondition(negation.getInput());
-            negated = !negated;
+            setCondition(negation.getValue(), !negated);
         }
     }
 
     public DeoptimizeNode lowerToIf() {
-        FixedNode next = next();
+        FixedNode currentNext = next();
         setNext(null);
-        DeoptimizeNode deopt = graph().add(new DeoptimizeNode(action, reason));
-        deopt.setDeoptimizationState(getDeoptimizationState());
+        DeoptimizeNode deopt = graph().add(new DeoptimizeNode(action, reason, speculation));
+        deopt.setStateBefore(stateBefore());
         IfNode ifNode;
         AbstractBeginNode noDeoptSuccessor;
         if (negated) {
-            ifNode = graph().add(new IfNode(condition, deopt, next, 0));
+            ifNode = graph().add(new IfNode(condition, deopt, currentNext, 0));
             noDeoptSuccessor = ifNode.falseSuccessor();
         } else {
-            ifNode = graph().add(new IfNode(condition, next, deopt, 1));
+            ifNode = graph().add(new IfNode(condition, currentNext, deopt, 1));
             noDeoptSuccessor = ifNode.trueSuccessor();
         }
         ((FixedWithNextNode) predecessor()).setNext(ifNode);

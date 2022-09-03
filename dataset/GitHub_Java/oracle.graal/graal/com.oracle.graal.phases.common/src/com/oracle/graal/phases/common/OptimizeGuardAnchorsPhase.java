@@ -24,12 +24,12 @@ package com.oracle.graal.phases.common;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodePosIterator;
 import com.oracle.graal.graph.iterators.NodeIterable;
 import com.oracle.graal.nodes.AbstractBeginNode;
 import com.oracle.graal.nodes.ControlSplitNode;
@@ -42,12 +42,22 @@ import com.oracle.graal.nodes.extended.AnchoringNode;
 import com.oracle.graal.phases.Phase;
 
 public class OptimizeGuardAnchorsPhase extends Phase {
-    private static final DebugCounter counterGuardsAnchorOptimized = Debug.counter("GuardsAnchorOptimized");
-    private static final DebugCounter counterGuardsOptimizedAtSplit = Debug.counter("GuardsOptimizedAtSplit");
+    private static final DebugMetric metricGuardsAnchorOptimized = Debug.metric("GuardsAnchorOptimized");
+    private static final DebugMetric metricGuardsOptimizedAtSplit = Debug.metric("GuardsOptimizedAtSplit");
 
-    public static class LazyCFG extends LazyValue<ControlFlowGraph> {
+    public static class LazyCFG {
+        private ControlFlowGraph cfg;
+        private StructuredGraph graph;
+
         public LazyCFG(StructuredGraph graph) {
-            super(() -> ControlFlowGraph.compute(graph, true, false, true, true));
+            this.graph = graph;
+        }
+
+        public ControlFlowGraph get() {
+            if (cfg == null) {
+                cfg = ControlFlowGraph.compute(graph, true, false, true, true);
+            }
+            return cfg;
         }
     }
 
@@ -68,7 +78,7 @@ public class OptimizeGuardAnchorsPhase extends Phase {
                         for (GuardNode guard : guards.snapshot()) {
                             guard.setAnchor(newAnchor);
                         }
-                        counterGuardsAnchorOptimized.increment();
+                        metricGuardsAnchorOptimized.increment();
                     }
                 }
             }
@@ -122,7 +132,7 @@ public class OptimizeGuardAnchorsPhase extends Phase {
                     otherGuard.replaceAndDelete(newGuard);
                 }
                 guard.replaceAndDelete(newGuard);
-                counterGuardsOptimizedAtSplit.increment();
+                metricGuardsOptimizedAtSplit.increment();
             }
             otherGuards.clear();
         }
@@ -134,7 +144,7 @@ public class OptimizeGuardAnchorsPhase extends Phase {
     }
 
     private static AbstractBeginNode findMinimumUsagesSuccessor(ControlSplitNode controlSplit) {
-        Iterator<Node> successors = controlSplit.successors().iterator();
+        NodePosIterator successors = controlSplit.successors().iterator();
         AbstractBeginNode min = (AbstractBeginNode) successors.next();
         int minUsages = min.getUsageCount();
         while (successors.hasNext()) {

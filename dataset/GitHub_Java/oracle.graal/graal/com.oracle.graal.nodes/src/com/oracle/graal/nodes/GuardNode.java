@@ -22,24 +22,20 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.nodeinfo.InputType.Condition;
-import static com.oracle.graal.nodeinfo.InputType.Guard;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaConstant;
 
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.Canonicalizable;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodeinfo.Verbosity;
 import com.oracle.graal.nodes.extended.AnchoringNode;
 import com.oracle.graal.nodes.extended.GuardingNode;
-
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
 
 /**
  * A guard is a node that deoptimizes based on a conditional expression. Guards are not attached to
@@ -53,11 +49,11 @@ import jdk.vm.ci.meta.JavaConstant;
  * maximum flexibility for the guard node and guarantees that deoptimization occurs only if the
  * control flow would have reached the guarded node (without taking exceptions into account).
  */
-@NodeInfo(nameTemplate = "Guard(!={p#negated}) {p#reason/s}", allowedUsageTypes = {Guard}, size = SIZE_1, cycles = CYCLES_1)
+@NodeInfo(nameTemplate = "Guard(!={p#negated}) {p#reason/s}", allowedUsageTypes = {InputType.Guard})
 public class GuardNode extends FloatingAnchoredNode implements Canonicalizable, GuardingNode, DeoptimizingGuard {
 
     public static final NodeClass<GuardNode> TYPE = NodeClass.create(GuardNode.class);
-    @Input(Condition) protected LogicNode condition;
+    @Input(InputType.Condition) protected LogicNode condition;
     protected final DeoptimizationReason reason;
     protected JavaConstant speculation;
     protected DeoptimizationAction action;
@@ -67,8 +63,7 @@ public class GuardNode extends FloatingAnchoredNode implements Canonicalizable, 
         this(TYPE, condition, anchor, reason, action, negated, speculation);
     }
 
-    protected GuardNode(NodeClass<? extends GuardNode> c, LogicNode condition, AnchoringNode anchor, DeoptimizationReason reason, DeoptimizationAction action, boolean negated,
-                    JavaConstant speculation) {
+    protected GuardNode(NodeClass<? extends GuardNode> c, LogicNode condition, AnchoringNode anchor, DeoptimizationReason reason, DeoptimizationAction action, boolean negated, JavaConstant speculation) {
         super(c, StampFactory.forVoid(), anchor);
         this.condition = condition;
         this.reason = reason;
@@ -80,34 +75,28 @@ public class GuardNode extends FloatingAnchoredNode implements Canonicalizable, 
     /**
      * The instruction that produces the tested boolean value.
      */
-    @Override
     public LogicNode getCondition() {
         return condition;
     }
 
-    @Override
     public void setCondition(LogicNode x, boolean negated) {
         updateUsages(condition, x);
         condition = x;
         this.negated = negated;
     }
 
-    @Override
     public boolean isNegated() {
         return negated;
     }
 
-    @Override
     public DeoptimizationReason getReason() {
         return reason;
     }
 
-    @Override
     public DeoptimizationAction getAction() {
         return action;
     }
 
-    @Override
     public JavaConstant getSpeculation() {
         return speculation;
     }
