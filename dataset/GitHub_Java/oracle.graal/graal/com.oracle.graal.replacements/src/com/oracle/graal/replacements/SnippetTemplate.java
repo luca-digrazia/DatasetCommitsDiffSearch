@@ -22,12 +22,12 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.compiler.common.GraalOptions.UseGraalInstrumentation;
+import static com.oracle.graal.compiler.common.GraalOptions.UseGraalQueries;
 import static com.oracle.graal.debug.Debug.applyFormattingFlagsAndWidth;
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.Required;
 import static com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates.UseSnippetTemplateCache;
 import static java.util.FormattableFlags.ALTERNATE;
-import static jdk.vm.ci.meta.LocationIdentity.any;
+import static jdk.internal.jvmci.meta.LocationIdentity.any;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.Method;
@@ -46,17 +46,17 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.Local;
-import jdk.vm.ci.meta.LocationIdentity;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.Signature;
+import jdk.internal.jvmci.code.TargetDescription;
+import jdk.internal.jvmci.common.JVMCIError;
+import jdk.internal.jvmci.meta.Constant;
+import jdk.internal.jvmci.meta.JavaConstant;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.Local;
+import jdk.internal.jvmci.meta.LocationIdentity;
+import jdk.internal.jvmci.meta.MetaAccessProvider;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.meta.Signature;
 
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.compiler.common.type.Stamp;
@@ -73,8 +73,8 @@ import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.NodePosIterator;
 import com.oracle.graal.graph.Position;
 import com.oracle.graal.loop.LoopEx;
+import com.oracle.graal.loop.LoopTransformations;
 import com.oracle.graal.loop.LoopsData;
-import com.oracle.graal.loop.phases.LoopTransformations;
 import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.AbstractBeginNode;
@@ -118,7 +118,7 @@ import com.oracle.graal.phases.common.FloatingReadPhase.MemoryMapImpl;
 import com.oracle.graal.phases.common.GuardLoweringPhase;
 import com.oracle.graal.phases.common.LoweringPhase;
 import com.oracle.graal.phases.common.inlining.InliningUtil;
-import com.oracle.graal.phases.common.instrumentation.nodes.InstrumentationNode;
+import com.oracle.graal.phases.common.query.nodes.InstrumentationNode;
 import com.oracle.graal.phases.tiers.PhaseContext;
 import com.oracle.graal.phases.util.Providers;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
@@ -221,7 +221,7 @@ public class SnippetTemplate {
         void notifyNewTemplate() {
             templateCount++;
             if (templateCount == MaxTemplatesPerSnippet) {
-                TTY.printf("WARNING: Exceeded %d templates for snippet %s%n" + "         Adjust maximum with %s system property%n", MaxTemplatesPerSnippet, method.format("%h.%n(%p)"),
+                TTY.print("WARNING: Exceeded %d templates for snippet %s%n" + "         Adjust maximum with %s system property%n", MaxTemplatesPerSnippet, method.format("%h.%n(%p)"),
                                 MAX_TEMPLATES_PER_SNIPPET_PROPERTY_NAME);
             }
         }
@@ -655,6 +655,9 @@ public class SnippetTemplate {
         final StructuredGraph snippetCopy = new StructuredGraph(snippetGraph.name, snippetGraph.method(), AllowAssumptions.NO);
 
         try (Debug.Scope scope = Debug.scope("SpecializeSnippet", snippetCopy)) {
+            if (!snippetGraph.isInlinedMethodRecordingEnabled()) {
+                snippetCopy.disableInlinedMethodRecording();
+            }
             if (!snippetGraph.isUnsafeAccessTrackingEnabled()) {
                 snippetCopy.disableUnsafeAccessTracking();
             }
@@ -1335,7 +1338,7 @@ public class SnippetTemplate {
 
             updateStamps(replacee, duplicates);
 
-            if (UseGraalInstrumentation.getValue()) {
+            if (UseGraalQueries.getValue()) {
                 for (InstrumentationNode instrumentation : replaceeGraph.getNodes().filter(InstrumentationNode.class)) {
                     if (instrumentation.target() == replacee) {
                         if (instrumentation.offset() < 0) {

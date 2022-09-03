@@ -23,14 +23,14 @@
 package com.oracle.graal.phases.common.inlining.info.elem;
 
 import static com.oracle.graal.compiler.common.GraalOptions.OptCanonicalizer;
-import static com.oracle.graal.compiler.common.GraalOptions.UseGraalInstrumentation;
+import static com.oracle.graal.compiler.common.GraalOptions.UseGraalQueries;
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.Optional;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.meta.Constant;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
 
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.debug.Debug;
@@ -45,7 +45,7 @@ import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
 import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
 import com.oracle.graal.phases.common.inlining.InliningUtil;
-import com.oracle.graal.phases.common.instrumentation.ExtractInstrumentationPhase;
+import com.oracle.graal.phases.common.query.ExtractICGPhase;
 import com.oracle.graal.phases.graph.FixedNodeProbabilityCache;
 import com.oracle.graal.phases.tiers.HighTierContext;
 
@@ -164,7 +164,7 @@ public class InlineableGraph implements Inlineable {
                     Constant constant = arg.asConstant();
                     parameterUsages = trackParameterUsages(param, parameterUsages);
                     // collect param usages before replacing the param
-                    param.replaceAtUsagesAndDelete(ConstantNode.forConstant(arg.stamp(), constant, context.getMetaAccess(), graph));
+                    graph.replaceFloating(param, ConstantNode.forConstant(arg.stamp(), constant, context.getMetaAccess(), graph));
                     // param-node gone, leaving a gap in the sequence given by param.index()
                 } else {
                     Stamp impro = improvedStamp(arg, param);
@@ -196,6 +196,13 @@ public class InlineableGraph implements Inlineable {
     private static StructuredGraph parseBytecodes(ResolvedJavaMethod method, HighTierContext context, CanonicalizerPhase canonicalizer, StructuredGraph caller) {
         StructuredGraph newGraph = new StructuredGraph(method, AllowAssumptions.from(caller.getAssumptions() != null));
         try (Debug.Scope s = Debug.scope("InlineGraph", newGraph)) {
+            if (!caller.isInlinedMethodRecordingEnabled()) {
+                // Don't record inlined methods in the callee if
+                // the caller doesn't want them. This decision is
+                // preserved in the graph cache (if used) which is
+                // ok since the graph cache is compilation local.
+                newGraph.disableInlinedMethodRecording();
+            }
             if (!caller.isUnsafeAccessTrackingEnabled()) {
                 newGraph.disableUnsafeAccessTracking();
             }
@@ -204,8 +211,8 @@ public class InlineableGraph implements Inlineable {
             }
             assert newGraph.start().next() != null : "graph needs to be populated by the GraphBuilderSuite " + method + ", " + method.canBeInlined();
 
-            if (UseGraalInstrumentation.getValue()) {
-                new ExtractInstrumentationPhase().apply(newGraph, context);
+            if (UseGraalQueries.getValue()) {
+                new ExtractICGPhase().apply(newGraph, context);
             }
             new DeadCodeEliminationPhase(Optional).apply(newGraph);
 

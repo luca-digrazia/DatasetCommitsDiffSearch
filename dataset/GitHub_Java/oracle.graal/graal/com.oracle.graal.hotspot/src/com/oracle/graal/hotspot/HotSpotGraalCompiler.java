@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,25 +23,22 @@
 package com.oracle.graal.hotspot;
 
 import static com.oracle.graal.compiler.common.GraalOptions.OptAssumptions;
-import static com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.ROOT_COMPILATION;
-import static jdk.vm.ci.code.CallingConvention.Type.JavaCallee;
-import static jdk.vm.ci.code.CodeUtil.getCallingConvention;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CallingConvention.Type;
-import jdk.vm.ci.code.CompilationRequest;
-import jdk.vm.ci.code.CompilationResult;
-import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
-import jdk.vm.ci.hotspot.HotSpotCompilationRequest;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
-import jdk.vm.ci.meta.DefaultProfilingInfo;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.ProfilingInfo;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.SpeculationLog;
-import jdk.vm.ci.meta.TriState;
-import jdk.vm.ci.runtime.JVMCICompiler;
+import static com.oracle.graal.graphbuilderconf.IntrinsicContext.CompilationContext.ROOT_COMPILATION;
+import static jdk.internal.jvmci.code.CallingConvention.Type.JavaCallee;
+import static jdk.internal.jvmci.code.CodeUtil.getCallingConvention;
+import jdk.internal.jvmci.code.CallingConvention;
+import jdk.internal.jvmci.code.CallingConvention.Type;
+import jdk.internal.jvmci.code.CompilationRequest;
+import jdk.internal.jvmci.code.CompilationResult;
+import jdk.internal.jvmci.compiler.Compiler;
+import jdk.internal.jvmci.hotspot.HotSpotCodeCacheProvider;
+import jdk.internal.jvmci.hotspot.HotSpotCompilationRequest;
+import jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider;
+import jdk.internal.jvmci.meta.JavaType;
+import jdk.internal.jvmci.meta.ProfilingInfo;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.meta.SpeculationLog;
 
-import com.oracle.graal.api.runtime.GraalJVMCICompiler;
 import com.oracle.graal.compiler.GraalCompiler;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.DebugConfigScope;
@@ -49,17 +46,18 @@ import com.oracle.graal.debug.DebugEnvironment;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.debug.TopLevelDebugConfig;
 import com.oracle.graal.debug.internal.DebugScope;
+import com.oracle.graal.debug.query.SpecialIntrinsicGuard;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.graphbuilderconf.IntrinsicContext;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
+import com.oracle.graal.hotspot.meta.HotSpotSuitesProvider;
 import com.oracle.graal.hotspot.phases.OnStackReplacementPhase;
 import com.oracle.graal.java.GraphBuilderPhase;
 import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
 import com.oracle.graal.lir.phases.LIRSuites;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.DebugInfoMode;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
 import com.oracle.graal.nodes.spi.Replacements;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.OptimisticOptimizations.Optimization;
@@ -67,7 +65,7 @@ import com.oracle.graal.phases.PhaseSuite;
 import com.oracle.graal.phases.tiers.HighTierContext;
 import com.oracle.graal.phases.tiers.Suites;
 
-public class HotSpotGraalCompiler implements GraalJVMCICompiler {
+public class HotSpotGraalCompiler implements Compiler {
 
     private final HotSpotJVMCIRuntimeProvider jvmciRuntime;
     private final HotSpotGraalRuntimeProvider graalRuntime;
@@ -77,8 +75,7 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
         this.graalRuntime = graalRuntime;
     }
 
-    @Override
-    public HotSpotGraalRuntimeProvider getGraalRuntime() {
+    HotSpotGraalRuntimeProvider getGraalRuntime() {
         return graalRuntime;
     }
 
@@ -90,7 +87,7 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
             DebugEnvironment.initialize(TTY.out);
         }
 
-        CompilationTask task = new CompilationTask(jvmciRuntime, this, (HotSpotCompilationRequest) request, true, true);
+        CompilationTask task = new CompilationTask(jvmciRuntime, this, (HotSpotCompilationRequest) request, true);
         try (DebugConfigScope dcs = Debug.setConfig(new TopLevelDebugConfig())) {
             task.runCompilation();
         }
@@ -108,11 +105,13 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
         System.exit(0);
     }
 
-    public CompilationResult compile(ResolvedJavaMethod method, int entryBCI, boolean useProfilingInfo) {
+    public CompilationResult compile(ResolvedJavaMethod method, int entryBCI, boolean mustRecordMethodInlining) {
         HotSpotBackend backend = graalRuntime.getHostBackend();
         HotSpotProviders providers = backend.getProviders();
-        final boolean isOSR = entryBCI != JVMCICompiler.INVOCATION_ENTRY_BCI;
-        StructuredGraph graph = method.isNative() || isOSR ? null : getIntrinsicGraph(method, providers);
+        final boolean isOSR = entryBCI != Compiler.INVOCATION_ENTRY_BCI;
+        // avoid compiling the intrinsic graphs for GraalQueryAPI methods
+        boolean bypassIntrinsic = method.isNative() || isOSR || SpecialIntrinsicGuard.isQueryIntrinsic(method);
+        StructuredGraph graph = bypassIntrinsic ? null : getIntrinsicGraph(method, providers);
 
         if (graph == null) {
             SpeculationLog speculationLog = method.getSpeculationLog();
@@ -120,6 +119,9 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
                 speculationLog.collectFailedSpeculations();
             }
             graph = new StructuredGraph(method, entryBCI, AllowAssumptions.from(OptAssumptions.getValue()), speculationLog);
+            if (!mustRecordMethodInlining) {
+                graph.disableInlinedMethodRecording();
+            }
         }
 
         CallingConvention cc = getCallingConvention(providers.getCodeCache(), Type.JavaCallee, graph.method(), false);
@@ -132,20 +134,19 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
         }
         Suites suites = getSuites(providers);
         LIRSuites lirSuites = getLIRSuites(providers);
-        ProfilingInfo profilingInfo = useProfilingInfo ? method.getProfilingInfo(!isOSR, isOSR) : DefaultProfilingInfo.get(TriState.FALSE);
+        ProfilingInfo profilingInfo = method.getProfilingInfo(!isOSR, isOSR);
         OptimisticOptimizations optimisticOpts = getOptimisticOpts(profilingInfo);
         if (isOSR) {
             // In OSR compiles, we cannot rely on never executed code profiles, because
             // all code after the OSR loop is never executed.
             optimisticOpts.remove(Optimization.RemoveNeverExecutedCode);
         }
-        CompilationResult result = new CompilationResult();
-        result.setEntryBCI(entryBCI);
-        boolean shouldDebugNonSafepoints = providers.getCodeCache().shouldDebugNonSafepoints();
-        PhaseSuite<HighTierContext> graphBuilderSuite = configGraphBuilderSuite(providers.getSuites().getDefaultGraphBuilderSuite(), shouldDebugNonSafepoints, isOSR, useProfilingInfo);
-        GraalCompiler.compileGraph(graph, cc, method, providers, backend, graphBuilderSuite, optimisticOpts, profilingInfo, suites, lirSuites, result, CompilationResultBuilderFactory.Default);
+        CompilationResult result = GraalCompiler.compileGraph(graph, cc, method, providers, backend, getGraphBuilderSuite(providers, isOSR), optimisticOpts, profilingInfo, suites, lirSuites,
+                        new CompilationResult(), CompilationResultBuilderFactory.Default);
 
-        if (!isOSR && useProfilingInfo) {
+        result.setEntryBCI(entryBCI);
+
+        if (!isOSR) {
             ProfilingInfo profile = method.getProfilingInfo();
             profile.setCompilerIRSize(StructuredGraph.class, graph.getNodeCount());
         }
@@ -188,46 +189,14 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
         return providers.getSuites().getDefaultLIRSuites();
     }
 
-    /**
-     * Reconfigures a given graph builder suite (GBS) if one of the given GBS parameter values is
-     * not the default.
-     *
-     * @param suite the graph builder suite
-     * @param shouldDebugNonSafepoints specifies if extra debug info should be generated (default is
-     *            false)
-     * @param isOSR specifies if extra OSR-specific post-processing is required (default is false)
-     * @param useProfilingInfo specifies if the graph builder should use profiling info (default is
-     *            true)
-     * @return a new suite derived from {@code suite} if any of the GBS parameters did not have a
-     *         default value otherwise {@code suite}
-     */
-    protected PhaseSuite<HighTierContext> configGraphBuilderSuite(PhaseSuite<HighTierContext> suite, boolean shouldDebugNonSafepoints, boolean isOSR, boolean useProfilingInfo) {
-        if (shouldDebugNonSafepoints || isOSR || !useProfilingInfo) {
-            PhaseSuite<HighTierContext> newGbs = suite.copy();
-
-            if (shouldDebugNonSafepoints || !useProfilingInfo) {
-                // This complexity below is to ensure exactly one
-                // GraphBuilderConfiguration copy is made.
-                GraphBuilderPhase graphBuilderPhase = (GraphBuilderPhase) newGbs.findPhase(GraphBuilderPhase.class).previous();
-                GraphBuilderConfiguration graphBuilderConfig = graphBuilderPhase.getGraphBuilderConfig();
-                if (shouldDebugNonSafepoints) {
-                    graphBuilderConfig = graphBuilderConfig.withDebugInfoMode(DebugInfoMode.Simple);
-                    if (!useProfilingInfo) {
-                        graphBuilderConfig.setUseProfiling(false);
-                    }
-                } else {
-                    assert !useProfilingInfo;
-                    graphBuilderConfig = graphBuilderConfig.copy();
-                    graphBuilderConfig.setUseProfiling(false);
-                }
-
-                GraphBuilderPhase newGraphBuilderPhase = new GraphBuilderPhase(graphBuilderConfig);
-                newGbs.findPhase(GraphBuilderPhase.class).set(newGraphBuilderPhase);
-            }
-            if (isOSR) {
-                newGbs.appendPhase(new OnStackReplacementPhase());
-            }
-            return newGbs;
+    protected PhaseSuite<HighTierContext> getGraphBuilderSuite(HotSpotProviders providers, boolean isOSR) {
+        PhaseSuite<HighTierContext> suite = providers.getSuites().getDefaultGraphBuilderSuite();
+        if (providers.getCodeCache().shouldDebugNonSafepoints()) {
+            suite = HotSpotSuitesProvider.withSimpleDebugInfo(suite);
+        }
+        if (isOSR) {
+            suite = suite.copy();
+            suite.appendPhase(new OnStackReplacementPhase());
         }
         return suite;
     }

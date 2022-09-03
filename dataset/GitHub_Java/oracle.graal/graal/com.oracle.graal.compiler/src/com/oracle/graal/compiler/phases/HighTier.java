@@ -32,6 +32,7 @@ import static com.oracle.graal.compiler.common.GraalOptions.OptConvertDeoptsToGu
 import static com.oracle.graal.compiler.common.GraalOptions.OptLoopTransform;
 import static com.oracle.graal.compiler.common.GraalOptions.PartialEscapeAnalysis;
 import static com.oracle.graal.compiler.common.GraalOptions.UseGraalQueries;
+import static com.oracle.graal.compiler.phases.HighTier.Options.Inline;
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.Optional;
 import jdk.internal.jvmci.options.Option;
 import jdk.internal.jvmci.options.OptionType;
@@ -73,7 +74,7 @@ public class HighTier extends PhaseSuite<HighTierContext> {
             appendPhase(canonicalizer);
         }
 
-        if (Options.Inline.getValue()) {
+        if (Inline.getValue()) {
             appendPhase(new InliningPhase(canonicalizer));
             appendPhase(new DeadCodeEliminationPhase(Optional));
 

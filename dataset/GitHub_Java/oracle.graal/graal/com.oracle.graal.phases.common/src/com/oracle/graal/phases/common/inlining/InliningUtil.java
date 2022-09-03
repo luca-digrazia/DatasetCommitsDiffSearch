@@ -23,26 +23,24 @@
 package com.oracle.graal.phases.common.inlining;
 
 import static com.oracle.graal.compiler.common.GraalOptions.HotSpotPrintInlining;
-import static com.oracle.graal.compiler.common.GraalOptions.NewInfopoints;
-import static com.oracle.graal.compiler.common.GraalOptions.UseGraalInstrumentation;
-import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
-import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
+import static com.oracle.graal.compiler.common.GraalOptions.UseGraalQueries;
+import static jdk.internal.jvmci.meta.DeoptimizationAction.InvalidateReprofile;
+import static jdk.internal.jvmci.meta.DeoptimizationReason.NullCheckException;
 
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.code.BytecodePosition;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.code.BytecodeFrame;
+import jdk.internal.jvmci.code.BytecodePosition;
+import jdk.internal.jvmci.common.JVMCIError;
+import jdk.internal.jvmci.meta.Assumptions;
+import jdk.internal.jvmci.meta.DeoptimizationAction;
+import jdk.internal.jvmci.meta.DeoptimizationReason;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.meta.ResolvedJavaType;
 
 import com.oracle.graal.api.replacements.MethodSubstitution;
 import com.oracle.graal.compiler.common.type.Stamp;
@@ -97,7 +95,7 @@ import com.oracle.graal.nodes.spi.Replacements;
 import com.oracle.graal.nodes.type.StampTool;
 import com.oracle.graal.nodes.util.GraphUtil;
 import com.oracle.graal.phases.common.inlining.info.InlineInfo;
-import com.oracle.graal.phases.common.instrumentation.nodes.InstrumentationNode;
+import com.oracle.graal.phases.common.query.nodes.InstrumentationNode;
 
 public class InliningUtil {
 
@@ -367,7 +365,7 @@ public class InliningUtil {
             unwindNode = (UnwindNode) duplicates.get(unwindNode);
         }
 
-        if (UseGraalInstrumentation.getValue()) {
+        if (UseGraalQueries.getValue()) {
             removeAttachedInstrumentation(invoke);
         }
         finishInlining(invoke, graph, firstCFGNode, returnNodes, unwindNode, inlineGraph.getAssumptions(), inlineGraph, canonicalizedNodes);
@@ -466,20 +464,7 @@ public class InliningUtil {
         return graph.method().format("%H.%n(%p)");
     }
 
-    @SuppressWarnings("try")
     private static void processSimpleInfopoints(Invoke invoke, StructuredGraph inlineGraph, Map<Node, Node> duplicates) {
-        if (NewInfopoints.getValue()) {
-            if (inlineGraph.mayHaveNodeContext() && invoke.stateAfter() != null) {
-                BytecodePosition outerPos = new BytecodePosition(FrameState.toBytecodePosition(invoke.stateAfter().outerFrameState()), invoke.asNode().graph().method(), invoke.bci());
-                for (Entry<Node, Node> entry : duplicates.entrySet()) {
-                    BytecodePosition pos = entry.getKey().getNodeContext(BytecodePosition.class);
-                    if (pos != null) {
-                        BytecodePosition newPos = pos.addCaller(outerPos);
-                        entry.getValue().setNodeContext(newPos);
-                    }
-                }
-            }
-        }
         if (inlineGraph.getNodes(SimpleInfopointNode.TYPE).isEmpty()) {
             return;
         }
@@ -516,14 +501,13 @@ public class InliningUtil {
                 if (outerFrameState == null) {
                     outerFrameState = stateAtReturn.duplicateModifiedDuringCall(invoke.bci(), invokeReturnKind);
                 }
-                processFrameState(frameState, invoke, inlineGraph.method(), stateAtExceptionEdge, outerFrameState, alwaysDuplicateStateAfter, invoke.callTarget().targetMethod(),
-                                invoke.callTarget().arguments());
+                processFrameState(frameState, invoke, inlineGraph.method(), stateAtExceptionEdge, outerFrameState, alwaysDuplicateStateAfter);
             }
         }
     }
 
     public static FrameState processFrameState(FrameState frameState, Invoke invoke, ResolvedJavaMethod inlinedMethod, FrameState stateAtExceptionEdge, FrameState outerFrameState,
-                    boolean alwaysDuplicateStateAfter, ResolvedJavaMethod invokeTargetMethod, List<ValueNode> invokeArgsList) {
+                    boolean alwaysDuplicateStateAfter) {
 
         FrameState stateAtReturn = invoke.stateAfter();
         JavaKind invokeReturnKind = invoke.asNode().getStackKind();
@@ -570,9 +554,10 @@ public class InliningUtil {
             // This is an intrinsic. Deoptimizing within an intrinsic
             // must re-execute the intrinsified invocation
             assert frameState.outerFrameState() == null;
+            NodeInputList<ValueNode> invokeArgsList = invoke.callTarget().arguments();
             ValueNode[] invokeArgs = invokeArgsList.isEmpty() ? NO_ARGS : invokeArgsList.toArray(new ValueNode[invokeArgsList.size()]);
-            FrameState stateBeforeCall = stateAtReturn.duplicateModifiedBeforeCall(invoke.bci(), invokeReturnKind, invokeTargetMethod.getSignature().toParameterKinds(!invokeTargetMethod.isStatic()),
-                            invokeArgs);
+            ResolvedJavaMethod targetMethod = invoke.callTarget().targetMethod();
+            FrameState stateBeforeCall = stateAtReturn.duplicateModifiedBeforeCall(invoke.bci(), invokeReturnKind, targetMethod.getSignature().toParameterKinds(!targetMethod.isStatic()), invokeArgs);
             frameState.replaceAndDelete(stateBeforeCall);
             return stateBeforeCall;
         } else {
@@ -776,7 +761,7 @@ public class InliningUtil {
 
     // exclude InstrumentationNode for inlining heuristics
     public static int getNodeCount(StructuredGraph graph) {
-        if (UseGraalInstrumentation.getValue()) {
+        if (UseGraalQueries.getValue()) {
             return graph.getNodeCount() - graph.getNodes().filter(InstrumentationNode.class).count();
         } else {
             return graph.getNodeCount();

@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import static com.oracle.graal.compiler.common.GraalOptions.UseGraalInstrumentation;
+import static com.oracle.graal.compiler.common.GraalOptions.UseGraalQueries;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -34,10 +34,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.IntFunction;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.internal.jvmci.meta.ConstantReflectionProvider;
+import jdk.internal.jvmci.meta.JavaConstant;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.MetaAccessProvider;
 
 import com.oracle.graal.compiler.common.CollectionsFactory;
 import com.oracle.graal.compiler.common.cfg.Loop;
@@ -73,7 +73,7 @@ import com.oracle.graal.nodes.spi.Virtualizable;
 import com.oracle.graal.nodes.spi.VirtualizableAllocation;
 import com.oracle.graal.nodes.spi.VirtualizerTool;
 import com.oracle.graal.nodes.virtual.VirtualObjectNode;
-import com.oracle.graal.phases.common.instrumentation.nodes.InstrumentationNode;
+import com.oracle.graal.phases.common.query.nodes.InstrumentationNode;
 import com.oracle.graal.phases.schedule.SchedulePhase;
 
 public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockState<BlockT>> extends EffectsClosure<BlockT> {
@@ -190,7 +190,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     return true;
                 }
             }
-            if (UseGraalInstrumentation.getValue() && (node instanceof InstrumentationNode)) {
+            if (UseGraalQueries.getValue() && (node instanceof InstrumentationNode)) {
                 // ignore inputs for InstrumentationNode
                 return false;
             }
@@ -414,8 +414,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 if (alias instanceof VirtualObjectNode) {
                     VirtualObjectNode virtual = (VirtualObjectNode) alias;
                     addAndMarkAlias(virtual, phi);
-                } else {
-                    aliases.set(phi, null);
                 }
             }
         }
@@ -635,7 +633,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 }
 
                 for (PhiNode phi : getPhis()) {
-                    aliases.set(phi, null);
                     if (hasVirtualInputs.isMarked(phi) && phi instanceof ValuePhiNode) {
                         materialized |= processPhi((ValuePhiNode) phi, states, virtualObjTemp);
                     }
@@ -853,6 +850,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
          * @return true if materialization happened during the merge, false otherwise
          */
         private boolean processPhi(ValuePhiNode phi, PartialEscapeBlockState<?>[] states, int[] mergedVirtualObjects) {
+            aliases.set(phi, null);
 
             // determine how many inputs are virtual and if they're all the same virtual object
             int virtualInputs = 0;

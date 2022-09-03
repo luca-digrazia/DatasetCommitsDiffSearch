@@ -165,7 +165,7 @@ public class ComputeInliningRelevance {
          */
         private double scopeRelevanceWithinParent = UNINITIALIZED;
 
-        Scope(FixedNode start, Scope parent) {
+        public Scope(FixedNode start, Scope parent) {
             this.start = start;
             this.parent = parent;
         }
