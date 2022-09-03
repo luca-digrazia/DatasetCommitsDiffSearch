@@ -20,6 +20,7 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
+
 package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.api.meta.MetaUtil.*;
@@ -92,13 +93,14 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
      * only called for snippets or replacements.
      */
     private static boolean isCalledForSnippets() {
-        MetaAccessProvider metaAccess = runtime().getProviders().getMetaAccess();
+        HotSpotRuntime runtime = graalRuntime().getRuntime();
+
         ResolvedJavaMethod makeGraphMethod = null;
         ResolvedJavaMethod initMethod = null;
         try {
             Class<?> rjm = ResolvedJavaMethod.class;
-            makeGraphMethod = metaAccess.lookupJavaMethod(ReplacementsImpl.class.getDeclaredMethod("makeGraph", rjm, rjm, SnippetInliningPolicy.class, boolean.class));
-            initMethod = metaAccess.lookupJavaMethod(SnippetTemplate.AbstractTemplates.class.getDeclaredMethod("template", Arguments.class));
+            makeGraphMethod = runtime.lookupJavaMethod(ReplacementsImpl.class.getDeclaredMethod("makeGraph", rjm, rjm, SnippetInliningPolicy.class, boolean.class));
+            initMethod = runtime.lookupJavaMethod(SnippetTemplate.AbstractTemplates.class.getDeclaredMethod("template", Arguments.class));
         } catch (NoSuchMethodException | SecurityException e) {
             throw new GraalInternalError(e);
         }
@@ -119,8 +121,8 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
     private static final Set<ResolvedJavaField> notEmbeddable = new HashSet<>();
 
     private static void addResolvedToSet(Field field) {
-        MetaAccessProvider metaAccess = runtime().getProviders().getMetaAccess();
-        notEmbeddable.add(metaAccess.lookupJavaField(field));
+        HotSpotRuntime runtime = graalRuntime().getRuntime();
+        notEmbeddable.add(runtime.lookupJavaField(field));
     }
 
     static {
@@ -216,12 +218,12 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
         if (receiver == null) {
             assert Modifier.isStatic(flags);
             if (holder.isInitialized()) {
-                return runtime().getProviders().getConstantReflection().readUnsafeConstant(getKind(), holder.mirror(), offset, getKind() == Kind.Object);
+                return graalRuntime().getRuntime().readUnsafeConstant(getKind(), holder.mirror(), offset, getKind() == Kind.Object);
             }
             return null;
         } else {
             assert !Modifier.isStatic(flags);
-            return runtime().getProviders().getConstantReflection().readUnsafeConstant(getKind(), receiver.asObject(), offset, getKind() == Kind.Object);
+            return graalRuntime().getRuntime().readUnsafeConstant(getKind(), receiver.asObject(), offset, getKind() == Kind.Object);
         }
     }
 
