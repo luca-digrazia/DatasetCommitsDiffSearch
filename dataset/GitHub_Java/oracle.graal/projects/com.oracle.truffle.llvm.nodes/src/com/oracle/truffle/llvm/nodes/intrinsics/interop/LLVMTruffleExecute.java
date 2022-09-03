@@ -107,7 +107,7 @@ public abstract class LLVMTruffleExecute extends LLVMIntrinsic {
             try (StackPointer save = stack.newFrame()) {
                 rawValue = ForeignAccess.sendExecute(foreignExecute, value, evaluatedArgs);
             }
-            return toLLVM.executeWithTarget(rawValue);
+            return toLLVM.executeWithTarget(frame, rawValue);
         } catch (UnsupportedMessageException | UnsupportedTypeException | ArityException e) {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException(e);

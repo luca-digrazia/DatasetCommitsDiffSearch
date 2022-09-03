@@ -142,4 +142,5 @@ public final class LLVMStack {
     private static boolean powerOfTwo(int value) {
         return (value & -value) == value;
     }
+
 }

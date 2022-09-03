@@ -34,6 +34,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -82,12 +83,12 @@ abstract class LLVMForeignCallNode extends Node {
         }
 
         @ExplodeLoop
-        Object[] pack(Object[] arguments, StackPointer stackPointer) {
+        Object[] pack(VirtualFrame frame, Object[] arguments, StackPointer stackPointer) {
             assert arguments.length == toLLVM.length;
             final Object[] packedArguments = new Object[1 + toLLVM.length];
             packedArguments[0] = stackPointer;
             for (int i = 0; i < toLLVM.length; i++) {
-                packedArguments[i + 1] = toLLVM[i].executeWithTarget(arguments[i]);
+                packedArguments[i + 1] = toLLVM[i].executeWithTarget(frame, arguments[i]);
             }
             return packedArguments;
         }
@@ -119,7 +120,7 @@ abstract class LLVMForeignCallNode extends Node {
         return new SlowPackForeignArgumentsNode();
     }
 
-    public abstract Object executeCall(LLVMFunctionDescriptor function, Object[] arguments);
+    public abstract Object executeCall(VirtualFrame frame, LLVMFunctionDescriptor function, Object[] arguments);
 
     @CompilationFinal private LLVMThreadingStack threadingStack = null;
 
@@ -133,7 +134,7 @@ abstract class LLVMForeignCallNode extends Node {
 
     @SuppressWarnings("unused")
     @Specialization(limit = "3", guards = {"function == cachedFunction", "cachedLength == arguments.length"})
-    protected Object callDirectCached(LLVMFunctionDescriptor function, Object[] arguments,
+    protected Object callDirectCached(VirtualFrame frame, LLVMFunctionDescriptor function, Object[] arguments,
                     @Cached("function") LLVMFunctionDescriptor cachedFunction,
                     @Cached("create(getCallTarget(cachedFunction))") DirectCallNode callNode,
                     @Cached("createFastPackArguments(cachedFunction, arguments.length)") PackForeignArgumentsNode packNode,
@@ -141,14 +142,14 @@ abstract class LLVMForeignCallNode extends Node {
                     @Cached("cachedFunction.getContext()") LLVMContext context,
                     @Cached("create()") LLVMGetStackNode getStack) {
         assert !(cachedFunction.getType().getReturnType() instanceof StructureType);
-        return directCall(arguments, callNode, packNode, getStack, context);
+        return directCall(frame, arguments, callNode, packNode, getStack, context);
     }
 
-    private Object directCall(Object[] arguments, DirectCallNode callNode, PackForeignArgumentsNode packNode, LLVMGetStackNode getStack, LLVMContext context) {
+    private Object directCall(VirtualFrame frame, Object[] arguments, DirectCallNode callNode, PackForeignArgumentsNode packNode, LLVMGetStackNode getStack, LLVMContext context) {
         Object result;
         LLVMStack stack = getStack.executeWithTarget(getThreadingStack(context), Thread.currentThread());
         try (StackPointer stackPointer = stack.newFrame()) {
-            result = callNode.call(packNode.pack(arguments, stackPointer));
+            result = callNode.call(packNode.pack(frame, arguments, stackPointer));
         }
         return prepareValueForEscape.executeWithTarget(result, context);
     }

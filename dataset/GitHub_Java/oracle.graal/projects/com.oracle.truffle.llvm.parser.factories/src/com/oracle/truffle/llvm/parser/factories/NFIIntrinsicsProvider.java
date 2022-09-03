@@ -40,13 +40,16 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.nodes.func.LLVMArgNodeGen;
+import com.oracle.truffle.llvm.nodes.func.LLVMAtExitNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMBeginCatchNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMEndCatchNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMFreeExceptionNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMRethrowNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMThrowExceptionNode;
 import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMAbortNodeGen;
+import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMAtExitNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMCMathsIntrinsicsFactory;
 import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMACosNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMASinNodeGen;
@@ -101,7 +104,6 @@ import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleHandleToManag
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleImportCachedNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleImportNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleInvokeNodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleIsHandleToManagedNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleIsTruffleObjectNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleManagedMallocNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleManagedToHandleNodeGen;
@@ -125,11 +127,15 @@ import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMComplexDiv;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.arith.LLVMComplexMul;
 import com.oracle.truffle.llvm.nodes.intrinsics.rust.LLVMLangStartNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.rust.LLVMPanicNodeGen;
+import com.oracle.truffle.llvm.nodes.intrinsics.rust.LLVMProcessExitNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.sulong.LLVMPrintStackTraceNodeGen;
+import com.oracle.truffle.llvm.nodes.intrinsics.sulong.LLVMRunConstructorFunctionsNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.sulong.LLVMRunDestructorFunctionsNodeGen;
+import com.oracle.truffle.llvm.nodes.intrinsics.sulong.LLVMRunGlobalVariableInitalizationNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.sulong.LLVMShouldPrintStackTraceOnAbortNodeGen;
 import com.oracle.truffle.llvm.parser.NodeFactory;
 import com.oracle.truffle.llvm.runtime.ContextExtension;
+import com.oracle.truffle.llvm.runtime.LLVMExitException;
 import com.oracle.truffle.llvm.runtime.NativeIntrinsicProvider;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
@@ -334,10 +340,24 @@ public class NFIIntrinsicsProvider implements NativeIntrinsicProvider, ContextEx
     }
 
     protected void registerSulongIntrinsics() {
-        factories.put("@__sulong_destructor_functions", new LLVMNativeIntrinsicFactory(true, true) {
+        factories.put("@sulong_run_global_variable_initialization", new LLVMNativeIntrinsicFactory(true, true) {
             @Override
             protected RootCallTarget generate(FunctionType type) {
-                return wrap("@__sulong_destructor_functions", LLVMRunDestructorFunctionsNodeGen.create());
+                return wrap("@sulong_run_global_variable_initialization", LLVMRunGlobalVariableInitalizationNodeGen.create());
+            }
+        });
+        factories.put("@sulong_run_constructor_functions", new LLVMNativeIntrinsicFactory(true, true) {
+            @Override
+            protected RootCallTarget generate(FunctionType type) {
+                return wrap("@sulong_run_constructor_functions",
+                                LLVMRunConstructorFunctionsNodeGen.create());
+            }
+        });
+        factories.put("@sulong_run_destructor_functions", new LLVMNativeIntrinsicFactory(true, true) {
+            @Override
+            protected RootCallTarget generate(FunctionType type) {
+                return wrap("@sulong_run_destructor_functions",
+                                LLVMRunDestructorFunctionsNodeGen.create());
             }
         });
 
@@ -923,14 +943,6 @@ public class NFIIntrinsicsProvider implements NativeIntrinsicProvider, ContextEx
             }
         });
 
-        factories.put("@truffle_is_handle_to_managed", new LLVMNativeIntrinsicFactory(true, true) {
-
-            @Override
-            protected RootCallTarget generate(FunctionType type) {
-                return wrap("@truffle_is_handle_to_managed", LLVMTruffleIsHandleToManagedNodeGen.create(LLVMArgNodeGen.create(1)));
-            }
-        });
-
         factories.put("@truffle_virtual_malloc", new LLVMNativeIntrinsicFactory(true, true) {
             @Override
             protected RootCallTarget generate(FunctionType type) {
@@ -963,6 +975,13 @@ public class NFIIntrinsicsProvider implements NativeIntrinsicProvider, ContextEx
                 return wrap("@exit", LLVMExitNodeGen.create(LLVMArgNodeGen.create(1)));
             }
         });
+        factories.put("@atexit", new LLVMNativeIntrinsicFactory(true, false) {
+
+            @Override
+            protected RootCallTarget generate(FunctionType type) {
+                return wrap("@atexit", LLVMAtExitNodeGen.create(LLVMArgNodeGen.create(1)));
+            }
+        });
         factories.put("@signal", new LLVMNativeIntrinsicFactory(true, false) {
 
             @Override
@@ -992,7 +1011,7 @@ public class NFIIntrinsicsProvider implements NativeIntrinsicProvider, ContextEx
 
             @Override
             protected RootCallTarget generate(FunctionType type) {
-                return wrap("@std::process::exit", LLVMExitNodeGen.create(LLVMArgNodeGen.create(1)));
+                return wrap("@std::process::exit", LLVMProcessExitNodeGen.create(LLVMArgNodeGen.create(1)));
             }
         });
         factories.put("@core::panicking::panic", new LLVMNativeIntrinsicFactory(true, false) {
@@ -1391,22 +1410,18 @@ public class NFIIntrinsicsProvider implements NativeIntrinsicProvider, ContextEx
                 return wrap("@__sulong_free", LLVMFreeNodeGen.create(LLVMArgNodeGen.create(1)));
             }
         });
-        LLVMNativeIntrinsicFactory memset = new LLVMNativeIntrinsicFactory(true, false) {
+        factories.put("@memset", new LLVMNativeIntrinsicFactory(true, false) {
             @Override
             protected RootCallTarget generate(FunctionType type) {
                 return wrap("@memset", LLVMLibcMemsetNodeGen.create(factory.createMemSet(), LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2), LLVMArgNodeGen.create(3)));
             }
-        };
-        factories.put("@memset", memset);
-        factories.put("@__memset_chk", memset);
-        LLVMNativeIntrinsicFactory memcpy = new LLVMNativeIntrinsicFactory(true, false) {
+        });
+        factories.put("@memcpy", new LLVMNativeIntrinsicFactory(true, false) {
             @Override
             protected RootCallTarget generate(FunctionType type) {
                 return wrap("@memcpy", LLVMLibcMemcpyNodeGen.create(factory.createMemMove(), LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2), LLVMArgNodeGen.create(3)));
             }
-        };
-        factories.put("@memcpy", memcpy);
-        factories.put("@__memcpy_chk", memcpy);
+        });
     }
 
     protected void registerExceptionIntrinsics() {
@@ -1445,11 +1460,23 @@ public class NFIIntrinsicsProvider implements NativeIntrinsicProvider, ContextEx
                 return wrap("@__cxa_free_exception", new LLVMFreeExceptionNode(LLVMArgNodeGen.create(1)));
             }
         });
+        factories.put("@__cxa_atexit", new LLVMNativeIntrinsicFactory(true, true) {
+
+            @Override
+            protected RootCallTarget generate(FunctionType type) {
+                return wrap("@__cxa_atexit", new LLVMAtExitNode(LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2), LLVMArgNodeGen.create(3)));
+            }
+        });
         factories.put("@__cxa_call_unexpected", new LLVMNativeIntrinsicFactory(true, true) {
 
             @Override
             protected RootCallTarget generate(FunctionType type) {
-                return wrap("@__cxa_call_unexpected", LLVMAbortNodeGen.create());
+                return wrap("@__cxa_call_unexpected", new LLVMExpressionNode() {
+                    @Override
+                    public Object executeGeneric(VirtualFrame frame) {
+                        throw new LLVMExitException(134);
+                    }
+                });
             }
         });
     }

@@ -35,18 +35,17 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
-import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions;
+import com.oracle.truffle.llvm.runtime.LLVMNativeFunctions;
+import com.oracle.truffle.llvm.runtime.NFIContextExtension;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.VoidType;
 
 public final class LLVMEndCatchNode extends LLVMExpressionNode {
-
     @Child private LLVMExpressionNode stackPointer;
     @Child private LLVMLookupDispatchNode dispatch;
     @Child private LLVMNativeFunctions.SulongDecrementHandlerCountNode decHandlerCount;
@@ -60,7 +59,7 @@ public final class LLVMEndCatchNode extends LLVMExpressionNode {
     public LLVMContext getCachedContext() {
         if (cachedContext == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.cachedContext = getContext();
+            this.cachedContext = getContextReference().get();
         }
         return cachedContext;
     }
@@ -73,7 +72,7 @@ public final class LLVMEndCatchNode extends LLVMExpressionNode {
     public LinkedList<LLVMAddress> getCaughtExceptionStack() {
         if (caughtExceptionStack == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.caughtExceptionStack = getContext().getCaughtExceptionStack();
+            this.caughtExceptionStack = getContextReference().get().getCaughtExceptionStack();
         }
         return caughtExceptionStack;
     }
@@ -81,7 +80,9 @@ public final class LLVMEndCatchNode extends LLVMExpressionNode {
     public LLVMNativeFunctions.SulongDecrementHandlerCountNode getDecHandlerCount() {
         if (decHandlerCount == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.decHandlerCount = insert(getContext().getNativeFunctions().createDecrementHandlerCount());
+            LLVMContext context = getContextReference().get();
+            NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
+            this.decHandlerCount = insert(nfiContextExtension.getNativeSulongFunctions().createDecrementHandlerCount(context));
         }
         return decHandlerCount;
     }
@@ -89,7 +90,9 @@ public final class LLVMEndCatchNode extends LLVMExpressionNode {
     public LLVMNativeFunctions.SulongGetHandlerCountNode getGetHandlerCount() {
         if (getHandlerCount == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.getHandlerCount = insert(getContext().getNativeFunctions().createGetHandlerCount());
+            LLVMContext context = getContextReference().get();
+            NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
+            this.getHandlerCount = insert(nfiContextExtension.getNativeSulongFunctions().createGetHandlerCount(context));
         }
         return getHandlerCount;
     }
@@ -97,7 +100,9 @@ public final class LLVMEndCatchNode extends LLVMExpressionNode {
     public LLVMNativeFunctions.SulongGetDestructorNode getGetDestructor() {
         if (getDestructor == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.getDestructor = insert(getContext().getNativeFunctions().createGetDestructor());
+            LLVMContext context = getContextReference().get();
+            NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
+            this.getDestructor = insert(nfiContextExtension.getNativeSulongFunctions().createGetDestructor(context));
         }
         return getDestructor;
     }
@@ -105,7 +110,9 @@ public final class LLVMEndCatchNode extends LLVMExpressionNode {
     public LLVMNativeFunctions.SulongGetThrownObjectNode getGetThrownObject() {
         if (getThrownObject == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.getThrownObject = insert(getContext().getNativeFunctions().createGetThrownObject());
+            LLVMContext context = getContextReference().get();
+            NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
+            this.getThrownObject = insert(nfiContextExtension.getNativeSulongFunctions().createGetThrownObject(context));
         }
         return getThrownObject;
     }
@@ -113,7 +120,9 @@ public final class LLVMEndCatchNode extends LLVMExpressionNode {
     public LLVMNativeFunctions.SulongSetHandlerCountNode getSetHandlerCount() {
         if (setHandlerCount == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.setHandlerCount = insert(getContext().getNativeFunctions().createSetHandlerCount());
+            LLVMContext context = getContextReference().get();
+            NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
+            this.setHandlerCount = insert(nfiContextExtension.getNativeSulongFunctions().createSetHandlerCount(context));
         }
         return setHandlerCount;
     }
@@ -131,8 +140,7 @@ public final class LLVMEndCatchNode extends LLVMExpressionNode {
             getDecHandlerCount().dec(ptr);
             LLVMAddress destructorAddress = getGetDestructor().get(ptr);
             if (getGetHandlerCount().get(ptr) <= 0 && destructorAddress.getVal() != 0) {
-                LLVMFunctionHandle destructor = new LLVMFunctionHandle(getCachedContext(), (int) destructorAddress.getVal());
-                dispatch.executeDispatch(frame, destructor, new Object[]{stackPointer.executeLLVMAddress(frame), getGetThrownObject().getThrownObject(ptr)});
+                dispatch.executeDispatch(frame, destructorAddress, new Object[]{stackPointer.executeGeneric(frame), getGetThrownObject().getThrownObject(ptr)});
             }
             return null;
         } catch (Throwable e) {
@@ -145,5 +153,4 @@ public final class LLVMEndCatchNode extends LLVMExpressionNode {
     private LLVMAddress popExceptionToStack() {
         return getCaughtExceptionStack().pop();
     }
-
 }

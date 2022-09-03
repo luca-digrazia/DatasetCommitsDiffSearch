@@ -36,6 +36,7 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.DirectCallNode;
@@ -76,7 +77,7 @@ public abstract class LLVMDispatchNode extends LLVMNode {
         return signature;
     }
 
-    public abstract Object executeDispatch(LLVMFunctionDescriptor function, Object[] arguments);
+    public abstract Object executeDispatch(VirtualFrame frame, LLVMFunctionDescriptor function, Object[] arguments);
 
     /*
      * Function is defined in the user program (available as LLVM IR)
@@ -136,7 +137,8 @@ public abstract class LLVMDispatchNode extends LLVMNode {
      */
 
     @Specialization(limit = "10", guards = {"descriptor == cachedDescriptor", "descriptor.isNativeFunction()"})
-    protected Object doCachedNative(@SuppressWarnings("unused") LLVMFunctionDescriptor descriptor,
+    protected Object doCachedNative(VirtualFrame frame,
+                    @SuppressWarnings("unused") LLVMFunctionDescriptor descriptor,
                     Object[] arguments,
                     @Cached("descriptor") LLVMFunctionDescriptor cachedDescriptor,
                     @Cached("createToNativeNodes()") LLVMNativeConvertNode[] toNative,
@@ -146,12 +148,12 @@ public abstract class LLVMDispatchNode extends LLVMNode {
                     @Cached("getContextReference()") ContextReference<LLVMContext> context,
                     @Cached("nativeCallStatisticsEnabled(context)") boolean statistics) {
 
-        Object[] nativeArgs = prepareNativeArguments(arguments, toNative);
+        Object[] nativeArgs = prepareNativeArguments(frame, arguments, toNative);
         Object returnValue;
         try (StackPointer save = ((StackPointer) arguments[0]).newFrame()) {
             returnValue = LLVMNativeCallUtils.callNativeFunction(statistics, context, nativeCall, cachedBoundFunction, nativeArgs, cachedDescriptor);
         }
-        return fromNative.executeConvert(returnValue);
+        return fromNative.executeConvert(frame, returnValue);
     }
 
     protected TruffleObject bindSymbol(LLVMFunctionDescriptor descriptor) {
@@ -161,7 +163,7 @@ public abstract class LLVMDispatchNode extends LLVMNode {
     }
 
     @Specialization(replaces = "doCachedNative", guards = "descriptor.isNativeFunction()")
-    protected Object doNative(LLVMFunctionDescriptor descriptor, Object[] arguments,
+    protected Object doNative(VirtualFrame frame, LLVMFunctionDescriptor descriptor, Object[] arguments,
                     @Cached("createToNativeNodes()") LLVMNativeConvertNode[] toNative,
                     @Cached("createFromNativeNode()") LLVMNativeConvertNode fromNative,
                     @Cached("createNativeCallNode()") Node nativeCall,
@@ -169,20 +171,20 @@ public abstract class LLVMDispatchNode extends LLVMNode {
                     @Cached("getContextReference()") ContextReference<LLVMContext> context,
                     @Cached("nativeCallStatisticsEnabled(context)") boolean statistics) {
 
-        Object[] nativeArgs = prepareNativeArguments(arguments, toNative);
+        Object[] nativeArgs = prepareNativeArguments(frame, arguments, toNative);
         TruffleObject boundSymbol = LLVMNativeCallUtils.bindNativeSymbol(bindNode, descriptor.getNativeFunction(), getSignature());
         Object returnValue;
         try (StackPointer save = ((StackPointer) arguments[0]).newFrame()) {
             returnValue = LLVMNativeCallUtils.callNativeFunction(statistics, context, nativeCall, boundSymbol, nativeArgs, descriptor);
         }
-        return fromNative.executeConvert(returnValue);
+        return fromNative.executeConvert(frame, returnValue);
     }
 
     @ExplodeLoop
-    private static Object[] prepareNativeArguments(Object[] arguments, LLVMNativeConvertNode[] toNative) {
+    private static Object[] prepareNativeArguments(VirtualFrame frame, Object[] arguments, LLVMNativeConvertNode[] toNative) {
         Object[] nativeArgs = new Object[arguments.length - LLVMCallNode.USER_ARGUMENT_OFFSET];
         for (int i = LLVMCallNode.USER_ARGUMENT_OFFSET; i < arguments.length; i++) {
-            nativeArgs[i - LLVMCallNode.USER_ARGUMENT_OFFSET] = toNative[i - LLVMCallNode.USER_ARGUMENT_OFFSET].executeConvert(arguments[i]);
+            nativeArgs[i - LLVMCallNode.USER_ARGUMENT_OFFSET] = toNative[i - LLVMCallNode.USER_ARGUMENT_OFFSET].executeConvert(frame, arguments[i]);
         }
         return nativeArgs;
     }
