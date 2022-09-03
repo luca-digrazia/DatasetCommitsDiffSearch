@@ -37,23 +37,23 @@ public class MonitorTest extends GraalCompilerTest {
     }
 
     @Test
-    public void test01() {
+    public void test0_1() {
         test("lockThisSimple", "test1", new Object());
         test("lockThisSimple", "test1", null);
     }
 
     @Test
-    public void test02() {
+    public void test0_2() {
         test("lockObjectSimple", null, "test1");
     }
 
     @Test
-    public void test101() {
+    public void test1_1() {
         test("lockObject", new Object(), "test1", new String[1]);
     }
 
     @Test
-    public void test102() {
+    public void test1_2() {
         test("lockObject", null, "test1_1", new String[1]);
     }
 
@@ -63,7 +63,7 @@ public class MonitorTest extends GraalCompilerTest {
     }
 
     /**
-     * Tests monitor operations on {@link PartialEscapePhase virtual objects}.
+     * Tests monitor operations on {@link PartialEscapeAnalysisPhase virtual objects}.
      */
     @Test
     public void test3() {
@@ -108,7 +108,7 @@ public class MonitorTest extends GraalCompilerTest {
     public void test7() {
         char[] src = "1234567890".toCharArray();
         char[] dst = new char[src.length];
-        int n = Math.min(32, Runtime.getRuntime().availableProcessors());
+        int n = Runtime.getRuntime().availableProcessors();
         testN(n, "copyArr", src, dst, 100);
     }
 
