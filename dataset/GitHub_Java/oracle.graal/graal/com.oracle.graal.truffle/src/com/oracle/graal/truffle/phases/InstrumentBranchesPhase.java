@@ -28,7 +28,6 @@ import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleInstrumentB
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -152,26 +151,13 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
         }
 
         public synchronized ArrayList<String> accessTableToList() {
-            Comparator<Map.Entry<String, Point>> comparator = new Comparator<Map.Entry<String, Point>>() {
-                @Override
-                public int compare(Map.Entry<String, Point> x, Map.Entry<String, Point> y) {
-                    long diff = y.getValue().getHotness() - x.getValue().getHotness();
-                    if (diff < 0) {
-                        return -1;
-                    } else if (diff == 0) {
-                        return 0;
-                    } else {
-                        return 1;
-                    }
-                }
-            };
-            return pointMap.entrySet().stream().sorted(comparator).map(entry -> entry.getKey() + "\n" + entry.getValue()).collect(Collectors.toCollection(ArrayList::new));
+            return pointMap.entrySet().stream().map(entry -> entry.getKey() + "\n" + entry.getValue()).collect(Collectors.toCollection(ArrayList::new));
         }
 
         public synchronized void dumpAccessTable() {
             // Dump accumulated profiling information.
-            TTY.println("Branch execution profile (sorted by hotness)");
-            TTY.println("============================================");
+            TTY.println("Branch execution profile");
+            TTY.println("========================");
             for (String line : accessTableToList()) {
                 TTY.println(line);
                 TTY.println();
@@ -226,24 +212,18 @@ public class InstrumentBranchesPhase extends BasePhase<HighTierContext> {
                 this.index = index;
             }
 
-            public long ifVisits() {
-                return ACCESS_TABLE[index * 2];
-            }
-
-            public long elseVisits() {
-                return ACCESS_TABLE[index * 2 + 1];
-            }
-
             public BranchState getBranchState() {
-                return BranchState.from(ifVisits() > 0, elseVisits() > 0);
+                int rawIndex = index * 2;
+                long ifVisits = ACCESS_TABLE[rawIndex];
+                long elseVisits = ACCESS_TABLE[rawIndex + 1];
+                return BranchState.from(ifVisits > 0, elseVisits > 0);
             }
 
             public String getCounts() {
-                return "if=" + ifVisits() + "#, else=" + elseVisits() + "#";
-            }
-
-            public long getHotness() {
-                return ifVisits() + elseVisits();
+                int rawIndex = index * 2;
+                long ifVisits = ACCESS_TABLE[rawIndex];
+                long elseVisits = ACCESS_TABLE[rawIndex + 1];
+                return "if=" + ifVisits + "#, else=" + elseVisits + "#";
             }
 
             public int getRawIndex(boolean isTrue) {
