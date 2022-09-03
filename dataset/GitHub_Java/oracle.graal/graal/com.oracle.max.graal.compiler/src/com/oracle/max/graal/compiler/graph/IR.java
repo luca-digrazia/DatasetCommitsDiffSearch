@@ -69,14 +69,27 @@ public class IR {
      */
     public void build() {
         new GraphBuilderPhase(compilation, compilation.method, false, false).apply(compilation.graph);
-        //printGraph("After GraphBuilding", compilation.graph);
+
+
+        printGraph("After GraphBuilding", compilation.graph);
         //new DuplicationPhase().apply(compilation.graph);
         new DeadCodeEliminationPhase().apply(compilation.graph);
-        //printGraph("After DeadCodeElimination", compilation.graph);
+        printGraph("After DeadCodeElimination", compilation.graph);
 
         if (GraalOptions.Inline) {
             new InliningPhase(compilation, this, GraalOptions.TraceInlining).apply(compilation.graph);
-            //printGraph("After Ininling", compilation.graph);
+            printGraph("After Ininling", compilation.graph);
+        }
+
+        // Set successor tags
+        for (Node n : compilation.graph.getNodes()) {
+            if (n instanceof Merge) {
+                for (int i=0; i<n.predecessors().size(); ++i) {
+                    int predIndex = n.predecessorsIndex().get(i);
+                    Node pred = n.predecessors().get(i);
+                    pred.successorTags()[predIndex] = (i + 1);
+                }
+            }
         }
 
         if (GraalOptions.Time) {
@@ -88,10 +101,8 @@ public class IR {
         if (GraalOptions.OptCanonicalizer) {
             new CanonicalizerPhase().apply(graph);
             new DeadCodeEliminationPhase().apply(compilation.graph);
-            //printGraph("After Canonicalization", graph);
+            printGraph("After Canonicalization", graph);
         }
-
-        new LoopPhase().apply(graph);
 
         new LoweringPhase().apply(graph);
 

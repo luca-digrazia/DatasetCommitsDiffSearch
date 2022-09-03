@@ -248,8 +248,6 @@ public abstract class LIRGenerator extends ValueVisitor {
             }
             if (!(instr instanceof Merge) && instr != instr.graph().start()) {
                 walkState(instr, stateAfter);
-            }
-            if (instr instanceof Value) {
                 doRoot((Value) instr);
             }
             if (stateAfter != null) {
@@ -277,7 +275,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     private static boolean jumpsToNextBlock(Node node) {
-        return node instanceof BlockEnd || node instanceof Anchor || node instanceof LoopEnd;
+        return node instanceof BlockEnd || node instanceof Anchor;
     }
 
     @Override
@@ -1185,7 +1183,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
     }
 
-    protected void arithmeticOpLong(int code, CiValue result, CiValue left, CiValue right) {
+    protected void arithmeticOpLong(int code, CiValue result, CiValue left, CiValue right, LIRDebugInfo info) {
         CiValue leftOp = left;
 
         if (isTwoOperand && leftOp != result) {
@@ -1409,6 +1407,50 @@ public abstract class LIRGenerator extends ValueVisitor {
         // Moves all stack values into their phi position
         LIRBlock bb = currentBlock;
         if (bb.numberOfSux() == 1) {
+
+            Node lastNode = bb.lastInstruction();
+            if (lastNode instanceof Instruction || lastNode == lastNode.graph().start()) {
+                Node nextInstr = lastNode.successors().get(Instruction.SUCCESSOR_NEXT);
+                int nextSuccIndex = lastNode.successorTags()[Instruction.SUCCESSOR_NEXT];
+
+                if (lastNode instanceof LoopEnd) {
+                    LoopEnd loopEnd = (LoopEnd) lastNode;
+                    nextInstr = loopEnd.loopBegin();
+                    nextSuccIndex = loopEnd.loopBegin().predecessors().size() + 1;
+                }
+                if (nextInstr instanceof Merge) {
+                    Merge merge = (Merge) nextInstr;
+                    assert nextSuccIndex > 0 : "nextSuccIndex=" + nextSuccIndex + ", lastNode=" + lastNode + ", nextInstr=" + nextInstr + "; preds=" + nextInstr.predecessors() + "; predIndex=" + nextInstr.predecessorsIndex();
+
+                    PhiResolver resolver = new PhiResolver(this);
+                    for (Node n : merge.usages()) {
+                        if (n instanceof Phi) {
+                            Phi phi = (Phi) n;
+                            if (!phi.isDead()) {
+                                Value curVal = phi.valueAt(nextSuccIndex - 1);
+                                if (curVal != null && curVal != phi) {
+                                    if (curVal instanceof Phi) {
+                                        operandForPhi((Phi) curVal);
+                                    }
+                                    CiValue operand = curVal.operand();
+                                    if (operand.isIllegal()) {
+                                        assert curVal instanceof Constant || curVal instanceof Local : "these can be produced lazily" + curVal + "/" + phi;
+                                        operand = operandForInstruction(curVal);
+                                    }
+                                    resolver.move(operand, operandForPhi(phi));
+                                }
+                            }
+                        }
+                    }
+                    resolver.dispose();
+                }
+                return;
+            }
+
+            assert false : "lastNode=" + lastNode + " instr=" + bb.getInstructions();
+
+
+
             LIRBlock sux = bb.suxAt(0);
             assert sux.numberOfPreds() > 0 : "invalid CFG";
 
@@ -1446,29 +1488,6 @@ public abstract class LIRGenerator extends ValueVisitor {
                         }
                     }
                     resolver.dispose();
-
-                    //TODO (gd) remove that later
-                    Node suxFirstInstr = sux.firstInstruction();
-                    if (suxFirstInstr instanceof LoopBegin) {
-                        for (Node n : suxFirstInstr.usages()) {
-                            if (n instanceof LoopCounter) {
-                                LoopCounter counter = (LoopCounter) n;
-                                if (counter.operand().isIllegal()) {
-                                    createResultVariable(counter);
-                                }
-                                if (predIndex == 0) {
-                                    lir.move(operandForInstruction(counter.init()), counter.operand());
-                                } else {
-                                    if (counter.kind == CiKind.Int) {
-                                        this.arithmeticOpInt(IADD, counter.operand(), counter.operand(), operandForInstruction(counter.stride()), CiValue.IllegalValue);
-                                    } else {
-                                        assert counter.kind == CiKind.Long;
-                                        this.arithmeticOpLong(LADD, counter.operand(), counter.operand(), operandForInstruction(counter.stride()));
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -1490,7 +1509,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             if (x instanceof Constant) {
                 x.setOperand(x.asConstant());
             } else {
-                assert x instanceof Phi || x instanceof Local : "only for Phi and Local : " + x;
+                assert x instanceof Phi || x instanceof Local : "only for Phi and Local";
                 // allocate a variable for this local or phi
                 createResultVariable(x);
             }
@@ -1502,7 +1521,8 @@ public abstract class LIRGenerator extends ValueVisitor {
         assert !phi.isDead() : "dead phi: " + phi.id();
         if (phi.operand().isIllegal()) {
             // allocate a variable for this phi
-            createResultVariable(phi);
+            CiVariable operand = newVariable(phi.kind);
+            setResult(phi, operand);
         }
         return phi.operand();
     }
