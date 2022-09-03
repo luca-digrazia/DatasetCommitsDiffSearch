@@ -349,7 +349,7 @@ public final class CompileTheWorld {
             HotSpotBackend backend = runtime.getHostBackend();
             PhasePlan phasePlan = vmToCompiler.createPhasePlan(backend.getProviders(), optimisticOpts, false);
             CompilationTask task = new CTWCompilationTask(backend, phasePlan, optimisticOpts, profilingInfo, method, INVOCATION_ENTRY_BCI, id);
-            task.runCompilation(false);
+            task.runCompilation();
 
             compileTime += (System.currentTimeMillis() - start);
             compiledMethodsCounter++;
