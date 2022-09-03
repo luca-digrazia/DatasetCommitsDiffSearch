@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.runtime;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
@@ -135,9 +136,9 @@ public final class LLVMTruffleObject implements LLVMObjectNativeLibrary.Provider
         }
 
         @Override
-        public boolean isPointer(Object obj) {
+        public boolean isPointer(VirtualFrame frame, Object obj) {
             LLVMTruffleObject object = (LLVMTruffleObject) obj;
-            if (lib.isPointer(object.getObject())) {
+            if (lib.isPointer(frame, object.getObject())) {
                 return true;
             } else {
                 if (isNull == null) {
@@ -149,7 +150,7 @@ public final class LLVMTruffleObject implements LLVMObjectNativeLibrary.Provider
         }
 
         @Override
-        public long asPointer(Object obj) throws InteropException {
+        public long asPointer(VirtualFrame frame, Object obj) throws InteropException {
             LLVMTruffleObject object = (LLVMTruffleObject) obj;
             if (isNull == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -158,15 +159,15 @@ public final class LLVMTruffleObject implements LLVMObjectNativeLibrary.Provider
             if (ForeignAccess.sendIsNull(isNull, object.getObject())) {
                 return object.getOffset();
             } else {
-                long base = lib.asPointer(object.getObject());
+                long base = lib.asPointer(frame, object.getObject());
                 return base + object.getOffset();
             }
         }
 
         @Override
-        public Object toNative(Object obj) throws InteropException {
+        public Object toNative(VirtualFrame frame, Object obj) throws InteropException {
             LLVMTruffleObject object = (LLVMTruffleObject) obj;
-            Object nativeBase = lib.toNative(object.getObject());
+            Object nativeBase = lib.toNative(frame, object.getObject());
             return new LLVMTruffleObject((TruffleObject) nativeBase, object.offset, object.baseType);
         }
     }
@@ -185,17 +186,17 @@ public final class LLVMTruffleObject implements LLVMObjectNativeLibrary.Provider
         }
 
         @Override
-        public boolean isPointer(Object obj) {
+        public boolean isPointer(VirtualFrame frame, Object obj) {
             return true;
         }
 
         @Override
-        public long asPointer(Object obj) throws InteropException {
+        public long asPointer(VirtualFrame frame, Object obj) throws InteropException {
             return ((LLVMTruffleObject) obj).getOffset();
         }
 
         @Override
-        public Object toNative(Object obj) throws InteropException {
+        public Object toNative(VirtualFrame frame, Object obj) throws InteropException {
             return obj;
         }
     }
