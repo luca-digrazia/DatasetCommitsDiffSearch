@@ -30,20 +30,14 @@
 package com.oracle.truffle.llvm.runtime;
 
 import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 
-public class LLVMLogger {
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.util.function.Consumer;
 
-    public static void performanceWarning(String warning) {
-        CompilerAsserts.neverPartOfCompilation();
-        if (LLVMOptions.printPerformanceWarnings()) {
-            // Checkstyle: stop
-            System.err.println(warning);
-            // Checkstyle: resume
-        }
-        if (LLVMOptions.performanceWarningsAreFatal()) {
-            throw new AssertionError(warning);
-        }
-    }
+public final class LLVMLogger {
 
     public static void error(String error) {
         CompilerAsserts.neverPartOfCompilation();
@@ -54,13 +48,44 @@ public class LLVMLogger {
 
     public static void unconditionalInfo(String string) {
         CompilerAsserts.neverPartOfCompilation();
+        // Checkstyle: stop
         System.err.println(string);
+        // Checkstyle: resume
     }
 
     public static void info(String string) {
         CompilerAsserts.neverPartOfCompilation();
-        if (LLVMOptions.debugEnabled()) {
-            System.err.println(string);
+        print(LLVMOptions.DEBUG.debug()).accept(string);
+    }
+
+    public static final String TARGET_NONE = String.valueOf(false);
+
+    public static final String TARGET_ANY = String.valueOf(true);
+
+    public static final String TARGET_STDOUT = "stdout";
+
+    public static final String TARGET_STDERR = "stderr";
+
+    public static Consumer<String> print(String target) {
+        if (TARGET_STDOUT.equals(target) || TARGET_ANY.equals(target)) {
+            return System.out::println;
+
+        } else if (TARGET_STDERR.equals(target)) {
+            return System.out::println;
+
+        } else if (TARGET_NONE.equals(target)) {
+            return s -> {
+            };
+
+        } else {
+            return message -> {
+                try (final PrintStream out = new PrintStream(new FileOutputStream(target, true))) {
+                    out.println(message);
+                    out.flush();
+                } catch (IOException e) {
+                    throw new IllegalStateException("Cannot write to file: " + target);
+                }
+            };
         }
     }
 

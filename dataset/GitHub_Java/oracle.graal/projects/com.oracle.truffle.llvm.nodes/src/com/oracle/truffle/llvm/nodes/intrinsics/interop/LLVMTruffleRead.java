@@ -34,18 +34,18 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMPerformance;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 public abstract class LLVMTruffleRead extends LLVMIntrinsic {
 
@@ -56,27 +56,25 @@ public abstract class LLVMTruffleRead extends LLVMIntrinsic {
         }
     }
 
-    private static Object doRead(TruffleObject value, LLVMAddress id, Node foreignRead, ToLLVMNode toLLVM) {
+    private static Object doRead(VirtualFrame frame, TruffleObject value, LLVMAddress id, Node foreignRead, ToLLVMNode toLLVM) {
         String name = LLVMTruffleIntrinsicUtil.readString(id);
-        return doRead(value, name, foreignRead, toLLVM);
+        return doRead(frame, value, name, foreignRead, toLLVM);
     }
 
-    private static Object doRead(TruffleObject value, String name, Node foreignRead, ToLLVMNode toLLVM) {
+    private static Object doRead(VirtualFrame frame, TruffleObject value, String name, Node foreignRead, ToLLVMNode toLLVM) {
         try {
-            Object rawValue = ForeignAccess.sendRead(foreignRead, value, name);
-            return toLLVM.executeWithTarget(rawValue);
+            Object rawValue = ForeignAccess.sendRead(foreignRead, frame, value, name);
+            return toLLVM.executeWithTarget(frame, rawValue);
         } catch (UnknownIdentifierException | UnsupportedMessageException e) {
-            CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException(e);
         }
     }
 
-    private static Object doReadIdx(TruffleObject value, int id, Node foreignRead, ToLLVMNode toLLVM) {
+    private static Object doReadIdx(VirtualFrame frame, TruffleObject value, int id, Node foreignRead, ToLLVMNode toLLVM) {
         try {
-            Object rawValue = ForeignAccess.sendRead(foreignRead, value, id);
-            return toLLVM.executeWithTarget(rawValue);
+            Object rawValue = ForeignAccess.sendRead(foreignRead, frame, value, id);
+            return toLLVM.executeWithTarget(frame, rawValue);
         } catch (UnknownIdentifierException | UnsupportedMessageException e) {
-            CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException(e);
         }
     }
@@ -93,30 +91,30 @@ public abstract class LLVMTruffleRead extends LLVMIntrinsic {
 
         @SuppressWarnings("unused")
         @Specialization(limit = "2", guards = "constantPointer(id, cachedPtr)")
-        public Object executeIntrinsicCached(LLVMTruffleObject value, LLVMAddress id, @Cached("pointerOf(id)") long cachedPtr,
+        public Object executeIntrinsicCached(VirtualFrame frame, LLVMTruffleObject value, LLVMAddress id, @Cached("pointerOf(id)") long cachedPtr,
                         @Cached("readString(id)") String cachedId) {
             checkLLVMTruffleObject(value);
-            return doRead(value.getObject(), cachedId, foreignRead, toLLVM);
+            return doRead(frame, value.getObject(), cachedId, foreignRead, toLLVM);
         }
 
         @Specialization
-        public Object executeIntrinsic(LLVMTruffleObject value, LLVMAddress id) {
+        public Object executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value, LLVMAddress id) {
             checkLLVMTruffleObject(value);
             LLVMPerformance.warn(this);
-            return doRead(value.getObject(), id, foreignRead, toLLVM);
+            return doRead(frame, value.getObject(), id, foreignRead, toLLVM);
         }
 
         @SuppressWarnings("unused")
         @Specialization(limit = "2", guards = "constantPointer(id, cachedPtr)")
-        public Object executeIntrinsicCached(TruffleObject value, LLVMAddress id, @Cached("pointerOf(id)") long cachedPtr,
+        public Object executeIntrinsicCached(VirtualFrame frame, TruffleObject value, LLVMAddress id, @Cached("pointerOf(id)") long cachedPtr,
                         @Cached("readString(id)") String cachedId) {
-            return doRead(value, cachedId, foreignRead, toLLVM);
+            return doRead(frame, value, cachedId, foreignRead, toLLVM);
         }
 
         @Specialization
-        public Object executeIntrinsic(TruffleObject value, LLVMAddress id) {
+        public Object executeIntrinsic(VirtualFrame frame, TruffleObject value, LLVMAddress id) {
             LLVMPerformance.warn(this);
-            return doRead(value, id, foreignRead, toLLVM);
+            return doRead(frame, value, id, foreignRead, toLLVM);
         }
     }
 
@@ -131,14 +129,14 @@ public abstract class LLVMTruffleRead extends LLVMIntrinsic {
         }
 
         @Specialization
-        public Object executeIntrinsic(LLVMTruffleObject value, int id) {
+        public Object executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value, int id) {
             checkLLVMTruffleObject(value);
-            return doReadIdx(value.getObject(), id, foreignRead, toLLVM);
+            return doReadIdx(frame, value.getObject(), id, foreignRead, toLLVM);
         }
 
         @Specialization
-        public Object executeIntrinsic(TruffleObject value, int id) {
-            return doReadIdx(value, id, foreignRead, toLLVM);
+        public Object executeIntrinsic(VirtualFrame frame, TruffleObject value, int id) {
+            return doReadIdx(frame, value, id, foreignRead, toLLVM);
         }
     }
 

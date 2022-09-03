@@ -35,27 +35,32 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
+import com.oracle.truffle.llvm.runtime.LLVMPerformance;
 
-@SuppressWarnings("unused")
 @NodeChild(type = LLVMExpressionNode.class)
 public abstract class LLVMTruffleAddressToFunction extends LLVMIntrinsic {
 
-    @Specialization(guards = "value.getVal() == cachedValue.getVal()")
-    public Object executeIntrinsicCached(LLVMAddress value, @Cached("value") LLVMAddress cachedValue, @Cached("getContext()") LLVMContext cachedContext,
-                    @Cached("getDescriptor(cachedValue, cachedContext)") LLVMFunctionDescriptor handle) {
-        return handle;
+    protected static long getPtr(LLVMAddress value) {
+        return value.getVal();
     }
 
-    @Specialization
-    public Object executeIntrinsic(LLVMAddress value, @Cached("getContext()") LLVMContext cachedContext) {
-        return getDescriptor(value, cachedContext);
+    @SuppressWarnings("unused")
+    @Specialization(limit = "10", guards = {"getPtr(value) == cachedAddress"})
+    public Object cached(LLVMAddress value,
+                    @Cached("getPtr(value)") long cachedAddress,
+                    @Cached("getDescriptor(cachedAddress)") LLVMFunctionDescriptor cachedDescriptor) {
+        return cachedDescriptor;
     }
 
-    protected static LLVMFunctionDescriptor getDescriptor(LLVMAddress value, LLVMContext cachedContext) {
-        return cachedContext.lookup(new LLVMFunctionHandle((int) value.getVal()));
+    @Specialization(replaces = "cached")
+    public Object uncached(LLVMAddress value) {
+        LLVMPerformance.warn(this);
+        return getDescriptor(value.getVal());
+    }
+
+    protected static LLVMFunctionDescriptor getDescriptor(long value) {
+        return LLVMFunctionDescriptor.create((int) value);
     }
 
 }

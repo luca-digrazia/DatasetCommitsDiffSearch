@@ -33,11 +33,11 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMPerformance;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
 public abstract class LLVMTruffleReadNString extends LLVMIntrinsic {
@@ -49,12 +49,12 @@ public abstract class LLVMTruffleReadNString extends LLVMIntrinsic {
 
     @TruffleBoundary
     private static Object getString(LLVMAddress value, int n) {
-        long ptr = value.getVal();
+        LLVMAddress adr = value;
         int count = n < 0 ? 0 : n;
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < count; i++) {
-            sb.append((char) Byte.toUnsignedInt(LLVMMemory.getI8(ptr)));
-            ptr += Byte.BYTES;
+            sb.append((char) Byte.toUnsignedInt(LLVMMemory.getI8(adr)));
+            adr = adr.increment(Byte.BYTES);
         }
         return sb.toString();
     }
