@@ -39,6 +39,8 @@ public class RegexCompilerWithFallback extends RegexCompiler {
     private final RegexCompiler mainCompiler;
     private final RegexCompiler fallbackCompiler;
 
+    private final DebugUtil.Timer timer = shouldLogCompilationTime() ? new DebugUtil.Timer() : null;
+
     public RegexCompilerWithFallback(TruffleObject mainCompiler, TruffleObject fallbackCompiler) {
         this.mainCompiler = ForeignRegexCompiler.importRegexCompiler(mainCompiler);
         this.fallbackCompiler = ForeignRegexCompiler.importRegexCompiler(fallbackCompiler);
@@ -50,11 +52,7 @@ public class RegexCompilerWithFallback extends RegexCompiler {
         TruffleObject regex;
         long elapsedTimeMain = 0;
         long elapsedTimeFallback = 0;
-        DebugUtil.Timer timer = null;
         final boolean shouldLog = shouldLogCompilationTime();
-        if (shouldLog) {
-            timer = new DebugUtil.Timer();
-        }
         try {
             if (shouldLog) {
                 timer.start();

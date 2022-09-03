@@ -51,7 +51,6 @@ import com.oracle.truffle.regex.tregex.nodes.input.InputLengthNode;
 import java.util.Arrays;
 
 import static com.oracle.truffle.regex.tregex.util.DebugUtil.LOG_BAILOUT_MESSAGES;
-import static com.oracle.truffle.regex.tregex.util.DebugUtil.LOG_INTERNAL_ERRORS;
 import static com.oracle.truffle.regex.tregex.util.DebugUtil.LOG_SWITCH_TO_EAGER;
 
 public class TRegexExecRootNode extends RegexExecRootNode implements CompiledRegex, RegexProfile.TracksRegexProfile {
@@ -162,7 +161,12 @@ public class TRegexExecRootNode extends RegexExecRootNode implements CompiledReg
             equal = Arrays.equals(((LazyCaptureGroupsResult) lazyResult).getResult(), ((LazyCaptureGroupsResult) eagerResult).getResult());
         }
         if (!equal) {
-            LOG_INTERNAL_ERRORS.severe(() -> String.format("Regex: %s\nInput: %s\nfromIndex: %d\nLazy Result: %s\nEager Result: %s", getSource(), input, fromIndex, lazyResult, eagerResult));
+            System.out.println("ERROR:");
+            System.out.println("Regex: " + getSource());
+            System.out.println("Input: " + input);
+            System.out.println("fromIndex: " + fromIndex);
+            System.out.println("Lazy  Result: " + lazyResult);
+            System.out.println("Eager Result: " + eagerResult);
         }
         return equal;
     }
