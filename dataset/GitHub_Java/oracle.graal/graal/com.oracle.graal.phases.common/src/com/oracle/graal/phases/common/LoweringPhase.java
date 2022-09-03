@@ -228,9 +228,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
 
                 if (loweringTool.lastFixedNode() == null) {
                     AbstractBeginNode beginNode = b.getBeginNode();
-                    if (node == beginNode) {
-                        loweringTool.setLastFixedNode(beginNode);
-                    } else if (node instanceof Lowerable) {
+                    if (node instanceof Lowerable) {
                         // Handles cases where there is a lowerable nodes scheduled before the begin
                         // node.
                         BeginNode newBegin = node.graph().add(new BeginNode());

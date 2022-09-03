@@ -51,8 +51,6 @@ import static com.oracle.graal.nodes.java.RegisterFinalizerNode.*;
 import static com.oracle.graal.phases.GraalOptions.*;
 import static com.oracle.graal.replacements.Log.*;
 import static com.oracle.graal.replacements.MathSubstitutionsX86.*;
-import static com.oracle.graal.hotspot.nodes.G1PostWriteBarrierStubCall.*;
-import static com.oracle.graal.hotspot.nodes.G1PreWriteBarrierStubCall.*;
 
 import java.lang.reflect.*;
 import java.util.*;
@@ -296,8 +294,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         linkForeignCall(r, THREAD_IS_INTERRUPTED, c.threadIsInterruptedAddress, PREPEND_THREAD, NOT_REEXECUTABLE, ANY_LOCATION);
         linkForeignCall(r, VM_ERROR, c.vmErrorAddress, PREPEND_THREAD, REEXECUTABLE, NO_LOCATIONS);
         linkForeignCall(r, OSR_MIGRATION_END, c.osrMigrationEndAddress, DONT_PREPEND_THREAD, NOT_REEXECUTABLE, NO_LOCATIONS);
-        linkForeignCall(r, G1WBPRECALL, c.writeBarrierPreAddress, PREPEND_THREAD, REEXECUTABLE, NO_LOCATIONS);
-        linkForeignCall(r, G1WBPOSTCALL, c.writeBarrierPostAddress, PREPEND_THREAD, REEXECUTABLE, NO_LOCATIONS);
+
         if (IntrinsifyObjectMethods.getValue()) {
             r.registerSubstitutions(ObjectSubstitutions.class);
         }
@@ -328,8 +325,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         writeBarrierSnippets = new WriteBarrierSnippets.Templates(this, r, graalRuntime.getTarget());
         boxingSnippets = new BoxingSnippets.Templates(this, r, graalRuntime.getTarget());
         exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(this, r, graalRuntime.getTarget());
-
-        r.registerSnippetTemplateCache(new UnsafeArrayCopySnippets.Templates(this, r, graalRuntime.getTarget()));
     }
 
     public HotSpotGraalRuntime getGraalRuntime() {
@@ -534,8 +529,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             HotSpotResolvedJavaField field = (HotSpotResolvedJavaField) loadField.field();
             ValueNode object = loadField.isStatic() ? ConstantNode.forObject(field.getDeclaringClass().mirror(), this, graph) : loadField.object();
             assert loadField.kind() != Kind.Illegal;
-            WriteBarrierType barrierType = getFieldLoadBarrierType(field);
-            ReadNode memoryRead = graph.add(new ReadNode(object, createFieldLocation(graph, field), loadField.stamp(), barrierType, (loadField.kind() == Kind.Object)));
+            ReadNode memoryRead = graph.add(new ReadNode(object, createFieldLocation(graph, field), loadField.stamp(), WriteBarrierType.NONE, (loadField.kind() == Kind.Object)));
             tool.createNullCheckGuard(memoryRead, object);
 
             graph.replaceFixedWithFixed(loadField, memoryRead);
@@ -827,14 +821,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         ReadNode hub = graph.add(new ReadNode(object, location, StampFactory.forKind(wordKind()), WriteBarrierType.NONE, false));
         tool.createNullCheckGuard(hub, object);
         return hub;
-    }
-
-    private static WriteBarrierType getFieldLoadBarrierType(HotSpotResolvedJavaField loadField) {
-        WriteBarrierType barrierType = WriteBarrierType.NONE;
-        if (config().useG1GC && loadField.getKind() == Kind.Object && loadField.getDeclaringClass().mirror() == java.lang.ref.Reference.class && loadField.getName().equals("referent")) {
-            barrierType = WriteBarrierType.PRECISE;
-        }
-        return barrierType;
     }
 
     private static WriteBarrierType getFieldStoreBarrierType(StoreFieldNode storeField) {
