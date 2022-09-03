@@ -118,8 +118,8 @@ public final class ReentrantBlockIterator {
                                 blockEndStates.put(end, state);
                                 MergeNode merge = end.merge();
                                 boolean endsVisited = true;
-                                for (EndNode forwardEnd : merge.forwardEnds()) {
-                                    if (!blockEndStates.containsKey(forwardEnd)) {
+                                for (int i = 0; i < merge.forwardEndCount(); i++) {
+                                    if (!blockEndStates.containsKey(merge.forwardEndAt(i))) {
                                         endsVisited = false;
                                         break;
                                     }
