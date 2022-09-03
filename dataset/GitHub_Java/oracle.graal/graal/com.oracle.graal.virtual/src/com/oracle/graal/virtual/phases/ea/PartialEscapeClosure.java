@@ -111,18 +111,13 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             return !(node instanceof CommitAllocationNode || node instanceof AllocatedObjectNode);
         }
         if (isMarked) {
-            if (node instanceof NodeWithState) {
-                NodeWithState nodeWithState = (NodeWithState) node;
-                FrameState stateAfter = nodeWithState.getState();
+            if (node instanceof StateSplit) {
+                StateSplit split = (StateSplit) node;
+                FrameState stateAfter = split.stateAfter();
                 if (stateAfter != null) {
                     if (stateAfter.usages().count() > 1) {
-                        if (nodeWithState instanceof StateSplit) {
-                            StateSplit split = (StateSplit) nodeWithState;
-                            stateAfter = (FrameState) stateAfter.copyWithInputs();
-                            split.setStateAfter(stateAfter);
-                        } else {
-                            throw GraalInternalError.shouldNotReachHere();
-                        }
+                        stateAfter = (FrameState) stateAfter.copyWithInputs();
+                        split.setStateAfter(stateAfter);
                     }
                     final HashSet<ObjectState> virtual = new HashSet<>();
                     stateAfter.applyToNonVirtual(new NodeClosure<ValueNode>() {
@@ -209,9 +204,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         assert obj != null;
         if (obj.getState() == EscapeState.Virtual) {
             metric.increment();
-            state.materializeBefore(materializeBefore, obj.virtual, EscapeState.Materialized, effects);
+            state.materializeBefore(materializeBefore, obj.virtual, EscapeState.Global, effects);
         } else {
-            assert obj.getState() == EscapeState.Materialized;
+            assert obj.getState() == EscapeState.Global;
         }
         assert !obj.isVirtual();
     }
@@ -366,9 +361,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                 ensureMaterialized(state, obj, predecessor.getEndNode(), blockEffects.get(predecessor), METRIC_MATERIALIZATIONS_MERGE);
                                 afterMergeEffects.addPhiInput(materializedValuePhi, obj.getMaterializedValue());
                             }
-                            newState.addObject(object, new ObjectState(object, materializedValuePhi, EscapeState.Materialized, null));
+                            newState.addObject(object, new ObjectState(object, materializedValuePhi, EscapeState.Global, null));
                         } else {
-                            newState.addObject(object, new ObjectState(object, singleValue, EscapeState.Materialized, null));
+                            newState.addObject(object, new ObjectState(object, singleValue, EscapeState.Global, null));
                         }
                     } else {
                         assert virtual == states.size();
