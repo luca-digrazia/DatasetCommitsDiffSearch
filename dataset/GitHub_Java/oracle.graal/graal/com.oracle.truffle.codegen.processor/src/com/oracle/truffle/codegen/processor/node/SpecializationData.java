@@ -26,9 +26,7 @@ import java.util.*;
 
 import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.codegen.processor.*;
-import com.oracle.truffle.codegen.processor.node.NodeFieldData.*;
 import com.oracle.truffle.codegen.processor.template.*;
-import com.oracle.truffle.codegen.processor.typesystem.*;
 
 public class SpecializationData extends TemplateMethod {
 
@@ -36,8 +34,7 @@ public class SpecializationData extends TemplateMethod {
     private final boolean generic;
     private final boolean uninitialized;
     private final List<SpecializationThrowsData> exceptions;
-    private List<String> guardDefinitions = Collections.emptyList();
-    private List<GuardData> guards;
+    private List<SpecializationGuardData> guards;
     private List<ShortCircuitData> shortCircuits;
     private boolean useSpecializationsForGeneric = true;
     private NodeData node;
@@ -84,7 +81,7 @@ public class SpecializationData extends TemplateMethod {
         }
         for (ActualParameter parameter : getParameters()) {
             NodeFieldData field = getNode().findField(parameter.getSpecification().getName());
-            if (field == null || field.getKind() == FieldKind.FIELD) {
+            if (field == null) {
                 continue;
             }
             ExecutableTypeData type = field.getNodeData().findExecutableType(parameter.getActualTypeData(field.getNodeData().getTypeSystem()));
@@ -95,31 +92,6 @@ public class SpecializationData extends TemplateMethod {
         return false;
     }
 
-    @Override
-    public int compareBySignature(TemplateMethod other) {
-        if (this == other) {
-            return 0;
-        } else if (!(other instanceof SpecializationData)) {
-            return super.compareBySignature(other);
-        }
-
-        SpecializationData m2 = (SpecializationData) other;
-
-        if (getOrder() != Specialization.DEFAULT_ORDER && m2.getOrder() != Specialization.DEFAULT_ORDER) {
-            return getOrder() - m2.getOrder();
-        } else if (isUninitialized() ^ m2.isUninitialized()) {
-            return isUninitialized() ? -1 : 1;
-        } else if (isGeneric() ^ m2.isGeneric()) {
-            return isGeneric() ? 1 : -1;
-        }
-
-        if (getTemplate() != m2.getTemplate()) {
-            throw new UnsupportedOperationException("Cannot compare two specializations with different templates.");
-        }
-
-        return super.compareBySignature(m2);
-    }
-
     public NodeData getNode() {
         return node;
     }
@@ -128,12 +100,8 @@ public class SpecializationData extends TemplateMethod {
         this.node = node;
     }
 
-    public void setGuards(List<GuardData> guards) {
+    public void setGuards(List<SpecializationGuardData> guards) {
         this.guards = guards;
-    }
-
-    public void setGuardDefinitions(List<String> guardDefinitions) {
-        this.guardDefinitions = guardDefinitions;
     }
 
     public int getOrder() {
@@ -152,11 +120,7 @@ public class SpecializationData extends TemplateMethod {
         return exceptions;
     }
 
-    public List<String> getGuardDefinitions() {
-        return guardDefinitions;
-    }
-
-    public List<GuardData> getGuards() {
+    public List<SpecializationGuardData> getGuards() {
         return guards;
     }
 
@@ -187,12 +151,12 @@ public class SpecializationData extends TemplateMethod {
     }
 
     public boolean hasDynamicGuards() {
-        return !getGuards().isEmpty();
-    }
-
-    @Override
-    public String toString() {
-        return String.format("%s [id = %s, method = %s, guards = %s]", getClass().getSimpleName(), getId(), getMethod(), getGuards());
+        for (SpecializationGuardData guard : getGuards()) {
+            if (guard.isOnExecution()) {
+                return true;
+            }
+        }
+        return false;
     }
 
 }
