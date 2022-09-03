@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.api;
 
-import java.lang.annotation.*;
 import java.util.concurrent.*;
 
 /**
@@ -85,14 +84,5 @@ public class CompilerDirectives {
      * @param reason the reason for the bailout
      */
     public static void bailout(String reason) {
-    }
-
-    /**
-     * Marks fields that should be considered final for a Truffle compilation although they are not
-     * final while executing in the interpreter.
-     */
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target({ElementType.FIELD})
-    public @interface CompilationFinal {
     }
 }
