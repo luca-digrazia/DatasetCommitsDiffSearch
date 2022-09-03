@@ -22,26 +22,73 @@
  */
 package com.oracle.nfi;
 
-import com.oracle.nfi.api.*;
+import java.lang.reflect.Method;
+import java.util.Iterator;
+import java.util.ServiceLoader;
 
+import com.oracle.nfi.api.NativeFunctionInterface;
+import com.oracle.nfi.api.NativeFunctionInterfaceAccess;
+
+/**
+ * Class for obtaining the {@link NativeFunctionInterface} (if any) provided by the VM.
+ */
 public final class NativeFunctionInterfaceRuntime {
-    private static final NativeFunctionInterface INTERFACE;
+    private static final NativeFunctionInterface INSTANCE;
 
-    private static native NativeFunctionInterface createInterface();
-
+    /**
+     * Gets the {@link NativeFunctionInterface} (if any) provided by the VM.
+     *
+     * @return null if the VM does not provide a {@link NativeFunctionInterface}
+     */
     public static NativeFunctionInterface getNativeFunctionInterface() {
-        return INTERFACE;
+        return INSTANCE;
     }
 
     static {
-        NativeFunctionInterface instance;
-        try {
-            instance = createInterface();
-        } catch (UnsatisfiedLinkError e) {
-            System.err.println("Graal Native Function Interface not supported!");
-            e.printStackTrace();
-            instance = null;
+
+        NativeFunctionInterface instance = null;
+
+        NativeFunctionInterfaceAccess access = null;
+        Class<?> servicesClass = null;
+        boolean java8OrEarlier = System.getProperty("java.specification.version").compareTo("1.9") < 0;
+        if (!java8OrEarlier) {
+            Iterator<NativeFunctionInterfaceAccess> providers = ServiceLoader.load(NativeFunctionInterfaceAccess.class).iterator();
+            if (providers.hasNext()) {
+                access = providers.next();
+                if (providers.hasNext()) {
+                    throw new InternalError(String.format("Multiple %s providers found", NativeFunctionInterfaceAccess.class.getName()));
+                }
+            }
+        } else {
+
+            try {
+                servicesClass = Class.forName("jdk.vm.ci.services.Services");
+            } catch (ClassNotFoundException e) {
+                try {
+                    servicesClass = Class.forName("jdk.vm.ci.service.Services");
+                } catch (ClassNotFoundException e2) {
+                    try {
+                        // Legacy support
+                        servicesClass = Class.forName("com.oracle.jvmci.service.Services");
+                    } catch (ClassNotFoundException e3) {
+                        // JVMCI is unavailable
+                    }
+                }
+            }
         }
-        INTERFACE = instance;
+        if (servicesClass != null) {
+            try {
+                Method m = servicesClass.getDeclaredMethod("loadSingle", Class.class, boolean.class);
+                access = (NativeFunctionInterfaceAccess) m.invoke(null, NativeFunctionInterfaceAccess.class, false);
+            } catch (Throwable e) {
+                // Fail fast for other errors
+                throw (InternalError) new InternalError().initCause(e);
+            }
+        }
+        // TODO: try standard ServiceLoader?
+        if (access != null) {
+            instance = access.getNativeFunctionInterface();
+        }
+        INSTANCE = instance;
     }
 }

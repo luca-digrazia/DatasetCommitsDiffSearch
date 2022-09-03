@@ -45,7 +45,6 @@ import org.junit.Assume;
 import org.junit.Test;
 
 import com.oracle.graal.api.test.Graal;
-import com.oracle.graal.bytecode.BridgeMethodUtils;
 import com.oracle.graal.compiler.CompilerThreadFactory;
 import com.oracle.graal.compiler.CompilerThreadFactory.DebugConfigAccess;
 import com.oracle.graal.compiler.common.LIRKind;
@@ -134,6 +133,8 @@ public class CheckGraalInvariants extends GraalTest {
         String propertyName = Java8OrEarlier ? "sun.boot.class.path" : "jdk.module.path";
         String bootclasspath = System.getProperty(propertyName);
         Assert.assertNotNull("Cannot find value of " + propertyName, bootclasspath);
+
+        bootclasspath.split(File.pathSeparator);
 
         final List<String> classNames = new ArrayList<>();
         for (String path : bootclasspath.split(File.pathSeparator)) {
@@ -278,10 +279,6 @@ public class CheckGraalInvariants extends GraalTest {
         new VerifyDebugUsage().apply(graph, context);
         new VerifyCallerSensitiveMethods().apply(graph, context);
         new VerifyVirtualizableUsage().apply(graph, context);
-
-        if (graph.method().isBridge()) {
-            BridgeMethodUtils.getBridgedMethod(graph.method());
-        }
     }
 
     private static boolean matches(String[] filters, String s) {

@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.replacements;
 
+import static com.oracle.graal.compiler.common.GraalOptions.UseGraalInstrumentation;
+import static com.oracle.graal.compiler.common.util.Util.Java8OrEarlier;
 import static jdk.vm.ci.code.MemoryBarriers.JMM_POST_VOLATILE_READ;
 import static jdk.vm.ci.code.MemoryBarriers.JMM_POST_VOLATILE_WRITE;
 import static jdk.vm.ci.code.MemoryBarriers.JMM_PRE_VOLATILE_READ;
@@ -71,11 +73,6 @@ import com.oracle.graal.nodes.debug.BlackholeNode;
 import com.oracle.graal.nodes.debug.ControlFlowAnchorNode;
 import com.oracle.graal.nodes.debug.OpaqueNode;
 import com.oracle.graal.nodes.debug.SpillRegistersNode;
-import com.oracle.graal.nodes.debug.instrumentation.ControlFlowPathNode;
-import com.oracle.graal.nodes.debug.instrumentation.InstrumentationBeginNode;
-import com.oracle.graal.nodes.debug.instrumentation.InstrumentationEndNode;
-import com.oracle.graal.nodes.debug.instrumentation.IsMethodInlinedNode;
-import com.oracle.graal.nodes.debug.instrumentation.RootNameNode;
 import com.oracle.graal.nodes.extended.BoxNode;
 import com.oracle.graal.nodes.extended.BranchProbabilityNode;
 import com.oracle.graal.nodes.extended.GetClassNode;
@@ -98,6 +95,11 @@ import com.oracle.graal.nodes.java.LoadFieldNode;
 import com.oracle.graal.nodes.java.RegisterFinalizerNode;
 import com.oracle.graal.nodes.util.GraphUtil;
 import com.oracle.graal.nodes.virtual.EnsureVirtualizedNode;
+import com.oracle.graal.phases.common.instrumentation.nodes.InstrumentationBeginNode;
+import com.oracle.graal.phases.common.instrumentation.nodes.InstrumentationEndNode;
+import com.oracle.graal.phases.common.instrumentation.nodes.IsMethodInlinedNode;
+import com.oracle.graal.phases.common.instrumentation.nodes.RootNameNode;
+import com.oracle.graal.phases.common.instrumentation.nodes.RuntimePathNode;
 import com.oracle.graal.replacements.nodes.DirectReadNode;
 import com.oracle.graal.replacements.nodes.ReverseBytesNode;
 import com.oracle.graal.replacements.nodes.VirtualizableInvokeMacroNode;
@@ -130,7 +132,7 @@ public class StandardGraphBuilderPlugins {
         registerIntegerLongPlugins(plugins, JavaKind.Long);
         registerFloatPlugins(plugins);
         registerDoublePlugins(plugins);
-        if (System.getProperty("java.specification.version").compareTo("1.9") < 0) {
+        if (Java8OrEarlier) {
             registerStringPlugins(plugins);
         }
         registerArraysPlugins(plugins);
@@ -781,34 +783,6 @@ public class StandardGraphBuilderPlugins {
                 return true;
             }
         });
-        r.register1("instrumentationBegin", int.class, new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode offset) {
-                b.add(new InstrumentationBeginNode(offset));
-                return true;
-            }
-        });
-        r.register0("instrumentationEnd", new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.add(new InstrumentationEndNode());
-                return true;
-            }
-        });
-        r.register0("isMethodInlined", new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.addPush(JavaKind.Boolean, new IsMethodInlinedNode(b.getDepth()));
-                return true;
-            }
-        });
-        r.register0("controlFlowPath", new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.addPush(JavaKind.Int, new ControlFlowPathNode());
-                return true;
-            }
-        });
         r.register0("rootName", new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
@@ -816,6 +790,44 @@ public class StandardGraphBuilderPlugins {
                 return true;
             }
         });
+
+        if (UseGraalInstrumentation.getValue()) {
+            r.register1("instrumentationBegin", int.class, new InvocationPlugin() {
+                @Override
+                public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode offset) {
+                    b.add(new InstrumentationBeginNode(offset, false));
+                    return true;
+                }
+            });
+            r.register1("instrumentationToInvokeBegin", int.class, new InvocationPlugin() {
+                @Override
+                public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode offset) {
+                    b.add(new InstrumentationBeginNode(offset, true));
+                    return true;
+                }
+            });
+            r.register0("instrumentationEnd", new InvocationPlugin() {
+                @Override
+                public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
+                    b.add(new InstrumentationEndNode());
+                    return true;
+                }
+            });
+            r.register0("isMethodInlined", new InvocationPlugin() {
+                @Override
+                public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
+                    b.addPush(JavaKind.Boolean, new IsMethodInlinedNode());
+                    return true;
+                }
+            });
+            r.register0("runtimePath", new InvocationPlugin() {
+                @Override
+                public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
+                    b.addPush(JavaKind.Int, new RuntimePathNode());
+                    return true;
+                }
+            });
+        }
     }
 
     private static void registerJMHBlackholePlugins(InvocationPlugins plugins) {
