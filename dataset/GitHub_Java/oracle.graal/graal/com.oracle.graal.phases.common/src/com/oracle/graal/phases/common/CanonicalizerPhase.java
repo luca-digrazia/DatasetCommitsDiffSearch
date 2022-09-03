@@ -194,7 +194,6 @@ public class CanonicalizerPhase extends Phase {
             return Debug.scope("CanonicalizeNode", node, new Callable<Boolean>(){
                 public Boolean call() {
                     ValueNode canonical = ((Canonicalizable) node).canonical(tool);
-// @formatter:off
 //     cases:                                           original node:
 //                                         |Floating|Fixed-unconnected|Fixed-connected|
 //                                         --------------------------------------------
@@ -207,7 +206,6 @@ public class CanonicalizerPhase extends Phase {
 //                          Fixed-connected|   2    |        X        |       6       |
 //                                         --------------------------------------------
 //       X: must not happen (checked with assertions)
-// @formatter:on
 
 
                     return performReplacement(node, graph, canonical);
@@ -342,11 +340,6 @@ public class CanonicalizerPhase extends Phase {
         @Override
         public void addToWorkList(Node node) {
             nodeWorkSet.addAgain(node);
-        }
-
-        @Override
-        public void removeIfUnused(Node node) {
-            tryKillUnused(node);
         }
     }
 }
