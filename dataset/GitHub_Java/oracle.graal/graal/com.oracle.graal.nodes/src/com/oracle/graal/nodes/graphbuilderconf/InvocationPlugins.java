@@ -37,12 +37,12 @@ import java.util.Map;
 
 import com.oracle.graal.api.replacements.MethodSubstitution;
 import com.oracle.graal.api.replacements.MethodSubstitutionRegistry;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.iterators.NodeIterable;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin.Receiver;
 
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.MetaUtil;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -319,42 +319,7 @@ public class InvocationPlugins {
     }
 
     /**
-     * Key for a {@linkplain ClassPlugins#entries resolved} plugin registration. Due to the
-     * possibility of class redefinition, we cannot directly use {@link ResolvedJavaMethod}s as
-     * keys. A {@link ResolvedJavaMethod} implementation might implement {@code equals()} and
-     * {@code hashCode()} based on internal representation subject to change by class redefinition.
-     */
-    static final class ResolvedJavaMethodKey {
-        private final ResolvedJavaMethod method;
-
-        ResolvedJavaMethodKey(ResolvedJavaMethod method) {
-            this.method = method;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (obj instanceof ResolvedJavaMethodKey) {
-                ResolvedJavaMethodKey that = (ResolvedJavaMethodKey) obj;
-                if (this.method.getDeclaringClass().equals(that.method.getDeclaringClass())) {
-                    if (this.method.getName().equals(that.method.getName())) {
-                        if (this.method.getSignature().equals(that.method.getSignature())) {
-                            return true;
-                        }
-                    }
-                }
-            }
-            return false;
-        }
-
-        @Override
-        public int hashCode() {
-            return this.method.getName().hashCode();
-        }
-    }
-
-    /**
-     * Key for {@linkplain ClassPlugins#registrations registering} an {@link InvocationPlugin} for a
-     * specific method.
+     * Key for a method.
      */
     static class MethodKey {
         final boolean isStatic;
@@ -496,7 +461,7 @@ public class InvocationPlugins {
          *
          * Note: this must be volatile as threads may race to initialize it.
          */
-        private volatile Map<ResolvedJavaMethodKey, InvocationPlugin> entries;
+        private volatile Map<ResolvedJavaMethod, InvocationPlugin> entries;
 
         void initializeMap() {
             if (entries == null) {
@@ -508,15 +473,13 @@ public class InvocationPlugins {
                         // An optional type that could not be resolved
                         entries = Collections.emptyMap();
                     } else {
-                        Map<ResolvedJavaMethodKey, InvocationPlugin> newEntries = new HashMap<>();
+                        Map<ResolvedJavaMethod, InvocationPlugin> newEntries = new HashMap<>();
                         for (MethodKey methodKey : registrations) {
                             ResolvedJavaMethod m = methodKey.resolve(declaringClass);
-                            if (m != null) {
-                                newEntries.put(new ResolvedJavaMethodKey(m), methodKey.value);
-                                if (entries != null) {
-                                    // Another thread finished initializing entries first
-                                    return;
-                                }
+                            newEntries.put(m, methodKey.value);
+                            if (entries != null) {
+                                // Another thread finished initializing entries first
+                                return;
                             }
                         }
                         entries = newEntries;
@@ -529,7 +492,7 @@ public class InvocationPlugins {
             if (entries == null) {
                 initializeMap();
             }
-            return entries.get(new ResolvedJavaMethodKey(method));
+            return entries.get(method);
         }
 
         public void register(MethodKey methodKey, boolean allowOverwrite) {
@@ -661,7 +624,7 @@ public class InvocationPlugins {
                 classPlugins.entries = new HashMap<>();
             }
 
-            classPlugins.entries.put(new ResolvedJavaMethodKey(method), plugin);
+            classPlugins.entries.put(method, plugin);
         }
     }
 
@@ -835,7 +798,7 @@ public class InvocationPlugins {
             if (optional) {
                 return null;
             }
-            throw new GraalError("Could not resolve type " + className);
+            throw new JVMCIError("Could not resolve type " + className);
         }
     }
 
