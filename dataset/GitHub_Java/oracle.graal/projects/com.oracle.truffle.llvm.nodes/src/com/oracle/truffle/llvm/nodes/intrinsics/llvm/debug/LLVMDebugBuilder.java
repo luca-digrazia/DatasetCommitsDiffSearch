@@ -31,27 +31,27 @@ package com.oracle.truffle.llvm.nodes.intrinsics.llvm.debug;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValue;
+import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValueProvider;
 
 public abstract class LLVMDebugBuilder {
 
     public static final LLVMDebugBuilder NATIVE_DECLARATION = new LLVMDebugBuilder() {
         @Override
-        public LLVMDebugValue.Builder createBuilder(TruffleLanguage.ContextReference<LLVMContext> contextRef) {
+        public LLVMDebugValueProvider.Builder createBuilder(TruffleLanguage.ContextReference<LLVMContext> contextRef) {
             return LLVMToDebugDeclarationNodeGen.create(contextRef);
         }
     };
 
     public static final LLVMDebugBuilder NATIVE_VALUE = new LLVMDebugBuilder() {
         @Override
-        public LLVMDebugValue.Builder createBuilder(TruffleLanguage.ContextReference<LLVMContext> contextRef) {
-            return LLVMToDebugValueNodeGen.LLVMToDynamicDebugValueNodeGen.create(contextRef);
+        public LLVMDebugValueProvider.Builder createBuilder(TruffleLanguage.ContextReference<LLVMContext> contextRef) {
+            return LLVMToDebugValueNodeGen.create(contextRef);
         }
     };
 
     protected LLVMDebugBuilder() {
     }
 
-    public abstract LLVMDebugValue.Builder createBuilder(TruffleLanguage.ContextReference<LLVMContext> contextRef);
+    public abstract LLVMDebugValueProvider.Builder createBuilder(TruffleLanguage.ContextReference<LLVMContext> contextRef);
 
 }
