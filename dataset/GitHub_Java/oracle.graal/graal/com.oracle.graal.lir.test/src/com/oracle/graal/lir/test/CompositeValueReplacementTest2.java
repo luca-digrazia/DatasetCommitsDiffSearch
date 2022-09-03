@@ -51,7 +51,7 @@ public class CompositeValueReplacementTest2 {
 
     }
 
-    private static class DummyValue extends Value {
+    private static class DummyValue extends AbstractValue {
 
         private static final long serialVersionUID = -645435039553382737L;
         private final int id;
@@ -95,7 +95,7 @@ public class CompositeValueReplacementTest2 {
 
     }
 
-    private static class TestOp extends LIRInstruction {
+    private static class TestOp extends LIRInstructionBase {
 
         @Use({COMPOSITE}) protected NestedCompositeValue compValue;
 
@@ -127,37 +127,18 @@ public class CompositeValueReplacementTest2 {
         LIRInstruction op1 = new TestOp(compValue1);
         LIRInstruction op2 = new TestOp(compValue1);
 
-        op1.forEachInput(new InstructionValueProcedure() {
-            @Override
-            public Value doValue(LIRInstruction instruction, Value value) {
-                assertEquals(dummyValue1, value);
-                return dummyValue2;
-            }
+        op1.forEachInput((instruction, value, mode, flags) -> {
+            assertEquals(dummyValue1, value);
+            return dummyValue2;
         });
 
-        op2.forEachInput(new InstructionValueProcedure() {
-            @Override
-            public Value doValue(LIRInstruction instruction, Value value) {
-                assertEquals(dummyValue1, value);
-                return dummyValue3;
-            }
+        op2.forEachInput((instruction, value, mode, flags) -> {
+            assertEquals(dummyValue1, value);
+            return dummyValue3;
         });
 
-        op1.forEachInput(new InstructionValueProcedure() {
-            @Override
-            public Value doValue(LIRInstruction instruction, Value value) {
-                assertEquals(dummyValue2, value);
-                return value;
-            }
-        });
-
-        op2.forEachInput(new InstructionValueProcedure() {
-            @Override
-            public Value doValue(LIRInstruction instruction, Value value) {
-                assertEquals(dummyValue3, value);
-                return value;
-            }
-        });
+        op1.visitEachInput((instruction, value, mode, flags) -> assertEquals(dummyValue2, value));
+        op2.visitEachInput((instruction, value, mode, flags) -> assertEquals(dummyValue3, value));
     }
 
     @Test
@@ -169,36 +150,17 @@ public class CompositeValueReplacementTest2 {
         LIRInstruction op1 = new TestOp(compValue1);
         LIRInstruction op2 = new TestOp(compValue1);
 
-        op1.forEachInput(new InstructionValueProcedure() {
-            @Override
-            public Value doValue(LIRInstruction instruction, Value value) {
-                assertEquals(dummyValue1, value);
-                return dummyValue2;
-            }
+        op1.forEachInput((instruction, value, mode, flags) -> {
+            assertEquals(dummyValue1, value);
+            return dummyValue2;
         });
 
-        op2.forEachInput(new InstructionValueProcedure() {
-            @Override
-            public Value doValue(LIRInstruction instruction, Value value) {
-                assertEquals(dummyValue1, value);
-                return dummyValue3;
-            }
+        op2.forEachInput((instruction, value, mode, flags) -> {
+            assertEquals(dummyValue1, value);
+            return dummyValue3;
         });
 
-        op1.forEachInput(new InstructionValueProcedure() {
-            @Override
-            public Value doValue(LIRInstruction instruction, Value value) {
-                assertEquals(dummyValue2, value);
-                return value;
-            }
-        });
-
-        op2.forEachInput(new InstructionValueProcedure() {
-            @Override
-            public Value doValue(LIRInstruction instruction, Value value) {
-                assertEquals(dummyValue3, value);
-                return value;
-            }
-        });
+        op1.visitEachInput((instruction, value, mode, flags) -> assertEquals(dummyValue2, value));
+        op2.visitEachInput((instruction, value, mode, flags) -> assertEquals(dummyValue3, value));
     }
 }

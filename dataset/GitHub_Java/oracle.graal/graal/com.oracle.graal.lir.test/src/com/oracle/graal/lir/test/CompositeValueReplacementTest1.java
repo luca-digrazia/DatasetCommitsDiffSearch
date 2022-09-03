@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,14 +25,11 @@ package com.oracle.graal.lir.test;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import static org.junit.Assert.*;
 
-import java.util.*;
-
 import org.junit.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
-import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.asm.*;
 
 /**
@@ -41,26 +38,16 @@ import com.oracle.graal.lir.asm.*;
  */
 public class CompositeValueReplacementTest1 {
 
-    private static class TestCompositeValue extends CompositeValue {
+    private static class NestedCompositeValue extends CompositeValue {
 
         private static final long serialVersionUID = -8804214200173503527L;
         @Component({REG, OperandFlag.ILLEGAL}) protected Value value;
 
-        public TestCompositeValue(Value value) {
+        public NestedCompositeValue(Value value) {
             super(LIRKind.Illegal);
             this.value = value;
         }
 
-        private static final EnumSet<OperandFlag> flags = EnumSet.of(OperandFlag.REG, OperandFlag.ILLEGAL);
-
-        @Override
-        public CompositeValue forEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueProcedure proc) {
-            Value newValue = proc.doValue(inst, value, mode, flags);
-            if (!value.identityEquals(newValue)) {
-                return new TestCompositeValue(newValue);
-            }
-            return this;
-        }
     }
 
     private static class DummyValue extends AbstractValue {
@@ -107,13 +94,11 @@ public class CompositeValueReplacementTest1 {
 
     }
 
-    private static final class TestOp extends LIRInstruction {
-        public static final LIRInstructionClass<TestOp> TYPE = LIRInstructionClass.create(TestOp.class);
+    private static class TestOp extends LIRInstructionBase {
 
-        @Use({COMPOSITE}) protected TestCompositeValue compValue;
+        @Use({COMPOSITE}) protected NestedCompositeValue compValue;
 
-        public TestOp(TestCompositeValue compValue) {
-            super(TYPE);
+        public TestOp(NestedCompositeValue compValue) {
             this.compValue = compValue;
         }
 
@@ -124,12 +109,43 @@ public class CompositeValueReplacementTest1 {
 
     }
 
+    private static NestedCompositeValue createNestedCompValue(Value value, int nestingLevel) {
+        NestedCompositeValue compValue = new NestedCompositeValue(value);
+        for (int i = 0; i < nestingLevel; i++) {
+            compValue = new NestedCompositeValue(compValue);
+        }
+        return compValue;
+    }
+
     @Test
     public void replaceCompValueTest0() {
         DummyValue dummyValue1 = new DummyValue();
         DummyValue dummyValue2 = new DummyValue();
         DummyValue dummyValue3 = new DummyValue();
-        TestCompositeValue compValue1 = new TestCompositeValue(dummyValue1);
+        NestedCompositeValue compValue1 = createNestedCompValue(dummyValue1, 0);
+        LIRInstruction op1 = new TestOp(compValue1);
+        LIRInstruction op2 = new TestOp(compValue1);
+
+        op1.forEachInput((instruction, value, mode, flags) -> {
+            assertEquals(dummyValue1, value);
+            return dummyValue2;
+        });
+
+        op2.forEachInput((instruction, value, mode, flags) -> {
+            assertEquals(dummyValue1, value);
+            return dummyValue3;
+        });
+
+        op1.visitEachInput((instruction, value, mode, flags) -> assertEquals(dummyValue2, value));
+        op2.visitEachInput((instruction, value, mode, flags) -> assertEquals(dummyValue3, value));
+    }
+
+    @Test
+    public void replaceCompValueTest1() {
+        DummyValue dummyValue1 = new DummyValue();
+        DummyValue dummyValue2 = new DummyValue();
+        DummyValue dummyValue3 = new DummyValue();
+        NestedCompositeValue compValue1 = createNestedCompValue(dummyValue1, 1);
         LIRInstruction op1 = new TestOp(compValue1);
         LIRInstruction op2 = new TestOp(compValue1);
 

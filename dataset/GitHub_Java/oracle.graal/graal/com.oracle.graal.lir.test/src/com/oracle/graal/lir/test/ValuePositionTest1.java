@@ -48,7 +48,7 @@ public class ValuePositionTest1 {
 
     }
 
-    private static class DummyValue extends Value {
+    private static class DummyValue extends AbstractValue {
 
         private static final long serialVersionUID = -645435039553382737L;
         private final int id;
@@ -86,7 +86,7 @@ public class ValuePositionTest1 {
         }
     }
 
-    private static class TestOp extends LIRInstruction {
+    private static class TestOp extends LIRInstructionBase {
 
         @Use({COMPOSITE}) protected NestedCompositeValue compValue;
 
@@ -117,13 +117,7 @@ public class ValuePositionTest1 {
 
         List<ValuePosition> positions = new ArrayList<>();
 
-        op.forEachInputPos(new ValuePositionProcedure() {
-
-            @Override
-            public void doValue(LIRInstruction instruction, ValuePosition position) {
-                positions.add(position);
-            }
-        });
+        op.forEachInputPos((instruction, position) -> positions.add(position));
 
         assertEquals(1, positions.size());
         assertEquals(dummyValue, positions.get(0).get(op));
@@ -136,13 +130,7 @@ public class ValuePositionTest1 {
 
         List<ValuePosition> positions = new ArrayList<>();
 
-        op.forEachInputPos(new ValuePositionProcedure() {
-
-            @Override
-            public void doValue(LIRInstruction instruction, ValuePosition position) {
-                positions.add(position);
-            }
-        });
+        op.forEachInputPos((instruction, position) -> positions.add(position));
 
         assertEquals(1, positions.size());
         assertEquals(dummyValue, positions.get(0).get(op));
@@ -155,13 +143,7 @@ public class ValuePositionTest1 {
 
         List<ValuePosition> positions = new ArrayList<>();
 
-        op.forEachInputPos(new ValuePositionProcedure() {
-
-            @Override
-            public void doValue(LIRInstruction instruction, ValuePosition position) {
-                positions.add(position);
-            }
-        });
+        op.forEachInputPos((instruction, position) -> positions.add(position));
 
         assertEquals(1, positions.size());
         assertEquals(dummyValue, positions.get(0).get(op));

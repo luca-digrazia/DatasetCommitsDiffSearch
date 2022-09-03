@@ -50,7 +50,7 @@ public class ValuePositionTest2 {
 
     }
 
-    private static class DummyValue extends Value {
+    private static class DummyValue extends AbstractValue {
 
         private static final long serialVersionUID = 3620305384660607012L;
         private final int id;
@@ -88,7 +88,7 @@ public class ValuePositionTest2 {
         }
     }
 
-    private static class TestOp extends LIRInstruction {
+    private static class TestOp extends LIRInstructionBase {
 
         @Use({COMPOSITE}) protected NestedCompositeValue compValue;
 
@@ -117,13 +117,7 @@ public class ValuePositionTest2 {
         LIRInstruction op = new TestOp(compValue2);
         List<ValuePosition> positions = new ArrayList<>();
 
-        op.forEachInputPos(new ValuePositionProcedure() {
-
-            @Override
-            public void doValue(LIRInstruction instruction, ValuePosition position) {
-                positions.add(position);
-            }
-        });
+        op.forEachInputPos((instruction, position) -> positions.add(position));
 
         assertEquals(4, positions.size());
 
