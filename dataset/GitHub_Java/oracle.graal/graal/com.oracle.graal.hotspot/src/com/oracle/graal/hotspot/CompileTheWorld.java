@@ -276,7 +276,7 @@ public final class CompileTheWorld {
 
                         // Pre-load all classes in the constant pool.
                         try {
-                            HotSpotResolvedObjectType objectType = HotSpotResolvedObjectTypeImpl.fromObjectClass(javaClass);
+                            HotSpotResolvedObjectType objectType = (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromClass(javaClass);
                             ConstantPool constantPool = objectType.constantPool();
                             for (int cpi = 1; cpi < constantPool.length(); cpi++) {
                                 constantPool.loadReferencedType(cpi, Bytecodes.LDC);
