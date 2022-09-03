@@ -36,11 +36,10 @@ public interface CodeCacheProvider {
      * 
      * @param method a method to which the executable code is begin added
      * @param compResult the compilation result to be added
-     * @param speculationLog the speculation log to be used
      * @return a reference to the compiled and ready-to-run code or null if the code installation
      *         failed
      */
-    InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult, SpeculationLog speculationLog);
+    InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult);
 
     /**
      * Sets the given compilation result as the default implementation of the given method.
