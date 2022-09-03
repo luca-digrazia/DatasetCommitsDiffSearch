@@ -33,7 +33,6 @@ import static org.graalvm.compiler.phases.common.LoweringPhase.ProcessBlockState
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
@@ -54,6 +53,8 @@ import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.GuardNode;
 import org.graalvm.compiler.nodes.LogicNode;
+import org.graalvm.compiler.nodes.PhiNode;
+import org.graalvm.compiler.nodes.ProxyNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.ScheduleResult;
 import org.graalvm.compiler.nodes.ValueNode;
@@ -62,6 +63,7 @@ import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.extended.AnchoringNode;
 import org.graalvm.compiler.nodes.extended.GuardedNode;
 import org.graalvm.compiler.nodes.extended.GuardingNode;
+import org.graalvm.compiler.nodes.extended.ValueAnchorNode;
 import org.graalvm.compiler.nodes.spi.Lowerable;
 import org.graalvm.compiler.nodes.spi.LoweringProvider;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
@@ -196,6 +198,8 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                 return result;
             } else {
                 GuardNode newGuard = graph.unique(new GuardNode(condition, guardAnchor, deoptReason, action, negated, speculation));
+                ValueAnchorNode valueAnchor = graph.add(new ValueAnchorNode(newGuard));
+                graph.addBeforeFixed(before, valueAnchor);
                 if (OptEliminateGuards.getValue(graph.getOptions())) {
                     activeGuards.markAndGrow(newGuard);
                 }
@@ -378,7 +382,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
 
             @Override
             public void postprocess() {
-                if (anchor != null && OptEliminateGuards.getValue(activeGuards.graph().getOptions())) {
+                if (anchor == block.getBeginNode() && OptEliminateGuards.getValue(activeGuards.graph().getOptions())) {
                     for (GuardNode guard : anchor.asNode().usages().filter(GuardNode.class)) {
                         if (activeGuards.isMarkedAndGrow(guard)) {
                             activeGuards.clear(guard);
@@ -464,7 +468,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
             List<Node> unscheduledUsages = new ArrayList<>();
             if (node instanceof FloatingNode) {
                 for (Node usage : node.usages()) {
-                    if (usage instanceof ValueNode) {
+                    if (usage instanceof ValueNode && !(usage instanceof PhiNode) && !(usage instanceof ProxyNode)) {
                         if (schedule.getCFG().getNodeToBlock().isNew(usage) || schedule.getCFG().blockFor(usage) == null) {
                             unscheduledUsages.add(usage);
                         }
@@ -526,11 +530,13 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                     nextState = ST_ENTER;
                 }
             } else if (state == ST_ENTER) {
-                if (f.dominated.hasNext()) {
-                    Block n = f.dominated.next();
+                if (f.dominated != null) {
+                    Block n = f.dominated;
+                    f.dominated = n.getDominatedSibling();
                     if (n == f.alwaysReachedBlock) {
-                        if (f.dominated.hasNext()) {
-                            n = f.dominated.next();
+                        if (f.dominated != null) {
+                            n = f.dominated;
+                            f.dominated = n.getDominatedSibling();
                         } else {
                             n = null;
                         }
@@ -580,11 +586,13 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                     nextState = ST_ENTER;
                 }
             } else if (state == ST_ENTER) {
-                if (f.dominated.hasNext()) {
-                    Block n = f.dominated.next();
+                if (f.dominated != null) {
+                    Block n = f.dominated;
+                    f.dominated = n.getDominatedSibling();
                     if (n == f.alwaysReachedBlock) {
-                        if (f.dominated.hasNext()) {
-                            n = f.dominated.next();
+                        if (f.dominated != null) {
+                            n = f.dominated;
+                            f.dominated = n.getDominatedSibling();
                         } else {
                             n = null;
                         }
@@ -620,14 +628,13 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
     public abstract static class Frame<T extends Frame<?>> {
         protected final Block block;
         final T parent;
-        Iterator<Block> dominated;
+        Block dominated;
         final Block alwaysReachedBlock;
 
         public Frame(Block block, T parent) {
-            super();
             this.block = block;
             this.alwaysReachedBlock = block.getPostdominator();
-            this.dominated = block.getDominated().iterator();
+            this.dominated = block.getFirstDominated();
             this.parent = parent;
         }
 
