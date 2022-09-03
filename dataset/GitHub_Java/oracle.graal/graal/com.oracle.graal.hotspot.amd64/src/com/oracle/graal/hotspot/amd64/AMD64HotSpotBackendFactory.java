@@ -152,18 +152,21 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
             try (InitTimer rt = timer("create Lowerer provider")) {
                 lowerer = createLowerer(runtime, metaAccess, foreignCalls, registers, target);
             }
+            // Replacements cannot have speculative optimizations since they have
+            // to be valid for the entire run of the VM.
+            Assumptions assumptions = new Assumptions(false);
             Providers p = new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, null, new HotSpotStampProvider());
             try (InitTimer rt = timer("create SnippetReflection provider")) {
                 snippetReflection = createSnippetReflection(runtime);
             }
             try (InitTimer rt = timer("create Replacements provider")) {
-                replacements = createReplacements(runtime, p, snippetReflection);
+                replacements = createReplacements(runtime, assumptions, p, snippetReflection);
             }
             try (InitTimer rt = timer("create Disassembler provider")) {
                 disassembler = createDisassembler(runtime);
             }
             try (InitTimer rt = timer("create Suites provider")) {
-                suites = createSuites(runtime, metaAccess, constantReflection, replacements);
+                suites = createSuites(runtime);
             }
             providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers, snippetReflection);
         }
@@ -184,8 +187,8 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
         return new HotSpotDisassemblerProvider(runtime);
     }
 
-    protected Replacements createReplacements(HotSpotGraalRuntimeProvider runtime, Providers p, SnippetReflectionProvider snippetReflection) {
-        return new HotSpotReplacementsImpl(p, snippetReflection, runtime.getConfig(), p.getCodeCache().getTarget());
+    protected Replacements createReplacements(HotSpotGraalRuntimeProvider runtime, Assumptions assumptions, Providers p, SnippetReflectionProvider snippetReflection) {
+        return new HotSpotReplacementsImpl(p, snippetReflection, runtime.getConfig(), assumptions, p.getCodeCache().getTarget());
     }
 
     protected AMD64HotSpotForeignCallsProvider createForeignCalls(HotSpotGraalRuntimeProvider runtime, HotSpotMetaAccessProvider metaAccess, HotSpotCodeCacheProvider codeCache,
@@ -209,8 +212,8 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
         return new HotSpotMetaAccessProvider(runtime);
     }
 
-    protected HotSpotSuitesProvider createSuites(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, Replacements replacements) {
-        return new HotSpotSuitesProvider(runtime, metaAccess, constantReflection, replacements);
+    protected HotSpotSuitesProvider createSuites(HotSpotGraalRuntimeProvider runtime) {
+        return new HotSpotSuitesProvider(runtime);
     }
 
     protected HotSpotSnippetReflectionProvider createSnippetReflection(HotSpotGraalRuntimeProvider runtime) {
