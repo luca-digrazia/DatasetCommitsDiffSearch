@@ -26,32 +26,33 @@ package com.oracle.truffle.tck.impl;
 
 import static org.junit.Assert.assertEquals;
 
-import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.Source;
-import org.graalvm.polyglot.Value;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.vm.PolyglotEngine;
+import com.oracle.truffle.api.vm.PolyglotEngine.Value;
 import com.oracle.truffle.tck.impl.TruffleLanguageRunner.RubyRunner;
 
 /**
- * Tests with code snippets referencing Ruby (executed only when implementation of Ruby is around).
+ * Tests with code snippets referencing Ruby. They are used from {@link PolyglotEngine} & co.
+ * classes, but executed only when implementation of Ruby is around.
  */
 @RunWith(RubyRunner.class)
 public class PolyglotEngineWithRuby {
 
-    private Context context;
+    private PolyglotEngine engine;
 
     @Before
     public void initEngine() {
-        context = Context.newBuilder().build();
+        engine = PolyglotEngine.newBuilder().build();
     }
 
     @After
     public void disposeEngine() {
-        context.close();
+        engine.dispose();
     }
 
     @Test
@@ -68,14 +69,13 @@ public class PolyglotEngineWithRuby {
     }
 
     public void callRubyFunctionFromJava() {
-        Source src = Source.newBuilder("ruby",
+        Source src = Source.newBuilder(
             "proc { |a, b|\n" +
             "  a * b" +
-            "}",
-            "mul.rb").buildLiteral();
+            "}").mimeType("application/x-ruby").name("mul.rb").build();
 
         // Evaluate Ruby function definition
-        Value rbFunction = context.eval(src);
+        Value rbFunction = engine.eval(src);
 
         // Create Java access to Ruby function
         Multiplier mul = rbFunction.as(Multiplier.class);
