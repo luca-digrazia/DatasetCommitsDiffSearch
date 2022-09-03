@@ -109,7 +109,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     protected final HotSpotGraalRuntime graalRuntime;
     private final Suites defaultSuites;
 
-    private CheckCastDynamicSnippets.Templates checkcastDynamicSnippets;
+    private CheckCastSnippets.Templates checkcastSnippets;
     private InstanceOfSnippets.Templates instanceofSnippets;
     private NewObjectSnippets.Templates newObjectSnippets;
     private MonitorSnippets.Templates monitorSnippets;
@@ -307,7 +307,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         linkForeignCall(r, LOG_OBJECT, c.logObjectAddress, PREPEND_THREAD, NOT_LEAF, REEXECUTABLE, NO_LOCATIONS);
         linkForeignCall(r, LOG_PRIMITIVE, c.logPrimitiveAddress, PREPEND_THREAD, NOT_LEAF, REEXECUTABLE, NO_LOCATIONS);
         linkForeignCall(r, THREAD_IS_INTERRUPTED, c.threadIsInterruptedAddress, PREPEND_THREAD, NOT_LEAF, NOT_REEXECUTABLE, ANY_LOCATION);
-        linkForeignCall(r, VM_ERROR, c.vmErrorAddress, PREPEND_THREAD, LEAF, REEXECUTABLE, NO_LOCATIONS);
+        linkForeignCall(r, VM_ERROR, c.vmErrorAddress, PREPEND_THREAD, NOT_LEAF, REEXECUTABLE, NO_LOCATIONS);
         linkForeignCall(r, OSR_MIGRATION_END, c.osrMigrationEndAddress, DONT_PREPEND_THREAD, LEAF, NOT_REEXECUTABLE, NO_LOCATIONS);
         linkForeignCall(r, G1WBPRECALL, c.writeBarrierPreAddress, PREPEND_THREAD, LEAF, REEXECUTABLE, NO_LOCATIONS);
         linkForeignCall(r, G1WBPOSTCALL, c.writeBarrierPostAddress, PREPEND_THREAD, LEAF, REEXECUTABLE, NO_LOCATIONS);
@@ -332,14 +332,11 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             r.registerSubstitutions(AESCryptSubstitutions.class);
             r.registerSubstitutions(CipherBlockChainingSubstitutions.class);
         }
-        if (IntrinsifyCRC32Methods.getValue()) {
-            r.registerSubstitutions(CRC32Substitutions.class);
-        }
         if (IntrinsifyReflectionMethods.getValue()) {
             r.registerSubstitutions(ReflectionSubstitutions.class);
         }
 
-        checkcastDynamicSnippets = new CheckCastDynamicSnippets.Templates(this, r, graalRuntime.getTarget());
+        checkcastSnippets = new CheckCastSnippets.Templates(this, r, graalRuntime.getTarget());
         instanceofSnippets = new InstanceOfSnippets.Templates(this, r, graalRuntime.getTarget());
         newObjectSnippets = new NewObjectSnippets.Templates(this, r, graalRuntime.getTarget());
         monitorSnippets = new MonitorSnippets.Templates(this, r, graalRuntime.getTarget(), c.useFastLocking);
@@ -768,6 +765,8 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                 }
                 graph.removeFixed(commit);
             }
+        } else if (n instanceof CheckCastNode) {
+            checkcastSnippets.lower((CheckCastNode) n, tool);
         } else if (n instanceof OSRStartNode) {
             if (tool.getLoweringType() == LoweringType.AFTER_GUARDS) {
                 OSRStartNode osrStart = (OSRStartNode) n;
@@ -796,7 +795,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
                 osrStart.safeDelete();
             }
         } else if (n instanceof CheckCastDynamicNode) {
-            checkcastDynamicSnippets.lower((CheckCastDynamicNode) n);
+            checkcastSnippets.lower((CheckCastDynamicNode) n);
         } else if (n instanceof InstanceOfNode) {
             instanceofSnippets.lower((InstanceOfNode) n, tool);
         } else if (n instanceof InstanceOfDynamicNode) {
