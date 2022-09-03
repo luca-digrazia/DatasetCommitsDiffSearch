@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -130,7 +128,7 @@ public class SubstitutionsTest extends ReplacementsTest {
     }
 
     @Override
-    protected void checkHighTierGraph(StructuredGraph graph) {
+    protected boolean checkHighTierGraph(StructuredGraph graph) {
         // Check that the graph contains the expected test nodes.
         NodeIterable<ReturnNode> retNodes = graph.getNodes().filter(ReturnNode.class);
         Assert.assertTrue("expected exactly one ReturnNode", retNodes.count() == 1);
@@ -151,6 +149,8 @@ public class SubstitutionsTest extends ReplacementsTest {
         value.safeDelete();
         guard.safeDelete();
         graph.removeFixed(memory);
+
+        return true;
     }
 
     @Test

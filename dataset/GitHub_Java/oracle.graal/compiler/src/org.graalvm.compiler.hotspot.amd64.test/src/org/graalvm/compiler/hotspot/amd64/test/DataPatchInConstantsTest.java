@@ -40,7 +40,6 @@ import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
@@ -171,7 +170,7 @@ public class DataPatchInConstantsTest extends HotSpotGraalCompilerTest {
         @Input protected ValueNode input;
 
         protected LoadThroughPatchNode(ValueNode input) {
-            super(TYPE, input.stamp(NodeView.DEFAULT));
+            super(TYPE, input.stamp());
             this.input = input;
         }
 
@@ -180,9 +179,9 @@ public class DataPatchInConstantsTest extends HotSpotGraalCompilerTest {
             assert input.isConstant();
 
             LIRGeneratorTool gen = generator.getLIRGeneratorTool();
-            Variable ret = gen.newVariable(gen.getLIRKind(stamp(NodeView.DEFAULT)));
+            Variable ret = gen.newVariable(gen.getLIRKind(stamp()));
 
-            gen.append(new LoadThroughPatchOp(input.asConstant(), stamp(NodeView.DEFAULT) instanceof NarrowOopStamp, ret));
+            gen.append(new LoadThroughPatchOp(input.asConstant(), stamp() instanceof NarrowOopStamp, ret));
             generator.setResult(this, ret);
         }
     }

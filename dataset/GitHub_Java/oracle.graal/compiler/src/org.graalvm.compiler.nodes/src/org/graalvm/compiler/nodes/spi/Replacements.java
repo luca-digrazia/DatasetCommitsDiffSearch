@@ -24,7 +24,6 @@ package org.graalvm.compiler.nodes.spi;
 
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.api.replacements.SnippetTemplateCache;
-import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
@@ -80,12 +79,11 @@ public interface Replacements {
     StructuredGraph getSubstitution(ResolvedJavaMethod method, int invokeBci);
 
     /**
-     * Gets the substitute bytecode for a given method.
+     * Gets a method that is a substitution for a given method.
      *
-     * @return the bytecode to substitute for {@code method} or {@code null} if there is no
-     *         substitute bytecode for {@code method}
+     * @return the method, if any, whose bytecode are a substitution for {@code method}
      */
-    Bytecode getSubstitutionBytecode(ResolvedJavaMethod method);
+    ResolvedJavaMethod getSubstitutionMethod(ResolvedJavaMethod method);
 
     /**
      * Determines if there may be a {@linkplain #getSubstitution(ResolvedJavaMethod, int)
@@ -103,10 +101,9 @@ public interface Replacements {
     boolean hasSubstitution(ResolvedJavaMethod method, int invokeBci);
 
     /**
-     * Gets the provider for accessing the bytecode of a substitution method if no other provider is
-     * associated with the substitution method.
+     * Gets the provider for accessing the bytecode of a substitution method.
      */
-    BytecodeProvider getDefaultReplacementBytecodeProvider();
+    BytecodeProvider getReplacementBytecodeProvider();
 
     /**
      * Register snippet templates.

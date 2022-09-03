@@ -37,7 +37,6 @@ import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.api.replacements.SnippetTemplateCache;
-import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
 import org.graalvm.compiler.bytecode.ResolvedJavaMethodBytecode;
 import org.graalvm.compiler.core.common.GraalOptions;
@@ -102,11 +101,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
      */
     protected final ConcurrentMap<ResolvedJavaMethod, StructuredGraph> graphs;
 
-    /**
-     * The default {@link BytecodeProvider} to use for accessing the bytecode of a replacement if
-     * the replacement doesn't provide another {@link BytecodeProvider}.
-     */
-    protected final BytecodeProvider defaultBytecodeProvider;
+    protected final BytecodeProvider bytecodeProvider;
 
     public void setGraphBuilderPlugins(GraphBuilderConfiguration.Plugins plugins) {
         assert this.graphBuilderPlugins == null;
@@ -137,11 +132,11 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
      */
     @Override
     public InlineInfo shouldInlineInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
-        Bytecode subst = getSubstitutionBytecode(method);
+        ResolvedJavaMethod subst = getSubstitutionMethod(method);
         if (subst != null) {
             if (b.parsingIntrinsic() || InlineDuringParsing.getValue(b.getOptions()) || InlineIntrinsicsDuringParsing.getValue(b.getOptions())) {
                 // Forced inlining of intrinsics
-                return createIntrinsicInlineInfo(subst.getMethod(), subst.getOrigin());
+                return createIntrinsicInlineInfo(subst, bytecodeProvider);
             }
             return null;
         }
@@ -149,7 +144,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
             assert b.getDepth() < MAX_GRAPH_INLINING_DEPTH : "inlining limit exceeded";
 
             // Force inlining when parsing replacements
-            return createIntrinsicInlineInfo(method, defaultBytecodeProvider);
+            return createIntrinsicInlineInfo(method, bytecodeProvider);
         } else {
             assert method.getAnnotation(NodeIntrinsic.class) == null : String.format("@%s method %s must only be called from within a replacement%n%s", NodeIntrinsic.class.getSimpleName(),
                             method.format("%h.%n"), b);
@@ -186,7 +181,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
         this.target = target;
         this.graphs = new ConcurrentHashMap<>();
         this.snippetTemplateCache = EconomicMap.create(Equivalence.DEFAULT);
-        this.defaultBytecodeProvider = bytecodeProvider;
+        this.bytecodeProvider = bytecodeProvider;
     }
 
     private static final DebugTimer SnippetPreparationTime = Debug.timer("SnippetPreparationTime");
@@ -205,7 +200,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
         StructuredGraph graph = UseSnippetGraphCache.getValue(options) ? graphs.get(method) : null;
         if (graph == null) {
             try (DebugCloseable a = SnippetPreparationTime.start()) {
-                StructuredGraph newGraph = makeGraph(defaultBytecodeProvider, method, args, recursiveEntry);
+                StructuredGraph newGraph = makeGraph(method, args, recursiveEntry);
                 Debug.counter("SnippetNodeCount[%#s]", method).add(newGraph.getNodeCount());
                 if (!UseSnippetGraphCache.getValue(options) || args != null) {
                     return newGraph;
@@ -229,17 +224,16 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
     }
 
     @Override
-    public BytecodeProvider getDefaultReplacementBytecodeProvider() {
-        return defaultBytecodeProvider;
+    public BytecodeProvider getReplacementBytecodeProvider() {
+        return bytecodeProvider;
     }
 
     @Override
-    public Bytecode getSubstitutionBytecode(ResolvedJavaMethod method) {
+    public ResolvedJavaMethod getSubstitutionMethod(ResolvedJavaMethod method) {
         InvocationPlugin plugin = graphBuilderPlugins.getInvocationPlugins().lookupInvocation(method);
         if (plugin instanceof MethodSubstitutionPlugin) {
             MethodSubstitutionPlugin msPlugin = (MethodSubstitutionPlugin) plugin;
-            ResolvedJavaMethod substitute = msPlugin.getSubstitute(providers.getMetaAccess());
-            return msPlugin.getBytecodeProvider().getBytecode(substitute);
+            return msPlugin.getSubstitute(providers.getMetaAccess());
         }
         return null;
     }
@@ -255,7 +249,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
                 ResolvedJavaMethod substitute = msPlugin.getSubstitute(metaAccess);
                 StructuredGraph graph = graphs.get(substitute);
                 if (graph == null) {
-                    graph = makeGraph(msPlugin.getBytecodeProvider(), substitute, null, method);
+                    graph = makeGraph(substitute, null, method);
                     graph.freeze();
                     graphs.putIfAbsent(substitute, graph);
                     graph = graphs.get(substitute);
@@ -263,7 +257,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
                 assert graph.isFrozen();
                 result = graph;
             } else {
-                Bytecode code = new ResolvedJavaMethodBytecode(method);
+                ResolvedJavaMethodBytecode code = new ResolvedJavaMethodBytecode(method);
                 ConstantReflectionProvider constantReflection = providers.getConstantReflection();
                 ConstantFieldProvider constantFieldProvider = providers.getConstantFieldProvider();
                 StampProvider stampProvider = providers.getStampProvider();
@@ -278,14 +272,14 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
     /**
      * Creates a preprocessed graph for a snippet or method substitution.
      *
-     * @param bytecodeProvider how to access the bytecode of {@code method}
      * @param method the snippet or method substitution for which a graph will be created
      * @param args
      * @param original the original method if {@code method} is a {@linkplain MethodSubstitution
      *            substitution} otherwise null
      */
-    public StructuredGraph makeGraph(BytecodeProvider bytecodeProvider, ResolvedJavaMethod method, Object[] args, ResolvedJavaMethod original) {
-        return createGraphMaker(method, original).makeGraph(bytecodeProvider, args);
+    @SuppressWarnings("try")
+    public StructuredGraph makeGraph(ResolvedJavaMethod method, Object[] args, ResolvedJavaMethod original) {
+        return createGraphMaker(method, original).makeGraph(args);
     }
 
     /**
@@ -322,10 +316,10 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
         }
 
         @SuppressWarnings("try")
-        public StructuredGraph makeGraph(BytecodeProvider bytecodeProvider, Object[] args) {
+        public StructuredGraph makeGraph(Object[] args) {
             try (Scope s = Debug.scope("BuildSnippetGraph", method)) {
                 assert method.hasBytecodes() : method;
-                StructuredGraph graph = buildInitialGraph(bytecodeProvider, method, args);
+                StructuredGraph graph = buildInitialGraph(method, args);
 
                 finalizeGraph(graph);
 
@@ -386,10 +380,10 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
         }
 
         /**
-         * Builds the initial graph for a replacement.
+         * Builds the initial graph for a snippet.
          */
         @SuppressWarnings("try")
-        protected StructuredGraph buildInitialGraph(BytecodeProvider bytecodeProvider, final ResolvedJavaMethod methodToParse, Object[] args) {
+        protected StructuredGraph buildInitialGraph(final ResolvedJavaMethod methodToParse, Object[] args) {
             // Replacements cannot have optimistic assumptions since they have
             // to be valid for the entire run of the VM.
 
@@ -410,11 +404,11 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
                 IntrinsicContext initialIntrinsicContext = null;
                 if (method.getAnnotation(Snippet.class) == null) {
                     // Post-parse inlined intrinsic
-                    initialIntrinsicContext = new IntrinsicContext(substitutedMethod, method, bytecodeProvider, INLINE_AFTER_PARSING);
+                    initialIntrinsicContext = new IntrinsicContext(substitutedMethod, method, replacements.bytecodeProvider, INLINE_AFTER_PARSING);
                 } else {
                     // Snippet
                     ResolvedJavaMethod original = substitutedMethod != null ? substitutedMethod : method;
-                    initialIntrinsicContext = new IntrinsicContext(original, method, bytecodeProvider, INLINE_AFTER_PARSING);
+                    initialIntrinsicContext = new IntrinsicContext(original, method, replacements.bytecodeProvider, INLINE_AFTER_PARSING);
                 }
 
                 createGraphBuilder(metaAccess, replacements.providers.getStampProvider(), replacements.providers.getConstantReflection(), replacements.providers.getConstantFieldProvider(), config,

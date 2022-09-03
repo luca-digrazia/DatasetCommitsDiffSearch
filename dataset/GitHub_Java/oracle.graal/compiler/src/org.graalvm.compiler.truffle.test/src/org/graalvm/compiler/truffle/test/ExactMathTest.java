@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,25 +22,18 @@
  */
 package org.graalvm.compiler.truffle.test;
 
-import com.oracle.truffle.api.ExactMath;
 import org.graalvm.compiler.core.test.GraalCompilerTest;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
-import org.graalvm.compiler.replacements.aarch64.AArch64RoundNode;
-import org.graalvm.compiler.replacements.amd64.AMD64RoundNode;
-import org.graalvm.compiler.truffle.compiler.aarch64.substitutions.TruffleAArch64InvocationPlugins;
-import org.graalvm.compiler.truffle.compiler.amd64.substitutions.TruffleAMD64InvocationPlugins;
-import org.graalvm.compiler.truffle.compiler.substitutions.TruffleGraphBuilderPlugins;
-import org.junit.Assert;
-import org.junit.Assume;
+import org.graalvm.compiler.truffle.substitutions.TruffleGraphBuilderPlugins;
 import org.junit.Test;
+
+import com.oracle.truffle.api.ExactMath;
 
 public class ExactMathTest extends GraalCompilerTest {
 
     @Override
     protected void registerInvocationPlugins(InvocationPlugins invocationPlugins) {
-        TruffleGraphBuilderPlugins.registerExactMathPlugins(invocationPlugins, getMetaAccess());
-        new TruffleAMD64InvocationPlugins().registerInvocationPlugins(getProviders(), getArchitecture(), invocationPlugins, true);
-        new TruffleAArch64InvocationPlugins().registerInvocationPlugins(getProviders(), getArchitecture(), invocationPlugins, true);
+        TruffleGraphBuilderPlugins.registerExactMathPlugins(invocationPlugins);
         super.registerInvocationPlugins(invocationPlugins);
     }
 
@@ -131,76 +122,16 @@ public class ExactMathTest extends GraalCompilerTest {
         test("longMulHighUnsigned", Long.MIN_VALUE, 15L);
     }
 
-    @Test
-    public void testTruncateFloat() {
-        test("truncateFloat", Float.NEGATIVE_INFINITY);
-        test("truncateFloat", -1.5f);
-        test("truncateFloat", -1.0f);
-        test("truncateFloat", -0.5f);
-        test("truncateFloat", -0.0f);
-        test("truncateFloat", Float.MIN_VALUE);
-        test("truncateFloat", Float.MIN_NORMAL);
-        test("truncateFloat", 0.0f);
-        test("truncateFloat", 0.5f);
-        test("truncateFloat", 1.0f);
-        test("truncateFloat", 1.5f);
-        test("truncateFloat", Float.MAX_VALUE);
-        test("truncateFloat", Float.POSITIVE_INFINITY);
-        test("truncateFloat", Float.NaN);
-    }
-
-    @Test
-    public void testTruncateFloatAMD64() {
-        Assume.assumeTrue(isArchitecture("AMD64"));
-        Assert.assertEquals(1, getFinalGraph("truncateFloat").getNodes().filter(AMD64RoundNode.class).count());
-    }
-
-    @Test
-    public void testTruncateFloatAarch64() {
-        Assume.assumeTrue(isArchitecture("aarch64"));
-        Assert.assertEquals(1, getFinalGraph("truncateFloat").getNodes().filter(AArch64RoundNode.class).count());
-    }
-
-    @Test
-    public void testTruncateDouble() {
-        test("truncateDouble", Double.NEGATIVE_INFINITY);
-        test("truncateDouble", -1.5);
-        test("truncateDouble", -1.0);
-        test("truncateDouble", -0.5);
-        test("truncateDouble", -0.0);
-        test("truncateDouble", Double.MIN_VALUE);
-        test("truncateDouble", Double.MIN_NORMAL);
-        test("truncateDouble", 0.0);
-        test("truncateDouble", 0.5);
-        test("truncateDouble", 1.0);
-        test("truncateDouble", 1.5);
-        test("truncateDouble", Double.MAX_VALUE);
-        test("truncateDouble", Double.POSITIVE_INFINITY);
-        test("truncateDouble", Double.NaN);
-    }
-
-    @Test
-    public void testTruncateDoubleAMD64() {
-        Assume.assumeTrue(isArchitecture("AMD64"));
-        Assert.assertEquals(1, getFinalGraph("truncateDouble").getNodes().filter(AMD64RoundNode.class).count());
-    }
-
-    @Test
-    public void testTruncateDoubleAarch64() {
-        Assume.assumeTrue(isArchitecture("aarch64"));
-        Assert.assertEquals(1, getFinalGraph("truncateDouble").getNodes().filter(AArch64RoundNode.class).count());
-    }
-
     public static int add(int a, int b) {
-        return Math.addExact(a, b);
+        return ExactMath.addExact(a, b);
     }
 
     public static int mul(int a, int b) {
-        return Math.multiplyExact(a, b);
+        return ExactMath.multiplyExact(a, b);
     }
 
     public static int sub(int a, int b) {
-        return Math.subtractExact(a, b);
+        return ExactMath.subtractExact(a, b);
     }
 
     public static int mulHigh(int a, int b) {
@@ -212,15 +143,15 @@ public class ExactMathTest extends GraalCompilerTest {
     }
 
     public static long longAdd(long a, long b) {
-        return Math.addExact(a, b);
+        return ExactMath.addExact(a, b);
     }
 
     public static long longMul(long a, long b) {
-        return Math.multiplyExact(a, b);
+        return ExactMath.multiplyExact(a, b);
     }
 
     public static long longSub(long a, long b) {
-        return Math.subtractExact(a, b);
+        return ExactMath.subtractExact(a, b);
     }
 
     public static long longMulHigh(long a, long b) {
@@ -229,13 +160,5 @@ public class ExactMathTest extends GraalCompilerTest {
 
     public static long longMulHighUnsigned(long a, long b) {
         return ExactMath.multiplyHighUnsigned(a, b);
-    }
-
-    public static float truncateFloat(float a) {
-        return ExactMath.truncate(a);
-    }
-
-    public static double truncateDouble(double a) {
-        return ExactMath.truncate(a);
     }
 }

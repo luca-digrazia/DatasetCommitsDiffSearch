@@ -53,7 +53,6 @@ import org.graalvm.util.UnmodifiableMapCursor;
 
 import jdk.vm.ci.meta.MetaUtil;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Signature;
 
 /**
@@ -643,24 +642,15 @@ public class InvocationPlugins {
             return resolvedRegistrations.get(method);
         } else {
             if (!method.isBridge()) {
-                ResolvedJavaType declaringClass = method.getDeclaringClass();
                 flushDeferrables();
-                String internalName = declaringClass.getName();
+                String internalName = method.getDeclaringClass().getName();
                 ClassPlugins classPlugins = registrations.get(internalName);
-                InvocationPlugin res = null;
                 if (classPlugins != null) {
-                    res = classPlugins.get(method);
+                    return classPlugins.get(method);
                 }
-                if (res == null) {
-                    LateClassPlugins lcp = findLateClassPlugins(internalName);
-                    if (lcp != null) {
-                        res = lcp.get(method);
-                    }
-                }
-                if (res != null) {
-                    if (canBeIntrinsified(declaringClass)) {
-                        return res;
-                    }
+                LateClassPlugins lcp = findLateClassPlugins(internalName);
+                if (lcp != null) {
+                    return lcp.get(method);
                 }
                 if (testExtensions != null) {
                     // Avoid the synchronization in the common case that there
@@ -691,15 +681,6 @@ public class InvocationPlugins {
         return null;
     }
 
-    /**
-     * Determines if methods in a given class can have invocation plugins.
-     *
-     * @param declaringClass the class to test
-     */
-    protected boolean canBeIntrinsified(ResolvedJavaType declaringClass) {
-        return true;
-    }
-
     LateClassPlugins findLateClassPlugins(String internalClassName) {
         for (LateClassPlugins lcp = lateRegistrations; lcp != null; lcp = lcp.next) {
             if (lcp.className.equals(internalClassName)) {
@@ -709,42 +690,14 @@ public class InvocationPlugins {
         return null;
     }
 
-    @SuppressWarnings("serial")
-    static class InvocationPlugRegistrationError extends GraalError {
-        InvocationPlugRegistrationError(Throwable cause) {
-            super(cause);
-        }
-    }
-
     private void flushDeferrables() {
         if (deferredRegistrations != null) {
             synchronized (this) {
                 if (deferredRegistrations != null) {
-                    try {
-                        for (Runnable deferrable : deferredRegistrations) {
-                            deferrable.run();
-                        }
-                        deferredRegistrations = null;
-                    } catch (InvocationPlugRegistrationError t) {
-                        throw t;
-                    } catch (Throwable t) {
-                        /*
-                         * Something went wrong during registration but it's possible we'll end up
-                         * coming back into this code. nulling out deferredRegistrations would just
-                         * cause other things to break and rerunning them would cause errors about
-                         * already registered plugins, so rethrow the original exception during
-                         * later invocations.
-                         */
-                        deferredRegistrations.clear();
-                        Runnable rethrow = new Runnable() {
-                            @Override
-                            public void run() {
-                                throw new InvocationPlugRegistrationError(t);
-                            }
-                        };
-                        deferredRegistrations.add(rethrow);
-                        rethrow.run();
+                    for (Runnable deferrable : deferredRegistrations) {
+                        deferrable.run();
                     }
+                    deferredRegistrations = null;
                 }
             }
         }

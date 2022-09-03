@@ -37,7 +37,7 @@ import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.Registratio
 import org.graalvm.compiler.replacements.Snippets;
 import org.graalvm.compiler.replacements.classfile.ClassfileBytecodeProvider;
 import org.graalvm.compiler.word.Word;
-import org.graalvm.compiler.word.WordCastNode;
+import org.graalvm.compiler.word.nodes.WordCastNode;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
@@ -196,7 +196,6 @@ public class DerivedOopTest extends ReplacementsTest implements Snippets {
             internalPointer = getRawPointer(o2) + offsetB;
             SideEffect2 = internalPointer;
         }
-        GraalDirectives.controlFlowAnchor();
         // make sure the internal pointer is computed before the safepoint
         GraalDirectives.blackhole(internalPointer);
         objResult.beforeGC.basePointer = getRawPointer(objResult);
@@ -216,7 +215,6 @@ public class DerivedOopTest extends ReplacementsTest implements Snippets {
             internalPointer = getRawPointer(o2) + offsetB;
             SideEffect2 = internalPointer;
         }
-        GraalDirectives.controlFlowAnchor();
         // make sure the internal pointer is computed before the safepoint
         GraalDirectives.blackhole(internalPointer);
         objResult.beforeGC.basePointer = getRawPointer(objResult);
@@ -235,7 +233,6 @@ public class DerivedOopTest extends ReplacementsTest implements Snippets {
             internalPointer = getRawPointer(b) + offsetB;
             SideEffect2 = internalPointer;
         }
-        GraalDirectives.controlFlowAnchor();
         // make sure the internal pointer is computed before the safepoint
         GraalDirectives.blackhole(internalPointer);
         objResult.beforeGC.basePointer = getRawPointer(objResult);

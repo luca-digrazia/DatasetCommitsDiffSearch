@@ -112,7 +112,7 @@ public class GuardedIntrinsicTest extends GraalCompilerTest {
     @Override
     protected StructuredGraph parseForCompile(ResolvedJavaMethod method, CompilationIdentifier compilationId, OptionValues options) {
         graph = super.parseForCompile(method, compilationId, options);
-        parsedForCompile = (StructuredGraph) graph.copy(graph.getDebug());
+        parsedForCompile = (StructuredGraph) graph.copy();
         return graph;
     }
 
@@ -144,11 +144,6 @@ public class GuardedIntrinsicTest extends GraalCompilerTest {
     public void test01() {
         Super inheritsHC = new Super();
         Person overridesHC = new Person(0);
-
-        // Ensure the profile for getSuperAge includes both receiver types
-        getSuperAge(inheritsHC);
-        getSuperAge(overridesHC);
-
         test("getSuperAge", inheritsHC);
         test("getSuperAge", overridesHC);
 

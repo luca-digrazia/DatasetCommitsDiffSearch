@@ -52,6 +52,7 @@ import org.graalvm.compiler.core.GraalCompiler;
 import org.graalvm.compiler.core.GraalCompiler.Request;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.type.StampFactory;
+import org.graalvm.compiler.core.common.util.ModuleAPI;
 import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.Debug.Scope;
@@ -111,7 +112,6 @@ import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.runtime.RuntimeProvider;
 import org.graalvm.compiler.test.AddExports;
 import org.graalvm.compiler.test.GraalTest;
-import org.graalvm.compiler.test.JLModule;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -133,6 +133,7 @@ import jdk.vm.ci.meta.ProfilingInfo;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog;
+import jdk.vm.ci.services.Services;
 
 /**
  * Base class for Graal compiler unit tests.
@@ -156,9 +157,7 @@ import jdk.vm.ci.meta.SpeculationLog;
 @AddExports({"jdk.internal.vm.ci/jdk.vm.ci.meta",
                 "jdk.internal.vm.ci/jdk.vm.ci.services",
                 "jdk.internal.vm.ci/jdk.vm.ci.code",
-                "jdk.internal.vm.ci/jdk.vm.ci.runtime",
                 "jdk.internal.vm.ci/jdk.vm.ci.services",
-                "jdk.internal.vm.compiler/*",
                 "java.base/jdk.internal.org.objectweb.asm",
                 "java.base/jdk.internal.org.objectweb.asm.tree"})
 public abstract class GraalCompilerTest extends GraalTest {
@@ -181,13 +180,18 @@ public abstract class GraalCompilerTest extends GraalTest {
     public static final Class<?> JAVA_BASE = Class.class;
 
     /**
+     * Representative class for the {@code jdk.vm.ci} module.
+     */
+    public static final Class<?> JDK_VM_CI = Services.class;
+
+    /**
      * Exports the package named {@code packageName} declared in {@code moduleMember}'s module to
      * this object's module. This must be called before accessing packages that are no longer public
      * as of JDK 9.
      */
     protected final void exportPackage(Class<?> moduleMember, String packageName) {
         if (!Java8OrEarlier) {
-            JLModule.exportPackageTo(moduleMember, packageName, getClass());
+            ModuleAPI.exportPackageTo(moduleMember, packageName, getClass());
         }
     }
 
