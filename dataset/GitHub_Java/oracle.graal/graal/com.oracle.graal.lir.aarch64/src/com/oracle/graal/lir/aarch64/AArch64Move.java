@@ -283,7 +283,7 @@ public class AArch64Move {
 
         @Override
         protected void emitMemAccess(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
-            emitStore(crb, masm, kind, addressValue.toAddress(), input);
+            emitStore(crb, masm, kind, addressValue.toAddress(), asRegister(input));
         }
     }
 
@@ -302,7 +302,7 @@ public class AArch64Move {
 
         @Override
         public void emitMemAccess(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
-            emitStore(crb, masm, kind, addressValue.toAddress(), zr.asValue(LIRKind.combine(addressValue)));
+            emitStore(crb, masm, kind, addressValue.toAddress(), zr);
         }
     }
 
@@ -387,12 +387,12 @@ public class AArch64Move {
         }
     }
 
-    private static void emitStore(@SuppressWarnings("unused") CompilationResultBuilder crb, AArch64MacroAssembler masm, AArch64Kind kind, AArch64Address dst, Value src) {
+    public static void emitStore(@SuppressWarnings("unused") CompilationResultBuilder crb, AArch64MacroAssembler masm, AArch64Kind kind, AArch64Address dst, Register src) {
         int destSize = kind.getSizeInBytes() * Byte.SIZE;
         if (kind.isInteger()) {
-            masm.str(destSize, asRegister(src), dst);
+            masm.str(destSize, src, dst);
         } else {
-            masm.fstr(destSize, asRegister(src), dst);
+            masm.fstr(destSize, src, dst);
         }
     }
 
@@ -499,13 +499,17 @@ public class AArch64Move {
     private static void const2stack(CompilationResultBuilder crb, AArch64MacroAssembler masm, Value result, JavaConstant constant) {
         if (constant.isDefaultForKind() || constant.isNull()) {
             AArch64Address resultAddress = (AArch64Address) crb.asAddress(result);
-            emitStore(crb, masm, (AArch64Kind) result.getPlatformKind(), resultAddress, zr.asValue(LIRKind.combine(result)));
+            // emitStore(g0.asValue(LIRKind.combine(result)), resultAddress,
+            // result.getPlatformKind(), null, crb, masm);
+            throw JVMCIError.unimplemented("" + resultAddress);
         } else {
             try (ScratchRegister sc = masm.getScratchRegister()) {
                 Value scratchRegisterValue = sc.getRegister().asValue(LIRKind.combine(result));
                 const2reg(crb, masm, scratchRegisterValue, constant);
                 AArch64Address resultAddress = (AArch64Address) crb.asAddress(result);
-                emitStore(crb, masm, (AArch64Kind) result.getPlatformKind(), resultAddress, scratchRegisterValue);
+                // emitStore(scratchRegisterValue, resultAddress, result.getPlatformKind(), null,
+                // crb, masm);
+                throw JVMCIError.unimplemented("" + resultAddress);
             }
         }
     }

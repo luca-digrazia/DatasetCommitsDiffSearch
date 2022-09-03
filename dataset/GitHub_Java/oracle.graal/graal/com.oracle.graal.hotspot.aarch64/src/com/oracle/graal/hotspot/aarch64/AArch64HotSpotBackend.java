@@ -34,6 +34,16 @@ import static jdk.vm.ci.hotspot.aarch64.AArch64HotSpotRegisterConfig.fp;
 
 import java.util.Set;
 
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
+import jdk.vm.ci.hotspot.aarch64.AArch64HotSpotRegisterConfig;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+
 import com.oracle.graal.asm.Assembler;
 import com.oracle.graal.asm.Label;
 import com.oracle.graal.asm.aarch64.AArch64Address;
@@ -65,16 +75,6 @@ import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.gen.LIRGeneratorTool;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.hotspot.aarch64.AArch64HotSpotRegisterConfig;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * HotSpot AArch64 specific backend.
@@ -228,7 +228,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
         crb.setMaxInterpreterFrameSize(gen.getMaxInterpreterFrameSize());
         StackSlot deoptimizationRescueSlot = gen.getDeoptimizationRescueSlot();
         if (deoptimizationRescueSlot != null && stub == null) {
-            crb.compilationResult.setCustomStackAreaOffset(deoptimizationRescueSlot);
+            crb.compilationResult.setCustomStackAreaOffset(frameMap.offsetForStackSlot(deoptimizationRescueSlot));
         }
 
         if (stub != null) {
@@ -247,7 +247,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
         Label verifiedStub = new Label();
 
         emitCodePrefix(crb, installedCodeOwner, masm, regConfig, config, verifiedStub);
-        emitCodeBody(crb, lir, masm);
+        emitCodeBody(crb, lir);
         emitCodeSuffix(crb, masm, config, frameMap);
     }
 
@@ -272,10 +272,9 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
                 masm.ldr(64, klass, klassAddress);
             }
             masm.cmp(64, inlineCacheKlass, klass);
-            /*
-             * Conditional jumps have a much lower range than unconditional ones, which can be a
-             * problem because the miss handler could be out of range.
-             */
+            // conditional jumps have a much lower range than unconditional ones, which can be a
+            // problem because
+            // the miss handler could be out of range.
             masm.branchConditionally(AArch64Assembler.ConditionFlag.EQ, verifiedStub);
             AArch64Call.directJmp(crb, masm, getForeignCalls().lookupForeignCall(IC_MISS_HANDLER));
         }
@@ -285,14 +284,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
         crb.recordMark(config.MARKID_VERIFIED_ENTRY);
     }
 
-    private static void emitCodeBody(CompilationResultBuilder crb, LIR lir, AArch64MacroAssembler masm) {
-        /*
-         * Insert a nop at the start of the prolog so we can patch in a branch if we need to
-         * invalidate the method later.
-         */
-        crb.blockComment("[nop for method invalidation]");
-        masm.nop();
-
+    private static void emitCodeBody(CompilationResultBuilder crb, LIR lir) {
         crb.emit(lir);
     }
 

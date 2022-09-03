@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,24 +21,25 @@
  * questions.
  */
 
-package com.oracle.graal.compiler.aarch64;
+package com.oracle.graal.lir.aarch64;
 
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.memory.address.AddressNode;
-import com.oracle.graal.phases.common.AddressLoweringPhase.AddressLowering;
+import com.oracle.graal.asm.aarch64.AArch64MacroAssembler;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.StandardOp.AbstractBlockEndOp;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
-public class AArch64AddressLowering extends AddressLowering {
+public abstract class AArch64BlockEndOp extends AbstractBlockEndOp {
 
-    @Override
-    public AddressNode lower(ValueNode address) {
-        return lower(address, null);
+    public static final LIRInstructionClass<AArch64BlockEndOp> TYPE = LIRInstructionClass.create(AArch64BlockEndOp.class);
+
+    protected AArch64BlockEndOp(LIRInstructionClass<? extends AArch64BlockEndOp> c) {
+        super(c);
     }
 
     @Override
-    public AddressNode lower(ValueNode base, ValueNode offset) {
-        AArch64AddressNode ret = new AArch64AddressNode(base, offset);
-        // TODO improve
-        return base.graph().unique(ret);
+    public final void emitCode(CompilationResultBuilder crb) {
+        emitCode(crb, (AArch64MacroAssembler) crb.asm);
     }
 
+    protected abstract void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm);
 }

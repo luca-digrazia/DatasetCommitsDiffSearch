@@ -23,8 +23,7 @@
 
 package com.oracle.graal.hotspot.aarch64;
 
-import com.oracle.graal.asm.NumUtil;
-import com.oracle.graal.asm.aarch64.AArch64Address.AddressingMode;
+import com.oracle.graal.asm.aarch64.AArch64Address;
 import com.oracle.graal.compiler.aarch64.AArch64ArithmeticLIRGenerator;
 import com.oracle.graal.compiler.aarch64.AArch64LIRGenerator;
 import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
@@ -42,7 +41,7 @@ import com.oracle.graal.lir.Variable;
 import com.oracle.graal.lir.VirtualStackSlot;
 import com.oracle.graal.lir.aarch64.AArch64AddressValue;
 import com.oracle.graal.lir.aarch64.AArch64FrameMapBuilder;
-import com.oracle.graal.lir.aarch64.AArch64Move.StoreOp;
+import com.oracle.graal.lir.aarch64.AArch64Move;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 
 import jdk.vm.ci.aarch64.AArch64Kind;
@@ -151,7 +150,8 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
 
     @Override
     public void emitPrefetchAllocate(Value address) {
-        append(new AArch64PrefetchOp(asAddressValue(address), config.allocatePrefetchInstr));
+        // TODO (das) Optimization for later.
+        throw JVMCIError.unimplemented();
     }
 
     @Override
@@ -187,10 +187,8 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
     private void moveValueToThread(Value value, int offset) {
         LIRKind wordKind = LIRKind.value(target().arch.getWordKind());
         RegisterValue thread = getProviders().getRegisters().getThreadRegister().asValue(wordKind);
-        final int transferSize = value.getLIRKind().getPlatformKind().getSizeInBytes();
-        final int scaledDisplacement = offset >> NumUtil.log2Ceil(transferSize);
-        AArch64AddressValue address = new AArch64AddressValue(value.getLIRKind(), thread, Value.ILLEGAL, scaledDisplacement, true, AddressingMode.IMMEDIATE_SCALED);
-        append(new StoreOp((AArch64Kind) value.getPlatformKind(), address, loadReg(value), null));
+        AArch64AddressValue pendingDeoptAddress = new AArch64AddressValue(value.getLIRKind(), thread, Value.ILLEGAL, offset, false, AArch64Address.AddressingMode.IMMEDIATE_UNSCALED);
+        append(new AArch64Move.StoreOp((AArch64Kind) value.getPlatformKind(), pendingDeoptAddress, loadReg(value), null));
     }
 
     @Override
