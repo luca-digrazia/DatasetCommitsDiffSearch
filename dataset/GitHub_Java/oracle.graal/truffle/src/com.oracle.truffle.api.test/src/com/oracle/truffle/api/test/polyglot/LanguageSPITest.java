@@ -34,8 +34,6 @@ import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.RootNode;
 
 public class LanguageSPITest {
 
@@ -157,14 +155,6 @@ public class LanguageSPITest {
         protected void disposeContext(LanguageContext context) {
             assertSame(getContext(), context);
             assertSame(context, getContextReference().get());
-
-            assertSame(context, new RootNode(this) {
-                @Override
-                public Object execute(VirtualFrame frame) {
-                    return null;
-                }
-            }.getLanguage(LanguageSPITestLanguage.class).getContextReference().get());
-
             context.disposeCalled++;
         }
 
