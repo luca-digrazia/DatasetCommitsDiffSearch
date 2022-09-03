@@ -65,7 +65,6 @@ import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
@@ -86,7 +85,7 @@ final class LLVMLiteralFactory {
     static LLVMExpressionNode createSimpleConstantNoArray(LLVMContext context, Object constant, Type type) {
         if (Type.isFunctionOrFunctionPointer(type)) {
             if (constant == null) {
-                LLVMFunctionDescriptor functionDescriptor = context.getFunctionDescriptor(LLVMFunctionHandle.nullPointer());
+                LLVMFunctionDescriptor functionDescriptor = context.getZeroFunctionDescriptor();
                 return LLVMFunctionLiteralNodeGen.create(functionDescriptor);
             } else {
                 throw new AssertionError("Not a Simple Constant: " + constant);

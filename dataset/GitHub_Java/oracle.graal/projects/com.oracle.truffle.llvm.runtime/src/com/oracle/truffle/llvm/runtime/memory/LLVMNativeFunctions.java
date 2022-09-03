@@ -40,10 +40,6 @@ public abstract class LLVMNativeFunctions {
 
     public abstract NullPointerNode createNullPointerNode();
 
-    public abstract MemCopyNode createMemMoveNode();
-
-    public abstract MemCopyNode createMemCopyNode();
-
     public abstract DynamicCastNode createDynamicCast();
 
     public abstract SulongCanCatchNode createSulongCanCatch();
@@ -196,42 +192,6 @@ public abstract class LLVMNativeFunctions {
         }
 
         public abstract LLVMAddress execute(LLVMAddress object, LLVMAddress type1, LLVMAddress type2, long value);
-    }
-
-    public abstract static class MemCopyNode extends HeapFunctionNode {
-
-        protected MemCopyNode(TruffleObject function, int argCount) {
-            super(function, argCount);
-        }
-
-        public abstract void execute(LLVMAddress target, LLVMAddress source, long length);
-    }
-
-    public abstract static class MemSetNode extends HeapFunctionNode {
-
-        protected MemSetNode(TruffleObject function, int argCount) {
-            super(function, argCount);
-        }
-
-        public abstract void execute(LLVMAddress target, int value, long length);
-    }
-
-    public abstract static class FreeNode extends HeapFunctionNode {
-
-        protected FreeNode(TruffleObject function, int argCount) {
-            super(function, argCount);
-        }
-
-        public abstract void execute(LLVMAddress addr);
-    }
-
-    public abstract static class MallocNode extends HeapFunctionNode {
-
-        protected MallocNode(TruffleObject function, int argCount) {
-            super(function, argCount);
-        }
-
-        public abstract LLVMAddress execute(long size);
     }
 
     public abstract static class NullPointerNode extends HeapFunctionNode {
