@@ -45,11 +45,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         return compare;
     }
 
-    public void setCompare(BooleanNode x) {
-        updateUsages(compare, x);
-        compare = x;
-    }
-
     public IfNode(BooleanNode condition, FixedNode trueSuccessor, FixedNode falseSuccessor, double takenProbability) {
         super(StampFactory.illegal(), new BeginNode[] {BeginNode.begin(trueSuccessor), BeginNode.begin(falseSuccessor)}, new double[] {takenProbability, 1 - takenProbability});
         this.compare = condition;
@@ -122,7 +117,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                 tool.addToWorkList(falseSuccessor());
                 ((StructuredGraph) graph()).removeSplit(this, FALSE_EDGE);
             }
-        } else if (trueSuccessor().guards().isEmpty() && falseSuccessor().guards().isEmpty()) {
+        } else {
             if (trueSuccessor().next() instanceof EndNode && falseSuccessor().next() instanceof EndNode) {
                 EndNode trueEnd = (EndNode) trueSuccessor().next();
                 EndNode falseEnd = (EndNode) falseSuccessor().next();
@@ -170,8 +165,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         MergeNode merge = trueEnd.merge();
         merge.prepareDelete(pred);
         assert merge.usages().isEmpty();
-        trueSuccessor.prepareDelete();
-        falseSuccessor.prepareDelete();
 
         FixedNode next = merge.next();
         merge.setNext(null);
