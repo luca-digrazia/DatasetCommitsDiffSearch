@@ -44,7 +44,6 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.sl.SLLanguage;
 import com.oracle.truffle.sl.parser.Parser;
 
 /**
@@ -57,12 +56,7 @@ public abstract class SLDefineFunctionBuiltin extends SLBuiltinNode {
     @TruffleBoundary
     @Specialization
     public String defineFunction(String code) {
-        // @formatter:off
-        Source source = Source.newFromText(code).
-            name("[defineFunction]").
-            mimeType(SLLanguage.MIME_TYPE).
-            build();
-        // @formatter:on
+        Source source = Source.fromText(code, "[defineFunction]");
         /* The same parsing code as for parsing the initial source. */
         getContext().getFunctionRegistry().register(Parser.parseSL(source));
 

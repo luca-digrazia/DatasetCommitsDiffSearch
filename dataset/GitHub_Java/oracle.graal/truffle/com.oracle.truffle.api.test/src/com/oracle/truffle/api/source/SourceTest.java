@@ -34,7 +34,6 @@ import java.io.StringReader;
 import java.lang.ref.WeakReference;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -330,19 +329,6 @@ public class SourceTest {
     }
 
     @Test
-    public void normalSourceIsntInternal() throws IOException {
-        Source source = Source.newWithText("anything").mimeType("text/plain").build();
-
-        assertFalse("Not internal", source.isInternal());
-    }
-
-    @Test
-    public void markSourceAsInternal() throws IOException {
-        Source source = Source.newWithText("anything internal").mimeType("text/plain").internal(true).build();
-
-        assertTrue("This source is internal", source.isInternal());
-    }
-
     public void subSourceHashAndEquals() {
         Source src = Source.fromText("One Two Three", "counting.en");
         Source one = Source.subSource(src, 0, 3);
