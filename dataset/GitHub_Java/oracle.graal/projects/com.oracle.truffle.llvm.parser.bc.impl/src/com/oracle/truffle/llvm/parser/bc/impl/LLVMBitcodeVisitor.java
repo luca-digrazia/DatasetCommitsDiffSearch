@@ -203,6 +203,8 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
     private final DataLayoutConverter.DataSpecConverter targetDataLayout;
 
+    private final LLVMBitcodeTypeHelper typeHelper;
+
     private final NodeFactoryFacade factoryFacade;
 
     private final LLVMBitcodeVisitorParserRuntime parserRuntime;
@@ -219,6 +221,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         this.labels = labels;
         this.phis = phis;
         this.targetDataLayout = layout;
+        this.typeHelper = new LLVMBitcodeTypeHelper(targetDataLayout);
         this.factoryFacade = factoryFacade;
         this.parserRuntime = new LLVMBitcodeVisitorParserRuntime();
         this.factoryFacade.setUpFacade(this.parserRuntime);
@@ -344,6 +347,10 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
     public LLVMParserRuntime getParserRuntime() {
         return parserRuntime;
+    }
+
+    public LLVMBitcodeTypeHelper getTypeHelper() {
+        return typeHelper;
     }
 
     public LLVMNode[] getDeallocations() {
