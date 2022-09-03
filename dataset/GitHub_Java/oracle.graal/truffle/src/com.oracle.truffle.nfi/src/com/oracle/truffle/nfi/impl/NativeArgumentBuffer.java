@@ -51,8 +51,6 @@ abstract class NativeArgumentBuffer {
         FLOAT_ARRAY,
         DOUBLE_ARRAY;
 
-        private static final TypeTag[] VALUES = values();
-
         int encode(int offset) {
             int encoded = (offset << 4) | (ordinal() & 0x0F);
             assert getTag(encoded) == this && getOffset(encoded) == offset : "error encoding type tag, maybe offset is too big?";
@@ -60,7 +58,7 @@ abstract class NativeArgumentBuffer {
         }
 
         static TypeTag getTag(int encoded) {
-            return VALUES[encoded & 0x0F];
+            return values()[encoded & 0x0F];
         }
 
         static int getOffset(int encoded) {
