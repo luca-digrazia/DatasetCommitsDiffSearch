@@ -40,12 +40,16 @@
  */
 package com.oracle.truffle.sl.test;
 
+import com.oracle.truffle.api.dsl.NodeFactory;
+import com.oracle.truffle.api.vm.TruffleVM;
+import com.oracle.truffle.sl.SLLanguage;
+import com.oracle.truffle.sl.builtins.SLBuiltinNode;
+import com.oracle.truffle.sl.test.SLTestRunner.TestCase;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.net.URL;
 import java.nio.charset.Charset;
@@ -56,13 +60,8 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.Enumeration;
 import java.util.List;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
-
 import org.junit.Assert;
-import org.junit.Assume;
 import org.junit.internal.TextListener;
 import org.junit.runner.Description;
 import org.junit.runner.JUnitCore;
@@ -73,12 +72,6 @@ import org.junit.runner.notification.Failure;
 import org.junit.runner.notification.RunNotifier;
 import org.junit.runners.ParentRunner;
 import org.junit.runners.model.InitializationError;
-
-import com.oracle.truffle.api.dsl.NodeFactory;
-import com.oracle.truffle.api.vm.PolyglotEngine;
-import com.oracle.truffle.sl.SLLanguage;
-import com.oracle.truffle.sl.builtins.SLBuiltinNode;
-import com.oracle.truffle.sl.test.SLTestRunner.TestCase;
 
 public final class SLTestRunner extends ParentRunner<TestCase> {
 
@@ -181,80 +174,30 @@ public final class SLTestRunner extends ParentRunner<TestCase> {
         return foundCases;
     }
 
-    /**
-     * Recursively deletes a file that may represent a directory.
-     */
-    private static void delete(File f) {
-        if (f.isDirectory()) {
-            for (File c : f.listFiles()) {
-                delete(c);
-            }
-        }
-        if (!f.delete()) {
-            PrintStream err = System.err;
-            err.println("Failed to delete file: " + f);
-        }
-    }
-
-    /**
-     * Unpacks a jar file to a temporary directory that will be removed when the VM exits.
-     *
-     * @param jarfilePath the path of the jar to unpack
-     * @return the path of the temporary directory
-     */
-    private static String explodeJarToTempDir(File jarfilePath) {
-        try {
-            final Path jarfileDir = Files.createTempDirectory(jarfilePath.getName());
-            Runtime.getRuntime().addShutdownHook(new Thread() {
-                @Override
-                public void run() {
-                    delete(jarfileDir.toFile());
-                }
-            });
-            jarfileDir.toFile().deleteOnExit();
-            JarFile jarfile = new JarFile(jarfilePath);
-            Enumeration<JarEntry> entries = jarfile.entries();
-            while (entries.hasMoreElements()) {
-                JarEntry e = entries.nextElement();
-                if (!e.isDirectory()) {
-                    File path = new File(jarfileDir.toFile(), e.getName().replace('/', File.separatorChar));
-                    File dir = path.getParentFile();
-                    dir.mkdirs();
-                    assert dir.exists();
-                    Files.copy(jarfile.getInputStream(e), path.toPath());
-                }
-            }
-            return jarfileDir.toFile().getAbsolutePath();
-        } catch (IOException e) {
-            throw new AssertionError(e);
-        }
-    }
-
     public static Path getRootViaResourceURL(final Class<?> c, String[] paths) {
         URL url = c.getResource(c.getSimpleName() + ".class");
         if (url != null) {
             char sep = File.separatorChar;
             String externalForm = url.toExternalForm();
             String classPart = sep + c.getName().replace('.', sep) + ".class";
+            String suffix = null;
             String prefix = null;
-            String base;
             if (externalForm.startsWith("jar:file:")) {
                 prefix = "jar:file:";
-                int bang = externalForm.indexOf('!', prefix.length());
-                Assume.assumeTrue(bang != -1);
-                File jarfilePath = new File(externalForm.substring(prefix.length(), bang));
-                Assume.assumeTrue(jarfilePath.exists());
-                base = explodeJarToTempDir(jarfilePath);
+                suffix = sep + "build/truffle-sl.jar!" + classPart;
             } else if (externalForm.startsWith("file:")) {
                 prefix = "file:";
-                base = externalForm.substring(prefix.length(), externalForm.length() - classPart.length());
+                suffix = sep + "bin" + classPart;
             } else {
                 return null;
             }
-            for (String path : paths) {
-                String candidate = base + sep + path;
-                if (new File(candidate).exists()) {
-                    return FileSystems.getDefault().getPath(candidate);
+            if (externalForm.endsWith(suffix)) {
+                String base = externalForm.substring(prefix.length(), externalForm.length() - suffix.length());
+                for (String path : paths) {
+                    String candidate = base + sep + path;
+                    if (new File(candidate).exists()) {
+                        return FileSystems.getDefault().getPath(candidate);
+                    }
                 }
             }
         }
@@ -286,7 +229,7 @@ public final class SLTestRunner extends ParentRunner<TestCase> {
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try {
-            PolyglotEngine vm = PolyglotEngine.buildNew().setIn(new ByteArrayInputStream(repeat(testCase.testInput, repeats).getBytes("UTF-8"))).setOut(out).build();
+            TruffleVM vm = TruffleVM.newVM().setIn(new ByteArrayInputStream(repeat(testCase.testInput, repeats).getBytes("UTF-8"))).setOut(out).build();
 
             String script = readAllLines(testCase.path);
 
