@@ -51,7 +51,7 @@ import com.oracle.truffle.api.test.instrument.InstrumentationTestNodes.TestAddit
 import com.oracle.truffle.api.test.instrument.InstrumentationTestNodes.TestLanguageNode;
 import com.oracle.truffle.api.test.instrument.InstrumentationTestNodes.TestValueNode;
 import com.oracle.truffle.api.test.instrument.InstrumentationTestingLanguage.InstrumentTestTag;
-import com.oracle.truffle.api.vm.PolyglotEngine;
+import com.oracle.truffle.api.vm.TruffleVM;
 
 /**
  * <h3>AST Instrumentation</h3>
@@ -64,12 +64,12 @@ public class InstrumentationTest {
 
     @Test
     public void testProbing() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, IOException {
-        final PolyglotEngine vm = PolyglotEngine.newBuilder().build();
-        final Field field = PolyglotEngine.class.getDeclaredField("instrumenter");
+        final TruffleVM vm = TruffleVM.newVM().build();
+        final Field field = TruffleVM.class.getDeclaredField("instrumenter");
         field.setAccessible(true);
         final Instrumenter instrumenter = (Instrumenter) field.get(vm);
         instrumenter.registerASTProber(new TestASTProber(instrumenter));
-        final Source source = InstrumentationTestingLanguage.createAdditionSource13("testProbing");
+        final Source source = Source.fromText("testProbing text", "testProbing").withMimeType("text/x-instTest");
 
         final Probe[] probes = new Probe[3];
         instrumenter.addProbeListener(new DefaultProbeListener() {
@@ -106,11 +106,11 @@ public class InstrumentationTest {
     @Test
     public void testTagging() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, IOException {
 
-        final PolyglotEngine vm = PolyglotEngine.newBuilder().build();
-        final Field field = PolyglotEngine.class.getDeclaredField("instrumenter");
+        final TruffleVM vm = TruffleVM.newVM().build();
+        final Field field = TruffleVM.class.getDeclaredField("instrumenter");
         field.setAccessible(true);
         final Instrumenter instrumenter = (Instrumenter) field.get(vm);
-        final Source source = InstrumentationTestingLanguage.createAdditionSource13("testTagging");
+        final Source source = Source.fromText("testTagging text", "testTagging").withMimeType("text/x-instTest");
 
         // Applies appropriate tags
         final TestASTProber astProber = new TestASTProber(instrumenter);
@@ -130,7 +130,7 @@ public class InstrumentationTest {
         assertEquals(instrumenter.findProbesTaggedAs(InstrumentTestTag.VALUE_TAG).size(), 2);
     }
 
-    private static void checkCounters(Probe probe, PolyglotEngine vm, Source source, TestCounter counterA, TestCounter counterB, TestCounter counterC) throws IOException {
+    private static void checkCounters(Probe probe, TruffleVM vm, Source source, TestCounter counterA, TestCounter counterB, TestCounter counterC) throws IOException {
 
         // Attach a counting instrument to the probe
         counterA.attach(probe);
@@ -243,9 +243,10 @@ public class InstrumentationTest {
                     leaveCount++;
                 }
 
-                public void onReturnExceptional(Probe p, Throwable exception) {
+                public void onReturnExceptional(Probe p, Exception exception) {
                     leaveCount++;
                 }
+
             }, "Instrumentation Test Counter");
         }
 
@@ -295,9 +296,10 @@ public class InstrumentationTest {
                     leaveCount++;
                 }
 
-                public void onReturnExceptional(Probe p, Node node, VirtualFrame vFrame, Throwable exception) {
+                public void onReturnExceptional(Probe p, Node node, VirtualFrame vFrame, Exception exception) {
                     leaveCount++;
                 }
+
             }, "Instrumentation Test Counter");
         }
 

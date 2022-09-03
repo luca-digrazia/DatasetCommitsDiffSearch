@@ -24,7 +24,6 @@
  */
 package com.oracle.truffle.api.instrument;
 
-import java.io.IOException;
 import java.io.PrintStream;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -33,13 +32,13 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
-import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.impl.Accessor;
+import com.oracle.truffle.api.instrument.TagInstrument.AfterTagInstrument;
+import com.oracle.truffle.api.instrument.TagInstrument.BeforeTagInstrument;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
@@ -87,11 +86,7 @@ import com.oracle.truffle.api.source.SourceSection;
  * {@linkplain #install(Tool) installed} for data collection, possibly providing their own services
  * with the resulting information.</li>
  * </ul>
- *
- * @since 0.8 or earlier
  */
-@SuppressWarnings("deprecation")
-@Deprecated
 public final class Instrumenter {
 
     private static final boolean TRACE = false;
@@ -154,16 +149,14 @@ public final class Instrumenter {
      * <li>Return modification-safe representations of the data; and</li>
      * <li>Not change the state of the data.</li>
      * </ul>
-     *
-     * @since 0.8 or earlier
      */
-    public abstract static class Tool {
+    public abstract static class Tool<T extends Tool<?>> {
+        // TODO (mlvdv) still thinking about the most appropriate name for this class of tools
 
         private ToolState toolState = ToolState.UNINSTALLED;
 
         private Instrumenter instrumenter;
 
-        /** @since 0.8 or earlier */
         protected Tool() {
         }
 
@@ -179,7 +172,6 @@ public final class Instrumenter {
 
         /**
          * @return whether the tool is currently collecting data.
-         * @since 0.8 or earlier
          */
         public final boolean isEnabled() {
             return toolState == ToolState.ENABLED;
@@ -190,7 +182,6 @@ public final class Instrumenter {
          * collecting data, but keeping data already collected).
          *
          * @throws IllegalStateException if not yet installed or disposed.
-         * @since 0.8 or earlier
          */
         public final void setEnabled(boolean isEnabled) {
             checkInstalled();
@@ -202,7 +193,6 @@ public final class Instrumenter {
          * Clears any data already collected, but otherwise does not change the state of the tool.
          *
          * @throws IllegalStateException if not yet installed or disposed.
-         * @since 0.8 or earlier
          */
         public final void reset() {
             checkInstalled();
@@ -214,7 +204,6 @@ public final class Instrumenter {
          * already collected.
          *
          * @throws IllegalStateException if not yet installed or disposed.
-         * @since 0.8 or earlier
          */
         public final void dispose() {
             checkInstalled();
@@ -225,7 +214,6 @@ public final class Instrumenter {
 
         /**
          * @return whether the installation succeeded.
-         * @since 0.8 or earlier
          */
         protected abstract boolean internalInstall();
 
@@ -233,18 +221,14 @@ public final class Instrumenter {
          * No subclass action required.
          *
          * @param isEnabled
-         * @since 0.8 or earlier
          */
         protected void internalSetEnabled(boolean isEnabled) {
         }
 
-        /** @since 0.8 or earlier */
         protected abstract void internalReset();
 
-        /** @since 0.8 or earlier */
         protected abstract void internalDispose();
 
-        /** @since 0.8 or earlier */
         protected final Instrumenter getInstrumenter() {
             return instrumenter;
         }
@@ -278,7 +262,7 @@ public final class Instrumenter {
     private final Object vm;
 
     /** Tools that have been created, but not yet disposed. */
-    Set<Tool> tools = new HashSet<>();
+    Set<Tool<? extends Tool<?>>> tools = new HashSet<>();
 
     private final Set<ASTProber> astProbers = Collections.synchronizedSet(new LinkedHashSet<ASTProber>());
 
@@ -293,13 +277,13 @@ public final class Instrumenter {
      * A global instrument that triggers notification just before executing any Node that is Probed
      * with a matching tag.
      */
-    @CompilationFinal private com.oracle.truffle.api.instrument.TagInstrument.BeforeTagInstrument beforeTagInstrument = null;
+    @CompilationFinal private BeforeTagInstrument beforeTagInstrument = null;
 
     /**
      * A global instrument that triggers notification just after executing any Node that is Probed
      * with a matching tag.
      */
-    @CompilationFinal private com.oracle.truffle.api.instrument.TagInstrument.AfterTagInstrument afterTagInstrument = null;
+    @CompilationFinal private AfterTagInstrument afterTagInstrument = null;
 
     Instrumenter(Object vm) {
         this.vm = vm;
@@ -322,7 +306,6 @@ public final class Instrumenter {
      *
      * @return a (possibly newly created) {@link Probe} associated with this node.
      * @throws ProbeException (unchecked) when a Probe cannot be created, leaving the AST unchanged
-     * @since 0.8 or earlier
      */
     @SuppressWarnings("rawtypes")
     public Probe probe(Node node) {
@@ -385,8 +368,6 @@ public final class Instrumenter {
 
     /**
      * Adds a {@link ProbeListener} to receive events.
-     *
-     * @since 0.8 or earlier
      */
     public void addProbeListener(ProbeListener listener) {
         assert listener != null;
@@ -395,8 +376,6 @@ public final class Instrumenter {
 
     /**
      * Removes a {@link ProbeListener}. Ignored if listener not found.
-     *
-     * @since 0.8 or earlier
      */
     public void removeProbeListener(ProbeListener listener) {
         probeListeners.remove(listener);
@@ -407,7 +386,6 @@ public final class Instrumenter {
      * probes if the specified tag is {@code null}.
      *
      * @return A collection of probes containing the given tag.
-     * @since 0.8 or earlier
      */
     public Collection<Probe> findProbesTaggedAs(SyntaxTag tag) {
         final List<Probe> taggedProbes = new ArrayList<>();
@@ -425,8 +403,6 @@ public final class Instrumenter {
     /**
      * Enables instrumentation at selected nodes in all subsequently constructed ASTs. Ignored if
      * the argument is already registered, runtime error if argument is {@code null}.
-     *
-     * @since 0.8 or earlier
      */
     public void registerASTProber(ASTProber prober) {
         if (prober == null) {
@@ -435,7 +411,6 @@ public final class Instrumenter {
         astProbers.add(prober);
     }
 
-    /** @since 0.8 or earlier */
     public void unregisterASTProber(ASTProber prober) {
         astProbers.remove(prober);
     }
@@ -447,14 +422,13 @@ public final class Instrumenter {
      * {@linkplain EventHandlerNode execution events} taking place at the Probe's AST location to
      * the listener.
      *
-     * @param probe source of AST execution events, non-null
+     * @param probe source of AST execution events
      * @param listener receiver of execution events
      * @param instrumentInfo optional documentation about the Instrument
      * @return a handle for access to the binding
-     * @since 0.8 or earlier
      */
+    @SuppressWarnings("static-method")
     public ProbeInstrument attach(Probe probe, SimpleInstrumentListener listener, String instrumentInfo) {
-        assert probe.getInstrumenter() == this;
         final ProbeInstrument instrument = new ProbeInstrument.SimpleInstrument(listener, instrumentInfo);
         probe.attach(instrument);
         return instrument;
@@ -467,113 +441,47 @@ public final class Instrumenter {
      * {@linkplain EventHandlerNode execution events} taking place at the Probe's AST location to
      * the listener.
      *
-     * @param probe source of AST execution events, non-null
+     * @param probe source of AST execution events
      * @param listener receiver of execution events
      * @param instrumentInfo optional documentation about the Instrument
      * @return a handle for access to the binding
-     * @since 0.8 or earlier
      */
+    @SuppressWarnings("static-method")
     public ProbeInstrument attach(Probe probe, StandardInstrumentListener listener, String instrumentInfo) {
-        assert probe.getInstrumenter() == this;
         final ProbeInstrument instrument = new ProbeInstrument.StandardInstrument(listener, instrumentInfo);
         probe.attach(instrument);
         return instrument;
     }
 
     /**
-     * <em>Attaches</em> a fragment of source text that is to be evaluated just before execution
-     * enters the location of a {@link Probe}, creating a <em>binding</em> called an
-     * {@link ProbeInstrument}. The outcome of the evaluation is reported to an optional
-     * {@link EvalInstrumentListener listener}, but the outcome does not affect the flow of guest
-     * language execution, even if the evaluation produces an exception.
+     * <em>Attaches</em> a {@link AdvancedInstrumentResultListener listener} to a {@link Probe},
+     * creating a <em>binding</em> called an {@link ProbeInstrument}. Until the Instrument is
+     * {@linkplain ProbeInstrument#dispose() disposed}, it routes synchronous notification of
+     * {@linkplain EventHandlerNode execution events} taking place at the Probe's AST location to
+     * the listener.
      * <p>
-     * The source text is assumed to be expressed in the language identified by its associated
-     * {@linkplain Source#getMimeType() MIME type}, if specified, otherwise by the language
-     * associated with the AST location associated with the {@link Probe}.
+     * This Instrument executes efficiently, subject to full Truffle optimization, a client-provided
+     * AST fragment every time the Probed node is entered.
      * <p>
-     * The source text is parsed in the lexical context of the AST location associated with the
-     * {@link Probe}.
-     * <p>
-     * The source text executes subject to full Truffle optimization.
+     * Any {@link RuntimeException} thrown by execution of the fragment is caught by the framework
+     * and reported to the listener; there is no other notification.
      *
-     * @param probe source of AST execution events, non-null
-     * @param languageClass the language in which the source text is to be executed
-     * @param source the source code to be evaluated, non-null and non-empty
+     * @param probe source of AST execution events
      * @param listener optional client callback for results/failure notification
+     * @param rootFactory provider of AST fragments on behalf of the client
+     * @param requiredResultType optional requirement, any non-assignable result is reported to the
+     *            the listener, if any, as a failure
      * @param instrumentInfo instrumentInfo optional documentation about the Instrument
      * @return a handle for access to the binding
-     * @deprecated
-     * @since 0.8 or earlier
      */
-    @Deprecated
-    @SuppressWarnings("rawtypes")
-    public ProbeInstrument attach(Probe probe, Class<? extends TruffleLanguage> languageClass, Source source, EvalInstrumentListener listener, String instrumentInfo) {
-        return attach(probe, languageClass, source, listener, instrumentInfo, new String[0], new Object[0]);
-    }
-
-    /**
-     * <em>Attaches</em> a fragment of source text that is to be evaluated just before execution
-     * enters the location of a {@link Probe}, creating a <em>binding</em> called an
-     * {@link ProbeInstrument}. The outcome of the evaluation is reported to an optional
-     * {@link EvalInstrumentListener listener}, but the outcome does not affect the flow of guest
-     * language execution, even if the evaluation produces an exception.
-     * <p>
-     * The source text is assumed to be expressed in the language identified by its associated
-     * {@linkplain Source#getMimeType() MIME type}, if specified, otherwise by the language
-     * associated with the AST location associated with the {@link Probe}.
-     * <p>
-     * The source text is parsed in the lexical context of the AST location associated with the
-     * {@link Probe}.
-     * <p>
-     * The source text executes subject to full Truffle optimization.
-     *
-     * @param probe source of AST execution events, non-null
-     * @param source the source code to be evaluated, non-null and non-empty, preferably with
-     *            {@link Source#withMimeType(java.lang.String) specified mime type} that determines
-     *            the {@link TruffleLanguage} to use when processing the source
-     * @param listener optional client callback for results/failure notification
-     * @param instrumentInfo instrumentInfo optional documentation about the Instrument
-     * @param parameters keys are the parameter names to pass to
-     *            {@link TruffleLanguage#parse(com.oracle.truffle.api.source.Source, com.oracle.truffle.api.nodes.Node, java.lang.String...)
-     *            parse} method; values will be passed to
-     *            {@link CallTarget#call(java.lang.Object...)} returned from the <code>parse</code>
-     *            method; the value can be <code>null</code>
-     * @return a handle for access to the binding
-     * @since 0.8 or earlier
-     */
-    public ProbeInstrument attach(Probe probe, Source source, EvalInstrumentListener listener, String instrumentInfo, Map<String, Object> parameters) {
-        final int size = parameters == null ? 0 : parameters.size();
-        String[] names = new String[size];
-        Object[] params = new Object[size];
-        if (parameters != null) {
-            int index = 0;
-            for (Map.Entry<String, Object> entry : parameters.entrySet()) {
-                names[index] = entry.getKey();
-                params[index] = entry.getValue();
-                index++;
-            }
-        }
-        return attach(probe, null, source, listener, instrumentInfo, names, params);
-    }
-
-    @SuppressWarnings("rawtypes")
-    private ProbeInstrument attach(Probe probe, Class<? extends TruffleLanguage> languageClass, Source source, EvalInstrumentListener listener, String instrumentInfo, String[] argumentNames,
-                    Object[] parameters) {
-        assert probe.getInstrumenter() == this;
-        Class<? extends TruffleLanguage> foundLanguageClass = null;
-        if (languageClass == null) {
-            if (source.getMimeType() == null) {
-                foundLanguageClass = ACCESSOR.findLanguage(probe);
-            }
-        } else {
-            foundLanguageClass = languageClass;
-        }
-        final com.oracle.truffle.api.instrument.ProbeInstrument.EvalInstrument instrument = new com.oracle.truffle.api.instrument.ProbeInstrument.EvalInstrument(foundLanguageClass, source, listener,
-                        instrumentInfo, argumentNames, parameters);
+    @SuppressWarnings("static-method")
+    public ProbeInstrument attach(Probe probe, AdvancedInstrumentResultListener listener, AdvancedInstrumentRootFactory rootFactory, Class<?> requiredResultType, String instrumentInfo) {
+        final ProbeInstrument instrument = new ProbeInstrument.AdvancedInstrument(listener, rootFactory, requiredResultType, instrumentInfo);
         probe.attach(instrument);
         return instrument;
     }
 
+    // TODO (mlvdv) allow multiple <em>before</em> instruments without performance hit?
     /**
      * Sets the current "<em>before</em>" TagInstrument; there can be no more than one in effect.
      * <ul>
@@ -588,7 +496,6 @@ public final class Instrumenter {
      * @param instrumentInfo optional, mainly for debugging.
      * @return a newly created, active Instrument
      * @throws IllegalStateException if called when a <em>before</em> Instrument is active.
-     * @since 0.8 or earlier
      */
     public TagInstrument attach(SyntaxTag tag, StandardBeforeInstrumentListener listener, String instrumentInfo) {
         if (beforeTagInstrument != null) {
@@ -599,6 +506,7 @@ public final class Instrumenter {
         return beforeTagInstrument;
     }
 
+    // TODO (mlvdv) allow multiple <em>after</em> instruments without performance hit?
     /**
      * Sets the current "<em>after</em>" TagInstrument; there can be no more than one in effect.
      * <ul>
@@ -613,7 +521,6 @@ public final class Instrumenter {
      * @param instrumentInfo optional, mainly for debugging.
      * @return a newly created, active Instrument
      * @throws IllegalStateException if called when a <em>after</em> Instrument is active.
-     * @since 0.8 or earlier
      */
     public TagInstrument attach(SyntaxTag tag, StandardAfterInstrumentListener listener, String instrumentInfo) {
         if (afterTagInstrument != null) {
@@ -629,9 +536,8 @@ public final class Instrumenter {
      *
      * @return the tool
      * @throws IllegalStateException if the tool has previously been installed or has been disposed.
-     * @since 0.8 or earlier
      */
-    public Tool install(Tool tool) {
+    public <T extends Tool<?>> T install(T tool) {
         tool.install(this);
         return tool;
     }
@@ -653,11 +559,11 @@ public final class Instrumenter {
         }
     }
 
-    com.oracle.truffle.api.instrument.TagInstrument.BeforeTagInstrument getBeforeTagInstrument() {
+    BeforeTagInstrument getBeforeTagInstrument() {
         return beforeTagInstrument;
     }
 
-    com.oracle.truffle.api.instrument.TagInstrument.AfterTagInstrument getAfterTagInstrument() {
+    AfterTagInstrument getAfterTagInstrument() {
         return afterTagInstrument;
     }
 
@@ -680,6 +586,7 @@ public final class Instrumenter {
         }
     }
 
+    // TODO (mlvdv) build this in as a VM event?
     /**
      * Enables instrumentation in a newly created AST by applying all registered instances of
      * {@link ASTProber}.
@@ -702,7 +609,7 @@ public final class Instrumenter {
                 listener.startASTProbing(rootNode);
             }
             for (ASTProber prober : astProbers) {
-                prober.probeAST(this, rootNode);
+                prober.probeAST(this, rootNode);  // TODO (mlvdv)
             }
             for (ProbeListener listener : probeListeners) {
                 listener.endASTProbing(rootNode);
@@ -724,7 +631,7 @@ public final class Instrumenter {
         }
 
         @Override
-        protected WrapperNode createWrapperNode(Object vm, Node node) {
+        public WrapperNode createWrapperNode(Object vm, Node node) {
             return super.createWrapperNode(vm, node);
         }
 
@@ -740,19 +647,10 @@ public final class Instrumenter {
             return probe.getLanguage();
         }
 
-        @SuppressWarnings("rawtypes")
-        @Override
-        protected CallTarget parse(Class<? extends TruffleLanguage> languageClass, Source code, Node context, String... argumentNames) throws IOException {
-            return super.parse(languageClass, code, context, argumentNames);
-        }
-
         @Override
         protected void probeAST(RootNode rootNode) {
             // Normally null vm argument; can be reflectively set for testing
-            Instrumenter instrumenter = super.getInstrumenter(testVM);
-            if (instrumenter != null) {
-                instrumenter.probeAST(rootNode);
-            }
+            super.getInstrumenter(testVM).probeAST(rootNode);
         }
     }
 

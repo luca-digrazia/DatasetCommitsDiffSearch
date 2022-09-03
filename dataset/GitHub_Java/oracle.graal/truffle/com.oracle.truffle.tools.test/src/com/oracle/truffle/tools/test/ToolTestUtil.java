@@ -33,8 +33,11 @@ import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrument.ASTProber;
+import com.oracle.truffle.api.instrument.AdvancedInstrumentResultListener;
+import com.oracle.truffle.api.instrument.AdvancedInstrumentRootFactory;
 import com.oracle.truffle.api.instrument.EventHandlerNode;
 import com.oracle.truffle.api.instrument.Instrumenter;
+import com.oracle.truffle.api.instrument.KillException;
 import com.oracle.truffle.api.instrument.Probe;
 import com.oracle.truffle.api.instrument.SyntaxTag;
 import com.oracle.truffle.api.instrument.Visualizer;
@@ -136,6 +139,11 @@ public class ToolTestUtil {
         }
 
         @Override
+        protected AdvancedInstrumentRootFactory createAdvancedInstrumentRootFactory(String expr, AdvancedInstrumentResultListener resultListener) throws IOException {
+            return null;
+        }
+
+        @Override
         protected Object createContext(Env env) {
             return null;
         }
@@ -211,6 +219,8 @@ public class ToolTestUtil {
             try {
                 result = child.execute(vFrame);
                 eventHandlerNode.returnValue(child, vFrame, result);
+            } catch (KillException e) {
+                throw (e);
             } catch (Exception e) {
                 eventHandlerNode.returnExceptional(child, vFrame, e);
                 throw (e);

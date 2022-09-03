@@ -30,10 +30,8 @@ import java.io.IOException;
 import java.io.Reader;
 import java.util.Enumeration;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.Executors;
 
 import org.junit.After;
@@ -45,22 +43,23 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.instrument.AdvancedInstrumentResultListener;
+import com.oracle.truffle.api.instrument.AdvancedInstrumentRootFactory;
 import com.oracle.truffle.api.instrument.Visualizer;
 import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.PolyglotEngine;
-import java.util.Objects;
+import com.oracle.truffle.api.vm.TruffleVM;
 
 public class ImplicitExplicitExportTest {
     private static Thread mainThread;
-    private PolyglotEngine vm;
+    private TruffleVM vm;
 
     @Before
     public void initializeVM() {
         mainThread = Thread.currentThread();
-        vm = PolyglotEngine.newBuilder().executor(Executors.newSingleThreadExecutor()).build();
+        vm = TruffleVM.newVM().executor(Executors.newSingleThreadExecutor()).build();
         assertTrue("Found " + L1 + " language", vm.getLanguages().containsKey(L1));
         assertTrue("Found " + L2 + " language", vm.getLanguages().containsKey(L2));
         assertTrue("Found " + L3 + " language", vm.getLanguages().containsKey(L3));
@@ -126,22 +125,16 @@ public class ImplicitExplicitExportTest {
         ).get();
         // @formatter:on
         assertEquals("Explicit import from L2 is used", "43", ret);
-        assertEquals("Global symbol is also 43", "43", vm.findGlobalSymbol("ahoj").execute().get());
+        assertEquals("Global symbol is also 43", "43", vm.findGlobalSymbol("ahoj").invoke(null).get());
     }
 
-    static final class Ctx {
-        static final Set<Ctx> disposed = new HashSet<>();
-
+    private static final class Ctx {
         final Map<String, String> explicit = new HashMap<>();
         final Map<String, String> implicit = new HashMap<>();
         final Env env;
 
         public Ctx(Env env) {
             this.env = env;
-        }
-
-        void dispose() {
-            disposed.add(this);
         }
     }
 
@@ -153,11 +146,6 @@ public class ImplicitExplicitExportTest {
                 assertNotEquals("Should run asynchronously", Thread.currentThread(), mainThread);
             }
             return new Ctx(env);
-        }
-
-        @Override
-        protected void disposeContext(Ctx context) {
-            context.dispose();
         }
 
         @Override
@@ -206,6 +194,11 @@ public class ImplicitExplicitExportTest {
 
         @Override
         protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) throws IOException {
+            return null;
+        }
+
+        @Override
+        protected AdvancedInstrumentRootFactory createAdvancedInstrumentRootFactory(String expr, AdvancedInstrumentResultListener resultListener) throws IOException {
             return null;
         }
 
@@ -269,19 +262,6 @@ public class ImplicitExplicitExportTest {
 
         public ExportImportLanguage1() {
         }
-
-        @Override
-        protected String toString(Ctx ctx, Object value) {
-            if (value instanceof String) {
-                try {
-                    int number = Integer.parseInt((String) value);
-                    return number + ": Int";
-                } catch (NumberFormatException ex) {
-                    // go on
-                }
-            }
-            return Objects.toString(value);
-        }
     }
 
     @TruffleLanguage.Registration(mimeType = L2, name = "ImportExport2", version = "0")
@@ -289,19 +269,6 @@ public class ImplicitExplicitExportTest {
         public static final AbstractExportImportLanguage INSTANCE = new ExportImportLanguage2();
 
         public ExportImportLanguage2() {
-        }
-
-        @Override
-        protected String toString(Ctx ctx, Object value) {
-            if (value instanceof String) {
-                try {
-                    double number = Double.parseDouble((String) value);
-                    return number + ": Double";
-                } catch (NumberFormatException ex) {
-                    // go on
-                }
-            }
-            return Objects.toString(value);
         }
     }
 

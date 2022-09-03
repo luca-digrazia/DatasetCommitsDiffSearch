@@ -22,24 +22,41 @@
  */
 package com.oracle.truffle.api.test.vm;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
-import org.junit.*;
+import java.io.IOException;
+import java.lang.reflect.Field;
 
-import com.oracle.truffle.api.*;
+import org.junit.Test;
+
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.debug.Breakpoint;
-import com.oracle.truffle.api.debug.DebugSupportException;
-import com.oracle.truffle.api.debug.DebugSupportProvider;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.ExecutionEvent;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.instrument.*;
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrument.ASTProber;
+import com.oracle.truffle.api.instrument.AdvancedInstrumentResultListener;
+import com.oracle.truffle.api.instrument.AdvancedInstrumentRootFactory;
+import com.oracle.truffle.api.instrument.EventHandlerNode;
+import com.oracle.truffle.api.instrument.Instrumenter;
+import com.oracle.truffle.api.instrument.Probe;
+import com.oracle.truffle.api.instrument.StandardSyntaxTag;
+import com.oracle.truffle.api.instrument.Visualizer;
+import com.oracle.truffle.api.instrument.WrapperNode;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeVisitor;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.vm.EventConsumer;
 import com.oracle.truffle.api.vm.TruffleVM;
-import java.io.IOException;
 
 /**
  * Bug report validating test.
@@ -47,10 +64,14 @@ import java.io.IOException;
  * It has been reported that calling {@link Env#importSymbol(java.lang.String)} in
  * {@link TruffleLanguage TruffleLanguage.createContext(env)} yields a {@link NullPointerException}.
  * <p>
+ * The other report was related to specifying an abstract language class in the RootNode and
+ * problems with debugging later on. That is what the other part of this test - once it obtains
+ * Debugger instance simulates.
  */
 public class InitializationTest {
+
     @Test
-    public void accessProbeForAbstractLanguage() throws IOException {
+    public void accessProbeForAbstractLanguage() throws IOException, NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException {
         final Debugger[] arr = {null};
         TruffleVM vm = TruffleVM.newVM().onEvent(new EventConsumer<ExecutionEvent>(ExecutionEvent.class) {
             @Override
@@ -59,25 +80,52 @@ public class InitializationTest {
             }
         }).build();
 
-        Source source = Source.fromText("any text", "any text").withMimeType("application/x-abstrlang");
+        final Field field = TruffleVM.class.getDeclaredField("instrumenter");
+        field.setAccessible(true);
+        final Instrumenter instrumenter = (Instrumenter) field.get(vm);
+        instrumenter.registerASTProber(new ASTProber() {
+
+            public void probeAST(final Instrumenter inst, RootNode startNode) {
+                startNode.accept(new NodeVisitor() {
+
+                    public boolean visit(Node node) {
+
+                        if (node instanceof ANode) {
+                            inst.probe(node).tagAs(StandardSyntaxTag.STATEMENT, null);
+                        }
+                        return true;
+                    }
+                });
+            }
+        });
+
+        Source source = Source.fromText("accessProbeForAbstractLanguage text", "accessProbeForAbstractLanguage").withMimeType("application/x-abstrlang");
 
         vm.eval(source);
 
         assertNotNull("Debugger found", arr[0]);
 
-        Debugger d = arr[0];
-        Breakpoint b = d.setLineBreakpoint(0, source.createLineLocation(1), true);
-        b.setCondition("true");
+        try {
+            Debugger d = arr[0];
+            Breakpoint b = d.setLineBreakpoint(0, source.createLineLocation(1), true);
+            assertTrue(b.isEnabled());
+            b.setCondition("true");
 
-        vm.eval(source);
+            vm.eval(source);
+        } catch (InstrumentOKException ex) {
+            // OK
+            return;
+        }
+        fail("We should properly call up to TestLanguage.createAdvancedInstrumentRootFactory");
     }
 
     private static final class MMRootNode extends RootNode {
         @Child ANode node;
 
-        MMRootNode() {
-            super(AbstractLanguage.class, null, null);
+        MMRootNode(SourceSection ss) {
+            super(AbstractLanguage.class, ss, null);
             node = new ANode(42);
+            adoptChildren();
         }
 
         @Override
@@ -86,24 +134,58 @@ public class InitializationTest {
         }
     }
 
-    private static final class ANode extends Node {
+    private static class ANode extends Node {
         private final int constant;
 
         public ANode(int constant) {
             this.constant = constant;
         }
 
+        @Override
+        public SourceSection getSourceSection() {
+            return getRootNode().getSourceSection();
+        }
+
         Object constant() {
             return constant;
         }
+    }
 
+    private static class ANodeWrapper extends ANode implements WrapperNode {
+        @Child ANode child;
+        @Child private EventHandlerNode eventHandlerNode;
+
+        ANodeWrapper(ANode node) {
+            super(1);  // dummy
+            this.child = node;
+        }
+
+        @Override
+        public Node getChild() {
+            return child;
+        }
+
+        @Override
+        public Probe getProbe() {
+            return eventHandlerNode.getProbe();
+        }
+
+        @Override
+        public void insertEventHandlerNode(EventHandlerNode eventHandler) {
+            this.eventHandlerNode = eventHandler;
+        }
+
+        @Override
+        public String instrumentationInfo() {
+            throw new UnsupportedOperationException();
+        }
     }
 
     private abstract static class AbstractLanguage extends TruffleLanguage<Object> {
     }
 
     @TruffleLanguage.Registration(mimeType = "application/x-abstrlang", name = "AbstrLang", version = "0.1")
-    public static final class TestLanguage extends AbstractLanguage implements DebugSupportProvider {
+    public static final class TestLanguage extends AbstractLanguage {
         public static final TestLanguage INSTANCE = new TestLanguage();
 
         @Override
@@ -114,7 +196,7 @@ public class InitializationTest {
 
         @Override
         protected CallTarget parse(Source code, Node context, String... argumentNames) throws IOException {
-            return Truffle.getRuntime().createCallTarget(new MMRootNode());
+            return Truffle.getRuntime().createCallTarget(new MMRootNode(code.createSection("1st line", 1)));
         }
 
         @Override
@@ -133,23 +215,13 @@ public class InitializationTest {
         }
 
         @Override
-        protected ToolSupportProvider getToolSupport() {
+        public Object evalInContext(Source source, Node node, MaterializedFrame mFrame) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        protected DebugSupportProvider getDebugSupport() {
-            return this;
-        }
-
-        @Override
-        public Object evalInContext(Source source, Node node, MaterializedFrame mFrame) throws DebugSupportException {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public AdvancedInstrumentRootFactory createAdvancedInstrumentRootFactory(String expr, AdvancedInstrumentResultListener resultListener) throws DebugSupportException {
-            throw new UnsupportedOperationException();
+        public AdvancedInstrumentRootFactory createAdvancedInstrumentRootFactory(String expr, AdvancedInstrumentResultListener resultListener) {
+            throw new InstrumentOKException();
         }
 
         @Override
@@ -158,8 +230,17 @@ public class InitializationTest {
         }
 
         @Override
-        public void enableASTProbing(ASTProber astProber) {
-            throw new UnsupportedOperationException();
+        protected boolean isInstrumentable(Node node) {
+            return node instanceof ANode;
         }
+
+        @Override
+        protected WrapperNode createWrapperNode(Node node) {
+            return node instanceof ANode ? new ANodeWrapper((ANode) node) : null;
+        }
+    }
+
+    private static final class InstrumentOKException extends RuntimeException {
+        static final long serialVersionUID = 1L;
     }
 }

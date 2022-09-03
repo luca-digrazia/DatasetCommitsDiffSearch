@@ -24,8 +24,10 @@ package com.oracle.truffle.api.test.instrument;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrument.AdvancedInstrumentRoot;
 import com.oracle.truffle.api.instrument.EventHandlerNode;
 import com.oracle.truffle.api.instrument.Instrumenter;
+import com.oracle.truffle.api.instrument.KillException;
 import com.oracle.truffle.api.instrument.Probe;
 import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
@@ -80,6 +82,8 @@ class InstrumentationTestNodes {
             try {
                 result = child.execute(vFrame);
                 eventHandlerNode.returnValue(child, vFrame, result);
+            } catch (KillException e) {
+                throw (e);
             } catch (Exception e) {
                 eventHandlerNode.returnExceptional(child, vFrame, e);
                 throw (e);
@@ -180,6 +184,25 @@ class InstrumentationTestNodes {
         @Override
         public boolean isCloningAllowed() {
             return true;
+        }
+    }
+
+    static class TestAdvancedInstrumentCounterRoot extends AdvancedInstrumentRoot {
+
+        private long count;
+
+        @Override
+        public Object executeRoot(Node node, VirtualFrame vFrame) {
+            count++;
+            return null;
+        }
+
+        public long getCount() {
+            return count;
+        }
+
+        public String instrumentationInfo() {
+            return null;
         }
     }
 

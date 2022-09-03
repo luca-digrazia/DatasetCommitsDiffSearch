@@ -50,13 +50,14 @@ import java.util.Collections;
 import java.util.List;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
 import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.instrument.AdvancedInstrumentResultListener;
+import com.oracle.truffle.api.instrument.AdvancedInstrumentRootFactory;
 import com.oracle.truffle.api.instrument.Visualizer;
 import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.nodes.GraphPrintVisitor;
@@ -65,8 +66,8 @@ import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.api.vm.PolyglotEngine;
-import com.oracle.truffle.api.vm.PolyglotEngine.Value;
+import com.oracle.truffle.api.vm.TruffleVM;
+import com.oracle.truffle.api.vm.TruffleVM.Symbol;
 import com.oracle.truffle.sl.builtins.SLBuiltinNode;
 import com.oracle.truffle.sl.builtins.SLDefineFunctionBuiltin;
 import com.oracle.truffle.sl.builtins.SLNanoTimeBuiltin;
@@ -186,7 +187,7 @@ import com.oracle.truffle.sl.runtime.SLNull;
  */
 
 /*
- * 
+ *
  * <p> <b>Tools:</b><br> The use of some of Truffle's support for developer tools (based on the
  * Truffle {@linkplain Instrumenter Instrumentation Framework}) are demonstrated in this file, for
  * example: <ul> <li>a {@linkplain NodeExecCounter counter for node executions}, tabulated by node
@@ -227,7 +228,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
      * The main entry point. Use the mx command "mx sl" to run it with the correct class path setup.
      */
     public static void main(String[] args) throws IOException {
-        PolyglotEngine vm = PolyglotEngine.newBuilder().build();
+        TruffleVM vm = TruffleVM.newVM().build();
         assert vm.getLanguages().containsKey("application/x-sl");
 
         setupToolDemos();
@@ -244,7 +245,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
             source = Source.fromFileName(args[0]);
         }
         vm.eval(source);
-        Value main = vm.findGlobalSymbol("main");
+        Symbol main = vm.findGlobalSymbol("main");
         if (main == null) {
             throw new SLException("No function main() defined in SL source file.");
         }
@@ -255,10 +256,25 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
     }
 
     /**
+     * Temporary method during API evolution, supports debugger integration.
+     */
+    @Deprecated
+    public static void run(Source source) throws IOException {
+        TruffleVM vm = TruffleVM.newVM().build();
+        assert vm.getLanguages().containsKey("application/x-sl");
+        vm.eval(source);
+        Symbol main = vm.findGlobalSymbol("main");
+        if (main == null) {
+            throw new SLException("No function main() defined in SL source file.");
+        }
+        main.invoke(null);
+    }
+
+    /**
      * Parse and run the specified SL source. Factored out in a separate method so that it can also
      * be used by the unit test harness.
      */
-    public static long run(PolyglotEngine context, Path path, PrintWriter logOutput, PrintWriter out, int repeats, List<NodeFactory<? extends SLBuiltinNode>> currentBuiltins) throws IOException {
+    public static long run(TruffleVM context, Path path, PrintWriter logOutput, PrintWriter out, int repeats, List<NodeFactory<? extends SLBuiltinNode>> currentBuiltins) throws IOException {
         builtins = currentBuiltins;
 
         if (logOutput != null) {
@@ -274,7 +290,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
         }
 
         /* Lookup our main entry point, which is per definition always named "main". */
-        Value main = context.findGlobalSymbol("main");
+        Symbol main = context.findGlobalSymbol("main");
         if (main == null) {
             throw new SLException("No function main() defined in SL source file.");
         }
@@ -420,7 +436,6 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
             failed[0] = e;
         }
         return new CallTarget() {
-            @TruffleBoundary
             @Override
             public Object call(Object... arguments) {
                 if (failed[0] instanceof RuntimeException) {
@@ -492,6 +507,11 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
     @Override
     protected Object evalInContext(Source source, Node node, MaterializedFrame mFrame) throws IOException {
         throw new IllegalStateException("evalInContext not supported in this language");
+    }
+
+    @Override
+    protected AdvancedInstrumentRootFactory createAdvancedInstrumentRootFactory(String expr, AdvancedInstrumentResultListener resultListener) throws IOException {
+        throw new IllegalStateException("createAdvancedInstrumentRootFactory not supported in this language");
     }
 
     public Node createFindContextNode0() {
