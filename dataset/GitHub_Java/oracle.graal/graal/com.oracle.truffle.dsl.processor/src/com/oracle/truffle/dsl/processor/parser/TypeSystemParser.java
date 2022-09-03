@@ -32,10 +32,12 @@ import javax.lang.model.type.*;
 import javax.lang.model.util.*;
 
 import com.oracle.truffle.api.dsl.*;
+import com.oracle.truffle.api.dsl.internal.*;
 import com.oracle.truffle.dsl.processor.generator.*;
 import com.oracle.truffle.dsl.processor.java.*;
 import com.oracle.truffle.dsl.processor.model.*;
 
+@DSLOptions
 public class TypeSystemParser extends AbstractParser<TypeSystemData> {
 
     public static final List<Class<? extends Annotation>> ANNOTATIONS = Arrays.asList(TypeSystem.class, ExpectError.class);
@@ -49,7 +51,13 @@ public class TypeSystemParser extends AbstractParser<TypeSystemData> {
     protected TypeSystemData parse(Element element, AnnotationMirror mirror) {
         TypeElement templateType = (TypeElement) element;
         AnnotationMirror templateTypeAnnotation = mirror;
-        TypeSystemData typeSystem = new TypeSystemData(context, templateType, templateTypeAnnotation);
+        DSLOptions options = element.getAnnotation(DSLOptions.class);
+        if (options == null) {
+            options = TypeSystemParser.class.getAnnotation(DSLOptions.class);
+        }
+        assert options != null;
+
+        TypeSystemData typeSystem = new TypeSystemData(context, templateType, templateTypeAnnotation, options);
 
         // annotation type on class path!?
         TypeElement annotationTypeElement = processingEnv.getElementUtils().getTypeElement(getAnnotationType().getCanonicalName());
@@ -67,16 +75,24 @@ public class TypeSystemParser extends AbstractParser<TypeSystemData> {
             return typeSystem;
         }
 
-        typeSystem.setTypes(parseTypes(typeSystem));
+        List<TypeData> types = parseTypes(typeSystem);
+
+        TypeMirror genericType = context.getType(Object.class);
+        TypeData voidType = new TypeData(typeSystem, types.size(), null, context.getType(void.class), context.getType(Void.class));
+        types.add(voidType);
+
+        typeSystem.setTypes(types);
         if (typeSystem.hasErrors()) {
             return typeSystem;
         }
-
-        TypeMirror genericType = context.getType(Object.class);
-        TypeData voidType = new TypeData(typeSystem, typeSystem.getTypes().size(), null, context.getType(void.class), context.getType(Void.class));
-
         typeSystem.setGenericType(genericType);
         typeSystem.setVoidType(voidType);
+
+        TypeData booleanType = typeSystem.findTypeData(context.getType(boolean.class));
+        if (booleanType == null) {
+            booleanType = new TypeData(typeSystem, types.size(), null, context.getType(boolean.class), context.getType(Boolean.class));
+        }
+        typeSystem.setBooleanType(booleanType);
 
         verifyExclusiveMethodAnnotation(typeSystem, TypeCast.class, TypeCheck.class);
 
@@ -105,7 +121,6 @@ public class TypeSystemParser extends AbstractParser<TypeSystemData> {
             cast.getTargetType().addTypeCast(cast);
         }
 
-        verifyGenericTypeChecksAndCasts(typeSystem);
         verifyMethodSignatures(typeSystem);
         verifyNamesUnique(typeSystem);
 
@@ -134,39 +149,6 @@ public class TypeSystemParser extends AbstractParser<TypeSystemData> {
         }
     }
 
-    private static void verifyGenericTypeChecksAndCasts(TypeSystemData typeSystem) {
-        for (TypeData type : typeSystem.getTypes()) {
-            if (!type.getTypeChecks().isEmpty()) {
-                boolean hasGeneric = false;
-                for (TypeCheckData typeCheck : type.getTypeChecks()) {
-                    if (typeCheck.isGeneric()) {
-                        hasGeneric = true;
-                        break;
-                    }
-                }
-                if (!hasGeneric) {
-                    type.addError("No generic but specific @%s method %s for type %s specified. " + "Specify a generic @%s method with parameter type %s to resolve this.",
-                                    TypeCheck.class.getSimpleName(), TypeSystemCodeGenerator.isTypeMethodName(type), ElementUtils.getSimpleName(type.getBoxedType()), TypeCheck.class.getSimpleName(),
-                                    Object.class.getSimpleName());
-                }
-            }
-            if (!type.getTypeCasts().isEmpty()) {
-                boolean hasGeneric = false;
-                for (TypeCastData typeCast : type.getTypeCasts()) {
-                    if (typeCast.isGeneric()) {
-                        hasGeneric = true;
-                        break;
-                    }
-                }
-                if (!hasGeneric) {
-                    type.addError("No generic but specific @%s method %s for type %s specified. " + "Specify a generic @%s method with parameter type %s to resolve this.",
-                                    TypeCast.class.getSimpleName(), TypeSystemCodeGenerator.asTypeMethodName(type), ElementUtils.getSimpleName(type.getBoxedType()), TypeCast.class.getSimpleName(),
-                                    Object.class.getSimpleName());
-                }
-            }
-        }
-    }
-
     private List<TypeData> parseTypes(TypeSystemData typeSystem) {
         List<TypeData> types = new ArrayList<>();
         List<TypeMirror> typeMirrors = ElementUtils.getAnnotationValueList(TypeMirror.class, typeSystem.getTemplateTypeAnnotation(), "value");
@@ -180,10 +162,12 @@ public class TypeSystemParser extends AbstractParser<TypeSystemData> {
 
         int index = 0;
         for (TypeMirror primitiveType : typeMirrors) {
-            TypeMirror boxedType = ElementUtils.boxType(context, primitiveType);
-            TypeData typeData = new TypeData(typeSystem, index, annotationValue, primitiveType, boxedType);
+            TypeMirror primitive = ElementUtils.fillInGenericWildcards(primitiveType);
 
-            if (isPrimitiveWrapper(primitiveType)) {
+            TypeMirror boxedType = ElementUtils.boxType(context, primitive);
+            TypeData typeData = new TypeData(typeSystem, index, annotationValue, primitive, boxedType);
+
+            if (isPrimitiveWrapper(primitive)) {
                 typeData.addError("Types must not contain primitive wrapper types.");
             }
 
@@ -198,7 +182,6 @@ public class TypeSystemParser extends AbstractParser<TypeSystemData> {
         verifyTypeOrder(types);
 
         types.add(new TypeData(typeSystem, index, annotationValue, objectType, objectType));
-
         return types;
     }
 
@@ -209,9 +192,14 @@ public class TypeSystemParser extends AbstractParser<TypeSystemData> {
             TypeData typeData = types.get(i);
             TypeMirror type = typeData.getBoxedType();
             if (invalidTypes.containsKey(ElementUtils.getQualifiedName(type))) {
-                typeData.addError("Invalid type order. The type(s) %s are inherited from a earlier defined type %s.", invalidTypes.get(ElementUtils.getQualifiedName(type)), ElementUtils.getQualifiedName(type));
+                typeData.addError("Invalid type order. The type(s) %s are inherited from a earlier defined type %s.", invalidTypes.get(ElementUtils.getQualifiedName(type)),
+                                ElementUtils.getQualifiedName(type));
             }
-            List<String> nextInvalidTypes = ElementUtils.getQualifiedSuperTypeNames(ElementUtils.fromTypeMirror(type));
+            TypeElement element = ElementUtils.fromTypeMirror(type);
+            List<String> nextInvalidTypes = new ArrayList<>();
+            if (element != null) {
+                nextInvalidTypes.addAll(ElementUtils.getQualifiedSuperTypeNames(element));
+            }
             nextInvalidTypes.add(getQualifiedName(type));
 
             for (String qualifiedName : nextInvalidTypes) {
@@ -292,15 +280,17 @@ public class TypeSystemParser extends AbstractParser<TypeSystemData> {
     }
 
     private static void verifyNamesUnique(TypeSystemData typeSystem) {
-        List<TypeData> types = typeSystem.getTypes();
-        for (int i = 0; i < types.size(); i++) {
-            for (int j = i + 1; j < types.size(); j++) {
-                String name1 = ElementUtils.getSimpleName(types.get(i).getBoxedType());
-                String name2 = ElementUtils.getSimpleName(types.get(j).getBoxedType());
-                if (name1.equalsIgnoreCase(name2)) {
-                    typeSystem.addError("Two types result in the same name: %s, %s.", name1, name2);
-                }
+        Set<String> usedNames = new HashSet<>();
+        for (TypeData type : typeSystem.getTypes()) {
+            String boxedName = ElementUtils.getSimpleName(type.getBoxedType());
+            String primitiveName = ElementUtils.getSimpleName(type.getPrimitiveType());
+            if (usedNames.contains(boxedName)) {
+                typeSystem.addError("Two types result in the same boxed name: %s.", boxedName);
+            } else if (usedNames.contains(primitiveName)) {
+                typeSystem.addError("Two types result in the same primitive name: %s.", primitiveName);
             }
+            usedNames.add(boxedName);
+            usedNames.add(primitiveName);
         }
     }
 }
