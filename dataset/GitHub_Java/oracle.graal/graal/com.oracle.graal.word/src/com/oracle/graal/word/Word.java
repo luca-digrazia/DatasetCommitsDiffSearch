@@ -61,7 +61,6 @@ public abstract class Word implements Signed, Unsigned, Pointer {
          READ,
          READ_COMPRESSED,
          WRITE,
-         INITIALIZE,
          ZERO,
          FROM_UNSIGNED,
          FROM_SIGNED,
@@ -759,12 +758,6 @@ public abstract class Word implements Signed, Unsigned, Pointer {
     }
 
     @Override
-    @Operation(opcode = Opcode.INITIALIZE)
-    public void initializeWord(WordBase offset, WordBase val, LocationIdentity locationIdentity) {
-        unsafe.putAddress(add((Word) offset).unbox(), ((Word) val).unbox());
-    }
-
-    @Override
     @Operation(opcode = Opcode.WRITE)
     public native void writeObject(WordBase offset, Object val, LocationIdentity locationIdentity);
 
@@ -814,12 +807,6 @@ public abstract class Word implements Signed, Unsigned, Pointer {
     @Operation(opcode = Opcode.WRITE)
     public void writeWord(int offset, WordBase val, LocationIdentity locationIdentity) {
         writeWord(signed(offset), val, locationIdentity);
-    }
-
-    @Override
-    @Operation(opcode = Opcode.INITIALIZE)
-    public void initializeWord(int offset, WordBase val, LocationIdentity locationIdentity) {
-        initializeWord(signed(offset), val, locationIdentity);
     }
 
     @Override
