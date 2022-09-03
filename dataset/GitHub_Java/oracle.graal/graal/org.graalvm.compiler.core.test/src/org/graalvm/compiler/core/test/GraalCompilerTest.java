@@ -78,7 +78,6 @@ import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.FullInfopointNode;
 import org.graalvm.compiler.nodes.InvokeNode;
 import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
-import org.graalvm.compiler.nodes.ParameterNode;
 import org.graalvm.compiler.nodes.ProxyNode;
 import org.graalvm.compiler.nodes.ReturnNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -92,7 +91,6 @@ import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
-import org.graalvm.compiler.nodes.java.AccessFieldNode;
 import org.graalvm.compiler.nodes.spi.LoweringProvider;
 import org.graalvm.compiler.nodes.spi.Replacements;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
@@ -123,7 +121,6 @@ import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.Assumptions.Assumption;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaKind;
@@ -133,6 +130,7 @@ import jdk.vm.ci.meta.ProfilingInfo;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog;
+import jdk.vm.ci.meta.Assumptions.Assumption;
 import jdk.vm.ci.services.Services;
 
 /**
@@ -484,25 +482,22 @@ public abstract class GraalCompilerTest extends GraalTest {
 
         StringBuilder result = new StringBuilder();
         for (Block block : scheduleResult.getCFG().getBlocks()) {
-            result.append("Block ").append(block).append(' ');
+            result.append("Block " + block + " ");
             if (block == scheduleResult.getCFG().getStartBlock()) {
                 result.append("* ");
             }
             result.append("-> ");
             for (Block succ : block.getSuccessors()) {
-                result.append(succ).append(' ');
+                result.append(succ + " ");
             }
-            result.append('\n');
+            result.append("\n");
             for (Node node : scheduleResult.getBlockToNodesMap().get(block)) {
                 if (node instanceof ValueNode && node.isAlive()) {
-                    if (!excludeVirtual || !(node instanceof VirtualObjectNode || node instanceof ProxyNode || node instanceof FullInfopointNode || node instanceof ParameterNode)) {
+                    if (!excludeVirtual || !(node instanceof VirtualObjectNode || node instanceof ProxyNode || node instanceof FullInfopointNode)) {
                         if (node instanceof ConstantNode) {
                             String name = checkConstants ? node.toString(Verbosity.Name) : node.getClass().getSimpleName();
-                            if (excludeVirtual) {
-                                constantsLines.add(name);
-                            } else {
-                                constantsLines.add(name + "    (" + filteredUsageCount(node) + ")");
-                            }
+                            String str = name + (excludeVirtual ? "\n" : "    (" + filteredUsageCount(node) + ")\n");
+                            constantsLines.add(str);
                         } else {
                             int id;
                             if (canonicalId.get(node) != null) {
@@ -512,17 +507,8 @@ public abstract class GraalCompilerTest extends GraalTest {
                                 canonicalId.set(node, id);
                             }
                             String name = node.getClass().getSimpleName();
-                            result.append("  ").append(id).append('|').append(name);
-                            if (node instanceof AccessFieldNode) {
-                                result.append('#');
-                                result.append(((AccessFieldNode) node).field());
-                            }
-                            if (!excludeVirtual) {
-                                result.append("    (");
-                                result.append(filteredUsageCount(node));
-                                result.append(')');
-                            }
-                            result.append('\n');
+                            String str = "  " + id + "|" + name + (excludeVirtual ? "\n" : "    (" + filteredUsageCount(node) + ")\n");
+                            result.append(str);
                         }
                     }
                 }
@@ -530,14 +516,14 @@ public abstract class GraalCompilerTest extends GraalTest {
         }
 
         StringBuilder constantsLinesResult = new StringBuilder();
-        constantsLinesResult.append(constantsLines.size()).append(" constants:\n");
+        constantsLinesResult.append(constantsLines.size() + " constants:\n");
         Collections.sort(constantsLines);
         for (String s : constantsLines) {
             constantsLinesResult.append(s);
-            constantsLinesResult.append('\n');
+            constantsLinesResult.append("\n");
         }
 
-        return constantsLinesResult.toString() + result.toString();
+        return constantsLines.toString() + result.toString();
     }
 
     /**
@@ -559,15 +545,15 @@ public abstract class GraalCompilerTest extends GraalTest {
         StringBuilder result = new StringBuilder();
         Block[] blocks = scheduleResult.getCFG().getBlocks();
         for (Block block : blocks) {
-            result.append("Block ").append(block).append(' ');
+            result.append("Block " + block + " ");
             if (block == scheduleResult.getCFG().getStartBlock()) {
                 result.append("* ");
             }
             result.append("-> ");
             for (Block succ : block.getSuccessors()) {
-                result.append(succ).append(' ');
+                result.append(succ + " ");
             }
-            result.append('\n');
+            result.append("\n");
             for (Node node : scheduleResult.getBlockToNodesMap().get(block)) {
                 result.append(String.format("%1S\n", node));
             }
