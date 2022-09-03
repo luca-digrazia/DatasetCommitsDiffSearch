@@ -22,40 +22,38 @@
  */
 package com.oracle.svm.core.graal.thread;
 
+import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_8;
+
 import org.graalvm.compiler.core.common.type.StampFactory;
-import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.nodeinfo.NodeCycles;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.NodeSize;
+import org.graalvm.compiler.nodes.AbstractStateSplit;
 import org.graalvm.compiler.nodes.ConstantNode;
-import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.extended.JavaReadNode;
-import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
-import org.graalvm.compiler.nodes.memory.address.AddressNode;
-import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
+import org.graalvm.compiler.nodes.java.UnsafeCompareAndSwapNode;
 import org.graalvm.compiler.nodes.spi.Lowerable;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 
 import com.oracle.svm.core.threadlocal.VMThreadLocalInfo;
 
-import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.JavaKind;
 
-@NodeInfo(cycles = NodeCycles.CYCLES_2, size = NodeSize.SIZE_1)
-public class LoadVMThreadLocalNode extends FixedWithNextNode implements Lowerable {
-    public static final NodeClass<LoadVMThreadLocalNode> TYPE = NodeClass.create(LoadVMThreadLocalNode.class);
+@NodeInfo(cycles = CYCLES_8, size = NodeSize.SIZE_8)
+public class CompareAndSetVMThreadLocalNode extends AbstractStateSplit implements Lowerable {
+    public static final NodeClass<CompareAndSetVMThreadLocalNode> TYPE = NodeClass.create(CompareAndSetVMThreadLocalNode.class);
 
-    protected final VMThreadLocalInfo threadLocalInfo;
-    protected final BarrierType barrierType;
+    private final VMThreadLocalInfo threadLocalInfo;
     @Input protected ValueNode holder;
+    @Input protected ValueNode expect;
+    @Input protected ValueNode update;
 
-    public LoadVMThreadLocalNode(MetaAccessProvider metaAccess, VMThreadLocalInfo threadLocalInfo, ValueNode holder, BarrierType barrierType) {
-        super(TYPE, threadLocalInfo.isObject ? StampFactory.object(TypeReference.createTrustedWithoutAssumptions(metaAccess.lookupJavaType(threadLocalInfo.valueClass)))
-                        : StampFactory.forKind(threadLocalInfo.storageKind));
+    public CompareAndSetVMThreadLocalNode(VMThreadLocalInfo threadLocalInfo, ValueNode holder, ValueNode expect, ValueNode update) {
+        super(TYPE, StampFactory.forKind(JavaKind.Boolean.getStackKind()));
         this.threadLocalInfo = threadLocalInfo;
-        this.barrierType = barrierType;
         this.holder = holder;
+        this.expect = expect;
+        this.update = update;
     }
 
     @Override
@@ -63,9 +61,9 @@ public class LoadVMThreadLocalNode extends FixedWithNextNode implements Lowerabl
         assert threadLocalInfo.offset >= 0;
 
         ConstantNode offset = ConstantNode.forLong(threadLocalInfo.offset, holder.graph());
-        AddressNode address = graph().unique(new OffsetAddressNode(holder, offset));
-        JavaReadNode read = graph().add(new JavaReadNode(threadLocalInfo.storageKind, address, threadLocalInfo.locationIdentity, barrierType, true));
-        graph().replaceFixedWithFixed(this, read);
-        tool.getLowerer().lower(read, tool);
+        UnsafeCompareAndSwapNode atomic = graph().add(new UnsafeCompareAndSwapNode(holder, offset, expect, update, threadLocalInfo.storageKind, threadLocalInfo.locationIdentity));
+        atomic.setStateAfter(stateAfter());
+        graph().replaceFixedWithFixed(this, atomic);
+        tool.getLowerer().lower(atomic, tool);
     }
 }
