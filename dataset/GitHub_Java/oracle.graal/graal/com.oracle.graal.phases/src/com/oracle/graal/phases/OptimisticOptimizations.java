@@ -34,7 +34,7 @@ public final class OptimisticOptimizations {
     private static final DebugMetric disabledOptimisticOptsMetric = Debug.metric("DisabledOptimisticOpts");
 
     private static enum Optimization {
-        RemoveNeverExecutedCode, UseTypeCheckedInlining, UseTypeCheckHints, UseExceptionProbabilityForOperations, UseExceptionProbability
+        RemoveNeverExecutedCode, UseTypeCheckedInlining, UseTypeCheckHints, UseExceptionProbability
     }
 
     private final Set<Optimization> enabledOpts;
@@ -42,7 +42,6 @@ public final class OptimisticOptimizations {
     public OptimisticOptimizations(ResolvedJavaMethod method) {
         this.enabledOpts = EnumSet.noneOf(Optimization.class);
 
-        enabledOpts.add(Optimization.UseExceptionProbabilityForOperations);
         addOptimization(method, DeoptimizationReason.UnreachedCode, Optimization.RemoveNeverExecutedCode);
         addOptimization(method, DeoptimizationReason.TypeCheckedInliningViolated, Optimization.UseTypeCheckedInlining);
         addOptimization(method, DeoptimizationReason.OptimizedTypeCheckViolated, Optimization.UseTypeCheckHints);
@@ -62,7 +61,7 @@ public final class OptimisticOptimizations {
     }
 
     public OptimisticOptimizations remove(Optimization... optimizations) {
-        Set<Optimization> newOptimizations = EnumSet.copyOf(enabledOpts);
+        Set<Optimization> newOptimizations = new HashSet<>(enabledOpts);
         for (Optimization o : optimizations) {
             newOptimizations.remove(o);
         }
@@ -70,7 +69,7 @@ public final class OptimisticOptimizations {
     }
 
     public OptimisticOptimizations add(Optimization... optimizations) {
-        Set<Optimization> newOptimizations = EnumSet.copyOf(enabledOpts);
+        Set<Optimization> newOptimizations = new HashSet<>(enabledOpts);
         for (Optimization o : optimizations) {
             newOptimizations.add(o);
         }
@@ -107,10 +106,6 @@ public final class OptimisticOptimizations {
 
     public boolean useExceptionProbability() {
         return GraalOptions.UseExceptionProbability && enabledOpts.contains(Optimization.UseExceptionProbability);
-    }
-
-    public boolean useExceptionProbabilityForOperations() {
-        return GraalOptions.UseExceptionProbabilityForOperations && enabledOpts.contains(Optimization.UseExceptionProbabilityForOperations);
     }
 
     public boolean lessOptimisticThan(OptimisticOptimizations other) {
