@@ -24,11 +24,10 @@ package com.oracle.graal.phases.common;
 
 import static com.oracle.graal.api.meta.LocationIdentity.*;
 import static com.oracle.graal.graph.Graph.NodeEvent.*;
-
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.remote.*;
 import com.oracle.graal.graph.Graph.NodeEventScope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -52,16 +51,16 @@ public class FloatingReadPhase extends Phase {
         private final Map<LocationIdentity, MemoryNode> lastMemorySnapshot;
 
         public MemoryMapImpl(MemoryMapImpl memoryMap) {
-            lastMemorySnapshot = CollectionsFactory.newMap(memoryMap.lastMemorySnapshot);
+            lastMemorySnapshot = new HashMap<>(memoryMap.lastMemorySnapshot);
         }
 
         public MemoryMapImpl(StartNode start) {
-            lastMemorySnapshot = CollectionsFactory.newMap();
+            lastMemorySnapshot = new HashMap<>();
             lastMemorySnapshot.put(ANY_LOCATION, start);
         }
 
         public MemoryMapImpl() {
-            lastMemorySnapshot = CollectionsFactory.newMap();
+            lastMemorySnapshot = new HashMap<>();
         }
 
         @Override
@@ -132,7 +131,7 @@ public class FloatingReadPhase extends Phase {
     @Override
     protected void run(StructuredGraph graph) {
         Map<LoopBeginNode, Set<LocationIdentity>> modifiedInLoops = Node.newIdentityMap();
-        ReentrantNodeIterator.apply(new CollectMemoryCheckpointsClosure(modifiedInLoops), graph.start(), CollectionsFactory.newSet());
+        ReentrantNodeIterator.apply(new CollectMemoryCheckpointsClosure(modifiedInLoops), graph.start(), new HashSet<LocationIdentity>());
         HashSetNodeEventListener listener = new HashSetNodeEventListener(EnumSet.of(NODE_ADDED, ZERO_USAGES));
         try (NodeEventScope nes = graph.trackNodeEvents(listener)) {
             ReentrantNodeIterator.apply(new FloatingReadClosure(modifiedInLoops, createFloatingReads, createMemoryMapNodes, updateExistingPhis), graph.start(), new MemoryMapImpl(graph.start()));
@@ -153,7 +152,7 @@ public class FloatingReadPhase extends Phase {
     public static MemoryMapImpl mergeMemoryMaps(MergeNode merge, List<? extends MemoryMap> states, boolean updateExistingPhis) {
         MemoryMapImpl newState = new MemoryMapImpl();
 
-        Set<LocationIdentity> keys = CollectionsFactory.newSet();
+        Set<LocationIdentity> keys = new HashSet<>();
         for (MemoryMap other : states) {
             keys.addAll(other.getLocations());
         }
@@ -163,7 +162,7 @@ public class FloatingReadPhase extends Phase {
         if (updateExistingPhis) {
             for (MemoryPhiNode phi : merge.phis().filter(MemoryPhiNode.class)) {
                 if (existingPhis == null) {
-                    existingPhis = CollectionsFactory.newMap();
+                    existingPhis = Context.newMap();
                 }
                 phi.values().clear();
                 existingPhis.put(phi.getLocationIdentity(), phi);
@@ -238,7 +237,7 @@ public class FloatingReadPhase extends Phase {
 
         @Override
         protected Set<LocationIdentity> merge(MergeNode merge, List<Set<LocationIdentity>> states) {
-            Set<LocationIdentity> result = CollectionsFactory.newSet();
+            Set<LocationIdentity> result = new HashSet<>();
             for (Set<LocationIdentity> other : states) {
                 result.addAll(other);
             }
@@ -247,13 +246,13 @@ public class FloatingReadPhase extends Phase {
 
         @Override
         protected Set<LocationIdentity> afterSplit(BeginNode node, Set<LocationIdentity> oldState) {
-            return CollectionsFactory.newSet(oldState);
+            return new HashSet<>(oldState);
         }
 
         @Override
         protected Map<LoopExitNode, Set<LocationIdentity>> processLoop(LoopBeginNode loop, Set<LocationIdentity> initialState) {
-            LoopInfo<Set<LocationIdentity>> loopInfo = ReentrantNodeIterator.processLoop(this, loop, CollectionsFactory.newSet());
-            Set<LocationIdentity> modifiedLocations = CollectionsFactory.newSet();
+            LoopInfo<Set<LocationIdentity>> loopInfo = ReentrantNodeIterator.processLoop(this, loop, new HashSet<LocationIdentity>());
+            Set<LocationIdentity> modifiedLocations = new HashSet<>();
             for (Set<LocationIdentity> end : loopInfo.endStates.values()) {
                 modifiedLocations.addAll(end);
             }
@@ -372,11 +371,11 @@ public class FloatingReadPhase extends Phase {
             Set<LocationIdentity> modifiedLocations = modifiedInLoops.get(loop);
             if (modifiedLocations.contains(ANY_LOCATION)) {
                 // create phis for all locations if ANY is modified in the loop
-                modifiedLocations = CollectionsFactory.newSet(modifiedLocations);
+                modifiedLocations = new HashSet<>(modifiedLocations);
                 modifiedLocations.addAll(initialState.lastMemorySnapshot.keySet());
             }
 
-            Map<LocationIdentity, MemoryPhiNode> phis = CollectionsFactory.newMap();
+            Map<LocationIdentity, MemoryPhiNode> phis = new HashMap<>();
 
             if (updateExistingPhis) {
                 for (MemoryPhiNode phi : loop.phis().filter(MemoryPhiNode.class).snapshot()) {

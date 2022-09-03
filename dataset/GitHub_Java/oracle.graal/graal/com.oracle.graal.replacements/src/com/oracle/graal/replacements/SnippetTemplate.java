@@ -534,9 +534,8 @@ public class SnippetTemplate {
         }
     }
 
-    // These values must be compared with equals() not '==' to support replay compilation.
-    private static final Object UNUSED_PARAMETER = "UNUSED_PARAMETER";
-    private static final Object CONSTANT_PARAMETER = "CONSTANT_PARAMETER";
+    private static final Object UNUSED_PARAMETER = "DEAD PARAMETER";
+    private static final Object CONSTANT_PARAMETER = "CONSTANT";
 
     /**
      * Determines if any parameter of a given method is annotated with {@link ConstantParameter}.
@@ -906,7 +905,7 @@ public class SnippetTemplate {
                     }
                 }
             } else {
-                assert parameter.equals(CONSTANT_PARAMETER) || parameter.equals(UNUSED_PARAMETER) : "unexpected entry for parameter: " + args.info.getParameterName(i) + " -> " + parameter;
+                assert parameter == CONSTANT_PARAMETER || parameter == UNUSED_PARAMETER : "unexpected entry for parameter: " + args.info.getParameterName(i) + " -> " + parameter;
             }
         }
         return replacements;
@@ -997,7 +996,7 @@ public class SnippetTemplate {
         }
     };
 
-    private boolean assertSnippetKills(ScheduledNode replacee) {
+    private boolean checkSnippetKills(ScheduledNode replacee) {
         if (!replacee.graph().isAfterFloatingReadPhase()) {
             // no floating reads yet, ignore locations created while lowering
             return true;
@@ -1042,7 +1041,7 @@ public class SnippetTemplate {
          * specific, so the runtime independent InstanceOfNode can not kill this location. However,
          * if no FloatingReadNode is reading from this location, the kill to this location is fine.
          */
-        for (FloatingReadNode frn : replacee.graph().getNodes().filter(FloatingReadNode.class)) {
+        for (FloatingReadNode frn : replacee.graph().getNodes(FloatingReadNode.class)) {
             LocationIdentity locationIdentity = frn.location().getLocationIdentity();
             if (SnippetCounters.getValue()) {
                 // accesses to snippet counters are artificially introduced and violate the memory
@@ -1095,7 +1094,7 @@ public class SnippetTemplate {
      * @return the map of duplicated nodes (original -&gt; duplicate)
      */
     public Map<Node, Node> instantiate(MetaAccessProvider metaAccess, FixedNode replacee, UsageReplacer replacer, Arguments args) {
-        assert assertSnippetKills(replacee);
+        assert checkSnippetKills(replacee);
         try (TimerCloseable a = args.info.instantiationTimer.start(); TimerCloseable b = instantiationTimer.start()) {
             args.info.instantiationCounter.increment();
             instantiationCounter.increment();
@@ -1242,7 +1241,7 @@ public class SnippetTemplate {
      * @param args the arguments to be bound to the flattened positional parameters of the snippet
      */
     public void instantiate(MetaAccessProvider metaAccess, FloatingNode replacee, UsageReplacer replacer, LoweringTool tool, Arguments args) {
-        assert assertSnippetKills(replacee);
+        assert checkSnippetKills(replacee);
         try (TimerCloseable a = args.info.instantiationTimer.start()) {
             args.info.instantiationCounter.increment();
             instantiationCounter.increment();
@@ -1299,9 +1298,9 @@ public class SnippetTemplate {
             sep = ", ";
             if (value == null) {
                 buf.append("<null> ").append(name);
-            } else if (value.equals(UNUSED_PARAMETER)) {
+            } else if (value == UNUSED_PARAMETER) {
                 buf.append("<unused> ").append(name);
-            } else if (value.equals(CONSTANT_PARAMETER)) {
+            } else if (value == CONSTANT_PARAMETER) {
                 buf.append("<constant> ").append(name);
             } else if (value instanceof ParameterNode) {
                 ParameterNode param = (ParameterNode) value;

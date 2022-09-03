@@ -25,7 +25,6 @@ package com.oracle.graal.virtual.phases.ea;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 
@@ -129,11 +128,11 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
     }
 
     public ReadEliminationBlockState() {
-        readCache = CollectionsFactory.newMap();
+        readCache = new HashMap<>();
     }
 
     public ReadEliminationBlockState(ReadEliminationBlockState other) {
-        readCache = CollectionsFactory.newMap(other.readCache);
+        readCache = new HashMap<>(other.readCache);
     }
 
     @Override
