@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.phases.common.inlining;
 
+import static com.oracle.graal.compiler.common.GraalOptions.HotSpotPrintInlining;
 import static com.oracle.graal.compiler.common.GraalOptions.UseGraalInstrumentation;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
@@ -117,7 +118,9 @@ public class InliningUtil {
     }
 
     private static void printInlining(final ResolvedJavaMethod method, final Invoke invoke, final int inliningDepth, final boolean success, final String msg, final Object... args) {
-        Util.printInlining(method, invoke.bci(), inliningDepth, success, msg, args);
+        if (HotSpotPrintInlining.getValue(invoke.asNode().getOptions())) {
+            Util.printInlining(method, invoke.bci(), inliningDepth, success, msg, args);
+        }
     }
 
     public static void logInlinedMethod(InlineInfo info, int inliningDepth, boolean allowLogging, String msg, Object... args) {
@@ -273,10 +276,10 @@ public class InliningUtil {
      */
     @SuppressWarnings("try")
     public static Map<Node, Node> inline(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck, List<Node> canonicalizedNodes, ResolvedJavaMethod inlineeMethod) {
-        MethodMetricsInlineeScopeInfo m = MethodMetricsInlineeScopeInfo.create();
+        FixedNode invokeNode = invoke.asNode();
+        StructuredGraph graph = invokeNode.graph();
+        MethodMetricsInlineeScopeInfo m = MethodMetricsInlineeScopeInfo.create(graph.getOptions());
         try (Debug.Scope s = Debug.methodMetricsScope("InlineEnhancement", m, false)) {
-            FixedNode invokeNode = invoke.asNode();
-            StructuredGraph graph = invokeNode.graph();
             if (Fingerprint.ENABLED) {
                 Fingerprint.submit("inlining %s into %s: %s", formatGraph(inlineGraph), formatGraph(invoke.asNode().graph()), inlineGraph.getNodes().snapshot());
             }
@@ -364,25 +367,10 @@ public class InliningUtil {
                 unwindNode = (UnwindNode) duplicates.get(unwindNode);
             }
 
-            if (UseGraalInstrumentation.getValue()) {
+            if (UseGraalInstrumentation.getValue(graph.getOptions())) {
                 detachInstrumentation(invoke);
             }
-            ValueNode returnValue = finishInlining(invoke, graph, firstCFGNode, returnNodes, unwindNode, inlineGraph.getAssumptions(), inlineGraph, canonicalizedNodes);
-            if (canonicalizedNodes != null) {
-                if (returnValue != null) {
-                    for (Node usage : returnValue.usages()) {
-                        canonicalizedNodes.add(usage);
-                    }
-                }
-                for (ParameterNode parameter : inlineGraph.getNodes(ParameterNode.TYPE)) {
-                    for (Node usage : parameter.usages()) {
-                        Node duplicate = duplicates.get(usage);
-                        if (duplicate != null && duplicate.isAlive()) {
-                            canonicalizedNodes.add(duplicate);
-                        }
-                    }
-                }
-            }
+            finishInlining(invoke, graph, firstCFGNode, returnNodes, unwindNode, inlineGraph.getAssumptions(), inlineGraph, canonicalizedNodes);
 
             GraphUtil.killCFG(invokeNode);
 
@@ -462,7 +450,7 @@ public class InliningUtil {
                 assumptions.record(inlinedAssumptions);
             }
         } else {
-            assert inlinedAssumptions == null : "cannot inline graph which makes assumptions into a graph that doesn't";
+            assert inlinedAssumptions == null : String.format("cannot inline graph (%s) which makes assumptions into a graph (%s) that doesn't", inlineGraph, graph);
         }
 
         // Copy inlined methods from inlinee to caller
@@ -680,6 +668,7 @@ public class InliningUtil {
                 if (phiResult == null && (singleResult == null || singleResult == result)) {
                     /* Only one result value, so no need yet for a phi node. */
                     singleResult = result;
+
                 } else if (phiResult == null) {
                     /* Found a second result value, so create phi node. */
                     phiResult = merge.graph().addWithoutUnique(new ValuePhiNode(result.stamp().unrestricted(), merge));
@@ -793,7 +782,7 @@ public class InliningUtil {
      * This method exclude InstrumentationNode from inlining heuristics.
      */
     public static int getNodeCount(StructuredGraph graph) {
-        if (UseGraalInstrumentation.getValue()) {
+        if (UseGraalInstrumentation.getValue(graph.getOptions())) {
             return graph.getNodeCount() - graph.getNodes().filter(InstrumentationNode.class).count();
         } else {
             return graph.getNodeCount();
