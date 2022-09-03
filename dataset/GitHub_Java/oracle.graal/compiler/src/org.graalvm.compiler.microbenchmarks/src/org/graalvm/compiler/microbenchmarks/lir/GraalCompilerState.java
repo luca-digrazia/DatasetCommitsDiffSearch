@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -46,13 +44,12 @@ import org.graalvm.compiler.core.LIRGenerationPhase.LIRGenerationContext;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.alloc.ComputeBlockOrder;
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
-import org.graalvm.compiler.core.gen.LIRGenerationProvider;
-import org.graalvm.compiler.core.gen.LIRCompilerBackend;
 import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.lir.LIR;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilderFactory;
+import org.graalvm.compiler.lir.framemap.FrameMapBuilder;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool;
 import org.graalvm.compiler.lir.phases.AllocationPhase.AllocationContext;
@@ -322,8 +319,7 @@ public abstract class GraalCompilerState {
         assert !graph.isFrozen();
         ResolvedJavaMethod installedCodeOwner = graph.method();
         request = new Request<>(graph, installedCodeOwner, getProviders(), getBackend(), getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL,
-                        graph.getProfilingInfo(), createSuites(getOptions()), createLIRSuites(getOptions()), new CompilationResult(graph.compilationId()), CompilationResultBuilderFactory.Default,
-                        true);
+                        graph.getProfilingInfo(), createSuites(getOptions()), createLIRSuites(getOptions()), new CompilationResult(graph.compilationId()), CompilationResultBuilderFactory.Default);
     }
 
     /**
@@ -375,10 +371,10 @@ public abstract class GraalCompilerState {
         linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blocks.length, startBlock);
 
         LIR lir = new LIR(cfg, linearScanOrder, codeEmittingOrder, getGraphOptions(), getGraphDebug());
-        LIRGenerationProvider lirBackend = (LIRGenerationProvider) request.backend;
-        lirGenRes = lirBackend.newLIRGenerationResult(graph.compilationId(), lir, registerConfig, request.graph, stub);
-        lirGenTool = lirBackend.newLIRGenerator(lirGenRes);
-        nodeLirGen = lirBackend.newNodeLIRBuilder(request.graph, lirGenTool);
+        FrameMapBuilder frameMapBuilder = request.backend.newFrameMapBuilder(registerConfig);
+        lirGenRes = request.backend.newLIRGenerationResult(graph.compilationId(), lir, frameMapBuilder, request.graph, stub);
+        lirGenTool = request.backend.newLIRGenerator(lirGenRes);
+        nodeLirGen = request.backend.newNodeLIRBuilder(request.graph, lirGenTool);
     }
 
     protected OptionValues getGraphOptions() {
@@ -462,7 +458,7 @@ public abstract class GraalCompilerState {
     protected final void emitCode() {
         int bytecodeSize = request.graph.method() == null ? 0 : request.graph.getBytecodeSize();
         request.compilationResult.setHasUnsafeAccess(request.graph.hasUnsafeAccess());
-        LIRCompilerBackend.emitCode(request.backend, request.graph.getAssumptions(), request.graph.method(), request.graph.getMethods(), request.graph.getFields(), bytecodeSize, lirGenRes,
+        GraalCompiler.emitCode(request.backend, request.graph.getAssumptions(), request.graph.method(), request.graph.getMethods(), request.graph.getFields(), bytecodeSize, lirGenRes,
                         request.compilationResult, request.installedCodeOwner, request.factory);
     }
 

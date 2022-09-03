@@ -32,7 +32,6 @@ import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInstrum
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.code.CompilationResult;
@@ -262,7 +261,7 @@ public abstract class TruffleCompiler {
     }
 
     private class TruffleCodeInstallationTask extends Backend.CodeInstallationTask {
-        private List<Consumer<InstalledCode>> installedCodeEntries = new ArrayList<>();
+        private List<AssumptionValidAssumption> validAssumptions = new ArrayList<>();
 
         @Override
         public void preProcess(CompilationResult result) {
@@ -273,8 +272,7 @@ public abstract class TruffleCompiler {
             for (Assumption assumption : result.getAssumptions()) {
                 if (assumption != null && assumption instanceof AssumptionValidAssumption) {
                     AssumptionValidAssumption assumptionValidAssumption = (AssumptionValidAssumption) assumption;
-                    Consumer<InstalledCode> entry = snippetReflection.asObject(OptimizedAssumption.class, assumptionValidAssumption.getAssumption()).registerInstalledCodeEntry();
-                    installedCodeEntries.add(entry);
+                    validAssumptions.add(assumptionValidAssumption);
                 } else {
                     newAssumptions.add(assumption);
                 }
@@ -285,8 +283,8 @@ public abstract class TruffleCompiler {
         @Override
         public void postProcess(InstalledCode installedCode) {
             if (installedCode instanceof OptimizedCallTarget) {
-                for (Consumer<InstalledCode> entry : installedCodeEntries) {
-                    entry.accept(installedCode);
+                for (AssumptionValidAssumption assumption : validAssumptions) {
+                    snippetReflection.asObject(OptimizedAssumption.class, assumption.getAssumption()).registerInstalledCode(installedCode);
                 }
             }
         }
