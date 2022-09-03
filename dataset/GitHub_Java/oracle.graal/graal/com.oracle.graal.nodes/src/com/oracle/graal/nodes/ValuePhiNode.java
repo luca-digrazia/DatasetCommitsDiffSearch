@@ -22,16 +22,12 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.Arrays;
-
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.spi.ArrayLengthProvider;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.util.*;
 
 /**
  * Value {@link PhiNode}s merge data flow values at control flow merges.
@@ -72,7 +68,6 @@ public class ValuePhiNode extends PhiNode implements ArrayLengthProvider {
         return updateStamp(valuesStamp);
     }
 
-    @Override
     public ValueNode length() {
         if (merge() instanceof LoopBeginNode) {
             return null;
@@ -90,19 +85,5 @@ public class ValuePhiNode extends PhiNode implements ArrayLengthProvider {
             }
         }
         return length;
-    }
-
-    @Override
-    public boolean verify() {
-        Stamp s = null;
-        for (ValueNode input : values()) {
-            if (s == null) {
-                s = input.stamp();
-            } else {
-                assertTrue(s.isCompatible(input.stamp()), "Phi Input Stamps are not compatible. Phi:%s inputs:%s", this,
-                                Arrays.toString(values().stream().map(x -> x.toString() + ":" + x.stamp()).toArray()));
-            }
-        }
-        return super.verify();
     }
 }
