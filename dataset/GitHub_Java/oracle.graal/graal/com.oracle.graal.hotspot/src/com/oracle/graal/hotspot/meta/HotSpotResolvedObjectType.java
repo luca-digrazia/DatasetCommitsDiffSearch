@@ -309,7 +309,7 @@ public final class HotSpotResolvedObjectType extends HotSpotResolvedJavaType {
     @Override
     public void initialize() {
         if (!isInitialized()) {
-            unsafe.ensureClassInitialized(javaMirror);
+            runtime().getCompilerToVM().initializeType(this);
             assert isInitialized();
         }
     }
