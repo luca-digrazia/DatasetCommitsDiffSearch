@@ -27,7 +27,6 @@ import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.api.meta.LocationIdentity.*;
 import static com.oracle.graal.api.meta.Value.*;
 import static com.oracle.graal.hotspot.HotSpotBackend.*;
-import static com.oracle.graal.hotspot.HotSpotBackend.Options.*;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.*;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.*;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.*;
@@ -59,17 +58,15 @@ public class AMD64HotSpotForeignCallsProvider extends HotSpotHostForeignCallsPro
         RegisterValue exception = rax.asValue(LIRKind.reference(Kind.Object));
         RegisterValue exceptionPc = rdx.asValue(LIRKind.value(word));
         CallingConvention exceptionCc = new CallingConvention(0, ILLEGAL, exception, exceptionPc);
-        register(new HotSpotForeignCallLinkageImpl(EXCEPTION_HANDLER, 0L, PRESERVES_REGISTERS, LEAF_NOFP, null, exceptionCc, NOT_REEXECUTABLE, any()));
-        register(new HotSpotForeignCallLinkageImpl(EXCEPTION_HANDLER_IN_CALLER, JUMP_ADDRESS, PRESERVES_REGISTERS, LEAF_NOFP, exceptionCc, null, NOT_REEXECUTABLE, any()));
+        register(new HotSpotForeignCallLinkageImpl(EXCEPTION_HANDLER, 0L, PRESERVES_REGISTERS, LEAF_NOFP, null, exceptionCc, NOT_REEXECUTABLE, ANY_LOCATION));
+        register(new HotSpotForeignCallLinkageImpl(EXCEPTION_HANDLER_IN_CALLER, JUMP_ADDRESS, PRESERVES_REGISTERS, LEAF_NOFP, exceptionCc, null, NOT_REEXECUTABLE, ANY_LOCATION));
 
-        if (PreferGraalStubs.getValue()) {
-            link(new AMD64DeoptimizationStub(providers, target, config, registerStubCall(DEOPTIMIZATION_HANDLER, REEXECUTABLE, LEAF, NO_LOCATIONS)));
-            link(new AMD64UncommonTrapStub(providers, target, config, registerStubCall(UNCOMMON_TRAP_HANDLER, REEXECUTABLE, LEAF, NO_LOCATIONS)));
-        }
+        link(new AMD64DeoptimizationStub(providers, target, config, registerStubCall(DEOPTIMIZATION_HANDLER, REEXECUTABLE, LEAF, NO_LOCATIONS)));
+        link(new AMD64UncommonTrapStub(providers, target, config, registerStubCall(UNCOMMON_TRAP_HANDLER, REEXECUTABLE, LEAF, NO_LOCATIONS)));
 
         if (config.useCRC32Intrinsics) {
             // This stub does callee saving
-            registerForeignCall(UPDATE_BYTES_CRC32, config.updateBytesCRC32Stub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE, any());
+            registerForeignCall(UPDATE_BYTES_CRC32, config.updateBytesCRC32Stub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE, ANY_LOCATION);
         }
 
         super.initialize(providers, config);

@@ -163,13 +163,11 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
     @Override
     protected void emitIndirectCall(IndirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
         if (callTarget instanceof HotSpotIndirectCallTargetNode) {
-            Value metaspaceMethodSrc = operand(((HotSpotIndirectCallTargetNode) callTarget).metaspaceMethod());
-            Value targetAddressSrc = operand(callTarget.computedAddress());
-            AllocatableValue metaspaceMethodDst = AMD64.rbx.asValue(metaspaceMethodSrc.getLIRKind());
-            AllocatableValue targetAddressDst = AMD64.rax.asValue(targetAddressSrc.getLIRKind());
-            gen.emitMove(metaspaceMethodDst, metaspaceMethodSrc);
-            gen.emitMove(targetAddressDst, targetAddressSrc);
-            append(new AMD64IndirectCallOp(callTarget.targetMethod(), result, parameters, temps, metaspaceMethodDst, targetAddressDst, callState));
+            AllocatableValue metaspaceMethod = AMD64.rbx.asValue();
+            gen.emitMove(metaspaceMethod, operand(((HotSpotIndirectCallTargetNode) callTarget).metaspaceMethod()));
+            AllocatableValue targetAddress = AMD64.rax.asValue();
+            gen.emitMove(targetAddress, operand(callTarget.computedAddress()));
+            append(new AMD64IndirectCallOp(callTarget.targetMethod(), result, parameters, temps, metaspaceMethod, targetAddress, callState));
         } else {
             super.emitIndirectCall(callTarget, result, parameters, temps, callState);
         }
