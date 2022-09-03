@@ -2,41 +2,25 @@
  * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.oracle.truffle.api;
 
@@ -66,7 +50,6 @@ import org.graalvm.options.OptionKey;
 import org.graalvm.options.OptionValues;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
-import org.graalvm.polyglot.Language;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.io.FileSystem;
 
@@ -286,65 +269,15 @@ public abstract class TruffleLanguage<C> {
         String version() default "inherit";
 
         /**
+         * List of MIME types associated with your language.
+         *
+         * Users will use them when {@link org.graalvm.polyglot.Source#findLanguage(String)} is used
+         * by the embedder to lookup a language id} for a mime type.
+         *
+         * @return array of MIME types assigned to your language files
          * @since 0.8 or earlier
-         * @deprecated split up MIME types into {@link #characterMimeTypes() character} and
-         *             {@link #byteMimeTypes() byte} based MIME types.
          */
-        @Deprecated
-        String[] mimeType() default {};
-
-        /**
-         * Returns the default MIME type of this language. The default MIME type allows embedders
-         * and other language or instruments to find out how content is interpreted if no MIME type
-         * was specified. The default MIME type must be specified in the list of supported
-         * {@link #characterMimeTypes() character} or {@link #byteMimeTypes() byte} based MIME
-         * types.
-         * <p>
-         * The default MIME type is mandatory if more than one supported MIME type was specified. If
-         * no default MIME type and no supported MIME types were specified then all sources for this
-         * language will be interpreted as {@link Source#hasCharacters() character} based sources.
-         *
-         * @see LanguageInfo#getDefaultMimeType()
-         * @see Language#getDefaultMimeType()
-         * @see #characterMimeTypes()
-         * @see #byteMimeTypes()
-         * @since 1.0
-         */
-        String defaultMimeType() default "";
-
-        /**
-         * List of MIME types supported by this language which sources should be interpreted as
-         * {@link Source#hasCharacters() character} based sources. Languages may use MIME types to
-         * differentiate supported source kinds. If a MIME type is declared as supported then the
-         * language needs to be able to {@link TruffleLanguage#parse(ParsingRequest) parse} sources
-         * of this kind. If only one supported MIME type was specified by a language then it will be
-         * used as {@link #defaultMimeType() default} MIME type. If no supported character and byte
-         * based MIME types are specified then all sources will be interpreted as
-         * {@link Source#hasCharacters() character} based.
-         *
-         * @return array of MIME types assigned to your language files
-         * @see #defaultMimeType()
-         * @see #byteMimeTypes()
-         * @since 1.0
-         */
-        String[] characterMimeTypes() default {};
-
-        /**
-         * List of MIME types supported by this language which sources should be interpreted as
-         * {@link Source#hasBytes() byte} based sources. Languages may use MIME types to
-         * differentiate supported source kinds. If a MIME type is declared as supported then the
-         * language needs to be able to {@link TruffleLanguage#parse(ParsingRequest) parse} sources
-         * of this kind. If only one supported MIME type was specified by a language then it will be
-         * used as {@link #defaultMimeType() default} MIME type. If no supported character and byte
-         * based MIME types are specified then all sources will be interpreted as
-         * {@link Source#hasCharacters() character} based.
-         *
-         * @return array of MIME types assigned to your language files
-         * @see #defaultMimeType()
-         * @see #characterMimeTypes()
-         * @since 1.0
-         */
-        String[] byteMimeTypes() default {};
+        String[] mimeType();
 
         /**
          * Specifies if the language is suitable for interactive evaluation of {@link Source
@@ -1455,76 +1388,7 @@ public abstract class TruffleLanguage<C> {
          */
         @TruffleBoundary
         public Thread createThread(Runnable runnable, @SuppressWarnings("hiding") TruffleContext context) {
-            return createThread(null, runnable, 0, context);
-        }
-
-        /**
-         * Creates a new thread that has access to the given context. A thread is
-         * {@link TruffleLanguage#initializeThread(Object, Thread) initialized} when it is
-         * {@link Thread#start() started} and {@link TruffleLanguage#disposeThread(Object, Thread)
-         * disposed} as soon as the thread finished the execution.
-         * <p>
-         * It is recommended to set an
-         * {@link Thread#setUncaughtExceptionHandler(java.lang.Thread.UncaughtExceptionHandler)
-         * uncaught exception handler} for the created thread. For example the thread can throw an
-         * uncaught exception if one of the initialized language contexts don't support execution on
-         * this thread.
-         * <p>
-         * The language that created and started the thread is responsible to complete all running
-         * or waiting threads when the context is {@link TruffleLanguage#disposeContext(Object)
-         * disposed}.
-         * <p>
-         * The {@link TruffleContext} can be either an inner context created by
-         * {@link #newContextBuilder()}.{@link TruffleContext.Builder#build() build()}, or the
-         * context associated with this environment obtained from {@link #getContext()}.
-         *
-         * @param group the thread group, passed on to the underlying {@link Thread}.
-         * @param runnable the runnable to run on this thread.
-         * @param context the context to enter and leave when the thread is started.
-         * @throws IllegalStateException if thread creation is not {@link #isCreateThreadAllowed()
-         *             allowed}.
-         * @see #getContext()
-         * @see #newContextBuilder()
-         * @since 0.28
-         */
-        @TruffleBoundary
-        public Thread createThread(ThreadGroup group, Runnable runnable, @SuppressWarnings("hiding") TruffleContext context) {
-            return createThread(group, runnable, 0, context);
-        }
-
-        /**
-         * Creates a new thread that has access to the given context. A thread is
-         * {@link TruffleLanguage#initializeThread(Object, Thread) initialized} when it is
-         * {@link Thread#start() started} and {@link TruffleLanguage#disposeThread(Object, Thread)
-         * disposed} as soon as the thread finished the execution.
-         * <p>
-         * It is recommended to set an
-         * {@link Thread#setUncaughtExceptionHandler(java.lang.Thread.UncaughtExceptionHandler)
-         * uncaught exception handler} for the created thread. For example the thread can throw an
-         * uncaught exception if one of the initialized language contexts don't support execution on
-         * this thread.
-         * <p>
-         * The language that created and started the thread is responsible to complete all running
-         * or waiting threads when the context is {@link TruffleLanguage#disposeContext(Object)
-         * disposed}.
-         * <p>
-         * The {@link TruffleContext} can be either an inner context created by
-         * {@link #newContextBuilder()}.{@link TruffleContext.Builder#build() build()}, or the
-         * context associated with this environment obtained from {@link #getContext()}.
-         *
-         * @param group the thread group, passed on to the underlying {@link Thread}.
-         * @param runnable the runnable to run on this thread.
-         * @param stackSize the desired stack size for the new thread, or zero if this parameter is to be ignored.
-         * @param context the context to enter and leave when the thread is started.
-         * @throws IllegalStateException if thread creation is not {@link #isCreateThreadAllowed()
-         *             allowed}.
-         * @see #getContext()
-         * @see #newContextBuilder()
-         * @since 0.28
-         */
-        @TruffleBoundary
-        public Thread createThread(ThreadGroup group, Runnable runnable, long stackSize, @SuppressWarnings("hiding") TruffleContext context) {
-            return AccessAPI.engineAccess().createThread(vmObject, group, runnable, stackSize, context != null ? context.impl : null);
+            return AccessAPI.engineAccess().createThread(vmObject, runnable, context != null ? context.impl : null);
         }
 
         /**
@@ -1619,7 +1483,7 @@ public abstract class TruffleLanguage<C> {
         }
 
         /**
-         * Looks up a Java class in the top-most scope the host environment. Throws an error if no
+         * Looks up a Java class in the top-most scope the host environmen. Throws an error if no
          * symbol was found or the symbol was not accessible. Symbols might not be accessible if a
          * {@link org.graalvm.polyglot.Context.Builder#hostClassFilter(java.util.function.Predicate)
          * class filter} prevents access. The returned object is always a <code>TruffleObject</code>
@@ -1642,7 +1506,7 @@ public abstract class TruffleLanguage<C> {
          */
         @SuppressWarnings("static-method")
         public boolean isHostObject(Object value) {
-            return AccessAPI.engineAccess().isHostObject(value);
+            return AccessAPI.javaAccess().isHostObject(value);
         }
 
         /**
@@ -1657,7 +1521,7 @@ public abstract class TruffleLanguage<C> {
                 CompilerDirectives.transferToInterpreter();
                 throw new ClassCastException();
             }
-            return AccessAPI.engineAccess().asHostObject(value);
+            return AccessAPI.javaAccess().asHostObject(value);
         }
 
         /**
@@ -1707,7 +1571,7 @@ public abstract class TruffleLanguage<C> {
          */
         @SuppressWarnings("static-method")
         public boolean isHostFunction(Object value) {
-            return AccessAPI.engineAccess().isHostFunction(value);
+            return AccessAPI.javaAccess().isHostFunction(value);
         }
 
         /**
@@ -1764,31 +1628,6 @@ public abstract class TruffleLanguage<C> {
         @SuppressWarnings("static-method")
         public Throwable asHostException(Throwable exception) {
             return AccessAPI.engineAccess().asHostException(exception);
-        }
-
-        /**
-         * Returns {@code true} if the argument is a host symbol, representing the constructor and
-         * static members of a Java class, as obtained by e.g. {@link #lookupHostSymbol}.
-         *
-         * @see #lookupHostSymbol(String)
-         * @since 1.0
-         */
-        @SuppressWarnings("static-method")
-        public boolean isHostSymbol(Object guestObject) {
-            return AccessAPI.engineAccess().isHostSymbol(guestObject);
-        }
-
-        /**
-         * Converts a Java class to a host symbol as if by
-         * {@code lookupHostSymbol(symbolClass.getName())} but without an actual lookup. Must not be
-         * used with Truffle or guest language classes.
-         *
-         * @see #lookupHostSymbol(String)
-         * @since 1.0
-         */
-        @TruffleBoundary
-        public Object asHostSymbol(Class<?> symbolClass) {
-            return AccessAPI.engineAccess().asHostSymbol(vmObject, symbolClass);
         }
 
         /**
@@ -2003,7 +1842,7 @@ public abstract class TruffleLanguage<C> {
          */
         @TruffleBoundary
         public TruffleFile getTruffleFile(String path) {
-            return new TruffleFile(fileSystem, fileSystem.parsePath(path));
+            return new TruffleFile(fileSystem, fileSystem.parsePath(path).normalize());
         }
 
         /**
@@ -2017,18 +1856,24 @@ public abstract class TruffleLanguage<C> {
         public TruffleFile getTruffleFile(URI uri) {
             checkDisposed();
             try {
-                return new TruffleFile(fileSystem, fileSystem.parsePath(uri));
+                return new TruffleFile(fileSystem, fileSystem.parsePath(uri).normalize());
             } catch (UnsupportedOperationException e) {
                 throw new FileSystemNotFoundException("FileSystem for: " + uri.getScheme() + " scheme is not supported.");
             }
         }
 
         /**
+         * Builds new {@link Source source} from a {@link TruffleFile}. Once the source is built the
+         * {@link Source#getName() name} will become {@link TruffleFile#getName()} and the
+         * {@link Source#getCharacters()} will be loaded from the {@link TruffleFile file}, unless
+         * {@link com.oracle.truffle.api.source.Source.Builder#content(java.lang.String) redefined}
+         * on the builder.
+         *
+         * @param file the {@link TruffleFile} to create {@link Source} for
+         * @return new builder to configure additional properties
          * @since 1.0
-         * @deprecated use {@link Source#newBuilder(String, TruffleFile)} instead.
          */
-        @SuppressWarnings({"static-method", "deprecation"})
-        @Deprecated
+        @SuppressWarnings("static-method")
         public Source.Builder<IOException, RuntimeException, RuntimeException> newSourceBuilder(final TruffleFile file) {
             Objects.requireNonNull(file, "File must be non null");
             return Source.newBuilder(new TruffleFile.FileAdapter(file));
@@ -2065,7 +1910,8 @@ public abstract class TruffleLanguage<C> {
         Object findMetaObjectImpl(Object obj) {
             Object c = getLanguageContext();
             if (c != UNSET_CONTEXT) {
-                return getSpi().findMetaObject(c, obj);
+                final Object rawValue = AccessAPI.engineAccess().findOriginalObject(obj);
+                return getSpi().findMetaObject(c, rawValue);
             } else {
                 return null;
             }
@@ -2074,14 +1920,16 @@ public abstract class TruffleLanguage<C> {
         SourceSection findSourceLocation(Object obj) {
             Object c = getLanguageContext();
             if (c != UNSET_CONTEXT) {
-                return getSpi().findSourceLocation(c, obj);
+                final Object rawValue = AccessAPI.engineAccess().findOriginalObject(obj);
+                return getSpi().findSourceLocation(c, rawValue);
             } else {
                 return null;
             }
         }
 
         boolean isObjectOfLanguage(Object obj) {
-            return getSpi().isObjectOfLanguage(obj);
+            final Object rawValue = AccessAPI.engineAccess().findOriginalObject(obj);
+            return getSpi().isObjectOfLanguage(rawValue);
         }
 
         Iterable<Scope> findLocalScopes(Node node, Frame frame) {
@@ -2313,6 +2161,10 @@ public abstract class TruffleLanguage<C> {
 
         static InteropSupport interopAccess() {
             return API.interopSupport();
+        }
+
+        static JavaInteropSupport javaAccess() {
+            return API.javaInteropSupport();
         }
 
         @Override
@@ -2607,11 +2459,6 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        public File asFile(TruffleFile file) {
-            return new FileAdapter(file);
-        }
-
-        @Override
         public void configureLoggers(Object polyglotContext, Map<String, Level> logLevels) {
             if (logLevels == null) {
                 TruffleLogger.LoggerCache.getInstance().removeLogLevelsForContext(polyglotContext);
@@ -2691,9 +2538,11 @@ class TruffleLanguageSnippets {
         protected void initializeContext(Context context) throws IOException {
             // called "later" to finish the initialization
             // for example call into another language
-            Source source = Source.newBuilder("js",
-                                "function(x, y) x * y",
-                                "mul.js").build();
+            Source source =
+                Source.newBuilder("function mul(x, y) { return x * y }").
+                name("mul.js").
+                mimeType("text/javascript").
+                build();
             context.mul = context.env.parse(source);
         }
     }
@@ -2763,9 +2612,10 @@ class TruffleLanguageSnippets {
 
     // BEGIN: TruffleLanguageSnippets#parseWithParams
     public void parseWithParams(Env env) {
-        Source multiply = Source.newBuilder("js",
-                        "a * b",
-                        "mul.js").build();
+        Source multiply = Source.newBuilder("a * b").
+            mimeType("text/javascript").
+            name("mul.js").
+            build();
         CallTarget method = env.parse(multiply, "a", "b");
         Number fortyTwo = (Number) method.call(6, 7);
         assert 42 == fortyTwo.intValue();
