@@ -31,26 +31,26 @@ public class SourceSection {
     private final String identifier;
     private final int startLine;
     private final int startColumn;
-    private final int charIndex;
-    private final int charLength;
+    private final int endLine;
+    private final int endColumn;
 
     /**
      * Creates a new object representing a section in the source code of a guest language program.
      * 
      * @param source object representing the source program this is should be a section of
      * @param identifier an identifier used when printing the section
-     * @param startLine the index of the start line of the section
-     * @param startColumn the index of the start column of the section
-     * @param charIndex the index of the first character of the section
-     * @param charLength the length of the section in number of characters
+     * @param startLine the index of the start line of the section (inclusive)
+     * @param startColumn the index of the start column of the section (inclusive)
+     * @param endLine the index of the end line of the section (inclusive)
+     * @param endColumn the index of the end column of the section (inclusive)
      */
-    public SourceSection(Source source, String identifier, int startLine, int startColumn, int charIndex, int charLength) {
+    public SourceSection(Source source, String identifier, int startLine, int startColumn, int endLine, int endColumn) {
         this.source = source;
         this.identifier = identifier;
         this.startLine = startLine;
         this.startColumn = startColumn;
-        this.charIndex = charIndex;
-        this.charLength = charLength;
+        this.endLine = endLine;
+        this.endColumn = endColumn;
     }
 
     /**
@@ -81,23 +81,21 @@ public class SourceSection {
     }
 
     /**
-     * Returns the index of the first character of this section. All characters of the source can be
-     * retrieved via the {@link Source#getCode()} method.
+     * Returns the index of the end line of this source section (inclusive).
      * 
-     * @return the character index
+     * @return the end line
      */
-    public final int getCharIndex() {
-        return charIndex;
+    public final int getEndLine() {
+        return endLine;
     }
 
     /**
-     * Returns the length of this section in characters. All characters of the source can be
-     * retrieved via the {@link Source#getCode()} method.
+     * Returns the index of the end column of this source section (inclusive).
      * 
-     * @return the character length
+     * @return the end column
      */
-    public final int getCharLength() {
-        return charLength;
+    public final int getEndColumn() {
+        return endColumn;
     }
 
     /**
@@ -107,14 +105,5 @@ public class SourceSection {
      */
     public final String getIdentifier() {
         return identifier;
-    }
-
-    /**
-     * Returns the code represented by this code section.
-     * 
-     * @return the code as a String object
-     */
-    public final String getCode() {
-        return getSource().getCode().substring(charIndex, charLength);
     }
 }
