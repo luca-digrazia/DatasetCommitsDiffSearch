@@ -66,7 +66,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
      * Note that the number of locals and the number of stack slots may be smaller than the maximum
      * number of locals and stack slots as specified in the compiled method.
      */
-    public final Value[] values;
+    public final JavaValue[] values;
 
     /**
      * The number of locals in the values array.
@@ -85,7 +85,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
 
     /**
      * True if this is a position inside an exception handler before the exception object has been
-     * consumed. In this case, {@link #numStack == 1} and {@link #getStackValue(int)
+     * consumed. In this case, {@link #numStack} {@code == 1} and {@link #getStackValue(int)
      * getStackValue(0)} is the location of the exception object. If deoptimization happens at this
      * position, the interpreter will rethrow the exception instead of executing the bytecode
      * instruction at this position.
@@ -144,7 +144,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
      * @param numStack the depth of the stack
      * @param numLocks the number of locked objects
      */
-    public BytecodeFrame(BytecodeFrame caller, ResolvedJavaMethod method, int bci, boolean rethrowException, boolean duringCall, Value[] values, int numLocals, int numStack, int numLocks) {
+    public BytecodeFrame(BytecodeFrame caller, ResolvedJavaMethod method, int bci, boolean rethrowException, boolean duringCall, JavaValue[] values, int numLocals, int numStack, int numLocks) {
         super(caller, method, bci);
         assert values != null;
         this.rethrowException = rethrowException;
@@ -170,7 +170,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
                 Kind kind = values[i].getKind();
                 if (kind.needsTwoSlots()) {
                     assert values.length > i + 1 : String.format("missing second word %s", this);
-                    assert values[i + 1] == null || values[i + 1].getKind() == Kind.Illegal : this;
+                    assert values[i + 1] == null || values[i + 1].getKind() == Kind.Illegal;
                 }
             }
         }
@@ -183,7 +183,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
      * @param i the local variable index
      * @return the value that can be used to reconstruct the local's current value
      */
-    public Value getLocalValue(int i) {
+    public JavaValue getLocalValue(int i) {
         return values[i];
     }
 
@@ -193,7 +193,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
      * @param i the stack index
      * @return the value that can be used to reconstruct the stack slot's current value
      */
-    public Value getStackValue(int i) {
+    public JavaValue getStackValue(int i) {
         return values[i + numLocals];
     }
 
@@ -203,7 +203,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
      * @param i the lock index
      * @return the value that can be used to reconstruct the lock's current value
      */
-    public Value getLockValue(int i) {
+    public JavaValue getLockValue(int i) {
         return values[i + numLocals + numStack];
     }
 
