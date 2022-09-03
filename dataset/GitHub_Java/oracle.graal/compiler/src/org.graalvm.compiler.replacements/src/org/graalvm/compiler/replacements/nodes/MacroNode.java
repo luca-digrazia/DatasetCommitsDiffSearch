@@ -116,7 +116,6 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable, 
         return bci;
     }
 
-    @Override
     public ResolvedJavaMethod getTargetMethod() {
         return targetMethod;
     }
@@ -126,7 +125,7 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable, 
     }
 
     @Override
-    protected void afterClone(Node other) {
+    protected void afterClone(@SuppressWarnings("unused") Node other) {
         updateInliningLogAfterClone(other);
     }
 

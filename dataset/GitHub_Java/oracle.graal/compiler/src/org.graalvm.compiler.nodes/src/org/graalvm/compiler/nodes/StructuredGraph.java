@@ -42,7 +42,6 @@ import org.graalvm.compiler.debug.JavaMethodContext;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeMap;
-import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
@@ -170,7 +169,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         private final OptionValues options;
         private Cancellable cancellable = null;
         private final DebugContext debug;
-        private NodeSourcePosition callerContext;
 
         /**
          * Creates a builder for a graph.
@@ -257,13 +255,8 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
             return this;
         }
 
-        public Builder callerContext(NodeSourcePosition context) {
-            this.callerContext = context;
-            return this;
-        }
-
         public StructuredGraph build() {
-            return new StructuredGraph(name, rootMethod, entryBCI, assumptions, speculationLog, useProfilingInfo, compilationId, options, debug, cancellable, callerContext);
+            return new StructuredGraph(name, rootMethod, entryBCI, assumptions, speculationLog, useProfilingInfo, compilationId, options, debug, cancellable);
         }
     }
 
@@ -292,11 +285,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     private ScheduleResult lastSchedule;
 
     private final InliningLog inliningLog;
-
-    /**
-     * Call stack (context) leading to construction of this graph.
-     */
-    private final NodeSourcePosition callerContext;
 
     /**
      * Records the methods that were used while constructing this graph, one entry for each time a
@@ -331,8 +319,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
                     CompilationIdentifier compilationId,
                     OptionValues options,
                     DebugContext debug,
-                    Cancellable cancellable,
-                    NodeSourcePosition context) {
+                    Cancellable cancellable) {
         super(name, options, debug);
         this.setStart(add(new StartNode()));
         this.rootMethod = method;
@@ -343,8 +330,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         this.speculationLog = speculationLog;
         this.useProfilingInfo = useProfilingInfo;
         this.cancellable = cancellable;
-        this.inliningLog = new InliningLog();
-        this.callerContext = context;
+        this.inliningLog = new InliningLog(rootMethod);
     }
 
     public void setLastSchedule(ScheduleResult result) {
@@ -480,7 +466,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
                         speculationLog,
                         useProfilingInfo,
                         newCompilationId,
-                        getOptions(), debugForCopy, null, callerContext);
+                        getOptions(), debugForCopy, null);
         if (allowAssumptions == AllowAssumptions.YES && assumptions != null) {
             copy.assumptions.record(assumptions);
         }
@@ -951,9 +937,10 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     @Override
     protected void afterRegister(Node node) {
         assert hasValueProxies() || !(node instanceof ValueProxyNode);
-    }
-
-    public NodeSourcePosition getCallerContext() {
-        return callerContext;
+        if (GraalOptions.TraceInlining.getValue(getOptions()).isTracing()) {
+            if (node instanceof Invokable) {
+                ((Invokable) node).updateInliningLogAfterRegister(this);
+            }
+        }
     }
 }

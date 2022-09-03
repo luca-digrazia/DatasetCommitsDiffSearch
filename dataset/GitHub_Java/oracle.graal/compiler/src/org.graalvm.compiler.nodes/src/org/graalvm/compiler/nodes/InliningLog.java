@@ -27,7 +27,6 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.MapCursor;
 import org.graalvm.compiler.debug.GraalError;
-import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.graph.Node;
 
 import java.util.ArrayList;
@@ -85,7 +84,7 @@ public class InliningLog {
 
         @Override
         public String toString() {
-            return String.format("<%s> %s: %s", phase, target.format("%H.%n(%p)"), reason);
+            return String.format("%s - %s at %s:", positive ? "yes" : "no ", phase, target.format("%H.%n(%p)"), reason);
         }
     }
 
@@ -93,14 +92,13 @@ public class InliningLog {
         public final List<Decision> decisions;
         public final List<Callsite> children;
         public Callsite parent;
-        public ResolvedJavaMethod target;
-        public Invokable invoke;
+        private Invokable originalInvoke;
 
         Callsite(Callsite parent, Invokable originalInvoke) {
             this.parent = parent;
             this.decisions = new ArrayList<>();
             this.children = new ArrayList<>();
-            this.invoke = originalInvoke;
+            this.originalInvoke = originalInvoke;
         }
 
         public Callsite addChild(Invokable childInvoke) {
@@ -110,23 +108,33 @@ public class InliningLog {
         }
 
         public String positionString() {
-            if (invoke == null) {
+            if (originalInvoke == null) {
                 return "<root>";
             }
-            return MetaUtil.appendLocation(new StringBuilder(100), parent.target, getBci()).toString();
+            ResolvedJavaMethod targetMethod = parent.getOriginalInvoke() == null ? rootMethod : parent.getOriginalInvoke().getTargetMethod();
+            return MetaUtil.appendLocation(new StringBuilder(100), targetMethod, getBci()).toString();
+        }
+
+        public Invokable getOriginalInvoke() {
+            return originalInvoke;
+        }
+
+        public void setOriginalInvoke(Invokable originalInvoke) {
+            this.originalInvoke = originalInvoke;
         }
 
         public int getBci() {
-            return invoke != null ? invoke.bci() : -1;
+            return originalInvoke != null ? originalInvoke.bci() : -1;
         }
     }
 
+    private ResolvedJavaMethod rootMethod;
     private final Callsite root;
     private final EconomicMap<Invokable, Callsite> leaves;
 
     public InliningLog(ResolvedJavaMethod rootMethod) {
+        this.rootMethod = rootMethod;
         this.root = new Callsite(null, null);
-        this.root.target = rootMethod;
         this.leaves = EconomicMap.create();
     }
 
@@ -134,17 +142,16 @@ public class InliningLog {
         assert leaves.containsKey(invoke);
         assert (!positive && duplicationMap == null && calleeLog == null) || (positive && duplicationMap != null && calleeLog != null);
         Callsite callsite = leaves.get(invoke);
-        callsite.target = callsite.invoke.getTargetMethod();
         Decision decision = new Decision(positive, reason, phase, invoke.getTargetMethod());
         callsite.decisions.add(decision);
+        leaves.removeKey(invoke);
         if (positive) {
-            leaves.removeKey(invoke);
             MapCursor<Invokable, Callsite> entries = calleeLog.leaves.getEntries();
             while (entries.advance()) {
                 Invokable invokeFromCallee = entries.getKey();
                 Callsite callsiteFromCallee = entries.getValue();
                 Invokable inlinedInvokeFromCallee = (Invokable) duplicationMap.get(invokeFromCallee.asFixedNode());
-                callsiteFromCallee.invoke = inlinedInvokeFromCallee;
+                callsiteFromCallee.setOriginalInvoke(inlinedInvokeFromCallee);
                 leaves.put(inlinedInvokeFromCallee, callsiteFromCallee);
             }
             for (Callsite child : calleeLog.root.children) {
@@ -215,7 +222,7 @@ public class InliningLog {
         Callsite callsite = leaves.get(previousInvoke);
         leaves.removeKey(previousInvoke);
         leaves.put(newInvoke, callsite);
-        callsite.invoke = newInvoke;
+        callsite.setOriginalInvoke(newInvoke);
     }
 
     public String formatAsTree() {
@@ -227,7 +234,7 @@ public class InliningLog {
     private void formatAsTree(Callsite site, String indent, StringBuilder builder) {
         String position = site.positionString();
         String decision = String.join(System.lineSeparator() + indent + "    ", site.decisions.stream().map(d -> d.toString()).collect(Collectors.toList()));
-        builder.append(indent).append("at ").append(position).append(": ").append(decision).append(System.lineSeparator());
+        builder.append(indent).append(position).append(": ").append(decision).append(System.lineSeparator());
         for (Callsite child : site.children) {
             formatAsTree(child, indent + "  ", builder);
         }
