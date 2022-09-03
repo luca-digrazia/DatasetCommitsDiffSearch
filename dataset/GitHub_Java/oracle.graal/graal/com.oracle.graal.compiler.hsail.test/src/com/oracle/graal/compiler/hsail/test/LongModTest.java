@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.compiler.hsail.test;
 
-import org.junit.*;
-
-import com.oracle.graal.compiler.hsail.test.infra.*;
+import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
+import org.junit.Test;
 
 /**
  * Tests the remainder operation (%) on two longs. Generates a rem_s64 instruction.
