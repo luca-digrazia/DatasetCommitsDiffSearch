@@ -36,6 +36,7 @@ import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.op.compare.LLVMAddressCompareNodeGen.LLVMAddressEQNodeGen;
 import com.oracle.truffle.llvm.nodes.op.compare.LLVMAddressCompareNodeGen.LLVMAddressNEQNodeGen;
@@ -43,7 +44,6 @@ import com.oracle.truffle.llvm.nodes.op.compare.LLVMAddressCompareNodeGen.ToComp
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
-import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
@@ -185,15 +185,6 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
             return globalAccess.getNativeLocation(address);
         }
 
-        @Specialization
-        protected LLVMAddress doManagedMalloc(LLVMVirtualAllocationAddress address) {
-            if (address.isNull()) {
-                return LLVMAddress.fromLong(address.getOffset());
-            } else {
-                return LLVMAddress.fromLong(getHashCode(address.getObject()) + address.getOffset());
-            }
-        }
-
         @Child private Node isNull = Message.IS_NULL.createNode();
 
         @Specialization
@@ -205,8 +196,17 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
             }
         }
 
+        @Specialization(guards = "notLLVM(address)")
+        protected LLVMAddress doTruffleObject(TruffleObject address) {
+            if (ForeignAccess.sendIsNull(isNull, address)) {
+                return LLVMAddress.nullPointer();
+            } else {
+                return LLVMAddress.fromLong(getHashCode(address));
+            }
+        }
+
         @TruffleBoundary
-        private static int getHashCode(Object address) {
+        private static int getHashCode(TruffleObject address) {
             return address.hashCode();
         }
 
