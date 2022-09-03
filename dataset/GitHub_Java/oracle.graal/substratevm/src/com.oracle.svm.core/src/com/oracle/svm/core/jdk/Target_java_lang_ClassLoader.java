@@ -47,7 +47,6 @@ import com.oracle.svm.core.util.VMError;
 @SuppressWarnings("static-method")
 public final class Target_java_lang_ClassLoader {
 
-    @Substitute //
     private Target_java_lang_ClassLoader parent;
 
     @Substitute
