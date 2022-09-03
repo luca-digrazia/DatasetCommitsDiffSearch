@@ -24,44 +24,34 @@
  */
 package org.graalvm.compiler.truffle.test;
 
+import java.io.File;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-
-import java.lang.reflect.Field;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.junit.Test;
 
-import com.oracle.truffle.api.TruffleOptions;
+import java.lang.reflect.Field;
+import static org.junit.Assert.assertTrue;
 
 public class TruffleOptionsByClassLoaderTest {
 
     @Test
     public void loadTruffleOptionsByOwnClassLoader() throws Exception {
-        URL url = TruffleOptions.class.getResource("TruffleOptions.class");
-        if (url != null) {
-            String urlString = url.toString();
-            String protocol = url.getProtocol();
-            url = null;
-            if ("jar".equals(protocol)) {
-                // Example:
-                // jar:file:/usr/lib/jvm/graalvm-ce-19.2.0/jre/lib/truffle/truffle-api.jar!/com/oracle/truffle/api/TruffleOptions.class
-                Matcher matcher = Pattern.compile("jar:(.*)!/com/oracle/truffle/api/TruffleOptions\\.class").matcher(urlString);
-                if (matcher.matches()) {
-                    url = new URL(matcher.group(1));
-                }
-            } else if ("jrt".equals(protocol)) {
-                // Example: jrt:/org.graalvm.truffle/com/oracle/truffle/api/TruffleOptions.class
-                url = new URL(urlString.substring(0, urlString.length() - "com/oracle/truffle/api/TruffleOptions.class".length()));
+        String cp = System.getProperty("java.class.path");
+        File truffleAPI = null;
+        for (String p : cp.split(File.pathSeparator)) {
+            if (p.endsWith("truffle-api.jar")) {
+                truffleAPI = new File(p);
+                assertTrue("File really exists: " + truffleAPI, truffleAPI.exists());
+                break;
             }
         }
-        assertNotNull("Did not find a URL for accessing the Truffle API", url);
 
+        assertNotNull("Found Truffle API: " + truffleAPI, truffleAPI);
         final String truffleOptionsName = "com.oracle.truffle.api.TruffleOptions";
-        ClassLoader loader = new URLClassLoader(new URL[]{url}) {
+        ClassLoader loader = new URLClassLoader(new URL[]{truffleAPI.toURI().toURL()}) {
             @Override
             public Class<?> loadClass(String name) throws ClassNotFoundException {
                 if (name.startsWith(truffleOptionsName)) {
@@ -70,7 +60,6 @@ public class TruffleOptionsByClassLoaderTest {
                 return super.loadClass(name);
             }
         };
-
         Class<?> truffleOptions = loader.loadClass(truffleOptionsName);
         assertEquals("Right classloader", loader, truffleOptions.getClassLoader());
 
