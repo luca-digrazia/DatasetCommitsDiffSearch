@@ -37,7 +37,6 @@ import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.schedule.*;
-import com.oracle.graal.phases.schedule.SchedulePhase.SchedulingStrategy;
 import com.oracle.graal.phases.tiers.*;
 
 /**
@@ -183,20 +182,21 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
 
     @Override
     protected void run(StructuredGraph graph, MidTierContext context) {
-        SchedulePhase schedule = new SchedulePhase(SchedulingStrategy.EARLIEST);
+        SchedulePhase schedule = new SchedulePhase();
         schedule.apply(graph);
 
         for (Block block : schedule.getCFG().getBlocks()) {
             processBlock(block, schedule, context.getTarget().implicitNullCheckLimit);
         }
 
-        graph.setGuardsStage(GuardsStage.FIXED_DEOPTS);
+        graph.setGuardsPhase(GuardsStage.FIXED_DEOPTS);
     }
 
     private static void processBlock(Block block, SchedulePhase schedule, int implicitNullCheckLimit) {
+        List<ScheduledNode> nodes = schedule.nodesFor(block);
         if (OptImplicitNullChecks.getValue() && implicitNullCheckLimit > 0) {
-            new UseImplicitNullChecks(implicitNullCheckLimit).processNodes(block, schedule);
+            new UseImplicitNullChecks(implicitNullCheckLimit).processNodes(nodes, block.getBeginNode());
         }
-        new LowerGuards(block).processNodes(block, schedule);
+        new LowerGuards(block).processNodes(nodes, block.getBeginNode());
     }
 }
