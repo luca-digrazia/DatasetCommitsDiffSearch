@@ -68,80 +68,50 @@ public final class TruffleCache {
 
     public StructuredGraph lookup(final ResolvedJavaMethod method, final NodeInputList<ValueNode> arguments) {
 
-        StructuredGraph resultGraph = null;
         if (cache.containsKey(method)) {
             StructuredGraph graph = cache.get(method);
             if (checkArgumentStamps(graph, arguments)) {
-                resultGraph = graph;
+                return graph;
             }
         }
 
-        if (resultGraph == null) {
-            resultGraph = Debug.sandbox("TruffleCache", new Object[]{metaAccessProvider, method}, DebugScope.getConfig(), new Callable<StructuredGraph>() {
+        StructuredGraph resultGraph = Debug.sandbox("TruffleCache", new Object[]{metaAccessProvider, method}, DebugScope.getConfig(), new Callable<StructuredGraph>() {
 
-                public StructuredGraph call() {
-                    StructuredGraph newGraph = parseGraph(method);
+            public StructuredGraph call() {
+                StructuredGraph newGraph = parseGraph(method);
 
-                    // Get stamps from actual arguments.
-                    List<Stamp> stamps = new ArrayList<>();
-                    for (ValueNode arg : arguments) {
-                        stamps.add(arg.stamp());
-                    }
+                // Get stamps from actual arguments.
+                List<Stamp> stamps = new ArrayList<>();
+                for (ValueNode arg : arguments) {
+                    stamps.add(arg.stamp());
+                }
 
-                    if (cache.containsKey(method)) {
-                        // Make sure stamps are generalized based on previous stamps.
-                        StructuredGraph graph = cache.get(method);
-                        for (LocalNode localNode : graph.getNodes(LocalNode.class)) {
-                            int index = localNode.index();
-                            Stamp stamp = stamps.get(index);
-                            stamps.set(index, stamp.meet(localNode.stamp()));
-                        }
-                    }
-
-                    // Set stamps into graph before optimizing.
-                    for (LocalNode localNode : newGraph.getNodes(LocalNode.class)) {
+                if (cache.containsKey(method)) {
+                    // Make sure stamps are generalized based on previous stamps.
+                    StructuredGraph graph = cache.get(method);
+                    for (LocalNode localNode : graph.getNodes(LocalNode.class)) {
                         int index = localNode.index();
                         Stamp stamp = stamps.get(index);
-                        localNode.setStamp(stamp);
-                    }
-
-                    optimizeGraph(newGraph);
-
-                    HighTierContext context = new HighTierContext(metaAccessProvider, new Assumptions(false), replacements);
-                    PartialEscapePhase partialEscapePhase = new PartialEscapePhase(false, new CanonicalizerPhase(true));
-                    partialEscapePhase.apply(newGraph, context);
-
-                    cache.put(method, newGraph);
-                    if (TruffleCompilerOptions.TraceTruffleCacheDetails.getValue()) {
-                        TTY.println(String.format("[truffle] added to graph cache method %s with %d nodes.", method, newGraph.getNodeCount()));
-                    }
-                    return newGraph;
-                }
-            });
-        }
-
-        final StructuredGraph clonedResultGraph = resultGraph.copy();
-
-        Debug.sandbox("TruffleCacheConstants", new Object[]{metaAccessProvider, method}, DebugScope.getConfig(), new Runnable() {
-
-            public void run() {
-
-                Debug.dump(clonedResultGraph, "before applying constants");
-                // Pass on constant arguments.
-                for (LocalNode local : clonedResultGraph.getNodes(LocalNode.class)) {
-                    ValueNode arg = arguments.get(local.index());
-                    if (arg.isConstant()) {
-                        Constant constant = arg.asConstant();
-                        local.replaceAndDelete(ConstantNode.forConstant(constant, metaAccessProvider, clonedResultGraph));
-                    } else {
-                        local.setStamp(arg.stamp());
+                        stamps.set(index, stamp.meet(localNode.stamp()));
                     }
                 }
-                Debug.dump(clonedResultGraph, "after applying constants");
-                optimizeGraph(clonedResultGraph);
+
+                // Set stamps into graph before optimizing.
+                for (LocalNode localNode : newGraph.getNodes(LocalNode.class)) {
+                    int index = localNode.index();
+                    Stamp stamp = stamps.get(index);
+                    localNode.setStamp(stamp);
+                }
+
+                optimizeGraph(newGraph);
+                cache.put(method, newGraph);
+                if (TruffleCompilerOptions.TraceTruffleCacheDetails.getValue()) {
+                    TTY.println(String.format("[truffle] added to graph cache method %s with %d nodes.", method, newGraph.getNodeCount()));
+                }
+                return newGraph;
             }
         });
-        return clonedResultGraph;
+        return resultGraph;
     }
 
     private void optimizeGraph(StructuredGraph newGraph) {
@@ -169,6 +139,10 @@ public final class TruffleCache {
 
             contractGraph(newGraph, eliminate, convertDeoptimizeToGuardPhase, canonicalizerPhase);
         }
+
+        HighTierContext context = new HighTierContext(metaAccessProvider, assumptions, replacements);
+        PartialEscapePhase partialEscapePhase = new PartialEscapePhase(false, new CanonicalizerPhase(true));
+        partialEscapePhase.apply(newGraph, context);
 
         if (newGraph.getNodeCount() > maxNodes && (TruffleCompilerOptions.TraceTruffleCacheDetails.getValue() || TruffleCompilerOptions.TraceTrufflePerformanceWarnings.getValue())) {
             TTY.println(String.format("[truffle] PERFORMANCE WARNING: method %s got too large with %d nodes.", newGraph.method(), newGraph.getNodeCount()));
