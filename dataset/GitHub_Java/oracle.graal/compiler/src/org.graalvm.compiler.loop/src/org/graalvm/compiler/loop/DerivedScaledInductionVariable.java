@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -110,8 +110,8 @@ public class DerivedScaledInductionVariable extends DerivedInductionVariable {
     }
 
     @Override
-    public ValueNode extremumNode(boolean assumeLoopEntered, Stamp stamp) {
-        return mul(graph(), base.extremumNode(assumeLoopEntered, stamp), IntegerConvertNode.convert(scale, stamp, graph(), NodeView.DEFAULT));
+    public ValueNode extremumNode(boolean assumePositiveTripCount, Stamp stamp) {
+        return mul(graph(), base.extremumNode(assumePositiveTripCount, stamp), IntegerConvertNode.convert(scale, stamp, graph(), NodeView.DEFAULT));
     }
 
     @Override
@@ -132,34 +132,6 @@ public class DerivedScaledInductionVariable extends DerivedInductionVariable {
     @Override
     public void deleteUnusedNodes() {
         GraphUtil.tryKillUnused(scale);
-    }
-
-    @Override
-    public boolean isConstantScale(InductionVariable ref) {
-        return super.isConstantScale(ref) || (scale.isConstant() && base.isConstantScale(ref));
-    }
-
-    @Override
-    public long constantScale(InductionVariable ref) {
-        assert isConstantScale(ref);
-        if (super.isConstantScale(ref)) {
-            return super.constantScale(ref);
-        }
-        return scale.asJavaConstant().asLong() * base.constantScale(ref);
-    }
-
-    @Override
-    public boolean offsetIsZero(InductionVariable ref) {
-        if (super.offsetIsZero(ref)) {
-            return true;
-        }
-        return base.offsetIsZero(ref);
-    }
-
-    @Override
-    public ValueNode offsetNode(InductionVariable ref) {
-        assert !offsetIsZero(ref);
-        return null;
     }
 
     @Override
