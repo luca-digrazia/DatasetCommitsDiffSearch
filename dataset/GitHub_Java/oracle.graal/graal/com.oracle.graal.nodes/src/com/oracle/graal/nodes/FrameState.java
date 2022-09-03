@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.code.BytecodePosition;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaUtil;
@@ -41,11 +42,10 @@ import com.oracle.graal.api.replacements.MethodSubstitution;
 import com.oracle.graal.bytecode.Bytecodes;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.graph.IterableNodeType;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.graph.NodeSourcePosition;
 import com.oracle.graal.graph.iterators.NodeIterable;
 import com.oracle.graal.nodeinfo.InputType;
 import com.oracle.graal.nodeinfo.NodeInfo;
@@ -64,7 +64,7 @@ import com.oracle.graal.nodes.virtual.VirtualObjectNode;
 public final class FrameState extends VirtualState implements IterableNodeType {
     public static final NodeClass<FrameState> TYPE = NodeClass.create(FrameState.class);
 
-    private static final DebugCounter FRAMESTATES_COUNTER = Debug.counter("FrameStateCount");
+    private static final DebugMetric METRIC_FRAMESTATE_COUNT = Debug.metric("FrameStateCount");
 
     /**
      * Marker value for the second slot of values that occupy two local variable or expression stack
@@ -134,7 +134,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         this.duringCall = duringCall;
         assert !this.rethrowException || this.stackSize == 1 : "must have exception on top of the stack";
         assert this.locksSize() == this.monitorIdCount();
-        FRAMESTATES_COUNTER.increment();
+        METRIC_FRAMESTATE_COUNT.increment();
     }
 
     public FrameState(FrameState outerFrameState, ResolvedJavaMethod method, int bci, List<ValueNode> values, int localsSize, int stackSize, boolean rethrowException, boolean duringCall,
@@ -220,11 +220,15 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         this.outerFrameState = x;
     }
 
-    public static NodeSourcePosition toSourcePosition(FrameState fs) {
+    public BytecodePosition toBytecodePosition() {
+        return toBytecodePosition(this);
+    }
+
+    public static BytecodePosition toBytecodePosition(FrameState fs) {
         if (fs == null) {
             return null;
         }
-        return new NodeSourcePosition(null, toSourcePosition(fs.outerFrameState()), fs.method(), fs.bci);
+        return new BytecodePosition(toBytecodePosition(fs.outerFrameState()), fs.method(), fs.bci);
     }
 
     /**
@@ -397,6 +401,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
             byte oldCode = codes[oldBci];
             assert Bytecodes.lengthOf(newCode) + newBci == oldBci || Bytecodes.lengthOf(oldCode) + oldBci == newBci : "expecting roll back or forward";
         }
+        assert !newDuringCall || Bytecodes.isInvoke(newCode) || newStackSize + Bytecodes.stackEffectOf(newCode) >= 0 : "stack underflow at " + Bytecodes.nameOf(newCode);
         return true;
     }
 
