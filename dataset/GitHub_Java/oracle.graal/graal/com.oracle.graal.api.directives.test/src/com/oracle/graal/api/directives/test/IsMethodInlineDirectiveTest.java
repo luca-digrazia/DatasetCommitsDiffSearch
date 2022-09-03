@@ -28,7 +28,8 @@ import org.junit.Test;
 import com.oracle.graal.api.directives.GraalDirectives;
 import com.oracle.graal.compiler.common.GraalOptions;
 import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.options.OptionValues.OverrideScope;
+import com.oracle.graal.options.OptionValue;
+import com.oracle.graal.options.OptionValue.OverrideScope;
 
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
@@ -105,7 +106,7 @@ public class IsMethodInlineDirectiveTest extends GraalCompilerTest {
     @SuppressWarnings("try")
     @Test
     public void testInlinedCalleeWithInstrumentation() {
-        try (OverrideScope s = overrideOptions(GraalOptions.UseGraalInstrumentation, true)) {
+        try (OverrideScope s = OptionValue.override(GraalOptions.UseGraalInstrumentation, true)) {
             ResolvedJavaMethod method = getResolvedJavaMethod("callerSnippet1");
             executeExpected(method, null); // ensure the method is fully resolved
             isCalleeInlined = false;
