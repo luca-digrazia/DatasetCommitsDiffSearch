@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,11 +24,11 @@ package org.graalvm.compiler.nodes.spi;
 
 import java.util.List;
 
+import org.graalvm.compiler.core.common.spi.ArrayOffsetProvider;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.WithExceptionNode;
 import org.graalvm.compiler.nodes.java.MonitorIdNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
 import org.graalvm.compiler.options.OptionValues;
@@ -51,13 +49,15 @@ public interface VirtualizerTool {
     /**
      * @return the {@link MetaAccessProvider} associated with the current compilation.
      */
-    MetaAccessProvider getMetaAccess();
+    MetaAccessProvider getMetaAccessProvider();
 
     /**
      * @return the {@link ConstantReflectionProvider} associated with the current compilation, which
      *         can be used to access {@link JavaConstant}s.
      */
-    ConstantReflectionProvider getConstantReflection();
+    ConstantReflectionProvider getConstantReflectionProvider();
+
+    ArrayOffsetProvider getArrayOffsetProvider();
 
     /**
      * This method should be used to query the maximum size of virtualized objects before attempting
@@ -127,14 +127,6 @@ public interface VirtualizerTool {
     void replaceWithVirtual(VirtualObjectNode virtualObject);
 
     /**
-     * Deletes the current node, which must be a {@link WithExceptionNode}, and replaces it with the
-     * given virtualized object. Kills the exception edge.
-     *
-     * @param virtualObject the virtualized object that should replace the current node.
-     */
-    void replaceWithVirtualAndKillExceptionEdge(VirtualObjectNode virtualObject);
-
-    /**
      * Deletes the current node and replaces it with the given value.
      *
      * @param replacement the value that should replace the current node.
@@ -145,12 +137,6 @@ public interface VirtualizerTool {
      * Deletes the current node.
      */
     void delete();
-
-    /**
-     * Deletes the current node, which must be a {@link WithExceptionNode}. Kills the exception
-     * edge.
-     */
-    void deleteAndKillExceptionEdge();
 
     /**
      * Replaces an input of the current node.
@@ -183,15 +169,6 @@ public interface VirtualizerTool {
      * @return true if materialization happened, false if not.
      */
     boolean ensureMaterialized(VirtualObjectNode virtualObject);
-
-    /**
-     *
-     * Returns whether deoptimization can recover from virtualizing large unsafe accesses to a byte
-     * array.
-     *
-     * @return true if deoptimization can recover, false if not.
-     */
-    boolean canVirtualizeLargeByteArrayUnsafeAccess();
 
     OptionValues getOptions();
 
