@@ -37,6 +37,8 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 
+import jdk.vm.ci.code.BytecodePosition;
+import jdk.vm.ci.meta.SpeculationLog;
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
@@ -61,7 +63,6 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.AbsNode;
 import org.graalvm.compiler.nodes.calc.CompareNode;
 import org.graalvm.compiler.nodes.calc.ConditionalNode;
-import org.graalvm.compiler.nodes.calc.FloatEqualsNode;
 import org.graalvm.compiler.nodes.calc.IntegerEqualsNode;
 import org.graalvm.compiler.nodes.calc.NarrowNode;
 import org.graalvm.compiler.nodes.calc.ReinterpretNode;
@@ -107,7 +108,6 @@ import org.graalvm.compiler.replacements.nodes.arithmetic.IntegerMulExactNode;
 import org.graalvm.compiler.replacements.nodes.arithmetic.IntegerSubExactNode;
 import org.graalvm.word.LocationIdentity;
 
-import jdk.vm.ci.code.BytecodePosition;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
@@ -116,7 +116,6 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.SpeculationLog;
 import sun.misc.Unsafe;
 
 /**
@@ -242,7 +241,7 @@ public class StandardGraphBuilderPlugins {
 
         @Override
         public JavaKind returnKind(JavaKind accessKind) {
-            return JavaKind.Boolean.getStackKind();
+            return JavaKind.Int;
         }
     }
 
@@ -257,7 +256,7 @@ public class StandardGraphBuilderPlugins {
         @Override
         public JavaKind returnKind(JavaKind accessKind) {
             if (accessKind.isNumericInteger()) {
-                return accessKind.getStackKind();
+                return accessKind.getByteCount() <= 4 ? JavaKind.Int : JavaKind.Long;
             } else {
                 return accessKind;
             }
@@ -405,16 +404,6 @@ public class StandardGraphBuilderPlugins {
                 return true;
             }
         });
-        r.register1("floatToIntBits", float.class, new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
-                LogicNode notNan = b.append(FloatEqualsNode.create(value, value, NodeView.DEFAULT));
-                ValueNode raw = b.append(ReinterpretNode.create(JavaKind.Int, value, NodeView.DEFAULT));
-                ValueNode result = b.append(ConditionalNode.create(notNan, raw, ConstantNode.forInt(0x7fc00000), NodeView.DEFAULT));
-                b.push(JavaKind.Int, result);
-                return true;
-            }
-        });
         r.register1("intBitsToFloat", int.class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
@@ -430,16 +419,6 @@ public class StandardGraphBuilderPlugins {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
                 b.push(JavaKind.Long, b.append(ReinterpretNode.create(JavaKind.Long, value, NodeView.DEFAULT)));
-                return true;
-            }
-        });
-        r.register1("doubleToLongBits", double.class, new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
-                LogicNode notNan = b.append(FloatEqualsNode.create(value, value, NodeView.DEFAULT));
-                ValueNode raw = b.append(ReinterpretNode.create(JavaKind.Long, value, NodeView.DEFAULT));
-                ValueNode result = b.append(ConditionalNode.create(notNan, raw, ConstantNode.forLong(0x7ff8000000000000L), NodeView.DEFAULT));
-                b.push(JavaKind.Long, result);
                 return true;
             }
         });
@@ -976,11 +955,6 @@ public class StandardGraphBuilderPlugins {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver blackhole, ValueNode value) {
                 blackhole.get();
                 b.add(new BlackholeNode(value));
-                return true;
-            }
-
-            @Override
-            public boolean isDecorator() {
                 return true;
             }
         };
