@@ -24,7 +24,6 @@
  */
 package com.oracle.svm.core;
 
-import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
@@ -33,10 +32,12 @@ import org.graalvm.nativeimage.Platforms;
  * method that can be called any time to obtain information about the currently collected profiling
  * data, if any. This class also serves as an SPI - subclasses shall override the
  * {@link #computeProfiles()} method to return their collected image profiles. There can be at most
- * single implementation of this type, registered in {@link ImageSingletons}.
+ * single implementation of this type, registered by creating its instance.
  *
  */
 public abstract class ImageProfiles {
+    private static ImageProfiles INSTANCE;
+
     /**
      * Constructor for subclasses. Can only be used in the hosted environment to register single
      * implementation of the class. Subsequent invocation of this constructur may yield an
@@ -44,6 +45,8 @@ public abstract class ImageProfiles {
      */
     @Platforms(Platform.HOSTED_ONLY.class)
     protected ImageProfiles() {
+        assert INSTANCE == null;
+        INSTANCE = this;
     }
 
     /**
@@ -60,7 +63,6 @@ public abstract class ImageProfiles {
      * @return {@code null} or opaque string representing the collected image profiles
      */
     public static String dumpProfiles() {
-        ImageProfiles inst = ImageSingletons.lookup(ImageProfiles.class);
-        return inst == null ? null : inst.computeProfiles();
+        return INSTANCE == null ? null : INSTANCE.computeProfiles();
     }
 }
