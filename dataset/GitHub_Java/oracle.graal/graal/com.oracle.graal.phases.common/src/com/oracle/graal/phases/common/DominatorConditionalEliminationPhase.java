@@ -348,7 +348,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
                     Stamp newStampY = binaryOpLogicNode.getSucceedingStampForY(negated);
                     registerNewStamp(y, newStampY, guard, undoOperations);
                 }
-                if (condition instanceof IntegerEqualsNode && guard instanceof FixedGuardNode && !negated) {
+                if (condition instanceof IntegerEqualsNode && guard instanceof FixedGuardNode) {
                     if (y.isConstant() && x instanceof AndNode) {
                         AndNode and = (AndNode) x;
                         if (and.getY() == y) {
