@@ -24,17 +24,19 @@ package com.oracle.graal.nodes;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.cri.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-@NodeInfo(nameTemplate = "FixedGuard(!={p#negated}) {p#reason/s}")
 public final class FixedGuardNode extends FixedWithNextNode implements Simplifiable, Lowerable, LIRLowerable, Node.IterableNodeType, Negatable {
 
     @Input private BooleanNode condition;
-    private final DeoptimizationReason reason;
+    private final DeoptimizationReason deoptReason;
     private final DeoptimizationAction action;
     private boolean negated;
+    private final long leafGraphId;
 
     public BooleanNode condition() {
         return condition;
@@ -45,28 +47,17 @@ public final class FixedGuardNode extends FixedWithNextNode implements Simplifia
         condition = x;
     }
 
-    public FixedGuardNode(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action) {
-        this(condition, deoptReason, action, false);
+    public FixedGuardNode(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, long leafGraphId) {
+        this(condition, deoptReason, action, false, leafGraphId);
     }
 
-    public FixedGuardNode(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated) {
+    public FixedGuardNode(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated, long leafGraphId) {
         super(StampFactory.forVoid());
         this.action = action;
         this.negated = negated;
+        this.leafGraphId = leafGraphId;
         this.condition = condition;
-        this.reason = deoptReason;
-    }
-
-    public DeoptimizationReason getReason() {
-        return reason;
-    }
-
-    public DeoptimizationAction getAction() {
-        return action;
-    }
-
-    public boolean isNegated() {
-        return negated;
+        this.deoptReason = deoptReason;
     }
 
     @Override
@@ -80,7 +71,7 @@ public final class FixedGuardNode extends FixedWithNextNode implements Simplifia
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        gen.emitGuardCheck(condition, reason, action, negated);
+        gen.emitGuardCheck(condition, deoptReason, action, negated, leafGraphId);
     }
 
     @Override
@@ -94,15 +85,17 @@ public final class FixedGuardNode extends FixedWithNextNode implements Simplifia
                 if (next != null) {
                     tool.deleteBranch(next);
                 }
-                setNext(graph().add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, reason)));
+                setNext(graph().add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, deoptReason, leafGraphId)));
                 return;
             }
         }
     }
 
     @Override
-    public void lower(LoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
+    public void lower(CiLoweringTool tool) {
+        ValueAnchorNode newAnchor = graph().add(new ValueAnchorNode());
+        newAnchor.addAnchoredNode(tool.createGuard(condition, deoptReason, action, negated, leafGraphId));
+        ((StructuredGraph) graph()).replaceFixedWithFixed(this, newAnchor);
     }
 
     @Override
