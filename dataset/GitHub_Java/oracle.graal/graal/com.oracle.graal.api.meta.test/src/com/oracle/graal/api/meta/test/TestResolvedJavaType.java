@@ -36,9 +36,6 @@ import sun.reflect.ConstantPool;
 
 import com.oracle.graal.api.meta.*;
 
-/**
- * Tests for {@link ResolvedJavaType}.
- */
 public class TestResolvedJavaType {
 
     public TestResolvedJavaType() {
@@ -242,8 +239,9 @@ public class TestResolvedJavaType {
 
     static void checkConcreteSubtype(ResolvedJavaType type, Class expected) {
         ResolvedJavaType subtype = type.findUniqueConcreteSubtype();
-        if (subtype == null) {
-            // The findUniqueConcreteSubtype() method is conservative
+        if (type.isInterface() && subtype == null) {
+            // A runtime may not record the subtype tree for interfaces in which case
+            // findUniqueConcreteSubtype() will return null for interfaces.
             return;
         }
 
@@ -254,9 +252,10 @@ public class TestResolvedJavaType {
         }
         if (!type.isArrayClass()) {
             ResolvedJavaType arrayType = type.getArrayClass();
-            ResolvedJavaType arraySubtype = arrayType.findUniqueConcreteSubtype();
-            if (arraySubtype != null) {
-                assertEquals(arraySubtype, arrayType);
+            if (subtype == type) {
+                assertEquals(arrayType.findUniqueConcreteSubtype(), arrayType);
+            } else {
+                assertNull(arrayType.findUniqueConcreteSubtype());
             }
         }
     }

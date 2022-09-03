@@ -41,6 +41,4 @@ public abstract class HotSpotJavaType extends CompilerObject implements JavaType
     public final String getName() {
         return name;
     }
-
-    public abstract Class<?> mirror();
 }

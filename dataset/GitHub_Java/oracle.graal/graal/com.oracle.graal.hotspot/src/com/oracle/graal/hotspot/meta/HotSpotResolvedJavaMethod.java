@@ -258,19 +258,9 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         return javaMethod == null ? null : javaMethod.getGenericParameterTypes();
     }
 
-    public Class<?>[] signatureToTypes() {
-        Signature sig = getSignature();
-        int count = sig.getParameterCount(false);
-        Class< ? >[] result = new Class< ? >[count];
-        for (int i = 0; i < result.length; ++i) {
-            result[i] = ((HotSpotJavaType) sig.getParameterType(i, holder).resolve(holder)).mirror();
-        }
-        return result;
-    }
-
     private Method toJava() {
         try {
-            return holder.mirror().getDeclaredMethod(name, signatureToTypes());
+            return holder.toJava().getDeclaredMethod(name, MetaUtil.signatureToTypes(getSignature(), holder));
         } catch (NoSuchMethodException e) {
             return null;
         }
@@ -278,7 +268,7 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
 
     private Constructor toJavaConstructor() {
         try {
-            return holder.mirror().getDeclaredConstructor(signatureToTypes());
+            return holder.toJava().getDeclaredConstructor(MetaUtil.signatureToTypes(getSignature(), holder));
         } catch (NoSuchMethodException e) {
             return null;
         }

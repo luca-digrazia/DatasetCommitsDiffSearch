@@ -145,9 +145,7 @@ public final class GraphBuilderPhase extends Phase {
     private BciBlockMapping createBlockMap() {
         BciBlockMapping map = new BciBlockMapping(method);
         map.build();
-        if (Debug.isDumpEnabled()) {
-            Debug.dump(map, MetaUtil.format("After block building %f %R %H.%n(%P)", method));
-        }
+        Debug.dump(map, MetaUtil.format("After block building %f %R %H.%n(%P)", method));
 
         return map;
     }
@@ -1409,7 +1407,7 @@ public final class GraphBuilderPhase extends Phase {
         if (initialized && graphBuilderConfig.getSkippedExceptionTypes() != null) {
             ResolvedJavaType resolvedCatchType = (ResolvedJavaType) catchType;
             for (ResolvedJavaType skippedType : graphBuilderConfig.getSkippedExceptionTypes()) {
-                initialized &= !resolvedCatchType.isSubtypeOf(skippedType);
+                initialized &= !resolvedCatchType.isAssignableTo(skippedType);
                 if (!initialized) {
                     break;
                 }

@@ -83,9 +83,9 @@ public class IntrinsifyArrayCopyPhase extends Phase {
                 ResolvedJavaType srcType = src.objectStamp().type();
                 ResolvedJavaType destType = dest.objectStamp().type();
                 if (srcType != null
-                                && srcType.isArray()
+                                && srcType.isArrayClass()
                                 && destType != null
-                                && destType.isArray()) {
+                                && destType.isArrayClass()) {
                     Kind componentKind = srcType.getComponentType().getKind();
                     if (srcType.getComponentType() == destType.getComponentType()) {
                         if (componentKind == Kind.Int) {

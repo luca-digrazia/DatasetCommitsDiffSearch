@@ -34,9 +34,7 @@ import org.junit.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 
-/**
- * Tests for {@link MetaAccessProvider}.
- */
+
 public class TestMetaAccessProvider {
 
     public TestMetaAccessProvider() {

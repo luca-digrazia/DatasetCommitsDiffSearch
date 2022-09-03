@@ -24,7 +24,6 @@ package com.oracle.graal.api.meta;
 
 import java.lang.annotation.*;
 import java.lang.reflect.*;
-import java.lang.reflect.Method;
 import java.util.*;
 
 /**
@@ -160,10 +159,4 @@ public interface ResolvedJavaMethod extends JavaMethod {
      * Returns {@code true} if this method can be inlined.
      */
     boolean canBeInlined();
-
-
-    /**
-     * Returns the LineNumberTable of this method.
-     */
-    LineNumberTable getLineNumberTable();
 }
