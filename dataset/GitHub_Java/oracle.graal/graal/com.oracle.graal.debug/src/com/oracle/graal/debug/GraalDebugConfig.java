@@ -81,34 +81,12 @@ public class GraalDebugConfig implements DebugConfig {
         public static final OptionValue<Boolean> SuppressZeroDebugValues = new OptionValue<>(true);
         @Option(help = "Only report debug values for maps which match the regular expression.", type = OptionType.Debug)
         public static final OptionValue<String> DebugValueThreadFilter = new OptionValue<>(null);
-        @Option(help = "Send Graal compiler IR to dump handlers on error", type = OptionType.Debug)
+        @Option(help = "Send JVMCI compiler IR to dump handlers on error", type = OptionType.Debug)
         public static final OptionValue<Boolean> DumpOnError = new OptionValue<>(false);
         @Option(help = "Intercept also bailout exceptions", type = OptionType.Debug)
         public static final OptionValue<Boolean> InterceptBailout = new OptionValue<>(false);
         @Option(help = "Enable more verbose log output when available", type = OptionType.Debug)
         public static final OptionValue<Boolean> LogVerbose = new OptionValue<>(false);
-        @Option(help = "Output probabilities for fixed nodes during binary graph dumping", type = OptionType.Debug)
-        public static final OptionValue<Boolean> PrintGraphProbabilities = new OptionValue<>(false);
-        @Option(help = "Enable dumping to the C1Visualizer. Enabling this option implies PrintBackendCFG.", type = OptionType.Debug)
-        public static final OptionValue<Boolean> PrintCFG = new OptionValue<>(false);
-        @Option(help = "Enable dumping LIR, register allocation and code generation info to the C1Visualizer.", type = OptionType.Debug)
-        public static final OptionValue<Boolean> PrintBackendCFG = new OptionValue<>(true);
-        @Option(help = "Enable dumping to the IdealGraphVisualizer.", type = OptionType.Debug)
-        public static final OptionValue<Boolean> PrintIdealGraph = new OptionValue<>(true);
-        @Option(help = "Dump IdealGraphVisualizer output in binary format", type = OptionType.Debug)
-        public static final OptionValue<Boolean> PrintBinaryGraphs = new OptionValue<>(true);
-        @Option(help = "Print Ideal graphs as opposed to sending them over the network.", type = OptionType.Debug)
-        public static final OptionValue<Boolean> PrintIdealGraphFile = new OptionValue<>(false);
-        @Option(help = "The directory into which to dump the Ideal graph files.")
-        public static final OptionValue<String> DumpPath = new OptionValue<>("");
-        @Option(help = "", type = OptionType.Debug)
-        public static final OptionValue<String> PrintIdealGraphAddress = new OptionValue<>("127.0.0.1");
-        @Option(help = "", type = OptionType.Debug)
-        public static final OptionValue<Integer> PrintIdealGraphPort = new OptionValue<>(4444);
-        @Option(help = "", type = OptionType.Debug)
-        public static final OptionValue<Integer> PrintBinaryGraphPort = new OptionValue<>(4445);
-        @Option(help = "", type = OptionType.Debug)
-        public static final OptionValue<Boolean> PrintIdealGraphSchedule = new OptionValue<>(false);
         // @formatter:on
     }
 
@@ -163,52 +141,42 @@ public class GraalDebugConfig implements DebugConfig {
         this.output = output;
     }
 
-    @Override
     public int getLogLevel() {
         return getLevel(logFilter);
     }
 
-    @Override
     public boolean isLogEnabledForMethod() {
         return isEnabledForMethod(logFilter);
     }
 
-    @Override
     public boolean isMeterEnabled() {
         return isEnabled(meterFilter);
     }
 
-    @Override
     public boolean isMemUseTrackingEnabled() {
         return isEnabled(trackMemUseFilter);
     }
 
-    @Override
     public int getDumpLevel() {
         return getLevel(dumpFilter);
     }
 
-    @Override
     public boolean isDumpEnabledForMethod() {
         return isEnabledForMethod(dumpFilter);
     }
 
-    @Override
     public boolean isVerifyEnabled() {
         return isEnabled(verifyFilter);
     }
 
-    @Override
     public boolean isVerifyEnabledForMethod() {
         return isEnabledForMethod(verifyFilter);
     }
 
-    @Override
     public boolean isTimeEnabled() {
         return isEnabled(timerFilter);
     }
 
-    @Override
     public PrintStream output() {
         return output;
     }

@@ -36,13 +36,21 @@ import java.util.BitSet;
 import java.util.EnumSet;
 import java.util.List;
 
-import com.oracle.graal.compiler.common.LIRKind;
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterAttributes;
+import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.common.cfg.BlockMap;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.Indent;
 import com.oracle.graal.lir.LIR;
 import com.oracle.graal.lir.LIRInstruction;
@@ -61,18 +69,10 @@ import com.oracle.graal.options.Option;
 import com.oracle.graal.options.OptionType;
 import com.oracle.graal.options.OptionValue;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterAttributes;
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Value;
-
 /**
- * An implementation of the linear scan register allocator algorithm described in
- * <a href="http://doi.acm.org/10.1145/1064979.1064998" >
- * "Optimized Interval Splitting in a Linear Scan Register Allocator"</a> by Christian Wimmer and
+ * An implementation of the linear scan register allocator algorithm described in <a
+ * href="http://doi.acm.org/10.1145/1064979.1064998"
+ * >"Optimized Interval Splitting in a Linear Scan Register Allocator"</a> by Christian Wimmer and
  * Hanspeter Moessenboeck.
  */
 public class LinearScan {
@@ -133,9 +133,7 @@ public class LinearScan {
      */
     private final List<? extends AbstractBlockBase<?>> sortedBlocks;
 
-    /**
-     * @see #intervals()
-     */
+    /** @see #intervals() */
     private Interval[] intervals;
 
     /**
@@ -172,10 +170,6 @@ public class LinearScan {
      * The {@linkplain #operandNumber(Value) number} of the first variable operand allocated.
      */
     private final int firstVariableNumber;
-    /**
-     * Number of variables.
-     */
-    private int numVariables;
     private final boolean neverSpillConstants;
 
     protected LinearScan(TargetDescription target, LIRGenerationResult res, MoveFactory spillMoveFactory, RegisterAllocationConfig regAllocConfig, List<? extends AbstractBlockBase<?>> sortedBlocks,
@@ -189,7 +183,6 @@ public class LinearScan {
 
         this.registers = target.arch.getRegisters();
         this.firstVariableNumber = getRegisters().length;
-        this.numVariables = ir.numVariables();
         this.blockData = new BlockMap<>(ir.getControlFlowGraph());
         this.neverSpillConstants = neverSpillConstants;
     }
@@ -240,7 +233,7 @@ public class LinearScan {
      * Gets the number of operands. This value will increase by 1 for new variable.
      */
     int operandSize() {
-        return firstVariableNumber + numVariables;
+        return firstVariableNumber + ir.numVariables();
     }
 
     /**
@@ -349,11 +342,7 @@ public class LinearScan {
         }
         intervalsSize++;
         assert intervalsSize <= intervals.length;
-        /*
-         * Note that these variables are not managed and must therefore never be inserted into the
-         * LIR
-         */
-        Variable variable = new Variable(source.kind(), numVariables++);
+        Variable variable = new Variable(source.kind(), ir.nextVariable());
 
         Interval interval = createInterval(variable);
         assert intervals[intervalsSize - 1] == interval;
@@ -777,32 +766,32 @@ public class LinearScan {
                 if (i1.operandNumber != i) {
                     Debug.log("Interval %d is on position %d in list", i1.operandNumber, i);
                     Debug.log(i1.logString(this));
-                    throw new GraalError("");
+                    throw new JVMCIError("");
                 }
 
                 if (isVariable(i1.operand) && i1.kind().equals(LIRKind.Illegal)) {
                     Debug.log("Interval %d has no type assigned", i1.operandNumber);
                     Debug.log(i1.logString(this));
-                    throw new GraalError("");
+                    throw new JVMCIError("");
                 }
 
                 if (i1.location() == null) {
                     Debug.log("Interval %d has no register assigned", i1.operandNumber);
                     Debug.log(i1.logString(this));
-                    throw new GraalError("");
+                    throw new JVMCIError("");
                 }
 
                 if (i1.first() == Range.EndMarker) {
                     Debug.log("Interval %d has no Range", i1.operandNumber);
                     Debug.log(i1.logString(this));
-                    throw new GraalError("");
+                    throw new JVMCIError("");
                 }
 
                 for (Range r = i1.first(); r != Range.EndMarker; r = r.next) {
                     if (r.from >= r.to) {
                         Debug.log("Interval %d has zero length range", i1.operandNumber);
                         Debug.log(i1.logString(this));
-                        throw new GraalError("");
+                        throw new JVMCIError("");
                     }
                 }
 

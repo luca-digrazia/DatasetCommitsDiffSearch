@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
-
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -48,7 +46,7 @@ public class SimpleCFGTest extends GraalCompilerTest {
 
     @Test
     public void testImplies() {
-        StructuredGraph graph = new StructuredGraph(AllowAssumptions.YES, INVALID_COMPILATION_ID);
+        StructuredGraph graph = new StructuredGraph(AllowAssumptions.YES);
 
         EndNode trueEnd = graph.add(new EndNode());
         EndNode falseEnd = graph.add(new EndNode());

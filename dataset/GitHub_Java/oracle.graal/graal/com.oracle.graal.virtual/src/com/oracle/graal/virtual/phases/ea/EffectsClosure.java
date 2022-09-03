@@ -26,12 +26,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import jdk.vm.ci.common.JVMCIError;
+
 import com.oracle.graal.compiler.common.CollectionsFactory;
 import com.oracle.graal.compiler.common.cfg.BlockMap;
 import com.oracle.graal.compiler.common.cfg.Loop;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeBitMap;
 import com.oracle.graal.graph.NodeMap;
@@ -90,7 +91,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
     }
 
     @Override
-    public void applyEffects() {
+    public final void applyEffects() {
         final StructuredGraph graph = cfg.graph;
         final ArrayList<Node> obsoleteNodes = new ArrayList<>(0);
         final ArrayList<GraphEffectList> effectList = new ArrayList<>();
@@ -264,7 +265,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
                 }
             }
         }
-        throw new GraalError("too many iterations at %s", loop);
+        throw new JVMCIError("too many iterations at %s", loop);
     }
 
     @SuppressWarnings("unused")

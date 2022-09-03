@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,24 +22,29 @@
  */
 package com.oracle.graal.compiler.test;
 
-import java.util.*;
+import org.junit.Assert;
+import org.junit.Test;
 
-import org.junit.*;
-
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.phases.common.*;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.DebugDumpScope;
+import com.oracle.graal.nodes.ParameterNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.memory.FloatingReadNode;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.FloatingReadPhase;
+import com.oracle.graal.phases.common.LoweringPhase;
+import com.oracle.graal.phases.common.OptimizeGuardAnchorsPhase;
+import com.oracle.graal.phases.tiers.PhaseContext;
 
 /* consider
  *     B b = (B) a;
  *     return b.x10;
  *
- * With snippets a typecheck is performed and if it was successful, a UnsafeCastNode is created.
- * For the read node, however, there is only a dependency to the UnsafeCastNode, but not to the
+ * With snippets a typecheck is performed and if it was successful, a PiNode is created.
+ * For the read node, however, there is only a dependency to the PiNode, but not to the
  * typecheck itself. With special crafting, it's possible to get the scheduler moving the
  * FloatingReadNode before the typecheck. Assuming the object is of the wrong type (here for
  * example A), an invalid field read is done.
@@ -78,53 +83,28 @@ public class ReadAfterCheckCastTest extends GraphScheduleTest {
         test("test1Snippet");
     }
 
+    @SuppressWarnings("try")
     private void test(final String snippet) {
-        Debug.scope("FloatingReadTest", new DebugDumpScope(snippet), new Runnable() {
-
+        try (Scope s = Debug.scope("ReadAfterCheckCastTest", new DebugDumpScope(snippet))) {
             // check shape of graph, with lots of assumptions. will probably fail if graph
             // structure changes significantly
-            public void run() {
-                StructuredGraph graph = parse(snippet);
-                new LoweringPhase(null, runtime(), replacements, new Assumptions(false)).apply(graph);
-                new FloatingReadPhase().apply(graph);
-                new EliminatePartiallyRedundantGuardsPhase(true, false).apply(graph);
-                new ReadEliminationPhase().apply(graph);
-                new CanonicalizerPhase.Instance(runtime(), null).apply(graph);
+            StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
+            PhaseContext context = new PhaseContext(getProviders());
+            CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
+            new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
+            new FloatingReadPhase().apply(graph);
+            new OptimizeGuardAnchorsPhase().apply(graph);
+            canonicalizer.apply(graph, context);
 
-                Debug.dump(graph, "After lowering");
+            Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "After lowering");
 
-                ArrayList<MergeNode> merges = new ArrayList<>();
-                ArrayList<FloatingReadNode> reads = new ArrayList<>();
-                for (Node n : graph.getNodes()) {
-                    if (n instanceof MergeNode) {
-                        // check shape
-                        MergeNode merge = (MergeNode) n;
-
-                        if (merge.inputs().count() == 2) {
-                            for (EndNode m : merge.forwardEnds()) {
-                                if (m.predecessor() != null && m.predecessor() instanceof BeginNode && m.predecessor().predecessor() instanceof IfNode) {
-                                    IfNode o = (IfNode) m.predecessor().predecessor();
-                                    if (o.falseSuccessor().next() instanceof DeoptimizeNode) {
-                                        merges.add(merge);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if (n instanceof IntegerAddNode) {
-                        IntegerAddNode ian = (IntegerAddNode) n;
-
-                        Assert.assertTrue(ian.y() instanceof ConstantNode);
-                        Assert.assertTrue(ian.x() instanceof FloatingReadNode);
-                        reads.add((FloatingReadNode) ian.x());
-                    }
-                }
-
-                Assert.assertTrue(merges.size() >= reads.size());
-                for (int i = 0; i < reads.size(); i++) {
-                    assertOrderedAfterSchedule(graph, merges.get(i), reads.get(i));
-                }
+            for (FloatingReadNode node : graph.getNodes(ParameterNode.TYPE).first().usages().filter(FloatingReadNode.class)) {
+                // Checking that the parameter a is not directly used for the access to field
+                // x10 (because x10 must be guarded by the checkcast).
+                Assert.assertTrue(node.getLocationIdentity().isImmutable());
             }
-        });
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
     }
 }

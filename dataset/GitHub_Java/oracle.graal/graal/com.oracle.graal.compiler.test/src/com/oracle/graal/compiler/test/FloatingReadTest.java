@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,28 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.*;
+import org.junit.Assert;
+import org.junit.Test;
 
-import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.DebugDumpScope;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.nodes.ReturnNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.extended.MonitorExit;
+import com.oracle.graal.nodes.memory.FloatingReadNode;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.FloatingReadPhase;
+import com.oracle.graal.phases.common.LoweringPhase;
+import com.oracle.graal.phases.tiers.PhaseContext;
 
 public class FloatingReadTest extends GraphScheduleTest {
 
     public static class Container {
+
         public int a;
     }
 
@@ -51,32 +61,38 @@ public class FloatingReadTest extends GraphScheduleTest {
         test("test1Snippet");
     }
 
+    @SuppressWarnings("try")
     private void test(final String snippet) {
-        Debug.scope("FloatingReadTest", new DebugDumpScope(snippet), new Runnable() {
-            public void run() {
-                StructuredGraph graph = parse(snippet);
-                new LoweringPhase(runtime(), null).apply(graph);
-                new FloatingReadPhase().apply(graph);
+        try (Scope s = Debug.scope("FloatingReadTest", new DebugDumpScope(snippet))) {
 
-                ReturnNode returnNode = null;
-                MonitorExitNode monitor = null;
+            StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
+            PhaseContext context = new PhaseContext(getProviders());
+            new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
+            new FloatingReadPhase().apply(graph);
 
-                for (Node n : graph.getNodes()) {
-                    if (n instanceof ReturnNode) {
-                        returnNode = (ReturnNode) n;
-                    } else if (n instanceof MonitorExitNode) {
-                        monitor = (MonitorExitNode) n;
-                    }
+            ReturnNode returnNode = null;
+            MonitorExit monitorexit = null;
+
+            for (Node n : graph.getNodes()) {
+                if (n instanceof ReturnNode) {
+                    assert returnNode == null;
+                    returnNode = (ReturnNode) n;
+                } else if (n instanceof MonitorExit) {
+                    monitorexit = (MonitorExit) n;
                 }
-
-                Assert.assertNotNull(returnNode);
-                Assert.assertNotNull(monitor);
-                Assert.assertTrue(returnNode.result() instanceof FloatingReadNode);
-
-                FloatingReadNode read = (FloatingReadNode) returnNode.result();
-
-                assertOrderedAfterSchedule(graph, read, monitor);
             }
-        });
+
+            Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "After lowering");
+
+            Assert.assertNotNull(returnNode);
+            Assert.assertNotNull(monitorexit);
+            Assert.assertTrue(returnNode.result() instanceof FloatingReadNode);
+
+            FloatingReadNode read = (FloatingReadNode) returnNode.result();
+
+            assertOrderedAfterSchedule(graph, read, (Node) monitorexit);
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
     }
 }

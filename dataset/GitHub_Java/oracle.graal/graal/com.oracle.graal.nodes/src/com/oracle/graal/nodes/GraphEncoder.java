@@ -28,6 +28,8 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 
+import jdk.vm.ci.code.Architecture;
+
 import com.oracle.graal.compiler.common.Fields;
 import com.oracle.graal.compiler.common.util.FrequencyEncoder;
 import com.oracle.graal.compiler.common.util.TypeConversion;
@@ -43,8 +45,6 @@ import com.oracle.graal.graph.NodeMap;
 import com.oracle.graal.graph.iterators.NodeIterable;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.java.ExceptionObjectNode;
-
-import jdk.vm.ci.code.Architecture;
 
 /**
  * Encodes a {@link StructuredGraph} to a compact byte[] array. All nodes of the graph and edges
@@ -66,8 +66,8 @@ import jdk.vm.ci.code.Architecture;
  * encoding-local.
  *
  * The encoded graph has the following structure: First, all nodes and their edges are serialized.
- * The start offset of every node is then known. The raw node data is followed by a "table of
- * contents" that lists the start offset for every node.
+ * The start offset of every node is then known. The raw node data is followed by a
+ * "table of contents" that lists the start offset for every node.
  *
  * The beginning of that table of contents is the return value of {@link #encode} and stored in
  * {@link EncodedGraph#getStartOffset()}. The order of nodes in the table of contents is the
@@ -101,8 +101,8 @@ import jdk.vm.ci.code.Architecture;
  * length -1) and empty lists (encoded as length 0). No reverse edges are written (predecessors,
  * usages) since that information can be easily restored during decoding.
  *
- * Some nodes have additional information written after the properties, successors, and inputs:
- * <li><item>{@link AbstractEndNode}: the orderId of the merge node and then all {@link PhiNode phi
+ * Some nodes have additional information written after the properties, successors, and inputs: <li>
+ * <item>{@link AbstractEndNode}: the orderId of the merge node and then all {@link PhiNode phi
  * mappings} from this end to the merge node are written. <item>{@link LoopExitNode}: the orderId of
  * all {@link ProxyNode proxy nodes} of the loop exit is written.</li>
  */
@@ -170,7 +170,7 @@ public class GraphEncoder {
             nodeClasses.addObject(node.getNodeClass());
 
             NodeClass<?> nodeClass = node.getNodeClass();
-            objects.addObject(node.getNodeSourcePosition());
+            objects.addObject(node.getRawNodeContext());
             for (int i = 0; i < nodeClass.getData().getCount(); i++) {
                 if (!nodeClass.getData().getType(i).isPrimitive()) {
                     objects.addObject(nodeClass.getData().get(node, i));
@@ -350,7 +350,7 @@ public class GraphEncoder {
     }
 
     protected void writeProperties(Node node, Fields fields) {
-        writeObjectId(node.getNodeSourcePosition());
+        writeObjectId(node.getRawNodeContext());
         for (int idx = 0; idx < fields.getCount(); idx++) {
             if (fields.getType(idx).isPrimitive()) {
                 long primitive = fields.getRawPrimitive(node, idx);

@@ -27,36 +27,25 @@ import com.oracle.graal.loop.LoopEx;
 import com.oracle.graal.loop.LoopPolicies;
 import com.oracle.graal.loop.LoopsData;
 import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.phases.tiers.PhaseContext;
 
-public class LoopPeelingPhase extends LoopPhase<LoopPolicies> {
+public class LoopPeelingPhase extends ContextlessLoopPhase<LoopPolicies> {
 
     public LoopPeelingPhase(LoopPolicies policies) {
         super(policies);
     }
 
     @Override
-    @SuppressWarnings("try")
-    protected void run(StructuredGraph graph, PhaseContext context) {
+    protected void run(StructuredGraph graph) {
         if (graph.hasLoops()) {
             LoopsData data = new LoopsData(graph);
-            try (Debug.Scope s = Debug.scope("peeling", data.getCFG())) {
-                for (LoopEx loop : data.outerFirst()) {
-                    if (getPolicies().shouldPeel(loop, data.getCFG(), context.getMetaAccess())) {
-                        Debug.log("Peeling %s", loop);
-                        LoopTransformations.peel(loop);
-                        Debug.dump(Debug.INFO_LOG_LEVEL, graph, "Peeling %s", loop);
-                    }
+            for (LoopEx loop : data.outerFirst()) {
+                if (getPolicies().shouldPeel(loop, data.getCFG())) {
+                    Debug.log("Peeling %s", loop);
+                    LoopTransformations.peel(loop);
+                    Debug.dump(Debug.INFO_LOG_LEVEL, graph, "Peeling %s", loop);
                 }
-                data.deleteUnusedNodes();
-            } catch (Throwable t) {
-                throw Debug.handle(t);
             }
+            data.deleteUnusedNodes();
         }
-    }
-
-    @Override
-    public float codeSizeIncrease() {
-        return 5.0f;
     }
 }

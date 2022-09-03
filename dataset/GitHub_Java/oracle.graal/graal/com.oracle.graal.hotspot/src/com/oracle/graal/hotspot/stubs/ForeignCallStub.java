@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,12 +31,12 @@ import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
 import jdk.vm.ci.hotspot.HotSpotSignature;
 import jdk.vm.ci.meta.JavaMethod;
 import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.LocationIdentity;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Signature;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.StampPair;
@@ -132,12 +132,10 @@ public class ForeignCallStub extends Stub {
     }
 
     private class DebugScopeContext implements JavaMethod, JavaMethodContext {
-        @Override
         public JavaMethod asJavaMethod() {
             return this;
         }
 
-        @Override
         public Signature getSignature() {
             ForeignCallDescriptor d = linkage.getDescriptor();
             MetaAccessProvider metaAccess = providers.getMetaAccess();
@@ -149,12 +147,10 @@ public class ForeignCallStub extends Stub {
             return new HotSpotSignature(jvmciRuntime, metaAccess.lookupJavaType(d.getResultType()), parameters);
         }
 
-        @Override
         public String getName() {
             return linkage.getDescriptor().getName();
         }
 
-        @Override
         public JavaType getDeclaringClass() {
             return providers.getMetaAccess().lookupJavaType(ForeignCallStub.class);
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,6 +23,7 @@
 package com.oracle.graal.replacements;
 
 import static com.oracle.graal.compiler.common.GraalOptions.DeoptALot;
+import static com.oracle.graal.compiler.common.GraalOptions.OptCanonicalizer;
 import static com.oracle.graal.compiler.common.GraalOptions.UseSnippetGraphCache;
 import static com.oracle.graal.java.BytecodeParserOptions.InlineDuringParsing;
 import static com.oracle.graal.java.BytecodeParserOptions.InlineIntrinsicsDuringParsing;
@@ -35,18 +36,23 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
 import com.oracle.graal.api.replacements.Fold;
 import com.oracle.graal.api.replacements.MethodSubstitution;
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.api.replacements.SnippetTemplateCache;
 import com.oracle.graal.compiler.common.CollectionsFactory;
 import com.oracle.graal.compiler.common.GraalOptions;
-import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.DebugCloseable;
 import com.oracle.graal.debug.DebugTimer;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.java.GraphBuilderPhase;
@@ -77,12 +83,6 @@ import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
 import com.oracle.graal.phases.tiers.PhaseContext;
 import com.oracle.graal.phases.util.Providers;
 import com.oracle.graal.word.Word;
-
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
 
@@ -134,16 +134,16 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
         }
         if (b.parsingIntrinsic()) {
             if (hasGeneratedInvocationPluginAnnotation(method)) {
-                throw new GraalError("%s should have been handled by a %s", method.format("%H.%n(%p)"), GeneratedInvocationPlugin.class.getSimpleName());
+                throw new JVMCIError("%s should have been handled by a %s", method.format("%H.%n(%p)"), GeneratedInvocationPlugin.class.getSimpleName());
             }
             if (hasGenericInvocationPluginAnnotation(method)) {
-                throw new GraalError("%s should have been handled by %s", method.format("%H.%n(%p)"), WordOperationPlugin.class.getSimpleName());
+                throw new JVMCIError("%s should have been handled by %s", method.format("%H.%n(%p)"), WordOperationPlugin.class.getSimpleName());
             }
 
             assert b.getDepth() < MAX_GRAPH_INLINING_DEPTH : "inlining limit exceeded";
 
             if (method.getName().startsWith("$jacoco")) {
-                throw new GraalError("Found call to JaCoCo instrumentation method " + method.format("%H.%n(%p)") + ". Placing \"//JaCoCo Exclude\" anywhere in " +
+                throw new JVMCIError("Found call to JaCoCo instrumentation method " + method.format("%H.%n(%p)") + ". Placing \"//JaCoCo Exclude\" anywhere in " +
                                 b.getMethod().getDeclaringClass().getSourceFileName() + " should fix this.");
             }
 
@@ -179,7 +179,6 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
 
     private static final DebugTimer SnippetPreparationTime = Debug.timer("SnippetPreparationTime");
 
-    @Override
     public StructuredGraph getSnippet(ResolvedJavaMethod method, Object[] args) {
         return getSnippet(method, null, args);
     }
@@ -194,7 +193,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
         if (graph == null) {
             try (DebugCloseable a = SnippetPreparationTime.start()) {
                 StructuredGraph newGraph = makeGraph(method, args, recursiveEntry);
-                Debug.counter("SnippetNodeCount[%#s]", method).add(newGraph.getNodeCount());
+                Debug.metric("SnippetNodeCount[%#s]", method).add(newGraph.getNodeCount());
                 if (!UseSnippetGraphCache.getValue() || args != null) {
                     return newGraph;
                 }
@@ -210,13 +209,11 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
         // No initialization needed as snippet graphs are created on demand in getSnippet
     }
 
-    @Override
     public boolean hasSubstitution(ResolvedJavaMethod method, int invokeBci) {
         InvocationPlugin plugin = graphBuilderPlugins.getInvocationPlugins().lookupInvocation(method);
         return plugin != null && (!plugin.inlineOnly() || invokeBci >= 0);
     }
 
-    @Override
     public ResolvedJavaMethod getSubstitutionMethod(ResolvedJavaMethod method) {
         InvocationPlugin plugin = graphBuilderPlugins.getInvocationPlugins().lookupInvocation(method);
         if (plugin instanceof MethodSubstitutionPlugin) {
@@ -244,8 +241,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
                 assert graph.isFrozen();
                 result = graph;
             } else {
-                result = new IntrinsicGraphBuilder(providers.getMetaAccess(), providers.getConstantReflection(), providers.getConstantFieldProvider(), providers.getStampProvider(), method,
-                                invokeBci).buildGraph(plugin);
+                result = new IntrinsicGraphBuilder(providers.getMetaAccess(), providers.getConstantReflection(), providers.getStampProvider(), method, invokeBci).buildGraph(plugin);
             }
         } else {
             result = null;
@@ -395,19 +391,21 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
                     initialIntrinsicContext = new IntrinsicContext(original, method, INLINE_AFTER_PARSING);
                 }
 
-                createGraphBuilder(metaAccess, replacements.providers.getStampProvider(), replacements.providers.getConstantReflection(), replacements.providers.getConstantFieldProvider(), config,
-                                OptimisticOptimizations.NONE, initialIntrinsicContext).apply(graph);
+                createGraphBuilder(metaAccess, replacements.providers.getStampProvider(), replacements.providers.getConstantReflection(), config, OptimisticOptimizations.NONE, initialIntrinsicContext).apply(
+                                graph);
 
-                new CanonicalizerPhase().apply(graph, new PhaseContext(replacements.providers));
+                if (OptCanonicalizer.getValue()) {
+                    new CanonicalizerPhase().apply(graph, new PhaseContext(replacements.providers));
+                }
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }
             return graph;
         }
 
-        protected Instance createGraphBuilder(MetaAccessProvider metaAccess, StampProvider stampProvider, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
-                        GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, IntrinsicContext initialIntrinsicContext) {
-            return new GraphBuilderPhase.Instance(metaAccess, stampProvider, constantReflection, constantFieldProvider, graphBuilderConfig, optimisticOpts, initialIntrinsicContext);
+        protected Instance createGraphBuilder(MetaAccessProvider metaAccess, StampProvider stampProvider, ConstantReflectionProvider constantReflection, GraphBuilderConfiguration graphBuilderConfig,
+                        OptimisticOptimizations optimisticOpts, IntrinsicContext initialIntrinsicContext) {
+            return new GraphBuilderPhase.Instance(metaAccess, stampProvider, constantReflection, graphBuilderConfig, optimisticOpts, initialIntrinsicContext);
         }
     }
 

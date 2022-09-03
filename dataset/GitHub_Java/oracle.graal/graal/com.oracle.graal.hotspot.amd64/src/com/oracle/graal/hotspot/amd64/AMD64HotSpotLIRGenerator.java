@@ -30,15 +30,33 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import jdk.vm.ci.amd64.AMD64;
+import jdk.vm.ci.amd64.AMD64Kind;
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.RegisterValue;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
+import jdk.vm.ci.hotspot.HotSpotVMConfig.CompressEncoding;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.PlatformKind;
+import jdk.vm.ci.meta.PrimitiveConstant;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.asm.amd64.AMD64Address.Scale;
 import com.oracle.graal.compiler.amd64.AMD64ArithmeticLIRGenerator;
 import com.oracle.graal.compiler.amd64.AMD64LIRGenerator;
 import com.oracle.graal.compiler.amd64.AMD64MoveFactoryBase.BackupSlotProvider;
-import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
 import com.oracle.graal.compiler.common.spi.LIRKindTool;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.hotspot.HotSpotBackend;
 import com.oracle.graal.hotspot.HotSpotDebugInfoBuilder;
 import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
@@ -64,31 +82,12 @@ import com.oracle.graal.lir.amd64.AMD64ControlFlow.StrategySwitchOp;
 import com.oracle.graal.lir.amd64.AMD64FrameMapBuilder;
 import com.oracle.graal.lir.amd64.AMD64Move;
 import com.oracle.graal.lir.amd64.AMD64Move.MoveFromRegOp;
-import com.oracle.graal.lir.amd64.AMD64PrefetchOp;
 import com.oracle.graal.lir.amd64.AMD64RestoreRegistersOp;
 import com.oracle.graal.lir.amd64.AMD64SaveRegistersOp;
 import com.oracle.graal.lir.amd64.AMD64ZapRegistersOp;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
 import com.oracle.graal.lir.framemap.FrameMapBuilder;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
-
-import jdk.vm.ci.amd64.AMD64;
-import jdk.vm.ci.amd64.AMD64Kind;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.hotspot.HotSpotVMConfig.CompressEncoding;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.PlatformKind;
-import jdk.vm.ci.meta.PrimitiveConstant;
-import jdk.vm.ci.meta.Value;
 
 /**
  * LIR generator specialized for AMD64 HotSpot.
@@ -237,7 +236,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
                 return r;
             }
         }
-        throw GraalError.shouldNotReachHere();
+        throw JVMCIError.shouldNotReachHere();
     }
 
     private Register pollOnReturnScratchRegister;
@@ -246,7 +245,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     public void emitReturn(JavaKind kind, Value input) {
         AllocatableValue operand = Value.ILLEGAL;
         if (input != null) {
-            operand = resultOperandFor(kind, input.getValueKind());
+            operand = resultOperandFor(kind, input.getLIRKind());
             emitMove(operand, input);
         }
         if (pollOnReturnScratchRegister == null) {
@@ -269,19 +268,16 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         super.emitForeignCallOp(linkage, result, arguments, temps, info);
     }
 
-    @Override
     public void emitLeaveCurrentStackFrame(SaveRegistersOp saveRegisterOp) {
         append(new AMD64HotSpotLeaveCurrentStackFrameOp(saveRegisterOp));
     }
 
-    @Override
     public void emitLeaveDeoptimizedStackFrame(Value frameSize, Value initialInfo) {
         Variable frameSizeVariable = load(frameSize);
         Variable initialInfoVariable = load(initialInfo);
         append(new AMD64HotSpotLeaveDeoptimizedStackFrameOp(frameSizeVariable, initialInfoVariable));
     }
 
-    @Override
     public void emitEnterUnpackFramesStackFrame(Value framePc, Value senderSp, Value senderFp, SaveRegistersOp saveRegisterOp) {
         Register threadRegister = getProviders().getRegisters().getThreadRegister();
         Variable framePcVariable = load(framePc);
@@ -291,7 +287,6 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
                         senderSpVariable, senderFpVariable, saveRegisterOp));
     }
 
-    @Override
     public void emitLeaveUnpackFramesStackFrame(SaveRegistersOp saveRegisterOp) {
         Register threadRegister = getProviders().getRegisters().getThreadRegister();
         append(new AMD64HotSpotLeaveUnpackFramesStackFrameOp(threadRegister, config.threadLastJavaSpOffset(), config.threadLastJavaPcOffset(), config.threadLastJavaFpOffset(), saveRegisterOp));
@@ -500,7 +495,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         LIRKind wordKind = LIRKind.value(target().arch.getWordKind());
         RegisterValue thread = getProviders().getRegisters().getThreadRegister().asValue(wordKind);
         AMD64AddressValue address = new AMD64AddressValue(wordKind, thread, offset);
-        arithmeticLIRGen.emitStore(v.getValueKind(), address, v, null);
+        arithmeticLIRGen.emitStore(v.getLIRKind(), address, v, null);
     }
 
     @Override
@@ -542,7 +537,6 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         }
     }
 
-    @Override
     public void emitPushInterpreterFrame(Value frameSize, Value framePc, Value senderSp, Value initialInfo) {
         Variable frameSizeVariable = load(frameSize);
         Variable framePcVariable = load(framePc);
@@ -553,7 +547,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
     @Override
     public Value emitCompress(Value pointer, CompressEncoding encoding, boolean nonNull) {
-        LIRKind inputKind = pointer.getValueKind(LIRKind.class);
+        LIRKind inputKind = pointer.getLIRKind();
         assert inputKind.getPlatformKind() == AMD64Kind.QWORD;
         if (inputKind.isReference(0)) {
             // oop
@@ -574,7 +568,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
     @Override
     public Value emitUncompress(Value pointer, CompressEncoding encoding, boolean nonNull) {
-        LIRKind inputKind = pointer.getValueKind(LIRKind.class);
+        LIRKind inputKind = pointer.getLIRKind();
         assert inputKind.getPlatformKind() == AMD64Kind.DWORD;
         if (inputKind.isReference(0)) {
             // oop
@@ -595,7 +589,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
     @Override
     public void emitNullCheck(Value address, LIRFrameState state) {
-        if (address.getValueKind().getPlatformKind() == AMD64Kind.DWORD) {
+        if (address.getLIRKind().getPlatformKind() == AMD64Kind.DWORD) {
             CompressEncoding encoding = config.getOopEncoding();
             Value uncompressed;
             if (encoding.shift <= 3) {
@@ -615,7 +609,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         if (BenchmarkCounters.enabled) {
             return new AMD64HotSpotCounterOp(name, group, increment, getProviders().getRegisters(), config, getOrInitRescueSlot());
         }
-        throw GraalError.shouldNotReachHere("BenchmarkCounters are not enabled!");
+        throw JVMCIError.shouldNotReachHere("BenchmarkCounters are not enabled!");
     }
 
     @Override
@@ -623,7 +617,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         if (BenchmarkCounters.enabled) {
             return new AMD64HotSpotCounterOp(names, groups, increments, getProviders().getRegisters(), config, getOrInitRescueSlot());
         }
-        throw GraalError.shouldNotReachHere("BenchmarkCounters are not enabled!");
+        throw JVMCIError.shouldNotReachHere("BenchmarkCounters are not enabled!");
     }
 
     @Override

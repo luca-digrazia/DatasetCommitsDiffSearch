@@ -27,33 +27,19 @@ import java.util.regex.Pattern;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.DebugCloseable;
-import com.oracle.graal.debug.DebugCounter;
 import com.oracle.graal.debug.DebugMemUseTracker;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.debug.DebugTimer;
 import com.oracle.graal.debug.Fingerprint;
 import com.oracle.graal.graph.Graph;
 import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionType;
-import com.oracle.graal.options.OptionValue;
-import com.oracle.graal.options.StableOptionValue;
-import com.oracle.graal.phases.contract.NodeCostUtil;
-import com.oracle.graal.phases.contract.PhaseSizeContract;
-import com.oracle.graal.phases.tiers.PhaseContext;
 
 /**
  * Base class for all compiler phases. Subclasses should be stateless. There will be one global
  * instance for each compiler phase that is shared for all compilations. VM-, target- and
  * compilation-specific data can be passed with a context object.
  */
-public abstract class BasePhase<C> implements PhaseSizeContract {
-
-    public static class PhaseOptions {
-        // @formatter:off
-        @Option(help = "Verify before - after relation of the relative, computed, code size of a graph", type = OptionType.Debug)
-        public static final OptionValue<Boolean> VerifyGraalPhasesSize = new StableOptionValue<>(false);
-        // @formatter:on
-    }
+public abstract class BasePhase<C> {
 
     private CharSequence name;
 
@@ -65,13 +51,13 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
     /**
      * Counts calls to {@link #apply(StructuredGraph, Object, boolean)}.
      */
-    private final DebugCounter executionCount;
+    private final DebugMetric executionCount;
 
     /**
      * Accumulates the {@linkplain Graph#getNodeCount() live node count} of all graphs sent to
      * {@link #apply(StructuredGraph, Object, boolean)}.
      */
-    private final DebugCounter inputNodesCount;
+    private final DebugMetric inputNodesCount;
 
     /**
      * Records memory usage within {@link #apply(StructuredGraph, Object, boolean)}.
@@ -97,13 +83,13 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
         /**
          * Counts calls to {@link #apply(StructuredGraph, Object, boolean)}.
          */
-        private final DebugCounter executionCount;
+        private final DebugMetric executionCount;
 
         /**
          * Accumulates the {@linkplain Graph#getNodeCount() live node count} of all graphs sent to
          * {@link #apply(StructuredGraph, Object, boolean)}.
          */
-        private final DebugCounter inputNodesCount;
+        private final DebugMetric inputNodesCount;
 
         /**
          * Records memory usage within {@link #apply(StructuredGraph, Object, boolean)}.
@@ -112,9 +98,9 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
 
         BasePhaseStatistics(Class<?> clazz) {
             timer = Debug.timer("PhaseTime_%s", clazz);
-            executionCount = Debug.counter("PhaseCount_%s", clazz);
+            executionCount = Debug.metric("PhaseCount_%s", clazz);
             memUseTracker = Debug.memUseTracker("PhaseMemUse_%s", clazz);
-            inputNodesCount = Debug.counter("PhaseNodes_%s", clazz);
+            inputNodesCount = Debug.metric("PhaseNodes_%s", clazz);
         }
     }
 
@@ -150,24 +136,12 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
     @SuppressWarnings("try")
     protected final void apply(final StructuredGraph graph, final C context, final boolean dumpGraph) {
         try (DebugCloseable a = timer.start(); Scope s = Debug.scope(getClass(), this); DebugCloseable c = memUseTracker.start()) {
-            double sizeBefore = 0.0D;
-            if (PhaseOptions.VerifyGraalPhasesSize.getValue() && checkContract()) {
-                if (context instanceof PhaseContext) {
-                    sizeBefore = NodeCostUtil.computeGraphSize(graph, ((PhaseContext) context).getNodeCostProvider());
-                }
-            }
             if (dumpGraph && Debug.isDumpEnabled(Debug.VERBOSE_LOG_LEVEL)) {
                 Debug.dump(Debug.VERBOSE_LOG_LEVEL, graph, "Before phase %s", getName());
             }
             inputNodesCount.add(graph.getNodeCount());
             this.run(graph, context);
             executionCount.increment();
-            if (PhaseOptions.VerifyGraalPhasesSize.getValue() && checkContract()) {
-                if (context instanceof PhaseContext) {
-                    double sizeAfter = NodeCostUtil.computeGraphSize(graph, ((PhaseContext) context).getNodeCostProvider());
-                    NodeCostUtil.phaseAdheresSizeContract(graph, sizeBefore, sizeAfter, this, getName().toString());
-                }
-            }
             if (dumpGraph && Debug.isDumpEnabled(Debug.BASIC_LOG_LEVEL)) {
                 Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "%s", getName());
             }
@@ -201,10 +175,4 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
     }
 
     protected abstract void run(StructuredGraph graph, C context);
-
-    @Override
-    public float codeSizeIncrease() {
-        return 1.25f;
-    }
-
 }

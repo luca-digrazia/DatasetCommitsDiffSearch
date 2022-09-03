@@ -22,15 +22,20 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.*;
+import org.junit.Assert;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.nodes.ProxyNode;
+import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.schedule.*;
-import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.ConvertDeoptimizeToGuardPhase;
+import com.oracle.graal.phases.common.DominatorConditionalEliminationPhase;
+import com.oracle.graal.phases.common.IterativeConditionalEliminationPhase;
+import com.oracle.graal.phases.common.LoweringPhase;
+import com.oracle.graal.phases.schedule.SchedulePhase;
+import com.oracle.graal.phases.tiers.PhaseContext;
 
 /**
  * Collection of tests for
@@ -39,20 +44,58 @@ import com.oracle.graal.phases.tiers.*;
  */
 public class ConditionalEliminationTestBase extends GraalCompilerTest {
 
-    protected void test(String snippet, String referenceSnippet) {
+    private final boolean disableSimplification;
+
+    protected ConditionalEliminationTestBase() {
+        disableSimplification = true;
+    }
+
+    protected ConditionalEliminationTestBase(boolean disableSimplification) {
+        this.disableSimplification = disableSimplification;
+    }
+
+    protected void testConditionalElimination(String snippet, String referenceSnippet) {
+        testConditionalElimination(snippet, referenceSnippet, false);
+    }
+
+    @SuppressWarnings("try")
+    protected void testConditionalElimination(String snippet, String referenceSnippet, boolean applyConditionalEliminationOnReference) {
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
-        Debug.dump(graph, "Graph");
+        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
         PhaseContext context = new PhaseContext(getProviders());
         CanonicalizerPhase canonicalizer1 = new CanonicalizerPhase();
-        canonicalizer1.disableSimplification();
-        canonicalizer1.apply(graph, context);
-        new ConvertDeoptimizeToGuardPhase().apply(graph, context);
+        if (disableSimplification) {
+            /**
+             * Some tests break if simplification is done so only do it when needed.
+             */
+            canonicalizer1.disableSimplification();
+        }
         CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
-        new DominatorConditionalEliminationPhase(true).apply(graph, context);
-        canonicalizer.apply(graph, context);
-        canonicalizer.apply(graph, context);
+        try (Debug.Scope scope = Debug.scope("ConditionalEliminationTest", graph)) {
+            canonicalizer1.apply(graph, context);
+            new ConvertDeoptimizeToGuardPhase().apply(graph, context);
+            // new DominatorConditionalEliminationPhase(true).apply(graph, context);
+            new IterativeConditionalEliminationPhase(canonicalizer, true).apply(graph, context);
+            canonicalizer.apply(graph, context);
+            canonicalizer.apply(graph, context);
+            new ConvertDeoptimizeToGuardPhase().apply(graph, context);
+        } catch (Throwable t) {
+            Debug.handle(t);
+        }
         StructuredGraph referenceGraph = parseEager(referenceSnippet, AllowAssumptions.YES);
-        canonicalizer.apply(referenceGraph, context);
+        try (Debug.Scope scope = Debug.scope("ConditionalEliminationTest.ReferenceGraph", referenceGraph)) {
+
+            new ConvertDeoptimizeToGuardPhase().apply(referenceGraph, context);
+            if (applyConditionalEliminationOnReference) {
+                new DominatorConditionalEliminationPhase(true).apply(referenceGraph, context);
+                canonicalizer.apply(referenceGraph, context);
+                canonicalizer.apply(referenceGraph, context);
+            } else {
+                canonicalizer.apply(referenceGraph, context);
+            }
+        } catch (Throwable t) {
+            Debug.handle(t);
+        }
         assertEquals(referenceGraph, graph);
     }
 

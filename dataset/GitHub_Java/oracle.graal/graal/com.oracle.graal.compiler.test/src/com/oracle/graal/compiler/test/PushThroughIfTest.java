@@ -22,14 +22,15 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.*;
+import org.junit.Test;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.tiers.PhaseContext;
 
 public class PushThroughIfTest extends GraalCompilerTest {
 
@@ -57,21 +58,21 @@ public class PushThroughIfTest extends GraalCompilerTest {
     }
 
     private void test(String snippet, String reference) {
-        StructuredGraph graph = parse(snippet);
-        Debug.dump(graph, "Graph");
-        for (FrameState fs : graph.getNodes(FrameState.class).snapshot()) {
+        StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
+        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+        for (FrameState fs : graph.getNodes(FrameState.TYPE).snapshot()) {
             fs.replaceAtUsages(null);
             GraphUtil.killWithUnusedFloatingInputs(fs);
         }
-        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), new Assumptions(false)));
-        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), new Assumptions(false)));
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
 
-        StructuredGraph referenceGraph = parse(reference);
-        for (FrameState fs : referenceGraph.getNodes(FrameState.class).snapshot()) {
+        StructuredGraph referenceGraph = parseEager(reference, AllowAssumptions.YES);
+        for (FrameState fs : referenceGraph.getNodes(FrameState.TYPE).snapshot()) {
             fs.replaceAtUsages(null);
             GraphUtil.killWithUnusedFloatingInputs(fs);
         }
-        new CanonicalizerPhase(true).apply(referenceGraph, new PhaseContext(getProviders(), new Assumptions(false)));
+        new CanonicalizerPhase().apply(referenceGraph, new PhaseContext(getProviders()));
         assertEquals(referenceGraph, graph);
     }
 }

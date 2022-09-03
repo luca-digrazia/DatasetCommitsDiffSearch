@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,10 +23,10 @@
 package com.oracle.graal.replacements;
 
 import static com.oracle.graal.compiler.common.GraalOptions.UseGraalInstrumentation;
-import static com.oracle.graal.compiler.common.LocationIdentity.any;
 import static com.oracle.graal.debug.Debug.applyFormattingFlagsAndWidth;
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.Required;
 import static java.util.FormattableFlags.ALTERNATE;
+import static jdk.vm.ci.meta.LocationIdentity.any;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.Method;
@@ -52,6 +52,7 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.Local;
 import jdk.vm.ci.meta.LocalVariableTable;
+import jdk.vm.ci.meta.LocationIdentity;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -59,7 +60,6 @@ import jdk.vm.ci.meta.Signature;
 
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.compiler.common.GraalOptions;
-import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.StampPair;
@@ -67,11 +67,12 @@ import com.oracle.graal.compiler.common.type.TypeReference;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.DebugCloseable;
-import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.debug.DebugTimer;
 import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.NodePosIterator;
 import com.oracle.graal.graph.Position;
 import com.oracle.graal.loop.LoopEx;
 import com.oracle.graal.loop.LoopsData;
@@ -211,14 +212,14 @@ public class SnippetTemplate {
          *
          * @see SnippetTemplate#instantiationCounter
          */
-        private final DebugCounter instantiationCounter;
+        private final DebugMetric instantiationCounter;
 
         protected abstract Lazy lazy();
 
         protected SnippetInfo(ResolvedJavaMethod method, LocationIdentity[] privateLocations) {
             this.method = method;
             this.privateLocations = SnippetCounterNode.addSnippetCounters(privateLocations);
-            instantiationCounter = Debug.counter("SnippetInstantiationCount[%s]", method.getName());
+            instantiationCounter = Debug.metric("SnippetInstantiationCount[%s]", method.getName());
             instantiationTimer = Debug.timer("SnippetInstantiationTime[%s]", method.getName());
             assert method.isStatic() : "snippet method must be static: " + method.format("%H.%n");
         }
@@ -386,7 +387,6 @@ public class SnippetTemplate {
             return result.toString();
         }
 
-        @Override
         public void formatTo(Formatter formatter, int flags, int width, int precision) {
             if ((flags & ALTERNATE) == 0) {
                 formatter.format(applyFormattingFlagsAndWidth(toString(), flags, width));
@@ -482,7 +482,6 @@ public class SnippetTemplate {
             this.varargs = varargs;
         }
 
-        @Override
         public ValueNode length() {
             return ConstantNode.forInt(varargs.length);
         }
@@ -536,7 +535,7 @@ public class SnippetTemplate {
     }
 
     private static final DebugTimer SnippetTemplateCreationTime = Debug.timer("SnippetTemplateCreationTime");
-    private static final DebugCounter SnippetTemplates = Debug.counter("SnippetTemplateCount");
+    private static final DebugMetric SnippetTemplates = Debug.metric("SnippetTemplateCount");
 
     static class Options {
         @Option(help = "Use a LRU cache for snippet templates.")//
@@ -662,7 +661,7 @@ public class SnippetTemplate {
         Object[] constantArgs = getConstantArgs(args);
         StructuredGraph snippetGraph = providers.getReplacements().getSnippet(args.info.method, args.info.original, constantArgs);
         instantiationTimer = Debug.timer("SnippetTemplateInstantiationTime[%#s]", args);
-        instantiationCounter = Debug.counter("SnippetTemplateInstantiationCount[%#s]", args);
+        instantiationCounter = Debug.metric("SnippetTemplateInstantiationCount[%#s]", args);
 
         ResolvedJavaMethod method = snippetGraph.method();
         Signature signature = method.getSignature();
@@ -730,7 +729,7 @@ public class SnippetTemplate {
                         assert parameterCount < 10000;
                         int idx = (i + 1) * 10000 + j;
                         assert idx >= parameterCount : "collision in parameter numbering";
-                        ParameterNode local = snippetCopy.addOrUnique(new ParameterNode(idx, StampPair.createSingle(stamp)));
+                        ParameterNode local = snippetCopy.unique(new ParameterNode(idx, StampPair.createSingle(stamp)));
                         params[j] = local;
                     }
                     parameters[i] = params;
@@ -875,7 +874,7 @@ public class SnippetTemplate {
                 }
             }
 
-            Debug.counter("SnippetTemplateNodeCount[%#s]", args).add(nodes.size());
+            Debug.metric("SnippetTemplateNodeCount[%#s]", args).add(nodes.size());
             Debug.dump(Debug.INFO_LOG_LEVEL, snippet, "SnippetTemplate final state");
 
         } catch (Throwable ex) {
@@ -984,7 +983,7 @@ public class SnippetTemplate {
      *
      * @see SnippetInfo#instantiationCounter
      */
-    private final DebugCounter instantiationCounter;
+    private final DebugMetric instantiationCounter;
 
     /**
      * Gets the instantiation-time bindings to this template's parameters.
@@ -1245,7 +1244,9 @@ public class SnippetTemplate {
 
             LocationIdentity location = getLocationIdentity(usage);
             if (location != null) {
-                for (Position pos : usage.inputPositions()) {
+                NodePosIterator iter = usage.inputs().iterator();
+                while (iter.hasNext()) {
+                    Position pos = iter.nextPosition();
                     if (pos.getInputType() == InputType.Memory && pos.get(usage) == node) {
                         MemoryNode replacement = map.getLastLocationAccess(location);
                         if (replacement == null) {

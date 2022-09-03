@@ -149,7 +149,7 @@ public class PartialEvaluator {
     }
 
     @SuppressWarnings("try")
-    public StructuredGraph createGraph(final OptimizedCallTarget callTarget, TruffleInlining inliningDecision, AllowAssumptions allowAssumptions) {
+    public StructuredGraph createGraph(final OptimizedCallTarget callTarget, AllowAssumptions allowAssumptions) {
         try (Scope c = Debug.scope("TruffleTree")) {
             Debug.dump(Debug.INFO_LOG_LEVEL, callTarget, "%s", callTarget);
         } catch (Throwable e) {
@@ -164,7 +164,7 @@ public class PartialEvaluator {
             PhaseContext baseContext = new PhaseContext(providers);
             HighTierContext tierContext = new HighTierContext(providers, new PhaseSuite<HighTierContext>(), OptimisticOptimizations.NONE);
 
-            fastPartialEvaluation(callTarget, inliningDecision, graph, baseContext, tierContext);
+            fastPartialEvaluation(callTarget, graph, baseContext, tierContext);
 
             if (Thread.currentThread().isInterrupted()) {
                 return null;
@@ -188,7 +188,6 @@ public class PartialEvaluator {
             this.receiver = receiver;
         }
 
-        @Override
         public FloatingNode interceptParameter(GraphBuilderContext b, int index, StampPair stamp) {
             if (index == 0) {
                 return ConstantNode.forConstant(snippetReflection.forObject(receiver), providers.getMetaAccess());
@@ -309,12 +308,10 @@ public class PartialEvaluator {
 
     private class PELoopExplosionPlugin implements LoopExplosionPlugin {
 
-        @Override
         public boolean shouldExplodeLoops(ResolvedJavaMethod method) {
             return method.getAnnotation(ExplodeLoop.class) != null;
         }
 
-        @Override
         public boolean shouldMergeExplosions(ResolvedJavaMethod method) {
             ExplodeLoop explodeLoop = method.getAnnotation(ExplodeLoop.class);
             if (explodeLoop != null) {
@@ -352,7 +349,8 @@ public class PartialEvaluator {
         };
     }
 
-    protected void doGraphPE(OptimizedCallTarget callTarget, StructuredGraph graph, HighTierContext tierContext, TruffleInlining inliningDecision) {
+    protected void doGraphPE(OptimizedCallTarget callTarget, StructuredGraph graph, HighTierContext tierContext) {
+        callTarget.setInlining(new TruffleInlining(callTarget, new DefaultInliningPolicy()));
 
         PEGraphDecoder decoder = createGraphDecoder(graph, tierContext);
 
@@ -361,7 +359,7 @@ public class PartialEvaluator {
 
         ReplacementsImpl replacements = (ReplacementsImpl) providers.getReplacements();
         InlineInvokePlugin[] inlineInvokePlugins;
-        InlineInvokePlugin inlineInvokePlugin = new PEInlineInvokePlugin(inliningDecision, replacements);
+        InlineInvokePlugin inlineInvokePlugin = new PEInlineInvokePlugin(callTarget.getInlining(), replacements);
 
         HistogramInlineInvokePlugin histogramPlugin = null;
         if (PrintTruffleExpansionHistogram.getValue()) {
@@ -403,8 +401,8 @@ public class PartialEvaluator {
     }
 
     @SuppressWarnings({"try", "unused"})
-    private void fastPartialEvaluation(OptimizedCallTarget callTarget, TruffleInlining inliningDecision, StructuredGraph graph, PhaseContext baseContext, HighTierContext tierContext) {
-        doGraphPE(callTarget, graph, tierContext, inliningDecision);
+    private void fastPartialEvaluation(OptimizedCallTarget callTarget, StructuredGraph graph, PhaseContext baseContext, HighTierContext tierContext) {
+        doGraphPE(callTarget, graph, tierContext);
         Debug.dump(Debug.INFO_LOG_LEVEL, graph, "After FastPE");
 
         graph.maybeCompress();

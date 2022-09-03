@@ -236,21 +236,19 @@ public class InliningTest extends GraalCompilerTest {
 
     @SuppressWarnings("try")
     private StructuredGraph getGraph(final String snippet, final boolean eagerInfopointMode) {
-        try (Scope s = Debug.scope("InliningTest", new DebugDumpScope(snippet, true))) {
+        try (Scope s = Debug.scope("InliningTest", new DebugDumpScope(snippet))) {
             ResolvedJavaMethod method = getResolvedJavaMethod(snippet);
             StructuredGraph graph = eagerInfopointMode ? parseDebug(method, AllowAssumptions.YES) : parseEager(method, AllowAssumptions.YES);
-            try (Scope s2 = Debug.scope("Inlining", graph)) {
-                PhaseSuite<HighTierContext> graphBuilderSuite = eagerInfopointMode ? getCustomGraphBuilderSuite(GraphBuilderConfiguration.getFullDebugDefault(getDefaultGraphBuilderPlugins()))
-                                : getDefaultGraphBuilderSuite();
-                HighTierContext context = new HighTierContext(getProviders(), graphBuilderSuite, OptimisticOptimizations.ALL);
-                Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
-                new CanonicalizerPhase().apply(graph, context);
-                new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
-                Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
-                new CanonicalizerPhase().apply(graph, context);
-                new DeadCodeEliminationPhase().apply(graph);
-                return graph;
-            }
+            PhaseSuite<HighTierContext> graphBuilderSuite = eagerInfopointMode ? getCustomGraphBuilderSuite(GraphBuilderConfiguration.getFullDebugDefault(getDefaultGraphBuilderPlugins()))
+                            : getDefaultGraphBuilderSuite();
+            HighTierContext context = new HighTierContext(getProviders(), graphBuilderSuite, OptimisticOptimizations.ALL);
+            Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+            new CanonicalizerPhase().apply(graph, context);
+            new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
+            Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+            new CanonicalizerPhase().apply(graph, context);
+            new DeadCodeEliminationPhase().apply(graph);
+            return graph;
         } catch (Throwable e) {
             throw Debug.handle(e);
         }

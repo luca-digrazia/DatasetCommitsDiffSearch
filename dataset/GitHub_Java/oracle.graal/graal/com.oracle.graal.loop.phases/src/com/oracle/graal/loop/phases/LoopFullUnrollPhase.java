@@ -22,24 +22,18 @@
  */
 package com.oracle.graal.loop.phases;
 
-import java.util.LinkedList;
-import java.util.List;
-
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugCounter;
-import com.oracle.graal.graph.Node;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.loop.LoopEx;
 import com.oracle.graal.loop.LoopPolicies;
 import com.oracle.graal.loop.LoopsData;
 import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.calc.IntegerEqualsNode;
-import com.oracle.graal.nodes.calc.IntegerLessThanNode;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
 import com.oracle.graal.phases.tiers.PhaseContext;
 
 public class LoopFullUnrollPhase extends LoopPhase<LoopPolicies> {
 
-    private static final DebugCounter FULLY_UNROLLED_LOOPS = Debug.counter("FullUnrolls");
+    private static final DebugMetric FULLY_UNROLLED_LOOPS = Debug.metric("FullUnrolls");
     private final CanonicalizerPhase canonicalizer;
 
     public LoopFullUnrollPhase(CanonicalizerPhase canonicalizer, LoopPolicies policies) {
@@ -51,17 +45,12 @@ public class LoopFullUnrollPhase extends LoopPhase<LoopPolicies> {
     protected void run(StructuredGraph graph, PhaseContext context) {
         if (graph.hasLoops()) {
             boolean peeled;
-            boolean intergerComparesCleaned = false;
             do {
                 peeled = false;
                 final LoopsData dataCounted = new LoopsData(graph);
                 dataCounted.detectedCountedLoops();
                 for (LoopEx loop : dataCounted.countedLoops()) {
                     if (getPolicies().shouldFullUnroll(loop)) {
-                        if (!intergerComparesCleaned) {
-                            cleanupIntegerCompares(graph, context);
-                            intergerComparesCleaned = true;
-                        }
                         Debug.log("FullUnroll %s", loop);
                         LoopTransformations.fullUnroll(loop, context, canonicalizer);
                         FULLY_UNROLLED_LOOPS.increment();
@@ -72,19 +61,6 @@ public class LoopFullUnrollPhase extends LoopPhase<LoopPolicies> {
                 }
                 dataCounted.deleteUnusedNodes();
             } while (peeled);
-        }
-    }
-
-    private void cleanupIntegerCompares(StructuredGraph graph, PhaseContext context) {
-        List<Node> integerCompares = new LinkedList<>();
-        for (Node n : graph.getNodes(IntegerEqualsNode.TYPE)) {
-            integerCompares.add(n);
-        }
-        for (Node n : graph.getNodes(IntegerLessThanNode.TYPE)) {
-            integerCompares.add(n);
-        }
-        if (!integerCompares.isEmpty()) {
-            canonicalizer.applyIncremental(graph, context, integerCompares);
         }
     }
 }

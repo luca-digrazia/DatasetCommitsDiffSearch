@@ -22,24 +22,35 @@
  */
 package com.oracle.graal.compiler.test;
 
-import java.util.*;
+import java.util.List;
 
-import org.junit.*;
+import org.junit.Test;
 
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.compiler.common.cfg.BlockMap;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeMap;
+import com.oracle.graal.nodes.BeginNode;
 import com.oracle.graal.nodes.DeoptimizingNode.DeoptDuring;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.ReturnNode;
+import com.oracle.graal.nodes.StateSplit;
+import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.schedule.*;
+import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
+import com.oracle.graal.nodes.calc.AddNode;
+import com.oracle.graal.nodes.calc.BinaryArithmeticNode;
+import com.oracle.graal.nodes.cfg.Block;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.phases.OptimisticOptimizations;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.FrameStateAssignmentPhase;
+import com.oracle.graal.phases.common.GuardLoweringPhase;
+import com.oracle.graal.phases.common.LoweringPhase;
+import com.oracle.graal.phases.schedule.SchedulePhase;
 import com.oracle.graal.phases.schedule.SchedulePhase.SchedulingStrategy;
-import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.phases.tiers.MidTierContext;
+import com.oracle.graal.phases.tiers.PhaseContext;
 
 public class SchedulingTest2 extends GraphScheduleTest {
 
@@ -58,15 +69,16 @@ public class SchedulingTest2 extends GraphScheduleTest {
         BeginNode beginNode = graph.add(new BeginNode());
         returnNode.replaceAtPredecessor(beginNode);
         beginNode.setNext(returnNode);
-        Debug.dump(graph, "Graph");
-        SchedulePhase schedule = new SchedulePhase(SchedulingStrategy.EARLIEST);
-        schedule.apply(graph);
+        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+        SchedulePhase schedulePhase = new SchedulePhase(SchedulingStrategy.EARLIEST);
+        schedulePhase.apply(graph);
+        ScheduleResult schedule = graph.getLastSchedule();
         BlockMap<List<Node>> blockToNodesMap = schedule.getBlockToNodesMap();
         NodeMap<Block> nodeToBlock = schedule.getNodeToBlockMap();
-        assertDeepEquals(2, schedule.getCFG().getBlocks().size());
+        assertDeepEquals(2, schedule.getCFG().getBlocks().length);
         for (BinaryArithmeticNode<?> node : graph.getNodes().filter(BinaryArithmeticNode.class)) {
             if (node instanceof AddNode) {
-                assertTrue(node.toString() + " expected: " + nodeToBlock.get(beginNode) + " but was: " + nodeToBlock.get(node), nodeToBlock.get(node) == nodeToBlock.get(beginNode));
+                assertTrue(node.toString() + " expected: " + nodeToBlock.get(beginNode) + " but was: " + nodeToBlock.get(node), nodeToBlock.get(node) != nodeToBlock.get(beginNode));
             }
         }
 
@@ -87,14 +99,14 @@ public class SchedulingTest2 extends GraphScheduleTest {
         PhaseContext context = new PhaseContext(getProviders());
         new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
         new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.MID_TIER).apply(graph, context);
-        MidTierContext midContext = new MidTierContext(getProviders(), getCodeCache().getTarget(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo(), null);
+        MidTierContext midContext = new MidTierContext(getProviders(), getTargetProvider(), OptimisticOptimizations.ALL, graph.getProfilingInfo());
 
         new GuardLoweringPhase().apply(graph, midContext);
         FrameStateAssignmentPhase phase = new FrameStateAssignmentPhase();
         phase.apply(graph);
 
-        schedule = new SchedulePhase(SchedulingStrategy.EARLIEST);
-        schedule.apply(graph);
+        schedulePhase.apply(graph);
+        schedule = graph.getLastSchedule();
         blockToNodesMap = schedule.getBlockToNodesMap();
         nodeToBlock = schedule.getNodeToBlockMap();
         for (FrameState fs : graph.getNodes(FrameState.TYPE)) {

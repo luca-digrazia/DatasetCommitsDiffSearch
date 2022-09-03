@@ -28,6 +28,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 import com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph;
@@ -41,7 +42,7 @@ import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.TypeReference;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeMap;
 import com.oracle.graal.nodeinfo.InputType;
@@ -86,8 +87,8 @@ import jdk.vm.ci.meta.TriState;
 
 public class DominatorConditionalEliminationPhase extends Phase {
 
-    private static final DebugCounter counterStampsRegistered = Debug.counter("StampsRegistered");
-    private static final DebugCounter counterStampsFound = Debug.counter("StampsFound");
+    private static final DebugMetric metricStampsRegistered = Debug.metric("StampsRegistered");
+    private static final DebugMetric metricStampsFound = Debug.metric("StampsFound");
     private final boolean fullSchedule;
 
     public DominatorConditionalEliminationPhase(boolean fullSchedule) {
@@ -444,7 +445,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
                          * limit it to the original node and constants.
                          */
                         InputFilter v = new InputFilter(original);
-                        thisGuard.getCondition().applyInputs(v);
+                        thisGuard.getCondition().acceptInputs(v);
                         if (v.ok && foldGuard(thisGuard, pending.guard, rewireGuardFunction)) {
                             return true;
                         }
@@ -489,7 +490,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
 
             protected boolean rewireGuards(ValueNode guard, boolean result, GuardRewirer rewireGuardFunction) {
                 assert guard instanceof GuardingNode;
-                counterStampsFound.increment();
+                metricStampsFound.increment();
                 ValueNode proxiedGuard = proxyGuard(guard);
                 return rewireGuardFunction.rewire(proxiedGuard, result);
             }
@@ -670,7 +671,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
                         info = new Info();
                         map.set(value, info);
                     }
-                    counterStampsRegistered.increment();
+                    metricStampsRegistered.increment();
                     final Info finalInfo = info;
                     Debug.log("\t Saving stamp for node %s stamp %s guarded by %s", value, newStamp, guard == null ? "null" : guard);
                     finalInfo.pushElement(new InfoElement(newStamp, guard));
@@ -765,7 +766,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
     /**
      * Checks for safe nodes when moving pending tests up.
      */
-    static class InputFilter extends Node.EdgeVisitor {
+    static class InputFilter implements BiConsumer<Node, Node> {
         boolean ok;
         private ValueNode value;
 
@@ -774,22 +775,20 @@ public class DominatorConditionalEliminationPhase extends Phase {
             this.ok = true;
         }
 
-        @Override
-        public Node apply(Node node, Node curNode) {
+        public void accept(Node node, Node curNode) {
             if (!(curNode instanceof ValueNode)) {
                 ok = false;
-                return curNode;
+                return;
             }
             ValueNode curValue = (ValueNode) curNode;
             if (curValue.isConstant() || curValue == value || curValue instanceof ParameterNode) {
-                return curNode;
+                return;
             }
             if (curValue instanceof BinaryNode || curValue instanceof UnaryNode) {
-                curValue.applyInputs(this);
+                curValue.acceptInputs(this);
             } else {
                 ok = false;
             }
-            return curNode;
         }
     }
 
@@ -849,7 +848,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
         }
 
         public void pushElement(InfoElement element) {
-            Debug.log(Debug.VERBOSE_LOG_LEVEL, "Pushing an info element:%s", element);
+            Debug.log(Debug.VERBOSE_LOG_LEVEL, "Pushing an info element:%s   size %d", element, infos);
             infos.add(element);
         }
 

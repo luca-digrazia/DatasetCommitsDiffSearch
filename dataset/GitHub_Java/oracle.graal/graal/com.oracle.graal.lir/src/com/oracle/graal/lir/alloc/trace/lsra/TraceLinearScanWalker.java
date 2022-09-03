@@ -47,7 +47,7 @@ import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.StandardOp.ValueMoveOp;
-import com.oracle.graal.lir.alloc.lsra.OutOfRegistersException;
+import com.oracle.graal.lir.alloc.OutOfRegistersException;
 import com.oracle.graal.lir.alloc.trace.lsra.TraceInterval.RegisterPriority;
 import com.oracle.graal.lir.alloc.trace.lsra.TraceInterval.SpillState;
 import com.oracle.graal.lir.alloc.trace.lsra.TraceInterval.State;
@@ -450,8 +450,8 @@ final class TraceLinearScanWalker extends TraceIntervalWalker {
             unhandledAnyList.addToListSortedByStartAndUsePositions(splitPart);
 
             if (Debug.isLogEnabled()) {
-                Debug.log("left interval  %s: %s", moveNecessary ? "      " : "", interval.logString(allocator));
-                Debug.log("right interval %s: %s", moveNecessary ? "(move)" : "", splitPart.logString(allocator));
+                Debug.log("left interval  %s: %s", moveNecessary ? "      " : "", interval.logString());
+                Debug.log("right interval %s: %s", moveNecessary ? "(move)" : "", splitPart.logString());
             }
         }
     }
@@ -557,8 +557,8 @@ final class TraceLinearScanWalker extends TraceIntervalWalker {
                     spilledPart.makeCurrentSplitChild();
 
                     if (Debug.isLogEnabled()) {
-                        Debug.log("left interval: %s", interval.logString(allocator));
-                        Debug.log("spilled interval   : %s", spilledPart.logString(allocator));
+                        Debug.log("left interval: %s", interval.logString());
+                        Debug.log("spilled interval   : %s", spilledPart.logString());
                     }
                 }
             }
@@ -904,8 +904,9 @@ final class TraceLinearScanWalker extends TraceIntervalWalker {
                              * avoid errors
                              */
                             allocator.assignSpillSlot(interval);
-                            Debug.dump(allocator.getLIR(), description);
-                            allocator.printIntervals(description);
+                            if (Debug.isDumpEnabled(Debug.INFO_LOG_LEVEL)) {
+                                dumpLIRAndIntervals(description);
+                            }
                             throw new OutOfRegistersException("LinearScan: no register found", description);
                         }
 
@@ -937,6 +938,11 @@ final class TraceLinearScanWalker extends TraceIntervalWalker {
             splitAndSpillIntersectingIntervals(reg);
             return;
         }
+    }
+
+    protected void dumpLIRAndIntervals(String description) {
+        Debug.dump(Debug.INFO_LOG_LEVEL, allocator.getLIR(), description);
+        allocator.printIntervals(description);
     }
 
     @SuppressWarnings("try")
@@ -1028,8 +1034,8 @@ final class TraceLinearScanWalker extends TraceIntervalWalker {
             return;
         }
 
-        TraceInterval beginHint = registerHint.getSplitChildAtOpId(beginPos, LIRInstruction.OperandMode.USE, allocator);
-        TraceInterval endHint = registerHint.getSplitChildAtOpId(endPos, LIRInstruction.OperandMode.DEF, allocator);
+        TraceInterval beginHint = registerHint.getSplitChildAtOpId(beginPos, LIRInstruction.OperandMode.USE);
+        TraceInterval endHint = registerHint.getSplitChildAtOpId(endPos, LIRInstruction.OperandMode.DEF);
         if (beginHint == endHint || beginHint.to() != beginPos || endHint.from() != endPos) {
             // registerHint must be split : otherwise the re-writing of use positions does not work
             return;

@@ -84,7 +84,7 @@ import com.oracle.graal.nodeinfo.Verbosity;
 import com.oracle.graal.nodes.BreakpointNode;
 import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.FullInfopointNode;
+import com.oracle.graal.nodes.InfopointNode;
 import com.oracle.graal.nodes.ProxyNode;
 import com.oracle.graal.nodes.ReturnNode;
 import com.oracle.graal.nodes.StructuredGraph;
@@ -379,7 +379,7 @@ public abstract class GraalCompilerTest extends GraalTest {
             result.append("\n");
             for (Node node : scheduleResult.getBlockToNodesMap().get(block)) {
                 if (node instanceof ValueNode && node.isAlive()) {
-                    if (!excludeVirtual || !(node instanceof VirtualObjectNode || node instanceof ProxyNode || node instanceof FullInfopointNode)) {
+                    if (!excludeVirtual || !(node instanceof VirtualObjectNode || node instanceof ProxyNode || node instanceof InfopointNode)) {
                         if (node instanceof ConstantNode) {
                             String name = checkConstants ? node.toString(Verbosity.Name) : node.getClass().getSimpleName();
                             String str = name + (excludeVirtual ? "\n" : "    (" + filteredUsageCount(node) + ")\n");
@@ -954,14 +954,12 @@ public abstract class GraalCompilerTest extends GraalTest {
     protected GraphBuilderConfiguration editGraphBuilderConfiguration(GraphBuilderConfiguration conf) {
         InvocationPlugins invocationPlugins = conf.getPlugins().getInvocationPlugins();
         invocationPlugins.register(new InvocationPlugin() {
-            @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 b.add(new BreakpointNode());
                 return true;
             }
         }, GraalCompilerTest.class, "breakpoint");
         invocationPlugins.register(new InvocationPlugin() {
-            @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg0) {
                 b.add(new BreakpointNode(arg0));
                 return true;

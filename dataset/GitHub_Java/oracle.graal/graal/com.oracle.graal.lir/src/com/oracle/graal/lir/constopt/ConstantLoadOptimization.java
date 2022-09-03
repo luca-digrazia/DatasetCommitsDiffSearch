@@ -33,11 +33,16 @@ import java.util.Deque;
 import java.util.EnumSet;
 import java.util.List;
 
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.common.cfg.BlockMap;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.debug.Indent;
 import com.oracle.graal.lir.InstructionValueConsumer;
 import com.oracle.graal.lir.LIR;
@@ -57,11 +62,6 @@ import com.oracle.graal.options.NestedBooleanOptionValue;
 import com.oracle.graal.options.Option;
 import com.oracle.graal.options.OptionType;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.meta.ValueKind;
-
 /**
  * This optimization tries to improve the handling of constants by replacing a single definition of
  * a constant, which is potentially scheduled into a block with high probability, with one or more
@@ -77,18 +77,18 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
     }
 
     @Override
-    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, List<? extends AbstractBlockBase<?>> codeEmittingOrder, List<? extends AbstractBlockBase<?>> linearScanOrder,
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
                     PreAllocationOptimizationContext context) {
         LIRGeneratorTool lirGen = context.lirGen;
         new Optimization(lirGenRes.getLIR(), lirGen).apply();
     }
 
-    private static final DebugCounter constantsTotal = Debug.counter("ConstantLoadOptimization[total]");
-    private static final DebugCounter phiConstantsSkipped = Debug.counter("ConstantLoadOptimization[PhisSkipped]");
-    private static final DebugCounter singleUsageConstantsSkipped = Debug.counter("ConstantLoadOptimization[SingleUsageSkipped]");
-    private static final DebugCounter usageAtDefinitionSkipped = Debug.counter("ConstantLoadOptimization[UsageAtDefinitionSkipped]");
-    private static final DebugCounter materializeAtDefinitionSkipped = Debug.counter("ConstantLoadOptimization[MaterializeAtDefinitionSkipped]");
-    private static final DebugCounter constantsOptimized = Debug.counter("ConstantLoadOptimization[optimized]");
+    private static final DebugMetric constantsTotal = Debug.metric("ConstantLoadOptimization[total]");
+    private static final DebugMetric phiConstantsSkipped = Debug.metric("ConstantLoadOptimization[PhisSkipped]");
+    private static final DebugMetric singleUsageConstantsSkipped = Debug.metric("ConstantLoadOptimization[SingleUsageSkipped]");
+    private static final DebugMetric usageAtDefinitionSkipped = Debug.metric("ConstantLoadOptimization[UsageAtDefinitionSkipped]");
+    private static final DebugMetric materializeAtDefinitionSkipped = Debug.metric("ConstantLoadOptimization[MaterializeAtDefinitionSkipped]");
+    private static final DebugMetric constantsOptimized = Debug.metric("ConstantLoadOptimization[optimized]");
 
     private static final class Optimization {
         private final LIR lir;
@@ -303,7 +303,7 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
                 if (constTree.get(Flags.CANDIDATE, block)) {
                     constTree.set(Flags.MATERIALIZE, block);
                     // create and insert load
-                    insertLoad(tree.getConstant(), tree.getVariable().getValueKind(), block, constTree.getCost(block).getUsages());
+                    insertLoad(tree.getConstant(), tree.getVariable().getLIRKind(), block, constTree.getCost(block).getUsages());
                 } else {
                     for (AbstractBlockBase<?> dominated : block.getDominated()) {
                         if (constTree.isMarked(dominated)) {
@@ -314,7 +314,7 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
             }
         }
 
-        private void insertLoad(Constant constant, ValueKind<?> kind, AbstractBlockBase<?> block, List<UseEntry> usages) {
+        private void insertLoad(Constant constant, LIRKind kind, AbstractBlockBase<?> block, List<UseEntry> usages) {
             assert usages != null && usages.size() > 0 : String.format("No usages %s %s %s", constant, block, usages);
             // create variable
             Variable variable = lirGen.newVariable(kind);

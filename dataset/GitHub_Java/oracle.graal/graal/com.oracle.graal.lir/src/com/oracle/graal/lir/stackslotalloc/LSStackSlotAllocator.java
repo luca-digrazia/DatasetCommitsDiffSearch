@@ -58,8 +58,8 @@ import com.oracle.graal.options.OptionType;
 
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.LIRKind;
 import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.meta.ValueKind;
 
 /**
  * Linear Scan {@link StackSlotAllocatorUtil stack slot allocator}.
@@ -88,8 +88,7 @@ public final class LSStackSlotAllocator extends AllocationPhase {
     private static final DebugTimer AssignSlotsTimer = Debug.timer("LSStackSlotAllocator[AssignSlots]");
 
     @Override
-    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, List<? extends AbstractBlockBase<?>> codeEmittingOrder, List<? extends AbstractBlockBase<?>> linearScanOrder,
-                    AllocationContext context) {
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, AllocationContext context) {
         allocateStackSlots((FrameMapBuilderTool) lirGenRes.getFrameMapBuilder(), lirGenRes);
         lirGenRes.buildFrameMap();
     }
@@ -260,8 +259,8 @@ public final class LSStackSlotAllocator extends AllocationPhase {
                     Debug.log(Debug.BASIC_LOG_LEVEL, "Reuse stack slot %s (reallocated from %s) for virtual stack slot %s", location, slot, virtualSlot);
                 } else {
                     // Allocate new stack slot.
-                    location = frameMapBuilder.getFrameMap().allocateSpillSlot(virtualSlot.getValueKind());
-                    StackSlotAllocatorUtil.virtualFramesize.add(frameMapBuilder.getFrameMap().spillSlotSize(virtualSlot.getValueKind()));
+                    location = frameMapBuilder.getFrameMap().allocateSpillSlot(virtualSlot.getLIRKind());
+                    StackSlotAllocatorUtil.virtualFramesize.add(frameMapBuilder.getFrameMap().spillSlotSize(virtualSlot.getLIRKind()));
                     StackSlotAllocatorUtil.allocatedSlots.increment();
                     Debug.log(Debug.BASIC_LOG_LEVEL, "New stack slot %s for virtual stack slot %s", location, virtualSlot);
                 }
@@ -278,7 +277,7 @@ public final class LSStackSlotAllocator extends AllocationPhase {
             Illegal;
         }
 
-        private SlotSize forKind(ValueKind<?> kind) {
+        private SlotSize forKind(LIRKind kind) {
             switch (frameMapBuilder.getFrameMap().spillSlotSize(kind)) {
                 case 1:
                     return SlotSize.Size1;
@@ -331,7 +330,7 @@ public final class LSStackSlotAllocator extends AllocationPhase {
          */
         private StackSlot findFreeSlot(SimpleVirtualStackSlot slot) {
             assert slot != null;
-            SlotSize size = forKind(slot.getValueKind());
+            SlotSize size = forKind(slot.getLIRKind());
             if (size == SlotSize.Illegal) {
                 return null;
             }
@@ -346,7 +345,7 @@ public final class LSStackSlotAllocator extends AllocationPhase {
          * Adds a stack slot to the list of free slots.
          */
         private void freeSlot(StackSlot slot) {
-            SlotSize size = forKind(slot.getValueKind());
+            SlotSize size = forKind(slot.getLIRKind());
             if (size == SlotSize.Illegal) {
                 return;
             }
@@ -407,7 +406,6 @@ public final class LSStackSlotAllocator extends AllocationPhase {
         }
 
         ValueProcedure assignSlot = new ValueProcedure() {
-            @Override
             public Value doValue(Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
                 if (isVirtualStackSlot(value)) {
                     VirtualStackSlot slot = asVirtualStackSlot(value);

@@ -22,25 +22,33 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import java.util.*;
+import static com.oracle.graal.compiler.common.GraalOptions.TraceEscapeAnalysis;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.*;
+import java.util.List;
+import java.util.Map;
+
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.TTY;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeFlood;
+import com.oracle.graal.nodes.AbstractEndNode;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.StructuredGraph;
 
 public final class VirtualUtil {
 
     private VirtualUtil() {
-        GraalInternalError.shouldNotReachHere();
+        JVMCIError.shouldNotReachHere();
     }
 
     public static boolean assertNonReachable(StructuredGraph graph, List<Node> obsoleteNodes) {
         // helper code that determines the paths that keep obsolete nodes alive:
 
         NodeFlood flood = graph.createNodeFlood();
-        IdentityHashMap<Node, Node> path = new IdentityHashMap<>();
+        Map<Node, Node> path = Node.newIdentityMap();
         flood.add(graph.start());
         for (Node current : flood) {
             if (current instanceof AbstractEndNode) {
@@ -60,15 +68,12 @@ public final class VirtualUtil {
         }
 
         for (Node node : obsoleteNodes) {
-            if (node instanceof FixedNode) {
+            if (node instanceof FixedNode && !node.isDeleted()) {
                 assert !flood.isMarked(node) : node;
             }
         }
 
         for (Node node : graph.getNodes()) {
-            if (node instanceof LocalNode) {
-                flood.add(node);
-            }
             if (flood.isMarked(node)) {
                 for (Node input : node.inputs()) {
                     flood.add(input);
@@ -88,39 +93,73 @@ public final class VirtualUtil {
         }
         boolean success = true;
         for (Node node : obsoleteNodes) {
-            if (flood.isMarked(node)) {
-                TTY.print("offending node path:");
+            if (!node.isDeleted() && flood.isMarked(node)) {
+                TTY.println("offending node path:");
                 Node current = node;
-                while (current != null) {
-                    TTY.println(current.toString());
+                TTY.print(current.toString());
+                while (true) {
                     current = path.get(current);
-                    if (current != null && current instanceof FixedNode && !obsoleteNodes.contains(current)) {
-                        break;
+                    if (current != null) {
+                        TTY.print(" -> " + current.toString());
+                        if (current instanceof FixedNode && !obsoleteNodes.contains(current)) {
+                            break;
+                        }
                     }
                 }
                 success = false;
             }
         }
+        if (!success) {
+            TTY.println();
+            Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "assertNonReachable");
+        }
         return success;
     }
 
-    public static void trace(String format, Object... obj) {
-        if (GraalOptions.TraceEscapeAnalysis) {
-            Debug.log(format, obj);
+    public static void trace(String format) {
+        if (Debug.isEnabled() && TraceEscapeAnalysis.getValue() && Debug.isLogEnabled()) {
+            Debug.logv(format);
         }
     }
 
-    static boolean matches(StructuredGraph graph, String filter) {
+    public static void trace(String format, Object obj) {
+        if (Debug.isEnabled() && TraceEscapeAnalysis.getValue() && Debug.isLogEnabled()) {
+            Debug.logv(format, obj);
+        }
+    }
+
+    public static void trace(String format, Object obj, Object obj2) {
+        if (Debug.isEnabled() && TraceEscapeAnalysis.getValue() && Debug.isLogEnabled()) {
+            Debug.logv(format, obj, obj2);
+        }
+    }
+
+    public static void trace(String format, Object obj, Object obj2, Object obj3) {
+        if (Debug.isEnabled() && TraceEscapeAnalysis.getValue() && Debug.isLogEnabled()) {
+            Debug.logv(format, obj, obj2, obj3);
+        }
+    }
+
+    public static void trace(String format, Object obj, Object obj2, Object obj3, Object obj4) {
+        if (Debug.isEnabled() && TraceEscapeAnalysis.getValue() && Debug.isLogEnabled()) {
+            Debug.logv(format, obj, obj2, obj3, obj4);
+        }
+    }
+
+    public static boolean matches(StructuredGraph graph, String filter) {
         if (filter != null) {
-            if (filter.startsWith("~")) {
-                ResolvedJavaMethod method = graph.method();
-                return method == null || !MetaUtil.format("%H.%n", method).contains(filter.substring(1));
-            } else {
-                ResolvedJavaMethod method = graph.method();
-                return method != null && MetaUtil.format("%H.%n", method).contains(filter);
-            }
+            return matchesHelper(graph, filter);
         }
         return true;
     }
 
+    private static boolean matchesHelper(StructuredGraph graph, String filter) {
+        if (filter.startsWith("~")) {
+            ResolvedJavaMethod method = graph.method();
+            return method == null || !method.format("%H.%n").contains(filter.substring(1));
+        } else {
+            ResolvedJavaMethod method = graph.method();
+            return method != null && method.format("%H.%n").contains(filter);
+        }
+    }
 }

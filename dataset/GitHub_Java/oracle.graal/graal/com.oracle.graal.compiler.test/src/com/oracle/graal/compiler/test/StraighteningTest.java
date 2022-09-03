@@ -22,11 +22,13 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.*;
+import org.junit.Test;
 
-import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.tiers.PhaseContext;
 
 public class StraighteningTest extends GraalCompilerTest {
 
@@ -74,7 +76,6 @@ public class StraighteningTest extends GraalCompilerTest {
         test("test1Snippet");
     }
 
-    @Test(expected = AssertionError.class)
     public void test2() {
         test("test2Snippet");
     }
@@ -86,10 +87,10 @@ public class StraighteningTest extends GraalCompilerTest {
 
     private void test(final String snippet) {
         // No debug scope to reduce console noise for @Test(expected = ...) tests
-        StructuredGraph graph = parse(snippet);
-        Debug.dump(graph, "Graph");
-        new CanonicalizerPhase(null, runtime(), null).apply(graph);
-        StructuredGraph referenceGraph = parse(REFERENCE_SNIPPET);
+        StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
+        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        StructuredGraph referenceGraph = parseEager(REFERENCE_SNIPPET, AllowAssumptions.YES);
         assertEquals(referenceGraph, graph);
     }
 }

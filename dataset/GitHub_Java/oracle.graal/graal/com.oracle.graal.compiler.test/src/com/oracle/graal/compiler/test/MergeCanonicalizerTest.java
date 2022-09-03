@@ -22,13 +22,14 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.*;
+import org.junit.Test;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.nodes.ReturnNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.tiers.PhaseContext;
 
 public class MergeCanonicalizerTest extends GraalCompilerTest {
 
@@ -57,10 +58,10 @@ public class MergeCanonicalizerTest extends GraalCompilerTest {
     }
 
     private void testReturnCount(String snippet, int returnCount) {
-        StructuredGraph graph = parse(snippet);
-        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), new Assumptions(false)));
-        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), new Assumptions(false)));
-        Debug.dump(graph, "Graph");
-        assertDeepEquals(returnCount, graph.getNodes(ReturnNode.class).count());
+        StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+        assertDeepEquals(returnCount, graph.getNodes(ReturnNode.TYPE).count());
     }
 }

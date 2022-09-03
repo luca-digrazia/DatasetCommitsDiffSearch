@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,17 +23,17 @@
 package com.oracle.graal.replacements.nodes;
 
 import static jdk.vm.ci.code.BytecodeFrame.isPlaceholderBci;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 import com.oracle.graal.api.replacements.MethodSubstitution;
 import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.nodeinfo.NodeCycles;
 import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.NodeSize;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.FixedWithNextNode;
 import com.oracle.graal.nodes.FrameState;
@@ -53,9 +53,6 @@ import com.oracle.graal.phases.common.inlining.InliningUtil;
 import com.oracle.graal.phases.tiers.PhaseContext;
 import com.oracle.graal.replacements.Snippet;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
 /**
  * Macro nodes can be used to temporarily replace an invoke. They can, for example, be used to
  * implement constant folding for known JDK functions like {@link Class#isInterface()}.<br/>
@@ -70,12 +67,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
  * possible if the macro node is a {@link MacroStateSplitNode}.</li>
  * </ul>
  */
-//@formatter:off
-@NodeInfo(cycles = NodeCycles.CYCLES_UNKNOWN,
-          cyclesRationale = "If this node is not optimized away it will be lowered to a call, which we cannot estimate",
-          size = NodeSize.SIZE_UNKNOWN,
-          sizeRationale = "If this node is not optimized away it will be lowered to a call, which we cannot estimate")
-//@formatter:on
+@NodeInfo
 public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
 
     public static final NodeClass<MacroNode> TYPE = NodeClass.create(MacroNode.class);
@@ -125,8 +117,7 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
      */
     @SuppressWarnings("try")
     protected StructuredGraph lowerReplacement(final StructuredGraph replacementGraph, LoweringTool tool) {
-        final PhaseContext c = new PhaseContext(tool.getMetaAccess(), tool.getConstantReflection(), tool.getConstantFieldProvider(), tool.getLowerer(), tool.getReplacements(),
-                        tool.getStampProvider(), tool.getNodeCostProvider());
+        final PhaseContext c = new PhaseContext(tool.getMetaAccess(), tool.getConstantReflection(), tool.getLowerer(), tool.getReplacements(), tool.getStampProvider());
         if (!graph().hasValueProxies()) {
             new RemoveValueProxyPhase().apply(replacementGraph);
         }
@@ -165,7 +156,7 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
             Debug.dump(Debug.INFO_LOG_LEVEL, graph(), "After inlining replacement %s", replacementGraph);
         } else {
             if (isPlaceholderBci(invoke.bci())) {
-                throw new GraalError("%s: cannot lower to invoke with placeholder BCI: %s", graph(), this);
+                throw new JVMCIError("%s: cannot lower to invoke with placeholder BCI: %s", graph(), this);
             }
 
             if (invoke.stateAfter() == null) {
@@ -175,10 +166,10 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
                     // no longer needs a MacroNode. For example, Class.getComponentType()
                     // only needs a MacroNode prior to JDK9 as it was given a non-native
                     // implementation in JDK9.
-                    throw new GraalError("%s macro created for call to %s in %s must be lowerable to a snippet or intrinsic graph. " +
-                                    "Maybe a macro node is not needed for this method in the current JDK?", getClass().getSimpleName(), targetMethod.format("%h.%n(%p)"), graph());
+                    throw new JVMCIError("%s macro created for call to %s in %s must be lowerable to a snippet or intrinsic graph. "
+                                    + "Maybe a macro node is not needed for this method in the current JDK?", getClass().getSimpleName(), targetMethod.format("%h.%n(%p)"), graph());
                 }
-                throw new GraalError("%s: cannot lower to invoke without state: %s", graph(), this);
+                throw new JVMCIError("%s: cannot lower to invoke without state: %s", graph(), this);
             }
             invoke.lower(tool);
         }

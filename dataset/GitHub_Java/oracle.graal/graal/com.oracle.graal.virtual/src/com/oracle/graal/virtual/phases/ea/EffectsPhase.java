@@ -74,8 +74,7 @@ public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends B
     @SuppressWarnings("try")
     public boolean runAnalysis(final StructuredGraph graph, final PhaseContextT context) {
         boolean changed = false;
-        boolean stop = false;
-        for (int iteration = 0; !stop && iteration < maxIterations; iteration++) {
+        for (int iteration = 0; iteration < maxIterations; iteration++) {
             try (Scope s = Debug.scope(isEnabled() ? "iteration " + iteration : null)) {
                 ScheduleResult schedule;
                 ControlFlowGraph cfg;
@@ -91,10 +90,8 @@ public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends B
                     Closure<?> closure = createEffectsClosure(context, schedule, cfg);
                     ReentrantBlockIterator.apply(closure, cfg.getStartBlock());
 
-                    if (closure.hasChanged()) {
-                        changed = true;
-                    } else {
-                        stop = true;
+                    if (!closure.hasChanged()) {
+                        break;
                     }
 
                     // apply the effects collected during this iteration
@@ -120,6 +117,7 @@ public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends B
                     throw Debug.handle(t);
                 }
             }
+            changed = true;
         }
         return changed;
     }

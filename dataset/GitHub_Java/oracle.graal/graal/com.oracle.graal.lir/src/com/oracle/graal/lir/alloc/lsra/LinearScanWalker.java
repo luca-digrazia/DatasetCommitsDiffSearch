@@ -32,11 +32,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig.AllocatableRegisters;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.common.util.Util;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.Indent;
 import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.StandardOp.ValueMoveOp;
@@ -45,9 +48,6 @@ import com.oracle.graal.lir.alloc.lsra.Interval.RegisterBinding;
 import com.oracle.graal.lir.alloc.lsra.Interval.RegisterPriority;
 import com.oracle.graal.lir.alloc.lsra.Interval.SpillState;
 import com.oracle.graal.lir.alloc.lsra.Interval.State;
-
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.meta.Value;
 
 /**
  */
@@ -91,12 +91,12 @@ class LinearScanWalker extends IntervalWalker {
         super(allocator, unhandledFixedFirst, unhandledAnyFirst);
 
         moveResolver = allocator.createMoveResolver();
-        spillIntervals = Util.uncheckedCast(new List<?>[allocator.getRegisters().size()]);
-        for (int i = 0; i < allocator.getRegisters().size(); i++) {
+        spillIntervals = Util.uncheckedCast(new List<?>[allocator.getRegisters().length]);
+        for (int i = 0; i < allocator.getRegisters().length; i++) {
             spillIntervals[i] = EMPTY_LIST;
         }
-        usePos = new int[allocator.getRegisters().size()];
-        blockPos = new int[allocator.getRegisters().size()];
+        usePos = new int[allocator.getRegisters().length];
+        blockPos = new int[allocator.getRegisters().length];
     }
 
     void initUseLists(boolean onlyProcessUsePos) {
@@ -639,7 +639,7 @@ class LinearScanWalker extends IntervalWalker {
                 break;
 
             default:
-                throw GraalError.shouldNotReachHere("other states not allowed at this time");
+                throw new BailoutException("other states not allowed at this time");
         }
     }
 

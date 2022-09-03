@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,29 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static com.oracle.graal.graph.iterators.NodePredicates.*;
+import org.junit.Test;
 
-import org.junit.*;
-
-import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.IfNode;
+import com.oracle.graal.nodes.ParameterNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.phases.OptimisticOptimizations;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.FloatingReadPhase;
+import com.oracle.graal.phases.common.GuardLoweringPhase;
+import com.oracle.graal.phases.common.LoweringPhase;
+import com.oracle.graal.phases.common.ValueAnchorCleanupPhase;
+import com.oracle.graal.phases.tiers.MidTierContext;
+import com.oracle.graal.phases.tiers.PhaseContext;
 
 /**
- * In the following tests, the usages of local variable "a" are replaced with the integer constant 0.
- * Then canonicalization is applied and it is verified that the resulting graph is equal to the
+ * In the following tests, the usages of local variable "a" are replaced with the integer constant
+ * 0. Then canonicalization is applied and it is verified that the resulting graph is equal to the
  * graph of the method that just has a "return 1" statement in it.
  */
 public class IfCanonicalizerTest extends GraalCompilerTest {
@@ -135,16 +146,86 @@ public class IfCanonicalizerTest extends GraalCompilerTest {
         return 1;
     }
 
-    private void test(String snippet) {
-        StructuredGraph graph = parse(snippet);
-        LocalNode local = graph.getNodes(LocalNode.class).iterator().next();
-        ConstantNode constant = ConstantNode.forInt(0, graph);
-        for (Node n : local.usages().filter(isNotA(FrameState.class)).snapshot()) {
-            n.replaceFirstInput(local, constant);
+    @Test
+    public void test6() {
+        testCombinedIf("test6Snippet", 3);
+        test("test6Snippet", new int[]{0});
+    }
+
+    public static int test6Snippet(int[] a) {
+        int i = a[0];
+        if (i >= 0 && i < a.length) {
+            return a[i];
         }
-        Debug.dump(graph, "Graph");
-        new CanonicalizerPhase(null, runtime(), null).apply(graph);
-        StructuredGraph referenceGraph = parse(REFERENCE_SNIPPET);
+        return 1;
+    }
+
+    @Test
+    public void test7() {
+        testCombinedIf("test7Snippet", 1);
+        test("test7Snippet", -1);
+    }
+
+    public static int test7Snippet(int v) {
+        if (v >= 0 && v < 1024) {
+            return v + 1;
+        }
+        return v - 1;
+    }
+
+    @Test
+    public void test8() {
+        testCombinedIf("test8Snippet", 1);
+        test("test8Snippet", -1);
+    }
+
+    public static int test8Snippet(int v) {
+        if (v >= 0 && v <= 1024) {
+            return v + 1;
+        }
+        return v - 1;
+    }
+
+    @Test
+    public void test9() {
+        testCombinedIf("test9Snippet", 2);
+        test("test9Snippet", -1);
+        test("test9Snippet", 1025);
+    }
+
+    public static int test9Snippet(int n) {
+        return (n < 0) ? 1 : (n >= 1024) ? 1024 : n + 1;
+    }
+
+    private void testCombinedIf(String snippet, int count) {
+        StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
+        PhaseContext context = new PhaseContext(getProviders());
+        new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
+        new FloatingReadPhase().apply(graph);
+        MidTierContext midContext = new MidTierContext(getProviders(), getTargetProvider(), OptimisticOptimizations.ALL, graph.getProfilingInfo());
+        new GuardLoweringPhase().apply(graph, midContext);
+        new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.MID_TIER).apply(graph, midContext);
+        new ValueAnchorCleanupPhase().apply(graph);
+        new CanonicalizerPhase().apply(graph, context);
+        assertDeepEquals(count, graph.getNodes().filter(IfNode.class).count());
+    }
+
+    private void test(String snippet) {
+        StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
+        ParameterNode param = graph.getNodes(ParameterNode.TYPE).iterator().next();
+        ConstantNode constant = ConstantNode.forInt(0, graph);
+        for (Node n : param.usages().snapshot()) {
+            if (!(n instanceof FrameState)) {
+                n.replaceFirstInput(param, constant);
+            }
+        }
+        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        for (FrameState fs : param.usages().filter(FrameState.class).snapshot()) {
+            fs.replaceFirstInput(param, null);
+            param.safeDelete();
+        }
+        StructuredGraph referenceGraph = parseEager(REFERENCE_SNIPPET, AllowAssumptions.YES);
         assertEquals(referenceGraph, graph);
     }
 }

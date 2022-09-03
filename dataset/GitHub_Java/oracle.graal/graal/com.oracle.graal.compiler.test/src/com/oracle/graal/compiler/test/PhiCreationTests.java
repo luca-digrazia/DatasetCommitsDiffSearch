@@ -22,10 +22,13 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.*;
+import org.junit.Assert;
+import org.junit.Test;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.ValuePhiNode;
 
 /**
  * In the following tests, the correct removal of redundant phis during graph building is tested.
@@ -40,8 +43,8 @@ public class PhiCreationTests extends GraalCompilerTest {
 
     @Test
     public void test1() {
-        StructuredGraph graph = parse("test1Snippet");
-        Assert.assertFalse(graph.getNodes().filter(PhiNode.class).iterator().hasNext());
+        StructuredGraph graph = parseEager("test1Snippet", AllowAssumptions.YES);
+        Assert.assertFalse(graph.getNodes().filter(ValuePhiNode.class).iterator().hasNext());
     }
 
     public static int test1Snippet(int a) {
@@ -53,8 +56,8 @@ public class PhiCreationTests extends GraalCompilerTest {
 
     @Test
     public void test2() {
-        StructuredGraph graph = parse("test2Snippet");
-        Assert.assertFalse(graph.getNodes().filter(PhiNode.class).iterator().hasNext());
+        StructuredGraph graph = parseEager("test2Snippet", AllowAssumptions.YES);
+        Assert.assertFalse(graph.getNodes().filter(ValuePhiNode.class).iterator().hasNext());
     }
 
     public static int test2Snippet(int a) {
@@ -66,9 +69,9 @@ public class PhiCreationTests extends GraalCompilerTest {
 
     @Test
     public void test3() {
-        StructuredGraph graph = parse("test3Snippet");
-        Debug.dump(graph, "Graph");
-        Assert.assertFalse(graph.getNodes().filter(PhiNode.class).iterator().hasNext());
+        StructuredGraph graph = parseEager("test3Snippet", AllowAssumptions.YES);
+        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+        Assert.assertFalse(graph.getNodes().filter(ValuePhiNode.class).iterator().hasNext());
     }
 
     public static int test3Snippet(int a) {
@@ -82,9 +85,9 @@ public class PhiCreationTests extends GraalCompilerTest {
 
     @Test
     public void test4() {
-        StructuredGraph graph = parse("test4Snippet");
-        Debug.dump(graph, "Graph");
-        Assert.assertFalse(graph.getNodes().filter(PhiNode.class).iterator().hasNext());
+        StructuredGraph graph = parseEager("test4Snippet", AllowAssumptions.YES);
+        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+        Assert.assertFalse(graph.getNodes().filter(ValuePhiNode.class).iterator().hasNext());
     }
 
     public static int test4Snippet(int a) {

@@ -28,6 +28,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import jdk.vm.ci.code.site.Call;
+import jdk.vm.ci.code.site.Mark;
+import jdk.vm.ci.code.site.Site;
+import jdk.vm.ci.meta.JavaTypeProfile;
+
 import org.junit.Test;
 
 import com.oracle.graal.debug.Debug;
@@ -36,13 +41,8 @@ import com.oracle.graal.nodes.IfNode;
 import com.oracle.graal.nodes.ReturnNode;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.java.InstanceOfNode;
+import com.oracle.graal.nodes.java.TypeProfileNode;
 import com.oracle.graal.phases.common.AbstractInliningPhase;
-
-import jdk.vm.ci.code.site.Call;
-import jdk.vm.ci.code.site.Mark;
-import jdk.vm.ci.code.site.Site;
-import jdk.vm.ci.meta.JavaTypeProfile;
 
 /**
  * Tests the implementation of instanceof, allowing profiling information to be manually specified.
@@ -55,9 +55,9 @@ public class InstanceOfTest extends TypeCheckTest {
 
     @Override
     protected void replaceProfile(StructuredGraph graph, JavaTypeProfile profile) {
-        InstanceOfNode ion = graph.getNodes().filter(InstanceOfNode.class).first();
+        TypeProfileNode ion = graph.getNodes().filter(TypeProfileNode.class).first();
         if (ion != null) {
-            ion.setProfile(profile, graph.start());
+            ion.setProfile(profile);
         }
     }
 

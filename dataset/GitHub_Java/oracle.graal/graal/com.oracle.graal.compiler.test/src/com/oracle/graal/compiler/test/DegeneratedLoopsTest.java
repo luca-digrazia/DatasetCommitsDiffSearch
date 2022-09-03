@@ -22,15 +22,20 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.*;
+import org.junit.Test;
 
-import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.DebugDumpScope;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.inlining.InliningPhase;
+import com.oracle.graal.phases.tiers.HighTierContext;
 
 /**
- * In the following tests, the usages of local variable "a" are replaced with the integer constant 0.
- * Then canonicalization is applied and it is verified that the resulting graph is equal to the
+ * In the following tests, the usages of local variable "a" are replaced with the integer constant
+ * 0. Then canonicalization is applied and it is verified that the resulting graph is equal to the
  * graph of the method that just has a "return 1" statement in it.
  */
 public class DegeneratedLoopsTest extends GraalCompilerTest {
@@ -48,6 +53,7 @@ public class DegeneratedLoopsTest extends GraalCompilerTest {
     }
 
     private static class UnresolvedException extends RuntimeException {
+
         private static final long serialVersionUID = 5215434338750728440L;
 
         static {
@@ -73,19 +79,19 @@ public class DegeneratedLoopsTest extends GraalCompilerTest {
 
     }
 
+    @SuppressWarnings("try")
     private void test(final String snippet) {
-        Debug.scope("DegeneratedLoopsTest", new DebugDumpScope(snippet), new Runnable() {
-            public void run() {
-                StructuredGraph graph = parse(snippet);
-                Debug.dump(graph, "Graph");
-                for (Invoke invoke : graph.getInvokes()) {
-                    invoke.intrinsify(null);
-                }
-                new CanonicalizerPhase(null, runtime(), null).apply(graph);
-                StructuredGraph referenceGraph = parse(REFERENCE_SNIPPET);
-                Debug.dump(referenceGraph, "Graph");
-                assertEquals(referenceGraph, graph);
-            }
-        });
+        try (Scope s = Debug.scope("DegeneratedLoopsTest", new DebugDumpScope(snippet))) {
+            StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
+            HighTierContext context = getDefaultHighTierContext();
+            new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
+            new CanonicalizerPhase().apply(graph, context);
+            Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+            StructuredGraph referenceGraph = parseEager(REFERENCE_SNIPPET, AllowAssumptions.YES);
+            Debug.dump(Debug.BASIC_LOG_LEVEL, referenceGraph, "ReferenceGraph");
+            assertEquals(referenceGraph, graph);
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
     }
 }

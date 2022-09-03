@@ -29,9 +29,12 @@ import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
 import java.util.Iterator;
 import java.util.List;
 
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.AllocatableValue;
+
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.debug.Indent;
 import com.oracle.graal.lir.LIRInsertionBuffer;
 import com.oracle.graal.lir.LIRInstruction;
@@ -40,13 +43,10 @@ import com.oracle.graal.lir.alloc.lsra.Interval.SpillState;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.phases.AllocationPhase;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.AllocatableValue;
-
 public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase {
 
-    private static final DebugCounter betterSpillPos = Debug.counter("BetterSpillPosition");
-    private static final DebugCounter betterSpillPosWithLowerProbability = Debug.counter("BetterSpillPositionWithLowerProbability");
+    private static final DebugMetric betterSpillPos = Debug.metric("BetterSpillPosition");
+    private static final DebugMetric betterSpillPosWithLowerProbability = Debug.metric("BetterSpillPositionWithLowerProbability");
 
     private final LinearScan allocator;
 
@@ -55,8 +55,7 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
     }
 
     @Override
-    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, List<? extends AbstractBlockBase<?>> codeEmittingOrder, List<? extends AbstractBlockBase<?>> linearScanOrder,
-                    AllocationContext context) {
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, AllocationContext context) {
         optimizeSpillPosition();
         allocator.printIntervals("After optimize spill position");
     }
@@ -149,8 +148,7 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
             }
 
             if (defBlock.probability() <= spillBlock.probability()) {
-                Debug.log(Debug.VERBOSE_LOG_LEVEL, "Definition has lower probability %s (%f) is lower than spill block %s (%f)", defBlock, defBlock.probability(), spillBlock,
-                                spillBlock.probability());
+                Debug.log(Debug.VERBOSE_LOG_LEVEL, "Definition has lower probability %s (%f) is lower than spill block %s (%f)", defBlock, defBlock.probability(), spillBlock, spillBlock.probability());
                 // better spill block has the same probability -> do nothing
                 interval.setSpillState(SpillState.StoreAtDefinition);
                 return;
@@ -192,7 +190,6 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
             block = allocator.blockForId(range.from);
         }
 
-        @Override
         public AbstractBlockBase<?> next() {
             AbstractBlockBase<?> currentBlock = block;
             int nextBlockIndex = block.getLinearScanNumber() + 1;
@@ -212,7 +209,6 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
             return currentBlock;
         }
 
-        @Override
         public boolean hasNext() {
             return block != null;
         }
@@ -220,7 +216,6 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
 
     private Iterable<AbstractBlockBase<?>> blocksForInterval(Interval interval) {
         return new Iterable<AbstractBlockBase<?>>() {
-            @Override
             public Iterator<AbstractBlockBase<?>> iterator() {
                 return new IntervalBlockIterator(interval);
             }

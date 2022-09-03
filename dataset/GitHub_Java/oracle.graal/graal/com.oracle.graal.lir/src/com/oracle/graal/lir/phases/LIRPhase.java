@@ -25,6 +25,8 @@ package com.oracle.graal.lir.phases;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import jdk.vm.ci.code.TargetDescription;
+
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
@@ -36,8 +38,6 @@ import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.options.Option;
 import com.oracle.graal.options.OptionType;
 import com.oracle.graal.options.OptionValue;
-
-import jdk.vm.ci.code.TargetDescription;
 
 /**
  * Base class for all {@link LIR low-level} phases. Subclasses should be stateless. There will be
@@ -64,24 +64,24 @@ public abstract class LIRPhase<C> {
      */
     private final DebugMemUseTracker memUseTracker;
 
-    public static final class LIRPhaseStatistics {
+    private static class LIRPhaseStatistics {
         /**
          * Records time spent within {@link #apply}.
          */
-        public final DebugTimer timer;
+        private final DebugTimer timer;
 
         /**
          * Records memory usage within {@link #apply}.
          */
-        public final DebugMemUseTracker memUseTracker;
+        private final DebugMemUseTracker memUseTracker;
 
-        private LIRPhaseStatistics(Class<?> clazz) {
+        LIRPhaseStatistics(Class<?> clazz) {
             timer = Debug.timer("LIRPhaseTime_%s", clazz);
             memUseTracker = Debug.memUseTracker("LIRPhaseMemUse_%s", clazz);
         }
     }
 
-    public static final ClassValue<LIRPhaseStatistics> statisticsClassValue = new ClassValue<LIRPhaseStatistics>() {
+    private static final ClassValue<LIRPhaseStatistics> statisticsClassValue = new ClassValue<LIRPhaseStatistics>() {
         @Override
         protected LIRPhaseStatistics computeValue(Class<?> c) {
             return new LIRPhaseStatistics(c);
@@ -132,17 +132,13 @@ public abstract class LIRPhase<C> {
 
     protected abstract <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, C context);
 
-    public static CharSequence createName(Class<?> clazz) {
-        String className = clazz.getName();
+    protected CharSequence createName() {
+        String className = LIRPhase.this.getClass().getName();
         String s = className.substring(className.lastIndexOf(".") + 1); // strip the package name
         if (s.endsWith("Phase")) {
             s = s.substring(0, s.length() - "Phase".length());
         }
         return s;
-    }
-
-    protected CharSequence createName() {
-        return createName(getClass());
     }
 
     public final CharSequence getName() {
@@ -151,4 +147,5 @@ public abstract class LIRPhase<C> {
         }
         return name;
     }
+
 }

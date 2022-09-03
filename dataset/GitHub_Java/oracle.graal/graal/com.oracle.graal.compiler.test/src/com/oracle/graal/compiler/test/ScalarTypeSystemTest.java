@@ -22,14 +22,17 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.*;
+import org.junit.Test;
 
-import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.tiers.PhaseContext;
 
 /**
- * In the following tests, the scalar type system of the compiler should be complete enough to see the relation between the different conditions.
+ * In the following tests, the scalar type system of the compiler should be complete enough to see
+ * the relation between the different conditions.
  */
 public class ScalarTypeSystemTest extends GraalCompilerTest {
 
@@ -100,43 +103,9 @@ public class ScalarTypeSystemTest extends GraalCompilerTest {
         }
     }
 
-    @Test
-    public void test4() {
-        test("test4Snippet", "referenceSnippet2");
-    }
-
-    public static int test4Snippet(int a, int b) {
-        if (a > b) {
-            if (a <= b) {
-                return 3;
-            } else {
-                return 1;
-            }
-        } else {
-            return 2;
-        }
-    }
-
-    @Test
-    public void test5() {
-        test("test5Snippet", "referenceSnippet3");
-    }
-
     public static int referenceSnippet3(int a, int b) {
         if (a == b) {
             return 1;
-        } else {
-            return 2;
-        }
-    }
-
-    public static int test5Snippet(int a, int b) {
-        if (a == b) {
-            if (a != b) {
-                return 3;
-            } else {
-                return 1;
-            }
         } else {
             return 2;
         }
@@ -161,13 +130,11 @@ public class ScalarTypeSystemTest extends GraalCompilerTest {
 
     private void test(final String snippet, final String referenceSnippet) {
         // No debug scope to reduce console noise for @Test(expected = ...) tests
-        StructuredGraph graph = parse(snippet);
-        Debug.dump(graph, "Graph");
-//        TypeSystemTest.outputGraph(graph);
-        new CanonicalizerPhase(null, runtime(), null).apply(graph);
-        new CheckCastEliminationPhase().apply(graph);
-        new CanonicalizerPhase(null, runtime(), null).apply(graph);
-        StructuredGraph referenceGraph = parse(referenceSnippet);
+        StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
+        Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+        PhaseContext context = new PhaseContext(getProviders());
+        new CanonicalizerPhase().apply(graph, context);
+        StructuredGraph referenceGraph = parseEager(referenceSnippet, AllowAssumptions.NO);
         assertEquals(referenceGraph, graph);
     }
 }

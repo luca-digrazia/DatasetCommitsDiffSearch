@@ -28,6 +28,18 @@ import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionalit
 
 import java.util.List;
 
+import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.code.site.ConstantReference;
+import jdk.vm.ci.code.site.DataPatch;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ProfilingInfo;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.VMConstant;
+
 import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.LIRGenerationPhase.LIRGenerationContext;
 import com.oracle.graal.compiler.common.alloc.ComputeBlockOrder;
@@ -37,10 +49,8 @@ import com.oracle.graal.compiler.target.Backend;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.DebugCloseable;
-import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.debug.DebugTimer;
-import com.oracle.graal.debug.GraalError;
-import com.oracle.graal.debug.internal.method.MethodMetricsRootScopeInfo;
 import com.oracle.graal.lir.BailoutAndRestartBackendException;
 import com.oracle.graal.lir.LIR;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
@@ -70,17 +80,6 @@ import com.oracle.graal.phases.tiers.Suites;
 import com.oracle.graal.phases.tiers.TargetProvider;
 import com.oracle.graal.phases.util.Providers;
 
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.code.site.ConstantReference;
-import jdk.vm.ci.code.site.DataPatch;
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ProfilingInfo;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.VMConstant;
-
 /**
  * Static methods for orchestrating the compilation of a {@linkplain StructuredGraph graph}.
  */
@@ -90,7 +89,6 @@ public class GraalCompiler {
     private static final DebugTimer BackEnd = Debug.timer("BackEnd");
     private static final DebugTimer EmitLIR = Debug.timer("EmitLIR");
     private static final DebugTimer EmitCode = Debug.timer("EmitCode");
-    private static final LIRGenerationPhase LIR_GENERATION_PHASE = new LIRGenerationPhase();
 
     /**
      * Encapsulates all the inputs to a {@linkplain GraalCompiler#compile(Request) compilation}.
@@ -168,16 +166,14 @@ public class GraalCompiler {
      */
     @SuppressWarnings("try")
     public static <T extends CompilationResult> T compile(Request<T> r) {
-        try (Scope s = MethodMetricsRootScopeInfo.createRootScopeIfAbsent(r.installedCodeOwner)) {
-            assert !r.graph.isFrozen();
-            try (Scope s0 = Debug.scope("GraalCompiler", r.graph, r.providers.getCodeCache())) {
-                emitFrontEnd(r.providers, r.backend, r.graph, r.graphBuilderSuite, r.optimisticOpts, r.profilingInfo, r.suites);
-                emitBackEnd(r.graph, null, r.installedCodeOwner, r.backend, r.compilationResult, r.factory, null, r.lirSuites);
-            } catch (Throwable e) {
-                throw Debug.handle(e);
-            }
-            return r.compilationResult;
+        assert !r.graph.isFrozen();
+        try (Scope s0 = Debug.scope("GraalCompiler", r.graph, r.providers.getCodeCache())) {
+            emitFrontEnd(r.providers, r.backend, r.graph, r.graphBuilderSuite, r.optimisticOpts, r.profilingInfo, r.suites);
+            emitBackEnd(r.graph, null, r.installedCodeOwner, r.backend, r.compilationResult, r.factory, null, r.lirSuites);
+        } catch (Throwable e) {
+            throw Debug.handle(e);
         }
+        return r.compilationResult;
     }
 
     /**
@@ -240,8 +236,7 @@ public class GraalCompiler {
     }
 
     @SuppressWarnings("try")
-    public static <T extends CompilationResult> LIRGenerationResult emitLIR(Backend backend, StructuredGraph graph, Object stub, RegisterConfig registerConfig, LIRSuites lirSuites,
-                    T compilationResult) {
+    public static <T extends CompilationResult> LIRGenerationResult emitLIR(Backend backend, StructuredGraph graph, Object stub, RegisterConfig registerConfig, LIRSuites lirSuites, T compilationResult) {
         OverrideScope overrideScope = null;
         LIRSuites lirSuites0 = lirSuites;
         while (true) {
@@ -256,7 +251,7 @@ public class GraalCompiler {
                     }
                 }
                 /* If the restart fails we convert the exception into a "hard" failure */
-                throw new GraalError(e);
+                throw new JVMCIError(e);
             }
         }
     }
@@ -291,7 +286,11 @@ public class GraalCompiler {
 
             // LIR generation
             LIRGenerationContext context = new LIRGenerationContext(lirGen, nodeLirGen, graph, schedule);
-            LIR_GENERATION_PHASE.apply(backend.getTarget(), lirGenRes, codeEmittingOrder, linearScanOrder, context);
+            try (Scope s = Debug.scope("LIRGeneration", nodeLirGen, lir)) {
+                new LIRGenerationPhase().apply(backend.getTarget(), lirGenRes, codeEmittingOrder, linearScanOrder, context);
+            } catch (Throwable e) {
+                throw Debug.handle(e);
+            }
 
             try (Scope s = Debug.scope("LIRStages", nodeLirGen, lir)) {
                 Debug.dump(Debug.BASIC_LOG_LEVEL, lir, "After LIR generation");
@@ -346,12 +345,12 @@ public class GraalCompiler {
                 compilationResult.setBytecodeSize(bytecodeSize);
             }
             crb.finish();
-            if (Debug.isCountEnabled()) {
+            if (Debug.isMeterEnabled()) {
                 List<DataPatch> ldp = compilationResult.getDataPatches();
                 JavaKind[] kindValues = JavaKind.values();
-                DebugCounter[] dms = new DebugCounter[kindValues.length];
+                DebugMetric[] dms = new DebugMetric[kindValues.length];
                 for (int i = 0; i < dms.length; i++) {
-                    dms[i] = Debug.counter("DataPatches-%s", kindValues[i]);
+                    dms[i] = Debug.metric("DataPatches-%s", kindValues[i]);
                 }
 
                 for (DataPatch dp : ldp) {
@@ -365,11 +364,11 @@ public class GraalCompiler {
                     dms[kind.ordinal()].add(1);
                 }
 
-                Debug.counter("CompilationResults").increment();
-                Debug.counter("CodeBytesEmitted").add(compilationResult.getTargetCodeSize());
-                Debug.counter("InfopointsEmitted").add(compilationResult.getInfopoints().size());
-                Debug.counter("DataPatches").add(ldp.size());
-                Debug.counter("ExceptionHandlersEmitted").add(compilationResult.getExceptionHandlers().size());
+                Debug.metric("CompilationResults").increment();
+                Debug.metric("CodeBytesEmitted").add(compilationResult.getTargetCodeSize());
+                Debug.metric("InfopointsEmitted").add(compilationResult.getInfopoints().size());
+                Debug.metric("DataPatches").add(ldp.size());
+                Debug.metric("ExceptionHandlersEmitted").add(compilationResult.getExceptionHandlers().size());
             }
 
             Debug.dump(Debug.BASIC_LOG_LEVEL, compilationResult, "After code generation");
