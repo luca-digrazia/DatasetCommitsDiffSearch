@@ -20,35 +20,30 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.api.meta.jdk8.test;
-
-import static org.junit.Assert.*;
+package com.oracle.graal.api.meta.test;
 
 import java.lang.reflect.*;
 import java.util.*;
 
-import org.junit.*;
-
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.test.*;
 
 /**
- * Tests for {@link ResolvedJavaMethod} that require JDK >= 8.
+ * Context for method related api.meta tests.
  */
-public class TestResolvedJavaMethodJDK8 extends MethodUniverse {
+public class MethodUniverse extends TypeUniverse {
 
-    public TestResolvedJavaMethodJDK8() {
-    }
+    public final Map<Method, ResolvedJavaMethod> methods = new HashMap<>();
+    public final Map<Constructor<?>, ResolvedJavaMethod> constructors = new HashMap<>();
 
-    @Test
-    public void isDefaultTest() {
-        for (Map.Entry<Method, ResolvedJavaMethod> e : methods.entrySet()) {
-            ResolvedJavaMethod m = e.getValue();
-            assertEquals(e.getKey().isDefault(), m.isDefault());
-        }
-        for (Map.Entry<Constructor<?>, ResolvedJavaMethod> e : constructors.entrySet()) {
-            ResolvedJavaMethod m = e.getValue();
-            assertFalse(m.isDefault());
+    public MethodUniverse() {
+        for (Class c : classes) {
+            for (Method m : c.getDeclaredMethods()) {
+                ResolvedJavaMethod method = metaAccess.lookupJavaMethod(m);
+                methods.put(m, method);
+            }
+            for (Constructor m : c.getDeclaredConstructors()) {
+                constructors.put(m, metaAccess.lookupJavaConstructor(m));
+            }
         }
     }
 }
