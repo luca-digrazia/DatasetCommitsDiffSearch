@@ -196,8 +196,6 @@ final class TraceInterval extends IntervalHint {
      */
     public final AllocatableValue operand;
 
-    public final ValueKind<?> kind;
-
     /**
      * The operand number for this interval's {@linkplain #operand operand}.
      */
@@ -299,7 +297,6 @@ final class TraceInterval extends IntervalHint {
     private TraceInterval(AllocatableValue operand, int operandNumber, OptionValues options, @SuppressWarnings("unused") int dummy) {
         assert operand != null;
         this.operand = operand;
-        this.kind = operand.getValueKind();
         this.operandNumber = operandNumber;
         this.options = options;
         if (isRegister(operand)) {
@@ -350,7 +347,7 @@ final class TraceInterval extends IntervalHint {
     }
 
     public ValueKind<?> kind() {
-        return kind;
+        return operand.getValueKind();
     }
 
     public boolean isEmpty() {
