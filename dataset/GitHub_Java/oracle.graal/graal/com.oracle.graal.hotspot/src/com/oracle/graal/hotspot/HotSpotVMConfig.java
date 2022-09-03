@@ -157,21 +157,7 @@ public class HotSpotVMConfig extends CompilerObject {
             }
         }
 
-        oopEncoding = new CompressEncoding(narrowOopBase, narrowOopShift, logMinObjAlignment());
-        klassEncoding = new CompressEncoding(narrowKlassBase, narrowKlassShift, logKlassAlignment);
-
         assert check();
-    }
-
-    private final CompressEncoding oopEncoding;
-    private final CompressEncoding klassEncoding;
-
-    public CompressEncoding getOopEncoding() {
-        return oopEncoding;
-    }
-
-    public CompressEncoding getKlassEncoding() {
-        return klassEncoding;
     }
 
     private void setField(Field field, Object value) {
@@ -716,11 +702,10 @@ public class HotSpotVMConfig extends CompilerObject {
     @HotSpotVMFlag(name = "UseTLAB") @Stable public boolean useTLAB;
     @HotSpotVMFlag(name = "UseBiasedLocking") @Stable public boolean useBiasedLocking;
     @HotSpotVMFlag(name = "UsePopCountInstruction") @Stable public boolean usePopCountInstruction;
-    @HotSpotVMFlag(name = "UseCountLeadingZerosInstruction", optional = true) @Stable public boolean useCountLeadingZerosInstruction;
+    @HotSpotVMFlag(name = "UseCountLeadingZerosInstruction") @Stable public boolean useCountLeadingZerosInstruction;
     @HotSpotVMFlag(name = "UseAESIntrinsics") @Stable public boolean useAESIntrinsics;
     @HotSpotVMFlag(name = "UseCRC32Intrinsics") @Stable public boolean useCRC32Intrinsics;
     @HotSpotVMFlag(name = "UseG1GC") @Stable public boolean useG1GC;
-    @HotSpotVMFlag(name = "UseConcMarkSweepGC") @Stable public boolean useCMSGC;
 
     @HotSpotVMFlag(name = "AllocatePrefetchStyle") @Stable public int allocatePrefetchStyle;
     @HotSpotVMFlag(name = "AllocatePrefetchInstr") @Stable public int allocatePrefetchInstr;
@@ -1102,6 +1087,11 @@ public class HotSpotVMConfig extends CompilerObject {
         return (layoutHelperArrayTagTypeValue & ~layoutHelperArrayTagObjectValue) << layoutHelperArrayTagShift;
     }
 
+    /**
+     * Bit pattern in the klass layout helper that can be used to identify arrays.
+     */
+    public final int arrayKlassLayoutHelperIdentifier = 0x80000000;
+
     @HotSpotVMField(name = "ArrayKlass::_component_mirror", type = "oop", get = HotSpotVMField.Type.OFFSET) @Stable public int arrayKlassComponentMirrorOffset;
 
     @HotSpotVMField(name = "java_lang_Class::_klass_offset", type = "int", get = HotSpotVMField.Type.VALUE) @Stable public int klassOffset;
@@ -1240,7 +1230,6 @@ public class HotSpotVMConfig extends CompilerObject {
     @Stable public long newArrayAddress;
     @Stable public long newMultiArrayAddress;
     @Stable public long dynamicNewArrayAddress;
-    @Stable public long dynamicNewInstanceAddress;
     @Stable public long registerFinalizerAddress;
     @Stable public long threadIsInterruptedAddress;
     @Stable public long vmMessageAddress;
@@ -1316,29 +1305,8 @@ public class HotSpotVMConfig extends CompilerObject {
         }
 
         assert codeEntryAlignment > 0 : codeEntryAlignment;
-        assert (layoutHelperArrayTagObjectValue & (1 << (Integer.SIZE - 1))) != 0 : "object array must have first bit set";
-        assert (layoutHelperArrayTagTypeValue & (1 << (Integer.SIZE - 1))) != 0 : "type array must have first bit set";
+        assert (layoutHelperArrayTagObjectValue & layoutHelperArrayTagTypeValue & arrayKlassLayoutHelperIdentifier) != 0 : "object array and type array must have first bit set";
 
         return true;
-    }
-
-    /**
-     * A compact representation of the different encoding strategies for Objects and metadata.
-     */
-    public static class CompressEncoding {
-        public final long base;
-        public final int shift;
-        public final int alignment;
-
-        CompressEncoding(long base, int shift, int alignment) {
-            this.base = base;
-            this.shift = shift;
-            this.alignment = alignment;
-        }
-
-        @Override
-        public String toString() {
-            return "base: " + base + " shift: " + shift + " alignment: " + alignment;
-        }
     }
 }

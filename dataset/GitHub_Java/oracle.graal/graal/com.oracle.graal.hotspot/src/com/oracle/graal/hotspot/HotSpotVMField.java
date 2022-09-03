@@ -40,8 +40,7 @@ public @interface HotSpotVMField {
 
     /**
      * List of architectures where this constant is required. Names are derived from
-     * {@link HotSpotVMConfig#getHostArchitectureName()}. An empty list implies that the constant is
-     * required on all architectures.
+     * {@link HotSpotVMConfig#getHostArchitectureName()}.
      */
     String[] archs() default {};
 
