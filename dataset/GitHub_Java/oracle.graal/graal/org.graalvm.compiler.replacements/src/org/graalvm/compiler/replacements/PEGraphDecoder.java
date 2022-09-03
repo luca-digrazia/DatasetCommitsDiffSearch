@@ -219,7 +219,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
         @Override
         public StructuredGraph getGraph() {
-            return graph;
+            return methodScope.graph;
         }
 
         @Override
@@ -400,10 +400,9 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
     protected final OptionValues options;
 
-    public PEGraphDecoder(Architecture architecture, StructuredGraph graph, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
-                    StampProvider stampProvider,
-                    OptionValues options) {
-        super(architecture, graph, metaAccess, constantReflection, constantFieldProvider, stampProvider, true);
+    public PEGraphDecoder(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider, StampProvider stampProvider,
+                    Architecture architecture, OptionValues options) {
+        super(metaAccess, constantReflection, constantFieldProvider, stampProvider, true, architecture);
         this.options = options;
     }
 
@@ -423,12 +422,12 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         decode(createInitialLoopScope(methodScope, null));
         cleanupGraph(methodScope);
 
-        Debug.dump(Debug.VERBOSE_LOG_LEVEL, graph, "After graph cleanup");
-        assert graph.verify();
+        Debug.dump(Debug.VERBOSE_LOG_LEVEL, methodScope.graph, "After graph cleanup");
+        assert methodScope.graph.verify();
 
         try {
             /* Check that the control flow graph can be computed, to catch problems early. */
-            assert CFGVerifier.verify(ControlFlowGraph.compute(graph, true, true, true, true));
+            assert CFGVerifier.verify(ControlFlowGraph.compute(methodScope.graph, true, true, true, true));
         } catch (Throwable ex) {
             throw GraalError.shouldNotReachHere("Control flow graph not valid after partial evaluation");
         }
@@ -438,7 +437,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
     protected void cleanupGraph(MethodScope methodScope) {
         super.cleanupGraph(methodScope);
 
-        for (FrameState frameState : graph.getNodes(FrameState.TYPE)) {
+        for (FrameState frameState : methodScope.graph.getNodes(FrameState.TYPE)) {
             if (frameState.bci == BytecodeFrame.UNWIND_BCI) {
                 /*
                  * handleMissingAfterExceptionFrameState is called during graph decoding from
@@ -493,7 +492,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
 
         /* We know that we need an invoke, so now we can add the call target to the graph. */
-        graph.add(callTarget);
+        methodScope.graph.add(callTarget);
         registerNode(loopScope, invokeData.callTargetOrderId, callTarget, false, false);
         return super.handleInvoke(methodScope, loopScope, invokeData);
     }
@@ -547,7 +546,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
          */
         invoke.asNode().replaceAtPredecessor(null);
 
-        PEMethodScope inlineScope = new PEMethodScope(graph, methodScope, loopScope, null, targetMethod, invokeData, methodScope.inliningDepth + 1, methodScope.loopExplosionPlugin,
+        PEMethodScope inlineScope = new PEMethodScope(methodScope.graph, methodScope, loopScope, null, targetMethod, invokeData, methodScope.inliningDepth + 1, methodScope.loopExplosionPlugin,
                         methodScope.invocationPlugins, methodScope.inlineInvokePlugins, null, arguments);
         PEAppendGraphBuilderContext graphBuilderContext = new PEAppendGraphBuilderContext(inlineScope, invokePredecessor);
         InvocationPluginReceiver invocationPluginReceiver = new InvocationPluginReceiver(graphBuilderContext);
@@ -621,7 +620,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         FixedWithNextNode predecessor = (FixedWithNextNode) invokeNode.predecessor();
         invokeNode.replaceAtPredecessor(null);
 
-        PEMethodScope inlineScope = new PEMethodScope(graph, methodScope, loopScope, graphToInline, inlineMethod, invokeData, methodScope.inliningDepth + 1,
+        PEMethodScope inlineScope = new PEMethodScope(methodScope.graph, methodScope, loopScope, graphToInline, inlineMethod, invokeData, methodScope.inliningDepth + 1,
                         methodScope.loopExplosionPlugin, methodScope.invocationPlugins, methodScope.inlineInvokePlugins, null, arguments);
 
         /*
@@ -658,7 +657,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
                 unwindReplacement = makeStubNode(methodScope, loopScope, invokeData.exceptionNextOrderId);
             } else {
                 /* No exception handler available, so the only thing we can do is deoptimize. */
-                unwindReplacement = graph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.NotCompiledExceptionHandler));
+                unwindReplacement = methodScope.graph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.NotCompiledExceptionHandler));
             }
 
             if (unwindNodes.size() == 1) {
@@ -674,7 +673,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
                  * also explode exception paths. Merge the exception in a similar way as multiple
                  * return values.
                  */
-                MergeNode unwindMergeNode = graph.add(new MergeNode());
+                MergeNode unwindMergeNode = methodScope.graph.add(new MergeNode());
                 exceptionValue = InliningUtil.mergeValueProducers(unwindMergeNode, unwindNodes, unwindNode -> unwindNode.exception());
                 unwindMergeNode.setNext(unwindReplacement);
 
@@ -695,7 +694,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
                 FixedNode n = nodeAfterInvoke(methodScope, loopScope, invokeData, AbstractBeginNode.prevBegin(returnNode));
                 returnNode.replaceAndDelete(n);
             } else {
-                AbstractMergeNode merge = graph.add(new MergeNode());
+                AbstractMergeNode merge = methodScope.graph.add(new MergeNode());
                 merge.setStateAfter((FrameState) ensureNodeCreated(methodScope, loopScope, invokeData.stateAfterOrderId));
                 returnValue = InliningUtil.mergeReturns(merge, returnNodes);
                 FixedNode n = nodeAfterInvoke(methodScope, loopScope, invokeData, merge);
@@ -724,7 +723,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
 
         if (Debug.isDumpEnabled(Debug.INFO_LOG_LEVEL) && DumpDuringGraphBuilding.getValue(options)) {
-            Debug.dump(Debug.INFO_LOG_LEVEL, graph, "Inline finished: %s.%s", inlineMethod.getDeclaringClass().getUnqualifiedName(), inlineMethod.getName());
+            Debug.dump(Debug.INFO_LOG_LEVEL, methodScope.graph, "Inline finished: %s.%s", inlineMethod.getDeclaringClass().getUnqualifiedName(), inlineMethod.getName());
         }
     }
 
@@ -843,7 +842,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             }
 
             JavaKind invokeReturnKind = methodScope.invokeData.invoke.asNode().getStackKind();
-            FrameState outerState = stateAtReturn.duplicateModified(graph, methodScope.invokeData.invoke.bci(), stateAtReturn.rethrowException(), true, invokeReturnKind, null, null);
+            FrameState outerState = stateAtReturn.duplicateModified(methodScope.graph, methodScope.invokeData.invoke.bci(), stateAtReturn.rethrowException(), true, invokeReturnKind, null, null);
 
             /*
              * When the encoded graph has methods inlining, we can already have a proper caller
@@ -868,7 +867,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             ensureStateAfterDecoded(methodScope);
 
             assert methodScope.exceptionPlaceholderNode == null;
-            methodScope.exceptionPlaceholderNode = graph.add(new ExceptionPlaceholderNode());
+            methodScope.exceptionPlaceholderNode = methodScope.graph.add(new ExceptionPlaceholderNode());
             registerNode(methodScope.callerLoopScope, methodScope.invokeData.exceptionOrderId, methodScope.exceptionPlaceholderNode, false, false);
             FrameState exceptionState = (FrameState) ensureNodeCreated(methodScope.caller, methodScope.callerLoopScope, methodScope.invokeData.exceptionStateOrderId);
 
