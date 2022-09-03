@@ -36,11 +36,15 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.StringJoiner;
+import java.util.stream.Collectors;
 
 import org.eclipse.emf.common.notify.Adapter;
 import org.eclipse.emf.common.notify.Notification;
@@ -52,25 +56,32 @@ import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.resource.Resource;
-import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import com.intel.llvm.ireditor.lLVM_IR.BasicBlock;
-import com.intel.llvm.ireditor.lLVM_IR.FunctionDef;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.llvm.parser.impl.LLVMWriteVisitor;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.llvm.parser.base.model.blocks.InstructionBlock;
+import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDefinition;
+import com.oracle.truffle.llvm.parser.base.model.visitors.ModelVisitor;
+import com.oracle.truffle.llvm.parser.bc.impl.LLVMBitcodeVisitor;
+import com.oracle.truffle.llvm.parser.bc.impl.LLVMLifetimeAnalysis;
 import com.oracle.truffle.llvm.parser.impl.lifetime.LLVMLifeTimeAnalysisResult;
-import com.oracle.truffle.llvm.parser.impl.lifetime.LLVMLifeTimeAnalysisVisitor;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
-import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
-import com.oracle.truffle.llvm.test.FunctionVisitorIterator.LLVMFunctionVisitor;
+import com.oracle.truffle.llvm.test.options.SulongTestOptions;
 
 @RunWith(Parameterized.class)
 public class TestLifetimeAnalysisGCC extends TestSuiteBase {
+
+    // TODO in the long term we should replace this
+    private static final String[] excludedFiles = new String[]{
+                    "projects/com.oracle.truffle.llvm.test/suites/gcc/gcc-5.2.0/gcc/testsuite/gcc.dg/pr43419.c",
+                    "projects/com.oracle.truffle.llvm.test/suites/gcc/gcc-5.2.0/gcc/testsuite/gfortran.fortran-torture/execute/integer_select.f90"
+    };
 
     private static final String FUNCTION_INDENT = "";
     private static final String BEGIN_DEAD_END_INDENT = "\t";
@@ -89,7 +100,7 @@ public class TestLifetimeAnalysisGCC extends TestSuiteBase {
     public TestLifetimeAnalysisGCC(TestCaseFiles tuple) throws IOException {
         this.tuple = tuple;
         setUpReferenceFilePath(tuple);
-        if (LLVMBaseOptionFacade.generateLifetimeReferenceOutput()) {
+        if (SulongTestOptions.TEST.generateLifetimeReferenceOutput()) {
             referenceOutputFile.getParentFile().mkdirs();
             printStream = new PrintStream(referenceOutputFile);
         } else {
@@ -109,8 +120,40 @@ public class TestLifetimeAnalysisGCC extends TestSuiteBase {
     public static List<TestCaseFiles[]> getTestFiles() throws IOException {
         File configFile = LLVMPaths.GCC_TEST_SUITE_CONFIG;
         File testSuite = LLVMPaths.GCC_TEST_SUITE;
-        List<TestCaseFiles[]> files = getTestCasesFromConfigFile(configFile, testSuite, new TestCaseGeneratorImpl(false, true));
-        return files;
+        List<TestCaseFiles[]> files = getTestCasesFromConfigFile(configFile, testSuite, new TestCaseGeneratorImpl(false, true), true);
+
+        final List<TestCaseFiles[]> filteredFiles = new ArrayList<>();
+        for (int i = 0; i < files.size(); i++) {
+            TestCaseFiles[] testCaseFilesArray = files.get(i);
+            int index = 0;
+            while (index < testCaseFilesArray.length) {
+                if (isExcluded(testCaseFilesArray[index])) {
+                    final TestCaseFiles[] newTestCaseFiles = new TestCaseFiles[testCaseFilesArray.length - 1];
+                    int targetIndex = 0;
+                    for (int j = 0; j < testCaseFilesArray.length; j++) {
+                        if (index != j) {
+                            newTestCaseFiles[targetIndex++] = testCaseFilesArray[j];
+                        }
+                    }
+                    testCaseFilesArray = newTestCaseFiles;
+                } else {
+                    index++;
+                }
+            }
+            if (testCaseFilesArray.length != 0) {
+                filteredFiles.add(testCaseFilesArray);
+            }
+        }
+        return filteredFiles;
+    }
+
+    private static boolean isExcluded(TestCaseFiles testCase) {
+        for (String excludedFilename : excludedFiles) {
+            if (testCase.getOriginalFile().getAbsolutePath().endsWith(excludedFilename)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private enum ParseState {
@@ -127,37 +170,123 @@ public class TestLifetimeAnalysisGCC extends TestSuiteBase {
         try {
             LLVMLogger.info("original file: " + tuple.getOriginalFile());
 
-            FunctionVisitorIterator.visitFunctions(new LLVMFunctionVisitor() {
-
+            final LLVMBitcodeVisitor.BitcodeParserResult parserResult = LLVMBitcodeVisitor.BitcodeParserResult.getFromSource(Source.newBuilder(tuple.getBitCodeFile().getAbsoluteFile()).build());
+            parserResult.getModel().accept(new ModelVisitor() {
                 @Override
-                public void visit(FunctionDef def) {
-                    Set<String> writes = LLVMWriteVisitor.visit(def);
-                    FrameDescriptor frameDescriptor = new FrameDescriptor();
-                    for (String variableName : writes) {
-                        frameDescriptor.findOrAddFrameSlot(variableName);
-                    }
-                    LLVMLifeTimeAnalysisResult analysisResult = LLVMLifeTimeAnalysisVisitor.visit(def,
-                                    frameDescriptor);
-                    String functionName = def.getHeader().getName();
-                    if (LLVMBaseOptionFacade.generateLifetimeReferenceOutput()) {
-                        printStringln(functionName);
-                        printStringln(BEGIN_DEAD);
-                        Map<BasicBlock, FrameSlot[]> beginDead = analysisResult.getBeginDead();
-                        printBasicBlockVariables(beginDead);
-                        printStringln(END_DEAD);
-                        Map<BasicBlock, FrameSlot[]> endDead = analysisResult.getEndDead();
-                        printBasicBlockVariables(endDead);
-                    } else {
-                        LLVMLifeTimeAnalysisResult expected = referenceResults.get(functionName);
-                        Assert.assertEquals(functionName, expected, analysisResult);
-                    }
+                public void ifVisitNotOverwritten(Object obj) {
                 }
 
-            }, tuple.getBitCodeFile());
+                @Override
+                public void visit(FunctionDefinition method) {
+                    final String functionName = method.getName();
+                    final LLVMLifetimeAnalysis lifetimes = LLVMLifetimeAnalysis.getResult(method, parserResult.getStackAllocation().getFrame(functionName),
+                                    parserResult.getPhis().getPhiMap(functionName));
+
+                    if (SulongTestOptions.TEST.generateLifetimeReferenceOutput()) {
+                        printStringln(functionName);
+                        printStringln(BEGIN_DEAD);
+                        printInstructionBlockVariables(lifetimes.getNullableBefore());
+                        printStringln(END_DEAD);
+                        printInstructionBlockVariables(lifetimes.getNullableAfter());
+
+                    } else {
+                        LLVMLifeTimeAnalysisResult expected = referenceResults.get(functionName);
+                        assertResultsEqual(functionName, expected, lifetimes);
+                    }
+
+                }
+            });
+
         } catch (Throwable e) {
             recordError(tuple, e);
             throw e;
         }
+    }
+
+    private void assertResultsEqual(String functionName, LLVMLifeTimeAnalysisResult expected, LLVMLifetimeAnalysis actual) {
+        if (expected == null) {
+            LLVMLogger.unconditionalInfo(String.format("No reference result for test %s", tuple.getBitCodeFile().getAbsolutePath()));
+            return;
+        }
+        final Map<String, Set<String>> expectedBeginDead = getCommonFromBasicBlocks(expected.getBeginDead());
+        final Map<String, Set<String>> actualBeginDead = getCommonFromInstructionBlocks(actual.getNullableBefore());
+        assertMapsEqual(functionName, expectedBeginDead, actualBeginDead);
+
+        final Map<String, Set<String>> expectedEndDead = getCommonFromBasicBlocks(expected.getEndDead());
+        final Map<String, Set<String>> actualEndDead = getCommonFromInstructionBlocks(actual.getNullableAfter());
+        assertMapsEqual(functionName, expectedEndDead, actualEndDead);
+    }
+
+    private static Map<String, Set<String>> getCommonFromBasicBlocks(Map<BasicBlock, FrameSlot[]> original) {
+        final Map<String, Set<String>> commonMap = new HashMap<>(original.size());
+        for (Map.Entry<BasicBlock, FrameSlot[]> entry : original.entrySet()) {
+            final String name = getQuotedName(entry.getKey().getName());
+            final Set<String> slots = getQuotedNames(entry.getValue());
+            commonMap.put(name, slots);
+        }
+        return commonMap;
+    }
+
+    private static Map<String, Set<String>> getCommonFromInstructionBlocks(Map<InstructionBlock, FrameSlot[]> original) {
+        final Map<String, Set<String>> commonMap = new HashMap<>(original.size());
+        for (Map.Entry<InstructionBlock, FrameSlot[]> entry : original.entrySet()) {
+            final String name = getQuotedName(entry.getKey().getName());
+            final Set<String> slots = getQuotedNames(entry.getValue());
+            commonMap.put(name, slots);
+        }
+        return commonMap;
+    }
+
+    private static Set<String> getQuotedNames(FrameSlot[] slots) {
+        return Arrays.stream(slots).map(frameSlot -> getQuotedName((String) frameSlot.getIdentifier())).collect(Collectors.toSet());
+    }
+
+    private static String getQuotedName(String originalName) {
+        // make sure all names are quoted to avoid naming differences between parsers
+        if (originalName.charAt(1) == '"') {
+            return originalName;
+        } else {
+            return String.format("%%\"%s\"", originalName.substring(1));
+        }
+    }
+
+    private void assertMapsEqual(String functionName, Map<String, Set<String>> expected, Map<String, Set<String>> actual) {
+        if (expected.size() != actual.size()) {
+            throw new AssertionError(buildErrorMessage(functionName, "Different Map Sizes!"));
+        }
+
+        for (final String name : expected.keySet()) {
+            if (!actual.containsKey(name)) {
+                throw new AssertionError(buildErrorMessage(functionName, String.format("Cannot find block %s in %s", name, asString(actual.keySet()))));
+            }
+
+            final Set<String> expectedFrameSlots = expected.get(name);
+            final Set<String> actualFrameSlots = actual.get(name);
+            if (!setsEqual(expectedFrameSlots, actualFrameSlots)) {
+                throw new AssertionError(buildErrorMessage(functionName, String.format("Nullers do not match: should be %s, but are %s", asString(expectedFrameSlots), asString(actualFrameSlots))));
+            }
+        }
+    }
+
+    private static boolean setsEqual(Set<String> expected, Set<String> actual) {
+        for (String expectedString : expected) {
+            if (!actual.contains(expectedString)) {
+                return false;
+            }
+        }
+        return expected.size() == actual.size();
+    }
+
+    private static String asString(Set<String> names) {
+        final StringJoiner joiner = new StringJoiner(", ", "[", "]");
+        for (final String name : names) {
+            joiner.add(name);
+        }
+        return joiner.toString();
+    }
+
+    private String buildErrorMessage(String functionName, String message) {
+        return String.format("Error in Function %s in File %s: %s", functionName, tuple.getBitCodeFile().getAbsolutePath(), message);
     }
 
     private static BasicBlock createBasicBlock(String name) {
@@ -391,8 +520,8 @@ public class TestLifetimeAnalysisGCC extends TestSuiteBase {
         slots.clear();
     }
 
-    private void printBasicBlockVariables(Map<BasicBlock, FrameSlot[]> beginDead) {
-        for (BasicBlock b : beginDead.keySet()) {
+    private void printInstructionBlockVariables(Map<InstructionBlock, FrameSlot[]> beginDead) {
+        for (InstructionBlock b : beginDead.keySet()) {
             printString(BASIC_BLOCK_INDENT + b.getName());
             for (FrameSlot slot : beginDead.get(b)) {
                 if (slot != null) {

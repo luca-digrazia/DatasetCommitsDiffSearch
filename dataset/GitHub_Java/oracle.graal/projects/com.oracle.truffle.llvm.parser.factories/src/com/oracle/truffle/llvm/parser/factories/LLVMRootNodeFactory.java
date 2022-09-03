@@ -35,18 +35,18 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.nodes.func.LLVMGlobalRootNode;
-import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.LLVMRuntimeType;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.memory.LLVMHeap;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.context.LLVMContext;
+import com.oracle.truffle.llvm.context.LLVMLanguage;
+import com.oracle.truffle.llvm.nodes.impl.func.LLVMGlobalRootNode;
+import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
+import com.oracle.truffle.llvm.types.LLVMAddress;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
+import com.oracle.truffle.llvm.types.memory.LLVMHeap;
+import com.oracle.truffle.llvm.types.memory.LLVMMemory;
 
-class LLVMRootNodeFactory {
+public class LLVMRootNodeFactory {
 
-    static LLVMGlobalRootNode createGlobalRootNode(
+    public static LLVMGlobalRootNode createGlobalRootNode(
                     LLVMParserRuntime runtime,
                     RootCallTarget mainCallTarget,
                     Object[] args,
@@ -62,7 +62,7 @@ class LLVMRootNodeFactory {
                         mainTypes);
     }
 
-    private static LLVMGlobalRootNode createGlobalRootNode(
+    public static LLVMGlobalRootNode createGlobalRootNode(
                     LLVMContext context,
                     FrameSlot stack,
                     FrameDescriptor frame,
@@ -75,18 +75,20 @@ class LLVMRootNodeFactory {
     }
 
     private static Object[] createArgs(Source sourceFile, Object[] mainArgs, LLVMRuntimeType[] llvmRuntimeTypes) {
-        int mainArgsCount = mainArgs == null ? 0 : mainArgs.length;
-        int argsCount = mainArgsCount + 1;
+        int argsCount;
+        if (mainArgs == null) {
+            argsCount = 1;
+        } else {
+            argsCount = mainArgs.length + 1;
+        }
         if (llvmRuntimeTypes.length == 0) {
             return new Object[0];
         } else if (llvmRuntimeTypes.length == 1) {
             return new Object[]{argsCount};
         } else {
-            Object[] args = new Object[argsCount];
+            Object[] args = new Object[mainArgs.length + 1];
             args[0] = sourceFile.getPath() == null ? "" : sourceFile.getPath();
-            if (mainArgsCount > 0) {
-                System.arraycopy(mainArgs, 0, args, 1, mainArgsCount);
-            }
+            System.arraycopy(mainArgs, 0, args, 1, mainArgs.length);
             LLVMAddress allocatedArgsStartAddress = getArgsAsStringArray(args);
             // Checkstyle: stop magic number check
             if (llvmRuntimeTypes.length == 2) {
@@ -101,10 +103,10 @@ class LLVMRootNodeFactory {
         }
     }
 
-    private static LLVMAddress getArgsAsStringArray(Object[] args) {
+    private static LLVMAddress getArgsAsStringArray(Object... args) {
         String[] stringArgs = getStringArgs(args);
         int argsMemory = stringArgs.length * LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE;
-        LLVMAddress allocatedArgsStartAddress = LLVMMemory.allocateMemory(argsMemory);
+        LLVMAddress allocatedArgsStartAddress = LLVMHeap.allocateMemory(argsMemory);
         LLVMAddress allocatedArgs = allocatedArgsStartAddress;
         for (int i = 0; i < stringArgs.length; i++) {
             String string = stringArgs[i];
@@ -115,7 +117,7 @@ class LLVMRootNodeFactory {
         return allocatedArgsStartAddress;
     }
 
-    private static String[] getStringArgs(Object[] args) {
+    private static String[] getStringArgs(Object... args) {
         String[] stringArgs = new String[args.length];
         for (int i = 0; i < args.length; i++) {
             stringArgs[i] = args[i].toString();
