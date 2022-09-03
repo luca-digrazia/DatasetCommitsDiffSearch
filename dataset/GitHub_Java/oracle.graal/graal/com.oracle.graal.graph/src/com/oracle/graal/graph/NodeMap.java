@@ -26,11 +26,11 @@ import java.util.AbstractMap.SimpleEntry;
 import java.util.*;
 import java.util.Map.Entry;
 
-public class NodeMap<T> {
+public final class NodeMap<T> {
 
     private final Graph graph;
     private final boolean autogrow;
-    protected Object[] values;
+    private Object[] values;
 
     public NodeMap(Graph graph) {
         this(graph, false);
@@ -52,29 +52,6 @@ public class NodeMap<T> {
     public T get(Node node) {
         check(node);
         return (T) values[node.id()];
-    }
-
-    public boolean isEmpty() {
-        return !entries().iterator().hasNext();
-    }
-
-    public boolean containsKey(Object key) {
-        if (key instanceof Node) {
-            Node node = (Node) key;
-            if (node.graph() == graph()) {
-                return get(node) != null;
-            }
-        }
-        return false;
-    }
-
-    public boolean containsValue(Object value) {
-        for (Object o : values) {
-            if (o == value) {
-                return true;
-            }
-        }
-        return false;
     }
 
     public Graph graph() {
@@ -159,28 +136,5 @@ public class NodeMap<T> {
                 };
             }
         };
-    }
-
-    @Override
-    public String toString() {
-        Iterator<Entry<Node, T>> i = entries().iterator();
-        if (!i.hasNext()) {
-            return "{}";
-        }
-
-        StringBuilder sb = new StringBuilder();
-        sb.append('{');
-        while (true) {
-            Entry<Node, T> e = i.next();
-            Node key = e.getKey();
-            T value = e.getValue();
-            sb.append(key);
-            sb.append('=');
-            sb.append(value);
-            if (!i.hasNext()) {
-                return sb.append('}').toString();
-            }
-            sb.append(',').append(' ');
-        }
     }
 }
