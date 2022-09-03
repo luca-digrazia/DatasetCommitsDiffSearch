@@ -40,18 +40,9 @@ import uk.ac.man.cs.llvm.ir.types.Type;
 
 public class MetadataBlock {
 
-    protected final List<MetadataBaseNode> metadata;
+    protected final List<MetadataBaseNode> metadata = new ArrayList<>();
 
     protected int startIndex = 0;
-
-    public MetadataBlock() {
-        metadata = new ArrayList<>();
-    }
-
-    public MetadataBlock(MetadataBlock orig) {
-        this.metadata = new ArrayList<>(orig.metadata);
-        this.startIndex = orig.startIndex;
-    }
 
     public void setStartIndex(int index) {
         startIndex = index;
@@ -113,11 +104,6 @@ public class MetadataBlock {
         MetadataBaseNode get();
 
         int getIndex();
-    }
-
-    @Override
-    public String toString() {
-        return "MetadataBlock [startIndex=" + startIndex + ", metadata=" + metadata + "]";
     }
 
     public static final VoidReference voidRef = new VoidReference();
