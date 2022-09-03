@@ -518,12 +518,12 @@ public final class REPLServer {
         breakpoints.remove(breakpoint);
     }
 
-    void call(String name, Object... args) throws IOException {
+    void call(String name) throws IOException {
         Value symbol = engine.findGlobalSymbol(name);
         if (symbol == null) {
             throw new IOException("symbol \"" + name + "\" not found");
         }
-        symbol.invoke(null, args);
+        symbol.invoke(null);
     }
 
     /**
