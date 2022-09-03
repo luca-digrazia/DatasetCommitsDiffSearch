@@ -22,18 +22,8 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 
 @NodeInfo(allowedUsageTypes = {InputType.Association})
 public class EndNode extends AbstractEndNode {
-    public static EndNode create() {
-        return new EndNodeGen();
-    }
-
-    public static Class<? extends EndNode> getGenClass() {
-        return EndNodeGen.class;
-    }
-
-    EndNode() {
-    }
 }

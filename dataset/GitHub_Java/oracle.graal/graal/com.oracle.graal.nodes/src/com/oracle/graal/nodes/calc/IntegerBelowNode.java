@@ -24,8 +24,8 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.util.*;
 
@@ -38,11 +38,7 @@ public class IntegerBelowNode extends CompareNode {
      * @param x the instruction producing the first input to the instruction
      * @param y the instruction that produces the second input to this instruction
      */
-    public static IntegerBelowNode create(ValueNode x, ValueNode y) {
-        return new IntegerBelowNodeGen(x, y);
-    }
-
-    protected IntegerBelowNode(ValueNode x, ValueNode y) {
+    public IntegerBelowNode(ValueNode x, ValueNode y) {
         super(x, y);
         assert x.stamp() instanceof IntegerStamp;
         assert y.stamp() instanceof IntegerStamp;
@@ -79,13 +75,13 @@ public class IntegerBelowNode extends CompareNode {
         }
         if (forX.isConstant() && forX.asConstant().asLong() == 0) {
             // 0 |<| y is the same as 0 != y
-            return LogicNegationNode.create(CompareNode.createCompareNode(Condition.EQ, forX, forY));
+            return new LogicNegationNode(CompareNode.createCompareNode(Condition.EQ, forX, forY));
         }
         return this;
     }
 
     @Override
     protected CompareNode duplicateModified(ValueNode newX, ValueNode newY) {
-        return IntegerBelowNode.create(newX, newY);
+        return new IntegerBelowNode(newX, newY);
     }
 }

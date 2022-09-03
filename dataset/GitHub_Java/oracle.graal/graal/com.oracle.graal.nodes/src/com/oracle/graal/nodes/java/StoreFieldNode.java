@@ -24,7 +24,7 @@ package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
@@ -63,20 +63,12 @@ public class StoreFieldNode extends AccessFieldNode implements StateSplit, Virtu
      * @param field the compiler interface field
      * @param value the node representing the value to store to the field
      */
-    public static StoreFieldNode create(ValueNode object, ResolvedJavaField field, ValueNode value) {
-        return new StoreFieldNodeGen(object, field, value);
-    }
-
-    StoreFieldNode(ValueNode object, ResolvedJavaField field, ValueNode value) {
+    public StoreFieldNode(ValueNode object, ResolvedJavaField field, ValueNode value) {
         super(StampFactory.forVoid(), object, field);
         this.value = value;
     }
 
-    public static StoreFieldNode create(ValueNode object, ResolvedJavaField field, ValueNode value, FrameState stateAfter) {
-        return new StoreFieldNodeGen(object, field, value, stateAfter);
-    }
-
-    StoreFieldNode(ValueNode object, ResolvedJavaField field, ValueNode value, FrameState stateAfter) {
+    public StoreFieldNode(ValueNode object, ResolvedJavaField field, ValueNode value, FrameState stateAfter) {
         super(StampFactory.forVoid(), object, field);
         this.value = value;
         this.stateAfter = stateAfter;

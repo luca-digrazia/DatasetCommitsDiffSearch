@@ -26,7 +26,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.replacements.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.replacements.nodes.*;
 
@@ -38,11 +37,7 @@ import com.oracle.graal.replacements.nodes.*;
 @NodeInfo
 public class ClassIsArrayNode extends MacroNode implements Canonicalizable {
 
-    public static ClassIsArrayNode create(Invoke invoke) {
-        return new ClassIsArrayNodeGen(invoke);
-    }
-
-    protected ClassIsArrayNode(Invoke invoke) {
+    public ClassIsArrayNode(Invoke invoke) {
         super(invoke);
     }
 

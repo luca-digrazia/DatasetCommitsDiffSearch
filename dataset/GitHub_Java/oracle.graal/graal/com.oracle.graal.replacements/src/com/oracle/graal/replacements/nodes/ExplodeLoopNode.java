@@ -26,7 +26,6 @@ import java.util.*;
 
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.replacements.Snippet.VarargsParameter;
 
@@ -39,11 +38,7 @@ import com.oracle.graal.replacements.Snippet.VarargsParameter;
 @NodeInfo
 public class ExplodeLoopNode extends FixedWithNextNode {
 
-    public static ExplodeLoopNode create() {
-        return new ExplodeLoopNodeGen();
-    }
-
-    protected ExplodeLoopNode() {
+    public ExplodeLoopNode() {
         super(StampFactory.forVoid());
     }
 

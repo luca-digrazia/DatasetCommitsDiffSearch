@@ -24,7 +24,7 @@ package com.oracle.graal.truffle.nodes.arithmetic;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
@@ -80,8 +80,8 @@ public abstract class IntegerExactArithmeticSplitNode extends ControlSplitNode i
             FixedWithNextNode previous = tool.lastFixedNode();
             FixedNode next = previous.next();
             previous.setNext(null);
-            DeoptimizeNode deopt = floatingNode.graph().add(DeoptimizeNode.create(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.ArithmeticException));
-            BeginNode normalBegin = floatingNode.graph().add(BeginNode.create());
+            DeoptimizeNode deopt = floatingNode.graph().add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.ArithmeticException));
+            BeginNode normalBegin = floatingNode.graph().add(new BeginNode());
             normalBegin.setNext(next);
             IntegerExactArithmeticSplitNode split = node.createSplit(normalBegin, BeginNode.begin(deopt));
             previous.setNext(split);

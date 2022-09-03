@@ -24,8 +24,8 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -40,11 +40,7 @@ public class ObjectEqualsNode extends CompareNode implements Virtualizable {
      * @param x the instruction producing the first input to the instruction
      * @param y the instruction that produces the second input to this instruction
      */
-    public static ObjectEqualsNode create(ValueNode x, ValueNode y) {
-        return new ObjectEqualsNodeGen(x, y);
-    }
-
-    protected ObjectEqualsNode(ValueNode x, ValueNode y) {
+    public ObjectEqualsNode(ValueNode x, ValueNode y) {
         super(x, y);
         assert x.getKind() == Kind.Object;
         assert y.getKind() == Kind.Object;
@@ -72,9 +68,9 @@ public class ObjectEqualsNode extends CompareNode implements Virtualizable {
             return LogicConstantNode.contradiction();
         }
         if (StampTool.isObjectAlwaysNull(forX)) {
-            return IsNullNode.create(forY);
+            return new IsNullNode(forY);
         } else if (StampTool.isObjectAlwaysNull(forY)) {
-            return IsNullNode.create(forX);
+            return new IsNullNode(forX);
         }
         return this;
     }
@@ -85,7 +81,7 @@ public class ObjectEqualsNode extends CompareNode implements Virtualizable {
                 Constant otherUnboxed = tool.getConstantReflectionProvider().unboxPrimitive(other.asConstant());
                 if (otherUnboxed != null && otherUnboxed.getKind() == Kind.Boolean) {
                     int expectedValue = otherUnboxed.asBoolean() ? 1 : 0;
-                    IntegerEqualsNode equals = IntegerEqualsNode.create(state.getEntry(0), ConstantNode.forInt(expectedValue, graph()));
+                    IntegerEqualsNode equals = new IntegerEqualsNode(state.getEntry(0), ConstantNode.forInt(expectedValue, graph()));
                     tool.addNode(equals);
                     tool.replaceWithValue(equals);
                 } else {
@@ -116,7 +112,7 @@ public class ObjectEqualsNode extends CompareNode implements Virtualizable {
                 /*
                  * One of the two objects has identity, the other doesn't. In code, this looks like
                  * "Integer.valueOf(a) == new Integer(b)", which is always false.
-                 * 
+                 *
                  * In other words: an object created via valueOf can never be equal to one created
                  * by new in the same compilation unit.
                  */
@@ -126,7 +122,7 @@ public class ObjectEqualsNode extends CompareNode implements Virtualizable {
                 assert stateX.getVirtualObject().entryCount() == 1 && stateY.getVirtualObject().entryCount() == 1;
                 assert stateX.getVirtualObject().type().equals(stateY.getVirtualObject().type());
                 assert stateX.getVirtualObject().entryKind(0).getStackKind() == Kind.Int || stateX.getVirtualObject().entryKind(0) == Kind.Long;
-                IntegerEqualsNode equals = IntegerEqualsNode.create(stateX.getEntry(0), stateY.getEntry(0));
+                IntegerEqualsNode equals = new IntegerEqualsNode(stateX.getEntry(0), stateY.getEntry(0));
                 tool.addNode(equals);
                 tool.replaceWithValue(equals);
             } else {
@@ -138,6 +134,6 @@ public class ObjectEqualsNode extends CompareNode implements Virtualizable {
 
     @Override
     protected CompareNode duplicateModified(ValueNode newX, ValueNode newY) {
-        return ObjectEqualsNode.create(newX, newY);
+        return new ObjectEqualsNode(newX, newY);
     }
 }

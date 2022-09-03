@@ -27,14 +27,14 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 
 @NodeInfo
 public abstract class LoweredCallTargetNode extends CallTargetNode {
 
-    protected Stamp returnStamp;
-    protected JavaType[] signature;
-    protected CallingConvention.Type callType;
+    private final Stamp returnStamp;
+    private final JavaType[] signature;
+    private final CallingConvention.Type callType;
 
     public LoweredCallTargetNode(List<ValueNode> arguments, Stamp returnStamp, JavaType[] signature, ResolvedJavaMethod target, CallingConvention.Type callType, InvokeKind invokeKind) {
         super(arguments, target, invokeKind);

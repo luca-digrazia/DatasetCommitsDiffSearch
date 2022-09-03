@@ -58,11 +58,12 @@ public class SnippetLocationNode extends LocationNode implements Canonicalizable
         return graph.unique(new SnippetLocationNode(snippetReflection, identity, kind, displacement, index, indexScaling));
     }
 
-    SnippetLocationNode(@InjectedNodeParameter SnippetReflectionProvider snippetReflection, ValueNode locationIdentity, ValueNode kind, ValueNode displacement) {
+    private SnippetLocationNode(@InjectedNodeParameter SnippetReflectionProvider snippetReflection, ValueNode locationIdentity, ValueNode kind, ValueNode displacement) {
         this(snippetReflection, locationIdentity, kind, displacement, null, null);
     }
 
-    SnippetLocationNode(@InjectedNodeParameter SnippetReflectionProvider snippetReflection, ValueNode locationIdentity, ValueNode kind, ValueNode displacement, ValueNode index, ValueNode indexScaling) {
+    private SnippetLocationNode(@InjectedNodeParameter SnippetReflectionProvider snippetReflection, ValueNode locationIdentity, ValueNode kind, ValueNode displacement, ValueNode index,
+                    ValueNode indexScaling) {
         super(StampFactory.object());
         this.snippetReflection = snippetReflection;
         this.valueKind = kind;

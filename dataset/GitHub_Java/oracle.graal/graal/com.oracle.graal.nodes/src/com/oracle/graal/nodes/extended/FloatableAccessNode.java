@@ -24,7 +24,7 @@ package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
 /**
@@ -53,6 +53,6 @@ public abstract class FloatableAccessNode extends FixedAccessNode {
      * an attached write barrier with pre-semantics can not also float.
      */
     public boolean canFloat() {
-        return !location().getLocationIdentity().equals(LocationIdentity.ANY_LOCATION) && getBarrierType() == BarrierType.NONE;
+        return location().getLocationIdentity() != LocationIdentity.ANY_LOCATION && getBarrierType() == BarrierType.NONE;
     }
 }

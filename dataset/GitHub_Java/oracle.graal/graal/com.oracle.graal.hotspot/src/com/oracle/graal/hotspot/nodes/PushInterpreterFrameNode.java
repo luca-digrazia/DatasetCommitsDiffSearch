@@ -24,8 +24,8 @@ package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.word.*;
@@ -41,11 +41,7 @@ public class PushInterpreterFrameNode extends FixedWithNextNode implements LIRLo
     @Input private ValueNode senderSp;
     @Input private ValueNode initialInfo;
 
-    public static PushInterpreterFrameNode create(ValueNode frameSize, ValueNode framePc, ValueNode senderSp, ValueNode initialInfo) {
-        return new PushInterpreterFrameNodeGen(frameSize, framePc, senderSp, initialInfo);
-    }
-
-    protected PushInterpreterFrameNode(ValueNode frameSize, ValueNode framePc, ValueNode senderSp, ValueNode initialInfo) {
+    public PushInterpreterFrameNode(ValueNode frameSize, ValueNode framePc, ValueNode senderSp, ValueNode initialInfo) {
         super(StampFactory.forVoid());
         this.frameSize = frameSize;
         this.framePc = framePc;

@@ -25,26 +25,30 @@ package com.oracle.graal.nodes.calc;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
 /**
  * Represents a conversion between primitive types.
  */
-public interface ConvertNode extends ArithmeticOperation, NodeInterface {
+@NodeInfo
+public abstract class ConvertNode extends UnaryNode implements ArithmeticOperation {
 
-    ValueNode getValue();
+    protected ConvertNode(Stamp stamp, ValueNode value) {
+        super(stamp, value);
+    }
 
-    Constant convert(Constant c);
+    public abstract Constant convert(Constant c);
 
-    Constant reverse(Constant c);
+    public abstract Constant reverse(Constant c);
 
     /**
      * Check whether a conversion is lossless.
      *
      * @return true iff reverse(convert(c)) == c for all c
      */
-    boolean isLossless();
+    public abstract boolean isLossless();
 
     /**
      * Check whether a conversion preserves comparison order.
@@ -52,14 +56,13 @@ public interface ConvertNode extends ArithmeticOperation, NodeInterface {
      * @param op a comparison operator
      * @return true iff (c1 op c2) == (convert(c1) op convert(c2)) for all c1, c2
      */
-    default boolean preservesOrder(Condition op) {
+    public boolean preservesOrder(Condition op) {
         return isLossless();
     }
 
-    default Constant evalConst(Constant... inputs) {
+    @Override
+    public Constant evalConst(Constant... inputs) {
         assert inputs.length == 1;
         return convert(inputs[0]);
     }
-
-    ValueNode asNode();
 }

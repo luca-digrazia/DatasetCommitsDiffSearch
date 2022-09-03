@@ -26,7 +26,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -42,21 +41,13 @@ public class GuardedValueNode extends FloatingGuardedNode implements LIRLowerabl
     @Input private ValueNode object;
     private final Stamp piStamp;
 
-    public static GuardedValueNode create(ValueNode object, GuardingNode guard, Stamp stamp) {
-        return new GuardedValueNodeGen(object, guard, stamp);
-    }
-
-    protected GuardedValueNode(ValueNode object, GuardingNode guard, Stamp stamp) {
+    public GuardedValueNode(ValueNode object, GuardingNode guard, Stamp stamp) {
         super(stamp, guard);
         this.object = object;
         this.piStamp = stamp;
     }
 
-    public static GuardedValueNode create(ValueNode object, GuardingNode guard) {
-        return new GuardedValueNodeGen(object, guard);
-    }
-
-    protected GuardedValueNode(ValueNode object, GuardingNode guard) {
+    public GuardedValueNode(ValueNode object, GuardingNode guard) {
         this(object, guard, object.stamp());
     }
 
@@ -93,7 +84,7 @@ public class GuardedValueNode extends FloatingGuardedNode implements LIRLowerabl
             if (stamp().equals(object().stamp())) {
                 return object();
             } else {
-                return PiNode.create(object(), stamp());
+                return new PiNode(object(), stamp());
             }
         }
         return this;

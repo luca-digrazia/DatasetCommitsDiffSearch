@@ -25,7 +25,6 @@ package com.oracle.graal.hotspot.nodes;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
@@ -35,11 +34,7 @@ public class SnippetLocationProxyNode extends FloatingNode implements Canonicali
 
     @Input(InputType.Unchecked) private ValueNode location;
 
-    public static SnippetLocationProxyNode create(ValueNode location) {
-        return new SnippetLocationProxyNodeGen(location);
-    }
-
-    protected SnippetLocationProxyNode(ValueNode location) {
+    public SnippetLocationProxyNode(ValueNode location) {
         super(StampFactory.object());
         this.location = location;
     }

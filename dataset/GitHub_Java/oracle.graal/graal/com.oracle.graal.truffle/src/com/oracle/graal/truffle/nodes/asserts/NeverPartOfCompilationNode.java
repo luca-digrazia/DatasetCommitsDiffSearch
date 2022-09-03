@@ -23,7 +23,6 @@
 package com.oracle.graal.truffle.nodes.asserts;
 
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.replacements.nodes.*;
 
@@ -32,19 +31,11 @@ public class NeverPartOfCompilationNode extends MacroStateSplitNode implements I
 
     private final String message;
 
-    public static NeverPartOfCompilationNode create(Invoke invoke) {
-        return new NeverPartOfCompilationNodeGen(invoke);
-    }
-
-    protected NeverPartOfCompilationNode(Invoke invoke) {
+    public NeverPartOfCompilationNode(Invoke invoke) {
         this(invoke, "This code path should never be part of a compilation.");
     }
 
-    public static NeverPartOfCompilationNode create(Invoke invoke, String message) {
-        return new NeverPartOfCompilationNodeGen(invoke, message);
-    }
-
-    protected NeverPartOfCompilationNode(Invoke invoke, String message) {
+    public NeverPartOfCompilationNode(Invoke invoke, String message) {
         super(invoke);
         this.message = message;
     }

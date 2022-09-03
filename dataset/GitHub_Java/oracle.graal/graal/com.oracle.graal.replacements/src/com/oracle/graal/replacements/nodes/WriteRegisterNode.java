@@ -25,7 +25,7 @@ package com.oracle.graal.replacements.nodes;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -45,11 +45,7 @@ public class WriteRegisterNode extends FixedWithNextNode implements LIRLowerable
      */
     @Input private ValueNode value;
 
-    public static WriteRegisterNode create(Register register, ValueNode value) {
-        return new WriteRegisterNodeGen(register, value);
-    }
-
-    protected WriteRegisterNode(Register register, ValueNode value) {
+    public WriteRegisterNode(Register register, ValueNode value) {
         super(StampFactory.forVoid());
         this.register = register;
         this.value = value;

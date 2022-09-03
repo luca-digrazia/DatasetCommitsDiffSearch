@@ -27,8 +27,8 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -51,11 +51,7 @@ public class AllocaNode extends FixedWithNextNode implements LIRLowerable {
      */
     private final BitSet objects;
 
-    public static AllocaNode create(int slots, BitSet objects) {
-        return new AllocaNodeGen(slots, objects);
-    }
-
-    protected AllocaNode(int slots, BitSet objects) {
+    public AllocaNode(int slots, BitSet objects) {
         super(StampFactory.forKind(HotSpotGraalRuntime.getHostWordKind()));
         this.slots = slots;
         this.objects = objects;

@@ -28,7 +28,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -43,7 +42,7 @@ public class TypeProfileProxyNode extends UnaryNode implements IterableNodeType,
     private transient ResolvedJavaType lastCheckedType;
     private transient JavaTypeProfile lastCheckedProfile;
 
-    public static ValueNode proxify(ValueNode object, JavaTypeProfile profile) {
+    public static ValueNode create(ValueNode object, JavaTypeProfile profile) {
         if (StampTool.isExactType(object)) {
             return object;
         }
@@ -55,11 +54,7 @@ public class TypeProfileProxyNode extends UnaryNode implements IterableNodeType,
             // Only null profiling is not beneficial enough to keep the node around.
             return object;
         }
-        return object.graph().addWithoutUnique(create(object, profile));
-    }
-
-    public static ValueNode create(ValueNode object, JavaTypeProfile profile) {
-        return new TypeProfileProxyNodeGen(object, profile);
+        return object.graph().addWithoutUnique(new TypeProfileProxyNode(object, profile));
     }
 
     TypeProfileProxyNode(ValueNode value, JavaTypeProfile profile) {
@@ -97,7 +92,7 @@ public class TypeProfileProxyNode extends UnaryNode implements IterableNodeType,
             }
             if (newProfile != this.profile) {
                 Debug.log("Improved profile via other profile.");
-                return TypeProfileProxyNode.create(forValue, newProfile);
+                return new TypeProfileProxyNode(forValue, newProfile);
             }
         } else if (StampTool.typeOrNull(forValue) != null) {
             ResolvedJavaType type = StampTool.typeOrNull(forValue);
@@ -119,7 +114,7 @@ public class TypeProfileProxyNode extends UnaryNode implements IterableNodeType,
                     // Only null profiling is not beneficial enough to keep the node around.
                     return forValue;
                 }
-                return TypeProfileProxyNode.create(forValue, newProfile);
+                return new TypeProfileProxyNode(forValue, newProfile);
             }
         }
         return this;

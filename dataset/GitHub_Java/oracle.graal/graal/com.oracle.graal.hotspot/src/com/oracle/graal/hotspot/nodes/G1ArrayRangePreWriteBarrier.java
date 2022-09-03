@@ -22,17 +22,13 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
 @NodeInfo
 public class G1ArrayRangePreWriteBarrier extends ArrayRangeWriteBarrier {
 
-    public static G1ArrayRangePreWriteBarrier create(ValueNode object, ValueNode startIndex, ValueNode length) {
-        return new G1ArrayRangePreWriteBarrierGen(object, startIndex, length);
-    }
-
-    protected G1ArrayRangePreWriteBarrier(ValueNode object, ValueNode startIndex, ValueNode length) {
+    public G1ArrayRangePreWriteBarrier(ValueNode object, ValueNode startIndex, ValueNode length) {
         super(object, startIndex, length);
     }
 }

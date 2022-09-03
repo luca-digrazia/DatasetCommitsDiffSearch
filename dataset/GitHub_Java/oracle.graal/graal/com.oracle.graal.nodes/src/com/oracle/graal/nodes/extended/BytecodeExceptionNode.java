@@ -25,7 +25,6 @@ package com.oracle.graal.nodes.extended;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -39,11 +38,7 @@ public class BytecodeExceptionNode extends AbstractMemoryCheckpoint implements L
     private final Class<? extends Throwable> exceptionClass;
     @Input private final NodeInputList<ValueNode> arguments;
 
-    public static BytecodeExceptionNode create(MetaAccessProvider metaAccess, Class<? extends Throwable> exceptionClass, ValueNode... arguments) {
-        return new BytecodeExceptionNodeGen(metaAccess, exceptionClass, arguments);
-    }
-
-    BytecodeExceptionNode(MetaAccessProvider metaAccess, Class<? extends Throwable> exceptionClass, ValueNode... arguments) {
+    public BytecodeExceptionNode(MetaAccessProvider metaAccess, Class<? extends Throwable> exceptionClass, ValueNode... arguments) {
         super(StampFactory.exactNonNull(metaAccess.lookupJavaType(exceptionClass)));
         this.exceptionClass = exceptionClass;
         this.arguments = new NodeInputList<>(this, arguments);

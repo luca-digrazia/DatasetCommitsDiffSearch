@@ -24,7 +24,7 @@ package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -36,11 +36,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
 public class EndLockScopeNode extends AbstractMemoryCheckpoint implements LIRLowerable, MonitorExit, MemoryCheckpoint.Single {
 
-    public static EndLockScopeNode create() {
-        return new EndLockScopeNodeGen();
-    }
-
-    protected EndLockScopeNode() {
+    public EndLockScopeNode() {
         super(StampFactory.forVoid());
     }
 

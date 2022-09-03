@@ -24,9 +24,9 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -37,10 +37,6 @@ public class AndNode extends BitLogicNode implements NarrowableArithmeticNode {
 
     public static AndNode create(ValueNode x, ValueNode y) {
         return new AndNodeGen(x, y);
-    }
-
-    public static Class<? extends AndNode> getGenClass() {
-        return AndNodeGen.class;
     }
 
     AndNode(ValueNode x, ValueNode y) {
@@ -65,7 +61,7 @@ public class AndNode extends BitLogicNode implements NarrowableArithmeticNode {
             return forX;
         }
         if (forX.isConstant() && !forY.isConstant()) {
-            return AndNode.create(forY, forX);
+            return new AndNode(forY, forX);
         }
         if (forX.isConstant()) {
             return ConstantNode.forPrimitive(stamp(), evalConst(forX.asConstant(), forY.asConstant()));
@@ -81,7 +77,7 @@ public class AndNode extends BitLogicNode implements NarrowableArithmeticNode {
             if (forX instanceof SignExtendNode) {
                 SignExtendNode ext = (SignExtendNode) forX;
                 if (rawY == ((1L << ext.getInputBits()) - 1)) {
-                    return ZeroExtendNode.create(ext.getValue(), ext.getResultBits());
+                    return new ZeroExtendNode(ext.getValue(), ext.getResultBits());
                 }
             }
             if (forX.stamp() instanceof IntegerStamp) {

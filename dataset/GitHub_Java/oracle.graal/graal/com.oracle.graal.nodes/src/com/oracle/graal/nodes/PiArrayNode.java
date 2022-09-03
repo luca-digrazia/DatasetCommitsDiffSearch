@@ -25,7 +25,6 @@ package com.oracle.graal.nodes;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -43,11 +42,7 @@ public class PiArrayNode extends PiNode implements ArrayLengthProvider {
         return length;
     }
 
-    public static PiArrayNode create(ValueNode object, ValueNode length, Stamp stamp) {
-        return new PiArrayNodeGen(object, length, stamp);
-    }
-
-    protected PiArrayNode(ValueNode object, ValueNode length, Stamp stamp) {
+    public PiArrayNode(ValueNode object, ValueNode length, Stamp stamp) {
         super(object, stamp);
         this.length = length;
     }

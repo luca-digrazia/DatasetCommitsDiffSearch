@@ -25,8 +25,8 @@ package com.oracle.graal.nodes.extended;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -43,20 +43,12 @@ public class LoadHubNode extends FloatingGuardedNode implements Lowerable, Canon
         return value;
     }
 
-    public static LoadHubNode create(ValueNode value, Kind kind) {
-        return new LoadHubNodeGen(value, kind);
-    }
-
-    LoadHubNode(ValueNode value, Kind kind) {
+    public LoadHubNode(ValueNode value, Kind kind) {
         super(getKind(kind), null);
         this.value = value;
     }
 
-    public static LoadHubNode create(ValueNode value, Kind kind, ValueNode guard) {
-        return new LoadHubNodeGen(value, kind, guard);
-    }
-
-    LoadHubNode(ValueNode value, Kind kind, ValueNode guard) {
+    public LoadHubNode(ValueNode value, Kind kind, ValueNode guard) {
         super(getKind(kind), (GuardingNode) guard);
         assert value != guard;
         this.value = value;

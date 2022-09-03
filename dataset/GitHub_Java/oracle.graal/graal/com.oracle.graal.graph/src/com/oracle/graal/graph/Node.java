@@ -31,7 +31,6 @@ import com.oracle.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.graal.graph.NodeClass.Position;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 
 /**
  * This class is the base class for all nodes, it represent a node which can be inserted in a
@@ -114,7 +113,7 @@ public abstract class Node implements Cloneable, Formattable {
      * annotated method can be replaced with an instance of the node class denoted by
      * {@link #value()}. For this reason, the signature of the annotated method must match the
      * signature (excluding a prefix of {@linkplain InjectedNodeParameter injected} parameters) of a
-     * factory method named {@code "create"} in the node class.
+     * constructor in the node class.
      */
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.METHOD)
@@ -161,7 +160,6 @@ public abstract class Node implements Cloneable, Formattable {
     private Node predecessor;
 
     public Node() {
-        assert getClass().getAnnotation(GeneratedNode.class) != null : getClass() + " is not a generated Node class - forgot @" + NodeInfo.class.getSimpleName() + " on class declaration?";
         init();
     }
 
@@ -997,6 +995,34 @@ public abstract class Node implements Cloneable, Formattable {
     @Override
     public final String toString() {
         return toString(Verbosity.Short);
+    }
+
+    public enum Verbosity {
+        /**
+         * Only the id of the node.
+         */
+        Id,
+        /**
+         * Only the name of the node, which may contain some more information for certain node types
+         * (constants, ...).
+         */
+        Name,
+        /**
+         * {@link #Id} + {@link #Name}.
+         */
+        Short,
+        /**
+         * Defaults to {@link #Short} and may be enhanced by subclasses.
+         */
+        Long,
+        /**
+         * For use by a custom formatting facility in an IDE.
+         */
+        Debugger,
+        /**
+         * All the other information plus all debug properties of the node.
+         */
+        All
     }
 
     /**

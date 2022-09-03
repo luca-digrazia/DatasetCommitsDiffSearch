@@ -26,7 +26,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -44,11 +43,7 @@ public class MonitorExitNode extends AccessMonitorNode implements Virtualizable,
     /**
      * Creates a new MonitorExitNode.
      */
-    public static MonitorExitNode create(ValueNode object, MonitorIdNode monitorId, ValueNode escapedReturnValue) {
-        return new MonitorExitNodeGen(object, monitorId, escapedReturnValue);
-    }
-
-    MonitorExitNode(ValueNode object, MonitorIdNode monitorId, ValueNode escapedReturnValue) {
+    public MonitorExitNode(ValueNode object, MonitorIdNode monitorId, ValueNode escapedReturnValue) {
         super(object, monitorId);
         this.escapedReturnValue = escapedReturnValue;
     }

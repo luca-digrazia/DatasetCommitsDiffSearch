@@ -28,7 +28,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.nodes.*;
@@ -47,11 +46,7 @@ public class HotSpotNodeClassSubstitutions {
     @NodeInfo
     public static class NodeClassGetNode extends PureFunctionMacroNode {
 
-        public static NodeClassGetNode create(Invoke invoke) {
-            return new HotSpotNodeClassSubstitutions_NodeClassGetNodeGen(invoke);
-        }
-
-        protected NodeClassGetNode(Invoke invoke) {
+        public NodeClassGetNode(Invoke invoke) {
             super(invoke);
         }
 

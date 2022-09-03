@@ -26,9 +26,9 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -41,11 +41,7 @@ public class FloatConvertNode extends ConvertNode implements Lowerable, Arithmet
 
     private final FloatConvert op;
 
-    public static FloatConvertNode create(FloatConvert op, ValueNode input) {
-        return new FloatConvertNodeGen(op, input);
-    }
-
-    protected FloatConvertNode(FloatConvert op, ValueNode input) {
+    public FloatConvertNode(FloatConvert op, ValueNode input) {
         super(createStamp(op, input), input);
         this.op = op;
     }

@@ -24,7 +24,7 @@ package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -64,11 +64,7 @@ public class StoreIndexedNode extends AccessIndexedNode implements StateSplit, L
      * @param elementKind the element type
      * @param value the value to store into the array
      */
-    public static StoreIndexedNode create(ValueNode array, ValueNode index, Kind elementKind, ValueNode value) {
-        return new StoreIndexedNodeGen(array, index, elementKind, value);
-    }
-
-    StoreIndexedNode(ValueNode array, ValueNode index, Kind elementKind, ValueNode value) {
+    public StoreIndexedNode(ValueNode array, ValueNode index, Kind elementKind, ValueNode value) {
         super(StampFactory.forVoid(), array, index, elementKind);
         this.value = value;
     }

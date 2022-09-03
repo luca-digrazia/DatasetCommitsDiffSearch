@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
@@ -40,11 +39,7 @@ public class CommitAllocationNode extends FixedWithNextNode implements Virtualiz
     @Input(InputType.Association) private final NodeInputList<MonitorIdNode> locks = new NodeInputList<>(this);
     private ArrayList<Integer> lockIndexes = new ArrayList<>(Arrays.asList(0));
 
-    public static CommitAllocationNode create() {
-        return new CommitAllocationNodeGen();
-    }
-
-    CommitAllocationNode() {
+    public CommitAllocationNode() {
         super(StampFactory.forVoid());
     }
 

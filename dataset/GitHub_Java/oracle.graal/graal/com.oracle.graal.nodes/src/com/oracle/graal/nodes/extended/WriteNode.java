@@ -23,8 +23,8 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.LocationNode.Location;
 import com.oracle.graal.nodes.spi.*;
@@ -36,27 +36,15 @@ import com.oracle.graal.nodes.virtual.*;
 @NodeInfo
 public class WriteNode extends AbstractWriteNode implements LIRLowerable, Simplifiable, Virtualizable {
 
-    public static WriteNode create(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType) {
-        return new WriteNodeGen(object, value, location, barrierType);
-    }
-
-    WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType) {
+    public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType) {
         super(object, value, location, barrierType);
     }
 
-    public static WriteNode create(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean initialization) {
-        return new WriteNodeGen(object, value, location, barrierType, initialization);
-    }
-
-    WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean initialization) {
+    public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, boolean initialization) {
         super(object, value, location, barrierType, initialization);
     }
 
-    public static WriteNode create(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, GuardingNode guard, boolean initialization) {
-        return new WriteNodeGen(object, value, location, barrierType, guard, initialization);
-    }
-
-    WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, GuardingNode guard, boolean initialization) {
+    public WriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, GuardingNode guard, boolean initialization) {
         super(object, value, location, barrierType, guard, initialization);
     }
 

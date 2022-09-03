@@ -27,7 +27,6 @@ import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
@@ -48,11 +47,7 @@ public class CustomizedUnsafeLoadFinalNode extends FixedWithNextNode implements 
     @Input private ValueNode location;
     private final Kind accessKind;
 
-    public static CustomizedUnsafeLoadFinalNode create(ValueNode object, ValueNode offset, ValueNode condition, ValueNode location, Kind accessKind) {
-        return new CustomizedUnsafeLoadFinalNodeGen(object, offset, condition, location, accessKind);
-    }
-
-    protected CustomizedUnsafeLoadFinalNode(ValueNode object, ValueNode offset, ValueNode condition, ValueNode location, Kind accessKind) {
+    public CustomizedUnsafeLoadFinalNode(ValueNode object, ValueNode offset, ValueNode condition, ValueNode location, Kind accessKind) {
         super(StampFactory.forKind(accessKind.getStackKind()));
         this.object = object;
         this.offset = offset;
@@ -100,7 +95,7 @@ public class CustomizedUnsafeLoadFinalNode extends FixedWithNextNode implements 
         } else {
             locationIdentity = ObjectLocationIdentity.create(location.asConstant());
         }
-        UnsafeLoadNode result = graph().add(UnsafeLoadNode.create(object, offset, accessKind, locationIdentity, compare));
+        UnsafeLoadNode result = graph().add(new UnsafeLoadNode(object, offset, accessKind, locationIdentity, compare));
         graph().replaceFixedWithFixed(this, result);
         result.lower(tool);
     }

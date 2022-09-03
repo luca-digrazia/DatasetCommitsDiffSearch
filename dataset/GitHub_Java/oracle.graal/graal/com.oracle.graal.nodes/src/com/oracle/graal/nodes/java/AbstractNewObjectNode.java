@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -46,10 +45,6 @@ public class AbstractNewObjectNode extends DeoptimizingFixedWithNextNode impleme
      * @param stamp the stamp of the newly created object
      * @param fillContents determines if the object's contents should be initialized to zero/null.
      */
-    public static AbstractNewObjectNode create(Stamp stamp, boolean fillContents) {
-        return new AbstractNewObjectNodeGen(stamp, fillContents);
-    }
-
     protected AbstractNewObjectNode(Stamp stamp, boolean fillContents) {
         super(stamp);
         this.fillContents = fillContents;

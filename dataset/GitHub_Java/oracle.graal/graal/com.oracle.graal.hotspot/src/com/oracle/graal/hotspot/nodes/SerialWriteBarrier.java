@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 
@@ -31,11 +31,7 @@ public class SerialWriteBarrier extends WriteBarrier {
 
     private final boolean alwaysNull;
 
-    public static SerialWriteBarrier create(ValueNode object, LocationNode location, boolean precise, boolean alwaysNull) {
-        return new SerialWriteBarrierGen(object, location, precise, alwaysNull);
-    }
-
-    protected SerialWriteBarrier(ValueNode object, LocationNode location, boolean precise, boolean alwaysNull) {
+    public SerialWriteBarrier(ValueNode object, LocationNode location, boolean precise, boolean alwaysNull) {
         super(object, null, location, precise);
         this.alwaysNull = alwaysNull;
     }

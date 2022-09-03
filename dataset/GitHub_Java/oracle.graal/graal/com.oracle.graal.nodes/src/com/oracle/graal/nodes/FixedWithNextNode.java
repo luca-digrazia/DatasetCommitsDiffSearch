@@ -23,7 +23,7 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 
 /**
  * Base class of all nodes that are fixed within the control flow graph and have an immediate
@@ -32,7 +32,7 @@ import com.oracle.graal.nodeinfo.*;
 @NodeInfo
 public abstract class FixedWithNextNode extends FixedNode {
 
-    @Successor protected FixedNode next;
+    @Successor private FixedNode next;
 
     public FixedNode next() {
         return next;

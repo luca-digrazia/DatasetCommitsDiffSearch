@@ -28,7 +28,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -51,31 +50,19 @@ public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtual
         return object;
     }
 
-    public static PiNode create(ValueNode object, Stamp stamp) {
-        return new PiNodeGen(object, stamp);
-    }
-
-    protected PiNode(ValueNode object, Stamp stamp) {
+    public PiNode(ValueNode object, Stamp stamp) {
         super(stamp);
         this.piStamp = stamp;
         this.object = object;
     }
 
-    public static PiNode create(ValueNode object, Stamp stamp, ValueNode anchor) {
-        return new PiNodeGen(object, stamp, anchor);
-    }
-
-    protected PiNode(ValueNode object, Stamp stamp, ValueNode anchor) {
+    public PiNode(ValueNode object, Stamp stamp, ValueNode anchor) {
         super(stamp, (GuardingNode) anchor);
         this.object = object;
         this.piStamp = stamp;
     }
 
-    public static PiNode create(ValueNode object, ResolvedJavaType toType, boolean exactType, boolean nonNull) {
-        return new PiNodeGen(object, toType, exactType, nonNull);
-    }
-
-    protected PiNode(ValueNode object, ResolvedJavaType toType, boolean exactType, boolean nonNull) {
+    public PiNode(ValueNode object, ResolvedJavaType toType, boolean exactType, boolean nonNull) {
         this(object, StampFactory.object(toType, exactType, nonNull || StampTool.isObjectNonNull(object.stamp())));
     }
 

@@ -23,7 +23,7 @@
 package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
 /**
@@ -32,7 +32,7 @@ import com.oracle.graal.nodes.*;
 @NodeInfo
 public abstract class AccessArrayNode extends FixedWithNextNode {
 
-    @Input protected ValueNode array;
+    @Input private ValueNode array;
 
     public ValueNode array() {
         return array;
@@ -40,7 +40,7 @@ public abstract class AccessArrayNode extends FixedWithNextNode {
 
     /**
      * Creates a new AccessArrayNode.
-     *
+     * 
      * @param array the instruction that produces the array object value
      */
     public AccessArrayNode(Stamp stamp, ValueNode array) {

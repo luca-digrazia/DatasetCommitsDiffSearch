@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,21 +24,21 @@ package com.oracle.graal.nodes;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
-import com.oracle.graal.nodeinfo.*;
 
 /**
  * This class represents a value within the graph, including local variables, phis, and all other
  * instructions.
  */
 @NodeInfo
-public abstract class ValueNode extends com.oracle.graal.graph.Node implements KindProvider {
+public abstract class ValueNode extends ScheduledNode implements StampProvider, KindProvider {
 
     /**
      * The kind of this value. This is {@link Kind#Void} for instructions that produce no value.
      * This kind is guaranteed to be a {@linkplain Kind#getStackKind() stack kind}.
      */
-    protected Stamp stamp;
+    private Stamp stamp;
 
     public ValueNode(Stamp stamp) {
         this.stamp = stamp;
@@ -48,13 +48,8 @@ public abstract class ValueNode extends com.oracle.graal.graph.Node implements K
         return stamp;
     }
 
-    public final void setStamp(Stamp stamp) {
+    public void setStamp(Stamp stamp) {
         this.stamp = stamp;
-    }
-
-    @Override
-    public final StructuredGraph graph() {
-        return (StructuredGraph) super.graph();
     }
 
     /**
@@ -110,31 +105,20 @@ public abstract class ValueNode extends com.oracle.graal.graph.Node implements K
      * @return {@code true} if this value represents the null constant
      */
     public final boolean isNullConstant() {
-        JavaConstant value = asJavaConstant();
-        return value != null && value.isNull();
+        return this instanceof ConstantNode && ((ConstantNode) this).getValue().isNull();
     }
 
     /**
      * Convert this value to a constant if it is a constant, otherwise return null.
      *
-     * @return the {@link JavaConstant} represented by this value if it is a constant; {@code null}
+     * @return the {@link Constant} represented by this value if it is a constant; {@code null}
      *         otherwise
      */
     public final Constant asConstant() {
         if (this instanceof ConstantNode) {
             return ((ConstantNode) this).getValue();
-        } else {
-            return null;
         }
-    }
-
-    public final JavaConstant asJavaConstant() {
-        Constant value = asConstant();
-        if (value instanceof JavaConstant) {
-            return (JavaConstant) value;
-        } else {
-            return null;
-        }
+        return null;
     }
 
     public ValueNode asNode() {

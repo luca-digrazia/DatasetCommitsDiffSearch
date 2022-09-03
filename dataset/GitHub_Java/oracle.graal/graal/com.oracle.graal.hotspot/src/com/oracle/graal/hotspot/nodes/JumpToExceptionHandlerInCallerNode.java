@@ -23,8 +23,8 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.word.*;
@@ -40,11 +40,7 @@ public class JumpToExceptionHandlerInCallerNode extends ControlSinkNode implemen
     @Input private ValueNode exception;
     @Input private ValueNode exceptionPc;
 
-    public static JumpToExceptionHandlerInCallerNode create(ValueNode handlerInCallerPc, ValueNode exception, ValueNode exceptionPc) {
-        return new JumpToExceptionHandlerInCallerNodeGen(handlerInCallerPc, exception, exceptionPc);
-    }
-
-    protected JumpToExceptionHandlerInCallerNode(ValueNode handlerInCallerPc, ValueNode exception, ValueNode exceptionPc) {
+    public JumpToExceptionHandlerInCallerNode(ValueNode handlerInCallerPc, ValueNode exception, ValueNode exceptionPc) {
         super(StampFactory.forVoid());
         this.handlerInCallerPc = handlerInCallerPc;
         this.exception = exception;

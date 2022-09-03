@@ -26,15 +26,14 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
 
 @NodeInfo
 public abstract class UnsafeAccessNode extends FixedWithNextNode implements Canonicalizable {
 
-    @Input ValueNode object;
-    @Input ValueNode offset;
+    @Input private ValueNode object;
+    @Input private ValueNode offset;
     private final Kind accessKind;
     private final LocationIdentity locationIdentity;
 

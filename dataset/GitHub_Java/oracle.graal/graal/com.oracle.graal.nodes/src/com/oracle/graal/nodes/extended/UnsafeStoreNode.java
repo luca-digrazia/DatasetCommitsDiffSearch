@@ -26,7 +26,7 @@ import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
@@ -41,19 +41,11 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
     @Input private ValueNode value;
     @OptionalInput(InputType.State) private FrameState stateAfter;
 
-    public static UnsafeStoreNode create(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity) {
-        return new UnsafeStoreNodeGen(object, offset, value, accessKind, locationIdentity);
-    }
-
-    UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity) {
+    public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity) {
         this(object, offset, value, accessKind, locationIdentity, null);
     }
 
-    public static UnsafeStoreNode create(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity, FrameState stateAfter) {
-        return new UnsafeStoreNodeGen(object, offset, value, accessKind, locationIdentity, stateAfter);
-    }
-
-    UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity, FrameState stateAfter) {
+    public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity, FrameState stateAfter) {
         super(StampFactory.forVoid(), object, offset, accessKind, locationIdentity);
         this.value = value;
         this.stateAfter = stateAfter;
@@ -117,12 +109,12 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
 
     @Override
     protected ValueNode cloneAsFieldAccess(ResolvedJavaField field) {
-        return StoreFieldNode.create(object(), field, value(), stateAfter());
+        return new StoreFieldNode(object(), field, value(), stateAfter());
     }
 
     @Override
     protected ValueNode cloneAsArrayAccess(ValueNode location, LocationIdentity identity) {
-        return UnsafeStoreNode.create(object(), location, value, accessKind(), identity, stateAfter());
+        return new UnsafeStoreNode(object(), location, value, accessKind(), identity, stateAfter());
     }
 
     public FrameState getState() {

@@ -23,8 +23,8 @@
 package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -44,11 +44,7 @@ public class InstanceOfDynamicNode extends LogicNode implements Canonicalizable.
      * @param mirror the {@link Class} value representing the target target type of the test
      * @param object the object being tested
      */
-    public static InstanceOfDynamicNode create(ValueNode mirror, ValueNode object) {
-        return new InstanceOfDynamicNodeGen(mirror, object);
-    }
-
-    InstanceOfDynamicNode(ValueNode mirror, ValueNode object) {
+    public InstanceOfDynamicNode(ValueNode mirror, ValueNode object) {
         this.mirror = mirror;
         this.object = object;
         assert mirror.getKind() == Kind.Object : mirror.getKind();
@@ -68,7 +64,7 @@ public class InstanceOfDynamicNode extends LogicNode implements Canonicalizable.
                 if (t.isPrimitive()) {
                     return LogicConstantNode.contradiction();
                 } else {
-                    return InstanceOfNode.create(t, forObject, null);
+                    return new InstanceOfNode(t, forObject, null);
                 }
             }
         }

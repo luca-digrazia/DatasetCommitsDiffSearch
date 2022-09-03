@@ -23,7 +23,7 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 
 /**
  * Provides an implementation of {@link StateSplit}.
@@ -31,7 +31,7 @@ import com.oracle.graal.nodeinfo.*;
 @NodeInfo
 public abstract class AbstractStateSplit extends FixedWithNextNode implements StateSplit {
 
-    @OptionalInput(InputType.State) protected FrameState stateAfter;
+    @OptionalInput(InputType.State) private FrameState stateAfter;
 
     public FrameState stateAfter() {
         return stateAfter;

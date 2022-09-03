@@ -23,7 +23,6 @@
 package com.oracle.graal.virtual.nodes;
 
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.virtual.*;
 
@@ -39,18 +38,14 @@ public class MaterializedObjectState extends EscapeObjectState implements Node.V
         return materializedValue;
     }
 
-    public static MaterializedObjectState create(VirtualObjectNode object, ValueNode materializedValue) {
-        return new MaterializedObjectStateGen(object, materializedValue);
-    }
-
-    protected MaterializedObjectState(VirtualObjectNode object, ValueNode materializedValue) {
+    public MaterializedObjectState(VirtualObjectNode object, ValueNode materializedValue) {
         super(object);
         this.materializedValue = materializedValue;
     }
 
     @Override
     public MaterializedObjectState duplicateWithVirtualState() {
-        return graph().addWithoutUnique(MaterializedObjectState.create(object(), materializedValue));
+        return graph().addWithoutUnique(new MaterializedObjectState(object(), materializedValue));
     }
 
     @Override

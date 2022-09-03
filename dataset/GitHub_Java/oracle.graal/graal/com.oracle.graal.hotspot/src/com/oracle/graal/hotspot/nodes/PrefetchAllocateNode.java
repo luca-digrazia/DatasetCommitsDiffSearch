@@ -24,8 +24,8 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.word.*;
@@ -36,11 +36,7 @@ public class PrefetchAllocateNode extends FixedWithNextNode implements LIRLowera
     @Input private ValueNode distance;
     @Input private ValueNode address;
 
-    public static PrefetchAllocateNode create(ValueNode address, ValueNode distance) {
-        return new PrefetchAllocateNodeGen(address, distance);
-    }
-
-    protected PrefetchAllocateNode(ValueNode address, ValueNode distance) {
+    public PrefetchAllocateNode(ValueNode address, ValueNode distance) {
         super(StampFactory.forVoid());
         this.address = address;
         this.distance = distance;

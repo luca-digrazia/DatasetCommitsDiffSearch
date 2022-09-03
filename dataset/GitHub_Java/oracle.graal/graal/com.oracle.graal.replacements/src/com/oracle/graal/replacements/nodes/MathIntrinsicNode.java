@@ -25,9 +25,9 @@ package com.oracle.graal.replacements.nodes;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
@@ -51,11 +51,7 @@ public class MathIntrinsicNode extends UnaryNode implements ArithmeticLIRLowerab
         return operation;
     }
 
-    public static MathIntrinsicNode create(ValueNode value, Operation op) {
-        return new MathIntrinsicNodeGen(value, op);
-    }
-
-    protected MathIntrinsicNode(ValueNode value, Operation op) {
+    public MathIntrinsicNode(ValueNode value, Operation op) {
         super(StampFactory.forKind(Kind.Double), value);
         assert value.stamp() instanceof FloatStamp && PrimitiveStamp.getBits(value.stamp()) == 64;
         this.operation = op;

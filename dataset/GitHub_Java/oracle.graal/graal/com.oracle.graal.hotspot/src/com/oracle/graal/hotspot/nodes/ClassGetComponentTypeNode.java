@@ -26,7 +26,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.replacements.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.replacements.nodes.*;
 
@@ -38,11 +37,7 @@ import com.oracle.graal.replacements.nodes.*;
 @NodeInfo
 public class ClassGetComponentTypeNode extends MacroNode implements Canonicalizable {
 
-    public static ClassGetComponentTypeNode create(Invoke invoke) {
-        return new ClassGetComponentTypeNodeGen(invoke);
-    }
-
-    protected ClassGetComponentTypeNode(Invoke invoke) {
+    public ClassGetComponentTypeNode(Invoke invoke) {
         super(invoke);
     }
 

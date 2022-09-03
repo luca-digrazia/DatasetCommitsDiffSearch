@@ -24,8 +24,8 @@ package com.oracle.graal.truffle.nodes.arithmetic;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
@@ -39,11 +39,7 @@ import com.oracle.truffle.api.*;
 @NodeInfo
 public class IntegerAddExactNode extends IntegerAddNode implements IntegerExactArithmeticNode {
 
-    public static IntegerAddExactNode create(ValueNode x, ValueNode y) {
-        return new IntegerAddExactNodeGen(x, y);
-    }
-
-    protected IntegerAddExactNode(ValueNode x, ValueNode y) {
+    public IntegerAddExactNode(ValueNode x, ValueNode y) {
         super(x, y);
         assert x.stamp().isCompatible(y.stamp()) && x.stamp() instanceof IntegerStamp;
     }
@@ -57,7 +53,7 @@ public class IntegerAddExactNode extends IntegerAddNode implements IntegerExactA
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
         if (forX.isConstant() && !forY.isConstant()) {
-            return IntegerAddExactNode.create(forY, forX);
+            return new IntegerAddExactNode(forY, forX);
         }
         if (forX.isConstant()) {
             return canonicalXconstant(forX, forY);
@@ -89,7 +85,7 @@ public class IntegerAddExactNode extends IntegerAddNode implements IntegerExactA
 
     @Override
     public IntegerExactArithmeticSplitNode createSplit(BeginNode next, BeginNode deopt) {
-        return graph().add(IntegerAddExactSplitNode.create(stamp(), getX(), getY(), next, deopt));
+        return graph().add(new IntegerAddExactSplitNode(stamp(), getX(), getY(), next, deopt));
     }
 
     @Override

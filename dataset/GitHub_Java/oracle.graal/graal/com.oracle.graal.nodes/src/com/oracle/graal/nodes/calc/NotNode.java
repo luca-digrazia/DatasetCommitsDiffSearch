@@ -24,9 +24,9 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -53,11 +53,7 @@ public class NotNode extends UnaryNode implements ArithmeticLIRLowerable, Narrow
      *
      * @param x the instruction producing the value that is input to this instruction
      */
-    public static NotNode create(ValueNode x) {
-        return new NotNodeGen(x);
-    }
-
-    protected NotNode(ValueNode x) {
+    public NotNode(ValueNode x) {
         super(StampTool.not(x.stamp()), x);
     }
 

@@ -24,8 +24,8 @@ package com.oracle.graal.replacements.nodes;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
@@ -37,11 +37,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class BitScanForwardNode extends UnaryNode implements LIRLowerable {
 
-    public static BitScanForwardNode create(ValueNode value) {
-        return new BitScanForwardNodeGen(value);
-    }
-
-    protected BitScanForwardNode(ValueNode value) {
+    public BitScanForwardNode(ValueNode value) {
         super(StampFactory.forInteger(Kind.Int, 0, ((PrimitiveStamp) value.stamp()).getBits()), value);
         assert value.getKind() == Kind.Int || value.getKind() == Kind.Long;
     }

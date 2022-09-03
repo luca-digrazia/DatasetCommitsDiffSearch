@@ -25,7 +25,6 @@ package com.oracle.graal.truffle.nodes.typesystem;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.truffle.nodes.*;
@@ -43,11 +42,7 @@ public class CustomizedUnsafeStoreMacroNode extends NeverPartOfCompilationNode i
     private static final int VALUE_ARGUMENT_INDEX = 2;
     private static final int LOCATION_ARGUMENT_INDEX = 3;
 
-    public static CustomizedUnsafeStoreMacroNode create(Invoke invoke) {
-        return new CustomizedUnsafeStoreMacroNodeGen(invoke);
-    }
-
-    protected CustomizedUnsafeStoreMacroNode(Invoke invoke) {
+    public CustomizedUnsafeStoreMacroNode(Invoke invoke) {
         super(invoke, "The location argument could not be resolved to a constant.");
         assert arguments.size() == ARGUMENT_COUNT;
     }
@@ -66,7 +61,7 @@ public class CustomizedUnsafeStoreMacroNode extends NeverPartOfCompilationNode i
                 locationIdentity = ObjectLocationIdentity.create(locationArgument.asConstant());
             }
 
-            return UnsafeStoreNode.create(objectArgument, offsetArgument, valueArgument, this.getTargetMethod().getSignature().getParameterKind(VALUE_ARGUMENT_INDEX), locationIdentity, stateAfter());
+            return new UnsafeStoreNode(objectArgument, offsetArgument, valueArgument, this.getTargetMethod().getSignature().getParameterKind(VALUE_ARGUMENT_INDEX), locationIdentity, stateAfter());
         }
         return this;
     }

@@ -23,7 +23,7 @@
 package com.oracle.graal.nodes.virtual;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 
@@ -32,24 +32,20 @@ public class VirtualBoxingNode extends VirtualInstanceNode {
 
     private final Kind boxingKind;
 
-    public static VirtualBoxingNode create(ResolvedJavaType type, Kind boxingKind) {
-        return new VirtualBoxingNodeGen(type, boxingKind);
-    }
-
-    VirtualBoxingNode(ResolvedJavaType type, Kind boxingKind) {
+    public VirtualBoxingNode(ResolvedJavaType type, Kind boxingKind) {
         super(type, false);
         this.boxingKind = boxingKind;
     }
 
     @Override
     public VirtualBoxingNode duplicate() {
-        return VirtualBoxingNode.create(type(), boxingKind);
+        return new VirtualBoxingNode(type(), boxingKind);
     }
 
     @Override
     public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks) {
         assert entries.length == 1;
         assert locks == null;
-        return BoxNode.create(entries[0], type(), boxingKind);
+        return new BoxNode(entries[0], type(), boxingKind);
     }
 }

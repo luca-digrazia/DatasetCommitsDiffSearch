@@ -24,7 +24,6 @@ package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 
 /**
@@ -33,10 +32,8 @@ import com.oracle.graal.nodes.*;
 @NodeInfo
 public abstract class ArrayRangeWriteNode extends AbstractMemoryCheckpoint {
 
-    public static final NodeClass TYPE = NodeClass.get(ArrayRangeWriteNode.class);
-
-    protected ArrayRangeWriteNode(NodeClass c, Stamp stamp) {
-        super(c, stamp);
+    protected ArrayRangeWriteNode(Stamp stamp) {
+        super(stamp);
     }
 
     /**

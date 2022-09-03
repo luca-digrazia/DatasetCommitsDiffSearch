@@ -23,7 +23,7 @@
 package com.oracle.graal.nodes.debug;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -44,11 +44,7 @@ public class DynamicCounterNode extends FixedWithNextNode implements Lowerable {
     private final String group;
     private final boolean withContext;
 
-    public static DynamicCounterNode create(String name, String group, ValueNode increment, boolean withContext) {
-        return new DynamicCounterNodeGen(name, group, increment, withContext);
-    }
-
-    DynamicCounterNode(String name, String group, ValueNode increment, boolean withContext) {
+    public DynamicCounterNode(String name, String group, ValueNode increment, boolean withContext) {
         super(StampFactory.forVoid());
         this.name = name;
         this.group = group;
@@ -79,7 +75,7 @@ public class DynamicCounterNode extends FixedWithNextNode implements Lowerable {
 
     public static void addCounterBefore(String group, String name, long increment, boolean withContext, FixedNode position) {
         StructuredGraph graph = position.graph();
-        graph.addBeforeFixed(position, position.graph().add(DynamicCounterNode.create(name, group, ConstantNode.forLong(increment, position.graph()), withContext)));
+        graph.addBeforeFixed(position, position.graph().add(new DynamicCounterNode(name, group, ConstantNode.forLong(increment, position.graph()), withContext)));
     }
 
     @NodeIntrinsic

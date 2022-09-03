@@ -23,8 +23,8 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
@@ -38,11 +38,7 @@ public class ValueAnchorNode extends FixedWithNextNode implements LIRLowerable, 
 
     @OptionalInput(InputType.Guard) private ValueNode anchored;
 
-    public static ValueAnchorNode create(ValueNode value) {
-        return new ValueAnchorNodeGen(value);
-    }
-
-    ValueAnchorNode(ValueNode value) {
+    public ValueAnchorNode(ValueNode value) {
         super(StampFactory.forVoid());
         this.anchored = value;
     }

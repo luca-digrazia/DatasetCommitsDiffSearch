@@ -24,11 +24,11 @@ package com.oracle.graal.nodes;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 
 @NodeInfo
 public abstract class InfopointNode extends FixedWithNextNode {
-    protected InfopointReason reason;
+    private final InfopointReason reason;
 
     public InfopointNode(InfopointReason reason) {
         super(StampFactory.forVoid());

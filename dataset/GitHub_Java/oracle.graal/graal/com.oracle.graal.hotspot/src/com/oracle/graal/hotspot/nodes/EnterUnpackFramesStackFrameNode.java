@@ -24,9 +24,9 @@ package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.lir.StandardOp.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.word.*;
@@ -43,11 +43,7 @@ public class EnterUnpackFramesStackFrameNode extends FixedWithNextNode implement
     @Input private ValueNode senderFp;
     @Input private SaveAllRegistersNode registerSaver;
 
-    public static EnterUnpackFramesStackFrameNode create(ValueNode framePc, ValueNode senderSp, ValueNode senderFp, ValueNode registerSaver) {
-        return new EnterUnpackFramesStackFrameNodeGen(framePc, senderSp, senderFp, registerSaver);
-    }
-
-    protected EnterUnpackFramesStackFrameNode(ValueNode framePc, ValueNode senderSp, ValueNode senderFp, ValueNode registerSaver) {
+    public EnterUnpackFramesStackFrameNode(ValueNode framePc, ValueNode senderSp, ValueNode senderFp, ValueNode registerSaver) {
         super(StampFactory.forVoid());
         this.framePc = framePc;
         this.senderSp = senderSp;

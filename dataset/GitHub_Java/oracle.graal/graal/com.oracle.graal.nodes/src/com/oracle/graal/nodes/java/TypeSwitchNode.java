@@ -27,8 +27,8 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -53,11 +53,7 @@ public class TypeSwitchNode extends SwitchNode implements LIRLowerable, Simplifi
      * @param keyProbabilities the probabilities of the keys
      * @param keySuccessors the successor index for each key
      */
-    public static TypeSwitchNode create(ValueNode value, BeginNode[] successors, ResolvedJavaType[] keys, double[] keyProbabilities, int[] keySuccessors) {
-        return new TypeSwitchNodeGen(value, successors, keys, keyProbabilities, keySuccessors);
-    }
-
-    TypeSwitchNode(ValueNode value, BeginNode[] successors, ResolvedJavaType[] keys, double[] keyProbabilities, int[] keySuccessors) {
+    public TypeSwitchNode(ValueNode value, BeginNode[] successors, ResolvedJavaType[] keys, double[] keyProbabilities, int[] keySuccessors) {
         super(value, successors, keySuccessors, keyProbabilities);
         assert successors.length <= keys.length + 1;
         assert keySuccessors.length == keyProbabilities.length;
@@ -205,7 +201,7 @@ public class TypeSwitchNode extends SwitchNode implements LIRLowerable, Simplifi
                     }
 
                     BeginNode[] successorsArray = newSuccessors.toArray(new BeginNode[newSuccessors.size()]);
-                    TypeSwitchNode newSwitch = graph().add(TypeSwitchNode.create(value(), successorsArray, newKeys, newKeyProbabilities, newKeySuccessors));
+                    TypeSwitchNode newSwitch = graph().add(new TypeSwitchNode(value(), successorsArray, newKeys, newKeyProbabilities, newKeySuccessors));
                     ((FixedWithNextNode) predecessor()).setNext(newSwitch);
                     GraphUtil.killWithUnusedFloatingInputs(this);
                 }

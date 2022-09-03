@@ -29,7 +29,6 @@ import java.util.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -43,11 +42,7 @@ public class LoopBeginNode extends MergeNode implements IterableNodeType, LIRLow
     private int unswitches;
     @OptionalInput(InputType.Guard) private GuardingNode overflowGuard;
 
-    public static LoopBeginNode create() {
-        return new LoopBeginNodeGen();
-    }
-
-    protected LoopBeginNode() {
+    public LoopBeginNode() {
         loopFrequency = 1;
     }
 
@@ -194,7 +189,7 @@ public class LoopBeginNode extends MergeNode implements IterableNodeType, LIRLow
         for (LoopExitNode loopexit : loopExits().snapshot()) {
             loopexit.removeProxies();
             FrameState stateAfter = loopexit.stateAfter();
-            graph().replaceFixedWithFixed(loopexit, graph().add(BeginNode.create()));
+            graph().replaceFixedWithFixed(loopexit, graph().add(new BeginNode()));
             if (stateAfter != null && stateAfter.isAlive() && stateAfter.usages().isEmpty()) {
                 GraphUtil.killWithUnusedFloatingInputs(stateAfter);
             }

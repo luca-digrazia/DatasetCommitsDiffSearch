@@ -26,9 +26,9 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
@@ -43,8 +43,7 @@ public class AMD64FloatConvertNode extends UnaryNode implements ArithmeticLIRLow
 
     private final FloatConvert op;
 
-public static AMD64FloatConvertNode create(Stamp stamp, FloatConvert op, ValueNode value) { return new AMD64FloatConvertNodeGen(stamp, op, value); }
-    protected AMD64FloatConvertNode(Stamp stamp, FloatConvert op, ValueNode value) {
+    public AMD64FloatConvertNode(Stamp stamp, FloatConvert op, ValueNode value) {
         super(stamp, value);
         this.op = op;
     }

@@ -24,17 +24,12 @@ package com.oracle.graal.truffle.nodes.asserts;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 
 @NodeInfo
 public class CompilationConstantNode extends NeverPartOfCompilationNode implements Canonicalizable {
 
-    public static CompilationConstantNode create(Invoke invoke) {
-        return new CompilationConstantNodeGen(invoke);
-    }
-
-    protected CompilationConstantNode(Invoke invoke) {
+    public CompilationConstantNode(Invoke invoke) {
         super(invoke, "The value could not be reduced to a compile time constant.");
         assert arguments.size() == 1;
     }

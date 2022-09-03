@@ -25,7 +25,6 @@ package com.oracle.graal.nodes;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ValueNumberable;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 
@@ -59,10 +58,10 @@ public abstract class ProxyNode extends FloatingNode implements IterableNodeType
     }
 
     public static ValueProxyNode forValue(ValueNode value, BeginNode exit, StructuredGraph graph) {
-        return graph.unique(ValueProxyNode.create(value, exit));
+        return graph.unique(new ValueProxyNode(value, exit));
     }
 
     public static GuardProxyNode forGuard(GuardingNode value, BeginNode exit, StructuredGraph graph) {
-        return graph.unique(GuardProxyNode.create(value, exit));
+        return graph.unique(new GuardProxyNode(value, exit));
     }
 }

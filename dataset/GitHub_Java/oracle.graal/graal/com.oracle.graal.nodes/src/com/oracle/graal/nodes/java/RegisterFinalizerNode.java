@@ -26,8 +26,8 @@ import static com.oracle.graal.nodes.java.ForeignCallDescriptors.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -41,11 +41,7 @@ public class RegisterFinalizerNode extends AbstractStateSplit implements Canonic
     @OptionalInput(InputType.State) private FrameState deoptState;
     @Input private ValueNode value;
 
-    public static RegisterFinalizerNode create(ValueNode value) {
-        return new RegisterFinalizerNodeGen(value);
-    }
-
-    RegisterFinalizerNode(ValueNode value) {
+    public RegisterFinalizerNode(ValueNode value) {
         super(StampFactory.forVoid());
         this.value = value;
     }

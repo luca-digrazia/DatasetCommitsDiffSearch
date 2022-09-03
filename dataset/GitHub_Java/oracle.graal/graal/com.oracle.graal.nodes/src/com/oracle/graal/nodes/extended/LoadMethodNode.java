@@ -26,7 +26,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -45,11 +44,7 @@ public class LoadMethodNode extends FixedWithNextNode implements Lowerable, Cano
         return hub;
     }
 
-    public static LoadMethodNode create(ResolvedJavaMethod method, ResolvedJavaType receiverType, ValueNode hub, Kind kind) {
-        return new LoadMethodNodeGen(method, receiverType, hub, kind);
-    }
-
-    LoadMethodNode(ResolvedJavaMethod method, ResolvedJavaType receiverType, ValueNode hub, Kind kind) {
+    public LoadMethodNode(ResolvedJavaMethod method, ResolvedJavaType receiverType, ValueNode hub, Kind kind) {
         super(kind == Kind.Object ? StampFactory.objectNonNull() : StampFactory.forKind(kind));
         this.receiverType = receiverType;
         this.hub = hub;

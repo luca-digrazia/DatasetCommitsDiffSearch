@@ -26,8 +26,8 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.util.*;
 
@@ -40,11 +40,7 @@ public class IntegerLessThanNode extends CompareNode {
      * @param x the instruction producing the first input to the instruction
      * @param y the instruction that produces the second input to this instruction
      */
-    public static IntegerLessThanNode create(ValueNode x, ValueNode y) {
-        return new IntegerLessThanNodeGen(x, y);
-    }
-
-    protected IntegerLessThanNode(ValueNode x, ValueNode y) {
+    public IntegerLessThanNode(ValueNode x, ValueNode y) {
         super(x, y);
         assert !x.getKind().isNumericFloat() && x.getKind() != Kind.Object;
         assert !y.getKind().isNumericFloat() && y.getKind() != Kind.Object;
@@ -68,9 +64,9 @@ public class IntegerLessThanNode extends CompareNode {
             ValueNode b = mirrored ? normalizeNode.getX() : normalizeNode.getY();
 
             if (normalizeNode.getX().getKind() == Kind.Double || normalizeNode.getX().getKind() == Kind.Float) {
-                return FloatLessThanNode.create(a, b, mirrored ^ normalizeNode.isUnorderedLess);
+                return new FloatLessThanNode(a, b, mirrored ^ normalizeNode.isUnorderedLess);
             } else {
-                return IntegerLessThanNode.create(a, b);
+                return new IntegerLessThanNode(a, b);
             }
         }
         return this;
@@ -95,7 +91,7 @@ public class IntegerLessThanNode extends CompareNode {
         }
         if (forX.stamp() instanceof IntegerStamp && forY.stamp() instanceof IntegerStamp) {
             if (IntegerStamp.sameSign((IntegerStamp) forX.stamp(), (IntegerStamp) forY.stamp())) {
-                return IntegerBelowNode.create(forX, forY);
+                return new IntegerBelowNode(forX, forY);
             }
         }
         return this;
@@ -104,9 +100,9 @@ public class IntegerLessThanNode extends CompareNode {
     @Override
     protected CompareNode duplicateModified(ValueNode newX, ValueNode newY) {
         if (newX.stamp() instanceof FloatStamp && newY.stamp() instanceof FloatStamp) {
-            return FloatLessThanNode.create(newX, newY, true);
+            return new FloatLessThanNode(newX, newY, true);
         } else if (newX.stamp() instanceof IntegerStamp && newY.stamp() instanceof IntegerStamp) {
-            return IntegerLessThanNode.create(newX, newY);
+            return new IntegerLessThanNode(newX, newY);
         }
         throw GraalInternalError.shouldNotReachHere();
     }

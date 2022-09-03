@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
@@ -52,11 +51,7 @@ public class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, LIRL
      * @param callTarget the target method being called
      * @param bci the bytecode index of the original invoke (used for debug infos)
      */
-    public static InvokeNode create(CallTargetNode callTarget, int bci) {
-        return new InvokeNodeGen(callTarget, bci);
-    }
-
-    protected InvokeNode(CallTargetNode callTarget, int bci) {
+    public InvokeNode(CallTargetNode callTarget, int bci) {
         this(callTarget, bci, callTarget.returnStamp());
     }
 
@@ -67,11 +62,7 @@ public class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, LIRL
      * @param bci the bytecode index of the original invoke (used for debug infos)
      * @param stamp the stamp to be used for this value
      */
-    public static InvokeNode create(CallTargetNode callTarget, int bci, Stamp stamp) {
-        return new InvokeNodeGen(callTarget, bci, stamp);
-    }
-
-    protected InvokeNode(CallTargetNode callTarget, int bci, Stamp stamp) {
+    public InvokeNode(CallTargetNode callTarget, int bci, Stamp stamp) {
         super(stamp);
         this.callTarget = callTarget;
         this.bci = bci;

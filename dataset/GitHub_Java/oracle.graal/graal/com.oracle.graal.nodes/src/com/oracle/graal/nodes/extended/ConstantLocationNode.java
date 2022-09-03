@@ -26,7 +26,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
@@ -41,11 +40,11 @@ public class ConstantLocationNode extends LocationNode {
     private final long displacement;
 
     public static ConstantLocationNode create(LocationIdentity identity, Kind kind, long displacement, Graph graph) {
-        return graph.unique(ConstantLocationNode.create(identity, kind, displacement));
+        return graph.unique(new ConstantLocationNode(identity, kind, displacement));
     }
 
     public static ConstantLocationNode create(LocationIdentity identity, Kind kind, long displacement) {
-        return new ConstantLocationNodeGen(identity, kind, displacement);
+        return new ConstantLocationNode(identity, kind, displacement);
     }
 
     ConstantLocationNode(LocationIdentity identity, Kind kind, long displacement) {

@@ -26,7 +26,6 @@ import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -43,11 +42,7 @@ public class AssertionNode extends FixedWithNextNode implements Lowerable, Canon
     private final boolean compileTimeAssertion;
     private final String message;
 
-    public static AssertionNode create(boolean compileTimeAssertion, ValueNode value, String message) {
-        return new AssertionNodeGen(compileTimeAssertion, value, message);
-    }
-
-    protected AssertionNode(boolean compileTimeAssertion, ValueNode value, String message) {
+    public AssertionNode(boolean compileTimeAssertion, ValueNode value, String message) {
         super(StampFactory.forVoid());
         this.value = value;
         this.compileTimeAssertion = compileTimeAssertion;

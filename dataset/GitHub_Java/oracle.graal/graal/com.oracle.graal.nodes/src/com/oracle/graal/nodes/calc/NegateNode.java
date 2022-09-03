@@ -24,9 +24,9 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -47,11 +47,7 @@ public class NegateNode extends UnaryNode implements ArithmeticLIRLowerable, Nar
      *
      * @param value the instruction producing the value that is input to this instruction
      */
-    public static NegateNode create(ValueNode value) {
-        return new NegateNodeGen(value);
-    }
-
-    protected NegateNode(ValueNode value) {
+    public NegateNode(ValueNode value) {
         super(StampTool.negate(value.stamp()), value);
     }
 
@@ -82,7 +78,7 @@ public class NegateNode extends UnaryNode implements ArithmeticLIRLowerable, Nar
         }
         if (forValue instanceof IntegerSubNode) {
             IntegerSubNode sub = (IntegerSubNode) forValue;
-            return IntegerSubNode.create(sub.getY(), sub.getX());
+            return new IntegerSubNode(sub.getY(), sub.getX());
         }
         return this;
     }

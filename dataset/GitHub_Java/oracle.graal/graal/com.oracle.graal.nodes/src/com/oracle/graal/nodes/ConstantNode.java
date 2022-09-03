@@ -30,7 +30,6 @@ import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -46,7 +45,7 @@ public class ConstantNode extends FloatingNode implements LIRLowerable {
 
     private static ConstantNode createPrimitive(Constant value) {
         assert value.getKind() != Kind.Object;
-        return ConstantNode.create(value, StampFactory.forConstant(value));
+        return new ConstantNode(value, StampFactory.forConstant(value));
     }
 
     /**
@@ -54,10 +53,6 @@ public class ConstantNode extends FloatingNode implements LIRLowerable {
      *
      * @param value the constant
      */
-    public static ConstantNode create(Constant value, Stamp stamp) {
-        return new ConstantNodeGen(value, stamp);
-    }
-
     protected ConstantNode(Constant value, Stamp stamp) {
         super(stamp);
         assert stamp != null;
@@ -113,7 +108,7 @@ public class ConstantNode extends FloatingNode implements LIRLowerable {
             return forInt(constant.asInt(), graph);
         }
         if (constant.getKind() == Kind.Object) {
-            return unique(graph, ConstantNode.create(constant, StampFactory.forConstant(constant, metaAccess)));
+            return unique(graph, new ConstantNode(constant, StampFactory.forConstant(constant, metaAccess)));
         } else {
             return unique(graph, createPrimitive(constant));
         }
@@ -124,18 +119,18 @@ public class ConstantNode extends FloatingNode implements LIRLowerable {
             return forInt(constant.asInt());
         }
         if (constant.getKind() == Kind.Object) {
-            return ConstantNode.create(constant, StampFactory.forConstant(constant, metaAccess));
+            return new ConstantNode(constant, StampFactory.forConstant(constant, metaAccess));
         } else {
             return createPrimitive(constant);
         }
     }
 
     public static ConstantNode forConstant(Stamp stamp, Constant constant, MetaAccessProvider metaAccess, StructuredGraph graph) {
-        return graph.unique(ConstantNode.create(constant, stamp.constant(constant, metaAccess)));
+        return graph.unique(new ConstantNode(constant, stamp.constant(constant, metaAccess)));
     }
 
     public static ConstantNode forConstant(Stamp stamp, Constant constant, MetaAccessProvider metaAccess) {
-        return ConstantNode.create(constant, stamp.constant(constant, metaAccess));
+        return new ConstantNode(constant, stamp.constant(constant, metaAccess));
     }
 
     /**
@@ -319,7 +314,7 @@ public class ConstantNode extends FloatingNode implements LIRLowerable {
     private static ConstantNode forIntegerBits(int bits, Constant constant, StructuredGraph graph) {
         long value = constant.asLong();
         long bounds = SignExtendNode.signExtend(value, bits);
-        return unique(graph, ConstantNode.create(constant, StampFactory.forInteger(bits, bounds, bounds)));
+        return unique(graph, new ConstantNode(constant, StampFactory.forInteger(bits, bounds, bounds)));
     }
 
     /**
@@ -333,7 +328,7 @@ public class ConstantNode extends FloatingNode implements LIRLowerable {
     private static ConstantNode forIntegerBits(int bits, Constant constant) {
         long value = constant.asLong();
         long bounds = SignExtendNode.signExtend(value, bits);
-        return ConstantNode.create(constant, StampFactory.forInteger(bits, bounds, bounds));
+        return new ConstantNode(constant, StampFactory.forInteger(bits, bounds, bounds));
     }
 
     /**

@@ -25,8 +25,8 @@ package com.oracle.graal.nodes.calc;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 
 /* TODO (thomaswue/gdub) For high-level optimization purpose the compare node should be a boolean *value* (it is currently only a helper node)
@@ -78,7 +78,7 @@ public abstract class CompareNode extends BinaryOpLogicNode {
                     return conditionalNode.condition();
                 } else {
                     assert falseResult == true;
-                    return LogicNegationNode.create(conditionalNode.condition());
+                    return new LogicNegationNode(conditionalNode.condition());
 
                 }
             }
@@ -157,18 +157,18 @@ public abstract class CompareNode extends BinaryOpLogicNode {
         CompareNode comparison;
         if (condition == Condition.EQ) {
             if (x.getKind() == Kind.Object) {
-                comparison = ObjectEqualsNode.create(x, y);
+                comparison = new ObjectEqualsNode(x, y);
             } else {
                 assert x.getKind().isNumericInteger();
-                comparison = IntegerEqualsNode.create(x, y);
+                comparison = new IntegerEqualsNode(x, y);
             }
         } else if (condition == Condition.LT) {
             assert x.getKind().isNumericInteger();
-            comparison = IntegerLessThanNode.create(x, y);
+            comparison = new IntegerLessThanNode(x, y);
         } else {
             assert condition == Condition.BT;
             assert x.getKind().isNumericInteger();
-            comparison = IntegerBelowNode.create(x, y);
+            comparison = new IntegerBelowNode(x, y);
         }
 
         return comparison;

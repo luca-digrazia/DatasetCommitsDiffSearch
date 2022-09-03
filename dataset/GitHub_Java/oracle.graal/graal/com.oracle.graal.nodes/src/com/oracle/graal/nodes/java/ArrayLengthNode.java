@@ -24,8 +24,8 @@ package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
@@ -46,11 +46,7 @@ public class ArrayLengthNode extends FixedWithNextNode implements Canonicalizabl
         return array;
     }
 
-    public static ArrayLengthNode create(ValueNode array) {
-        return new ArrayLengthNodeGen(array);
-    }
-
-    ArrayLengthNode(ValueNode array) {
+    public ArrayLengthNode(ValueNode array) {
         super(StampFactory.positiveInt());
         this.array = array;
     }

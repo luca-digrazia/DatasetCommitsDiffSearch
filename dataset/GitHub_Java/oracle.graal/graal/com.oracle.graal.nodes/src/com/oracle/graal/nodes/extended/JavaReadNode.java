@@ -23,7 +23,7 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -36,11 +36,7 @@ public class JavaReadNode extends FixedAccessNode implements Lowerable, Guarding
 
     private final boolean compressible;
 
-    public static JavaReadNode create(ValueNode object, LocationNode location, BarrierType barrierType, boolean compressible) {
-        return new JavaReadNodeGen(object, location, barrierType, compressible);
-    }
-
-    JavaReadNode(ValueNode object, LocationNode location, BarrierType barrierType, boolean compressible) {
+    public JavaReadNode(ValueNode object, LocationNode location, BarrierType barrierType, boolean compressible) {
         super(object, location, StampFactory.forKind(location.getValueKind()), barrierType);
         this.compressible = compressible;
     }

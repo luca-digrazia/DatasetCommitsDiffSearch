@@ -27,9 +27,9 @@ import static com.oracle.graal.hotspot.HotSpotBackend.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.word.*;
@@ -44,11 +44,7 @@ public class NewInstanceStubCall extends DeoptimizingStubCall implements LIRLowe
 
     @Input private ValueNode hub;
 
-    public static NewInstanceStubCall create(ValueNode hub) {
-        return new NewInstanceStubCallGen(hub);
-    }
-
-    protected NewInstanceStubCall(ValueNode hub) {
+    public NewInstanceStubCall(ValueNode hub) {
         super(defaultStamp);
         this.hub = hub;
     }

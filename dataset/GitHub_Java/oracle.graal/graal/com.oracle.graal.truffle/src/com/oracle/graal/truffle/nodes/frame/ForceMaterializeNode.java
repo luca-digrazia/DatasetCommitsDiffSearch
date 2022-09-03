@@ -23,7 +23,7 @@
 package com.oracle.graal.truffle.nodes.frame;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -32,11 +32,7 @@ public class ForceMaterializeNode extends FixedWithNextNode implements LIRLowera
 
     @Input private ValueNode object;
 
-    public static ForceMaterializeNode create(ValueNode object) {
-        return new ForceMaterializeNodeGen(object);
-    }
-
-    protected ForceMaterializeNode(ValueNode object) {
+    public ForceMaterializeNode(ValueNode object) {
         super(StampFactory.forVoid());
         this.object = object;
     }

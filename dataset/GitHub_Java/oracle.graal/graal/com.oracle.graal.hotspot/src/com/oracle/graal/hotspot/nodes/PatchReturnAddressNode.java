@@ -23,8 +23,8 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.word.*;
@@ -37,11 +37,7 @@ public class PatchReturnAddressNode extends FixedWithNextNode implements LIRLowe
 
     @Input private ValueNode address;
 
-    public static PatchReturnAddressNode create(ValueNode address) {
-        return new PatchReturnAddressNodeGen(address);
-    }
-
-    protected PatchReturnAddressNode(ValueNode address) {
+    public PatchReturnAddressNode(ValueNode address) {
         super(StampFactory.forVoid());
         this.address = address;
     }

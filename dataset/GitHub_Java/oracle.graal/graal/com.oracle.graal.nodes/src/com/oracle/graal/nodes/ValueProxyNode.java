@@ -24,7 +24,6 @@ package com.oracle.graal.nodes;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo
@@ -32,11 +31,7 @@ public class ValueProxyNode extends ProxyNode implements Canonicalizable, Virtua
 
     @Input private ValueNode value;
 
-    public static ValueProxyNode create(ValueNode value, BeginNode proxyPoint) {
-        return new ValueProxyNodeGen(value, proxyPoint);
-    }
-
-    protected ValueProxyNode(ValueNode value, BeginNode proxyPoint) {
+    public ValueProxyNode(ValueNode value, BeginNode proxyPoint) {
         super(value.stamp(), proxyPoint);
         this.value = value;
     }

@@ -24,8 +24,8 @@ package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
@@ -53,11 +53,7 @@ public class BranchProbabilityNode extends FloatingNode implements Simplifiable,
     @Input private ValueNode probability;
     @Input private ValueNode condition;
 
-    public static BranchProbabilityNode create(ValueNode probability, ValueNode condition) {
-        return new BranchProbabilityNodeGen(probability, condition);
-    }
-
-    BranchProbabilityNode(ValueNode probability, ValueNode condition) {
+    public BranchProbabilityNode(ValueNode probability, ValueNode condition) {
         super(condition.stamp());
         this.probability = probability;
         this.condition = condition;

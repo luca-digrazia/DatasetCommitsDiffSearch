@@ -24,13 +24,11 @@ package com.oracle.graal.nodes;
 
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
 
 @NodeInfo
 public abstract class ControlSinkNode extends FixedNode {
-    public static final NodeClass TYPE = NodeClass.get(ControlSinkNode.class);
 
-    protected ControlSinkNode(NodeClass c, Stamp stamp) {
-        super(c, stamp);
+    public ControlSinkNode(Stamp stamp) {
+        super(stamp);
     }
 }

@@ -27,8 +27,8 @@ import static com.oracle.graal.hotspot.HotSpotBackend.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -46,11 +46,7 @@ public class NewMultiArrayStubCall extends ForeignCallNode {
     @Input private ValueNode dims;
     private final int rank;
 
-    public static NewMultiArrayStubCall create(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ValueNode hub, int rank, ValueNode dims) {
-        return new NewMultiArrayStubCallGen(foreignCalls, hub, rank, dims);
-    }
-
-    protected NewMultiArrayStubCall(ForeignCallsProvider foreignCalls, ValueNode hub, int rank, ValueNode dims) {
+    public NewMultiArrayStubCall(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ValueNode hub, int rank, ValueNode dims) {
         super(foreignCalls, NEW_MULTI_ARRAY, defaultStamp);
         this.hub = hub;
         this.rank = rank;

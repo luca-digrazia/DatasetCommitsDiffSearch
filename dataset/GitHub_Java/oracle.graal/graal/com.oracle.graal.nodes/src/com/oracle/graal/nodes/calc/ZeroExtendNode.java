@@ -25,9 +25,9 @@ package com.oracle.graal.nodes.calc;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -38,11 +38,7 @@ import com.oracle.graal.nodes.type.*;
 @NodeInfo
 public class ZeroExtendNode extends IntegerConvertNode {
 
-    public static ZeroExtendNode create(ValueNode input, int resultBits) {
-        return new ZeroExtendNodeGen(input, resultBits);
-    }
-
-    protected ZeroExtendNode(ValueNode input, int resultBits) {
+    public ZeroExtendNode(ValueNode input, int resultBits) {
         super(StampTool.zeroExtend(input.stamp(), resultBits), input, resultBits);
     }
 
@@ -93,7 +89,7 @@ public class ZeroExtendNode extends IntegerConvertNode {
             // xxxx -(zero-extend)-> 0000 xxxx -(zero-extend)-> 00000000 0000xxxx
             // ==> xxxx -(zero-extend)-> 00000000 0000xxxx
             ZeroExtendNode other = (ZeroExtendNode) forValue;
-            return ZeroExtendNode.create(other.getValue(), getResultBits());
+            return new ZeroExtendNode(other.getValue(), getResultBits());
         }
         if (forValue instanceof NarrowNode) {
             NarrowNode narrow = (NarrowNode) forValue;

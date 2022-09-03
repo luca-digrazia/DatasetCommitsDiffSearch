@@ -24,7 +24,6 @@ package com.oracle.graal.nodes;
 
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.spi.*;
 
 /**
@@ -50,11 +49,7 @@ public class BreakpointNode extends FixedWithNextNode implements LIRLowerable {
 
     @Input private final NodeInputList<ValueNode> arguments;
 
-    public static BreakpointNode create(ValueNode[] arguments) {
-        return new BreakpointNodeGen(arguments);
-    }
-
-    protected BreakpointNode(ValueNode... arguments) {
+    public BreakpointNode(ValueNode... arguments) {
         super(StampFactory.forVoid());
         this.arguments = new NodeInputList<>(this, arguments);
     }

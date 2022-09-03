@@ -26,7 +26,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 
 @NodeInfo
@@ -34,11 +33,7 @@ public class DynamicNewInstanceNode extends AbstractNewObjectNode implements Can
 
     @Input private ValueNode clazz;
 
-    public static DynamicNewInstanceNode create(ValueNode clazz, boolean fillContents) {
-        return new DynamicNewInstanceNodeGen(clazz, fillContents);
-    }
-
-    DynamicNewInstanceNode(ValueNode clazz, boolean fillContents) {
+    public DynamicNewInstanceNode(ValueNode clazz, boolean fillContents) {
         super(StampFactory.objectNonNull(), fillContents);
         this.clazz = clazz;
     }
@@ -48,7 +43,7 @@ public class DynamicNewInstanceNode extends AbstractNewObjectNode implements Can
         if (clazz.isConstant()) {
             ResolvedJavaType type = tool.getConstantReflection().asJavaType(clazz.asConstant());
             if (type != null && type.isInitialized() && !type.isArray() && !type.isInterface() && !type.isPrimitive()) {
-                return NewInstanceNode.create(type, fillContents());
+                return new NewInstanceNode(type, fillContents());
             }
         }
         return this;

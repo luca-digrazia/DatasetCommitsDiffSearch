@@ -28,7 +28,7 @@ import static com.oracle.graal.hotspot.nodes.CStringNode.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.*;
@@ -43,11 +43,7 @@ public class VMErrorNode extends DeoptimizingStubCall implements LIRLowerable {
     private final String format;
     @Input private ValueNode value;
 
-    public static VMErrorNode create(String format, ValueNode value) {
-        return new VMErrorNodeGen(format, value);
-    }
-
-    protected VMErrorNode(String format, ValueNode value) {
+    public VMErrorNode(String format, ValueNode value) {
         super(StampFactory.forVoid());
         this.format = format;
         this.value = value;

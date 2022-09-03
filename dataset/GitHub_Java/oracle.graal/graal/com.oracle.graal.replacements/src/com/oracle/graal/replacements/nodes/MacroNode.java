@@ -30,9 +30,8 @@ import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
@@ -65,10 +64,6 @@ public class MacroNode extends FixedWithNextNode implements Lowerable {
     private final ResolvedJavaMethod targetMethod;
     private final JavaType returnType;
     private final InvokeKind invokeKind;
-
-    public static MacroNode create(Invoke invoke) {
-        return new MacroNodeGen(invoke);
-    }
 
     protected MacroNode(Invoke invoke) {
         super(StampFactory.forKind(((MethodCallTargetNode) invoke.callTarget()).targetMethod().getSignature().getReturnKind()));
@@ -188,8 +183,8 @@ public class MacroNode extends FixedWithNextNode implements Lowerable {
     }
 
     protected InvokeNode createInvoke() {
-        MethodCallTargetNode callTarget = graph().add(MethodCallTargetNode.create(invokeKind, targetMethod, arguments.toArray(new ValueNode[arguments.size()]), returnType));
-        InvokeNode invoke = graph().add(InvokeNode.create(callTarget, bci));
+        MethodCallTargetNode callTarget = graph().add(new MethodCallTargetNode(invokeKind, targetMethod, arguments.toArray(new ValueNode[arguments.size()]), returnType));
+        InvokeNode invoke = graph().add(new InvokeNode(callTarget, bci));
         if (stateAfter() != null) {
             invoke.setStateAfter(stateAfter().duplicate());
             if (getKind() != Kind.Void) {

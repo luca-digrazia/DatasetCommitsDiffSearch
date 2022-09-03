@@ -24,7 +24,6 @@ package com.oracle.graal.nodes;
 
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo
@@ -43,19 +42,11 @@ public class ReturnNode extends ControlSinkNode implements LIRLowerable, Iterabl
      * @param result the instruction producing the result for this return; {@code null} if this is a
      *            void return
      */
-    public static ReturnNode create(ValueNode result) {
-        return new ReturnNodeGen(result);
-    }
-
-    protected ReturnNode(ValueNode result) {
+    public ReturnNode(ValueNode result) {
         this(result, null);
     }
 
-    public static ReturnNode create(ValueNode result, MemoryMapNode memoryMap) {
-        return new ReturnNodeGen(result, memoryMap);
-    }
-
-    protected ReturnNode(ValueNode result, MemoryMapNode memoryMap) {
+    public ReturnNode(ValueNode result, MemoryMapNode memoryMap) {
         super(StampFactory.forVoid());
         this.result = result;
         this.memoryMap = memoryMap;

@@ -24,7 +24,6 @@ package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -40,11 +39,7 @@ public class MonitorEnterNode extends AccessMonitorNode implements Virtualizable
      *
      * @param object the instruction producing the object
      */
-    public static MonitorEnterNode create(ValueNode object, MonitorIdNode monitorId) {
-        return new MonitorEnterNodeGen(object, monitorId);
-    }
-
-    MonitorEnterNode(ValueNode object, MonitorIdNode monitorId) {
+    public MonitorEnterNode(ValueNode object, MonitorIdNode monitorId) {
         super(object, monitorId);
     }
 

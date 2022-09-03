@@ -28,7 +28,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -41,11 +40,7 @@ import com.oracle.graal.replacements.nodes.*;
 @NodeInfo
 public class ObjectGetClassNode extends MacroNode implements Virtualizable, Canonicalizable {
 
-    public static ObjectGetClassNode create(Invoke invoke) {
-        return new ObjectGetClassNodeGen(invoke);
-    }
-
-    protected ObjectGetClassNode(Invoke invoke) {
+    public ObjectGetClassNode(Invoke invoke) {
         super(invoke);
     }
 

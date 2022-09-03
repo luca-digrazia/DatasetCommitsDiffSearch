@@ -25,7 +25,6 @@ package com.oracle.graal.nodes;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -35,19 +34,11 @@ public class ConditionAnchorNode extends FixedWithNextNode implements Canonicali
     @Input(InputType.Condition) private LogicNode condition;
     private boolean negated;
 
-    public static ConditionAnchorNode create(LogicNode condition) {
-        return new ConditionAnchorNodeGen(condition);
-    }
-
-    protected ConditionAnchorNode(LogicNode condition) {
+    public ConditionAnchorNode(LogicNode condition) {
         this(condition, false);
     }
 
-    public static ConditionAnchorNode create(LogicNode condition, boolean negated) {
-        return new ConditionAnchorNodeGen(condition, negated);
-    }
-
-    protected ConditionAnchorNode(LogicNode condition, boolean negated) {
+    public ConditionAnchorNode(LogicNode condition, boolean negated) {
         super(StampFactory.forVoid());
         this.negated = negated;
         this.condition = condition;
@@ -73,14 +64,14 @@ public class ConditionAnchorNode extends FixedWithNextNode implements Canonicali
     public Node canonical(CanonicalizerTool tool, Node forValue) {
         if (condition instanceof LogicNegationNode) {
             LogicNegationNode negation = (LogicNegationNode) condition;
-            return ConditionAnchorNode.create(negation.getValue(), !negated);
+            return new ConditionAnchorNode(negation.getValue(), !negated);
         }
         if (condition instanceof LogicConstantNode) {
             LogicConstantNode c = (LogicConstantNode) condition;
             if (c.getValue() != negated) {
                 return null;
             } else {
-                return ValueAnchorNode.create(null);
+                return new ValueAnchorNode(null);
             }
         }
         return this;
@@ -89,7 +80,7 @@ public class ConditionAnchorNode extends FixedWithNextNode implements Canonicali
     @Override
     public void lower(LoweringTool tool) {
         if (graph().getGuardsStage() == StructuredGraph.GuardsStage.FIXED_DEOPTS) {
-            ValueAnchorNode newAnchor = graph().add(ValueAnchorNode.create(null));
+            ValueAnchorNode newAnchor = graph().add(new ValueAnchorNode(null));
             graph().replaceFixedWithFixed(this, newAnchor);
         }
     }

@@ -25,7 +25,6 @@ package com.oracle.graal.replacements.nodes;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.replacements.Snippet.VarargsParameter;
 
@@ -39,11 +38,7 @@ public class LoadSnippetVarargParameterNode extends FixedWithNextNode implements
 
     @Input private final NodeInputList<ParameterNode> parameters;
 
-    public static LoadSnippetVarargParameterNode create(ParameterNode[] locals, ValueNode index, Stamp stamp) {
-        return new LoadSnippetVarargParameterNodeGen(locals, index, stamp);
-    }
-
-    protected LoadSnippetVarargParameterNode(ParameterNode[] locals, ValueNode index, Stamp stamp) {
+    public LoadSnippetVarargParameterNode(ParameterNode[] locals, ValueNode index, Stamp stamp) {
         super(stamp);
         this.index = index;
         this.parameters = new NodeInputList<>(this, locals);

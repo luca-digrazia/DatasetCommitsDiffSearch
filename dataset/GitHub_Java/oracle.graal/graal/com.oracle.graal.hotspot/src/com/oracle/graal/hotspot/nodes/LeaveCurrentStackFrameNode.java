@@ -23,9 +23,9 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.lir.StandardOp.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -38,11 +38,7 @@ public class LeaveCurrentStackFrameNode extends FixedWithNextNode implements LIR
 
     @Input private SaveAllRegistersNode registerSaver;
 
-    public static LeaveCurrentStackFrameNode create(ValueNode registerSaver) {
-        return new LeaveCurrentStackFrameNodeGen(registerSaver);
-    }
-
-    protected LeaveCurrentStackFrameNode(ValueNode registerSaver) {
+    public LeaveCurrentStackFrameNode(ValueNode registerSaver) {
         super(StampFactory.forVoid());
         this.registerSaver = (SaveAllRegistersNode) registerSaver;
     }

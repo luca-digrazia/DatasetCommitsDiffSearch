@@ -24,8 +24,8 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -41,11 +41,7 @@ public class IsNullNode extends UnaryOpLogicNode implements LIRLowerable, Virtua
      *
      * @param object the instruction producing the object to check against null
      */
-    public static IsNullNode create(ValueNode object) {
-        return new IsNullNodeGen(object);
-    }
-
-    protected IsNullNode(ValueNode object) {
+    public IsNullNode(ValueNode object) {
         super(object);
     }
 

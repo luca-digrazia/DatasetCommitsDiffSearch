@@ -26,7 +26,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -50,11 +49,7 @@ public class ArrayEqualsNode extends FixedWithNextNode implements LIRLowerable, 
     /** Length of both arrays. */
     @Input private ValueNode length;
 
-    public static ArrayEqualsNode create(ValueNode array1, ValueNode array2, ValueNode length) {
-        return new ArrayEqualsNodeGen(array1, array2, length);
-    }
-
-    protected ArrayEqualsNode(ValueNode array1, ValueNode array2, ValueNode length) {
+    public ArrayEqualsNode(ValueNode array1, ValueNode array2, ValueNode length) {
         super(StampFactory.forKind(Kind.Boolean));
 
         assert array1.stamp().equals(array2.stamp());

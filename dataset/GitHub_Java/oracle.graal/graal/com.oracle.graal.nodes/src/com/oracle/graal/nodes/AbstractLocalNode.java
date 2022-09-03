@@ -23,13 +23,13 @@
 package com.oracle.graal.nodes;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.calc.*;
 
 @NodeInfo
 public abstract class AbstractLocalNode extends FloatingNode {
 
-    protected int index;
+    private final int index;
 
     public AbstractLocalNode(int index, Stamp stamp) {
         super(stamp);

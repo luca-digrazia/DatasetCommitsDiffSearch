@@ -26,7 +26,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.replacements.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
@@ -40,11 +39,7 @@ import com.oracle.graal.replacements.nodes.*;
 @NodeInfo
 public class ClassIsInstanceNode extends MacroNode implements Canonicalizable {
 
-    public static ClassIsInstanceNode create(Invoke invoke) {
-        return new ClassIsInstanceNodeGen(invoke);
-    }
-
-    protected ClassIsInstanceNode(Invoke invoke) {
+    public ClassIsInstanceNode(Invoke invoke) {
         super(invoke);
     }
 
@@ -71,8 +66,8 @@ public class ClassIsInstanceNode extends MacroNode implements Canonicalizable {
                     return ConstantNode.forBoolean(o != null && c.isInstance(o));
                 }
                 HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromClass(c);
-                InstanceOfNode instanceOf = InstanceOfNode.create(type, object, null);
-                return ConditionalNode.create(instanceOf, ConstantNode.forBoolean(true), ConstantNode.forBoolean(false));
+                InstanceOfNode instanceOf = new InstanceOfNode(type, object, null);
+                return new ConditionalNode(instanceOf, ConstantNode.forBoolean(true), ConstantNode.forBoolean(false));
             }
         }
         return this;

@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 
@@ -37,11 +37,7 @@ public class G1ReferentFieldReadBarrier extends WriteBarrier {
 
     private final boolean doLoad;
 
-    public static G1ReferentFieldReadBarrier create(ValueNode object, ValueNode expectedObject, LocationNode location, boolean doLoad) {
-        return new G1ReferentFieldReadBarrierGen(object, expectedObject, location, doLoad);
-    }
-
-    protected G1ReferentFieldReadBarrier(ValueNode object, ValueNode expectedObject, LocationNode location, boolean doLoad) {
+    public G1ReferentFieldReadBarrier(ValueNode object, ValueNode expectedObject, LocationNode location, boolean doLoad) {
         super(object, expectedObject, location, true);
         this.doLoad = doLoad;
     }

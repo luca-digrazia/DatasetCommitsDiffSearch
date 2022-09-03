@@ -34,7 +34,6 @@ import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.java.*;
@@ -56,11 +55,7 @@ public class MethodHandleNode extends MacroStateSplitNode implements Simplifiabl
     private JavaType replacementReturnType;
     @Input private final NodeInputList<ValueNode> replacementArguments;
 
-    public static MethodHandleNode create(Invoke invoke) {
-        return new MethodHandleNodeGen(invoke);
-    }
-
-    protected MethodHandleNode(Invoke invoke) {
+    public MethodHandleNode(Invoke invoke) {
         super(invoke);
 
         MethodCallTargetNode callTarget = (MethodCallTargetNode) invoke.callTarget();
@@ -236,7 +231,7 @@ public class MethodHandleNode extends MacroStateSplitNode implements Simplifiabl
                 ValueNode argument = arguments.get(index);
                 ResolvedJavaType argumentType = StampTool.typeOrNull(argument.stamp());
                 if (argumentType == null || (argumentType.isAssignableFrom(targetType) && !argumentType.equals(targetType))) {
-                    PiNode piNode = graph().unique(PiNode.create(argument, StampFactory.declared(targetType)));
+                    PiNode piNode = graph().unique(new PiNode(argument, StampFactory.declared(targetType)));
                     arguments.set(index, piNode);
                 }
             }
@@ -275,10 +270,10 @@ public class MethodHandleNode extends MacroStateSplitNode implements Simplifiabl
         // If there is already replacement information, use that instead.
         MethodCallTargetNode callTarget;
         if (replacementTargetMethod == null) {
-            callTarget = SelfReplacingMethodCallTargetNode.create(invokeKind, targetMethod, targetArguments, returnType, getTargetMethod(), originalArguments, getReturnType());
+            callTarget = new SelfReplacingMethodCallTargetNode(invokeKind, targetMethod, targetArguments, returnType, getTargetMethod(), originalArguments, getReturnType());
         } else {
             ValueNode[] args = replacementArguments.toArray(new ValueNode[replacementArguments.size()]);
-            callTarget = SelfReplacingMethodCallTargetNode.create(invokeKind, targetMethod, targetArguments, returnType, replacementTargetMethod, args, replacementReturnType);
+            callTarget = new SelfReplacingMethodCallTargetNode(invokeKind, targetMethod, targetArguments, returnType, replacementTargetMethod, args, replacementReturnType);
         }
         graph().add(callTarget);
 
@@ -289,9 +284,9 @@ public class MethodHandleNode extends MacroStateSplitNode implements Simplifiabl
         // (usually java.lang.Object).
         InvokeNode invoke;
         if (stamp() == StampFactory.forVoid()) {
-            invoke = InvokeNode.create(callTarget, getBci(), stamp());
+            invoke = new InvokeNode(callTarget, getBci(), stamp());
         } else {
-            invoke = InvokeNode.create(callTarget, getBci());
+            invoke = new InvokeNode(callTarget, getBci());
         }
         graph().add(invoke);
         invoke.setStateAfter(stateAfter());

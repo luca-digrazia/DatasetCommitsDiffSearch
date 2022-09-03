@@ -24,7 +24,7 @@ package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -42,11 +42,7 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable 
      * @param index the instruction producing the index
      * @param elementKind the element type
      */
-    public static LoadIndexedNode create(ValueNode array, ValueNode index, Kind elementKind) {
-        return new LoadIndexedNodeGen(array, index, elementKind);
-    }
-
-    LoadIndexedNode(ValueNode array, ValueNode index, Kind elementKind) {
+    public LoadIndexedNode(ValueNode array, ValueNode index, Kind elementKind) {
         super(createStamp(array, elementKind), array, index, elementKind);
     }
 

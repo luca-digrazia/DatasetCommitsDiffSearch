@@ -22,15 +22,15 @@
  */
 package com.oracle.graal.nodes;
 
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo
 public abstract class BinaryOpLogicNode extends LogicNode implements LIRLowerable, Canonicalizable.Binary<ValueNode> {
 
-    @Input protected ValueNode x;
-    @Input protected ValueNode y;
+    @Input private ValueNode x;
+    @Input private ValueNode y;
 
     public ValueNode getX() {
         return x;

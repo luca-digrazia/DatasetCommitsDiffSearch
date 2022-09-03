@@ -23,7 +23,7 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -36,11 +36,7 @@ public class FixedValueAnchorNode extends FixedWithNextNode implements LIRLowera
         return object;
     }
 
-    public static FixedValueAnchorNode create(ValueNode object) {
-        return new FixedValueAnchorNodeGen(object);
-    }
-
-    FixedValueAnchorNode(ValueNode object) {
+    public FixedValueAnchorNode(ValueNode object) {
         super(StampFactory.forNodeIntrinsic());
         this.object = object;
 

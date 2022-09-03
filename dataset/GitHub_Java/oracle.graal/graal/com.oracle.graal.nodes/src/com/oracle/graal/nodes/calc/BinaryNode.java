@@ -24,9 +24,9 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 
 /**
@@ -92,7 +92,7 @@ public abstract class BinaryNode extends FloatingNode implements Canonicalizable
         if (stamp instanceof IntegerStamp) {
             return IntegerArithmeticNode.add(graph, x, y);
         } else if (stamp instanceof FloatStamp) {
-            return graph.unique(FloatAddNode.create(x, y, false));
+            return graph.unique(new FloatAddNode(x, y, false));
         } else {
             throw GraalInternalError.shouldNotReachHere();
         }
@@ -104,7 +104,7 @@ public abstract class BinaryNode extends FloatingNode implements Canonicalizable
         if (stamp instanceof IntegerStamp) {
             return IntegerArithmeticNode.sub(graph, x, y);
         } else if (stamp instanceof FloatStamp) {
-            return graph.unique(FloatSubNode.create(x, y, false));
+            return graph.unique(new FloatSubNode(x, y, false));
         } else {
             throw GraalInternalError.shouldNotReachHere();
         }
@@ -116,7 +116,7 @@ public abstract class BinaryNode extends FloatingNode implements Canonicalizable
         if (stamp instanceof IntegerStamp) {
             return IntegerArithmeticNode.mul(graph, x, y);
         } else if (stamp instanceof FloatStamp) {
-            return graph.unique(FloatMulNode.create(x, y, false));
+            return graph.unique(new FloatMulNode(x, y, false));
         } else {
             throw GraalInternalError.shouldNotReachHere();
         }

@@ -24,8 +24,8 @@ package com.oracle.graal.replacements.nodes;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
@@ -34,11 +34,7 @@ import com.oracle.graal.nodes.type.*;
 @NodeInfo
 public class ReverseBytesNode extends UnaryNode implements LIRLowerable {
 
-    public static ReverseBytesNode create(ValueNode value) {
-        return new ReverseBytesNodeGen(value);
-    }
-
-    protected ReverseBytesNode(ValueNode value) {
+    public ReverseBytesNode(ValueNode value) {
         super(StampFactory.forKind(value.getKind()), value);
         assert getKind() == Kind.Int || getKind() == Kind.Long;
     }

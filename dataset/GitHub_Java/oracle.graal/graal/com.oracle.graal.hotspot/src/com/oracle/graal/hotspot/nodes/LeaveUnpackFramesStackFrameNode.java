@@ -23,9 +23,9 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.lir.StandardOp.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -38,11 +38,7 @@ public class LeaveUnpackFramesStackFrameNode extends FixedWithNextNode implement
 
     @Input private SaveAllRegistersNode registerSaver;
 
-    public static LeaveUnpackFramesStackFrameNode create(ValueNode registerSaver) {
-        return new LeaveUnpackFramesStackFrameNodeGen(registerSaver);
-    }
-
-    protected LeaveUnpackFramesStackFrameNode(ValueNode registerSaver) {
+    public LeaveUnpackFramesStackFrameNode(ValueNode registerSaver) {
         super(StampFactory.forVoid());
         this.registerSaver = (SaveAllRegistersNode) registerSaver;
     }

@@ -24,7 +24,6 @@ package com.oracle.graal.nodes;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 
 @NodeInfo
 public class ShortCircuitOrNode extends LogicNode implements IterableNodeType, Canonicalizable.Binary<LogicNode> {
@@ -35,11 +34,7 @@ public class ShortCircuitOrNode extends LogicNode implements IterableNodeType, C
     private boolean yNegated;
     private double shortCircuitProbability;
 
-    public static ShortCircuitOrNode create(LogicNode x, boolean xNegated, LogicNode y, boolean yNegated, double shortCircuitProbability) {
-        return new ShortCircuitOrNodeGen(x, xNegated, y, yNegated, shortCircuitProbability);
-    }
-
-    protected ShortCircuitOrNode(LogicNode x, boolean xNegated, LogicNode y, boolean yNegated, double shortCircuitProbability) {
+    public ShortCircuitOrNode(LogicNode x, boolean xNegated, LogicNode y, boolean yNegated, double shortCircuitProbability) {
         this.x = x;
         this.xNegated = xNegated;
         this.y = y;
@@ -87,7 +82,7 @@ public class ShortCircuitOrNode extends LogicNode implements IterableNodeType, C
         }
 
         if (xCond != forX || yCond != forY) {
-            return ShortCircuitOrNode.create(xCond, xNeg, yCond, yNeg, shortCircuitProbability);
+            return new ShortCircuitOrNode(xCond, xNeg, yCond, yNeg, shortCircuitProbability);
         } else {
             return this;
         }
@@ -109,7 +104,7 @@ public class ShortCircuitOrNode extends LogicNode implements IterableNodeType, C
             if (isXNegated()) {
                 if (isYNegated()) {
                     // !a || !a = !a
-                    return LogicNegationNode.create(forX);
+                    return new LogicNegationNode(forX);
                 } else {
                     // !a || a = true
                     return LogicConstantNode.tautology();
@@ -129,7 +124,7 @@ public class ShortCircuitOrNode extends LogicNode implements IterableNodeType, C
                 return LogicConstantNode.tautology();
             } else {
                 if (isYNegated()) {
-                    return LogicNegationNode.create(forY);
+                    return new LogicNegationNode(forY);
                 } else {
                     return forY;
                 }
@@ -140,7 +135,7 @@ public class ShortCircuitOrNode extends LogicNode implements IterableNodeType, C
                 return LogicConstantNode.tautology();
             } else {
                 if (isXNegated()) {
-                    return LogicNegationNode.create(forX);
+                    return new LogicNegationNode(forX);
                 } else {
                     return forX;
                 }

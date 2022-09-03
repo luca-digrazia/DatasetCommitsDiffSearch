@@ -23,7 +23,7 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -97,13 +97,13 @@ public abstract class IntegerConvertNode extends ConvertNode implements Arithmet
         if (toStamp.getBits() == fromStamp.getBits()) {
             result = input;
         } else if (toStamp.getBits() < fromStamp.getBits()) {
-            result = NarrowNode.create(input, toStamp.getBits());
+            result = new NarrowNode(input, toStamp.getBits());
         } else if (zeroExtend) {
             // toStamp.getBits() > fromStamp.getBits()
-            result = ZeroExtendNode.create(input, toStamp.getBits());
+            result = new ZeroExtendNode(input, toStamp.getBits());
         } else {
             // toStamp.getBits() > fromStamp.getBits()
-            result = SignExtendNode.create(input, toStamp.getBits());
+            result = new SignExtendNode(input, toStamp.getBits());
         }
 
         IntegerStamp resultStamp = (IntegerStamp) result.stamp();

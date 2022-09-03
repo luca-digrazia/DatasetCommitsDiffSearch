@@ -26,7 +26,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -42,29 +41,17 @@ public class UnsafeCastNode extends FloatingGuardedNode implements LIRLowerable,
 
     @Input private ValueNode object;
 
-    public static UnsafeCastNode create(ValueNode object, Stamp stamp) {
-        return new UnsafeCastNodeGen(object, stamp);
-    }
-
-    UnsafeCastNode(ValueNode object, Stamp stamp) {
+    public UnsafeCastNode(ValueNode object, Stamp stamp) {
         super(stamp);
         this.object = object;
     }
 
-    public static UnsafeCastNode create(ValueNode object, Stamp stamp, ValueNode anchor) {
-        return new UnsafeCastNodeGen(object, stamp, anchor);
-    }
-
-    UnsafeCastNode(ValueNode object, Stamp stamp, ValueNode anchor) {
+    public UnsafeCastNode(ValueNode object, Stamp stamp, ValueNode anchor) {
         super(stamp, (GuardingNode) anchor);
         this.object = object;
     }
 
-    public static UnsafeCastNode create(ValueNode object, ResolvedJavaType toType, boolean exactType, boolean nonNull) {
-        return new UnsafeCastNodeGen(object, toType, exactType, nonNull);
-    }
-
-    UnsafeCastNode(ValueNode object, ResolvedJavaType toType, boolean exactType, boolean nonNull) {
+    public UnsafeCastNode(ValueNode object, ResolvedJavaType toType, boolean exactType, boolean nonNull) {
         this(object, toType.getKind() == Kind.Object ? StampFactory.object(toType, exactType, nonNull || StampTool.isObjectNonNull(object.stamp())) : StampFactory.forKind(toType.getKind()));
     }
 

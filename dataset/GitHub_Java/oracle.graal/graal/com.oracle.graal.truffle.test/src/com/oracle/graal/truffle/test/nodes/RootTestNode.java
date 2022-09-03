@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,9 +22,7 @@
  */
 package com.oracle.graal.truffle.test.nodes;
 
-import com.oracle.graal.truffle.test.MockLanguage;
 import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.nodes.*;
 
 @NodeInfo
@@ -34,7 +32,7 @@ public class RootTestNode extends RootNode {
     @Child AbstractTestNode node;
 
     public RootTestNode(FrameDescriptor descriptor, String name, AbstractTestNode node) {
-        super(MockLanguage.class, null, descriptor);
+        super(null, descriptor);
         this.name = name;
         this.node = node;
     }
@@ -42,11 +40,6 @@ public class RootTestNode extends RootNode {
     @Override
     public Object execute(VirtualFrame frame) {
         return node.execute(frame);
-    }
-
-    @Override
-    public void applyInstrumentation() {
-        Probe.applyASTProbers(node);
     }
 
     @Override
