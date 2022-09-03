@@ -22,8 +22,11 @@
  */
 package com.oracle.graal.replacements;
 
+import static com.oracle.graal.api.code.BytecodeFrame.*;
+
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.util.*;
@@ -33,13 +36,13 @@ import com.oracle.graal.phases.graph.ReentrantNodeIterator.LoopInfo;
 import com.oracle.graal.phases.graph.ReentrantNodeIterator.NodeIteratorClosure;
 
 /**
- * This phase ensures that there's a single {@linkplain FrameState#AFTER_BCI collapsed frame state}
- * per path.
- * 
+ * This phase ensures that there's a single {@linkplain BytecodeFrame#AFTER_BCI collapsed frame
+ * state} per path.
+ *
  * Removes other frame states from {@linkplain StateSplit#hasSideEffect() non-side-effecting} nodes
- * in the graph, and replaces them with {@linkplain FrameState#INVALID_FRAMESTATE_BCI invalid frame
- * states}.
- * 
+ * in the graph, and replaces them with {@linkplain BytecodeFrame#INVALID_FRAMESTATE_BCI invalid
+ * frame states}.
+ *
  * The invalid frame states ensure that no deoptimization to a snippet frame state will happen.
  */
 public class CollapseFrameForSingleSideEffectPhase extends Phase {
@@ -69,7 +72,7 @@ public class CollapseFrameForSingleSideEffectPhase extends Phase {
             return new IterationState(this, begin, null, this.invalid);
         }
 
-        public static IterationState merge(MergeNode merge, Collection<IterationState> before, boolean invalid) {
+        public static IterationState merge(AbstractMergeNode merge, Collection<IterationState> before, boolean invalid) {
             return new IterationState(null, merge, before, invalid);
         }
 
@@ -111,7 +114,7 @@ public class CollapseFrameForSingleSideEffectPhase extends Phase {
     @Override
     protected void run(StructuredGraph graph) {
         CollapseFrameForSingleSideEffectClosure closure = new CollapseFrameForSingleSideEffectClosure();
-        ReentrantNodeIterator.apply(closure, graph.start(), new IterationState(), null);
+        ReentrantNodeIterator.apply(closure, graph.start(), new IterationState());
         closure.finishProcessing(graph);
     }
 
@@ -128,15 +131,17 @@ public class CollapseFrameForSingleSideEffectPhase extends Phase {
                 FrameState frameState = stateSplit.stateAfter();
                 if (frameState != null) {
                     if (stateSplit.hasSideEffect()) {
-                        stateSplit.setStateAfter(createInvalidFrameState(node));
+                        setStateAfter(node.graph(), stateSplit, INVALID_FRAMESTATE_BCI, false);
                         state = state.addSideEffect(stateSplit);
                     } else if (currentState.invalid) {
-                        stateSplit.setStateAfter(createInvalidFrameState(node));
+                        setStateAfter(node.graph(), stateSplit, INVALID_FRAMESTATE_BCI, false);
+                    } else if (stateSplit instanceof StartNode) {
+                        setStateAfter(node.graph(), stateSplit, BEFORE_BCI, false);
                     } else {
                         stateSplit.setStateAfter(null);
-                    }
-                    if (frameState.usages().isEmpty()) {
-                        GraphUtil.killWithUnusedFloatingInputs(frameState);
+                        if (frameState.hasNoUsages()) {
+                            GraphUtil.killWithUnusedFloatingInputs(frameState);
+                        }
                     }
                 }
             }
@@ -149,7 +154,7 @@ public class CollapseFrameForSingleSideEffectPhase extends Phase {
         }
 
         @Override
-        protected IterationState merge(MergeNode merge, List<IterationState> states) {
+        protected IterationState merge(AbstractMergeNode merge, List<IterationState> states) {
             boolean invalid = false;
             for (IterationState state : states) {
                 if (state.invalid) {
@@ -175,18 +180,14 @@ public class CollapseFrameForSingleSideEffectPhase extends Phase {
             for (Node returnSideEffect : returnSideEffects) {
                 if (!unwindSideEffects.contains(returnSideEffect) && !maskedSideEffects.contains(returnSideEffect)) {
                     StateSplit split = (StateSplit) returnSideEffect;
-                    if (split.getState() != null) {
-                        split.setStateAfter(graph.add(new FrameState(FrameState.AFTER_BCI)));
-                    }
+                    setStateAfter(graph, split, AFTER_BCI, true);
                 }
             }
 
             for (Node unwindSideEffect : unwindSideEffects) {
                 if (!returnSideEffects.contains(unwindSideEffect) && !maskedSideEffects.contains(unwindSideEffect)) {
                     StateSplit split = (StateSplit) unwindSideEffect;
-                    if (split.getState() != null) {
-                        split.setStateAfter(graph.add(new FrameState(FrameState.AFTER_EXCEPTION_BCI)));
-                    }
+                    setStateAfter(graph, split, AFTER_EXCEPTION_BCI, true);
                 }
             }
         }
@@ -206,15 +207,34 @@ public class CollapseFrameForSingleSideEffectPhase extends Phase {
             }
 
             if (isNowInvalid) {
-                loop.setStateAfter(createInvalidFrameState(loop));
+                setStateAfter(loop.graph(), loop, INVALID_FRAMESTATE_BCI, false);
             }
 
             IterationState endState = IterationState.merge(loop, info.endStates.values(), isNowInvalid);
             return ReentrantNodeIterator.processLoop(this, loop, endState).exitStates;
         }
 
-        private static FrameState createInvalidFrameState(FixedNode node) {
-            return node.graph().add(new FrameState(FrameState.INVALID_FRAMESTATE_BCI));
+        /**
+         * Creates and sets a special frame state for a node. If the existing frame state is
+         * non-null and has no other usages, it is deleted via
+         * {@link GraphUtil#killWithUnusedFloatingInputs(Node)}.
+         *
+         * @param graph the graph context
+         * @param node the node whose frame state is updated
+         * @param bci {@link BytecodeFrame#BEFORE_BCI}, {@link BytecodeFrame#AFTER_EXCEPTION_BCI} or
+         *            {@link BytecodeFrame#INVALID_FRAMESTATE_BCI}
+         * @param replaceOnly only perform the update if the node currently has a non-null frame
+         *            state
+         */
+        private static void setStateAfter(StructuredGraph graph, StateSplit node, int bci, boolean replaceOnly) {
+            assert (bci == BEFORE_BCI && node instanceof StartNode) || bci == AFTER_BCI || bci == AFTER_EXCEPTION_BCI || bci == INVALID_FRAMESTATE_BCI;
+            FrameState currentStateAfter = node.stateAfter();
+            if (currentStateAfter != null || !replaceOnly) {
+                node.setStateAfter(graph.add(new FrameState(bci)));
+                if (currentStateAfter != null && currentStateAfter.hasNoUsages()) {
+                    GraphUtil.killWithUnusedFloatingInputs(currentStateAfter);
+                }
+            }
         }
     }
 }
