@@ -46,10 +46,10 @@ public final class ControlFlowOptimizer extends PostAllocationOptimizationPhase 
     protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
                     PostAllocationOptimizationContext context) {
         LIR lir = lirGenRes.getLIR();
-        new Optimizer(lir).deleteEmptyBlocks(codeEmittingOrder);
+        new Optimizer<B>(lir).deleteEmptyBlocks(codeEmittingOrder);
     }
 
-    private static final class Optimizer {
+    private static final class Optimizer<B extends AbstractBlockBase<B>> {
 
         private final LIR lir;
 
@@ -66,7 +66,7 @@ public final class ControlFlowOptimizer extends PostAllocationOptimizationPhase 
          * @param block the block checked for deletion
          * @return whether the block can be deleted
          */
-        private boolean canDeleteBlock(AbstractBlockBase<?> block) {
+        private boolean canDeleteBlock(B block) {
             if (block == null || block.getSuccessorCount() != 1 || block.getPredecessorCount() == 0 || block.getSuccessors()[0] == block) {
                 return false;
             }
@@ -83,7 +83,7 @@ public final class ControlFlowOptimizer extends PostAllocationOptimizationPhase 
             return instructions.size() == 2 && !instructions.get(instructions.size() - 1).hasState() && !block.isExceptionEntry();
         }
 
-        private void alignBlock(AbstractBlockBase<?> block) {
+        private void alignBlock(B block) {
             if (!block.isAligned()) {
                 block.setAlign(true);
                 List<LIRInstruction> instructions = lir.getLIRforBlock(block);
@@ -93,15 +93,15 @@ public final class ControlFlowOptimizer extends PostAllocationOptimizationPhase 
             }
         }
 
-        private void deleteEmptyBlocks(List<? extends AbstractBlockBase<?>> blocks) {
+        private void deleteEmptyBlocks(List<B> blocks) {
             assert verifyBlocks(lir, blocks);
             for (int i = 0; i < blocks.size(); i++) {
-                AbstractBlockBase<?> block = blocks.get(i);
+                B block = blocks.get(i);
                 if (canDeleteBlock(block)) {
 
                     block.delete();
                     // adjust successor and predecessor lists
-                    AbstractBlockBase<?> other = block.getSuccessors()[0];
+                    B other = block.getSuccessors()[0];
                     if (block.isAligned()) {
                         alignBlock(other);
                     }

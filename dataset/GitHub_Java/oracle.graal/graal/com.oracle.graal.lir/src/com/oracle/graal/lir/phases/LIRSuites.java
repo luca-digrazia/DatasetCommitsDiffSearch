@@ -22,57 +22,83 @@
  */
 package com.oracle.graal.lir.phases;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.phases.LowLevelHighTierPhase.LowLevelHighTierContext;
-import com.oracle.graal.lir.phases.LowLevelLowTierPhase.LowLevelLowTierContext;
-import com.oracle.graal.lir.phases.LowLevelMidTierPhase.LowLevelMidTierContext;
+import com.oracle.graal.lir.LIR;
+import com.oracle.graal.lir.Variable;
+import com.oracle.graal.lir.VirtualStackSlot;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.gen.LIRGeneratorTool;
+import com.oracle.graal.lir.phases.AllocationPhase.AllocationContext;
+import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase.PostAllocationOptimizationContext;
+import com.oracle.graal.lir.phases.PreAllocationOptimizationPhase.PreAllocationOptimizationContext;
+
+import jdk.vm.ci.code.StackSlot;
 
 public class LIRSuites {
 
-    private final LowLevelPhaseSuite<LowLevelHighTierContext> highTier;
-    private final LowLevelPhaseSuite<LowLevelMidTierContext> midTier;
-    private final LowLevelPhaseSuite<LowLevelLowTierContext> lowTier;
+    private final LIRPhaseSuite<PreAllocationOptimizationContext> preAllocOptStage;
+    private final LIRPhaseSuite<AllocationContext> allocStage;
+    private final LIRPhaseSuite<PostAllocationOptimizationContext> postAllocStage;
+    private boolean immutable;
 
-    public LIRSuites(LowLevelPhaseSuite<LowLevelHighTierContext> highTier, LowLevelPhaseSuite<LowLevelMidTierContext> midTier, LowLevelPhaseSuite<LowLevelLowTierContext> lowTier) {
-        this.highTier = highTier;
-        this.midTier = midTier;
-        this.lowTier = lowTier;
+    public LIRSuites(LIRPhaseSuite<PreAllocationOptimizationContext> preAllocOptStage, LIRPhaseSuite<AllocationContext> allocStage, LIRPhaseSuite<PostAllocationOptimizationContext> postAllocStage) {
+        this.preAllocOptStage = preAllocOptStage;
+        this.allocStage = allocStage;
+        this.postAllocStage = postAllocStage;
+    }
+
+    public LIRSuites(LIRSuites other) {
+        this(other.getPreAllocationOptimizationStage().copy(), other.getAllocationStage().copy(), other.getPostAllocationOptimizationStage().copy());
     }
 
     /**
-     * {@link LowLevelHighTierPhase}s are executed between {@link LIR} generation and register
-     * allocation.
+     * {@link PreAllocationOptimizationPhase}s are executed between {@link LIR} generation and
+     * register allocation.
      * <p>
-     * {@link LowLevelHighTierPhase Implementers} can create new
+     * {@link PreAllocationOptimizationPhase Implementers} can create new
      * {@link LIRGeneratorTool#newVariable variables}, {@link LIRGenerationResult#getFrameMap stack
      * slots} and {@link LIRGenerationResult#getFrameMapBuilder virtual stack slots}.
      */
-    public LowLevelPhaseSuite<LowLevelHighTierContext> getHighTier() {
-        return highTier;
+    public LIRPhaseSuite<PreAllocationOptimizationContext> getPreAllocationOptimizationStage() {
+        return preAllocOptStage;
     }
 
     /**
-     * {@link LowLevelMidTierPhase}s are responsible for register allocation and translating
+     * {@link AllocationPhase}s are responsible for register allocation and translating
      * {@link VirtualStackSlot}s into {@link StackSlot}s.
      * <p>
-     * After the {@link LowLevelMidTier} there should be no more {@link Variable}s and
+     * After the {@link AllocationStage} there should be no more {@link Variable}s and
      * {@link VirtualStackSlot}s.
      */
-    public LowLevelPhaseSuite<LowLevelMidTierContext> getMidTier() {
-        return midTier;
+    public LIRPhaseSuite<AllocationContext> getAllocationStage() {
+        return allocStage;
     }
 
     /**
-     * {@link LowLevelLowTierPhase}s are executed after register allocation and before machine code
-     * generation.
+     * {@link PostAllocationOptimizationPhase}s are executed after register allocation and before
+     * machine code generation.
      * <p>
-     * A {@link LowLevelLowTierPhase} must not introduce new {@link Variable}s,
-     * {@link VirtualStackSlot}s or {@link StackSlot}s.
+     * A {@link PostAllocationOptimizationPhase} must not introduce new {@link Variable}s,
+     * {@link VirtualStackSlot}s or {@link StackSlot}s. Blocks might be removed from
+     * {@link LIR#codeEmittingOrder()} by overwriting them with {@code null}.
      */
-    public LowLevelPhaseSuite<LowLevelLowTierContext> getLowTier() {
-        return lowTier;
+    public LIRPhaseSuite<PostAllocationOptimizationContext> getPostAllocationOptimizationStage() {
+        return postAllocStage;
     }
 
+    public boolean isImmutable() {
+        return immutable;
+    }
+
+    public synchronized void setImmutable() {
+        if (!immutable) {
+            preAllocOptStage.setImmutable();
+            allocStage.setImmutable();
+            postAllocStage.setImmutable();
+            immutable = true;
+        }
+    }
+
+    public LIRSuites copy() {
+        return new LIRSuites(preAllocOptStage.copy(), allocStage.copy(), postAllocStage.copy());
+    }
 }
