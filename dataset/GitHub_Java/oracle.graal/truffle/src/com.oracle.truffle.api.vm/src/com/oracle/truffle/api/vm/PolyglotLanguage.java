@@ -159,10 +159,6 @@ final class PolyglotLanguage extends AbstractLanguageImpl implements com.oracle.
         return optionValues;
     }
 
-    void clearOptionValues() {
-        optionValues = null;
-    }
-
     <S> S lookup(Class<S> serviceClass) {
         ensureInitialized();
         return LANGUAGE.lookup(info, serviceClass);

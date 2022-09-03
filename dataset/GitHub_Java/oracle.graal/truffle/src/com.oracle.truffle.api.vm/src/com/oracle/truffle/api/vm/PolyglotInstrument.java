@@ -39,7 +39,6 @@ class PolyglotInstrument extends AbstractInstrumentImpl implements com.oracle.tr
     InstrumentInfo info;
     final InstrumentCache cache;
     final PolyglotEngineImpl engine;
-    private final Object instrumentLock = new Object();
 
     private volatile OptionDescriptors options;
     private volatile OptionValuesImpl optionValues;
@@ -61,7 +60,7 @@ class PolyglotInstrument extends AbstractInstrumentImpl implements com.oracle.tr
 
     OptionValuesImpl getOptionValues() {
         if (optionValues == null) {
-            synchronized (instrumentLock) {
+            synchronized (engine) {
                 if (optionValues == null) {
                     optionValues = new OptionValuesImpl(engine, getOptions());
                 }
@@ -77,7 +76,7 @@ class PolyglotInstrument extends AbstractInstrumentImpl implements com.oracle.tr
 
     void ensureInitialized() {
         if (!initialized) {
-            synchronized (instrumentLock) {
+            synchronized (engine) {
                 if (!initialized) {
                     try {
                         Class<?> loadedInstrument = cache.getInstrumentationClass();
@@ -94,7 +93,7 @@ class PolyglotInstrument extends AbstractInstrumentImpl implements com.oracle.tr
 
     void ensureCreated() {
         if (!created) {
-            synchronized (instrumentLock) {
+            synchronized (engine) {
                 if (!created) {
                     if (!initialized) {
                         ensureInitialized();

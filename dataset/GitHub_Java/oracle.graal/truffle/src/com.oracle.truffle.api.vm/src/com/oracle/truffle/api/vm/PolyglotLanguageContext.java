@@ -100,14 +100,6 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         defaultValueCache = new PolyglotValue.Default(this);
     }
 
-    Object getContextImpl() {
-        if (env != null) {
-            return LANGUAGE.getContext(env);
-        } else {
-            return null;
-        }
-    }
-
     Value getHostBindings() {
         Value bindings = this.hostBindings;
         if (bindings == null) {
@@ -281,7 +273,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                             Env createdEnv = env = LANGUAGE.createEnv(this, language.info,
                                             context.out,
                                             context.err,
-                                            context.in, config, getOptionValues(), applicationArguments, context.fileSystem);
+                                            context.in, config, getOptionValues(), applicationArguments);
                             LANGUAGE.createEnvContext(createdEnv);
                             language.requireProfile().notifyContextCreate(createdEnv);
                         } finally {
@@ -405,7 +397,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         setApplicationArguments(newApplicationArguments);
         if (preInitialized) {
             try {
-                final Env newEnv = LANGUAGE.patchEnvContext(env, context.out, context.err, context.in, config, getOptionValues(), newApplicationArguments, context.fileSystem);
+                final Env newEnv = LANGUAGE.patchEnvContext(env, context.out, context.err, context.in, config, getOptionValues(), newApplicationArguments);
                 if (newEnv != null) {
                     env = newEnv;
                     return true;
