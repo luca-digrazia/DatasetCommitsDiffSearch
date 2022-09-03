@@ -79,10 +79,8 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
 
     protected abstract int getInvalidationBackoff();
 
-    /**
-     * @param rootFrameDescriptor may be {@code null}.
-     */
-    protected OSRRootNode createRootNode(@SuppressWarnings("rawtypes") Class<? extends TruffleLanguage> truffleLanguage, FrameDescriptor rootFrameDescriptor, Class<? extends VirtualFrame> clazz) {
+    protected OSRRootNode createRootNode(@SuppressWarnings("rawtypes") Class<? extends TruffleLanguage> truffleLanguage, @SuppressWarnings("unused") FrameDescriptor rootFrameDescriptor,
+                    Class<? extends VirtualFrame> clazz) {
         /*
          * Use a new frame descriptor, because the frame that this new root node creates is not
          * used.
