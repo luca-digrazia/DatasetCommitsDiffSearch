@@ -31,54 +31,32 @@ package com.oracle.truffle.llvm.runtime.interop.access;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.interop.CanResolve;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.MessageResolution;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceArrayLikeType;
-import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceBasicType;
-import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceMemberType;
-import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourcePointerType;
-import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceStructLikeType;
-import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceArrayLikeType;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceBasicType;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceMemberType;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourcePointerType;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceStructLikeType;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import java.util.IdentityHashMap;
 
 /**
  * Describes how foreign interop should interpret values.
  */
-public abstract class LLVMInteropType implements TruffleObject {
+public abstract class LLVMInteropType {
 
-    public static final LLVMInteropType.Value UNKNOWN = Value.primitive(null, 0);
-
-    private final long size;
-
-    private LLVMInteropType(long size) {
-        this.size = size;
-    }
-
-    public LLVMInteropType.Array toArray(long length) {
-        return new Array(this, size, length);
-    }
-
-    @Override
-    public abstract String toString();
+    public static final LLVMInteropType.Value UNKNOWN = Value.primitive(null);
 
     public enum ValueKind {
-        I1(1),
-        I8(1),
-        I16(2),
-        I32(4),
-        I64(8),
-        FLOAT(4),
-        DOUBLE(8),
-        POINTER(8);
+        I1,
+        I8,
+        I16,
+        I32,
+        I64,
+        FLOAT,
+        DOUBLE,
+        POINTER;
 
-        public final LLVMInteropType.Value type;
-
-        ValueKind(long size) {
-            type = Value.primitive(this, size);
-        }
+        public final LLVMInteropType.Value type = Value.primitive(this);
     }
 
     public static final class Value extends LLVMInteropType {
@@ -86,16 +64,15 @@ public abstract class LLVMInteropType implements TruffleObject {
         final ValueKind kind;
         final Structured baseType;
 
-        private static Value primitive(ValueKind kind, long size) {
-            return new Value(kind, null, size);
+        private static Value primitive(ValueKind kind) {
+            return new Value(kind, null);
         }
 
-        static Value pointer(Structured baseType, long size) {
-            return new Value(ValueKind.POINTER, baseType, size);
+        static Value pointer(Structured baseType) {
+            return new Value(ValueKind.POINTER, baseType);
         }
 
-        private Value(ValueKind kind, Structured baseType, long size) {
-            super(size);
+        private Value(ValueKind kind, Structured baseType) {
             this.kind = kind;
             this.baseType = baseType;
         }
@@ -107,23 +84,9 @@ public abstract class LLVMInteropType implements TruffleObject {
         public Structured getBaseType() {
             return baseType;
         }
-
-        @Override
-        @TruffleBoundary
-        public String toString() {
-            if (baseType == null) {
-                return kind.name();
-            } else {
-                return baseType.toString() + "*";
-            }
-        }
     }
 
     public abstract static class Structured extends LLVMInteropType {
-
-        Structured(long size) {
-            super(size);
-        }
     }
 
     public static final class Array extends Structured {
@@ -133,14 +96,12 @@ public abstract class LLVMInteropType implements TruffleObject {
         final long length;
 
         Array(InteropTypeFactory.Register elementType, long elementSize, long length) {
-            super(elementSize * length);
             this.elementType = elementType.get(this);
             this.elementSize = elementSize;
             this.length = length;
         }
 
         private Array(LLVMInteropType elementType, long elementSize, long length) {
-            super(elementSize * length);
             this.elementType = elementType;
             this.elementSize = elementSize;
             this.length = length;
@@ -161,23 +122,13 @@ public abstract class LLVMInteropType implements TruffleObject {
         public LLVMInteropType.Array resize(long newLength) {
             return new LLVMInteropType.Array(elementType, elementSize, newLength);
         }
-
-        @Override
-        @TruffleBoundary
-        public String toString() {
-            return String.format("%s[%d]", elementType.toString(), length);
-        }
     }
 
     public static final class Struct extends Structured {
 
-        private final String name;
-
         @CompilationFinal(dimensions = 1) final StructMember[] members;
 
-        Struct(String name, StructMember[] members, long size) {
-            super(size);
-            this.name = name;
+        Struct(StructMember[] members) {
             this.members = members;
         }
 
@@ -186,9 +137,9 @@ public abstract class LLVMInteropType implements TruffleObject {
         }
 
         @TruffleBoundary
-        public StructMember findMember(String memberName) {
+        public StructMember findMember(String name) {
             for (StructMember member : members) {
-                if (member.getName().equals(memberName)) {
+                if (member.getName().equals(name)) {
                     return member;
                 }
             }
@@ -197,11 +148,6 @@ public abstract class LLVMInteropType implements TruffleObject {
 
         public int getMemberCount() {
             return members.length;
-        }
-
-        @Override
-        public String toString() {
-            return name;
         }
     }
 
@@ -324,7 +270,7 @@ public abstract class LLVMInteropType implements TruffleObject {
         }
 
         private Struct convertStruct(LLVMSourceStructLikeType type) {
-            Struct ret = new Struct(type.getName(), new StructMember[type.getDynamicElementCount()], type.getSize() / 8);
+            Struct ret = new Struct(new StructMember[type.getDynamicElementCount()]);
             typeCache.put(type, ret);
             for (int i = 0; i < ret.members.length; i++) {
                 LLVMSourceMemberType member = type.getDynamicElement(i);
@@ -372,22 +318,7 @@ public abstract class LLVMInteropType implements TruffleObject {
         }
 
         private Value convertPointer(LLVMSourcePointerType type) {
-            return Value.pointer(getStructured(type.getBaseType()), type.getSize() / 8);
-        }
-    }
-
-    @Override
-    public ForeignAccess getForeignAccess() {
-        return LLVMInteropTypeMRForeign.ACCESS;
-    }
-
-    @MessageResolution(receiverType = LLVMInteropType.class)
-    public static class LLVMInteropTypeMR {
-        @CanResolve
-        abstract static class CheckFunction extends Node {
-            protected static boolean test(TruffleObject receiver) {
-                return receiver instanceof LLVMInteropType;
-            }
+            return Value.pointer(getStructured(type.getBaseType()));
         }
     }
 }
