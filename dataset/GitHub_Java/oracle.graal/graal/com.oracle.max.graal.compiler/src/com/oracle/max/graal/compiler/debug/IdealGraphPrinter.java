@@ -229,14 +229,14 @@ public class IdealGraphPrinter {
             if (block != null) {
                 stream.printf("    <p name='block'>%d</p>%n", block.blockID());
                 if (!(node instanceof Phi || node instanceof FrameState || node instanceof Local || node instanceof LoopCounter) && !block.getInstructions().contains(node)) {
-                    stream.println("    <p name='notInOwnBlock'>true</p>");
+                    stream.printf("    <p name='notInOwnBlock'>true</p>%n");
                 }
             } else {
-                stream.println("    <p name='block'>noBlock</p>");
+                stream.printf("    <p name='block'>noBlock</p>%n");
                 noBlockNodes.add(node);
             }
             if (loopExits.isMarked(node)) {
-                stream.println("    <p name='loopExit'>true</p>");
+                stream.printf("    <p name='loopExit'>true</p>%n");
             }
             StringBuilder sb = new StringBuilder();
             if (loops != null) {
@@ -264,7 +264,7 @@ public class IdealGraphPrinter {
             Set<String> nodeBits = bits.get(node);
             if (nodeBits != null) {
                 for (String bit : nodeBits) {
-                    stream.print("    <p name='");
+                    stream.printf("    <p name='");
                     stream.print(bit);
                     stream.println("'>true</p>");
                 }
@@ -310,14 +310,14 @@ public class IdealGraphPrinter {
 
     private void printBlock(Graph graph, Block block, NodeMap<Block> nodeToBlock) {
         stream.printf("   <block name='%d'>%n", block.blockID());
-        stream.println("    <successors>");
+        stream.printf("    <successors>%n");
         for (Block sux : block.getSuccessors()) {
             if (sux != null) {
                 stream.printf("     <successor name='%d'/>%n", sux.blockID());
             }
         }
-        stream.println("    </successors>");
-        stream.println("    <nodes>");
+        stream.printf("    </successors>%n");
+        stream.printf("    <nodes>%n");
 
         Set<Node> nodes = new HashSet<Node>(block.getInstructions());
 
@@ -360,7 +360,7 @@ public class IdealGraphPrinter {
                 }
             }
         }
-        stream.println("    </nodes>");
+        stream.printf("    </nodes>%n");
         stream.printf("   </block>%n", block.blockID());
     }
 

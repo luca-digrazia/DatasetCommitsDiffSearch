@@ -124,9 +124,8 @@ public class IdentifyBlocksPhase extends Phase {
                         // Either dead code or at a merge node => stop iteration.
                         break;
                     }
-                    Node prev = currentNode;
                     currentNode = currentNode.singlePredecessor();
-                    assert !currentNode.isDeleted() : prev + " " + currentNode;
+                    assert !currentNode.isDeleted();
                 }
             }
         }
