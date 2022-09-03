@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,62 +29,69 @@
  */
 package com.oracle.truffle.llvm.runtime.types;
 
-import com.oracle.truffle.api.frame.FrameSlotKind;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
+import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
-public enum MetaType implements Type {
+public final class MetaType extends Type {
+    public static final MetaType UNKNOWN = new MetaType("unknown");
+    public static final MetaType LABEL = new MetaType("label");
+    public static final MetaType TOKEN = new MetaType("token");
+    public static final MetaType METADATA = new MetaType("metadata");
+    public static final MetaType X86MMX = new MetaType("x86mmx");
 
-    UNKNOWN,
-    VOID,
-    OPAQUE,
-    LABEL,
-    TOKEN,
-    METADATA,
-    X86_MMX;
+    // this type is only used to enter debug information into the truffle ast
+    public static final MetaType DEBUG = new MetaType("debug");
 
-    @Override
-    public String toString() {
-        return name().toLowerCase();
+    private final String name;
+    private final Object identity;
+
+    private MetaType(String name) {
+        this.name = name;
+        this.identity = new Object();
     }
 
     @Override
-    public LLVMBaseType getLLVMBaseType() {
-        switch (this) {
-            case VOID:
-                return LLVMBaseType.VOID;
-            case OPAQUE:
-                return LLVMBaseType.ADDRESS;
-            default:
-                throw new AssertionError("Cannot resolve to LLVMBaseType: " + this);
+    public Type shallowCopy() {
+        return this;
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + ((identity == null) ? 0 : identity.hashCode());
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
         }
-    }
-
-    @Override
-    public FrameSlotKind getFrameSlotKind() {
-        switch (this) {
-            case VOID:
-                throw new LLVMUnsupportedException(LLVMUnsupportedException.UnsupportedReason.PARSER_ERROR_VOID_SLOT);
-            default:
-                return FrameSlotKind.Object;
+        if (obj == null) {
+            return false;
         }
-    }
-
-    @Override
-    public LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
-        switch (this) {
-            case VOID:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.VOID;
-            case OPAQUE:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.ADDRESS;
-            default:
-                throw new UnsupportedOperationException("Cannot resolve to Runtime Type: " + this);
+        if (getClass() != obj.getClass()) {
+            return false;
         }
+        MetaType other = (MetaType) obj;
+        if (identity == null) {
+            if (other.identity != null) {
+                return false;
+            }
+        } else if (!identity.equals(other.identity)) {
+            return false;
+        }
+        return true;
     }
 
     @Override
-    public int getBits() {
+    public int getBitSize() {
         return 0;
+    }
+
+    @Override
+    public void accept(TypeVisitor visitor) {
+        visitor.visit(this);
     }
 
     @Override
@@ -95,5 +102,10 @@ public enum MetaType implements Type {
     @Override
     public int getSize(DataSpecConverter targetDataLayout) {
         return 0;
+    }
+
+    @Override
+    public String toString() {
+        return name;
     }
 }

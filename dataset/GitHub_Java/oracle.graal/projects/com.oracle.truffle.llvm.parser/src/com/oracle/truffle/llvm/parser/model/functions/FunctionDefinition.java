@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -39,13 +39,14 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.parser.metadata.MDAttachment;
 import com.oracle.truffle.llvm.parser.metadata.MetadataAttachmentHolder;
+import com.oracle.truffle.llvm.parser.metadata.debuginfo.DebugInfoModuleProcessor;
 import com.oracle.truffle.llvm.parser.metadata.debuginfo.SourceFunction;
 import com.oracle.truffle.llvm.parser.model.SymbolImpl;
+import com.oracle.truffle.llvm.parser.model.ValueSymbol;
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesCodeEntry;
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
 import com.oracle.truffle.llvm.parser.model.blocks.InstructionBlock;
 import com.oracle.truffle.llvm.parser.model.enums.Linkage;
-import com.oracle.truffle.llvm.parser.model.enums.Visibility;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.Constant;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstruction;
@@ -56,7 +57,7 @@ import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 
-public final class FunctionDefinition implements Constant, FunctionSymbol, MetadataAttachmentHolder {
+public final class FunctionDefinition implements Constant, ValueSymbol, MetadataAttachmentHolder {
 
     private static final InstructionBlock[] EMPTY = new InstructionBlock[0];
 
@@ -64,25 +65,23 @@ public final class FunctionDefinition implements Constant, FunctionSymbol, Metad
     private final FunctionType type;
     private final AttributesCodeEntry paramAttr;
     private final Linkage linkage;
-    private final Visibility visibility;
 
     private List<MDAttachment> mdAttachments = null;
-    private SourceFunction sourceFunction = SourceFunction.DEFAULT;
+    private SourceFunction sourceFunction = DebugInfoModuleProcessor.DEFAULT_FUNCTION;
 
     private InstructionBlock[] blocks = EMPTY;
     private int currentBlock = 0;
     private String name;
 
-    public FunctionDefinition(FunctionType type, String name, Linkage linkage, Visibility visibility, AttributesCodeEntry paramAttr) {
+    public FunctionDefinition(FunctionType type, String name, Linkage linkage, AttributesCodeEntry paramAttr) {
         this.type = type;
         this.name = name;
         this.paramAttr = paramAttr;
         this.linkage = linkage;
-        this.visibility = visibility;
     }
 
-    public FunctionDefinition(FunctionType type, Linkage linkage, Visibility visibility, AttributesCodeEntry paramAttr) {
-        this(type, LLVMIdentifier.UNKNOWN, linkage, visibility, paramAttr);
+    public FunctionDefinition(FunctionType type, Linkage linkage, AttributesCodeEntry paramAttr) {
+        this(type, LLVMIdentifier.UNKNOWN, linkage, paramAttr);
     }
 
     @Override
@@ -106,11 +105,6 @@ public final class FunctionDefinition implements Constant, FunctionSymbol, Metad
     public String getName() {
         assert name != null;
         return name;
-    }
-
-    public String getSourceName() {
-        final String scopeName = sourceFunction.getName();
-        return SourceFunction.DEFAULT_SOURCE_NAME.equals(scopeName) ? null : scopeName;
     }
 
     @Override
@@ -220,15 +214,6 @@ public final class FunctionDefinition implements Constant, FunctionSymbol, Metad
         blocks[index].setName(LLVMIdentifier.toExplicitBlockName(argName));
     }
 
-    public void onAfterParse() {
-        // drop the parser symbol tree after parsing the function
-        blocks = EMPTY;
-        currentBlock = 0;
-        mdAttachments = null;
-        sourceFunction.clearLocals();
-        parameters.clear();
-    }
-
     @Override
     public int hashCode() {
         CompilerAsserts.neverPartOfCompilation();
@@ -261,20 +246,5 @@ public final class FunctionDefinition implements Constant, FunctionSymbol, Metad
 
     public void setSourceFunction(SourceFunction sourceFunction) {
         this.sourceFunction = sourceFunction;
-    }
-
-    @Override
-    public boolean isExported() {
-        return Linkage.isExported(linkage, visibility);
-    }
-
-    @Override
-    public boolean isOverridable() {
-        return Linkage.isOverridable(linkage, visibility);
-    }
-
-    @Override
-    public boolean isExternal() {
-        return Linkage.isExternal(linkage);
     }
 }

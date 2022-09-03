@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,6 +31,7 @@ package com.oracle.truffle.llvm.parser.model.functions;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.llvm.parser.model.SymbolImpl;
+import com.oracle.truffle.llvm.parser.model.ValueSymbol;
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesCodeEntry;
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
 import com.oracle.truffle.llvm.parser.model.enums.Linkage;
@@ -39,7 +40,7 @@ import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 
-public final class FunctionDeclaration implements Constant, FunctionSymbol {
+public final class FunctionDeclaration implements Constant, ValueSymbol {
 
     private final FunctionType type;
     private String name;
@@ -138,21 +139,6 @@ public final class FunctionDeclaration implements Constant, FunctionSymbol {
         } else if (!type.equals(other.type)) {
             return false;
         }
-        return true;
-    }
-
-    @Override
-    public boolean isExported() {
-        return true;
-    }
-
-    @Override
-    public boolean isOverridable() {
-        return true;
-    }
-
-    @Override
-    public boolean isExternal() {
         return true;
     }
 }

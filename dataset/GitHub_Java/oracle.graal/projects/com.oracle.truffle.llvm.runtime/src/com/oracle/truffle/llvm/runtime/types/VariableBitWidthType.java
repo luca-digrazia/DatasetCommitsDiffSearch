@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.runtime.types;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
 public final class VariableBitWidthType extends Type {
@@ -100,7 +99,7 @@ public final class VariableBitWidthType extends Type {
     }
 
     @Override
-    public int getAlignment(DataLayout targetDataLayout) {
+    public int getAlignment(DataSpecConverter targetDataLayout) {
         if (targetDataLayout != null) {
             return targetDataLayout.getBitAlignment(this) / Byte.SIZE;
 
@@ -119,7 +118,7 @@ public final class VariableBitWidthType extends Type {
     }
 
     @Override
-    public int getSize(DataLayout targetDataLayout) {
+    public int getSize(DataSpecConverter targetDataLayout) {
         return targetDataLayout.getSize(this);
     }
 
@@ -133,10 +132,6 @@ public final class VariableBitWidthType extends Type {
     @Override
     @TruffleBoundary
     public String toString() {
-        if (getConstant() != null) {
-            return String.format("i%d %s", getBitSize(), getConstant());
-        } else {
-            return String.format("i%d", getBitSize());
-        }
+        return String.format("i%d %s", getBitSize(), getConstant());
     }
 }
