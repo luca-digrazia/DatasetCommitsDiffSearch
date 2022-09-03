@@ -41,16 +41,6 @@ import com.oracle.graal.lir.asm.*;
 
 public class AMD64Move {
 
-    public static AMD64LIRInstruction createMove(AllocatableValue dst, Value src) {
-        if (src instanceof AMD64AddressValue) {
-            return new LeaOp(dst, (AMD64AddressValue) src);
-        } else if (isRegister(src) || isStackSlot(dst)) {
-            return new MoveFromRegOp(dst, src);
-        } else {
-            return new MoveToRegOp(dst, src);
-        }
-    }
-
     @Opcode("MOVE")
     public static class MoveToRegOp extends AMD64LIRInstruction implements MoveOp {
 
@@ -117,14 +107,14 @@ public class AMD64Move {
             this.state = state;
         }
 
-        protected abstract void emitMemAccess(CompilationResultBuilder crb, AMD64MacroAssembler masm);
+        protected abstract void emitMemAccess(AMD64MacroAssembler masm);
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
             if (state != null) {
                 crb.recordImplicitException(masm.codeBuffer.position(), state);
             }
-            emitMemAccess(crb, masm);
+            emitMemAccess(masm);
         }
 
         public boolean makeNullCheckFor(Value value, LIRFrameState nullCheckState, int implicitNullCheckLimit) {
@@ -146,16 +136,14 @@ public class AMD64Move {
         }
 
         @Override
-        public void emitMemAccess(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        public void emitMemAccess(AMD64MacroAssembler masm) {
             switch (kind) {
                 case Boolean:
-                    masm.movzbl(asRegister(result), address.toAddress());
-                    break;
                 case Byte:
-                    masm.movsbl(asRegister(result), address.toAddress());
+                    masm.movsxb(asRegister(result), address.toAddress());
                     break;
                 case Char:
-                    masm.movzwl(asRegister(result), address.toAddress());
+                    masm.movzxl(asRegister(result), address.toAddress());
                     break;
                 case Short:
                     masm.movswl(asRegister(result), address.toAddress());
@@ -191,7 +179,7 @@ public class AMD64Move {
         }
 
         @Override
-        public void emitMemAccess(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        public void emitMemAccess(AMD64MacroAssembler masm) {
             assert isRegister(input);
             switch (kind) {
                 case Boolean:
@@ -233,7 +221,7 @@ public class AMD64Move {
         }
 
         @Override
-        public void emitMemAccess(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        public void emitMemAccess(AMD64MacroAssembler masm) {
             switch (kind) {
                 case Boolean:
                 case Byte:
@@ -472,7 +460,7 @@ public class AMD64Move {
         switch (input.getKind().getStackKind()) {
             case Int:
                 if (crb.codeCache.needsDataPatch(input)) {
-                    crb.recordInlineDataInCode(input);
+                    crb.recordDataReferenceInCode(input, 0, true);
                 }
                 // Do not optimize with an XOR as this instruction may be between
                 // a CMP and a Jcc in which case the XOR will modify the condition
@@ -481,27 +469,13 @@ public class AMD64Move {
 
                 break;
             case Long:
-                boolean patch = false;
                 if (crb.codeCache.needsDataPatch(input)) {
-                    patch = true;
-                    crb.recordInlineDataInCode(input);
+                    crb.recordDataReferenceInCode(input, 0, true);
                 }
                 // Do not optimize with an XOR as this instruction may be between
                 // a CMP and a Jcc in which case the XOR will modify the condition
                 // flags and interfere with the Jcc.
-                if (patch) {
-                    masm.movq(asRegister(result), input.asLong());
-                } else {
-                    if (input.asLong() == (int) input.asLong()) {
-                        // Sign extended to long
-                        masm.movslq(asRegister(result), (int) input.asLong());
-                    } else if ((input.asLong() & 0xFFFFFFFFL) == input.asLong()) {
-                        // Zero extended to long
-                        masm.movl(asRegister(result), (int) input.asLong());
-                    } else {
-                        masm.movq(asRegister(result), input.asLong());
-                    }
-                }
+                masm.movq(asRegister(result), input.asLong());
                 break;
             case Float:
                 // This is *not* the same as 'constant == 0.0f' in the case where constant is -0.0f
@@ -528,10 +502,10 @@ public class AMD64Move {
                 if (input.isNull()) {
                     masm.movq(asRegister(result), 0x0L);
                 } else if (crb.target.inlineObjects) {
-                    crb.recordInlineDataInCode(input);
+                    crb.recordDataReferenceInCode(input, 0, true);
                     masm.movq(asRegister(result), 0xDEADDEADDEADDEADL);
                 } else {
-                    masm.movq(asRegister(result), (AMD64Address) crb.recordDataReferenceInCode(input, 0));
+                    masm.movq(asRegister(result), (AMD64Address) crb.recordDataReferenceInCode(input, 0, false));
                 }
                 break;
             default:
