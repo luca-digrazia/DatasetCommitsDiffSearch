@@ -69,6 +69,7 @@ import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.nativeimage.Feature;
+import org.graalvm.nativeimage.ImageSingletons;
 
 import com.oracle.graal.pointsto.infrastructure.SubstitutionProcessor;
 import com.oracle.graal.pointsto.meta.AnalysisType;
@@ -95,7 +96,7 @@ class AutomaticSubstitutionFeature implements Feature {
     @Override
     public void duringAnalysis(DuringAnalysisAccess access) {
         DuringAnalysisAccessImpl accessImpl = (DuringAnalysisAccessImpl) access;
-        UnsafeAutomaticSubstitutionProcessor automaticSubstitutions = accessImpl.getHostVM().getAutomaticSubstitutionProcessor();
+        UnsafeAutomaticSubstitutionProcessor automaticSubstitutions = ImageSingletons.lookup(UnsafeAutomaticSubstitutionProcessor.class);
         automaticSubstitutions.processComputedValueFields(accessImpl);
     }
 
@@ -233,7 +234,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
         Plugins plugins = new Plugins(new InvocationPlugins());
         plugins.appendInlineInvokePlugin(inlineInvokePlugin);
 
-        ReflectionPlugins.registerInvocationPlugins(loader, snippetReflection, annotationSubstitutions, plugins.getInvocationPlugins(), false, false);
+        ReflectionPlugins.registerInvocationPlugins(loader, snippetReflection, plugins.getInvocationPlugins(), false, false);
 
         builderPhase = new GraphBuilderPhase(GraphBuilderConfiguration.getDefault(plugins));
 
@@ -298,11 +299,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
 
         /* Detect field offset computation in static initializers. */
         ResolvedJavaMethod clinit = hostType.getClassInitializer();
-        /*
-         * Even if clinit.hasBytecodes() returns true, clinit.getCode() can return null when the
-         * type fails to initialize due to verification issues triggered by missing types.
-         */
-        if (clinit != null && clinit.hasBytecodes() && clinit.getCode() != null) {
+        if (clinit != null && clinit.hasBytecodes()) {
             DebugContext debug = DebugContext.create(options, DebugHandlersFactory.LOADER);
             try (DebugContext.Scope s = debug.scope("Field offset computation", clinit)) {
                 StructuredGraph clinitGraph = getStaticInitializerGraph(clinit, options, debug);

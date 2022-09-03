@@ -281,12 +281,10 @@ public final class InvokeWithExceptionNode extends ControlSplitNode implements I
      * code.
      */
     public InvokeNode replaceWithInvoke() {
-        InvokeNode newInvoke = graph().add(new InvokeNode(callTarget, bci, stamp, getLocationIdentity()));
-        newInvoke.setStateAfter(stateAfter);
-        newInvoke.setStateDuring(stateDuring);
+        InvokeNode invokeNode = graph().add(new InvokeNode(callTarget, bci, stamp, getLocationIdentity()));
         AbstractBeginNode oldException = this.exceptionEdge;
-        graph().replaceSplitWithFixed(this, newInvoke, this.next());
+        graph().replaceSplitWithFixed(this, invokeNode, this.next());
         GraphUtil.killCFG(oldException);
-        return newInvoke;
+        return invokeNode;
     }
 }
