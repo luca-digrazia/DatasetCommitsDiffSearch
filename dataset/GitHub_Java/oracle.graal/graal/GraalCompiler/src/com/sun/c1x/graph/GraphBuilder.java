@@ -182,7 +182,7 @@ public final class GraphBuilder {
         // 3. setup internal state for appending instructions
         curBlock = startBlock;
         lastInstr = startBlock;
-        lastInstr.appendNext(null, -1);
+        lastInstr.setNext(null, -1);
         curState = initialState;
 
         if (isSynchronized(rootMethod.accessFlags())) {
@@ -385,7 +385,7 @@ public final class GraphBuilder {
         curBlock.addExceptionHandler(entry);
 
         // add back-edge from exception handler entry to this block
-        if (!entry.blockPredecessors().contains(curBlock)) {
+        if (!entry.predecessors().contains(curBlock)) {
             entry.addPredecessor(curBlock);
         }
 
@@ -1165,7 +1165,7 @@ public final class GraphBuilder {
         if (lastInstr instanceof Base) {
             assert false : "may only happen when inlining intrinsics";
         } else {
-            lastInstr = lastInstr.appendNext(x, bci);
+            lastInstr = lastInstr.setNext(x, bci);
         }
         if (++stats.nodeCount >= C1XOptions.MaximumInstructionCount) {
             // bailout if we've exceeded the maximum inlining size
@@ -1289,7 +1289,7 @@ public final class GraphBuilder {
                 curBlock = b;
                 curState = b.stateBefore().copy();
                 lastInstr = b;
-                b.appendNext(null, -1);
+                b.setNext(null, -1);
 
                 iterateBytecodesForBlock(b.bci(), false);
             }
@@ -1321,7 +1321,7 @@ public final class GraphBuilder {
             if (nextBlock != null && nextBlock != block) {
                 // we fell through to the next block, add a goto and break
                 end = new Goto(nextBlock, null, false);
-                lastInstr = lastInstr.appendNext(end, prevBCI);
+                lastInstr = lastInstr.setNext(end, prevBCI);
                 break;
             }
             // read the opcode
@@ -1366,8 +1366,8 @@ public final class GraphBuilder {
         end.setStateAfter(curState.immutableCopy(bci()));
         curBlock.setEnd(end);
         // propagate the state
-        for (BlockBegin succ : end.blockSuccessors()) {
-            assert succ.blockPredecessors().contains(curBlock);
+        for (BlockBegin succ : end.successors()) {
+            assert succ.predecessors().contains(curBlock);
             succ.mergeOrClone(end.stateAfter(), method());
             addToWorkList(succ);
         }
