@@ -22,12 +22,10 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.extended.*;
 
 /**
  * Guard {@link PhiNode}s merge guard dependencies at control flow merges.
@@ -51,10 +49,5 @@ public final class GuardPhiNode extends PhiNode implements GuardingNode {
     @Override
     public NodeInputList<ValueNode> values() {
         return values;
-    }
-
-    @Override
-    public boolean hasValidInput() {
-        return true;
     }
 }
