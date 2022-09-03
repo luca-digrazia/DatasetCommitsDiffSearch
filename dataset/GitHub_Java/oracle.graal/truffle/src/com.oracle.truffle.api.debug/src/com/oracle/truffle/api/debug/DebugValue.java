@@ -126,14 +126,19 @@ public abstract class DebugValue {
     public abstract boolean isWritable();
 
     /**
-     * Returns <code>true</code> if this value represents an internal variable or property,
-     * <code>false</code> otherwise.
+     * Returns <code>true</code> if this value represents an internal implementation detail,
+     * <code>false</code> otherwise. Internal values should be hidden during normal guest language
+     * debugging.
      * <p>
-     * Languages might have extra object properties or extra scope variables that are a part of the
-     * runtime, but do not correspond to anything what is an explicit part of the guest language
-     * representation. They may represent additional language artifacts, providing more in-depth
-     * information that can be valuable during debugging. Language implementors mark these variables
-     * as <em>internal</em>. An example of such internal values are internal slots in ECMAScript.
+     * Language implementations sometimes create internal helper variables that do not correspond to
+     * anything explicitly written by a programmer. Language implementors mark these variables as
+     * <em>internal</em>.
+     * </p>
+     * <p>
+     * Clients of the debugging API should assume that displaying <em>internal</em> values is
+     * unlikely to help programmers debug guest language programs and might possibly create
+     * confusion. However, clients may choose to display all values, for example in a special mode
+     * to support development of programming language implementations.
      * </p>
      *
      * @since 0.26
@@ -357,6 +362,7 @@ public abstract class DebugValue {
             this.value = value;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
         public <T> T as(Class<T> clazz) {
             if (!isReadable()) {
@@ -376,7 +382,7 @@ public abstract class DebugValue {
                 } else {
                     stringValue = debugger.getEnv().toString(languageInfo, val);
                 }
-                return clazz.cast(stringValue);
+                return (T) stringValue;
             }
             throw new UnsupportedOperationException();
         }

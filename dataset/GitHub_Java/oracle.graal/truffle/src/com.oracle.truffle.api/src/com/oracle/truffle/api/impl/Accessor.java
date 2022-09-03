@@ -78,10 +78,6 @@ public abstract class Accessor {
         public abstract LanguageInfo createLanguage(Object vmObject, String id, String name, String version, Set<String> mimeTypes);
 
         public abstract Object getSourceVM(RootNode rootNode);
-
-        public abstract int getRootNodeBits(RootNode root);
-
-        public abstract void setRootNodeBits(RootNode root, int bits);
     }
 
     public abstract static class DumpSupport {
@@ -121,8 +117,6 @@ public abstract class Accessor {
         public abstract void exportSymbol(Object vmObject, String symbolName, Object value);
 
         public abstract Object importSymbol(Object vmObject, Env env, String symbolName);
-
-        public abstract Object lookupSymbol(Object vmObject, Env env, LanguageInfo language, String symbolName);
 
         public abstract boolean isMimeTypeSupported(Object languageShared, String mimeType);
 
@@ -177,10 +171,6 @@ public abstract class Accessor {
         public abstract Object getVMFromLanguageObject(Object engineObject);
 
         public abstract OptionValues getCompilerOptionValues(RootNode rootNode);
-
-        public abstract Object lookupHostSymbol(Object vmObject, Env env, String symbolName);
-
-        public abstract boolean isHostAccessAllowed(Object vmObject, Env env);
 
     }
 
@@ -276,8 +266,6 @@ public abstract class Accessor {
         public abstract OptionDescriptors describeOptions(Object instrumentationHandler, Object key, String requiredGroup);
 
         public abstract Object getEngineInstrumenter(Object instrumentationHandler);
-
-        public abstract void onNodeInserted(RootNode rootNode, Node tree);
 
     }
 

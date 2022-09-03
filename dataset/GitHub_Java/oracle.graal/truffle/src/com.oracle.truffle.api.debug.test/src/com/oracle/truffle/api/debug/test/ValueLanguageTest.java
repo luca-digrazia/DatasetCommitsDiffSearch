@@ -24,15 +24,14 @@
  */
 package com.oracle.truffle.api.debug.test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
@@ -49,8 +48,6 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.Instrumentable;
 import com.oracle.truffle.api.instrumentation.ProvidedTags;
 import com.oracle.truffle.api.instrumentation.StandardTags;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.LanguageInfo;
@@ -347,7 +344,7 @@ public class ValueLanguageTest extends AbstractDebugTest {
             if (value instanceof String) {
                 return "L" + id + ":" + value.toString();
             }
-            if (ForeignAccess.sendIsNull(Message.IS_NULL.createNode(), (TruffleObject) value)) {
+            if (JavaInterop.isNull((TruffleObject) value)) {
                 return "null";
             }
             ValueObject vo = JavaInterop.asJavaObject(ValueObject.class, (TruffleObject) value);
@@ -366,7 +363,7 @@ public class ValueLanguageTest extends AbstractDebugTest {
             if (value instanceof String) {
                 return "L" + id + ": String";
             }
-            if (ForeignAccess.sendIsNull(Message.IS_NULL.createNode(), (TruffleObject) value)) {
+            if (JavaInterop.isNull((TruffleObject) value)) {
                 return "Null";
             }
             ValueObject vo = JavaInterop.asJavaObject(ValueObject.class, (TruffleObject) value);

@@ -158,7 +158,7 @@ public abstract class TruffleInstrument {
      * Returns a set of option descriptors that are supported by this instrument. Option values are
      * accessible using the {@link Env#getOptions() environment} when the instrument is
      * {@link #onCreate(Env) created}. By default no options are available for an instrument.
-     * Options returned by this method must specify the {@link Registration#id() instrument id} as
+     * Options returned by this method must specifiy the {@link Registration#id() instrument id} as
      * {@link OptionDescriptor#getName() name} prefix for each option. For example if the id of the
      * instrument is "debugger" then a valid option name would be "debugger.Enabled". The instrument
      * will automatically be {@link #onCreate(Env) created} if one of the specified options was
@@ -544,14 +544,6 @@ public abstract class TruffleInstrument {
          * The version for instrument in an arbitrary format.
          */
         String version() default "";
-
-        /**
-         * Specifies whether the instrument is accessible using the polyglot API. Internal
-         * instruments are only accessible from other instruments or guest languages.
-         *
-         * @since 0.27
-         */
-        boolean internal() default false;
 
         /**
          * Declarative list of classes this instrument is known to provide. The instrument is

@@ -1896,7 +1896,8 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value apply = findGlobalSymbol(id);
 
-        List<?> object = JavaInterop.asJavaObject(List.class, (TruffleObject) apply.execute().get());
+        @SuppressWarnings("unchecked")
+        List<Object> object = JavaInterop.asJavaObject(List.class, (TruffleObject) apply.execute().get());
 
         Assert.assertEquals(4, object.size());
     }
