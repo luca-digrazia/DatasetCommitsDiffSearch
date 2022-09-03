@@ -24,7 +24,7 @@ package org.graalvm.compiler.nodes.calc;
 
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_1;
 
-import org.graalvm.compiler.core.common.calc.CanonicalCondition;
+import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable.IntegerConvertOp;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable.IntegerConvertOp.Narrow;
@@ -78,8 +78,11 @@ public final class ZeroExtendNode extends IntegerConvertNode<ZeroExtend, Narrow>
     }
 
     @Override
-    public boolean preservesOrder(CanonicalCondition cond) {
+    public boolean preservesOrder(Condition cond) {
         switch (cond) {
+            case GE:
+            case GT:
+            case LE:
             case LT:
                 return false;
             default:

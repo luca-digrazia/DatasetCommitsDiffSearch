@@ -1125,7 +1125,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected ValueNode genIntegerDiv(ValueNode x, ValueNode y) {
-        return SignedDivNode.create(x, y, NodeView.DEFAULT);
+        return new SignedDivNode(x, y);
     }
 
     protected ValueNode genIntegerRem(ValueNode x, ValueNode y) {
