@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -28,6 +28,8 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 package com.oracle.truffle.llvm.parser.metadata;
+
+import java.util.Arrays;
 
 public abstract class MDType extends MDName {
 
@@ -123,8 +125,6 @@ public abstract class MDType extends MDName {
         // removed tags
         DW_TAG_VECTOR_TYPE(0x103);       // MDCompositeType
 
-        private static final DwarfTag[] VALUES = values();
-
         private final int id;
 
         DwarfTag(int id) {
@@ -132,12 +132,7 @@ public abstract class MDType extends MDName {
         }
 
         static DwarfTag decode(long val) {
-            for (DwarfTag tag : VALUES) {
-                if (tag.id == val) {
-                    return tag;
-                }
-            }
-            return UNKNOWN;
+            return Arrays.stream(values()).filter(e -> e.id == val).findAny().orElse(UNKNOWN);
         }
     }
 }

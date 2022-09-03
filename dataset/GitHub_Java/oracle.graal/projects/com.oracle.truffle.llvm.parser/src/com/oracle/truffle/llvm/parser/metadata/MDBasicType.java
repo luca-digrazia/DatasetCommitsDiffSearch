@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,6 +32,8 @@ package com.oracle.truffle.llvm.parser.metadata;
 import com.oracle.truffle.llvm.parser.listeners.Metadata;
 import com.oracle.truffle.llvm.parser.records.DwTagRecord;
 
+import java.util.Arrays;
+
 public final class MDBasicType extends MDType implements MDBaseNode {
     // http://llvm.org/releases/3.2/docs/SourceLevelDebugging.html#format_basic_type
 
@@ -62,8 +64,6 @@ public final class MDBasicType extends MDType implements MDBaseNode {
         DW_ATE_UNSIGNED(7),
         DW_ATE_UNSIGNED_CHAR(8);
 
-        private static final DwarfEncoding[] VALUES = values();
-
         private final int id;
 
         DwarfEncoding(int id) {
@@ -71,12 +71,7 @@ public final class MDBasicType extends MDType implements MDBaseNode {
         }
 
         private static DwarfEncoding decode(long val) {
-            for (DwarfEncoding encoding : VALUES) {
-                if (encoding.id == val) {
-                    return encoding;
-                }
-            }
-            return UNKNOWN;
+            return Arrays.stream(values()).filter(e -> e.id == val).findAny().orElse(UNKNOWN);
         }
     }
 
@@ -121,4 +116,5 @@ public final class MDBasicType extends MDType implements MDBaseNode {
         basicType.setFile(ParseUtil.resolveReference(args, ARGINDEX_32_FILE, basicType, md));
         return basicType;
     }
+
 }
