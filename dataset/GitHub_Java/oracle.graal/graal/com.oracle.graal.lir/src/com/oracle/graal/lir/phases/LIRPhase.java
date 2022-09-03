@@ -22,22 +22,17 @@
  */
 package com.oracle.graal.lir.phases;
 
-import java.util.List;
-import java.util.regex.Pattern;
+import java.util.*;
+import java.util.regex.*;
 
-import jdk.vm.ci.code.TargetDescription;
+import jdk.internal.jvmci.code.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+import jdk.internal.jvmci.options.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.DebugCloseable;
-import com.oracle.graal.debug.DebugMemUseTracker;
-import com.oracle.graal.debug.DebugTimer;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionType;
-import com.oracle.graal.options.OptionValue;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.gen.*;
 
 /**
  * Base class for all {@link LIR low-level} phases. Subclasses should be stateless. There will be
@@ -51,6 +46,8 @@ public abstract class LIRPhase<C> {
         public static final OptionValue<Boolean> LIROptimization = new OptionValue<>(true);
         // @formatter:on
     }
+
+    private static final int PHASE_DUMP_LEVEL = 2;
 
     private CharSequence name;
 
@@ -116,13 +113,12 @@ public abstract class LIRPhase<C> {
         apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context, true);
     }
 
-    @SuppressWarnings("try")
     public final <B extends AbstractBlockBase<B>> void apply(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, C context, boolean dumpLIR) {
         try (Scope s = Debug.scope(getName(), this)) {
             try (DebugCloseable a = timer.start(); DebugCloseable c = memUseTracker.start()) {
                 run(target, lirGenRes, codeEmittingOrder, linearScanOrder, context);
-                if (dumpLIR && Debug.isDumpEnabled(Debug.BASIC_LOG_LEVEL)) {
-                    Debug.dump(Debug.BASIC_LOG_LEVEL, lirGenRes.getLIR(), "%s", getName());
+                if (dumpLIR && Debug.isDumpEnabled(PHASE_DUMP_LEVEL)) {
+                    Debug.dump(PHASE_DUMP_LEVEL, lirGenRes.getLIR(), "%s", getName());
                 }
             }
         } catch (Throwable e) {
