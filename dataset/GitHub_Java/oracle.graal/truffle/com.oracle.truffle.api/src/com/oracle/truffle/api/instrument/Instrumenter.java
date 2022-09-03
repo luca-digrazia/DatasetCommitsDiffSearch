@@ -367,7 +367,7 @@ public final class Instrumenter {
 
         final SourceSection sourceSection = wrapper.getChild().getSourceSection();
         final ProbeNode probeNode = new ProbeNode();
-        Class<? extends TruffleLanguage> l = AccessorInstrument.nodesAccess().findLanguage(wrapper.getChild().getRootNode());
+        Class<? extends TruffleLanguage> l = ACCESSOR.findLanguage(wrapper.getChild().getRootNode());
         final Probe probe = new Probe(this, l, probeNode, sourceSection);
         probes.add(new WeakReference<>(probe));
         probeNode.probe = probe;  // package private access
@@ -561,7 +561,7 @@ public final class Instrumenter {
         Class<? extends TruffleLanguage<?>> foundLanguageClass = null;
         if (languageClass == null) {
             if (source.getMimeType() == null) {
-                foundLanguageClass = Util.toClass(probe.getLanguage());
+                foundLanguageClass = (Class<? extends TruffleLanguage<?>>) ACCESSOR.findLanguage(probe);
             }
         } else {
             foundLanguageClass = languageClass;
@@ -710,50 +710,47 @@ public final class Instrumenter {
     }
 
     static final class AccessorInstrument extends Accessor {
-        @Deprecated
-        @SuppressWarnings({"rawtypes"})
-        boolean isInstrumentable(Object vm, Node node) {
-            final RootNode rootNode = node.getRootNode();
-            Class<? extends TruffleLanguage> languageClazz = nodesAccess().findLanguage(rootNode);
-            TruffleLanguage language = engineSupport().findLanguageImpl(vm, languageClazz, null);
-            return languageSupport().isInstrumentable(node, language);
-        }
 
-        /**
-         * Provided by each {@linkplain TruffleLanguage language implementation}.
-         */
-        @Deprecated
-        @SuppressWarnings({"rawtypes"})
-        com.oracle.truffle.api.instrument.WrapperNode createWrapperNode(Object vm, Node node) {
-            final RootNode rootNode = node.getRootNode();
-            Class<? extends TruffleLanguage> languageClazz = nodesAccess().findLanguage(rootNode);
-            TruffleLanguage language = engineSupport().findLanguageImpl(vm, languageClazz, null);
-            return (com.oracle.truffle.api.instrument.WrapperNode) languageSupport().createWrapperNode(node, language);
-        }
-
-        static Accessor.Nodes nodesAccess() {
-            return ACCESSOR.nodes();
-        }
-
-        @SuppressWarnings("rawtypes")
-        protected CallTarget parse(Class<? extends TruffleLanguage> languageClass, Source code, Node context, String... argumentNames) throws IOException {
-            final TruffleLanguage<?> truffleLanguage = engineSupport().findLanguageImpl(null, languageClass, code.getMimeType());
-            return languageSupport().parse(truffleLanguage, code, context, argumentNames);
+        @Override
+        protected Instrumenter createInstrumenter(Object vm) {
+            return new Instrumenter(vm);
         }
 
         @Override
-        protected OldInstrumentSupport oldInstrumentSupport() {
-            return new OldInstrumentSupport() {
-                @Override
-                public void probeAST(RootNode rootNode) {
-                    final EngineSupport engineSupport = engineSupport();
-                    // Normally null vm argument; can be reflectively set for testing
-                    Instrumenter instrumenter = (Instrumenter) (engineSupport != null ? engineSupport.getInstrumenter(testVM) : null);
-                    if (instrumenter != null) {
-                        instrumenter.probeAST(rootNode);
-                    }
-                }
-            };
+        protected boolean isInstrumentable(Object vm, Node node) {
+            return super.isInstrumentable(vm, node);
+        }
+
+        @Override
+        protected WrapperNode createWrapperNode(Object vm, Node node) {
+            return super.createWrapperNode(vm, node);
+        }
+
+        @SuppressWarnings("rawtypes")
+        @Override
+        protected Class<? extends TruffleLanguage> findLanguage(RootNode n) {
+            return super.findLanguage(n);
+        }
+
+        @SuppressWarnings("rawtypes")
+        @Override
+        protected Class<? extends TruffleLanguage> findLanguage(Probe probe) {
+            return probe.getLanguage();
+        }
+
+        @SuppressWarnings("rawtypes")
+        @Override
+        protected CallTarget parse(Class<? extends TruffleLanguage> languageClass, Source code, Node context, String... argumentNames) throws IOException {
+            return super.parse(languageClass, code, context, argumentNames);
+        }
+
+        @Override
+        protected void probeAST(RootNode rootNode) {
+            // Normally null vm argument; can be reflectively set for testing
+            Instrumenter instrumenter = super.getInstrumenter(testVM);
+            if (instrumenter != null) {
+                instrumenter.probeAST(rootNode);
+            }
         }
     }
 
