@@ -82,10 +82,9 @@ final class InstrumentCache {
         if (PRELOAD) {
             return CACHE;
         }
-        PolyglotLocator locator = customLocator == null ? defaultLocator() : customLocator;
         List<InstrumentCache> list = new ArrayList<>();
         Set<String> classNamesUsed = new HashSet<>();
-        for (ClassLoader loader : PolyglotLocator.Response.loaders(locator)) {
+        for (ClassLoader loader : PolyglotLocator.Response.loaders(customLocator)) {
             loadForOne(loader, list, classNamesUsed);
         }
         return list;
@@ -158,23 +157,4 @@ final class InstrumentCache {
         }
     }
 
-    private static PolyglotLocator defaultLocator() {
-        ClassLoader l;
-        if (PolyglotEngine.JDK8OrEarlier) {
-            l = PolyglotEngine.class.getClassLoader();
-            if (l == null) {
-                l = ClassLoader.getSystemClassLoader();
-            }
-        } else {
-            l = ModuleResourceLocator.createLoader();
-        }
-
-        final ClassLoader loader = l;
-        return new PolyglotLocator() {
-            @Override
-            public void locate(PolyglotLocator.Response response) {
-                response.registerClassLoader(loader);
-            }
-        };
-    }
 }
