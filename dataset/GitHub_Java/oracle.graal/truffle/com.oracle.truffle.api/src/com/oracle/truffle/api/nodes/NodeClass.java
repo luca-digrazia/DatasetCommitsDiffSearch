@@ -54,8 +54,7 @@ public abstract class NodeClass {
         return node.getNodeClass();
     }
 
-    @SuppressWarnings("unused")
-    public NodeClass(Class<? extends Node> clazz) {
+    protected NodeClass() {
     }
 
     public abstract NodeFieldAccessor getNodeClassField();
