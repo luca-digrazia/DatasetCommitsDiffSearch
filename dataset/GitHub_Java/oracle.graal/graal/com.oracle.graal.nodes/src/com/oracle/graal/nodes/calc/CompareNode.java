@@ -84,20 +84,24 @@ public abstract class CompareNode extends BooleanNode implements Canonicalizable
         Constant falseConstant = conditionalNode.falseValue().asConstant();
 
         if (falseConstant != null && trueConstant != null && runtime != null) {
-            boolean trueResult = cond.foldCondition(trueConstant, constant, runtime, unorderedIsTrue());
-            boolean falseResult = cond.foldCondition(falseConstant, constant, runtime, unorderedIsTrue());
+            Boolean trueResult = cond.foldCondition(trueConstant, constant, runtime, unorderedIsTrue());
+            Boolean falseResult = cond.foldCondition(falseConstant, constant, runtime, unorderedIsTrue());
 
-            if (trueResult == falseResult) {
-                return ConstantNode.forBoolean(trueResult, graph());
-            } else {
-                if (trueResult) {
-                    assert falseResult == false;
-                    return conditionalNode.condition();
+            if (trueResult != null && falseResult != null) {
+                boolean trueUnboxedResult = trueResult;
+                boolean falseUnboxedResult = falseResult;
+                if (trueUnboxedResult == falseUnboxedResult) {
+                    return ConstantNode.forBoolean(trueUnboxedResult, graph());
                 } else {
-                    assert falseResult == true;
-                    negateUsages();
-                    return conditionalNode.condition();
+                    if (trueUnboxedResult) {
+                        assert falseUnboxedResult == false;
+                        return conditionalNode.condition();
+                    } else {
+                        assert falseUnboxedResult == true;
+                        negateUsages();
+                        return conditionalNode.condition();
 
+                    }
                 }
             }
         }
@@ -126,30 +130,5 @@ public abstract class CompareNode extends BooleanNode implements Canonicalizable
             }
         }
         return this;
-    }
-
-    public static CompareNode createCompareNode(Condition condition, ValueNode x, ValueNode y) {
-        assert x.kind() == y.kind();
-        assert condition.isCanonical() : "condition is not canonical: " + condition;
-        assert x.kind() != Kind.Double && x.kind() != Kind.Float;
-
-        CompareNode comparison;
-        if (condition == Condition.EQ) {
-            if (x.kind() == Kind.Object) {
-                comparison = new ObjectEqualsNode(x, y);
-            } else {
-                assert x.kind().getStackKind() == Kind.Int || x.kind() == Kind.Long;
-                comparison = new IntegerEqualsNode(x, y);
-            }
-        } else if (condition == Condition.LT) {
-            assert x.kind().getStackKind() == Kind.Int || x.kind() == Kind.Long;
-            comparison = new IntegerLessThanNode(x, y);
-        } else {
-            assert condition == Condition.BT;
-            assert x.kind().getStackKind() == Kind.Int || x.kind() == Kind.Long;
-            comparison = new IntegerBelowThanNode(x, y);
-        }
-
-        return x.graph().unique(comparison);
     }
 }

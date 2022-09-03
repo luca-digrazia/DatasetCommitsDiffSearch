@@ -27,13 +27,11 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The {@code LoadFieldNode} represents a read of a static or instance field.
  */
-@NodeInfo(nameTemplate = "LoadField#{p#field/s}")
-public final class LoadFieldNode extends AccessFieldNode implements Canonicalizable, Node.IterableNodeType, Virtualizable {
+public final class LoadFieldNode extends AccessFieldNode implements Canonicalizable, Node.IterableNodeType {
 
     /**
      * Creates a new LoadFieldNode instance.
@@ -46,9 +44,9 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
     }
 
     private static Stamp createStamp(ResolvedJavaField field) {
-        Kind kind = field.getKind();
-        if (kind == Kind.Object && field.getType() instanceof ResolvedJavaType) {
-            return StampFactory.declared((ResolvedJavaType) field.getType());
+        Kind kind = field.kind();
+        if (kind == Kind.Object && field.type() instanceof ResolvedJavaType) {
+            return StampFactory.declared((ResolvedJavaType) field.type());
         } else {
             return StampFactory.forKind(kind);
         }
@@ -60,25 +58,14 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
         if (runtime != null) {
             Constant constant = null;
             if (isStatic()) {
-                constant = field().readConstantValue(null);
+                constant = field().constantValue(null);
             } else if (object().isConstant() && !object().isNullConstant()) {
-                constant = field().readConstantValue(object().asConstant());
+                constant = field().constantValue(object().asConstant());
             }
             if (constant != null) {
                 return ConstantNode.forConstant(constant, runtime, graph());
             }
         }
         return this;
-    }
-
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        State state = tool.getObjectState(object());
-        if (state != null && state.getState() == EscapeState.Virtual) {
-            int fieldIndex = ((VirtualInstanceNode) state.getVirtualObject()).fieldIndex(field());
-            if (fieldIndex != -1) {
-                tool.replaceWith(state.getEntry(fieldIndex));
-            }
-        }
     }
 }

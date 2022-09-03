@@ -26,76 +26,47 @@ import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.phases.*;
 import com.oracle.graal.snippets.Snippet.Fold;
 
 public class SnippetIntrinsificationPhase extends Phase {
 
     private final MetaAccessProvider runtime;
     private final BoxingMethodPool pool;
-    private final boolean intrinsificationOrFoldingCanBeDeferred;
 
-    /**
-     * @param intrinsificationOrFoldingCanBeDeferred if true, then {@link NonConstantParameterError}s are not fatal
-     */
-    public SnippetIntrinsificationPhase(MetaAccessProvider runtime, BoxingMethodPool pool, boolean intrinsificationOrFoldingCanBeDeferred) {
+    public SnippetIntrinsificationPhase(MetaAccessProvider runtime, BoxingMethodPool pool) {
         this.runtime = runtime;
         this.pool = pool;
-        this.intrinsificationOrFoldingCanBeDeferred = intrinsificationOrFoldingCanBeDeferred;
     }
 
     @Override
     protected void run(StructuredGraph graph) {
         for (Invoke i : graph.getInvokes()) {
-            try {
-                if (i.callTarget() instanceof MethodCallTargetNode) {
-                    tryIntrinsify(i);
-                }
-            } catch (NonConstantParameterError t) {
-                if (!intrinsificationOrFoldingCanBeDeferred) {
-                    throw t;
-                }
-            }
-        }
-    }
-
-    /**
-     * Exception raised when an argument to a {@linkplain Fold foldable} or
-     * {@link NodeIntrinsic} method is not a constant.
-     */
-    @SuppressWarnings("serial")
-    public static class NonConstantParameterError extends Error {
-
-        public NonConstantParameterError(String message) {
-            super(message);
+            tryIntrinsify(i);
         }
     }
 
     private void tryIntrinsify(Invoke invoke) {
-        ResolvedJavaMethod target = invoke.methodCallTarget().targetMethod();
+        ResolvedJavaMethod target = invoke.callTarget().targetMethod();
         NodeIntrinsic intrinsic = target.getAnnotation(Node.NodeIntrinsic.class);
-        ResolvedJavaType declaringClass = target.getDeclaringClass();
         if (intrinsic != null) {
             assert target.getAnnotation(Fold.class) == null;
-            assert Modifier.isNative(target.getModifiers()) : "node intrinsic " + target + " should be native";
 
-            Class< ? >[] parameterTypes = MetaUtil.signatureToTypes(target.getSignature(), declaringClass);
-            ResolvedJavaType returnType = target.getSignature().getReturnType(declaringClass).resolve(declaringClass);
+            Class< ? >[] parameterTypes = MetaUtil.signatureToTypes(target.signature(), target.holder());
 
             // Prepare the arguments for the reflective constructor call on the node class.
             Object[] nodeConstructorArguments = prepareArguments(invoke, parameterTypes, target, false);
 
             // Create the new node instance.
             Class< ? > c = getNodeClass(target, intrinsic);
-            Node newInstance = createNodeInstance(c, parameterTypes, returnType, intrinsic.setStampFromReturnType(), nodeConstructorArguments);
+            Node newInstance = createNodeInstance(c, parameterTypes, nodeConstructorArguments);
 
             // Replace the invoke with the new node.
             invoke.node().graph().add(newInstance);
@@ -104,18 +75,18 @@ public class SnippetIntrinsificationPhase extends Phase {
             // Clean up checkcast instructions inserted by javac if the return type is generic.
             cleanUpReturnCheckCast(newInstance);
         } else if (target.getAnnotation(Fold.class) != null) {
-            Class< ? >[] parameterTypes = MetaUtil.signatureToTypes(target.getSignature(), declaringClass);
+            Class< ? >[] parameterTypes = MetaUtil.signatureToTypes(target.signature(), target.holder());
 
             // Prepare the arguments for the reflective method call
             Object[] arguments = prepareArguments(invoke, parameterTypes, target, true);
             Object receiver = null;
-            if (!invoke.methodCallTarget().isStatic()) {
+            if (!invoke.callTarget().isStatic()) {
                 receiver = arguments[0];
                 arguments = Arrays.asList(arguments).subList(1, arguments.length).toArray();
             }
 
             // Call the method
-            Constant constant = callMethod(target.getSignature().getReturnKind(), declaringClass.toJava(), target.getName(), parameterTypes, receiver, arguments);
+            Constant constant = callMethod(target.signature().returnKind(), target.holder().toJava(), target.name(), parameterTypes, receiver, arguments);
 
             if (constant != null) {
                 // Replace the invoke with the result of the call
@@ -142,19 +113,17 @@ public class SnippetIntrinsificationPhase extends Phase {
         Object[] reflectionCallArguments = new Object[arguments.size()];
         for (int i = 0; i < reflectionCallArguments.length; ++i) {
             int parameterIndex = i;
-            if (!invoke.methodCallTarget().isStatic()) {
+            if (!invoke.callTarget().isStatic()) {
                 parameterIndex--;
             }
             ValueNode argument = tryBoxingElimination(parameterIndex, target, arguments.get(i));
             if (folding || MetaUtil.getParameterAnnotation(ConstantNodeParameter.class, parameterIndex, target) != null) {
-                if (!(argument instanceof ConstantNode)) {
-                    throw new NonConstantParameterError("parameter " + parameterIndex + " must be a compile time constant for calling " + invoke.methodCallTarget().targetMethod() + " at " + sourceLocation(invoke.node()) + ": " + argument);
-                }
+                assert argument instanceof ConstantNode : "parameter " + parameterIndex + " must be a compile time constant for calling " + invoke.callTarget().targetMethod() + " at " + sourceLocation(invoke.node()) + ": " + argument;
                 ConstantNode constantNode = (ConstantNode) argument;
                 Constant constant = constantNode.asConstant();
-                Object o = constant.asBoxedValue();
+                Object o = constant.boxedValue();
                 if (o instanceof Class< ? >) {
-                    reflectionCallArguments[i] = runtime.lookupJavaType((Class< ? >) o);
+                    reflectionCallArguments[i] = runtime.getResolvedJavaType((Class< ? >) o);
                     parameterTypes[i] = ResolvedJavaType.class;
                 } else {
                     if (parameterTypes[i] == boolean.class) {
@@ -180,7 +149,7 @@ public class SnippetIntrinsificationPhase extends Phase {
     private static Class< ? > getNodeClass(ResolvedJavaMethod target, NodeIntrinsic intrinsic) {
         Class< ? > result = intrinsic.value();
         if (result == NodeIntrinsic.class) {
-            result = target.getDeclaringClass().toJava();
+            result = target.holder().toJava();
         }
         assert Node.class.isAssignableFrom(result);
         return result;
@@ -198,7 +167,7 @@ public class SnippetIntrinsificationPhase extends Phase {
                         if (node.usages().size() == 2) {
                             if (node instanceof Invoke) {
                                 Invoke invokeNode = (Invoke) node;
-                                MethodCallTargetNode callTarget = invokeNode.methodCallTarget();
+                                MethodCallTargetNode callTarget = invokeNode.callTarget();
                                 if (pool.isBoxingMethod(callTarget.targetMethod())) {
                                     FrameState stateAfter = invokeNode.stateAfter();
                                     assert stateAfter.usages().size() == 1;
@@ -259,7 +228,7 @@ public class SnippetIntrinsificationPhase extends Phase {
 
     static final int VARARGS = 0x00000080;
 
-    private static Node createNodeInstance(Class< ? > nodeClass, Class< ? >[] parameterTypes, ResolvedJavaType returnType, boolean setStampFromReturnType, Object[] nodeConstructorArguments) {
+    private static Node createNodeInstance(Class< ? > nodeClass, Class< ? >[] parameterTypes, Object[] nodeConstructorArguments) {
         Object[] arguments = null;
         Constructor< ? > constructor = null;
         nextConstructor:
@@ -306,15 +275,7 @@ public class SnippetIntrinsificationPhase extends Phase {
         }
         constructor.setAccessible(true);
         try {
-            ValueNode intrinsicNode = (ValueNode) constructor.newInstance(arguments);
-            if (setStampFromReturnType) {
-                if (returnType.getKind().isObject()) {
-                    intrinsicNode.setStamp(StampFactory.declared(returnType));
-                } else {
-                    intrinsicNode.setStamp(StampFactory.forKind(returnType.getKind()));
-                }
-            }
-            return intrinsicNode;
+            return (ValueNode) constructor.newInstance(arguments);
         } catch (Exception e) {
             throw new RuntimeException(constructor + Arrays.toString(nodeConstructorArguments), e);
         }
@@ -348,7 +309,7 @@ public class SnippetIntrinsificationPhase extends Phase {
     }
 
     public void cleanUpReturnCheckCast(Node newInstance) {
-        if (newInstance instanceof ValueNode && (((ValueNode) newInstance).kind() != Kind.Object || ((ValueNode) newInstance).stamp() == StampFactory.forNodeIntrinsic())) {
+        if (newInstance instanceof ValueNode && ((ValueNode) newInstance).kind() != Kind.Object) {
             StructuredGraph graph = (StructuredGraph) newInstance.graph();
             for (CheckCastNode checkCastNode : newInstance.usages().filter(CheckCastNode.class).snapshot()) {
                 for (ValueProxyNode vpn : checkCastNode.usages().filter(ValueProxyNode.class).snapshot()) {
@@ -377,8 +338,6 @@ public class SnippetIntrinsificationPhase extends Phase {
                         checkCastCallTarget.safeDelete();
                     } else if (checkCastUsage instanceof FrameState) {
                         checkCastUsage.replaceFirstInput(checkCastNode, null);
-                    } else if (checkCastUsage instanceof ReturnNode && checkCastNode.object().stamp() == StampFactory.forNodeIntrinsic()) {
-                        checkCastUsage.replaceFirstInput(checkCastNode, checkCastNode.object());
                     } else {
                         assert false : sourceLocation(checkCastUsage) + " has unexpected usage " + checkCastUsage + " of checkcast at " + sourceLocation(checkCastNode);
                     }

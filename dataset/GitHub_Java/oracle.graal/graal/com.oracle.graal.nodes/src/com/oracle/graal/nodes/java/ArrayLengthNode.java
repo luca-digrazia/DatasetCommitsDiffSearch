@@ -30,7 +30,7 @@ import com.oracle.graal.nodes.type.*;
 /**
  * The {@code ArrayLength} instruction gets the length of an array.
  */
-public final class ArrayLengthNode extends FixedWithNextNode implements Canonicalizable, Lowerable, Virtualizable {
+public final class ArrayLengthNode extends FixedWithNextNode implements Canonicalizable, Lowerable {
 
     @Input private ValueNode array;
 
@@ -45,8 +45,8 @@ public final class ArrayLengthNode extends FixedWithNextNode implements Canonica
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        if (array() instanceof ArrayLengthProvider) {
-            ValueNode length = ((ArrayLengthProvider) array()).length();
+        if (array() instanceof NewArrayNode) {
+            ValueNode length = ((NewArrayNode) array()).dimension(0);
             assert length != null;
             return length;
         }
@@ -54,7 +54,7 @@ public final class ArrayLengthNode extends FixedWithNextNode implements Canonica
         if (runtime != null && array().isConstant() && !array().isNullConstant()) {
             Constant constantValue = array().asConstant();
             if (constantValue != null && constantValue.isNonNull()) {
-                return ConstantNode.forInt(runtime.lookupArrayLength(constantValue), graph());
+                return ConstantNode.forInt(runtime.getArrayLength(constantValue), graph());
             }
         }
         return this;
@@ -63,17 +63,5 @@ public final class ArrayLengthNode extends FixedWithNextNode implements Canonica
     @Override
     public void lower(LoweringTool tool) {
         tool.getRuntime().lower(this, tool);
-    }
-
-    @NodeIntrinsic
-    public static native int arrayLength(Object array);
-
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        State state = tool.getObjectState(array());
-        if (state != null) {
-            assert state.getVirtualObject().type().isArray();
-            tool.replaceWithValue(ConstantNode.forInt(state.getVirtualObject().entryCount(), graph()));
-        }
     }
 }
