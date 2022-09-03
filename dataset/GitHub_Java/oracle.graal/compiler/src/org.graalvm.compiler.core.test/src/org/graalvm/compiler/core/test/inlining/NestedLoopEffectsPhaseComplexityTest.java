@@ -35,7 +35,6 @@ import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
@@ -44,8 +43,10 @@ import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase;
 import org.graalvm.compiler.phases.common.inlining.InliningUtil;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
+import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.graalvm.compiler.virtual.phases.ea.EarlyReadEliminationPhase;
 import org.graalvm.compiler.virtual.phases.ea.PartialEscapePhase;
+
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestRule;
@@ -59,8 +60,7 @@ public class NestedLoopEffectsPhaseComplexityTest extends GraalCompilerTest {
     public static int[] Memory = new int[]{0};
 
     public static void recursiveLoopMethodUnsafeLoad(int a) {
-        long arrayIntBaseOffset = Unsafe.ARRAY_INT_BASE_OFFSET;
-        if (UNSAFE.getInt(Memory, arrayIntBaseOffset) == 0) {
+        if (UNSAFE.getInt(Memory, (long) Unsafe.ARRAY_INT_BASE_OFFSET) == 0) {
             return;
         }
         for (int i = 0; i < a; i++) {
@@ -123,7 +123,7 @@ public class NestedLoopEffectsPhaseComplexityTest extends GraalCompilerTest {
         }
     }
 
-    private long runAndTimePhase(StructuredGraph g, BasePhase<? super CoreProviders> phase) {
+    private long runAndTimePhase(StructuredGraph g, BasePhase<? super PhaseContext> phase) {
         HighTierContext context = getDefaultHighTierContext();
         long start = System.currentTimeMillis();
         phase.apply(g, context);

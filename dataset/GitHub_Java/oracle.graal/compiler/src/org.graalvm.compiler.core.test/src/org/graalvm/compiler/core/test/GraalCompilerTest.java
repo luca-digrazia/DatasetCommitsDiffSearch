@@ -1063,20 +1063,6 @@ public abstract class GraalCompilerTest extends GraalTest {
         }
     }
 
-    protected StructuredGraph getFinalGraph(String method) {
-        return getFinalGraph(getResolvedJavaMethod(method));
-    }
-
-    protected StructuredGraph getFinalGraph(ResolvedJavaMethod method) {
-        StructuredGraph graph = parseForCompile(method);
-        applyFrontEnd(graph);
-        return graph;
-    }
-
-    protected void applyFrontEnd(StructuredGraph graph) {
-        GraalCompiler.emitFrontEnd(getProviders(), getBackend(), graph, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, graph.getProfilingInfo(), createSuites(graph.getOptions()));
-    }
-
     protected StructuredGraph lastCompiledGraph;
 
     protected SpeculationLog getSpeculationLog() {
