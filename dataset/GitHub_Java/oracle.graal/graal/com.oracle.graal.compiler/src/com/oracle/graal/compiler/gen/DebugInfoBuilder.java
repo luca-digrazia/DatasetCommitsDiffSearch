@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.compiler.gen;
 
-import static com.oracle.graal.graph.util.CollectionsAccess.*;
-
 import java.util.*;
 import java.util.Map.Entry;
 
@@ -34,7 +32,6 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.virtual.nodes.*;
 
@@ -49,8 +46,8 @@ public class DebugInfoBuilder {
         this.nodeOperands = nodeOperands;
     }
 
-    protected final Map<VirtualObjectNode, VirtualObject> virtualObjects = new HashMap<>();
-    protected final Map<VirtualObjectNode, EscapeObjectState> objectStates = newNodeIdentityMap();
+    protected final HashMap<VirtualObjectNode, VirtualObject> virtualObjects = new HashMap<>();
+    protected final IdentityHashMap<VirtualObjectNode, EscapeObjectState> objectStates = new IdentityHashMap<>();
 
     public LIRFrameState build(FrameState topState, LabelRef exceptionEdge) {
         assert virtualObjects.size() == 0;
@@ -79,7 +76,7 @@ public class DebugInfoBuilder {
             boolean changed;
             do {
                 changed = false;
-                Map<VirtualObjectNode, VirtualObject> virtualObjectsCopy = newIdentityMap(virtualObjects);
+                IdentityHashMap<VirtualObjectNode, VirtualObject> virtualObjectsCopy = new IdentityHashMap<>(virtualObjects);
                 for (Entry<VirtualObjectNode, VirtualObject> entry : virtualObjectsCopy.entrySet()) {
                     if (entry.getValue().getValues() == null) {
                         VirtualObjectNode vobj = entry.getKey();
@@ -90,11 +87,11 @@ public class DebugInfoBuilder {
                             assert currentField != null;
                             int pos = 0;
                             for (int i = 0; i < vobj.entryCount(); i++) {
-                                if (!currentField.values().get(i).isConstant() || currentField.values().get(i).asConstant().getKind() != Kind.Illegal) {
-                                    values[pos++] = toValue(currentField.values().get(i));
+                                if (!currentField.fieldValues().get(i).isConstant() || currentField.fieldValues().get(i).asConstant().getKind() != Kind.Illegal) {
+                                    values[pos++] = toValue(currentField.fieldValues().get(i));
                                 } else {
-                                    assert currentField.values().get(i - 1).getKind() == Kind.Double || currentField.values().get(i - 1).getKind() == Kind.Long : vobj + " " + i + " " +
-                                                    currentField.values().get(i - 1);
+                                    assert currentField.fieldValues().get(i - 1).getKind() == Kind.Double || currentField.fieldValues().get(i - 1).getKind() == Kind.Long : vobj + " " + i + " " +
+                                                    currentField.fieldValues().get(i - 1);
                                 }
                             }
                             if (pos != vobj.entryCount()) {
@@ -204,24 +201,20 @@ public class DebugInfoBuilder {
                     STATE_VIRTUAL_OBJECTS.increment();
                     return vobject;
                 }
+            } else if (value instanceof ConstantNode) {
+                STATE_CONSTANTS.increment();
+                return ((ConstantNode) value).getValue();
+
+            } else if (value != null) {
+                STATE_VARIABLES.increment();
+                Value operand = nodeOperands.get(value);
+                assert operand != null && (operand instanceof Variable || operand instanceof Constant) : operand + " for " + value;
+                return operand;
+
             } else {
-                // Remove proxies from constants so the constant can be directly embedded.
-                ValueNode unproxied = GraphUtil.unproxify(value);
-                if (unproxied instanceof ConstantNode) {
-                    STATE_CONSTANTS.increment();
-                    return ((ConstantNode) unproxied).getValue();
-
-                } else if (value != null) {
-                    STATE_VARIABLES.increment();
-                    Value operand = nodeOperands.get(value);
-                    assert operand != null && (operand instanceof Variable || operand instanceof Constant) : operand + " for " + value;
-                    return operand;
-
-                } else {
-                    // return a dummy value because real value not needed
-                    STATE_ILLEGALS.increment();
-                    return Value.ILLEGAL;
-                }
+                // return a dummy value because real value not needed
+                STATE_ILLEGALS.increment();
+                return Value.ILLEGAL;
             }
         } catch (GraalInternalError e) {
             throw e.addContext("toValue: ", value);

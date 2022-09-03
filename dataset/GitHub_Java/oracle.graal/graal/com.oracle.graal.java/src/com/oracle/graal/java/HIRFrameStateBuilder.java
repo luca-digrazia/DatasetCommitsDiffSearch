@@ -337,7 +337,6 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode, H
     /**
      * @return the current lock depth
      */
-    @Override
     public int lockDepth() {
         assert lockedObjects.length == monitorIds.length;
         return lockedObjects.length;
