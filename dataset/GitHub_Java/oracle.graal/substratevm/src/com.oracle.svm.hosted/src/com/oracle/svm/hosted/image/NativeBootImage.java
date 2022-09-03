@@ -109,7 +109,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 
 public abstract class NativeBootImage extends AbstractBootImage {
 
-    public static final long RWDATA_CGLOBALS_PARTITION_OFFSET = 0;
+    private static final long RWDATA_CGLOBALS_PARTITION_OFFSET = 0;
 
     @Override
     public Section getTextSection() {
@@ -136,7 +136,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
         }
     }
 
-    void writeHeaderFiles(Path outputDir, String imageName, Map<ResolvedJavaMethod, String> symbolAliases, boolean dynamic) {
+    void writeHeaderFiles(Path outputDir, String imageName, boolean dynamic) {
         /* Group methods by header files. */
         Map<? extends Class<? extends Header>, List<HostedMethod>> hostedMethods = uniqueEntryPoints.stream()
                         .filter(this::shouldWriteHeader)
@@ -146,11 +146,11 @@ public abstract class NativeBootImage extends AbstractBootImage {
         hostedMethods.forEach((headerClass, methods) -> {
             methods.sort(NativeBootImage::sortMethodsByFileNameAndPosition);
             Header header = headerClass == Header.class ? defaultCHeaderAnnotation(imageName) : instantiateCHeader(headerClass);
-            writeHeaderFile(outputDir, header, methods, symbolAliases, dynamic);
+            writeHeaderFile(outputDir, header, methods, dynamic);
         });
     }
 
-    private void writeHeaderFile(Path outDir, Header header, List<HostedMethod> methods, Map<ResolvedJavaMethod, String> symbolAliases, boolean dynamic) {
+    private void writeHeaderFile(Path outDir, CHeader.Header header, List<HostedMethod> methods, boolean dynamic) {
         CSourceCodeWriter writer = new CSourceCodeWriter(outDir.getParent());
         String imageHeaderGuard = "__" + header.name().toUpperCase().replaceAll("[^A-Z0-9]", "_") + "_H";
         String dynamicSuffix = dynamic ? "_dynamic.h" : ".h";
@@ -182,7 +182,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
             writer.appendln("#endif");
             writer.appendln();
 
-            methods.forEach(m -> writeMethodHeader(m, writer, symbolAliases, dynamic));
+            methods.forEach(m -> writeMethodHeader(m, writer, dynamic));
 
             writer.appendln("#if defined(__cplusplus)");
             writer.appendln("}");
@@ -263,7 +263,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
         return 0;
     }
 
-    private void writeMethodHeader(HostedMethod m, CSourceCodeWriter writer, Map<ResolvedJavaMethod, String> symbolAliases, boolean dynamic) {
+    private void writeMethodHeader(HostedMethod m, CSourceCodeWriter writer, boolean dynamic) {
         assert Modifier.isStatic(m.getModifiers()) : "Published methods that go into the header must be static.";
         CEntryPointData cEntryPointData = (CEntryPointData) m.getWrapped().getEntryPointData();
         String docComment = cEntryPointData.getDocumentation();
@@ -273,53 +273,42 @@ public abstract class NativeBootImage extends AbstractBootImage {
             writer.appendln(" */");
         }
 
-        String entryPointDataSymbolName = cEntryPointData.getSymbolName();
-        String symbolAlias = symbolAliases.get(m);
-        String[] symbolNames;
-        if (symbolAlias == null || symbolAlias.isEmpty()) {
-            symbolNames = new String[]{entryPointDataSymbolName};
+        if (dynamic) {
+            writer.append("typedef ");
+        }
+
+        writer.append(CSourceCodeWriter.toCTypeName(m,
+                        (ResolvedJavaType) m.getSignature().getReturnType(m.getDeclaringClass()),
+                        false,
+                        false, // GR-9242
+                        metaAccess,
+                        nativeLibs));
+        writer.append(" ");
+
+        assert !cEntryPointData.getSymbolName().isEmpty();
+        if (dynamic) {
+            writer.append("(*").append(cEntryPointData.getSymbolName()).append("_fn_t)");
         } else {
-            symbolNames = new String[]{entryPointDataSymbolName, symbolAlias};
+            writer.append(cEntryPointData.getSymbolName());
         }
+        writer.append("(");
 
-        for (String symbolName : symbolNames) {
-            if (dynamic) {
-                writer.append("typedef ");
-            }
-
+        String sep = "";
+        Parameter[] parameterInfo = m.getParameters();
+        for (int i = 0; i < m.getSignature().getParameterCount(false); i++) {
+            writer.append(sep);
+            sep = ", ";
             writer.append(CSourceCodeWriter.toCTypeName(m,
-                            (ResolvedJavaType) m.getSignature().getReturnType(m.getDeclaringClass()),
-                            false,
-                            false, // GR-9242
-                            metaAccess,
-                            nativeLibs));
-            writer.append(" ");
-
-            assert !symbolName.isEmpty();
-            if (dynamic) {
-                writer.append("(*").append(symbolName).append("_fn_t)");
-            } else {
-                writer.append(symbolName);
+                            (ResolvedJavaType) m.getSignature().getParameterType(i, m.getDeclaringClass()),
+                            parameterInfo != null && parameterInfo[i].getDeclaredAnnotation(CConst.class) != null,
+                            parameterInfo != null && parameterInfo[i].getDeclaredAnnotation(CUnsigned.class) != null,
+                            metaAccess, nativeLibs));
+            if (parameterInfo != null && parameterInfo[i].isNamePresent()) {
+                writer.append(" ");
+                writer.append(parameterInfo[i].getName());
             }
-            writer.append("(");
-
-            String sep = "";
-            Parameter[] parameterInfo = m.getParameters();
-            for (int i = 0; i < m.getSignature().getParameterCount(false); i++) {
-                writer.append(sep);
-                sep = ", ";
-                writer.append(CSourceCodeWriter.toCTypeName(m,
-                                (ResolvedJavaType) m.getSignature().getParameterType(i, m.getDeclaringClass()),
-                                parameterInfo != null && parameterInfo[i].getDeclaredAnnotation(CConst.class) != null,
-                                parameterInfo != null && parameterInfo[i].getDeclaredAnnotation(CUnsigned.class) != null,
-                                metaAccess, nativeLibs));
-                if (parameterInfo != null && parameterInfo[i].isNamePresent()) {
-                    writer.append(" ");
-                    writer.append(parameterInfo[i].getName());
-                }
-            }
-            writer.appendln(");");
         }
+        writer.appendln(");");
         writer.appendln();
     }
 

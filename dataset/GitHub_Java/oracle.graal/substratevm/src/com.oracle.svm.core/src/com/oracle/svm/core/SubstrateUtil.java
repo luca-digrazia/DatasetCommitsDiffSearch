@@ -34,6 +34,7 @@ import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
+import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -52,6 +53,7 @@ import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CCharPointerPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.word.Pointer;
+import org.graalvm.word.PointerBase;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
@@ -67,6 +69,7 @@ import com.oracle.svm.core.deopt.DeoptimizationSupport;
 import com.oracle.svm.core.deopt.DeoptimizedFrame;
 import com.oracle.svm.core.deopt.Deoptimizer;
 import com.oracle.svm.core.log.Log;
+import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.stack.JavaFrameAnchor;
 import com.oracle.svm.core.stack.JavaFrameAnchors;
 import com.oracle.svm.core.stack.JavaStackWalker;
@@ -80,7 +83,6 @@ import com.oracle.svm.core.util.Counter;
 import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.services.Services;
 
 public class SubstrateUtil {
 
@@ -111,20 +113,6 @@ public class SubstrateUtil {
         return arch;
     }
 
-    /**
-     * @return true if the standalone libgraal is being built instead of a normal SVM image.
-     */
-    public static boolean isBuildingLibgraal() {
-        return Services.IS_BUILDING_NATIVE_IMAGE;
-    }
-
-    /**
-     * @return true if running in the standalone libgraal image.
-     */
-    public static boolean isInLibgraal() {
-        return Services.IS_IN_NATIVE_IMAGE;
-    }
-
     @TargetClass(com.oracle.svm.core.SubstrateUtil.class)
     static final class Target_com_oracle_svm_core_SubstrateUtil {
         @Alias @RecomputeFieldValue(kind = Kind.FromAlias, isFinal = true)//
@@ -139,7 +127,7 @@ public class SubstrateUtil {
 
     @Uninterruptible(reason = "Called from uninterruptible code.")
     public static FileDescriptor getFileDescriptor(FileOutputStream out) {
-        return SubstrateUtil.cast(out, Target_java_io_FileOutputStream.class).fd;
+        return KnownIntrinsics.unsafeCast(out, Target_java_io_FileOutputStream.class).fd;
     }
 
     /**
@@ -172,19 +160,10 @@ public class SubstrateUtil {
         return n;
     }
 
-    /**
-     * The same as {@link Class#cast}. This method is available for use in places where either the
-     * Java compiler or static analysis tools would complain about a cast because the cast appears
-     * to violate the Java type system rules.
-     *
-     * The most prominent example are casts between a {@link TargetClass} and the original class,
-     * i.e., two classes that appear to be unrelated from the Java type system point of view, but
-     * are actually the same class.
-     */
-    @SuppressWarnings({"unused", "unchecked"})
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public static <T> T cast(Object obj, Class<T> toType) {
-        return (T) obj;
+    /** @deprecated replaced by {@link CTypeConversion#asByteBuffer(PointerBase, int)} */
+    @Deprecated
+    public static ByteBuffer wrapAsByteBuffer(PointerBase pointer, int size) {
+        return CTypeConversion.asByteBuffer(pointer, size);
     }
 
     /**
@@ -340,7 +319,7 @@ public class SubstrateUtil {
             log.string("No anchors").newline();
         }
         while (anchor.isNonNull()) {
-            log.string("Anchor ").zhex(anchor.rawValue()).string(" LastJavaSP ").zhex(anchor.getLastJavaSP().rawValue()).string(" LastJavaIP ").zhex(anchor.getLastJavaIP().rawValue()).newline();
+            log.string("Anchor ").zhex(anchor.rawValue()).string(" LastJavaSP ").zhex(anchor.getLastJavaSP().rawValue()).newline();
             anchor = anchor.getPreviousAnchor();
         }
         log.indent(false);
@@ -381,7 +360,7 @@ public class SubstrateUtil {
                     log.string("Found matching Anchor:").zhex(anchor.rawValue()).newline();
                     Pointer lastSp = anchor.getLastJavaSP();
                     log.string("LastJavaSP ").zhex(lastSp.rawValue()).newline();
-                    CodePointer lastIp = anchor.getLastJavaIP();
+                    CodePointer lastIp = FrameAccess.singleton().readReturnAddress(lastSp);
                     log.string("LastJavaIP ").zhex(lastIp.rawValue()).newline();
                 }
             }

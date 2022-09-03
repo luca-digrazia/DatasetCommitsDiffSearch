@@ -53,16 +53,11 @@ import com.oracle.svm.hosted.meta.HostedMetaAccess;
 import com.oracle.svm.hosted.meta.HostedMethod;
 import com.oracle.svm.hosted.meta.HostedUniverse;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
 public abstract class NativeBootImageViaCC extends NativeBootImage {
-
-    protected final HostedMethod mainEntryPoint;
 
     public NativeBootImageViaCC(NativeImageKind k, HostedUniverse universe, HostedMetaAccess metaAccess, NativeLibraries nativeLibs, NativeImageHeap heap, NativeImageCodeCache codeCache,
                     List<HostedMethod> entryPoints, HostedMethod mainEntryPoint, ClassLoader imageClassLoader) {
         super(k, universe, metaAccess, nativeLibs, heap, codeCache, entryPoints, mainEntryPoint, imageClassLoader);
-        this.mainEntryPoint = mainEntryPoint;
     }
 
     public NativeImageKind getOutputKind() {
@@ -77,9 +72,9 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
         }
 
         @Override
-        protected void addOneSymbolAliasOption(List<String> cmd, Entry<ResolvedJavaMethod, String> ent) {
+        protected void addOneSymbolAliasOption(List<String> cmd, Entry<String, String> ent) {
             cmd.add("-Wl,--defsym");
-            cmd.add("-Wl," + ent.getValue() + "=" + NativeBootImage.globalSymbolNameForMethod(ent.getKey()));
+            cmd.add("-Wl," + ent.getKey() + "=" + ent.getValue());
         }
 
         @Override
@@ -103,8 +98,8 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
     class DarwinCCLinkerInvocation extends CCLinkerInvocation {
 
         @Override
-        protected void addOneSymbolAliasOption(List<String> cmd, Entry<ResolvedJavaMethod, String> ent) {
-            cmd.add("-Wl,-alias,_" + NativeBootImage.globalSymbolNameForMethod(ent.getKey()) + ",_" + ent.getValue());
+        protected void addOneSymbolAliasOption(List<String> cmd, Entry<String, String> ent) {
+            cmd.add("-Wl,-alias," + ent.getValue() + "," + ent.getKey());
         }
 
         @Override
@@ -130,7 +125,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
         }
 
         @Override
-        protected void addOneSymbolAliasOption(List<String> cmd, Entry<ResolvedJavaMethod, String> ent) {
+        protected void addOneSymbolAliasOption(List<String> cmd, Entry<String, String> ent) {
             // cmd.add("-Wl,-alias," + ent.getValue() + "," + ent.getKey());
         }
 
@@ -221,20 +216,12 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
             inv.addInputFile(filename);
         }
 
-        addMainEntryPoint(inv);
-
         return inv;
-    }
-
-    protected void addMainEntryPoint(CCLinkerInvocation inv) {
-        if (mainEntryPoint != null) {
-            inv.addSymbolAlias(mainEntryPoint, "main");
-        }
     }
 
     @Override
     @SuppressWarnings("try")
-    public LinkerInvocation write(DebugContext debug, Path outputDirectory, Path tempDirectory, String imageName, BeforeImageWriteAccessImpl config) {
+    public Path write(DebugContext debug, Path outputDirectory, Path tempDirectory, String imageName, BeforeImageWriteAccessImpl config) {
         String cmdstr = "";
         String outputstr = "";
         try (Indent indent = debug.logAndIndent("Writing native image")) {
@@ -298,7 +285,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
                         }
                     }
                 }
-                return inv;
+                return inv.getOutputFile();
             } catch (Exception ex) {
                 throw new RuntimeException("host C compiler or linker does not seem to work: " + ex.toString() + "\n\n" + cmdstr + "\n\n" + outputstr);
             }

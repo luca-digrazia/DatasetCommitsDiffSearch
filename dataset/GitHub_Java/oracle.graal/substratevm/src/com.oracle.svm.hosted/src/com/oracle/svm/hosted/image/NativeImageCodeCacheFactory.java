@@ -26,15 +26,9 @@ package com.oracle.svm.hosted.image;
 
 import com.oracle.svm.hosted.code.CompileQueue;
 import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.Platform;
 
 public abstract class NativeImageCodeCacheFactory {
-
-    public NativeImageCodeCache newCodeCache(CompileQueue compileQueue, NativeImageHeap heap) {
-        return newCodeCache(compileQueue, heap, ImageSingletons.lookup(Platform.class));
-    }
-
-    public abstract NativeImageCodeCache newCodeCache(CompileQueue compileQueue, NativeImageHeap heap, Platform target);
+    public abstract NativeImageCodeCache newCodeCache(CompileQueue compileQueue, NativeImageHeap heap);
 
     public static NativeImageCodeCacheFactory get() {
         return ImageSingletons.lookup(NativeImageCodeCacheFactory.class);
