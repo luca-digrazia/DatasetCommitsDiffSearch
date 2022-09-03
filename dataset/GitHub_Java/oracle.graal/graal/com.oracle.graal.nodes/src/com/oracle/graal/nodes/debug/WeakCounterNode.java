@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.nodes.debug;
 
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -35,13 +34,12 @@ import com.oracle.graal.nodes.spi.*;
  * actually executed.
  */
 @NodeInfo
-public final class WeakCounterNode extends DynamicCounterNode implements Simplifiable, Virtualizable {
+public class WeakCounterNode extends DynamicCounterNode implements Simplifiable, Virtualizable {
 
-    public static final NodeClass TYPE = NodeClass.get(WeakCounterNode.class);
     @Input ValueNode checkedValue;
 
     public WeakCounterNode(String group, String name, ValueNode increment, boolean addContext, ValueNode checkedValue) {
-        super(TYPE, group, name, increment, addContext);
+        super(group, name, increment, addContext);
         this.checkedValue = checkedValue;
     }
 

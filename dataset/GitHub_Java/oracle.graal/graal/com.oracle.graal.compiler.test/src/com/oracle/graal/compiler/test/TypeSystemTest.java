@@ -222,8 +222,8 @@ public class TypeSystemTest extends GraalCompilerTest {
             TTY.print(" " + input.toString(Verbosity.Id));
         }
         TTY.println(")");
-        if (node instanceof AbstractMergeNode) {
-            for (PhiNode phi : ((AbstractMergeNode) node).phis()) {
+        if (node instanceof MergeNode) {
+            for (PhiNode phi : ((MergeNode) node).phis()) {
                 outputNode(phi);
             }
         }

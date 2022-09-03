@@ -41,8 +41,8 @@ public abstract class AbstractEndNode extends FixedNode implements IterableNodeT
         gen.visitEndNode(this);
     }
 
-    public AbstractMergeNode merge() {
-        return (AbstractMergeNode) usages().first();
+    public MergeNode merge() {
+        return (MergeNode) usages().first();
     }
 
     @Override

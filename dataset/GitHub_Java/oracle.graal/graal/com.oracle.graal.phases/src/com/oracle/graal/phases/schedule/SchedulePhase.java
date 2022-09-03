@@ -533,7 +533,7 @@ public final class SchedulePhase extends Phase {
                     closure = new NewMemoryScheduleClosure();
                 }
                 Map<FixedNode, KillSet> states;
-                states = ReentrantBlockIterator.apply(closure, currentBlock, new KillSet(), (block) -> !region.contains(block));
+                states = ReentrantBlockIterator.apply(closure, currentBlock, new KillSet(), region);
 
                 KillSet mergeState = states.get(dominatedBlock.getBeginNode());
                 if (mergeState.isKilled(locid)) {

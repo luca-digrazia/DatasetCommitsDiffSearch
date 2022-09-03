@@ -30,7 +30,7 @@ import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.match.MatchPattern.Result;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.virtual.*;
 
@@ -39,15 +39,15 @@ import com.oracle.graal.nodes.virtual.*;
  */
 public class MatchContext {
 
-    private final Node root;
+    private final ValueNode root;
 
-    private final List<Node> nodes;
+    private final List<ValueNode> nodes;
 
     private final MatchStatement rule;
 
     private Map<String, NamedNode> namedNodes;
 
-    private ArrayList<Node> consumed;
+    private ArrayList<ValueNode> consumed;
 
     private int startIndex;
 
@@ -56,16 +56,16 @@ public class MatchContext {
     private final NodeLIRBuilder builder;
 
     private static class NamedNode {
-        final Class<? extends Node> type;
-        final Node value;
+        final Class<? extends ValueNode> type;
+        final ValueNode value;
 
-        NamedNode(Class<? extends Node> type, Node value) {
+        NamedNode(Class<? extends ValueNode> type, ValueNode value) {
             this.type = type;
             this.value = value;
         }
     }
 
-    public MatchContext(NodeLIRBuilder builder, MatchStatement rule, int index, Node node, List<Node> nodes) {
+    public MatchContext(NodeLIRBuilder builder, MatchStatement rule, int index, ValueNode node, List<ValueNode> nodes) {
         this.builder = builder;
         this.rule = rule;
         this.root = node;
@@ -75,11 +75,11 @@ public class MatchContext {
         startIndex = endIndex = index;
     }
 
-    public Node getRoot() {
+    public ValueNode getRoot() {
         return root;
     }
 
-    public Result captureNamedValue(String name, Class<? extends Node> type, Node value) {
+    public Result captureNamedValue(String name, Class<? extends ValueNode> type, ValueNode value) {
         if (namedNodes == null) {
             namedNodes = new HashMap<>(2);
         }
@@ -99,7 +99,7 @@ public class MatchContext {
     public Result validate() {
         // Ensure that there's no unsafe work in between these operations.
         for (int i = startIndex; i <= endIndex; i++) {
-            Node node = nodes.get(i);
+            ValueNode node = nodes.get(i);
             if (node instanceof VirtualObjectNode || node instanceof FloatingNode) {
                 // The order of evaluation of these nodes controlled by data dependence so they
                 // don't interfere with this match.
@@ -108,7 +108,7 @@ public class MatchContext {
                 if (LogVerbose.getValue()) {
                     Debug.log("unexpected node %s", node);
                     for (int j = startIndex; j <= endIndex; j++) {
-                        Node theNode = nodes.get(j);
+                        ValueNode theNode = nodes.get(j);
                         Debug.log("%s(%s) %1s", (consumed != null && consumed.contains(theNode) || theNode == root) ? "*" : " ", theNode.getUsageCount(), theNode);
                     }
                 }
@@ -131,7 +131,7 @@ public class MatchContext {
             Debug.log("with nodes %s", rule.formatMatch(root));
         }
         if (consumed != null) {
-            for (Node node : consumed) {
+            for (ValueNode node : consumed) {
                 // All the interior nodes should be skipped during the normal doRoot calls in
                 // NodeLIRBuilder so mark them as interior matches. The root of the match will get a
                 // closure which will be evaluated to produce the final LIR.
@@ -146,7 +146,7 @@ public class MatchContext {
      *
      * @return Result.OK if the node can be safely consumed.
      */
-    public Result consume(Node node) {
+    public Result consume(ValueNode node) {
         assert node.getUsageCount() <= 1 : "should have already been checked";
 
         // Check NOT_IN_BLOCK first since that usually implies ALREADY_USED
@@ -174,7 +174,7 @@ public class MatchContext {
      * @return the matched node
      * @throws GraalInternalError is the named node doesn't exist.
      */
-    public Node namedNode(String name) {
+    public ValueNode namedNode(String name) {
         if (namedNodes != null) {
             NamedNode value = namedNodes.get(name);
             if (value != null) {
