@@ -40,34 +40,25 @@ import org.graalvm.nativeimage.c.type.CLongPointer;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.core.snippets.KnownIntrinsics;
 
 @Platforms(Platform.WINDOWS.class)
 public class WindowsUtils {
 
     @TargetClass(java.io.FileDescriptor.class)
     private static final class Target_java_io_FileDescriptor {
-        @Alias int fd;
         @Alias long handle;
     }
 
-    public static long getHandle(FileDescriptor descriptor) {
-        return SubstrateUtil.cast(descriptor, Target_java_io_FileDescriptor.class).handle;
+    public static int getHandle(FileDescriptor descriptor) {
+        return (int) KnownIntrinsics.unsafeCast(descriptor, Target_java_io_FileDescriptor.class).handle;
     }
 
-    public static void setHandle(FileDescriptor descriptor, long handle) {
-        SubstrateUtil.cast(descriptor, Target_java_io_FileDescriptor.class).handle = handle;
-    }
-
-    public static int getFD(FileDescriptor descriptor) {
-        return SubstrateUtil.cast(descriptor, Target_java_io_FileDescriptor.class).fd;
-    }
-
-    public static void setFD(FileDescriptor descriptor, int fd) {
-        SubstrateUtil.cast(descriptor, Target_java_io_FileDescriptor.class).fd = fd;
+    public static void setHandle(FileDescriptor descriptor, int handle) {
+        KnownIntrinsics.unsafeCast(descriptor, Target_java_io_FileDescriptor.class).handle = handle;
     }
 
     static boolean outOfBounds(int off, int len, byte[] array) {
