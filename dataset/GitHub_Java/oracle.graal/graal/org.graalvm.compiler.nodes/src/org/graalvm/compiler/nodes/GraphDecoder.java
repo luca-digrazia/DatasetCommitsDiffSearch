@@ -37,7 +37,7 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
-import org.graalvm.compiler.core.common.PermanentBailoutException;
+import org.graalvm.compiler.common.PermanentBailoutException;
 import org.graalvm.compiler.core.common.Fields;
 import org.graalvm.compiler.core.common.util.TypeReader;
 import org.graalvm.compiler.core.common.util.UnsafeArrayTypeReader;
@@ -63,7 +63,6 @@ import org.graalvm.compiler.nodes.extended.IntegerSwitchNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.LoopExplosionPlugin.LoopExplosionKind;
 import org.graalvm.util.Equivalence;
 import org.graalvm.util.EconomicMap;
-import org.graalvm.util.EconomicSet;
 
 import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -108,7 +107,7 @@ public class GraphDecoder {
         public final List<UnwindNode> unwindNodes;
 
         /** All merges created during loop explosion. */
-        public final EconomicSet<Node> loopExplosionMerges;
+        public final NodeBitMap loopExplosionMerges;
         /**
          * The start of explosion, and the merge point for when irreducible loops are detected. Only
          * used when {@link MethodScope#loopExplosion} is {@link LoopExplosionKind#MERGE_EXPLODE}.
@@ -121,9 +120,9 @@ public class GraphDecoder {
             this.methodStartMark = graph.getMark();
             this.encodedGraph = encodedGraph;
             this.loopExplosion = loopExplosion;
-            this.cleanupTasks = new ArrayList<>(2);
-            this.returnNodes = new ArrayList<>(1);
-            this.unwindNodes = new ArrayList<>(0);
+            this.cleanupTasks = new ArrayList<>();
+            this.returnNodes = new ArrayList<>();
+            this.unwindNodes = new ArrayList<>();
 
             if (encodedGraph != null) {
                 reader = UnsafeArrayTypeReader.create(encodedGraph.getEncoding(), encodedGraph.getStartOffset(), architecture.supportsUnalignedMemoryAccess());
@@ -140,7 +139,7 @@ public class GraphDecoder {
             }
 
             if (loopExplosion != LoopExplosionKind.NONE) {
-                loopExplosionMerges = EconomicSet.create(Equivalence.IDENTITY);
+                loopExplosionMerges = new NodeBitMap(graph);
             } else {
                 loopExplosionMerges = null;
             }
@@ -383,7 +382,7 @@ public class GraphDecoder {
 
     protected final void decode(LoopScope initialLoopScope) {
         LoopScope loopScope = initialLoopScope;
-        /* Process (inlined) methods. */
+        /* Process inlined methods. */
         while (loopScope != null) {
             MethodScope methodScope = loopScope.methodScope;
 
@@ -497,8 +496,8 @@ public class GraphDecoder {
         int typeId = methodScope.reader.getUVInt();
         assert node.getNodeClass() == methodScope.encodedGraph.getNodeClasses()[typeId];
         readProperties(methodScope, node);
-        makeInputNodes(methodScope, loopScope, node, true);
         makeSuccessorStubs(methodScope, successorAddScope, node, updatePredecessors);
+        makeInputNodes(methodScope, loopScope, node, true);
 
         LoopScope resultScope = loopScope;
         if (node instanceof LoopBeginNode) {
@@ -563,7 +562,7 @@ public class GraphDecoder {
         return resultScope;
     }
 
-    protected InvokeData readInvokeData(MethodScope methodScope, int invokeOrderId, Invoke invoke) {
+    private InvokeData readInvokeData(MethodScope methodScope, int invokeOrderId, Invoke invoke) {
         ResolvedJavaType contextType = (ResolvedJavaType) readObject(methodScope);
         int callTargetOrderId = readOrderId(methodScope);
         int stateAfterOrderId = readOrderId(methodScope);
@@ -643,7 +642,7 @@ public class GraphDecoder {
         }
 
         MergeNode merge = methodScope.graph.add(new MergeNode());
-        methodScope.loopExplosionMerges.add(merge);
+        methodScope.loopExplosionMerges.markAndGrow(merge);
 
         if (methodScope.loopExplosion == LoopExplosionKind.MERGE_EXPLODE) {
             if (loopScope.iterationStates.size() == 0 && loopScope.loopDepth == 1) {
@@ -680,7 +679,8 @@ public class GraphDecoder {
             FrameState newFrameState = methodScope.graph.add(new FrameState(frameState.outerFrameState(), frameState.getCode(), frameState.bci, newFrameStateValues, frameState.localsSize(),
                             frameState.stackSize(), frameState.rethrowException(), frameState.duringCall(), frameState.monitorIds(), frameState.virtualObjectMappings()));
 
-            frameState.replaceAtUsagesAndDelete(newFrameState);
+            frameState.replaceAtUsages(newFrameState);
+            frameState.safeDelete();
             frameState = newFrameState;
         }
 
@@ -769,7 +769,7 @@ public class GraphDecoder {
              * need to be able to create a FrameState and the necessary proxy nodes in this case.
              */
             loopExitPlaceholder = methodScope.graph.add(new MergeNode());
-            methodScope.loopExplosionMerges.add(loopExitPlaceholder);
+            methodScope.loopExplosionMerges.markAndGrow(loopExitPlaceholder);
 
             EndNode end = methodScope.graph.add(new EndNode());
             begin.setNext(end);
@@ -969,7 +969,7 @@ public class GraphDecoder {
                 fields.setRawPrimitive(node, pos, primitive);
             } else {
                 Object value = readObject(methodScope);
-                fields.putObject(node, pos, value);
+                fields.set(node, pos, value);
             }
         }
     }
@@ -981,9 +981,9 @@ public class GraphDecoder {
      * nodes).
      */
     protected void makeInputNodes(MethodScope methodScope, LoopScope loopScope, Node node, boolean updateUsages) {
-        Edges edges = node.getNodeClass().getInputEdges();
+        Edges edges = node.getNodeClass().getEdges(Edges.Type.Inputs);
         for (int index = 0; index < edges.getDirectCount(); index++) {
-            if (skipDirectEdge(node, edges, index)) {
+            if (skipEdge(node, edges, index, true, true)) {
                 continue;
             }
             int orderId = readOrderId(methodScope);
@@ -995,7 +995,7 @@ public class GraphDecoder {
             }
         }
         for (int index = edges.getDirectCount(); index < edges.getCount(); index++) {
-            if (skipIndirectEdge(node, edges, index, true)) {
+            if (skipEdge(node, edges, index, false, true)) {
                 continue;
             }
             int size = methodScope.reader.getSVInt();
@@ -1108,9 +1108,9 @@ public class GraphDecoder {
      * on top of the worklist in {@link #processNextNode}.
      */
     protected void makeSuccessorStubs(MethodScope methodScope, LoopScope loopScope, Node node, boolean updatePredecessors) {
-        Edges edges = node.getNodeClass().getSuccessorEdges();
+        Edges edges = node.getNodeClass().getEdges(Edges.Type.Successors);
         for (int index = 0; index < edges.getDirectCount(); index++) {
-            if (skipDirectEdge(node, edges, index)) {
+            if (skipEdge(node, edges, index, true, true)) {
                 continue;
             }
             int orderId = readOrderId(methodScope);
@@ -1121,7 +1121,7 @@ public class GraphDecoder {
             }
         }
         for (int index = edges.getDirectCount(); index < edges.getCount(); index++) {
-            if (skipIndirectEdge(node, edges, index, true)) {
+            if (skipEdge(node, edges, index, false, true)) {
                 continue;
             }
             int size = methodScope.reader.getSVInt();
@@ -1159,9 +1159,38 @@ public class GraphDecoder {
         return node;
     }
 
-    protected static boolean skipDirectEdge(Node node, Edges edges, int index) {
-        if (node instanceof Invoke) {
+    /**
+     * Returns false for {@link Edges} that are not necessary in the encoded graph because they are
+     * reconstructed using other sources of information.
+     */
+    protected static boolean skipEdge(Node node, Edges edges, int index, boolean direct, boolean decode) {
+        if (node instanceof PhiNode) {
+            /* The inputs of phi functions are filled manually when the end nodes are processed. */
+            assert edges.type() == Edges.Type.Inputs;
+            if (direct) {
+                assert index == edges.getDirectCount() - 1 : "PhiNode has one direct input (the MergeNode)";
+            } else {
+                assert index == edges.getCount() - 1 : "PhiNode has one variable size input (the values)";
+                if (decode) {
+                    /* The values must not be null, so initialize with an empty list. */
+                    edges.initializeList(node, index, new NodeInputList<>(node));
+                }
+            }
+            return true;
+
+        } else if (node instanceof AbstractMergeNode && edges.type() == Edges.Type.Inputs && !direct) {
+            /* The ends of merge nodes are filled manually when the ends are processed. */
+            assert index == edges.getCount() - 1 : "MergeNode has one variable size input (the ends)";
+            assert Edges.getNodeList(node, edges.getOffsets(), index) != null : "Input list must have been already created";
+            return true;
+
+        } else if (node instanceof LoopExitNode && edges.type() == Edges.Type.Inputs && edges.getType(index) == FrameState.class) {
+            /* The stateAfter of the loop exit is filled manually. */
+            return true;
+
+        } else if (node instanceof Invoke) {
             assert node instanceof InvokeNode || node instanceof InvokeWithExceptionNode : "The only two Invoke node classes. Got " + node.getClass();
+            assert direct : "Invoke and InvokeWithException only have direct successor and input edges";
             if (edges.type() == Edges.Type.Successors) {
                 assert edges.getCount() == (node instanceof InvokeWithExceptionNode ? 2 : 1) : "InvokeNode has one successor (next); InvokeWithExceptionNode has two successors (next, exceptionEdge)";
                 return true;
@@ -1174,39 +1203,6 @@ public class GraphDecoder {
                     return true;
                 }
             }
-        } else if (node instanceof PhiNode) {
-            /* The inputs of phi functions are filled manually when the end nodes are processed. */
-            assert edges.type() == Edges.Type.Inputs;
-            assert index == edges.getDirectCount() - 1 : "PhiNode has one direct input (the MergeNode)";
-            return true;
-
-        } else if (node instanceof LoopExitNode && edges.type() == Edges.Type.Inputs && edges.getType(index) == FrameState.class) {
-            /* The stateAfter of the loop exit is filled manually. */
-            return true;
-
-        }
-        return false;
-    }
-
-    protected static boolean skipIndirectEdge(Node node, Edges edges, int index, boolean decode) {
-        assert !(node instanceof Invoke);
-        assert !(node instanceof LoopExitNode && edges.type() == Edges.Type.Inputs && edges.getType(index) == FrameState.class);
-        if (node instanceof AbstractMergeNode && edges.type() == Edges.Type.Inputs) {
-            /* The ends of merge nodes are filled manually when the ends are processed. */
-            assert index == edges.getCount() - 1 : "MergeNode has one variable size input (the ends)";
-            assert Edges.getNodeList(node, edges.getOffsets(), index) != null : "Input list must have been already created";
-            return true;
-
-        } else if (node instanceof PhiNode) {
-            /* The inputs of phi functions are filled manually when the end nodes are processed. */
-            assert edges.type() == Edges.Type.Inputs;
-            assert index == edges.getCount() - 1 : "PhiNode has one variable size input (the values)";
-            if (decode) {
-                /* The values must not be null, so initialize with an empty list. */
-                edges.initializeList(node, index, new NodeInputList<>(node));
-            }
-            return true;
-
         }
         return false;
     }
@@ -1402,7 +1398,7 @@ class LoopDetector implements Runnable {
     }
 
     private Loop findOrCreateLoop(EconomicMap<MergeNode, Loop> unorderedLoops, MergeNode loopHeader) {
-        assert methodScope.loopExplosionMerges.contains(loopHeader) : loopHeader;
+        assert methodScope.loopExplosionMerges.isMarkedAndGrow(loopHeader) : loopHeader;
         Loop loop = unorderedLoops.get(loopHeader);
         if (loop == null) {
             loop = new Loop();
@@ -1420,7 +1416,7 @@ class LoopDetector implements Runnable {
          * subtract the loop nodes, to find the exits.
          */
 
-        List<Node> possibleExits = new ArrayList<>();
+        NodeBitMap possibleExits = methodScope.graph.createNodeBitMap();
         NodeBitMap visited = methodScope.graph.createNodeBitMap();
         Deque<Node> stack = new ArrayDeque<>();
         for (EndNode loopEnd : loop.ends) {
@@ -1459,7 +1455,7 @@ class LoopDetector implements Runnable {
                          * have all exits of the inner loop.
                          */
                         for (LoopExitNode exit : innerLoopBegin.loopExits()) {
-                            possibleExits.add(exit);
+                            possibleExits.mark(exit);
                         }
                     }
 
@@ -1476,12 +1472,15 @@ class LoopDetector implements Runnable {
                              * point we do not have the complete visited information, so we would
                              * always mark too many possible exits.
                              */
-                            possibleExits.add(succ);
+                            possibleExits.mark(succ);
                         }
                     }
                 }
             }
         }
+
+        /* All visited nodes are not exits of our loop. */
+        possibleExits.subtract(visited);
 
         /*
          * Now we know all the actual loop exits. Ideally, we would insert LoopExit nodes for them.
@@ -1500,11 +1499,9 @@ class LoopDetector implements Runnable {
          */
 
         for (Node succ : possibleExits) {
-            if (!visited.contains(succ)) {
-                stack.push(succ);
-                visited.mark(succ);
-                assert !methodScope.loopExplosionMerges.contains(succ);
-            }
+            stack.push(succ);
+            visited.mark(succ);
+            assert !methodScope.loopExplosionMerges.isMarkedAndGrow(succ);
         }
 
         while (!stack.isEmpty()) {
@@ -1516,7 +1513,7 @@ class LoopDetector implements Runnable {
                 if (visited.isMarked(successor)) {
                     /* Already processed this successor. */
 
-                } else if (methodScope.loopExplosionMerges.contains(successor)) {
+                } else if (methodScope.loopExplosionMerges.isMarkedAndGrow(successor)) {
                     /*
                      * We have a FrameState for the successor. The LoopExit will be inserted between
                      * the current node and the successor node. Since the successor node is a
@@ -1587,7 +1584,7 @@ class LoopDetector implements Runnable {
          */
         for (AbstractEndNode exit : loop.exits) {
             AbstractMergeNode loopExplosionMerge = exit.merge();
-            assert methodScope.loopExplosionMerges.contains(loopExplosionMerge);
+            assert methodScope.loopExplosionMerges.isMarkedAndGrow(loopExplosionMerge);
 
             LoopExitNode loopExit = methodScope.graph.add(new LoopExitNode(loopBegin));
             exit.replaceAtPredecessor(loopExit);
@@ -1606,11 +1603,11 @@ class LoopDetector implements Runnable {
         FrameState oldState = loopExplosionMerge.stateAfter();
 
         /* Collect all nodes that are in the FrameState at the LoopBegin. */
-        EconomicSet<Node> loopBeginValues = EconomicSet.create(Equivalence.IDENTITY);
+        NodeBitMap loopBeginValues = new NodeBitMap(methodScope.graph);
         for (FrameState state = loopExit.loopBegin().stateAfter(); state != null; state = state.outerFrameState()) {
             for (ValueNode value : state.values()) {
                 if (value != null && !value.isConstant() && !loopExit.loopBegin().isPhiAtMerge(value)) {
-                    loopBeginValues.add(ProxyPlaceholder.unwrap(value));
+                    loopBeginValues.mark(ProxyPlaceholder.unwrap(value));
                 }
             }
         }
