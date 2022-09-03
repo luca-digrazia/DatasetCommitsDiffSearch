@@ -22,15 +22,12 @@
  */
 package com.oracle.graal.phases.common.cfs;
 
-import static com.oracle.graal.graph.Graph.NodeEvent.*;
-
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.graph.Graph.NodeEventScope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
 import com.oracle.graal.phases.common.util.*;
 import com.oracle.graal.phases.tiers.*;
 
@@ -44,28 +41,42 @@ public class IterativeFlowSensitiveReductionPhase extends BasePhase<PhaseContext
         this.canonicalizer = canonicalizer;
     }
 
+    public static class CountingListener extends HashSetNodeChangeListener {
+
+        public int count;
+
+        @Override
+        public void nodeChanged(Node node) {
+            super.nodeChanged(node);
+        }
+
+    }
+
     // private Histogram histogram = new Histogram("FSR-");
 
     @Override
     protected void run(StructuredGraph graph, PhaseContext context) {
         FlowSensitiveReductionPhase eliminate = new FlowSensitiveReductionPhase(context.getMetaAccess());
-        HashSetNodeEventListener listener = new HashSetNodeEventListener().exclude(NODE_ADDED);
+        CountingListener listener = new CountingListener();
         int count = 1;
         while (true) {
-            try (NodeEventScope nes = graph.trackNodeEvents(listener)) {
-                eliminate.apply(graph, context);
-            }
-            if (listener.getNodes().isEmpty()) {
+            listener.count = count;
+            graph.trackInputChange(listener);
+            graph.trackUsagesDroppedZero(listener);
+            eliminate.apply(graph, context);
+            graph.stopTrackingInputChange();
+            graph.stopTrackingUsagesDroppedZero();
+            if (listener.getChangedNodes().isEmpty()) {
                 // histogram.tick(count);
                 break;
             }
             for (Node node : graph.getNodes()) {
                 if (node instanceof Simplifiable) {
-                    listener.getNodes().add(node);
+                    listener.getChangedNodes().add(node);
                 }
             }
-            canonicalizer.applyIncremental(graph, context, listener.getNodes());
-            listener.getNodes().clear();
+            canonicalizer.applyIncremental(graph, context, listener.getChangedNodes());
+            listener.getChangedNodes().clear();
             if (++count > MAX_ITERATIONS) {
                 // System.out.println("Bailing out IterativeFlowSensitiveReductionPhase for graph: "
                 // + graph);

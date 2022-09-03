@@ -90,7 +90,7 @@ public class ConditionalEliminationTest extends GraalCompilerTest {
 
     @Test
     public void testRedundantCompares() {
-        StructuredGraph graph = parseEager("testRedundantComparesSnippet");
+        StructuredGraph graph = parse("testRedundantComparesSnippet");
         CanonicalizerPhase canonicalizer = new CanonicalizerPhase(true);
         PhaseContext context = new PhaseContext(getProviders(), null);
 
@@ -100,7 +100,7 @@ public class ConditionalEliminationTest extends GraalCompilerTest {
         new ConditionalEliminationPhase(getMetaAccess()).apply(graph, context);
         canonicalizer.apply(graph, context);
 
-        assertDeepEquals(1, graph.getNodes().filter(GuardNode.class).count());
+        assertEquals(1, graph.getNodes().filter(GuardNode.class).count());
     }
 
     public static String testInstanceOfCheckCastSnippet(Object e) {
@@ -113,7 +113,7 @@ public class ConditionalEliminationTest extends GraalCompilerTest {
     @Test
     @Ignore
     public void testInstanceOfCheckCastLowered() {
-        StructuredGraph graph = parseEager("testInstanceOfCheckCastSnippet");
+        StructuredGraph graph = parse("testInstanceOfCheckCastSnippet");
 
         CanonicalizerPhase canonicalizer = new CanonicalizerPhase(true);
         PhaseContext context = new PhaseContext(getProviders(), null);
@@ -123,7 +123,7 @@ public class ConditionalEliminationTest extends GraalCompilerTest {
         new ConditionalEliminationPhase(getMetaAccess()).apply(graph, context);
         canonicalizer.apply(graph, context);
 
-        assertDeepEquals(0, graph.getNodes().filter(GuardNode.class).count());
+        assertEquals(0, graph.getNodes().filter(GuardNode.class).count());
     }
 
 }

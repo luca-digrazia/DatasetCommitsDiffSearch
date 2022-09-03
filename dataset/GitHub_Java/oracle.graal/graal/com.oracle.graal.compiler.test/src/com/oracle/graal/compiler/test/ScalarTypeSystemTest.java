@@ -165,13 +165,13 @@ public class ScalarTypeSystemTest extends GraalCompilerTest {
 
     private void test(final String snippet, final String referenceSnippet) {
         // No debug scope to reduce console noise for @Test(expected = ...) tests
-        StructuredGraph graph = parseEager(snippet);
+        StructuredGraph graph = parse(snippet);
         Debug.dump(graph, "Graph");
         Assumptions assumptions = new Assumptions(false);
         PhaseContext context = new PhaseContext(getProviders(), assumptions);
         new FlowSensitiveReductionPhase(getMetaAccess()).apply(graph, context);
         new CanonicalizerPhase(true).apply(graph, context);
-        StructuredGraph referenceGraph = parseEager(referenceSnippet);
+        StructuredGraph referenceGraph = parse(referenceSnippet);
         assertEquals(referenceGraph, graph);
     }
 }

@@ -187,7 +187,7 @@ public final class GraalOptions {
 
     // Code generator settings
     @Option(help = "")
-    public static final OptionValue<Boolean> FlowSensitiveReduction = new OptionValue<>(false);
+    public static final OptionValue<Boolean> FlowSensitiveReduction = new OptionValue<>(true);
     @Option(help = "")
     public static final OptionValue<Boolean> ConditionalElimination = new OptionValue<>(true);
     @Option(help = "")

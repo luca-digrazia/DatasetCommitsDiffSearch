@@ -148,7 +148,9 @@ public class FlowSensitiveReductionTest extends GraalCompilerTest {
         new FlowSensitiveReductionPhase(getMetaAccess()).apply(graph, context);
         new CanonicalizerPhase(true).apply(graph, context);
         for (ConstantNode constant : getConstantNodes(graph)) {
-            assertTrue("unexpected constant: " + constant, constant.asConstant().isNull() || constant.asConstant().asInt() > 0);
+            if (ConstantNodeRecordsUsages || !constant.gatherUsages(graph).isEmpty()) {
+                assertTrue("unexpected constant: " + constant, constant.asConstant().isNull() || constant.asConstant().asInt() > 0);
+            }
         }
     }
 
@@ -184,7 +186,9 @@ public class FlowSensitiveReductionTest extends GraalCompilerTest {
         new FlowSensitiveReductionPhase(getMetaAccess()).apply(graph, new PhaseContext(getProviders(), null));
         new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), null));
         for (ConstantNode constant : getConstantNodes(graph)) {
-            assertTrue("unexpected constant: " + constant, constant.asConstant().isNull() || constant.asConstant().asInt() > 0);
+            if (ConstantNodeRecordsUsages || !constant.gatherUsages(graph).isEmpty()) {
+                assertTrue("unexpected constant: " + constant, constant.asConstant().isNull() || constant.asConstant().asInt() > 0);
+            }
         }
     }
 
@@ -205,7 +209,7 @@ public class FlowSensitiveReductionTest extends GraalCompilerTest {
         new FlowSensitiveReductionPhase(getMetaAccess()).apply(graph, context);
 
         InvokeNode invoke = graph.getNodes().filter(InvokeNode.class).first();
-        assertDeepEquals(InvokeKind.Special, ((MethodCallTargetNode) invoke.callTarget()).invokeKind());
+        assertEquals(InvokeKind.Special, ((MethodCallTargetNode) invoke.callTarget()).invokeKind());
     }
 
     public static void testTypeMergingSnippet(Object o, boolean b) {
@@ -236,7 +240,7 @@ public class FlowSensitiveReductionTest extends GraalCompilerTest {
         new FlowSensitiveReductionPhase(getMetaAccess()).apply(graph, context);
         new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), null));
 
-        assertDeepEquals(0, graph.getNodes().filter(StoreFieldNode.class).count());
+        assertEquals(0, graph.getNodes().filter(StoreFieldNode.class).count());
     }
 
     public static String testInstanceOfCheckCastSnippet(Object e) {
@@ -254,7 +258,7 @@ public class FlowSensitiveReductionTest extends GraalCompilerTest {
         new FlowSensitiveReductionPhase(getMetaAccess()).apply(graph, context);
         new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), null));
 
-        assertDeepEquals(0, graph.getNodes().filter(CheckCastNode.class).count());
+        assertEquals(0, graph.getNodes().filter(CheckCastNode.class).count());
     }
 
     public static int testDuplicateNullChecksSnippet(Object a) {
@@ -283,7 +287,7 @@ public class FlowSensitiveReductionTest extends GraalCompilerTest {
         new FlowSensitiveReductionPhase(getMetaAccess()).apply(graph, context);
         canonicalizer.apply(graph, context);
 
-        assertDeepEquals(1, graph.getNodes().filter(GuardNode.class).count());
+        assertEquals(1, graph.getNodes().filter(GuardNode.class).count());
     }
 
 }
