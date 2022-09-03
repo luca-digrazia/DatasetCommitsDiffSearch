@@ -23,7 +23,6 @@
 package org.graalvm.compiler.printer;
 
 import static org.graalvm.compiler.debug.GraalDebugConfig.asJavaMethod;
-import static org.graalvm.compiler.options.OptionValues.GLOBAL;
 
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
@@ -121,7 +120,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
     @Override
     @SuppressWarnings("try")
     public void dump(Object object, final String message) {
-        if (object instanceof Graph && Options.PrintIdealGraph.getValue(GLOBAL)) {
+        if (object instanceof Graph && Options.PrintGraph.getValue(DebugScope.getConfig().getOptions())) {
             ensureInitialized();
             if (printer == null) {
                 return;
@@ -174,6 +173,9 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                 Map<Object, Object> properties = new HashMap<>();
                 properties.put("graph", graph.toString());
                 properties.put("scope", Debug.currentScope());
+                if (graph instanceof StructuredGraph) {
+                    properties.put("compilationIdentifier", ((StructuredGraph) graph).compilationId());
+                }
                 addCFGFileName(properties);
                 printer.print(graph, nextDumpId() + ":" + message, properties);
             } catch (IOException e) {
@@ -185,7 +187,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
     }
 
     void handleException(IOException e) {
-        if (GraalDebugConfig.Options.DumpingErrorsAreFatal.getValue(GLOBAL)) {
+        if (GraalDebugConfig.Options.DumpingErrorsAreFatal.getValue(DebugScope.getConfig().getOptions())) {
             throw new GraalError(e);
         }
         if (e instanceof ClosedByInterruptException) {
@@ -299,7 +301,6 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
     }
 
     private void openScope(String name, int inlineDepth, Map<Object, Object> properties) {
-        String prefix = inlineDepth == 0 ? Thread.currentThread().getName() + ":" : "";
         try {
             Map<Object, Object> props = properties;
             if (inlineDepth == 0) {
@@ -313,7 +314,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                 }
                 props.put("date", new Date().toString());
             }
-            printer.beginGroup(prefix + name, name, Debug.contextLookup(ResolvedJavaMethod.class), -1, props);
+            printer.beginGroup(name, name, Debug.contextLookup(ResolvedJavaMethod.class), -1, props);
         } catch (IOException e) {
             handleException(e);
         }

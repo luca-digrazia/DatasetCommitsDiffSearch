@@ -2653,7 +2653,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private DebugCloseable openNodeContext() {
-        if ((graphBuilderConfig.trackNodeSourcePosition() || Debug.isDumpEnabledForMethod()) && !parsingIntrinsic()) {
+        if (graphBuilderConfig.trackNodeSourcePosition() && !parsingIntrinsic()) {
             return graph.withNodeSourcePosition(createBytecodePosition());
         }
         return null;
