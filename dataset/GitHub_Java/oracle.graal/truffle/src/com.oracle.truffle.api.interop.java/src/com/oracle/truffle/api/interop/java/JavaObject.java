@@ -29,24 +29,26 @@ import com.oracle.truffle.api.interop.TruffleObject;
 
 final class JavaObject implements TruffleObject {
 
-    static final JavaObject NULL = new JavaObject(null, null);
+    static final JavaObject NULL = new JavaObject(null, Object.class, null);
 
     final Object obj;
+    final Class<?> clazz;
     final Object languageContext;
 
-    private JavaObject(Object obj, Object languageContext) {
+    private JavaObject(Object obj, Class<?> clazz, Object languageContext) {
         this.obj = obj;
+        this.clazz = clazz;
         this.languageContext = languageContext;
     }
 
     static JavaObject forClass(Class<?> clazz, Object languageContext) {
         assert clazz != null;
-        return new JavaObject(clazz, languageContext);
+        return new JavaObject(null, clazz, languageContext);
     }
 
     static JavaObject forObject(Object object, Object languageContext) {
         assert object != null && !(object instanceof Class<?>);
-        return new JavaObject(object, languageContext);
+        return new JavaObject(object, object.getClass(), languageContext);
     }
 
     static boolean isInstance(TruffleObject obj) {
@@ -64,7 +66,11 @@ final class JavaObject implements TruffleObject {
 
     static Object valueOf(TruffleObject value) {
         final JavaObject obj = (JavaObject) value;
-        return obj.obj;
+        if (obj.isClass()) {
+            return obj.clazz;
+        } else {
+            return obj.obj;
+        }
     }
 
     @Override
@@ -78,44 +84,34 @@ final class JavaObject implements TruffleObject {
     }
 
     boolean isClass() {
-        return obj instanceof Class<?>;
+        return NULL != this && obj == null;
     }
 
     boolean isArray() {
         return obj != null && obj.getClass().isArray();
     }
 
-    Class<?> getObjectClass() {
-        return obj == null ? null : obj.getClass();
-    }
-
-    Class<?> getLookupClass() {
-        if (obj == null) {
-            return null;
-        } else if (obj instanceof Class) {
-            return (Class<?>) obj;
-        } else {
-            return obj.getClass();
-        }
+    Class<?> getClazz() {
+        return clazz;
     }
 
     @Override
     public boolean equals(Object o) {
         if (o instanceof JavaObject) {
             JavaObject other = (JavaObject) o;
-            return this.obj == other.obj && this.languageContext == other.languageContext;
+            return this.obj == other.obj && clazz == other.clazz && this.languageContext == other.languageContext;
         }
         return false;
     }
 
     @Override
     public String toString() {
-        if (obj == null) {
+        if (obj == NULL) {
             return "null";
         }
         if (isClass()) {
-            return "JavaClass[" + getLookupClass().getTypeName() + "]";
+            return "JavaClass[" + clazz.getTypeName() + "]";
         }
-        return "JavaObject[" + obj + " (" + getLookupClass().getTypeName() + ")" + "]";
+        return "JavaObject[" + obj + " (" + clazz.getTypeName() + ")" + "]";
     }
 }
