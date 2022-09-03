@@ -31,6 +31,7 @@ import java.util.*;
 import sun.misc.*;
 
 import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.remote.*;
 import com.oracle.graal.graph.Graph.NodeEventListener;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.graph.spi.*;
@@ -208,17 +209,20 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     /**
-     * @see CollectionsFactory#newSet()
+     * Creates a {@link Node} set. If the current thread has a non-null
+     * {@linkplain Context#getCurrent() compilation replay scope}, the returned set will have a
+     * deterministic iteration order determined by the order in which elements are inserted in the
+     * map.
      */
     public static <E extends Node> Set<E> newSet() {
-        return CollectionsFactory.newSet();
+        return Context.getCurrent() == null ? new HashSet<>() : new LinkedHashSet<>();
     }
 
     /**
      * @see #newSet()
      */
     public static <E extends Node> Set<E> newSet(Collection<? extends E> c) {
-        return CollectionsFactory.newSet(c);
+        return Context.getCurrent() == null ? new HashSet<>(c) : new LinkedHashSet<>(c);
     }
 
     public static <K extends Node, V> Map<K, V> newMap() {
@@ -246,15 +250,15 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     public static <K extends Node, V> Map<K, V> newIdentityMap() {
-        return CollectionsFactory.newIdentityMap();
+        return Context.newIdentityMap();
     }
 
     public static <K extends Node, V> Map<K, V> newIdentityMap(Map<K, V> m) {
-        return CollectionsFactory.newIdentityMap(m);
+        return Context.newIdentityMap(m);
     }
 
     public static <K extends Node, V> Map<K, V> newIdentityMap(int expectedMaxSize) {
-        return CollectionsFactory.newIdentityMap(expectedMaxSize);
+        return Context.newIdentityMap(expectedMaxSize);
     }
 
     /**

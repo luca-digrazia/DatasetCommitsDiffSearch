@@ -28,26 +28,32 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
 /**
- * A PostOrderNodeIterator iterates the fixed nodes of the graph in post order starting from a specified fixed node.<br>
- * For this iterator the CFG is defined by the classical CFG nodes ({@link ControlSplitNode}, {@link MergeNode}...) and the {@link FixedWithNextNode#next() next} pointers
- * of {@link FixedWithNextNode}.<br>
- * While iterating it maintains a user-defined state by calling the methods available in {@link MergeableState}.
+ * A PostOrderNodeIterator iterates the fixed nodes of the graph in post order starting from a
+ * specified fixed node.
+ * <p>
+ * For this iterator the CFG is defined by the classical CFG nodes ({@link ControlSplitNode},
+ * {@link MergeNode}...) and the {@link FixedWithNextNode#next() next} pointers of
+ * {@link FixedWithNextNode}.
+ * <p>
+ * While iterating it maintains a user-defined state by calling the methods available in
+ * {@link MergeableState}.
  *
  * @param <T> the type of {@link MergeableState} handled by this PostOrderNodeIterator
  */
 public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
 
     private final NodeBitMap visitedEnds;
-    private final Deque<FixedNode> nodeQueue;
-    private final IdentityHashMap<FixedNode, T> nodeStates;
+    private final Deque<BeginNode> nodeQueue;
+    private final Map<FixedNode, T> nodeStates;
     private final FixedNode start;
 
     protected T state;
 
     public PostOrderNodeIterator(FixedNode start, T initialState) {
-        visitedEnds = start.graph().createNodeBitMap();
+        StructuredGraph graph = start.graph();
+        visitedEnds = graph.createNodeBitMap();
         nodeQueue = new ArrayDeque<>();
-        nodeStates = new IdentityHashMap<>();
+        nodeStates = Node.newIdentityMap();
         this.start = start;
         this.state = initialState;
     }
@@ -84,14 +90,8 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
                 end((EndNode) current);
                 queueMerge((EndNode) current);
                 current = nextQueuedNode();
-            } else if (current instanceof DeoptimizeNode) {
-                deoptimize((DeoptimizeNode) current);
-                current = nextQueuedNode();
-            } else if (current instanceof ReturnNode) {
-                returnNode((ReturnNode) current);
-                current = nextQueuedNode();
-            } else if (current instanceof UnwindNode) {
-                unwind((UnwindNode) current);
+            } else if (current instanceof ControlSinkNode) {
+                node(current);
                 current = nextQueuedNode();
             } else if (current instanceof ControlSplitNode) {
                 Set<Node> successors = controlSplit((ControlSplitNode) current);
@@ -100,7 +100,8 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
             } else {
                 assert false : current;
             }
-        } while(current != null);
+        } while (current != null);
+        finished();
     }
 
     private void queueSuccessors(FixedNode x, Set<Node> successors) {
@@ -109,13 +110,13 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
             for (Node node : successors) {
                 if (node != null) {
                     nodeStates.put((FixedNode) node.predecessor(), state);
-                    nodeQueue.addFirst((FixedNode) node);
+                    nodeQueue.addFirst((BeginNode) node);
                 }
             }
         } else {
             for (Node node : x.successors()) {
                 if (node != null) {
-                    nodeQueue.addFirst((FixedNode) node);
+                    nodeQueue.addFirst((BeginNode) node);
                 }
             }
         }
@@ -124,7 +125,7 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
     private FixedNode nextQueuedNode() {
         int maxIterations = nodeQueue.size();
         while (maxIterations-- > 0) {
-            FixedNode node = nodeQueue.removeFirst();
+            BeginNode node = nodeQueue.removeFirst();
             if (node instanceof MergeNode) {
                 MergeNode merge = (MergeNode) node;
                 state = nodeStates.get(merge.forwardEndAt(0)).clone();
@@ -211,24 +212,16 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
         node(loopEnd);
     }
 
-    protected void deoptimize(DeoptimizeNode deoptimize) {
-        node(deoptimize);
-    }
-
     protected Set<Node> controlSplit(ControlSplitNode controlSplit) {
         node(controlSplit);
         return null;
     }
 
-    protected void returnNode(ReturnNode returnNode) {
-        node(returnNode);
-    }
-
     protected void invoke(Invoke invoke) {
-        node(invoke.node());
+        node(invoke.asNode());
     }
 
-    protected void unwind(UnwindNode unwind) {
-        node(unwind);
+    protected void finished() {
+        // nothing to do
     }
 }

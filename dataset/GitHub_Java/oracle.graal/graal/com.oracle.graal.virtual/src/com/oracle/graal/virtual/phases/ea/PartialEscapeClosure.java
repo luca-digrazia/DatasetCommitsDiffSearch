@@ -26,7 +26,7 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.remote.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
@@ -188,9 +188,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             }
                         }
                     }
-                    v = new VirtualObjectState(obj.virtual, fieldState);
+                    v = VirtualObjectState.create(obj.virtual, fieldState);
                 } else {
-                    v = new MaterializedObjectState(obj.virtual, obj.getMaterializedValue());
+                    v = MaterializedObjectState.create(obj.virtual, obj.getMaterializedValue());
                 }
                 effects.addVirtualMapping(frameState, v);
             }
@@ -237,7 +237,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         ValueNode value = obj.getEntry(i);
                         if (!(value instanceof VirtualObjectNode || value.isConstant())) {
                             if (exitNode.loopBegin().isPhiAtMerge(value) || initialObj == null || !initialObj.isVirtual() || initialObj.getEntry(i) != value) {
-                                ProxyNode proxy = new ValueProxyNode(value, exitNode);
+                                ProxyNode proxy = ValueProxyNode.create(value, exitNode);
                                 obj.setEntry(i, proxy);
                                 effects.addFloatingNode(proxy, "virtualProxy");
                             }
@@ -247,7 +247,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     if (initialObj == null || initialObj.isVirtual()) {
                         ProxyNode proxy = proxies.get(obj.virtual);
                         if (proxy == null) {
-                            proxy = new ValueProxyNode(obj.getMaterializedValue(), exitNode);
+                            proxy = ValueProxyNode.create(obj.getMaterializedValue(), exitNode);
                             effects.addFloatingNode(proxy, "proxy");
                         } else {
                             effects.replaceFirstInput(proxy, proxy.value(), obj.getMaterializedValue());
@@ -271,7 +271,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
     protected class MergeProcessor extends EffectsClosure<BlockT>.MergeProcessor {
 
-        private final HashMap<Object, ValuePhiNode> materializedPhis = CollectionsFactory.newMap();
+        private final HashMap<Object, ValuePhiNode> materializedPhis = Context.newMap();
         private final Map<ValueNode, ValuePhiNode[]> valuePhis = Node.newIdentityMap();
         private final Map<ValuePhiNode, VirtualObjectNode> valueObjectVirtuals = Node.newIdentityMap();
 
@@ -282,7 +282,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         protected <T> PhiNode getCachedPhi(T virtual, Stamp stamp) {
             ValuePhiNode result = materializedPhis.get(virtual);
             if (result == null) {
-                result = new ValuePhiNode(stamp, merge);
+                result = ValuePhiNode.create(stamp, merge);
                 materializedPhis.put(virtual, result);
             }
             return result;
@@ -435,7 +435,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             Kind valueKind = value.getKind();
                             if (valueKind != twoSlotKinds[valueIndex]) {
                                 ValueNode nextValue = objStates[i].getEntry(valueIndex + 1);
-                                if (value.isConstant() && value.asConstant().equals(JavaConstant.INT_0) && nextValue.isConstant() && nextValue.asConstant().equals(JavaConstant.INT_0)) {
+                                if (value.isConstant() && value.asJavaConstant().equals(JavaConstant.INT_0) && nextValue.isConstant() && nextValue.asJavaConstant().equals(JavaConstant.INT_0)) {
                                     // rewrite to a zero constant of the larger kind
                                     objStates[i].setEntry(valueIndex, ConstantNode.defaultForKind(twoSlotKinds[valueIndex], merge.graph()));
                                     objStates[i].setEntry(valueIndex + 1, ConstantNode.forConstant(JavaConstant.forIllegal(), tool.getMetaAccessProvider(), merge.graph()));
@@ -457,11 +457,11 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     for (int i = 1; i < objStates.length; i++) {
                         ValueNode[] fields = objStates[i].getEntries();
                         if (phis[valueIndex] == null && values[valueIndex] != fields[valueIndex]) {
-                            phis[valueIndex] = new ValuePhiNode(values[valueIndex].stamp().unrestricted(), merge);
+                            phis[valueIndex] = ValuePhiNode.create(values[valueIndex].stamp().unrestricted(), merge);
                         }
                     }
                     if (phis[valueIndex] != null && !phis[valueIndex].stamp().isCompatible(values[valueIndex].stamp())) {
-                        phis[valueIndex] = new ValuePhiNode(values[valueIndex].stamp().unrestricted(), merge);
+                        phis[valueIndex] = ValuePhiNode.create(values[valueIndex].stamp().unrestricted(), merge);
                     }
                     if (twoSlotKinds != null && twoSlotKinds[valueIndex] != null) {
                         // skip an entry after a long/double value that occupies two int slots

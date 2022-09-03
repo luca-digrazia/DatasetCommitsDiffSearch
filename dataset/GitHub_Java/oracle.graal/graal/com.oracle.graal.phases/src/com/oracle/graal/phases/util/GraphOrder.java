@@ -34,6 +34,7 @@ import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.graph.ReentrantBlockIterator.BlockIteratorClosure;
 import com.oracle.graal.phases.schedule.*;
+import com.oracle.graal.phases.schedule.SchedulePhase.MemoryScheduling;
 import com.oracle.graal.phases.schedule.SchedulePhase.SchedulingStrategy;
 
 public final class GraphOrder {
@@ -134,7 +135,7 @@ public final class GraphOrder {
      */
     public static boolean assertSchedulableGraph(final StructuredGraph graph) {
         try {
-            final SchedulePhase schedule = new SchedulePhase(SchedulingStrategy.LATEST_OUT_OF_LOOPS);
+            final SchedulePhase schedule = new SchedulePhase(SchedulingStrategy.LATEST_OUT_OF_LOOPS, MemoryScheduling.NONE);
             final Map<LoopBeginNode, NodeBitMap> loopEntryStates = Node.newIdentityMap();
             schedule.apply(graph, false);
 
@@ -147,7 +148,7 @@ public final class GraphOrder {
 
                 @Override
                 protected NodeBitMap processBlock(final Block block, final NodeBitMap currentState) {
-                    final List<ValueNode> list = schedule.getBlockToNodesMap().get(block);
+                    final List<ScheduledNode> list = schedule.getBlockToNodesMap().get(block);
 
                     /*
                      * A stateAfter is not valid directly after its associated state split, but
@@ -155,7 +156,7 @@ public final class GraphOrder {
                      * will be checked at the correct position.
                      */
                     FrameState pendingStateAfter = null;
-                    for (final ValueNode node : list) {
+                    for (final ScheduledNode node : list) {
                         FrameState stateAfter = node instanceof StateSplit ? ((StateSplit) node).stateAfter() : null;
                         if (node instanceof FullInfopointNode) {
                             stateAfter = ((FullInfopointNode) node).getState();

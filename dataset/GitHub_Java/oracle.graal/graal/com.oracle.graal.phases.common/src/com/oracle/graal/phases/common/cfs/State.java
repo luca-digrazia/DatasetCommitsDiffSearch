@@ -22,24 +22,21 @@
  */
 package com.oracle.graal.phases.common.cfs;
 
-import com.oracle.graal.api.meta.Kind;
-import com.oracle.graal.api.meta.ResolvedJavaType;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugMetric;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.IsNullNode;
-import com.oracle.graal.nodes.calc.ObjectEqualsNode;
-import com.oracle.graal.nodes.extended.GuardedNode;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.java.InstanceOfNode;
-import com.oracle.graal.nodes.spi.ValueProxy;
-import com.oracle.graal.compiler.common.type.ObjectStamp;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.phases.graph.MergeableState;
-
-import java.lang.reflect.Modifier;
+import java.lang.reflect.*;
 import java.util.*;
+
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.graph.*;
 
 /**
  * A State instance is mutated in place as each FixedNode is visited in a basic block of
@@ -50,10 +47,10 @@ import java.util.*;
  */
 public final class State extends MergeableState<State> implements Cloneable {
 
-    private static final DebugMetric metricTypeRegistered = Debug.metric("TypeRegistered");
-    private static final DebugMetric metricNullnessRegistered = Debug.metric("NullnessRegistered");
-    private static final DebugMetric metricObjectEqualsRegistered = Debug.metric("ObjectEqualsRegistered");
-    private static final DebugMetric metricImpossiblePathDetected = Debug.metric("ImpossiblePathDetected");
+    private static final DebugMetric metricTypeRegistered = Debug.metric("FSR-TypeRegistered");
+    private static final DebugMetric metricNullnessRegistered = Debug.metric("FSR-NullnessRegistered");
+    private static final DebugMetric metricObjectEqualsRegistered = Debug.metric("FSR-ObjectEqualsRegistered");
+    private static final DebugMetric metricImpossiblePathDetected = Debug.metric("FSR-ImpossiblePathDetected");
 
     /**
      * <p>
@@ -80,7 +77,7 @@ public final class State extends MergeableState<State> implements Cloneable {
      * </ul>
      * </p>
      *
-     * */
+     */
     int versionNr = 0;
 
     boolean isUnreachable = false;
@@ -91,7 +88,7 @@ public final class State extends MergeableState<State> implements Cloneable {
      * detect an "impossible path" could be shaved off.
      *
      * @see com.oracle.graal.phases.common.cfs.BaseReduction.PostponedDeopt
-     * */
+     */
     void impossiblePath() {
         isUnreachable = true;
         metricImpossiblePathDetected.increment();
@@ -99,51 +96,52 @@ public final class State extends MergeableState<State> implements Cloneable {
 
     /**
      * <p>
-     * This map semantically tracks "facts" (ie, properties valid for the program-point the state
-     * refers to) as opposed to floating-guard-dependent properties. The
-     * {@link com.oracle.graal.nodes.extended.GuardingNode} being tracked comes handy at
-     * {@link com.oracle.graal.phases.common.cfs.FlowSensitiveReduction#visitFixedGuardNode(com.oracle.graal.nodes.FixedGuardNode)}
-     * .
+     * This map tracks properties about reference-values, ie combinations of: definitely-null,
+     * known-to-be-non-null, seen-type.
      * </p>
      *
      * <p>
-     * On a related note, {@link #typeRefinements} also captures information the way
-     * {@link #trueFacts} and {@link #falseFacts} do, including "witnessing" guards. Why not just
-     * standardize on one of them, and drop the other? Because the {@link #typeRefinements} eagerly
-     * aggregates information for easier querying afterwards, e.g. when producing a "downcasted"
-     * value (which involves building a {@link com.oracle.graal.nodes.PiNode}, see
-     * {@link EquationalReasoner#downcasted(com.oracle.graal.nodes.ValueNode) downcasted()}
+     * In contrast to {@link #trueFacts} and {@link #falseFacts}, this map can answer queries even
+     * though the exact {@link LogicNode} standing for such query hasn't been tracked. For example,
+     * queries about subtyping. Additionally, a {@link Witness} can combine separate pieces of
+     * information more flexibly, eg, two separate observations about non-null and check-cast are
+     * promoted to an instance-of witness.
      * </p>
      *
-     * */
-    private IdentityHashMap<ValueNode, Witness> typeRefinements;
+     */
+    private Map<ValueNode, Witness> typeRefinements;
 
-    IdentityHashMap<ValueNode, GuardingNode> knownNull;
-    IdentityHashMap<LogicNode, GuardingNode> trueFacts;
-    IdentityHashMap<LogicNode, GuardingNode> falseFacts;
+    Map<LogicNode, GuardingNode> trueFacts;
+    Map<LogicNode, GuardingNode> falseFacts;
 
     public State() {
-        this.typeRefinements = new IdentityHashMap<>();
-        this.knownNull = new IdentityHashMap<>();
-        this.trueFacts = new IdentityHashMap<>();
-        this.falseFacts = new IdentityHashMap<>();
+        this.typeRefinements = Node.newIdentityMap();
+        this.trueFacts = Node.newIdentityMap();
+        this.falseFacts = Node.newIdentityMap();
     }
 
     public State(State other) {
         this.isUnreachable = other.isUnreachable;
         this.versionNr = other.versionNr;
-        this.typeRefinements = new IdentityHashMap<>();
+        this.typeRefinements = Node.newIdentityMap();
         for (Map.Entry<ValueNode, Witness> entry : other.typeRefinements.entrySet()) {
             this.typeRefinements.put(entry.getKey(), new Witness(entry.getValue()));
         }
-        this.knownNull = new IdentityHashMap<>(other.knownNull);
-        this.trueFacts = new IdentityHashMap<>(other.trueFacts);
-        this.falseFacts = new IdentityHashMap<>(other.falseFacts);
+        this.trueFacts = Node.newIdentityMap(other.trueFacts);
+        this.falseFacts = Node.newIdentityMap(other.falseFacts);
+    }
+
+    public boolean repOK() {
+        // trueFacts and falseFacts disjoint
+        for (LogicNode trueFact : trueFacts.keySet()) {
+            assert !falseFacts.containsKey(trueFact) : trueFact + " tracked as both true and false fact.";
+        }
+        return true;
     }
 
     /**
      * @return A new list containing only those states that are reachable.
-     * */
+     */
     private static ArrayList<State> reachableStates(List<State> states) {
         ArrayList<State> result = new ArrayList<>(states);
         Iterator<State> iter = result.iterator();
@@ -155,8 +153,8 @@ public final class State extends MergeableState<State> implements Cloneable {
         return result;
     }
 
-    private IdentityHashMap<ValueNode, Witness> mergeKnownTypes(MergeNode merge, ArrayList<State> withReachableStates) {
-        IdentityHashMap<ValueNode, Witness> newKnownTypes = new IdentityHashMap<>();
+    private Map<ValueNode, Witness> mergeKnownTypes(MergeNode merge, ArrayList<State> withReachableStates) {
+        Map<ValueNode, Witness> newKnownTypes = Node.newIdentityMap();
 
         for (Map.Entry<ValueNode, Witness> entry : typeRefinements.entrySet()) {
             ValueNode node = entry.getKey();
@@ -179,31 +177,6 @@ public final class State extends MergeableState<State> implements Cloneable {
         return newKnownTypes;
     }
 
-    private IdentityHashMap<ValueNode, GuardingNode> mergeKnownNull(MergeNode merge, ArrayList<State> withReachableStates) {
-        // newKnownNull starts empty
-        IdentityHashMap<ValueNode, GuardingNode> newKnownNull = new IdentityHashMap<>();
-        for (Map.Entry<ValueNode, GuardingNode> entry : knownNull.entrySet()) {
-            ValueNode key = entry.getKey();
-            GuardingNode newGN = entry.getValue();
-            boolean missing = false;
-
-            for (State other : withReachableStates) {
-                GuardingNode otherGuard = other.knownNull.get(key);
-                if (otherGuard == null) {
-                    missing = true;
-                    break;
-                }
-                if (otherGuard != newGN) {
-                    newGN = merge;
-                }
-            }
-            if (!missing) {
-                newKnownNull.put(key, newGN);
-            }
-        }
-        return newKnownNull;
-    }
-
     /**
      * <p>
      * This method handles phis, by adding to the resulting state any information that can be gained
@@ -217,11 +190,11 @@ public final class State extends MergeableState<State> implements Cloneable {
      * {@link com.oracle.graal.phases.common.cfs.FlowSensitiveReduction} determined to be
      * unreachable will be eliminated by canonicalization and dead code elimination. For now they
      * still exist, thus polluting the result of
-     * {@link com.oracle.graal.nodes.ValuePhiNode#inferPhiStamp()} but we are careful to skip them
-     * when merging type-witnesses and known-null maps.
+     * {@link com.oracle.graal.nodes.ValuePhiNode#inferStamp()} but we are careful to skip them when
+     * merging type-witnesses and known-null maps.
      * </p>
      */
-    private void mergePhis(MergeNode merge, List<State> withStates, IdentityHashMap<ValueNode, Witness> newKnownPhiTypes, IdentityHashMap<ValueNode, GuardingNode> newKnownNullPhis) {
+    private void mergePhis(MergeNode merge, List<State> withStates, Map<ValueNode, Witness> newKnownPhiTypes) {
 
         if (merge instanceof LoopBeginNode) {
             return;
@@ -244,19 +217,20 @@ public final class State extends MergeableState<State> implements Cloneable {
                 ObjectStamp phiStamp = (ObjectStamp) phi.stamp();
                 ObjectStamp nonPollutedStamp = (ObjectStamp) StampTool.meet(reachingValues);
                 Witness w = new Witness(nonPollutedStamp, merge);
-                if (FlowUtil.isMorePrecise(w.type(), phiStamp.type())) {
+                if (w.isNull() && !phiStamp.alwaysNull()) {
+                    // precision gain: null
+                    newKnownPhiTypes.put(phi, w);
+                } else if (FlowUtil.isMorePrecise(w.type(), phiStamp.type())) {
                     // precision gain regarding type
                     newKnownPhiTypes.put(phi, w);
                     // confirm no precision loss regarding nullness
                     assert implies(phiStamp.nonNull(), w.isNonNull());
+                    assert implies(phiStamp.alwaysNull(), w.isNull());
                 } else if (w.isNonNull() && !phiStamp.nonNull()) {
-                    // precision gain regarding nullness
+                    // precision gain: non-null
                     newKnownPhiTypes.put(phi, w);
                     // confirm no precision loss regarding type
                     assert !FlowUtil.isMorePrecise(phiStamp.type(), w.type());
-                }
-                if (nonPollutedStamp.alwaysNull()) {
-                    newKnownNullPhis.put(phi, merge);
                 }
             }
         }
@@ -275,32 +249,36 @@ public final class State extends MergeableState<State> implements Cloneable {
             return true;
         }
 
-        for (State state : withReachableStates) {
-            versionNr = Math.max(versionNr, state.versionNr) + 1;
-            isUnreachable &= state.isUnreachable;
+        for (State other : withReachableStates) {
+            versionNr = Math.max(versionNr, other.versionNr) + 1;
+            if (!other.isUnreachable) {
+                isUnreachable = false;
+            }
         }
 
         if (isUnreachable) {
             typeRefinements.clear();
-            knownNull.clear();
+            trueFacts.clear();
+            falseFacts.clear();
             return true;
         }
 
         // may also get updated in a moment, during processing of phi nodes.
-        IdentityHashMap<ValueNode, Witness> newKnownTypes = mergeKnownTypes(merge, withReachableStates);
+        Map<ValueNode, Witness> newKnownTypes = mergeKnownTypes(merge, withReachableStates);
         // may also get updated in a moment, during processing of phi nodes.
-        IdentityHashMap<ValueNode, GuardingNode> newKnownNull = mergeKnownNull(merge, withReachableStates);
-        mergePhis(merge, withStates, newKnownTypes, newKnownNull);
+        mergePhis(merge, withStates, newKnownTypes);
         this.typeRefinements = newKnownTypes;
-        this.knownNull = newKnownNull;
 
         this.trueFacts = mergeTrueFacts(withReachableStates, merge);
         this.falseFacts = mergeFalseFacts(withReachableStates, merge);
+
+        assert repOK();
+
         return true;
     }
 
-    private IdentityHashMap<LogicNode, GuardingNode> mergeTrueFacts(ArrayList<State> withReachableStates, GuardingNode merge) {
-        IdentityHashMap<LogicNode, GuardingNode> newTrueConditions = new IdentityHashMap<>();
+    private Map<LogicNode, GuardingNode> mergeTrueFacts(ArrayList<State> withReachableStates, GuardingNode merge) {
+        Map<LogicNode, GuardingNode> newTrueConditions = Node.newIdentityMap();
         for (Map.Entry<LogicNode, GuardingNode> entry : trueFacts.entrySet()) {
             LogicNode check = entry.getKey();
             GuardingNode guard = entry.getValue();
@@ -322,8 +300,8 @@ public final class State extends MergeableState<State> implements Cloneable {
         return newTrueConditions;
     }
 
-    private IdentityHashMap<LogicNode, GuardingNode> mergeFalseFacts(ArrayList<State> withReachableStates, GuardingNode merge) {
-        IdentityHashMap<LogicNode, GuardingNode> newFalseConditions = new IdentityHashMap<>();
+    private Map<LogicNode, GuardingNode> mergeFalseFacts(ArrayList<State> withReachableStates, GuardingNode merge) {
+        Map<LogicNode, GuardingNode> newFalseConditions = Node.newIdentityMap();
         for (Map.Entry<LogicNode, GuardingNode> entry : falseFacts.entrySet()) {
             LogicNode check = entry.getKey();
             GuardingNode guard = entry.getValue();
@@ -346,7 +324,7 @@ public final class State extends MergeableState<State> implements Cloneable {
     }
 
     /**
-     * @retun null if no type-witness available for the argument, the witness otherwise.
+     * @return null if no type-witness available for the argument, the witness otherwise.
      */
     public Witness typeInfo(ValueNode object) {
         assert FlowUtil.hasLegalObjectStamp(object);
@@ -354,11 +332,16 @@ public final class State extends MergeableState<State> implements Cloneable {
     }
 
     /**
-     * @retun true iff the argument is known to stand for null.
+     * @return true iff the argument is known to stand for null.
      */
     public boolean isNull(ValueNode object) {
         assert FlowUtil.hasLegalObjectStamp(object);
-        return StampTool.isObjectAlwaysNull(object) || knownNull.containsKey(GraphUtil.unproxify(object));
+        if (StampTool.isObjectAlwaysNull(object)) {
+            return true;
+        }
+        ValueNode scrutinee = GraphUtil.unproxify(object);
+        Witness w = typeRefinements.get(scrutinee);
+        return (w != null) && w.isNull();
     }
 
     /**
@@ -377,7 +360,7 @@ public final class State extends MergeableState<State> implements Cloneable {
      * is-non-null set.
      * </p>
      *
-     * @retun true iff the argument is known to stand for non-null.
+     * @return true iff the argument is known to stand for non-null.
      */
     public boolean isNonNull(ValueNode object) {
         assert FlowUtil.hasLegalObjectStamp(object);
@@ -389,7 +372,8 @@ public final class State extends MergeableState<State> implements Cloneable {
     }
 
     /**
-     * @retun true iff the argument is known to stand for an object conforming to the given type.
+     * @return true iff the argument definitely stands for an object-value that conforms to the
+     *         given type.
      */
     public boolean knownToConform(ValueNode object, ResolvedJavaType to) {
         assert FlowUtil.hasLegalObjectStamp(object);
@@ -411,14 +395,20 @@ public final class State extends MergeableState<State> implements Cloneable {
     }
 
     /**
-     * @retun true iff the argument is known to stand for an object that definitely does not conform
-     *        to the given type.
+     * @return true iff the argument is known to stand for an object that is definitely non-null and
+     *         moreover does not conform to the given type.
      */
-    public boolean knownNotToConform(ValueNode object, ResolvedJavaType to) {
+    public boolean knownNotToPassCheckCast(ValueNode object, ResolvedJavaType to) {
         assert FlowUtil.hasLegalObjectStamp(object);
         assert !to.isPrimitive();
         final ValueNode scrutinee = GraphUtil.unproxify(object);
         if (isNull(scrutinee)) {
+            // known-null means it conforms to whatever `to`
+            // and thus passes the check-cast
+            return false;
+        }
+        if (!isNonNull(scrutinee)) {
+            // unless `null` can be ruled out, a positive answer isn't safe
             return false;
         }
         ResolvedJavaType stampType = StampTool.typeOrNull(object);
@@ -433,8 +423,39 @@ public final class State extends MergeableState<State> implements Cloneable {
         return false;
     }
 
+    /**
+     * @return true iff the argument is known to stand for an object that definitely does not
+     *         conform to the given type (no matter whether the object turns out to be null or
+     *         non-null).
+     */
+    public boolean knownNotToPassInstanceOf(ValueNode object, ResolvedJavaType to) {
+        assert FlowUtil.hasLegalObjectStamp(object);
+        assert !to.isPrimitive();
+        final ValueNode scrutinee = GraphUtil.unproxify(object);
+        if (isNull(scrutinee)) {
+            return true;
+        }
+        ResolvedJavaType stampType = StampTool.typeOrNull(object);
+        if (stampType != null && knownNotToConform(stampType, to)) {
+            // object turns out to be null, positive answer is correct
+            // object turns out non-null, positive answer is also correct
+            return true;
+        }
+        Witness w = typeInfo(scrutinee);
+        boolean witnessAnswer = w != null && !w.cluelessAboutType() && knownNotToConform(w.type(), to);
+        if (witnessAnswer) {
+            // object turns out to be null, positive answer is correct
+            // object turns out non-null, positive answer is also correct
+            return true;
+        }
+        return false;
+    }
+
     // @formatter:off
     /**
+     * Determines if the first argument is known not to conform to the second argument.
+     *
+     * <pre>
      *   \   |     |     |     |
      *    \ b|     |     |     |
      *   a \ |     |     |     |
@@ -453,8 +474,8 @@ public final class State extends MergeableState<State> implements Cloneable {
      *    iface: interface
      *    final: exact non-interface reference-type
      *    non-f: non-exact non-interface reference-type
-     *
-     * @retun true iff the first argument is known not to conform to the second argument.
+     * </pre>
+     * @return true iff the first argument is known not to conform to the second argument.
      */
     // @formatter:on
     public static boolean knownNotToConform(ResolvedJavaType a, ResolvedJavaType b) {
@@ -514,6 +535,7 @@ public final class State extends MergeableState<State> implements Cloneable {
         if (isDependencyTainted(object, anchor)) {
             return false;
         }
+        assert anchor instanceof FixedNode;
         ResolvedJavaType stampType = StampTool.typeOrNull(object);
         if (stampType != null && !stampType.isInterface()) {
             return trackIO(object, stampType, anchor);
@@ -521,6 +543,7 @@ public final class State extends MergeableState<State> implements Cloneable {
         Witness w = getOrElseAddTypeInfo(object);
         if (w.trackNN(anchor)) {
             versionNr++;
+            assert repOK();
             return true;
         }
         return false;
@@ -548,10 +571,12 @@ public final class State extends MergeableState<State> implements Cloneable {
         if (isDependencyTainted(object, anchor)) {
             return false;
         }
+        assert anchor instanceof FixedNode;
         Witness w = getOrElseAddTypeInfo(object);
         if (w.trackCC(observed, anchor)) {
             versionNr++;
             metricTypeRegistered.increment();
+            assert repOK();
             return true;
         }
         return false;
@@ -573,10 +598,12 @@ public final class State extends MergeableState<State> implements Cloneable {
         if (isDependencyTainted(object, anchor)) {
             return false;
         }
+        assert anchor instanceof FixedNode;
         Witness w = getOrElseAddTypeInfo(object);
         if (w.trackIO(observed, anchor)) {
             versionNr++;
             metricTypeRegistered.increment();
+            assert repOK();
             return true;
         }
         return false;
@@ -592,8 +619,8 @@ public final class State extends MergeableState<State> implements Cloneable {
      * case the state should be marked unreachable), the caller must take care of that.
      * </p>
      *
-     * */
-    private void addFactPrimordial(LogicNode condition, IdentityHashMap<LogicNode, GuardingNode> to, GuardingNode anchor) {
+     */
+    private void addFactPrimordial(LogicNode condition, Map<LogicNode, GuardingNode> to, GuardingNode anchor) {
         assert condition != null;
         if (!to.containsKey(condition)) {
             versionNr++;
@@ -602,15 +629,16 @@ public final class State extends MergeableState<State> implements Cloneable {
     }
 
     /**
-     * Ideas for the future:
+     * Ideas for the future.
      * <ul>
      * <li>track inferred less-than edges from (accumulated) CompareNode-s</li>
      * <li>track set-representative for equality classes determined by (chained) IntegerTestNode</li>
      * </ul>
      *
-     * */
+     */
     public void addFact(boolean isTrue, LogicNode condition, GuardingNode anchor) {
         assert anchor != null;
+        assert anchor instanceof FixedNode;
         assert !isUnreachable;
 
         if (condition instanceof LogicConstantNode) {
@@ -621,7 +649,7 @@ public final class State extends MergeableState<State> implements Cloneable {
         }
 
         if (condition instanceof LogicNegationNode) {
-            addFact(!isTrue, ((LogicNegationNode) condition).getInput(), anchor);
+            addFact(!isTrue, ((LogicNegationNode) condition).getValue(), anchor);
         } else if (condition instanceof ShortCircuitOrNode) {
             /*
              * We can register the conditions being or-ed as long as the anchor is a fixed node,
@@ -651,12 +679,13 @@ public final class State extends MergeableState<State> implements Cloneable {
             addFactInstanceOf(isTrue, (InstanceOfNode) condition, anchor);
         } else if (condition instanceof IsNullNode) {
             IsNullNode nullCheck = (IsNullNode) condition;
-            addNullness(isTrue, nullCheck.object(), anchor);
+            addNullness(isTrue, nullCheck.getValue(), anchor);
         } else if (condition instanceof ObjectEqualsNode) {
             addFactObjectEqualsNode(isTrue, (ObjectEqualsNode) condition, anchor);
         } else {
             addFactPrimordial(condition, isTrue ? trueFacts : falseFacts, anchor);
         }
+        assert repOK();
     }
 
     /**
@@ -665,9 +694,9 @@ public final class State extends MergeableState<State> implements Cloneable {
      *
      */
     private void addFactInstanceOf(boolean isTrue, InstanceOfNode instanceOf, GuardingNode anchor) {
-        ValueNode object = instanceOf.object();
+        ValueNode object = instanceOf.getValue();
         if (isTrue) {
-            if (knownNotToConform(object, instanceOf.type())) {
+            if (knownNotToPassInstanceOf(object, instanceOf.type())) {
                 impossiblePath();
                 return;
             }
@@ -679,28 +708,19 @@ public final class State extends MergeableState<State> implements Cloneable {
             } else {
                 trackIO(object, instanceOf.type(), anchor);
             }
-        } else {
-            if (knownToConform(object, instanceOf.type())) {
-                impossiblePath(); // TODO this used to be a bug
-                return;
-            }
-            if (instanceOf.type().isInterface()) {
-                if (!knownNotToConform(object, instanceOf.type())) {
-                    addFactPrimordial(instanceOf, falseFacts, anchor);
-                }
-            }
         }
     }
 
     private void addFactObjectEqualsNode(boolean isTrue, ObjectEqualsNode equals, GuardingNode anchor) {
-        if (isDependencyTainted(equals.x(), anchor)) {
+        if (isDependencyTainted(equals.getX(), anchor)) {
             return;
         }
-        if (isDependencyTainted(equals.y(), anchor)) {
+        if (isDependencyTainted(equals.getY(), anchor)) {
             return;
         }
-        ValueNode x = GraphUtil.unproxify(equals.x());
-        ValueNode y = GraphUtil.unproxify(equals.y());
+        assert anchor instanceof FixedNode;
+        ValueNode x = GraphUtil.unproxify(equals.getX());
+        ValueNode y = GraphUtil.unproxify(equals.getY());
         if (isTrue) {
             if (isNull(x) && isNonNull(y)) {
                 impossiblePath();
@@ -712,12 +732,12 @@ public final class State extends MergeableState<State> implements Cloneable {
             }
             if (isNull(x) || isNull(y)) {
                 metricObjectEqualsRegistered.increment();
-                addNullness(true, equals.x(), anchor);
-                addNullness(true, equals.y(), anchor);
+                addNullness(true, equals.getX(), anchor);
+                addNullness(true, equals.getY(), anchor);
             } else if (isNonNull(x) || isNonNull(y)) {
                 metricObjectEqualsRegistered.increment();
-                addNullness(false, equals.x(), anchor);
-                addNullness(false, equals.y(), anchor);
+                addNullness(false, equals.getX(), anchor);
+                addNullness(false, equals.getY(), anchor);
             }
             Witness wx = typeInfo(x);
             Witness wy = typeInfo(y);
@@ -730,8 +750,8 @@ public final class State extends MergeableState<State> implements Cloneable {
                 if (best != null) {
                     assert !best.isInterface();
                     // type tightening is enough, nullness already taken care of
-                    trackCC(equals.x(), best, anchor);
-                    trackCC(equals.y(), best, anchor);
+                    trackCC(equals.getX(), best, anchor);
+                    trackCC(equals.getY(), best, anchor);
                 }
             } else if (wx == null) {
                 typeRefinements.put(x, new Witness(wy));
@@ -741,10 +761,10 @@ public final class State extends MergeableState<State> implements Cloneable {
         } else {
             if (isNull(x) && !isNonNull(y)) {
                 metricObjectEqualsRegistered.increment();
-                addNullness(false, equals.y(), anchor);
+                addNullness(false, equals.getY(), anchor);
             } else if (!isNonNull(x) && isNull(y)) {
                 metricObjectEqualsRegistered.increment();
-                addNullness(false, equals.x(), anchor);
+                addNullness(false, equals.getX(), anchor);
             }
         }
     }
@@ -757,32 +777,36 @@ public final class State extends MergeableState<State> implements Cloneable {
         if (isDependencyTainted(value, anchor)) {
             return;
         }
-        ValueNode original = GraphUtil.unproxify(value);
-        boolean wasNull = isNull(original);
-        boolean wasNonNull = isNonNull(original);
+        assert anchor instanceof FixedNode;
+        ValueNode scrutinee = GraphUtil.unproxify(value);
+        boolean wasNull = isNull(scrutinee);
+        boolean wasNonNull = isNonNull(scrutinee);
         if (isNull) {
             if (wasNonNull) {
                 impossiblePath();
             } else {
                 metricNullnessRegistered.increment();
                 versionNr++;
-                knownNull.put(original, anchor);
+                Witness w = getOrElseAddTypeInfo(scrutinee);
+                w.trackDN(anchor);
             }
         } else {
             if (wasNull) {
                 impossiblePath();
             } else {
                 metricNullnessRegistered.increment();
-                trackNN(original, anchor);
+                trackNN(scrutinee, anchor);
             }
         }
+        assert repOK();
     }
 
     /**
      *
      * @return true iff `value` may lose dependency not covered by `anchor`.
-     * */
+     */
     public static boolean isDependencyTainted(ValueNode value, GuardingNode anchor) {
+        assert anchor instanceof FixedNode;
         if (value instanceof ValueProxy) {
             if (value instanceof GuardedNode) {
                 GuardedNode gn = (GuardedNode) value;
@@ -807,7 +831,187 @@ public final class State extends MergeableState<State> implements Cloneable {
         versionNr = 0;
         isUnreachable = false;
         typeRefinements.clear();
-        knownNull.clear();
+        trueFacts.clear();
+        falseFacts.clear();
+    }
+
+    /**
+     * <p>
+     * If the argument is known null due to its stamp, there's no need to have an anchor for that
+     * fact and this method returns null.
+     * </p>
+     *
+     * <p>
+     * Otherwise, if an anchor is found it is returned, null otherwise.
+     * </p>
+     */
+    public GuardingNode nonTrivialNullAnchor(ValueNode object) {
+        assert FlowUtil.hasLegalObjectStamp(object);
+        if (StampTool.isObjectAlwaysNull(object)) {
+            return null;
+        }
+        ValueNode scrutinee = GraphUtil.unproxify(object);
+        Witness w = typeRefinements.get(scrutinee);
+        if (w != null && w.isNull()) {
+            return w.guard();
+        }
+        return null;
+    }
+
+    /**
+     * This method:
+     * <ul>
+     * <li>
+     * attempts to find an existing {@link com.oracle.graal.nodes.extended.GuardingNode} that
+     * implies the property stated by the arguments. If found, returns it as positive evidence.</li>
+     * <li>
+     * otherwise, if the property of interest is known not to hold, negative evidence is returned.</li>
+     * <li>
+     * otherwise, null is returned.</li>
+     * </ul>
+     */
+    public Evidence outcome(boolean isTrue, LogicNode cond) {
+
+        // attempt to find an anchor for the condition of interest, verbatim
+        if (isTrue) {
+            GuardingNode existingGuard = trueFacts.get(cond);
+            if (existingGuard != null) {
+                return new Evidence(existingGuard);
+            }
+            if (falseFacts.containsKey(cond)) {
+                return Evidence.COUNTEREXAMPLE;
+            }
+        } else {
+            GuardingNode existingGuard = falseFacts.get(cond);
+            if (existingGuard != null) {
+                return new Evidence(existingGuard);
+            }
+            if (trueFacts.containsKey(cond)) {
+                return Evidence.COUNTEREXAMPLE;
+            }
+        }
+
+        if (cond instanceof IsNullNode) {
+            return outcomeIsNullNode(isTrue, (IsNullNode) cond);
+        }
+
+        if (cond instanceof InstanceOfNode) {
+            return outcomeInstanceOfNode(isTrue, (InstanceOfNode) cond);
+        }
+
+        if (cond instanceof ShortCircuitOrNode) {
+            return outcomeShortCircuitOrNode(isTrue, (ShortCircuitOrNode) cond);
+        }
+
+        // can't produce evidence
+        return null;
+    }
+
+    /**
+     * Utility method for {@link #outcome(boolean, com.oracle.graal.nodes.LogicNode)}.
+     */
+    private Evidence outcomeIsNullNode(boolean isTrue, IsNullNode isNullNode) {
+        if (isTrue) {
+            // grab an anchor attesting nullness
+            final GuardingNode replacement = nonTrivialNullAnchor(isNullNode.getValue());
+            if (replacement != null) {
+                return new Evidence(replacement);
+            }
+            if (isNonNull(isNullNode.getValue())) {
+                return Evidence.COUNTEREXAMPLE;
+            }
+        } else {
+            // grab an anchor attesting non-nullness
+            final Witness w = typeInfo(isNullNode.getValue());
+            if (w != null && w.isNonNull()) {
+                return new Evidence(w.guard());
+            }
+            if (isNull(isNullNode.getValue())) {
+                return Evidence.COUNTEREXAMPLE;
+            }
+        }
+        // can't produce evidence
+        return null;
+    }
+
+    /**
+     * Utility method for {@link #outcome(boolean, com.oracle.graal.nodes.LogicNode)}.
+     */
+    private Evidence outcomeInstanceOfNode(boolean isTrue, InstanceOfNode iOf) {
+        final Witness w = typeInfo(iOf.getValue());
+        if (isTrue) {
+            if (isNull(iOf.getValue())) {
+                return Evidence.COUNTEREXAMPLE;
+            }
+            // grab an anchor attesting instanceof
+            if ((w != null) && (w.type() != null)) {
+                if (w.isNonNull()) {
+                    if (iOf.type().isAssignableFrom(w.type())) {
+                        return new Evidence(w.guard());
+                    }
+                }
+                if (State.knownNotToConform(w.type(), iOf.type())) {
+                    // null -> fails instanceof
+                    // non-null but non-conformant -> also fails instanceof
+                    return Evidence.COUNTEREXAMPLE;
+                }
+            }
+        } else {
+            // grab an anchor attesting not-instanceof
+            // (1 of 2) attempt determining nullness
+            final GuardingNode nullGuard = nonTrivialNullAnchor(iOf.getValue());
+            if (nullGuard != null) {
+                return new Evidence(nullGuard);
+            }
+            // (2 of 2) attempt determining known-not-to-conform
+            if (w != null && !w.cluelessAboutType()) {
+                if (State.knownNotToConform(w.type(), iOf.type())) {
+                    return new Evidence(w.guard());
+                }
+            }
+        }
+        // can't produce evidence
+        return null;
+    }
+
+    /**
+     * Utility method for {@link #outcome(boolean, com.oracle.graal.nodes.LogicNode)}.
+     */
+    private Evidence outcomeShortCircuitOrNode(boolean isTrue, ShortCircuitOrNode orNode) {
+        if (!isTrue) {
+            // too tricky to reason about
+            return null;
+        }
+        CastCheckExtractor cce = CastCheckExtractor.extract(orNode);
+        if (cce != null) {
+            // grab an anchor attesting check-cast
+            Witness w = typeInfo(cce.subject);
+            if (w != null && w.type() != null) {
+                if (cce.type.isAssignableFrom(w.type())) {
+                    return new Evidence(w.guard());
+                }
+                if (isNonNull(cce.subject) && State.knownNotToConform(w.type(), cce.type)) {
+                    return Evidence.COUNTEREXAMPLE;
+                }
+            }
+        }
+        // search for positive-evidence for the first or-input
+        Evidence evidenceX = outcome(!orNode.isXNegated(), orNode.getX());
+        if (evidenceX != null && evidenceX.isPositive()) {
+            return evidenceX;
+        }
+        // search for positive-evidence for the second or-input
+        Evidence evidenceY = outcome(!orNode.isYNegated(), orNode.getY());
+        if (evidenceY != null && evidenceY.isPositive()) {
+            return evidenceY;
+        }
+        // check for contradictions on both or-inputs
+        if (evidenceX != null && evidenceY != null) {
+            assert evidenceX.isNegative() && evidenceY.isNegative();
+            return Evidence.COUNTEREXAMPLE;
+        }
+        // can't produce evidence
+        return null;
     }
 
 }

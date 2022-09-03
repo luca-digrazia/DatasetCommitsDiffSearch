@@ -121,7 +121,7 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
 
         private void processGuard(Node node) {
             GuardNode guard = (GuardNode) node;
-            if (guard.isNegated() && guard.condition() instanceof IsNullNode && (guard.getSpeculation() == null || guard.getSpeculation().equals(JavaConstant.NULL_POINTER))) {
+            if (guard.negated() && guard.condition() instanceof IsNullNode && (guard.getSpeculation() == null || guard.getSpeculation().equals(JavaConstant.NULL_OBJECT))) {
                 ValueNode obj = ((IsNullNode) guard.condition()).getValue();
                 nullGuarded.put(obj, guard);
             }
@@ -168,7 +168,7 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
             BeginNode trueSuccessor;
             BeginNode falseSuccessor;
             insertLoopExits(deopt);
-            if (guard.isNegated()) {
+            if (guard.negated()) {
                 trueSuccessor = deoptBranch;
                 falseSuccessor = fastPath;
             } else {
@@ -203,16 +203,7 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
             graph.setGuardsStage(GuardsStage.FIXED_DEOPTS);
         }
 
-        assert checkNoGuardsLeft(graph);
-    }
-
-    private static boolean checkNoGuardsLeft(StructuredGraph graph) {
-        for (Node n : graph.getNodes()) {
-            if (n instanceof GuardNode) {
-                assert false : n;
-            }
-        }
-        return true;
+        assert graph.getNodes(GuardNode.class).isEmpty();
     }
 
     private static void processBlock(Block block, SchedulePhase schedule, int implicitNullCheckLimit) {

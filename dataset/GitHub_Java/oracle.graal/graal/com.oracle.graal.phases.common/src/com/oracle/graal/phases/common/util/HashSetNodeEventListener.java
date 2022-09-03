@@ -49,7 +49,7 @@ public class HashSetNodeEventListener implements NodeEventListener {
      * filter.
      */
     public HashSetNodeEventListener(Set<NodeEvent> filter) {
-        this.nodes = Node.newSet();
+        this.nodes = new HashSet<>();
         this.filter = filter;
     }
 

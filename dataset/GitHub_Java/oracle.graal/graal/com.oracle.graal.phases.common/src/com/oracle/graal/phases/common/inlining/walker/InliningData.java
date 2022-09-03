@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -158,7 +158,7 @@ public class InliningData {
             return getExactInlineInfo(invoke, targetMethod);
         }
 
-        assert callTarget.invokeKind().isIndirect();
+        assert callTarget.invokeKind() == CallTargetNode.InvokeKind.Virtual || callTarget.invokeKind() == CallTargetNode.InvokeKind.Interface;
 
         ResolvedJavaType holder = targetMethod.getDeclaringClass();
         if (!(callTarget.receiver().stamp() instanceof ObjectStamp)) {
@@ -422,7 +422,7 @@ public class InliningData {
         }
 
         if (context.getOptimisticOptimizations().devirtualizeInvokes()) {
-            calleeInfo.tryToDevirtualizeInvoke(new Providers(context), callerAssumptions);
+            calleeInfo.tryToDevirtualizeInvoke(context.getMetaAccess(), callerAssumptions);
         }
 
         return false;

@@ -81,7 +81,7 @@ public class ValueAnchorCleanupPhase extends Phase {
                         state.anchoredValues.add(anchored);
                     }
                 }
-                if (anchor.getAnchoredNode() == null && anchor.hasNoUsages()) {
+                if (anchor.getAnchoredNode() == null && anchor.usages().isEmpty()) {
                     node.graph().removeFixed(anchor);
                 }
             }

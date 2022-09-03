@@ -62,10 +62,13 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
 
     @NodeInfo(allowedUsageTypes = {InputType.Guard, InputType.Anchor})
     static class DummyAnchorNode extends FixedWithNextNode implements GuardingNode, AnchoringNode {
-        public DummyAnchorNode() {
-            super(StampFactory.forVoid());
+        public static DummyAnchorNode create() {
+            return new DummyAnchorNode();
         }
 
+        protected DummyAnchorNode() {
+            super(StampFactory.forVoid());
+        }
     }
 
     /**
@@ -338,7 +341,7 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
          * @return The new {@link ValueAnchorNode} that was created.
          */
         private DummyAnchorNode addValueAnchor() {
-            DummyAnchorNode anchor = graph.add(new DummyAnchorNode());
+            DummyAnchorNode anchor = graph.add(DummyAnchorNode.create());
             graph.addAfterFixed(merge, anchor);
             merge.replaceAtUsages(InputType.Guard, anchor);
             merge.replaceAtUsages(InputType.Anchor, anchor);
@@ -448,8 +451,8 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
          * @return The newly created end node.
          */
         private AbstractEndNode createNewMerge(FixedNode successor, FrameState stateAfterMerge) {
-            MergeNode newBottomMerge = graph.add(new MergeNode());
-            AbstractEndNode newBottomEnd = graph.add(new EndNode());
+            MergeNode newBottomMerge = graph.add(MergeNode.create());
+            AbstractEndNode newBottomEnd = graph.add(EndNode.create());
             newBottomMerge.addForwardEnd(newBottomEnd);
             newBottomMerge.setStateAfter(stateAfterMerge);
             ((FixedWithNextNode) successor.predecessor()).setNext(newBottomEnd);
@@ -523,7 +526,7 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
                                     ValueNode node = (ValueNode) duplicated;
                                     PhiNode newPhi = bottomPhis.get(node);
                                     if (newPhi == null) {
-                                        newPhi = graph.addWithoutUnique(new ValuePhiNode(node.stamp().unrestricted(), newBottomMerge));
+                                        newPhi = graph.addWithoutUnique(ValuePhiNode.create(node.stamp().unrestricted(), newBottomMerge));
                                         bottomPhis.put(node, newPhi);
                                         newPhi.addInput(node);
                                     }

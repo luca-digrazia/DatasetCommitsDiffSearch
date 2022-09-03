@@ -24,21 +24,20 @@ package com.oracle.graal.loop;
 
 import java.util.*;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.compiler.common.remote.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 
 public class LoopsData {
 
-    private Map<Loop<Block>, LoopEx> loopToEx = CollectionsFactory.newIdentityMap();
+    private Map<Loop<Block>, LoopEx> loopToEx = Context.newIdentityMap();
     private Map<LoopBeginNode, LoopEx> loopBeginToEx = Node.newIdentityMap();
     private ControlFlowGraph cfg;
 
-    @SuppressWarnings("try")
     public LoopsData(final StructuredGraph graph) {
         try (Scope s = Debug.scope("ControlFlowGraph")) {
             cfg = ControlFlowGraph.compute(graph, true, true, true, true);
@@ -105,7 +104,7 @@ public class LoopsData {
         }
     }
 
-    public ControlFlowGraph getCFG() {
+    public ControlFlowGraph controlFlowGraph() {
         return cfg;
     }
 
