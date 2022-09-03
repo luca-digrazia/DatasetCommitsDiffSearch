@@ -26,6 +26,7 @@ import static java.lang.Character.*;
 
 import java.util.concurrent.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
@@ -51,21 +52,7 @@ import com.oracle.truffle.api.frame.*;
 public class TruffleGraphBuilderPlugins {
     public static void registerInvocationPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
 
-        registerOptimizedAssumptionPlugins(metaAccess, plugins);
-        registerExactMathPlugins(metaAccess, plugins);
-        registerCompilerDirectivesPlugins(metaAccess, plugins);
-        registerOptimizedCallTargetPlugins(metaAccess, plugins);
-        registerUnsafeAccessImplPlugins(metaAccess, plugins);
-
-        if (TruffleCompilerOptions.TruffleUseFrameWithoutBoxing.getValue()) {
-            registerFrameWithoutBoxingPlugins(metaAccess, plugins);
-        } else {
-            registerFrameWithBoxingPlugins(metaAccess, plugins);
-        }
-
-    }
-
-    public static void registerOptimizedAssumptionPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
+        // OptimizedAssumption.class
         Registration r = new Registration(plugins, metaAccess, OptimizedAssumption.class);
         r.register1("isValid", Receiver.class, new InvocationPlugin() {
             public boolean apply(GraphBuilderContext builder, ValueNode arg) {
@@ -77,15 +64,14 @@ public class TruffleGraphBuilderPlugins {
                         builder.getAssumptions().record(new AssumptionValidAssumption(assumption));
                     }
                 } else {
-                    throw builder.bailout("assumption could not be reduced to a constant");
+                    throw new BailoutException("assumption could not be reduced to a constant");
                 }
                 return true;
             }
         });
-    }
 
-    public static void registerExactMathPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
-        Registration r = new Registration(plugins, metaAccess, ExactMath.class);
+        // ExactMath.class
+        r = new Registration(plugins, metaAccess, ExactMath.class);
         r.register2("addExact", Integer.TYPE, Integer.TYPE, new InvocationPlugin() {
             public boolean apply(GraphBuilderContext builder, ValueNode x, ValueNode y) {
                 builder.push(Kind.Int.getStackKind(), builder.append(new IntegerAddExactNode(x, y)));
@@ -122,10 +108,9 @@ public class TruffleGraphBuilderPlugins {
                 return true;
             }
         });
-    }
 
-    public static void registerCompilerDirectivesPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
-        Registration r = new Registration(plugins, metaAccess, CompilerDirectives.class);
+        // CompilerDirectives.class
+        r = new Registration(plugins, metaAccess, CompilerDirectives.class);
         r.register0("inInterpreter", new InvocationPlugin() {
             public boolean apply(GraphBuilderContext builder) {
                 builder.push(Kind.Boolean.getStackKind(), builder.append(ConstantNode.forBoolean(false)));
@@ -169,9 +154,9 @@ public class TruffleGraphBuilderPlugins {
         r.register1("bailout", String.class, new InvocationPlugin() {
             public boolean apply(GraphBuilderContext builder, ValueNode message) {
                 if (message.isConstant()) {
-                    throw builder.bailout(message.asConstant().toValueString());
+                    throw new BailoutException(message.asConstant().toValueString());
                 }
-                throw builder.bailout("bailout (message is not compile-time constant, so no additional information is available)");
+                throw new BailoutException("bailout (message is not compile-time constant, so no additional information is available)");
             }
         });
         r.register1("isCompilationConstant", Object.class, new InvocationPlugin() {
@@ -191,25 +176,8 @@ public class TruffleGraphBuilderPlugins {
             }
         });
 
-        r = new Registration(plugins, metaAccess, CompilerAsserts.class);
-        r.register1("partialEvaluationConstant", Object.class, new InvocationPlugin() {
-            public boolean apply(GraphBuilderContext builder, ValueNode value) {
-                ValueNode curValue = value;
-                if (curValue instanceof BoxNode) {
-                    BoxNode boxNode = (BoxNode) curValue;
-                    curValue = boxNode.getValue();
-                }
-                if (curValue.isConstant()) {
-                    return true;
-                } else {
-                    throw builder.bailout("Partial evaluation did not reduce value to a constant, is a regular compiler node: " + curValue);
-                }
-            }
-        });
-    }
-
-    public static void registerOptimizedCallTargetPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
-        Registration r = new Registration(plugins, metaAccess, OptimizedCallTarget.class);
+        // OptimizedCallTarget.class
+        r = new Registration(plugins, metaAccess, OptimizedCallTarget.class);
         r.register2("createFrame", FrameDescriptor.class, Object[].class, new InvocationPlugin() {
             public boolean apply(GraphBuilderContext builder, ValueNode arg1, ValueNode arg2) {
                 Class<?> frameClass = TruffleCompilerOptions.TruffleUseFrameWithoutBoxing.getValue() ? FrameWithoutBoxing.class : FrameWithBoxing.class;
@@ -217,23 +185,22 @@ public class TruffleGraphBuilderPlugins {
                 return true;
             }
         });
-    }
 
-    public static void registerFrameWithoutBoxingPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
-        Registration r = new Registration(plugins, metaAccess, FrameWithoutBoxing.class);
-        registerMaterialize(r);
-        registerUnsafeCast(r);
-        registerUnsafeLoadStorePlugins(r, Kind.Int, Kind.Long, Kind.Float, Kind.Double, Kind.Object);
-    }
+        if (TruffleCompilerOptions.TruffleUseFrameWithoutBoxing.getValue()) {
+            // FrameWithoutBoxing.class
+            r = new Registration(plugins, metaAccess, FrameWithoutBoxing.class);
+            registerMaterialize(r);
+            registerUnsafeCast(r);
+            registerUnsafeLoadStorePlugins(r, Kind.Int, Kind.Long, Kind.Float, Kind.Double, Kind.Object);
+        } else {
+            // FrameWithBoxing.class
+            r = new Registration(plugins, metaAccess, FrameWithBoxing.class);
+            registerMaterialize(r);
+            registerUnsafeCast(r);
+        }
 
-    public static void registerFrameWithBoxingPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
-        Registration r = new Registration(plugins, metaAccess, FrameWithBoxing.class);
-        registerMaterialize(r);
-        registerUnsafeCast(r);
-    }
-
-    public static void registerUnsafeAccessImplPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
-        Registration r = new Registration(plugins, metaAccess, UnsafeAccessImpl.class);
+        // CompilerDirectives.class
+        r = new Registration(plugins, metaAccess, UnsafeAccessImpl.class);
         registerUnsafeCast(r);
         registerUnsafeLoadStorePlugins(r, Kind.Boolean, Kind.Byte, Kind.Int, Kind.Short, Kind.Long, Kind.Float, Kind.Double, Kind.Object);
     }
