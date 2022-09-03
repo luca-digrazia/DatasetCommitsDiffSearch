@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,178 +26,170 @@ package com.oracle.truffle.api.frame;
 
 import java.util.*;
 
-/**
- * Descriptor of the slots of frame objects. Multiple frame instances are associated with one such descriptor.
- */
-public final class FrameDescriptor {
+import com.oracle.truffle.api.*;
 
-    protected final TypeConversion typeConversion;
-    private final ArrayList<FrameSlotImpl> slots;
-    private FrameVersionImpl lastVersion;
-    private final HashMap<String, FrameSlotImpl> nameToSlotMap;
+/**
+ * Descriptor of the slots of frame objects. Multiple frame instances are associated with one such
+ * descriptor.
+ */
+public final class FrameDescriptor implements Cloneable {
+
+    private final Object defaultValue;
+    private final ArrayList<FrameSlot> slots;
+    private final HashMap<Object, FrameSlot> identifierToSlotMap;
+    private Assumption version;
+    private HashMap<Object, Assumption> identifierToNotInFrameAssumptionMap;
 
     public FrameDescriptor() {
-        this(DefaultTypeConversion.getInstance());
+        this(null);
     }
 
-    public FrameDescriptor(TypeConversion typeConversion) {
-        this.typeConversion = typeConversion;
+    public FrameDescriptor(Object defaultValue) {
+        this.defaultValue = defaultValue;
         slots = new ArrayList<>();
-        nameToSlotMap = new HashMap<>();
-        lastVersion = new FrameVersionImpl();
+        identifierToSlotMap = new HashMap<>();
+        version = createVersion();
     }
 
-    public FrameSlot addFrameSlot(String name) {
-        return addFrameSlot(name, typeConversion.getTopType());
+    public static FrameDescriptor create() {
+        return new FrameDescriptor();
     }
 
-    public FrameSlot addFrameSlot(String name, Class<?> type) {
-        assert !nameToSlotMap.containsKey(name);
-        FrameSlotImpl slot = new FrameSlotImpl(this, name, slots.size(), type);
+    public static FrameDescriptor create(Object defaultValue) {
+        return new FrameDescriptor(defaultValue);
+    }
+
+    public FrameSlot addFrameSlot(Object identifier) {
+        return addFrameSlot(identifier, null, FrameSlotKind.Illegal);
+    }
+
+    public FrameSlot addFrameSlot(Object identifier, FrameSlotKind kind) {
+        return addFrameSlot(identifier, null, kind);
+    }
+
+    public FrameSlot addFrameSlot(Object identifier, Object info, FrameSlotKind kind) {
+        CompilerAsserts.neverPartOfCompilation("interpreter-only.  includes hashmap operations.");
+        assert !identifierToSlotMap.containsKey(identifier);
+        FrameSlot slot = new FrameSlot(this, identifier, info, slots.size(), kind);
         slots.add(slot);
-        nameToSlotMap.put(name, slot);
+        identifierToSlotMap.put(identifier, slot);
+        updateVersion();
+        invalidateNotInFrameAssumption(identifier);
         return slot;
     }
 
-    public FrameSlot findFrameSlot(String name) {
-        return nameToSlotMap.get(name);
+    public FrameSlot findFrameSlot(Object identifier) {
+        return identifierToSlotMap.get(identifier);
     }
 
-    public FrameSlot findOrAddFrameSlot(String name) {
-        FrameSlot result = findFrameSlot(name);
+    public FrameSlot findOrAddFrameSlot(Object identifier) {
+        FrameSlot result = findFrameSlot(identifier);
         if (result != null) {
             return result;
         }
-        return addFrameSlot(name);
+        return addFrameSlot(identifier);
     }
 
-    public FrameVersion getCurrentVersion() {
-        return lastVersion;
+    public FrameSlot findOrAddFrameSlot(Object identifier, FrameSlotKind kind) {
+        FrameSlot result = findFrameSlot(identifier);
+        if (result != null) {
+            return result;
+        }
+        return addFrameSlot(identifier, kind);
+    }
+
+    public FrameSlot findOrAddFrameSlot(Object identifier, Object info, FrameSlotKind kind) {
+        FrameSlot result = findFrameSlot(identifier);
+        if (result != null) {
+            return result;
+        }
+        return addFrameSlot(identifier, info, kind);
+    }
+
+    public void removeFrameSlot(Object identifier) {
+        CompilerAsserts.neverPartOfCompilation("interpreter-only.  includes hashmap operations.");
+        assert identifierToSlotMap.containsKey(identifier);
+        slots.remove(identifierToSlotMap.get(identifier));
+        identifierToSlotMap.remove(identifier);
+        updateVersion();
+        getNotInFrameAssumption(identifier);
     }
 
     public int getSize() {
         return slots.size();
     }
 
-    public List< ? extends FrameSlot> getSlots() {
+    public List<? extends FrameSlot> getSlots() {
         return Collections.unmodifiableList(slots);
     }
 
-    protected void appendVersion(FrameVersionImpl newVersion) {
-        lastVersion.next = newVersion;
-        lastVersion = newVersion;
-    }
-}
-
-class FrameVersionImpl implements FrameVersion {
-
-    protected FrameVersionImpl next;
-
-    @Override
-    public final FrameVersion getNext() {
-        return next;
-    }
-}
-
-class TypeChangeFrameVersionImpl extends FrameVersionImpl implements FrameVersion.TypeChange {
-
-    private final FrameSlotImpl slot;
-    private final Class< ? > oldType;
-    private final Class< ? > newType;
-
-    protected TypeChangeFrameVersionImpl(FrameSlotImpl slot, Class< ? > oldType, Class< ? > newType) {
-        this.slot = slot;
-        this.oldType = oldType;
-        this.newType = newType;
+    /**
+     * Retrieve the list of all the identifiers associated with this frame descriptor.
+     *
+     * @return the list of all the identifiers in this frame descriptor
+     */
+    public Set<Object> getIdentifiers() {
+        return Collections.unmodifiableSet(identifierToSlotMap.keySet());
     }
 
-    @Override
-    public final void applyTransformation(Frame frame) {
-        Object value = slot.getValue(oldType, frame);
-        slot.setValue(newType, frame, value);
-    }
-}
-
-class FrameSlotImpl implements FrameSlot {
-
-    private final FrameDescriptor descriptor;
-    private final String name;
-    private final int index;
-    private Class< ? > type;
-    private ArrayList<FrameSlotTypeListener> listeners;
-
-    protected FrameSlotImpl(FrameDescriptor descriptor, String name, int index, Class< ? > type) {
-        this.descriptor = descriptor;
-        this.name = name;
-        this.index = index;
-        this.type = type;
-        assert type != null;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public int getIndex() {
-        return index;
-    }
-
-    public Class< ? > getType() {
-        return type;
-    }
-
-    protected Object getValue(Class< ? > accessType, Frame frame) {
-        if (accessType == Integer.class) {
-            return frame.getInt(this);
-        } else if (accessType == Long.class) {
-            return frame.getLong(this);
-        } else if (accessType == Float.class) {
-            return frame.getFloat(this);
-        } else if (accessType == Double.class) {
-            return frame.getDouble(this);
-        } else {
-            return frame.getObject(this);
+    public FrameDescriptor copy() {
+        FrameDescriptor clonedFrameDescriptor = new FrameDescriptor(this.defaultValue);
+        for (int i = 0; i < this.getSlots().size(); i++) {
+            Object identifier = this.getSlots().get(i).getIdentifier();
+            clonedFrameDescriptor.addFrameSlot(identifier);
         }
+        return clonedFrameDescriptor;
     }
 
-    protected void setValue(Class< ? > accessType, Frame frame, Object value) {
-        Object newValue = descriptor.typeConversion.convertTo(accessType, value);
-        if (accessType == Integer.class) {
-            frame.setInt(this, (Integer) newValue);
-        } else if (accessType == Long.class) {
-            frame.setLong(this, (Long) newValue);
-        } else if (accessType == Float.class) {
-            frame.setFloat(this, (Float) newValue);
-        } else if (accessType == Double.class) {
-            frame.setDouble(this, (Double) newValue);
-        } else {
-            frame.setObject(this, newValue);
+    public FrameDescriptor shallowCopy() {
+        FrameDescriptor clonedFrameDescriptor = new FrameDescriptor(this.defaultValue);
+        clonedFrameDescriptor.slots.addAll(slots);
+        clonedFrameDescriptor.identifierToSlotMap.putAll(identifierToSlotMap);
+        return clonedFrameDescriptor;
+    }
+
+    void updateVersion() {
+        version.invalidate();
+        version = createVersion();
+    }
+
+    public Assumption getVersion() {
+        return version;
+    }
+
+    private static Assumption createVersion() {
+        return Truffle.getRuntime().createAssumption("frame version");
+    }
+
+    public Object getDefaultValue() {
+        return defaultValue;
+    }
+
+    public Assumption getNotInFrameAssumption(Object identifier) {
+        if (identifierToSlotMap.containsKey(identifier)) {
+            throw new IllegalArgumentException("Cannot get not-in-frame assumption for existing frame slot!");
         }
-    }
 
-    public void setType(final Class< ? > type) {
-        final Class< ? > oldType = this.type;
-        this.type = type;
-        ArrayList<FrameSlotTypeListener> oldListeners = this.listeners;
-        this.listeners = null;
-        if (oldListeners != null) {
-            for (FrameSlotTypeListener listener : oldListeners) {
-                listener.typeChanged(this, oldType);
+        if (identifierToNotInFrameAssumptionMap == null) {
+            identifierToNotInFrameAssumptionMap = new HashMap<>();
+        } else {
+            Assumption assumption = identifierToNotInFrameAssumptionMap.get(identifier);
+            if (assumption != null) {
+                return assumption;
             }
         }
-        descriptor.appendVersion(new TypeChangeFrameVersionImpl(this, oldType, type));
+        Assumption assumption = Truffle.getRuntime().createAssumption("not in frame: " + identifier);
+        identifierToNotInFrameAssumptionMap.put(identifier, assumption);
+        return assumption;
     }
 
-    @Override
-    public String toString() {
-        return "[" + index + "," + name + "]";
-    }
-
-    @Override
-    public void registerOneShotTypeListener(FrameSlotTypeListener listener) {
-        if (listeners == null) {
-            listeners = new ArrayList<>();
+    private void invalidateNotInFrameAssumption(Object identifier) {
+        if (identifierToNotInFrameAssumptionMap != null) {
+            Assumption assumption = identifierToNotInFrameAssumptionMap.get(identifier);
+            if (assumption != null) {
+                assumption.invalidate();
+                identifierToNotInFrameAssumptionMap.remove(identifier);
+            }
         }
-        listeners.add(listener);
     }
 }
