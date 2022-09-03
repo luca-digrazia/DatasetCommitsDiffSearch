@@ -30,7 +30,6 @@ import java.util.function.Function;
 
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.asm.aarch64.AArch64Address.AddressingMode;
-import org.graalvm.compiler.asm.aarch64.AArch64Assembler.PrefetchMode;
 import org.graalvm.compiler.asm.aarch64.AArch64Assembler.ConditionFlag;
 import org.graalvm.compiler.core.aarch64.AArch64ArithmeticLIRGenerator;
 import org.graalvm.compiler.core.aarch64.AArch64LIRGenerator;
@@ -251,7 +250,7 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
 
     @Override
     public void emitPrefetchAllocate(Value address) {
-        append(new AArch64PrefetchOp(asAddressValue(address), PrefetchMode.PSTL1KEEP));
+        append(new AArch64PrefetchOp(asAddressValue(address), config.allocatePrefetchInstr));
     }
 
     @Override

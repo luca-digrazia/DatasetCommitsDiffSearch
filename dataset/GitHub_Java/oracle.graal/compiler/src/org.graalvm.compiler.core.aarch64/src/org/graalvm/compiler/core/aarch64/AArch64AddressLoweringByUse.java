@@ -24,6 +24,8 @@
 
 package org.graalvm.compiler.core.aarch64;
 
+import jdk.vm.ci.aarch64.AArch64Kind;
+import jdk.vm.ci.meta.JavaConstant;
 import org.graalvm.compiler.asm.aarch64.AArch64Address;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.NumUtil;
@@ -32,10 +34,8 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.AddNode;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
+import org.graalvm.compiler.nodes.memory.address.RawAddressNode;
 import org.graalvm.compiler.phases.common.AddressLoweringByUsePhase;
-
-import jdk.vm.ci.aarch64.AArch64Kind;
-import jdk.vm.ci.meta.JavaConstant;
 
 public class AArch64AddressLoweringByUse extends AddressLoweringByUsePhase.AddressLoweringByUse {
     private AArch64LIRKindTool kindtool;
@@ -46,7 +46,9 @@ public class AArch64AddressLoweringByUse extends AddressLoweringByUsePhase.Addre
 
     @Override
     public AddressNode lower(ValueNode use, Stamp stamp, AddressNode address) {
-        if (address instanceof OffsetAddressNode) {
+        if (address instanceof RawAddressNode) {
+            return doLower(stamp, address.getBase(), null);
+        } else if (address instanceof OffsetAddressNode) {
             OffsetAddressNode offsetAddress = (OffsetAddressNode) address;
             return doLower(stamp, offsetAddress.getBase(), offsetAddress.getOffset());
         } else {

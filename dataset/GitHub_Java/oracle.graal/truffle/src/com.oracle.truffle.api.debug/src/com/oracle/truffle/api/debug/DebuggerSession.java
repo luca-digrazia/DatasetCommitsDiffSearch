@@ -29,8 +29,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -52,14 +54,10 @@ import com.oracle.truffle.api.instrumentation.ExecutionEventNodeFactory;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter.Builder;
 import com.oracle.truffle.api.instrumentation.StandardTags.CallTag;
-import com.oracle.truffle.api.instrumentation.StandardTags.RootTag;
 import com.oracle.truffle.api.instrumentation.StandardTags.StatementTag;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.vm.PolyglotEngine;
-import java.util.Set;
-import java.util.function.Predicate;
 
 /**
  * Client access to {@link PolyglotEngine} {@linkplain Debugger debugging services}.
@@ -160,32 +158,32 @@ public final class DebuggerSession implements Closeable {
 
     private final Debugger debugger;
     private final SuspendedCallback callback;
-    private final List<Breakpoint> breakpoints = Collections.synchronizedList(new ArrayList<>());
+    private final Set<Breakpoint> breakpoints = Collections.synchronizedSet(new HashSet<Breakpoint>());
+    private final Breakpoint alwaysHaltBreakpoint;
 
     private EventBinding<? extends ExecutionEventNodeFactory> callBinding;
     private EventBinding<? extends ExecutionEventNodeFactory> statementBinding;
-    private EventBinding<? extends ExecutionEventNodeFactory> rootBinding;
 
     private final ConcurrentHashMap<Thread, SuspendedEvent> currentSuspendedEventMap = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Thread, SteppingStrategy> strategyMap = new ConcurrentHashMap<>();
     private volatile boolean suspendNext;
-    private volatile boolean suspendAll;
+    private boolean suspendAll;
     private final StableBoolean stepping = new StableBoolean(false);
     private final StableBoolean ignoreLanguageContextInitialization = new StableBoolean(false);
-    private final StableBoolean ignoreInternal = new StableBoolean(false);
-    private volatile Predicate<SourceSection> sourceFilter;
     private final StableBoolean breakpointsActive = new StableBoolean(true);
-    private final SuspensionFilterCompound steppingFilter = new SuspensionFilterCompound();
 
     private final int sessionId;
 
     private volatile boolean closed;
 
-    DebuggerSession(Debugger debugger, SuspendedCallback callback, Set<SuspensionFilter> steppingFilters) {
+    DebuggerSession(Debugger debugger, SuspendedCallback callback) {
         this.sessionId = SESSIONS.incrementAndGet();
         this.debugger = debugger;
         this.callback = callback;
-        steppingFilter.setOthers(steppingFilters);
+        SourceSectionFilter filter = SourceSectionFilter.newBuilder().tagIs(DebuggerTags.AlwaysHalt.class).build();
+        this.alwaysHaltBreakpoint = new Breakpoint(BreakpointLocation.ANY, filter, false);
+        this.alwaysHaltBreakpoint.setEnabled(true);
+        this.alwaysHaltBreakpoint.install(this);
         if (Debugger.TRACE) {
             trace("open with callback %s", callback);
         }
@@ -222,19 +220,7 @@ public final class DebuggerSession implements Closeable {
      * @since 0.26
      */
     public void setSteppingFilter(SuspensionFilter steppingFilter) {
-        this.steppingFilter.setMain(steppingFilter);
-        steppingFilterUpdated();
-    }
-
-    void notifyDebugSteppingFilters(Set<SuspensionFilter> steppingFilters) {
-        steppingFilter.setOthers(steppingFilters);
-        steppingFilterUpdated();
-    }
-
-    private void steppingFilterUpdated() {
         this.ignoreLanguageContextInitialization.set(steppingFilter.isIgnoreLanguageContextInitialization());
-        this.ignoreInternal.set(steppingFilter.isIgnoreInternal());
-        this.sourceFilter = steppingFilter.getSourceFilter();
     }
 
     /**
@@ -356,7 +342,7 @@ public final class DebuggerSession implements Closeable {
         updateStepping();
     }
 
-    private SteppingStrategy getSteppingStrategy(Thread value) {
+    private SteppingStrategy getSteppingStrategy(Object value) {
         return strategyMap.get(value);
     }
 
@@ -366,7 +352,7 @@ public final class DebuggerSession implements Closeable {
         boolean needsStepping = suspendNext || suspendAll;
         if (!needsStepping) {
             // iterating concurrent hashmap should be save
-            for (Thread t : strategyMap.keySet()) {
+            for (Object t : strategyMap.keySet()) {
                 SteppingStrategy s = strategyMap.get(t);
                 assert s != null;
                 if (!s.isDone()) {
@@ -381,14 +367,10 @@ public final class DebuggerSession implements Closeable {
 
     private void addBindings() {
         if (statementBinding == null) {
-            // The order of registered instrumentations matters.
-            // It's important to instrument root nodes first to intercept stack changes,
-            // then instrument statements, and
-            // call bindings need to be called after statements.
-            Builder builder = SourceSectionFilter.newBuilder().tagIs(RootTag.class);
-            this.rootBinding = debugger.getInstrumenter().attachFactory(builder.build(), new ExecutionEventNodeFactory() {
+            Builder builder = SourceSectionFilter.newBuilder().tagIs(CallTag.class);
+            this.callBinding = debugger.getInstrumenter().attachFactory(builder.build(), new ExecutionEventNodeFactory() {
                 public ExecutionEventNode create(EventContext context) {
-                    return new RootSteppingDepthNode();
+                    return new CallSteppingNode(context);
                 }
             });
             builder = SourceSectionFilter.newBuilder().tagIs(StatementTag.class);
@@ -397,23 +379,14 @@ public final class DebuggerSession implements Closeable {
                     return new StatementSteppingNode(context);
                 }
             });
-            builder = SourceSectionFilter.newBuilder().tagIs(CallTag.class);
-            this.callBinding = debugger.getInstrumenter().attachFactory(builder.build(), new ExecutionEventNodeFactory() {
-                public ExecutionEventNode create(EventContext context) {
-                    return new CallSteppingNode(context);
-                }
-            });
         }
     }
 
     private void removeBindings() {
-        assert Thread.holdsLock(this);
         if (statementBinding != null) {
             callBinding.dispose();
             statementBinding.dispose();
             callBinding = null;
-            rootBinding.dispose();
-            rootBinding = null;
             statementBinding = null;
             if (Debugger.TRACE) {
                 trace("disabled stepping");
@@ -436,23 +409,19 @@ public final class DebuggerSession implements Closeable {
 
         clearStrategies();
         removeBindings();
-        for (Breakpoint breakpoint : this.breakpoints) {
-            breakpoint.sessionClosed(this);
+        for (Breakpoint breakpoint : getBreakpoints()) {
+            breakpoint.dispose();
         }
+        alwaysHaltBreakpoint.dispose();
         currentSuspendedEventMap.clear();
-        debugger.disposedSession(this);
         closed = true;
     }
 
     /**
-     * Returns all breakpoints {@link #install(com.oracle.truffle.api.debug.Breakpoint) installed}
-     * in this session, in the install order. The returned list contains a current snapshot of
-     * breakpoints, those that were {@link Breakpoint#dispose() disposed}, or
-     * {@link Debugger#install(com.oracle.truffle.api.debug.Breakpoint) installed on Debugger} are
-     * not included.
+     * Returns all breakpoints in the order they were installed. {@link Breakpoint#dispose()
+     * Disposed} breakpoints are automatically removed from this list.
      *
      * @since 0.17
-     * @see Debugger#getBreakpoints()
      */
     public List<Breakpoint> getBreakpoints() {
         if (closed) {
@@ -505,48 +474,36 @@ public final class DebuggerSession implements Closeable {
      * @since 0.17
      */
     public synchronized Breakpoint install(Breakpoint breakpoint) {
-        install(breakpoint, false);
-        return breakpoint;
-    }
-
-    synchronized void install(Breakpoint breakpoint, boolean global) {
         if (closed) {
-            if (!global) {
-                throw new IllegalStateException("Debugger session is already closed. Cannot install new breakpoints.");
-            } else {
-                return;
-            }
+            throw new IllegalStateException("Debugger session is already closed. Cannot install new breakpoints.");
         }
-        if (!breakpoint.install(this, !global)) {
-            return;
+        if (breakpoint.isDisposed()) {
+            throw new IllegalArgumentException("Cannot install breakpoint, it is already disposed.");
         }
-        if (!global) { // Do not keep global breakpoints in the list
-            this.breakpoints.add(breakpoint);
+        if (breakpoint.getSession() != null) {
+            throw new IllegalArgumentException("Cannot install breakpoint, it is already installed in different debugger session.");
         }
+        breakpoint.install(this);
+        this.breakpoints.add(breakpoint);
+        breakpoint.setEnabled(true);
         if (Debugger.TRACE) {
-            trace("installed session breakpoint %s", breakpoint);
+            trace("installed breakpoint %s", breakpoint);
         }
+        return breakpoint;
     }
 
     synchronized void disposeBreakpoint(Breakpoint breakpoint) {
         breakpoints.remove(breakpoint);
         if (Debugger.TRACE) {
-            trace("disposed session breakpoint %s", breakpoint);
+            trace("disposed breakpoint %s", breakpoint);
         }
     }
 
     @TruffleBoundary
     void notifyCallback(DebuggerNode source, MaterializedFrame frame, Object returnValue, BreakpointConditionFailure conditionFailure) {
         // SuspensionFilter:
-        if (source.isStepNode()) {
-            if (ignoreLanguageContextInitialization.get() && !source.getContext().isLanguageContextInitialized() ||
-                ignoreInternal.get() && source.getContext().getInstrumentedNode().getRootNode().isInternal()) {
-                return;
-            }
-            Predicate<SourceSection> filter = sourceFilter;
-            if (filter != null && !filter.test(source.getContext().getInstrumentedSourceSection())) {
-                return;
-            }
+        if (source.isStepNode() && ignoreLanguageContextInitialization.get() && !source.getContext().isLanguageContextInitialized()) {
+            return;
         }
         Thread currentThread = Thread.currentThread();
         SuspendedEvent event = currentSuspendedEventMap.get(currentThread);
@@ -617,17 +574,13 @@ public final class DebuggerSession implements Closeable {
                 if (breaks == null) {
                     breaks = new ArrayList<>();
                 }
-                breaks.add(breakpoint.isGlobal() ? breakpoint.getROWrapper() : breakpoint);
+                breaks.add(breakpoint);
             }
             if (failure != null) {
                 if (breakpointFailures == null) {
                     breakpointFailures = new HashMap<>();
                 }
-                Breakpoint fb = failure.getBreakpoint();
-                if (fb.isGlobal()) {
-                    fb = fb.getROWrapper();
-                }
-                breakpointFailures.put(fb, failure.getConditionFailure());
+                breakpointFailures.put(failure.getBreakpoint(), failure.getConditionFailure());
             }
         }
 
@@ -708,23 +661,17 @@ public final class DebuggerSession implements Closeable {
                     }
                 }
             }
-            synchronized (breakpoints) {
-                for (Breakpoint b : breakpoints) {
-                    DebuggerNode node = b.lookupNode(context);
-                    if (node != null) {
-                        nodes.add(node);
+            if (!breakpoints.isEmpty()) {
+                synchronized (breakpoints) {
+                    for (Breakpoint b : breakpoints) {
+                        DebuggerNode node = b.lookupNode(context);
+                        if (node != null) {
+                            nodes.add(node);
+                        }
                     }
                 }
             }
-            synchronized (debugger) {
-                for (Breakpoint b : debugger.getRawBreakpoints()) {
-                    DebuggerNode node = b.lookupNode(context);
-                    if (node != null) {
-                        nodes.add(node);
-                    }
-                }
-            }
-            DebuggerNode node = debugger.alwaysHaltBreakpoint.lookupNode(context);
+            DebuggerNode node = alwaysHaltBreakpoint.lookupNode(context);
             if (node != null) {
                 nodes.add(node);
             }
@@ -803,15 +750,7 @@ public final class DebuggerSession implements Closeable {
         @Override
         protected void onEnter(VirtualFrame frame) {
             if (stepping.get()) {
-                doEnter(frame.materialize());
-            }
-        }
-
-        @TruffleBoundary
-        private void doEnter(MaterializedFrame frame) {
-            SteppingStrategy steppingStrategy;
-            if (suspendNext || suspendAll || (steppingStrategy = getSteppingStrategy(Thread.currentThread())) != null && steppingStrategy.isActive()) {
-                notifyCallback(this, frame, null, null);
+                notifyCallback(this, frame.materialize(), null, null);
             }
         }
 
@@ -840,69 +779,20 @@ public final class DebuggerSession implements Closeable {
         @Override
         public void onReturnValue(VirtualFrame frame, Object result) {
             if (stepping.get()) {
-                doReturn(frame.materialize(), result);
+                notifyCallback(this, frame.materialize(), result, null);
             }
         }
 
         @Override
         public void onReturnExceptional(VirtualFrame frame, Throwable exception) {
             if (stepping.get()) {
-                doReturn(frame.materialize(), null);
-            }
-        }
-
-        @TruffleBoundary
-        private void doReturn(MaterializedFrame frame, Object result) {
-            SteppingStrategy steppingStrategy = strategyMap.get(Thread.currentThread());
-            if (steppingStrategy != null && steppingStrategy.isStopAfterCall()) {
-                notifyCallback(this, frame, result, null);
+                notifyCallback(this, frame.materialize(), null, null);
             }
         }
 
         @Override
         SteppingLocation getSteppingLocation() {
             return SteppingLocation.AFTER_CALL;
-        }
-
-    }
-
-    private final class RootSteppingDepthNode extends ExecutionEventNode {
-
-        @Override
-        protected void onEnter(VirtualFrame frame) {
-            if (stepping.get()) {
-                doEnter();
-            }
-        }
-
-        @Override
-        public void onReturnValue(VirtualFrame frame, Object result) {
-            if (stepping.get()) {
-                doReturn();
-            }
-        }
-
-        @Override
-        public void onReturnExceptional(VirtualFrame frame, Throwable exception) {
-            if (stepping.get()) {
-                doReturn();
-            }
-        }
-
-        @TruffleBoundary
-        private void doEnter() {
-            SteppingStrategy steppingStrategy = strategyMap.get(Thread.currentThread());
-            if (steppingStrategy != null) {
-                steppingStrategy.notifyCallEntry();
-            }
-        }
-
-        @TruffleBoundary
-        private void doReturn() {
-            SteppingStrategy steppingStrategy = strategyMap.get(Thread.currentThread());
-            if (steppingStrategy != null) {
-                steppingStrategy.notifyCallExit();
-            }
         }
 
     }
@@ -935,36 +825,6 @@ public final class DebuggerSession implements Closeable {
                 this.value = value;
                 Assumption old = this.unchanged;
                 unchanged = Truffle.getRuntime().createAssumption("Unchanged boolean");
-                old.invalidate();
-            }
-        }
-
-    }
-
-    private static final class StableReference<T> {
-
-        @CompilationFinal private volatile Assumption unchanged;
-        @CompilationFinal private volatile T value;
-
-        StableReference() {
-            this.value = null;
-            this.unchanged = Truffle.getRuntime().createAssumption("Unchanged reference");
-        }
-
-        T get() {
-            if (unchanged.isValid()) {
-                return value;
-            } else {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                return value;
-            }
-        }
-
-        void set(T value) {
-            if (this.value != value) {
-                this.value = value;
-                Assumption old = this.unchanged;
-                unchanged = Truffle.getRuntime().createAssumption("Unchanged reference");
                 old.invalidate();
             }
         }
