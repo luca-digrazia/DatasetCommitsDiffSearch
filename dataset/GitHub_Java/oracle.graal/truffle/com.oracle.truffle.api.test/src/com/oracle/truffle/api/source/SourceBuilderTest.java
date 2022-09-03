@@ -92,10 +92,9 @@ public class SourceBuilderTest {
     @Test
     public void assignMimeTypeAndIdentityForReader() throws IOException {
         String text = "// Hello";
-        final Source.Builder<Void> builder = Source.newFromReader(new StringReader(text));
-        Source s1 = builder.name("Hello").mimeType("text/plain").build();
-        assertEquals("Base type assigned", "text/plain", s1.getMimeType());
-        Source s2 = builder.mimeType("text/x-c").build();
+        Source s1 = Source.fromReader(new StringReader(text), "Hello");
+        assertNull("No mime type assigned", s1.getMimeType());
+        Source s2 = s1.withMimeType("text/x-c");
         assertEquals("They have the same content", s1.getCode(), s2.getCode());
         assertEquals("// Hello", s1.getCode());
         assertNotEquals("But different type", s1.getMimeType(), s2.getMimeType());
@@ -277,6 +276,7 @@ public class SourceBuilderTest {
     }
 
     /* Test currently fails on Sparc. */
+    @Ignore
     @Test
     public void fileSample() throws Exception {
         File sample = File.createTempFile("sample", ".java");
