@@ -121,7 +121,4 @@ public class ClassSubstitutions {
     public static boolean isInstance(final Class<?> thisObj, Object obj) {
         return !isPrimitive(thisObj) && ConditionalNode.materializeIsInstance(thisObj, obj);
     }
-
-    @MacroSubstitution(macro = ClassCastNode.class, isStatic = false)
-    public static native Object cast(final Class<?> thisObj, Object obj);
 }
