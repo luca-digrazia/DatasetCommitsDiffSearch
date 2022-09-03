@@ -24,7 +24,6 @@ package com.oracle.graal.nodes.util;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
@@ -157,15 +156,10 @@ public class GraphUtil {
                 killWithUnusedFloatingInputs(stateAfter);
             }
         }
-        unlinkFixedNode(fixed);
-        killWithUnusedFloatingInputs(fixed);
-    }
-
-    public static void unlinkFixedNode(FixedWithNextNode fixed) {
-        assert fixed.next() != null && fixed.predecessor() != null && fixed.isAlive();
         FixedNode next = fixed.next();
         fixed.setNext(null);
         fixed.replaceAtPredecessor(next);
+        killWithUnusedFloatingInputs(fixed);
     }
 
     public static void checkRedundantPhi(PhiNode phiNode) {
@@ -174,7 +168,7 @@ public class GraphUtil {
         }
 
         ValueNode singleValue = phiNode.singleValue();
-        if (singleValue != PhiNode.NO_VALUE) {
+        if (singleValue != null) {
             Collection<PhiNode> phiUsages = phiNode.usages().filter(PhiNode.class).snapshot();
             Collection<ProxyNode> proxyUsages = phiNode.usages().filter(ProxyNode.class).snapshot();
             phiNode.graph().replaceFloating(phiNode, singleValue);
@@ -343,9 +337,6 @@ public class GraphUtil {
                 v = ((ValueProxy) v).getOriginalNode();
             } else if (v instanceof PhiNode) {
                 v = ((PhiNode) v).singleValue();
-                if (v == PhiNode.NO_VALUE) {
-                    v = null;
-                }
             } else {
                 break;
             }
@@ -449,54 +440,5 @@ public class GraphUtil {
                 };
             }
         };
-    }
-
-    private static final class DefaultSimplifierTool implements SimplifierTool {
-        private final Assumptions assumptions;
-        private final MetaAccessProvider metaAccess;
-        private final ConstantReflectionProvider constantReflection;
-        private final boolean canonicalizeReads;
-
-        public DefaultSimplifierTool(Assumptions assumptions, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, boolean canonicalizeReads) {
-            this.assumptions = assumptions;
-            this.metaAccess = metaAccess;
-            this.constantReflection = constantReflection;
-            this.canonicalizeReads = canonicalizeReads;
-        }
-
-        public Assumptions assumptions() {
-            return assumptions;
-        }
-
-        public MetaAccessProvider getMetaAccess() {
-            return metaAccess;
-        }
-
-        public ConstantReflectionProvider getConstantReflection() {
-            return constantReflection;
-        }
-
-        public boolean canonicalizeReads() {
-            return canonicalizeReads;
-        }
-
-        public void deleteBranch(Node branch) {
-            branch.predecessor().replaceFirstSuccessor(branch, null);
-            GraphUtil.killCFG(branch, this);
-        }
-
-        public void removeIfUnused(Node node) {
-            GraphUtil.tryKillUnused(node);
-        }
-
-        public void addToWorkList(Node node) {
-        }
-
-        public void addToWorkList(Iterable<? extends Node> nodes) {
-        }
-    }
-
-    public static SimplifierTool getDefaultSimplifier(Assumptions assumptions, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, boolean canonicalizeReads) {
-        return new DefaultSimplifierTool(assumptions, metaAccess, constantReflection, canonicalizeReads);
     }
 }
