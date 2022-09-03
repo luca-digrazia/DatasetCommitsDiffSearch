@@ -142,8 +142,7 @@ public class LLVM {
                     mainFunction[0] = parserResult.getMainFunction();
                     handleParserResult(context, parserResult);
                 } else if (code.getMimeType().equals(LLVMLanguage.LLVM_BITCODE_MIME_TYPE)) {
-                    List<String> resolvedVariables = getAllResolvedGlobalVariables(code);
-                    context.setResolvedVariableNames(resolvedVariables);
+                    // TODO we need to set the global variables for .bc files
                     LLVMParserResult parserResult = parseBitcodeFile(code, context);
                     mainFunction[0] = parserResult.getMainFunction();
                     handleParserResult(context, parserResult);

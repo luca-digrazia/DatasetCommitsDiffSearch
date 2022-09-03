@@ -196,15 +196,13 @@ public final class LLVMVisitor implements LLVMParserRuntime {
     private Source sourceFile;
     private Source mainSourceFile;
 
-    private LLVMTypeHelper typeHelper;
-
     public LLVMVisitor(LLVMOptimizationConfiguration optimizationConfiguration, Object[] mainArgs, Source sourceFile, Source mainSourceFile, List<String> resolvedVariableNames) {
         this.optimizationConfiguration = optimizationConfiguration;
         this.mainArgs = mainArgs;
         this.sourceFile = sourceFile;
         this.mainSourceFile = mainSourceFile;
         this.resolvedVariableNames = resolvedVariableNames;
-        typeHelper = new LLVMTypeHelper(this);
+        LLVMTypeHelper.setParserRuntime(this);
     }
 
     private class ParserResult implements LLVMParserResult {
@@ -407,14 +405,14 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         int size = type.getSize();
         Object allocGlobalVariable = findOrAllocateGlobal(globalVar);
         ResolvedType structType = type.getContainedType(0);
-        int structSize = typeHelper.getByteSize(structType);
+        int structSize = LLVMTypeHelper.getByteSize(structType);
         for (int i = 0; i < size; i++) {
             LLVMExpressionNode globalVarAddress = factoryFacade.createLiteral(allocGlobalVariable, LLVMBaseType.ADDRESS);
             LLVMExpressionNode iNode = factoryFacade.createLiteral(i, LLVMBaseType.I32);
             LLVMExpressionNode structPointer = factoryFacade.createGetElementPtr(LLVMBaseType.I32, globalVarAddress, iNode, structSize);
             LLVMExpressionNode loadedStruct = factoryFacade.createLoad(structType, structPointer);
             ResolvedType functionType = structType.getContainedType(1);
-            int indexedTypeLength = typeHelper.getAlignmentByte(functionType);
+            int indexedTypeLength = LLVMTypeHelper.getAlignmentByte(functionType);
             LLVMExpressionNode oneLiteralNode = factoryFacade.createLiteral(1, LLVMBaseType.I32);
             LLVMExpressionNode functionLoadTarget = factoryFacade.createGetElementPtr(LLVMBaseType.I32, loadedStruct, oneLiteralNode, indexedTypeLength);
             LLVMExpressionNode loadedFunction = factoryFacade.createLoad(functionType, functionLoadTarget);
@@ -480,7 +478,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
             LLVMExpressionNode constant = visitConstant(globalVariable.getType(), initialValue);
             if (constant != null) {
                 ResolvedType resolvedType = resolve(globalVariable.getType());
-                int byteSize = typeHelper.getByteSize(resolvedType);
+                int byteSize = LLVMTypeHelper.getByteSize(resolvedType);
                 Object allocGlobalVariable = findOrAllocateGlobal(globalVariable);
                 if (byteSize == 0) {
                     return null;
@@ -881,7 +879,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         EList<Constant> indices = insertValue.getIndices();
         TypedValue aggregate = insertValue.getAggregate();
         TypedValue element = insertValue.getElement();
-        int size = typeHelper.getByteSize(resolve(aggregate.getType()));
+        int size = LLVMTypeHelper.getByteSize(resolve(aggregate.getType()));
         LLVMExpressionNode resultAggregate = allocateFunctionLifetime(resolve(aggregate.getType()));
         LLVMExpressionNode sourceAggregate = visitValueRef(aggregate.getRef(), aggregate.getType());
         LLVMExpressionNode valueToInsert = visitValueRef(element.getRef(), element.getType());
@@ -893,7 +891,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
             throw new AssertionError(constants);
         }
         int index = constants.get(0);
-        int offset = typeHelper.goIntoTypeGetLengthByte(resolve(aggregate.getType()), index);
+        int offset = LLVMTypeHelper.goIntoTypeGetLengthByte(resolve(aggregate.getType()), index);
         LLVMBaseType llvmType = getLLVMType(element).getType();
         return factoryFacade.createInsertValue(resultAggregate, sourceAggregate, size, offset, valueToInsert, llvmType);
     }
@@ -958,12 +956,12 @@ public final class LLVMVisitor implements LLVMParserRuntime {
             Type type = types.get(i);
             Integer constantIndex = evaluateIndexAsConstant(currentRef);
             if (constantIndex == null) {
-                int indexedTypeLength = typeHelper.goIntoTypeGetLengthByte(currentType, 1);
+                int indexedTypeLength = LLVMTypeHelper.goIntoTypeGetLengthByte(currentType, 1);
                 currentType = LLVMTypeHelper.goIntoType(currentType, 1);
                 LLVMExpressionNode valueRef = visitValueRef(currentRef, type);
                 currentAddress = factoryFacade.createGetElementPtr(getLLVMType(type).getType(), currentAddress, valueRef, indexedTypeLength);
             } else {
-                int indexedTypeLength = typeHelper.goIntoTypeGetLengthByte(currentType, constantIndex);
+                int indexedTypeLength = LLVMTypeHelper.goIntoTypeGetLengthByte(currentType, constantIndex);
                 currentType = LLVMTypeHelper.goIntoType(currentType, constantIndex);
                 if (indexedTypeLength != 0) {
                     LLVMExpressionNode constantNode;
@@ -1031,7 +1029,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         int alignment = 0;
         if (alignmentString == null) {
             if (layoutConverter != null) {
-                alignment = typeHelper.getAlignmentByte(resolvedInstructionType);
+                alignment = LLVMTypeHelper.getAlignmentByte(resolvedInstructionType);
             }
         } else {
             alignment = Integer.parseInt(alignmentString.substring("align ".length()));
@@ -1039,7 +1037,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         if (alignment == 0) {
             alignment = LLVMStack.NO_ALIGNMENT_REQUIREMENTS;
         }
-        int byteSize = typeHelper.getByteSize(resolvedInstructionType);
+        int byteSize = LLVMTypeHelper.getByteSize(resolvedInstructionType);
         LLVMExpressionNode alloc;
         if (numElementsVal == null) {
             alloc = factoryFacade.createAlloc(resolvedInstructionType, byteSize, alignment, null, null);
@@ -1240,13 +1238,13 @@ public final class LLVMVisitor implements LLVMParserRuntime {
             Number evaluateConstant = (Number) LLVMConstantEvaluator.evaluateConstant(this, index);
             assert evaluateConstant.longValue() == evaluateConstant.intValue();
             int val = evaluateConstant.intValue();
-            int indexedTypeLength = typeHelper.goIntoTypeGetLengthByte(currentType, val);
+            int indexedTypeLength = LLVMTypeHelper.goIntoTypeGetLengthByte(currentType, val);
             currentOffset += indexedTypeLength;
             parentType = currentType;
             currentType = LLVMTypeHelper.goIntoType(currentType, val);
         }
         if (currentType != null && !LLVMTypeHelper.isPackedStructType(parentType)) {
-            currentOffset += typeHelper.computePaddingByte(currentOffset, currentType);
+            currentOffset += LLVMTypeHelper.computePaddingByte(currentOffset, currentType);
         }
         if (currentOffset != 0) {
             LLVMExpressionNode oneValueNode = factoryFacade.createLiteral(1, LLVMBaseType.I32);
@@ -1280,7 +1278,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
 
     private LLVMExpressionNode visitZeroStructInitializer(EObject type) {
         ResolvedType resolvedType = resolve(type);
-        int size = typeHelper.getByteSize(resolvedType);
+        int size = LLVMTypeHelper.getByteSize(resolvedType);
         if (size == 0) {
             LLVMAddress minusOneNode = LLVMAddress.fromLong(-1);
             return factoryFacade.createLiteral(minusOneNode, LLVMBaseType.ADDRESS);
@@ -1293,7 +1291,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
 
     private LLVMExpressionNode visitZeroArrayInitializer(EObject type) {
         ResolvedArrayType resolvedType = (ResolvedArrayType) resolve(type);
-        int size = typeHelper.getByteSize(resolvedType);
+        int size = LLVMTypeHelper.getByteSize(resolvedType);
         if (size == 0) {
             // zero-size array, not allowed per C and C++ standard
             return null;
@@ -1329,7 +1327,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
             return factoryFacade.createUndefinedValue(type);
         } else {
             ResolvedType resolvedType = resolve(type);
-            int byteSize = typeHelper.getByteSize(resolvedType);
+            int byteSize = LLVMTypeHelper.getByteSize(resolvedType);
             LLVMExpressionNode alloca = allocateFunctionLifetime(resolvedType);
             return factoryFacade.createEmptyStructLiteralNode(alloca, byteSize);
         }
@@ -1544,13 +1542,13 @@ public final class LLVMVisitor implements LLVMParserRuntime {
     }
 
     public LLVMExpressionNode allocateFunctionLifetime(ResolvedType resolvedType) {
-        int alignment = typeHelper.getAlignmentByte(resolvedType);
-        int size = typeHelper.getByteSize(resolvedType);
+        int alignment = LLVMTypeHelper.getAlignmentByte(resolvedType);
+        int size = LLVMTypeHelper.getByteSize(resolvedType);
         return allocateFunctionLifetime(resolvedType, size, alignment);
     }
 
     public LLVMExpressionNode allocateFunctionLifetime(int size, ResolvedType resolvedType) {
-        int alignment = typeHelper.getAlignmentByte(resolvedType);
+        int alignment = LLVMTypeHelper.getAlignmentByte(resolvedType);
         return allocateFunctionLifetime(resolvedType, size, alignment);
     }
 
@@ -1603,10 +1601,4 @@ public final class LLVMVisitor implements LLVMParserRuntime {
     public long getNativeHandle(String name) {
         return nativeLookup.getNativeHandle(name);
     }
-
-    @Override
-    public LLVMTypeHelper getTypeHelper() {
-        return typeHelper;
-    }
-
 }
