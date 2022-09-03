@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -151,6 +149,17 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
                 throw UserError.abort("Invalid classpath element '" + v + "'. Make sure that all paths provided with '" + IMAGE_CLASSPATH_PREFIX + "' are correct.");
             }
         }).toArray(URL[]::new);
+    }
+
+    public static boolean isValidJavaVersion() {
+        String versionString = getJavaVersion();
+        if (versionString.startsWith("1.8")) {
+            String[] splitVersion = versionString.split("_");
+            int update = Integer.valueOf(splitVersion[1]);
+            return update > 40;
+        } else {
+            return false;
+        }
     }
 
     private static void reportToolUserError(String msg) {
@@ -315,6 +324,10 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
     }
 
     public static boolean verifyValidJavaVersionAndPlatform() {
+        if (!isValidJavaVersion()) {
+            reportToolUserError("supports only Java 1.8 with an update version 40+. Detected Java version is: " + getJavaVersion());
+            return false;
+        }
         if (!isValidArchitecture()) {
             reportToolUserError("runs only on architecture AMD64. Detected architecture: " + GraalAccess.getOriginalTarget().arch.getClass().getSimpleName());
         }

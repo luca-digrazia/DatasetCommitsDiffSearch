@@ -38,7 +38,6 @@ import com.oracle.svm.core.LinkerInvocation;
 import com.oracle.svm.core.OS;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.util.UserError;
-import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.FeatureImpl.BeforeImageWriteAccessImpl;
 import com.oracle.svm.hosted.NativeImageOptions;
 import com.oracle.svm.hosted.c.NativeLibraries;
@@ -69,16 +68,12 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
         @Override
         protected void setOutputKind(List<String> cmd) {
             switch (kind) {
-                case EXECUTABLE:
-                    break;
                 case STATIC_EXECUTABLE:
                     cmd.add("-static");
                     break;
                 case SHARED_LIBRARY:
                     cmd.add("-shared");
                     break;
-                default:
-                    VMError.shouldNotReachHere();
             }
         }
 
