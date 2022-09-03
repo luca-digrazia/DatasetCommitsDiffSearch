@@ -45,7 +45,7 @@ public class LoopEx {
     private final Loop<Block> loop;
     private LoopFragmentInside inside;
     private LoopFragmentWhole whole;
-    private CountedLoopInfo counted;
+    private CountedLoopInfo counted; // TODO (gd) detect
     private LoopsData data;
     private Map<Node, InductionVariable> ivs;
 
@@ -198,6 +198,9 @@ public class LoopEx {
                     limit = lessThan.getY();
                 }
             }
+            if (iv != null && iv.isConstantStride() && iv.constantStride() != 1 && !(ifTest instanceof IntegerLessThanNode)) {
+                return false;
+            }
             if (condition == null) {
                 return false;
             }
@@ -209,9 +212,6 @@ public class LoopEx {
                 case EQ:
                     return false;
                 case NE: {
-                    if (!iv.isConstantStride() || Math.abs(iv.constantStride()) != 1) {
-                        return false;
-                    }
                     IntegerStamp initStamp = (IntegerStamp) iv.initNode().stamp();
                     IntegerStamp limitStamp = (IntegerStamp) limit.stamp();
                     if (iv.direction() == Direction.Up) {
@@ -259,7 +259,7 @@ public class LoopEx {
         Collection<AbstractBeginNode> blocks = new LinkedList<>();
         Collection<LoopExitNode> exits = new LinkedList<>();
         Queue<Block> work = new LinkedList<>();
-        ControlFlowGraph cfg = loopsData().getCFG();
+        ControlFlowGraph cfg = loopsData().controlFlowGraph();
         work.add(cfg.blockFor(branch));
         while (!work.isEmpty()) {
             Block b = work.remove();
