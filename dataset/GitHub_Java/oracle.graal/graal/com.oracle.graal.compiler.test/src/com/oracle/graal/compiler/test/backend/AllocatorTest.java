@@ -22,15 +22,12 @@
  */
 package com.oracle.graal.compiler.test.backend;
 
-import static com.oracle.graal.api.code.CodeUtil.*;
-
 import java.util.*;
 import java.util.concurrent.*;
 
 import org.junit.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.test.*;
@@ -118,7 +115,7 @@ public class AllocatorTest extends GraalCompilerTest {
 
             @Override
             public LIR call() {
-                return GraalCompiler.emitHIR(runtime, backend.target, graph, replacements, assumptions, null, phasePlan, OptimisticOptimizations.NONE, new SpeculationLog());
+                return GraalCompiler.emitHIR(runtime, backend.target, graph, assumptions, null, phasePlan, OptimisticOptimizations.NONE, new SpeculationLog());
             }
         });
 
@@ -126,8 +123,7 @@ public class AllocatorTest extends GraalCompilerTest {
 
             @Override
             public RegisterStats call() {
-                CallingConvention cc = getCallingConvention(runtime, Type.JavaCallee, graph.method(), false);
-                GraalCompiler.emitLIR(backend, backend.target, lir, graph, graph.method(), cc);
+                GraalCompiler.emitLIR(backend, backend.target, lir, graph, graph.method());
                 return new RegisterStats(lir);
             }
         });
