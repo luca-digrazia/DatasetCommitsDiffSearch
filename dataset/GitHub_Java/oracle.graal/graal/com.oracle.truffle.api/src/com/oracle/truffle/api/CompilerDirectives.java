@@ -134,9 +134,8 @@ public class CompilerDirectives {
      * @param clazz the specified type of the value
      * @return the value
      */
-    @SuppressWarnings("unchecked")
     @Unsafe
-    public static <T> T unsafeCast(Object value, Class<T> clazz) {
-        return (T) value;
+    public static Object unsafeCast(Object value, Class clazz) {
+        return value;
     }
 }
