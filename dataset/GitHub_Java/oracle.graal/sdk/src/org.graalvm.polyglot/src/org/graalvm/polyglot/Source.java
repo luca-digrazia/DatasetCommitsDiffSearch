@@ -101,8 +101,8 @@ import org.graalvm.polyglot.io.ByteSequence;
  * determine whether bytes or characters should be loaded. The behavior can be customized by
  * specifying a {@link Builder#mimeType(String) MIME type} or {@link Builder#content(ByteSequence)
  * content} explicitly. If the specified or inferred MIME type starts with <code>'text/</code> or
- * the MIME types is <code>null</code> then it will be interpreted as character based, otherwise
- * byte based.
+ * the MIME typs is <code>null</code> then it will be interpreted as character based, otherwise byte
+ * based.
  *
  * @see Context#eval(Source) To evaluate sources.
  * @see Source#findLanguage(File) To detect a language using a File
@@ -467,8 +467,8 @@ public final class Source {
      *            used as name.
      * @since 1.0
      */
-    public static Builder newBuilder(String language, CharSequence characters, String name) {
-        return EMPTY.new Builder(language, characters).name(name);
+    public static LiteralBuilder newBuilder(String language, CharSequence characters, String name) {
+        return EMPTY.new LiteralBuilder(language, characters).name(name);
     }
 
     /**
@@ -483,8 +483,8 @@ public final class Source {
      *            used as name.
      * @since 1.0
      */
-    public static Builder newBuilder(String language, ByteSequence bytes, String name) {
-        return EMPTY.new Builder(language, bytes).name(name);
+    public static LiteralBuilder newBuilder(String language, ByteSequence bytes, String name) {
+        return EMPTY.new LiteralBuilder(language, bytes).name(name);
     }
 
     /**
@@ -502,7 +502,7 @@ public final class Source {
      * @since 1.0
      */
     public static Builder newBuilder(String language, File file) {
-        return EMPTY.new Builder(language, file);
+        return EMPTY.new LiteralBuilder(language, file);
     }
 
     /**
@@ -520,7 +520,7 @@ public final class Source {
      * @since 1.0
      */
     public static Builder newBuilder(String language, URL url) {
-        return EMPTY.new Builder(language, url);
+        return EMPTY.new LiteralBuilder(language, url);
     }
 
     /**
@@ -531,7 +531,7 @@ public final class Source {
      * @since 1.0
      */
     public static Builder newBuilder(String language, Reader source, String name) {
-        return EMPTY.new Builder(language, source).name(name);
+        return EMPTY.new LiteralBuilder(language, source).name(name);
     }
 
     /**
@@ -541,7 +541,7 @@ public final class Source {
      * @since 1.0
      */
     public static Source create(String language, CharSequence source) {
-        return newBuilder(language, source, "Unnamed").buildLiteral();
+        return newBuilder(language, source, "Unnamed").build();
     }
 
     /**
@@ -721,7 +721,7 @@ public final class Source {
          * @return instance of this builder
          * @since 1.0
          */
-        public Builder content(String code) {
+        public LiteralBuilder content(String code) {
             return content((CharSequence) code);
         }
 
@@ -738,10 +738,10 @@ public final class Source {
          *         {@link IOException}
          * @since 1.0
          */
-        public Builder content(CharSequence characters) {
+        public LiteralBuilder content(CharSequence characters) {
             Objects.requireNonNull(characters);
             this.content = characters;
-            return this;
+            return (LiteralBuilder) this;
         }
 
         /**
@@ -892,7 +892,9 @@ public final class Source {
          *
          * @return the source object
          * @since 1.0
+         * @deprecated use {@link LiteralBuilder#build()} instead.
          */
+        @Deprecated
         public Source buildLiteral() {
             try {
                 return build();
@@ -901,6 +903,95 @@ public final class Source {
             }
         }
     }
+
+    /**
+     * Represents a builder to build literal {@link Source} objects. The literal builder is
+     * different from a normal builder is it does not throw an {@link IOException} when it is built.
+     *
+     * @since 1.0
+     */
+    public class LiteralBuilder extends Builder {
+
+        LiteralBuilder(String language, Object origin) {
+            super(language, origin);
+        }
+
+        /**
+         * {@inheritDoc}
+         *
+         * @since 1.0
+         */
+        @Override
+        public LiteralBuilder name(String newName) {
+            return (LiteralBuilder) super.name(newName);
+        }
+
+        /**
+         * {@inheritDoc}
+         *
+         * @since 1.0
+         */
+        @Override
+        public LiteralBuilder mimeType(String mimeType) {
+            return (LiteralBuilder) super.mimeType(mimeType);
+        }
+
+        /**
+         * {@inheritDoc}
+         *
+         * @since 1.0
+         */
+        @Override
+        public LiteralBuilder interactive(boolean interactive) {
+            return (LiteralBuilder) super.interactive(interactive);
+        }
+
+        /**
+         * {@inheritDoc}
+         *
+         * @since 1.0
+         */
+        @Override
+        public LiteralBuilder internal(boolean internal) {
+            return (LiteralBuilder) super.internal(internal);
+        }
+
+        /**
+         * {@inheritDoc}
+         *
+         * @since 1.0
+         */
+        @Override
+        public LiteralBuilder cached(boolean cached) {
+            return (LiteralBuilder) super.cached(cached);
+        }
+
+        /**
+         * {@inheritDoc}
+         *
+         * @since 1.0
+         */
+        @Override
+        public LiteralBuilder uri(URI newUri) {
+            return (LiteralBuilder) super.uri(newUri);
+        }
+
+        /**
+         * {@inheritDoc}
+         *
+         * @since 1.0
+         */
+        @Override
+        public Source build() {
+            try {
+                return super.build();
+            } catch (IOException e) {
+                throw silenceException(RuntimeException.class, e);
+            }
+        }
+
+    }
+
 }
 
 //@formatter:off
@@ -949,7 +1040,7 @@ class SourceSnippets {
      URL resource = relativeClass.getResource("sample.js");
      Source source = Source.newBuilder("js", resource)
          .content("{}")
-         .buildLiteral();
+         .build();
      assert resource.toExternalForm().equals(source.getPath());
      assert "sample.js".equals(source.getName());
      assert resource.toExternalForm().equals(source.getURI().toString());
@@ -974,7 +1065,7 @@ class SourceSnippets {
      // BEGIN: SourceSnippets#fromAString
      Source source = Source.newBuilder("js", "function() {\n"
          + "  return 'Hi';\n"
-         + "}\n", "hi.js").buildLiteral();
+         + "}\n", "hi.js").build();
      assert "hi.js".equals(source.getName());
      // END: SourceSnippets#fromAString
      return source;
@@ -985,7 +1076,7 @@ class SourceSnippets {
      byte[] bytes = new byte[] {/* Binary */};
      Source source = Source.newBuilder("llvm",
                      ByteSequence.create(bytes),
-                     "<literal>").buildLiteral();
+                     "<literal>").build();
      // END: SourceSnippets#fromBytes
      return source;
  }
