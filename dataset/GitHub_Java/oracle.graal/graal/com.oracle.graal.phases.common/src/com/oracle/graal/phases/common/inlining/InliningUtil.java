@@ -146,8 +146,9 @@ public class InliningUtil {
         logInliningDecision(info, inliningDepth, allowLogging, true, msg, args);
     }
 
-    public static void logNotInlinedMethod(InlineInfo info, int inliningDepth, String msg, Object... args) {
+    public static boolean logNotInlinedMethod(InlineInfo info, int inliningDepth, String msg, Object... args) {
         logInliningDecision(info, inliningDepth, true, false, msg, args);
+        return false;
     }
 
     public static void logInliningDecision(InlineInfo info, int inliningDepth, boolean allowLogging, boolean success, String msg, final Object... args) {
