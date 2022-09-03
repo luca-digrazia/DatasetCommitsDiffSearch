@@ -22,15 +22,27 @@
  */
 package com.oracle.graal.api.directives.test;
 
+import java.io.ByteArrayOutputStream;
+import java.lang.reflect.Method;
+import java.util.Formatter;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.junit.Assert;
 import org.junit.Test;
 
+import com.google.monitoring.runtime.instrumentation.common.com.google.common.base.Objects;
 import com.oracle.graal.api.directives.GraalDirectives;
 import com.oracle.graal.compiler.common.GraalOptions;
 import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.options.OptionValue.OverrideScope;
+import com.oracle.graal.printer.IdealGraphPrinter;
 
+import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -64,7 +76,7 @@ public class RootNameDirectiveTest extends GraalCompilerTest {
             Result result = new Result(code.executeVarargs(), null);
             assertEquals(new Result(toString(method), null), result);
         } catch (Throwable e) {
-            Assert.fail("Unexpected exception: " + e);
+            throw new AssertionError(e);
         }
     }
 
@@ -87,43 +99,76 @@ public class RootNameDirectiveTest extends GraalCompilerTest {
             Result result = new Result(code.executeVarargs(), null);
             assertEquals(new Result(toString(method), null), result);
         } catch (Throwable e) {
-            Assert.fail("Unexpected exception: " + e);
+            throw new AssertionError(e);
         }
     }
 
-    static String rootName1;
-    static String rootName2;
+    static String rootNameInCallee;
+    static String rootNameInCaller;
 
+    @BytecodeParserForceInline
     public static void rootNameWithinInstrumentationSnippet() {
-        GraalDirectives.instrumentationBegin(0);
-        rootName1 = GraalDirectives.rootName();
+        GraalDirectives.instrumentationBegin();
+        rootNameInCallee = GraalDirectives.rootName();
         GraalDirectives.instrumentationEnd();
     }
 
     public static void callerSnippet1() {
         rootNameWithinInstrumentationSnippet();
 
-        GraalDirectives.instrumentationBegin(0);
-        rootName2 = GraalDirectives.rootName();
+        GraalDirectives.instrumentationBegin();
+        rootNameInCaller = GraalDirectives.rootName();
         GraalDirectives.instrumentationEnd();
     }
 
+    @SuppressWarnings("try")
+    private void assertEquals(StructuredGraph graph, InstalledCode code, Object expected, Object actual) {
+        if (!Objects.equal(expected, actual)) {
+            Formatter buf = new Formatter();
+
+            try (Scope s = Debug.sandbox("PrintingGraph", null)) {
+                Map<Object, Object> properties = new HashMap<>();
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                IdealGraphPrinter printer = new IdealGraphPrinter(baos, true, getSnippetReflection());
+                printer.beginGroup("RootNameDirectiveTest", "RootNameDirectiveTest", graph.method(), -1, null);
+                properties.put("graph", graph.toString());
+                properties.put("scope", Debug.currentScope());
+                printer.print(graph, graph.method().format("%H.%n(%p)"), properties);
+                printer.endGroup();
+                printer.close();
+                buf.format("-- Graph -- %n%s", baos.toString());
+            } catch (Throwable e) {
+                buf.format("%nError printing graph: %s", e);
+            }
+            try {
+                CodeCacheProvider codeCache = getCodeCache();
+                Method disassemble = codeCache.getClass().getMethod("disassemble", InstalledCode.class);
+                buf.format("%n-- Code -- %n%s", disassemble.invoke(codeCache, code));
+            } catch (NoSuchMethodException e) {
+                // Not a HotSpotCodeCacheProvider
+            } catch (Exception e) {
+                buf.format("%nError disassembling code: %s", e);
+            }
+            Assert.assertEquals(buf.toString(), expected, actual);
+        }
+    }
+
+    @SuppressWarnings("try")
     @Test
     public void testRootNameWithinInstrumentationAtCallee() {
         try (OverrideScope s = OptionValue.override(GraalOptions.UseGraalInstrumentation, true)) {
             ResolvedJavaMethod method = getResolvedJavaMethod("callerSnippet1");
             executeExpected(method, null); // ensure the method is fully resolved
-            rootName1 = null;
-            rootName2 = null;
+            rootNameInCallee = null;
+            rootNameInCaller = null;
             // We expect both rootName1 and rootName2 are set to the name of the target snippet.
-            InstalledCode code = getCode(method);
-            try {
-                code.executeVarargs();
-                Assert.assertEquals(toString(method), rootName1);
-                Assert.assertEquals(rootName1, rootName2);
-            } catch (Throwable e) {
-                Assert.fail("Unexpected exception: " + e);
-            }
+            StructuredGraph graph = parseForCompile(method);
+            InstalledCode code = getCode(method, graph);
+            code.executeVarargs();
+            assertEquals(graph, code, toString(method), rootNameInCallee);
+            assertEquals(graph, code, rootNameInCallee, rootNameInCaller);
+        } catch (Throwable e) {
+            throw new AssertionError(e);
         }
     }
 
