@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,25 +31,43 @@ import com.oracle.truffle.api.nodes.NodeCost;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.test.ReflectionUtils;
+import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntimeListener;
 import org.graalvm.compiler.truffle.runtime.OptimizedDirectCallNode;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 
 import java.lang.reflect.Field;
 
-public class AbstractSplittingStrategyTest extends TestWithPolyglotOptions {
+public class AbstractSplittingStrategyTest {
 
     protected static final GraalTruffleRuntime runtime = (GraalTruffleRuntime) Truffle.getRuntime();
+
+    private static TruffleCompilerOptions.TruffleOptionsOverrideScope doNotCompileScope;
+    private static TruffleCompilerOptions.TruffleOptionsOverrideScope growthLimitScope;
+    private static TruffleCompilerOptions.TruffleOptionsOverrideScope hardLimitScope;
+
+    @BeforeClass
+    public static void before() {
+        doNotCompileScope = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleCompilation, false);
+        growthLimitScope = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleSplittingGrowthLimit, 2.0);
+        hardLimitScope = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleSplittingMaxNumberOfSplitNodes, 1000);
+    }
+
+    @AfterClass
+    public static void after() {
+        hardLimitScope.close();
+        growthLimitScope.close();
+        doNotCompileScope.close();
+    }
 
     protected SplitCountingListener listener;
 
     @Before
     public void addListener() {
-        setupContext("engine.CompileOnly", "DisableCompilationsForThisTest",
-                        "engine.SplittingGrowthLimit", "2.0",
-                        "engine.SplittingMaxNumberOfSplitNodes", "1000");
         listener = new SplitCountingListener();
         runtime.addListener(listener);
     }

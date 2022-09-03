@@ -785,7 +785,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
             }
         }));
         // task and future must never diverge from each other
-        assert cancellable.getFuture() != null;
+        assert cancellable.future != null;
         return cancellable;
     }
 
