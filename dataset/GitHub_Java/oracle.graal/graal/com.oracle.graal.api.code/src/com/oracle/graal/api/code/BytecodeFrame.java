@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,6 @@
 package com.oracle.graal.api.code;
 
 import java.io.*;
-import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 
@@ -66,7 +65,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
      * Note that the number of locals and the number of stack slots may be smaller than the maximum
      * number of locals and stack slots as specified in the compiled method.
      */
-    public final JavaValue[] values;
+    public final Value[] values;
 
     /**
      * The number of locals in the values array.
@@ -144,7 +143,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
      * @param numStack the depth of the stack
      * @param numLocks the number of locked objects
      */
-    public BytecodeFrame(BytecodeFrame caller, ResolvedJavaMethod method, int bci, boolean rethrowException, boolean duringCall, JavaValue[] values, int numLocals, int numStack, int numLocks) {
+    public BytecodeFrame(BytecodeFrame caller, ResolvedJavaMethod method, int bci, boolean rethrowException, boolean duringCall, Value[] values, int numLocals, int numStack, int numLocks) {
         super(caller, method, bci);
         assert values != null;
         this.rethrowException = rethrowException;
@@ -168,9 +167,9 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
         for (int i = 0; i < numLocals + numStack; i++) {
             if (values[i] != null) {
                 Kind kind = values[i].getKind();
-                if (kind.needsTwoSlots()) {
+                if (kind == Kind.Long || kind == Kind.Double) {
                     assert values.length > i + 1 : String.format("missing second word %s", this);
-                    assert values[i + 1] == null || values[i + 1].getKind() == Kind.Illegal : this;
+                    assert values[i + 1] == null || values[i + 1].getKind() == Kind.Illegal;
                 }
             }
         }
@@ -183,7 +182,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
      * @param i the local variable index
      * @return the value that can be used to reconstruct the local's current value
      */
-    public JavaValue getLocalValue(int i) {
+    public Value getLocalValue(int i) {
         return values[i];
     }
 
@@ -193,7 +192,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
      * @param i the stack index
      * @return the value that can be used to reconstruct the stack slot's current value
      */
-    public JavaValue getStackValue(int i) {
+    public Value getStackValue(int i) {
         return values[i + numLocals];
     }
 
@@ -203,7 +202,7 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
      * @param i the lock index
      * @return the value that can be used to reconstruct the lock's current value
      */
-    public JavaValue getLockValue(int i) {
+    public Value getLockValue(int i) {
         return values[i + numLocals + numStack];
     }
 
@@ -214,28 +213,6 @@ public class BytecodeFrame extends BytecodePosition implements Serializable {
      */
     public BytecodeFrame caller() {
         return (BytecodeFrame) getCaller();
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj instanceof BytecodeFrame && super.equals(obj)) {
-            BytecodeFrame that = (BytecodeFrame) obj;
-            // @formatter:off
-            if (this.duringCall == that.duringCall &&
-                this.rethrowException == that.rethrowException &&
-                this.numLocals == that.numLocals &&
-                this.numLocks == that.numLocks &&
-                this.numStack == that.numStack &&
-                Arrays.equals(this.values, that.values)) {
-                return true;
-            }
-            // @formatter:off
-            return true;
-        }
-        return false;
     }
 
     @Override
