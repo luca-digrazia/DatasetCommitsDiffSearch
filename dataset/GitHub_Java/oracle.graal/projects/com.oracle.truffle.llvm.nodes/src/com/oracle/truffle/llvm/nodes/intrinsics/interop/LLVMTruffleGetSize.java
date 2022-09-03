@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -71,7 +71,7 @@ public abstract class LLVMTruffleGetSize extends LLVMIntrinsic {
     }
 
     @Specialization
-    protected int doIntrinsic(VirtualFrame frame, LLVMTruffleObject value) {
+    public int executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value) {
         checkLLVMTruffleObject(value);
         return getSize(frame, value.getObject());
     }

@@ -44,11 +44,11 @@ import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
@@ -59,54 +59,53 @@ public abstract class LLVMToI16Node extends LLVMExpressionNode {
     public abstract static class LLVMToI16NoZeroExtNode extends LLVMToI16Node {
 
         @Specialization
-        protected short doLLVMFunction(short from) {
+        public short executeLLVMFunction(short from) {
             return from;
         }
 
         @Specialization
-        protected short doI16(boolean from) {
+        public short executeI16(boolean from) {
             return (short) (from ? -1 : 0);
         }
 
         @Specialization
-        protected short doI16(byte from) {
+        public short executeI16(byte from) {
             return from;
         }
 
         @Specialization
-        protected short doI16(int from) {
+        public short executeI16(int from) {
             return (short) from;
         }
 
         @Specialization
-        protected short doI16(long from) {
+        public short executeI16(long from) {
             return (short) from;
         }
 
         @Specialization
-        protected short doI16(LLVMIVarBit from) {
+        public short executeI16(LLVMIVarBit from) {
             return from.getShortValue();
         }
 
         @Specialization
-        protected short doI16(float from) {
+        public short executeI16(float from) {
             return (short) from;
         }
 
         @Specialization
-        protected short doI16(double from) {
+        public short executeI16(double from) {
             return (short) from;
         }
 
         @Specialization
-        protected short doLLVMAddress(LLVMAddress from) {
+        public short executeLLVMAddress(LLVMAddress from) {
             return (short) from.getVal();
         }
 
         @Specialization
-        public short doGlobal(VirtualFrame frame, LLVMGlobal from,
-                        @Cached("toNative()") LLVMToNativeNode access) {
-            return (short) access.executeWithTarget(frame, from).getVal();
+        public short executeLLVMAddress(LLVMGlobalVariable from, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            return (short) globalAccess.getNativeLocation(from).getVal();
         }
 
         @Child private Node isNull = Message.IS_NULL.createNode();
@@ -115,7 +114,7 @@ public abstract class LLVMToI16Node extends LLVMExpressionNode {
         @Child private ForeignToLLVM toShort = ForeignToLLVM.create(ForeignToLLVMType.I16);
 
         @Specialization
-        protected short doLLVMTruffleObject(VirtualFrame frame, LLVMTruffleObject from) {
+        public short executeLLVMTruffleObject(VirtualFrame frame, LLVMTruffleObject from) {
             TruffleObject base = from.getObject();
             if (ForeignAccess.sendIsNull(isNull, base)) {
                 return (short) from.getOffset();
@@ -133,7 +132,7 @@ public abstract class LLVMToI16Node extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected short doLLVMBoxedPrimitive(VirtualFrame frame, LLVMBoxedPrimitive from) {
+        public short executeLLVMBoxedPrimitive(VirtualFrame frame, LLVMBoxedPrimitive from) {
             return (short) toShort.executeWithTarget(frame, from.getValue());
         }
     }
@@ -142,22 +141,22 @@ public abstract class LLVMToI16Node extends LLVMExpressionNode {
     public abstract static class LLVMToI16ZeroExtNode extends LLVMToI16Node {
 
         @Specialization
-        protected short doI16(boolean from) {
+        public short executeI16(boolean from) {
             return (short) (from ? 1 : 0);
         }
 
         @Specialization
-        protected short doI16(byte from) {
+        public short executeI16(byte from) {
             return (short) (from & LLVMExpressionNode.I8_MASK);
         }
 
         @Specialization
-        protected short doI16(LLVMIVarBit from) {
+        public short executeI16(LLVMIVarBit from) {
             return from.getZeroExtendedShortValue();
         }
 
         @Specialization
-        protected short doLLVMFunction(short from) {
+        public short executeLLVMFunction(short from) {
             return from;
         }
     }
@@ -166,22 +165,22 @@ public abstract class LLVMToI16Node extends LLVMExpressionNode {
     public abstract static class LLVMToI16BitNode extends LLVMToI16Node {
 
         @Specialization
-        protected short doI16(short from) {
+        public short executeI16(short from) {
             return from;
         }
 
         @Specialization
-        protected short doI1Vector(LLVMI1Vector from) {
+        public short executeI1Vector(LLVMI1Vector from) {
             return (short) LLVMToI64BitNode.castI1Vector(from, Short.SIZE);
         }
 
         @Specialization
-        protected short doI8Vector(LLVMI8Vector from) {
+        public short executeI8Vector(LLVMI8Vector from) {
             return (short) LLVMToI64BitNode.castI8Vector(from, Short.SIZE / Byte.SIZE);
         }
 
         @Specialization
-        protected short doI16Vector(LLVMI16Vector from) {
+        public short executeI16Vector(LLVMI16Vector from) {
             if (from.getLength() != 1) {
                 CompilerDirectives.transferToInterpreter();
                 throw new AssertionError("invalid vector size!");

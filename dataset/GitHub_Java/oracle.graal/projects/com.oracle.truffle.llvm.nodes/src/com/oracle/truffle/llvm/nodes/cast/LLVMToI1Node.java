@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.nodes.cast;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -53,13 +54,13 @@ public abstract class LLVMToI1Node extends LLVMExpressionNode {
     @Child private ForeignToLLVM toBool = ForeignToLLVM.create(ForeignToLLVMType.I1);
 
     @Specialization
-    protected boolean doTruffleObject(LLVMTruffleObject from) {
+    public boolean executeTruffleObject(VirtualFrame frame, LLVMTruffleObject from) {
         TruffleObject base = from.getObject();
         if (ForeignAccess.sendIsNull(isNull, base)) {
             return (from.getOffset() & 1) != 0;
         } else if (ForeignAccess.sendIsBoxed(isBoxed, base)) {
             try {
-                boolean ptr = (boolean) toBool.executeWithTarget(ForeignAccess.sendUnbox(unbox, base));
+                boolean ptr = (boolean) toBool.executeWithTarget(frame, ForeignAccess.sendUnbox(unbox, base));
                 return ptr ^ ((from.getOffset() & 1) != 0);
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
@@ -71,43 +72,43 @@ public abstract class LLVMToI1Node extends LLVMExpressionNode {
     }
 
     @Specialization
-    protected boolean doLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
-        return (boolean) toBool.executeWithTarget(from.getValue());
+    public boolean executeLLVMBoxedPrimitive(VirtualFrame frame, LLVMBoxedPrimitive from) {
+        return (boolean) toBool.executeWithTarget(frame, from.getValue());
     }
 
     public abstract static class LLVMToI1NoZeroExtNode extends LLVMToI1Node {
         @Specialization
-        protected boolean doI1(byte from) {
+        public boolean executeI1(byte from) {
             return (from & 1) != 0;
         }
 
         @Specialization
-        protected boolean doI1(short from) {
+        public boolean executeI1(short from) {
             return (from & 1) != 0;
         }
 
         @Specialization
-        protected boolean doI1(int from) {
+        public boolean executeI1(int from) {
             return (from & 1) != 0;
         }
 
         @Specialization
-        protected boolean doI1(long from) {
+        public boolean executeI1(long from) {
             return (from & 1) != 0;
         }
 
         @Specialization
-        protected boolean doI1(float from) {
+        public boolean executeI1(float from) {
             return from != 0;
         }
 
         @Specialization
-        protected boolean doI1(double from) {
+        public boolean executeI1(double from) {
             return from != 0;
         }
 
         @Specialization
-        protected boolean doLLVMFunction(boolean from) {
+        public boolean executeLLVMFunction(boolean from) {
             return from;
         }
     }
@@ -115,12 +116,12 @@ public abstract class LLVMToI1Node extends LLVMExpressionNode {
     public abstract static class LLVMToI1BitNode extends LLVMToI1Node {
 
         @Specialization
-        protected boolean doI1(boolean from) {
+        public boolean executeI1(boolean from) {
             return from;
         }
 
         @Specialization
-        protected boolean doI1Vector(LLVMI1Vector from) {
+        public boolean executeI1Vector(LLVMI1Vector from) {
             if (from.getLength() != 1) {
                 CompilerDirectives.transferToInterpreter();
                 throw new AssertionError("invalid vector size!");
@@ -128,4 +129,5 @@ public abstract class LLVMToI1Node extends LLVMExpressionNode {
             return from.getValue(0);
         }
     }
+
 }

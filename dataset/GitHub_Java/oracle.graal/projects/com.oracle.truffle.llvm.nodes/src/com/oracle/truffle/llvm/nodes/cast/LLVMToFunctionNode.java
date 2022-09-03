@@ -41,11 +41,11 @@ import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 
 @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
 public abstract class LLVMToFunctionNode extends LLVMExpressionNode {
@@ -53,31 +53,30 @@ public abstract class LLVMToFunctionNode extends LLVMExpressionNode {
     @Child private ForeignToLLVM toLong = ForeignToLLVM.create(ForeignToLLVMType.I64);
 
     @Specialization
-    protected LLVMAddress doLLVMBoxedPrimitive(VirtualFrame frame, LLVMBoxedPrimitive from) {
+    public LLVMAddress executeLLVMBoxedPrimitive(VirtualFrame frame, LLVMBoxedPrimitive from) {
         return LLVMAddress.fromLong((long) toLong.executeWithTarget(frame, from.getValue()));
     }
 
     @Specialization
-    protected LLVMAddress doI64(long from) {
+    public LLVMAddress executeI64(long from) {
         return LLVMAddress.fromLong(from);
     }
 
     @Specialization
-    protected LLVMAddress doI64(LLVMAddress from) {
+    public LLVMAddress executeI64(LLVMAddress from) {
         return from;
     }
 
     @Specialization
-    protected LLVMAddress doGlobal(VirtualFrame frame, LLVMGlobal from,
-                    @Cached("toNative()") LLVMToNativeNode access) {
-        return access.executeWithTarget(frame, from);
+    public LLVMAddress executeGlobal(LLVMGlobalVariable from, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess access) {
+        return LLVMAddress.fromLong(access.getNativeLocation(from).getVal());
     }
 
     @Child private Node isExecutable = Message.IS_EXECUTABLE.createNode();
     @Child private Node isNull = Message.IS_NULL.createNode();
 
     @Specialization
-    protected Object doTruffleObject(LLVMTruffleObject from) {
+    public Object executeTruffleObject(LLVMTruffleObject from) {
         if (from.getOffset() == 0) {
             if (ForeignAccess.sendIsNull(isNull, from.getObject())) {
                 return LLVMAddress.fromLong(0);
@@ -90,7 +89,8 @@ public abstract class LLVMToFunctionNode extends LLVMExpressionNode {
     }
 
     @Specialization
-    protected LLVMFunctionDescriptor doLLVMFunction(LLVMFunctionDescriptor from) {
+    public LLVMFunctionDescriptor executeLLVMFunction(LLVMFunctionDescriptor from) {
         return from;
     }
+
 }

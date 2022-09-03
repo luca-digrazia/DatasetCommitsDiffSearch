@@ -29,19 +29,33 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
+import com.oracle.truffle.api.TruffleLanguage.ContextReference;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic.LLVMAddressIntrinsic;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
+@SuppressWarnings("unused")
 @NodeChild(type = LLVMExpressionNode.class)
-public abstract class LLVMTruffleAddressToFunction extends LLVMAddressIntrinsic {
+public abstract class LLVMTruffleAddressToFunction extends LLVMIntrinsic {
 
-    @Specialization
-    public Object executeIntrinsic(LLVMAddress value) {
-        return LLVMFunctionDescriptor.create((int) value.getVal());
+    @Specialization(guards = "value.getVal() == cachedValue.getVal()")
+    public Object executeIntrinsicCached(LLVMAddress value, @Cached("value") LLVMAddress cachedValue, @Cached("getContextReference()") ContextReference<LLVMContext> cachedContext,
+                    @Cached("getDescriptor(cachedValue, cachedContext)") LLVMFunctionDescriptor handle) {
+        return handle;
+    }
+
+    @Specialization(replaces = "executeIntrinsicCached")
+    public Object executeIntrinsic(LLVMAddress value, @Cached("getContextReference()") ContextReference<LLVMContext> cachedContext) {
+        return getDescriptor(value, cachedContext);
+    }
+
+    protected static LLVMFunctionDescriptor getDescriptor(LLVMAddress value, ContextReference<LLVMContext> cachedContext) {
+        return cachedContext.get().getFunctionDescriptor(value);
     }
 
 }

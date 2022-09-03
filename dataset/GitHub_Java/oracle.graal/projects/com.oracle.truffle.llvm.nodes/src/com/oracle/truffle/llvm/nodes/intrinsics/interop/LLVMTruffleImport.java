@@ -29,20 +29,41 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.context.LLVMLanguage;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic.LLVMAddressIntrinsic;
-import com.oracle.truffle.llvm.types.LLVMAddress;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
+import com.oracle.truffle.llvm.nodes.memory.LLVMAddressGetElementPtrNode.LLVMIncrementPointerNode;
+import com.oracle.truffle.llvm.nodes.memory.LLVMAddressGetElementPtrNodeGen.LLVMIncrementPointerNodeGen;
+import com.oracle.truffle.llvm.nodes.memory.load.LLVMI8LoadNode;
+import com.oracle.truffle.llvm.nodes.memory.load.LLVMI8LoadNodeGen;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeChild(type = LLVMExpressionNode.class)
-public abstract class LLVMTruffleImport extends LLVMAddressIntrinsic {
+public abstract class LLVMTruffleImport extends LLVMIntrinsic {
 
-    @Specialization
-    public Object executeIntrinsic(LLVMAddress value) {
-        String id = LLVMTruffleIntrinsicUtil.readString(value);
-        return LLVMLanguage.INSTANCE.getEnvironment().importSymbol(id);
+    @Child protected ForeignToLLVM toLLVM = ForeignToLLVM.create(ForeignToLLVMType.POINTER);
+
+    protected static LLVMIncrementPointerNode createIncNode() {
+        return LLVMIncrementPointerNodeGen.create();
     }
 
+    protected static LLVMI8LoadNode loadI8() {
+        return LLVMI8LoadNodeGen.create();
+    }
+
+    @Specialization
+    public Object executeIntrinsic(VirtualFrame frame, Object value, @Cached("createReadString()") LLVMReadStringNode readStr) {
+        String id = readStr.executeWithTarget(frame, value);
+        return toLLVM.executeWithTarget(frame, importSymbol(id));
+    }
+
+    @TruffleBoundary
+    public Object importSymbol(String id) {
+        return getContextReference().get().getEnv().importSymbol(id);
+    }
 }

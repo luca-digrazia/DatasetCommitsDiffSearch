@@ -56,45 +56,44 @@ public abstract class LLVMToAddressNode extends LLVMExpressionNode {
     public abstract Type getType();
 
     @Specialization
-    protected LLVMAddress doI1(boolean from) {
+    public LLVMAddress executeI1(boolean from) {
         return LLVMAddress.fromLong(from ? 1 : 0);
     }
 
     @Specialization
-    protected LLVMAddress doI8(byte from) {
+    public LLVMAddress executeI8(byte from) {
         return LLVMAddress.fromLong(LLVMExpressionNode.I8_MASK & (long) from);
     }
 
     @Specialization
-    protected LLVMAddress doI16(short from) {
+    public LLVMAddress executeI16(short from) {
         return LLVMAddress.fromLong(LLVMExpressionNode.I16_MASK & (long) from);
     }
 
     @Specialization
-    protected LLVMAddress doI32(int from) {
+    public LLVMAddress executeI32(int from) {
         return LLVMAddress.fromLong(LLVMExpressionNode.I32_MASK & from);
     }
 
     @Specialization
-    protected LLVMAddress doI64(long from) {
+    public LLVMAddress executeI64(long from) {
         return LLVMAddress.fromLong(from);
     }
 
     @Specialization
-    protected LLVMAddress doFunctionDescriptor(VirtualFrame frame, LLVMFunctionDescriptor from,
-                    @Cached("toNative()") LLVMToNativeNode toNative) {
+    public LLVMAddress executeI64(VirtualFrame frame, LLVMFunctionDescriptor from, @Cached("createToNativeNode()") LLVMToNativeNode toNative) {
         return toNative.executeWithTarget(frame, from);
     }
 
     @Specialization
-    protected LLVMAddress doLLVMAddress(LLVMAddress from) {
+    public LLVMAddress executeLLVMAddress(LLVMAddress from) {
         return from;
     }
 
     @Child private ForeignToLLVM toLong = ForeignToLLVM.create(ForeignToLLVMType.I64);
 
     @Specialization
-    protected LLVMAddress doLLVMBoxedPrimitive(VirtualFrame frame, LLVMBoxedPrimitive from) {
+    public LLVMAddress executeLLVMBoxedPrimitive(VirtualFrame frame, LLVMBoxedPrimitive from) {
         return LLVMAddress.fromLong((long) toLong.executeWithTarget(frame, from.getValue()));
     }
 
@@ -112,9 +111,7 @@ public abstract class LLVMToAddressNode extends LLVMExpressionNode {
 
     @SuppressWarnings("unused")
     @Specialization(guards = {"checkIsPointer(isPointer, obj)"})
-    protected LLVMAddress fromNativePointer(LLVMTruffleObject obj,
-                    @Cached("createIsPointer()") Node isPointer,
-                    @Cached("createAsPointer()") Node asPointer) {
+    public LLVMAddress fromNativePointer(LLVMTruffleObject obj, @Cached("createIsPointer()") Node isPointer, @Cached("createAsPointer()") Node asPointer) {
         try {
             long raw = ForeignAccess.sendAsPointer(asPointer, obj.getObject());
             return LLVMAddress.fromLong(raw + obj.getOffset());
@@ -126,8 +123,7 @@ public abstract class LLVMToAddressNode extends LLVMExpressionNode {
 
     @SuppressWarnings("unused")
     @Specialization(guards = {"!checkIsPointer(isPointer, from)"})
-    protected LLVMTruffleObject doTruffleObject(LLVMTruffleObject from,
-                    @Cached("createIsPointer()") Node isPointer) {
+    public LLVMTruffleObject executeTruffleObject(LLVMTruffleObject from, @Cached("createIsPointer()") Node isPointer) {
         return new LLVMTruffleObject(from, getType());
     }
 }

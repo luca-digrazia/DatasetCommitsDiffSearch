@@ -55,7 +55,7 @@ import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -86,6 +86,7 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
                     public boolean compare(LLVMAddress val1, LLVMAddress val2) {
                         return val1.signedLessThan(val2);
                     }
+
                 }, l, r);
 
             case SGE:
@@ -95,6 +96,7 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
                     public boolean compare(LLVMAddress val1, LLVMAddress val2) {
                         return val1.signedGreaterEquals(val2);
                     }
+
                 }, l, r);
             case SGT:
                 return LLVMAddressCompareNodeGen.create(new AddressCompare() {
@@ -103,6 +105,7 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
                     public boolean compare(LLVMAddress val1, LLVMAddress val2) {
                         return val1.signedGreaterThan(val2);
                     }
+
                 }, l, r);
             case SLE:
                 return LLVMAddressCompareNodeGen.create(new AddressCompare() {
@@ -111,6 +114,7 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
                     public boolean compare(LLVMAddress val1, LLVMAddress val2) {
                         return val1.signedLessEquals(val2);
                     }
+
                 }, l, r);
             case UGE:
                 return LLVMAddressCompareNodeGen.create(new AddressCompare() {
@@ -119,6 +123,7 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
                     public boolean compare(LLVMAddress val1, LLVMAddress val2) {
                         return val1.unsignedGreaterEquals(val2);
                     }
+
                 }, l, r);
             case UGT:
                 return LLVMAddressCompareNodeGen.create(new AddressCompare() {
@@ -127,6 +132,7 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
                     public boolean compare(LLVMAddress val1, LLVMAddress val2) {
                         return val1.unsignedGreaterThan(val2);
                     }
+
                 }, l, r);
             case ULE:
                 return LLVMAddressCompareNodeGen.create(new AddressCompare() {
@@ -135,6 +141,7 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
                     public boolean compare(LLVMAddress val1, LLVMAddress val2) {
                         return val1.unsignedLessEquals(val2);
                     }
+
                 }, l, r);
             case ULT:
                 return LLVMAddressCompareNodeGen.create(new AddressCompare() {
@@ -143,6 +150,7 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
                     public boolean compare(LLVMAddress val1, LLVMAddress val2) {
                         return val1.unsignedLessThan(val2);
                     }
+
                 }, l, r);
 
             case EQ:
@@ -197,8 +205,7 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected LLVMAddress doLLVMBoxedPrimitive(VirtualFrame frame, LLVMBoxedPrimitive address,
-                        @Cached("create(I64)") ForeignToLLVM toLLVM) {
+        protected LLVMAddress doLLVMBoxedPrimitive(VirtualFrame frame, LLVMBoxedPrimitive address, @Cached("create(I64)") ForeignToLLVM toLLVM) {
             return LLVMAddress.fromLong((long) toLLVM.executeWithTarget(frame, address.getValue()));
         }
     }
@@ -255,7 +262,7 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
     @Child private ToComparableValue convertVal2 = ToComparableValueNodeGen.create();
 
     @Specialization
-    protected boolean doGenericCompare(VirtualFrame frame, Object val1, Object val2) {
+    public boolean doGenericCompare(VirtualFrame frame, Object val1, Object val2) {
         return op.compare(convertVal1.execute(frame, val1), convertVal2.execute(frame, val2));
     }
 
@@ -265,12 +272,12 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
         abstract boolean execute(TruffleObject obj1, TruffleObject obj2);
 
         @Specialization(guards = {"isJavaObject(obj1)", "isJavaObject(obj2)"})
-        protected boolean doJava(TruffleObject obj1, TruffleObject obj2) {
+        boolean doJava(TruffleObject obj1, TruffleObject obj2) {
             return JavaInterop.asJavaObject(obj1) == JavaInterop.asJavaObject(obj2);
         }
 
         @Fallback
-        protected boolean doOther(TruffleObject obj1, TruffleObject obj2) {
+        boolean doOther(TruffleObject obj1, TruffleObject obj2) {
             return obj1 == obj2;
         }
     }
@@ -280,29 +287,29 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
         abstract boolean execute(Object val1, Object val2);
 
         @Specialization
-        protected boolean doForeign(LLVMTruffleObject obj1, LLVMTruffleObject obj2,
+        boolean doForeign(LLVMTruffleObject obj1, LLVMTruffleObject obj2,
                         @Cached("createForeignEquals()") LLVMForeignEqualsNode equals) {
             return equals.execute(obj1.getObject(), obj2.getObject()) && obj1.getOffset() == obj2.getOffset();
         }
 
         @Specialization
-        protected boolean doGlobal(LLVMGlobal g1, LLVMGlobal g2) {
+        boolean doGlobal(LLVMGlobalVariable g1, LLVMGlobalVariable g2) {
             return g1 == g2;
         }
 
         @Specialization
-        protected boolean doVirtual(LLVMVirtualAllocationAddress v1, LLVMVirtualAllocationAddress v2) {
+        boolean doVirtual(LLVMVirtualAllocationAddress v1, LLVMVirtualAllocationAddress v2) {
             return v1.getObject() == v2.getObject() && v1.getOffset() == v2.getOffset();
         }
 
         @Specialization
-        protected boolean doFunctionDescriptor(LLVMFunctionDescriptor f1, LLVMFunctionDescriptor f2) {
+        boolean doFunctionDescriptor(LLVMFunctionDescriptor f1, LLVMFunctionDescriptor f2) {
             return f1 == f2;
         }
 
         @Specialization(guards = "val1.getClass() != val2.getClass()")
         @SuppressWarnings("unused")
-        protected boolean doDifferentType(Object val1, Object val2) {
+        boolean doDifferentType(Object val1, Object val2) {
             // different type, and at least one of them is managed, and not a pointer
             // these objects can not have the same address
             return false;
@@ -320,7 +327,7 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
                         Object val2, LLVMObjectNativeLibrary lib2);
 
         @Specialization(guards = {"lib1.isPointer(frame, val1)", "lib2.isPointer(frame, val2)"})
-        protected boolean doPointerPointer(VirtualFrame frame,
+        boolean doPointerPointer(VirtualFrame frame,
                         Object val1, LLVMObjectNativeLibrary lib1,
                         Object val2, LLVMObjectNativeLibrary lib2) {
             try {
@@ -331,9 +338,10 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
         }
 
         @Specialization(guards = "!lib1.isPointer(frame, val1) || !lib2.isPointer(frame, val2)")
-        protected boolean doOther(@SuppressWarnings("unused") VirtualFrame frame,
-                        Object val1, @SuppressWarnings("unused") LLVMObjectNativeLibrary lib1,
-                        Object val2, @SuppressWarnings("unused") LLVMObjectNativeLibrary lib2,
+        @SuppressWarnings("unused")
+        boolean doOther(VirtualFrame frame,
+                        Object val1, LLVMObjectNativeLibrary lib1,
+                        Object val2, LLVMObjectNativeLibrary lib2,
                         @Cached("createManagedEquals()") LLVMManagedEqualsNode managedEquals) {
             return managedEquals.execute(val1, val2);
         }
@@ -348,7 +356,7 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
         abstract boolean execute(VirtualFrame frame, Object val1, Object val2);
 
         @Specialization(guards = {"lib1.guard(val1)", "lib2.guard(val2)"})
-        protected boolean doCached(VirtualFrame frame, Object val1, Object val2,
+        boolean doCached(VirtualFrame frame, Object val1, Object val2,
                         @Cached("createCached(val1)") LLVMObjectNativeLibrary lib1,
                         @Cached("createCached(val2)") LLVMObjectNativeLibrary lib2,
                         @Cached("createEquals()") LLVMNativeEqualsNode equals) {
@@ -356,7 +364,7 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
         }
 
         @Specialization(replaces = "doCached", guards = {"lib.guard(val1)", "lib.guard(val2)"})
-        protected boolean doGeneric(VirtualFrame frame, Object val1, Object val2,
+        boolean doGeneric(VirtualFrame frame, Object val1, Object val2,
                         @Cached("createGeneric()") LLVMObjectNativeLibrary lib,
                         @Cached("createEquals()") LLVMNativeEqualsNode equals) {
             return equals.execute(frame, val1, lib, val2, lib);
@@ -370,10 +378,10 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
     @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
     abstract static class LLVMAddressEQNode extends LLVMExpressionNode {
 
-        @Child private LLVMAddressEqualsNode equals = LLVMAddressEqualsNodeGen.create();
+        @Child LLVMAddressEqualsNode equals = LLVMAddressEqualsNodeGen.create();
 
         @Specialization
-        protected boolean doCompare(VirtualFrame frame, Object val1, Object val2) {
+        public boolean doCompare(VirtualFrame frame, Object val1, Object val2) {
             return equals.execute(frame, val1, val2);
         }
     }
@@ -381,11 +389,12 @@ public abstract class LLVMAddressCompareNode extends LLVMExpressionNode {
     @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
     abstract static class LLVMAddressNEQNode extends LLVMExpressionNode {
 
-        @Child private LLVMAddressEqualsNode equals = LLVMAddressEqualsNodeGen.create();
+        @Child LLVMAddressEqualsNode equals = LLVMAddressEqualsNodeGen.create();
 
         @Specialization
-        protected boolean doCompare(VirtualFrame frame, Object val1, Object val2) {
+        public boolean doCompare(VirtualFrame frame, Object val1, Object val2) {
             return !equals.execute(frame, val1, val2);
         }
     }
+
 }

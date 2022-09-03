@@ -29,44 +29,43 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.context.LLVMLanguage;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleImportCachedFactory.ImportCacheNodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic.LLVMAddressIntrinsic;
-import com.oracle.truffle.llvm.types.LLVMAddress;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeChild(type = LLVMExpressionNode.class)
-public abstract class LLVMTruffleImportCached extends LLVMAddressIntrinsic {
+public abstract class LLVMTruffleImportCached extends LLVMIntrinsic {
 
-    @Child private ImportCache cache = ImportCacheNodeGen.create();
+    @Child protected ForeignToLLVM toLLVM = ForeignToLLVM.create(ForeignToLLVMType.POINTER);
 
-    @Specialization
-    public Object executeIntrinsic(LLVMAddress value) {
-        String id = LLVMTruffleIntrinsicUtil.readString(value);
-        return cache.execute(id);
+    protected Object resolve(VirtualFrame frame, String name) {
+        return toLLVM.executeWithTarget(frame, importSymbol(name));
     }
 
-    abstract static class ImportCache extends Node {
+    @TruffleBoundary
+    public Object importSymbol(String id) {
+        return getContextReference().get().getEnv().importSymbol(id);
+    }
 
-        public abstract Object execute(String name);
+    @SuppressWarnings("unused")
+    @Specialization(limit = "10", guards = {"src.equals(readStr.executeWithTarget(frame, value))"})
+    public Object cached(VirtualFrame frame, Object value,
+                    @Cached("createReadString()") LLVMReadStringNode readStr,
+                    @Cached("readStr.executeWithTarget(frame, value)") String src,
+                    @Cached("resolve(frame, src)") Object symbol) {
+        return symbol;
+    }
 
-        @SuppressWarnings("unused")
-        @Specialization(limit = "10", guards = {"stringEquals(name, cachedName)"})
-        public Object importValue(String name, @Cached("name") String cachedName, @Cached("resolve(cachedName)") Object value) {
-            return value;
-        }
-
-        protected static Object resolve(String name) {
-            return LLVMLanguage.INSTANCE.getEnvironment().importSymbol(name);
-        }
-
-        protected static boolean stringEquals(String s1, String s2) {
-            return s1.equals(s2);
-        }
+    @Specialization(replaces = "cached")
+    public Object uncached(VirtualFrame frame, Object value,
+                    @Cached("createReadString()") LLVMReadStringNode readStr) {
+        return resolve(frame, readStr.executeWithTarget(frame, value));
     }
 
 }

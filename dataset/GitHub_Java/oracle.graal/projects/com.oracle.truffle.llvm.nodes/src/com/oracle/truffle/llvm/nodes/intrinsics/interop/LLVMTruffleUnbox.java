@@ -35,13 +35,13 @@ import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
-import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -57,14 +57,9 @@ public abstract class LLVMTruffleUnbox extends LLVMIntrinsic {
     }
 
     @Specialization
-    protected Object doIntrinsic(LLVMTruffleObject value) {
+    public Object executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value) {
         checkLLVMTruffleObject(value);
-        return doUnbox(value.getObject());
-    }
-
-    @Specialization
-    protected Object doIntrinsic(LLVMBoxedPrimitive value) {
-        return toLLVM.executeWithTarget(value.getValue());
+        return doUnbox(frame, value.getObject());
     }
 
     @Fallback
@@ -82,13 +77,14 @@ public abstract class LLVMTruffleUnbox extends LLVMIntrinsic {
         }
     }
 
-    private Object doUnbox(TruffleObject value) {
+    private Object doUnbox(VirtualFrame frame, TruffleObject value) {
         try {
             Object rawValue = ForeignAccess.sendUnbox(foreignUnbox, value);
-            return toLLVM.executeWithTarget(rawValue);
+            return toLLVM.executeWithTarget(frame, rawValue);
         } catch (UnsupportedMessageException e) {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException(e);
         }
     }
+
 }

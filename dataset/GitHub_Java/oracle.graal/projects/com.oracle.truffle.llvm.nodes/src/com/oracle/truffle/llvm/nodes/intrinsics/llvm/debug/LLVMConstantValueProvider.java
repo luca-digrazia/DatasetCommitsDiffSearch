@@ -38,7 +38,6 @@ import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugTypeConstants;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebugValueProvider;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 
 abstract class LLVMConstantValueProvider implements LLVMDebugValueProvider {
 
@@ -210,10 +209,8 @@ abstract class LLVMConstantValueProvider implements LLVMDebugValueProvider {
     static final class Address extends LLVMConstantValueProvider {
 
         private final LLVMAddress address;
-        private final LLVMMemory memory;
 
-        Address(LLVMMemory memory, LLVMAddress address) {
-            this.memory = memory;
+        Address(LLVMAddress address) {
             this.address = address;
         }
 
@@ -245,7 +242,7 @@ abstract class LLVMConstantValueProvider implements LLVMDebugValueProvider {
         @Override
         public LLVMDebugValueProvider dereferencePointer(long bitOffset) {
             if (canRead(bitOffset, LLVMDebugTypeConstants.ADDRESS_SIZE)) {
-                return new LLVMAllocationValueProvider(memory, address);
+                return new LLVMAllocationValueProvider(address);
             } else {
                 return null;
             }

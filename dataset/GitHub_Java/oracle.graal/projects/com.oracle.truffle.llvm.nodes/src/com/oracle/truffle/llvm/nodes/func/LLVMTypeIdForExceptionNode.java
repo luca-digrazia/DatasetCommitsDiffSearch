@@ -44,7 +44,7 @@ public final class LLVMTypeIdForExceptionNode extends LLVMExpressionNode {
     public LLVMTypeIdForExceptionNode(LLVMExpressionNode thrownTypeID, SourceSection sourceSection) {
         this.thrownTypeID = thrownTypeID;
         this.sourceSection = sourceSection;
-        this.thrownTypeIDToAddress = LLVMToNativeNode.toNative();
+        this.thrownTypeIDToAddress = createToNativeNode();
     }
 
     @Override
@@ -56,4 +56,5 @@ public final class LLVMTypeIdForExceptionNode extends LLVMExpressionNode {
     public Object executeGeneric(VirtualFrame frame) {
         return (int) thrownTypeIDToAddress.executeWithTarget(frame, thrownTypeID.executeGeneric(frame)).getVal();
     }
+
 }

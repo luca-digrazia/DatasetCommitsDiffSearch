@@ -41,7 +41,8 @@ import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -56,107 +57,105 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 public abstract class LLVMToI32Node extends LLVMExpressionNode {
 
     @Specialization
-    protected int doI32(VirtualFrame frame, LLVMFunctionDescriptor from,
-                    @Cached("toNative()") LLVMToNativeNode toNative) {
+    public int executeI32(VirtualFrame frame, LLVMFunctionDescriptor from, @Cached("createToNativeNode()") LLVMToNativeNode toNative) {
         return (int) toNative.executeWithTarget(frame, from).getVal();
     }
 
     @Specialization
-    protected int doGlobal(VirtualFrame frame, LLVMGlobal from,
-                    @Cached("toNative()") LLVMToNativeNode access) {
-        return (int) access.executeWithTarget(frame, from).getVal();
+    public int executeLLVMAddress(LLVMGlobalVariable from, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+        return (int) globalAccess.getNativeLocation(from).getVal();
     }
 
     @Child private ForeignToLLVM convert = ForeignToLLVM.create(ForeignToLLVMType.I32);
 
     @Specialization
-    protected int doLLVMTruffleObject(VirtualFrame frame, LLVMTruffleObject from,
-                    @Cached("toNative()") LLVMToNativeNode toNative) {
+    public int executeLLVMTruffleObject(VirtualFrame frame, LLVMTruffleObject from, @Cached("createToNativeNode()") LLVMToNativeNode toNative) {
         return (int) toNative.executeWithTarget(frame, from).getVal();
     }
 
     @Specialization
-    protected int doLLVMBoxedPrimitive(VirtualFrame frame, LLVMBoxedPrimitive from) {
+    public int executeLLVMBoxedPrimitive(VirtualFrame frame, LLVMBoxedPrimitive from) {
         return (int) convert.executeWithTarget(frame, from.getValue());
     }
 
     public abstract static class LLVMToI32NoZeroExtNode extends LLVMToI32Node {
 
         @Specialization
-        protected int doI32(boolean from) {
+        public int executeI32(boolean from) {
             return from ? -1 : 0;
         }
 
         @Specialization
-        protected int doI32(byte from) {
+        public int executeI32(byte from) {
             return from;
         }
 
         @Specialization
-        protected int doI32(short from) {
+        public int executeI32(short from) {
             return from;
         }
 
         @Specialization
-        protected int doI32(LLVMAddress from) {
+        public int executeI32(LLVMAddress from) {
             return (int) from.getVal();
         }
 
         @Specialization
-        protected int doI32(long from) {
+        public int executeI32(long from) {
             return (int) from;
         }
 
         @Specialization
-        protected int doI32(LLVMIVarBit from) {
+        public int executeI32(LLVMIVarBit from) {
             return from.getIntValue();
         }
 
         @Specialization
-        protected int doI32(float from) {
+        public int executeI32(float from) {
             return (int) from;
         }
 
         @Specialization
-        protected int doI32(double from) {
+        public int executeI32(double from) {
             return (int) from;
         }
 
         @Specialization
-        protected int doI32(LLVM80BitFloat from) {
+        public int executeI32(LLVM80BitFloat from) {
             return from.getIntValue();
         }
 
         @Specialization
-        protected int doI32(int from) {
+        public int executeI32(int from) {
             return from;
         }
+
     }
 
     public abstract static class LLVMToI32ZeroExtNode extends LLVMToI32Node {
 
         @Specialization
-        protected int doI32(boolean from) {
+        public int executeI32(boolean from) {
             return from ? 1 : 0;
         }
 
         @Specialization
-        protected int doI32(byte from) {
+        public int executeI32(byte from) {
             return from & LLVMExpressionNode.I8_MASK;
         }
 
         @Specialization
-        protected int doI32(short from) {
+        public int executeI32(short from) {
             return from & LLVMExpressionNode.I16_MASK;
         }
 
         @Specialization
-        protected int doI32(LLVMIVarBit from) {
+        public int executeI32(LLVMIVarBit from) {
             return from.getZeroExtendedIntValue();
         }
 
         @Specialization
-        protected int doI32(int from) {
+        public int executeI32(int from) {
             return from;
         }
     }
@@ -164,32 +163,32 @@ public abstract class LLVMToI32Node extends LLVMExpressionNode {
     public abstract static class LLVMToI32BitNode extends LLVMToI32Node {
 
         @Specialization
-        protected int doI32(float from) {
+        public int executeI32(float from) {
             return Float.floatToIntBits(from);
         }
 
         @Specialization
-        protected int doI32(int from) {
+        public int executeI32(int from) {
             return from;
         }
 
         @Specialization
-        protected int doI1Vector(LLVMI1Vector from) {
+        public int executeI1Vector(LLVMI1Vector from) {
             return (int) LLVMToI64BitNode.castI1Vector(from, Integer.SIZE);
         }
 
         @Specialization
-        protected int doI8Vector(LLVMI8Vector from) {
+        public int executeI8Vector(LLVMI8Vector from) {
             return (int) LLVMToI64BitNode.castI8Vector(from, Integer.SIZE / Byte.SIZE);
         }
 
         @Specialization
-        protected int doI16Vector(LLVMI16Vector from) {
+        public int executeI16Vector(LLVMI16Vector from) {
             return (int) LLVMToI64BitNode.castI16Vector(from, Integer.SIZE / Short.SIZE);
         }
 
         @Specialization
-        protected int doI32Vector(LLVMI32Vector from) {
+        public int executeI32Vector(LLVMI32Vector from) {
             if (from.getLength() != 1) {
                 CompilerDirectives.transferToInterpreter();
                 throw new AssertionError("invalid vector size!");
@@ -198,7 +197,7 @@ public abstract class LLVMToI32Node extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected int doFloatVector(LLVMFloatVector from) {
+        public int executeFloatVector(LLVMFloatVector from) {
             if (from.getLength() != 1) {
                 CompilerDirectives.transferToInterpreter();
                 throw new AssertionError("invalid vector size!");
@@ -210,7 +209,7 @@ public abstract class LLVMToI32Node extends LLVMExpressionNode {
     public abstract static class LLVMToUnsignedI32Node extends LLVMToI32Node {
 
         @Specialization
-        protected int doI32(double from) {
+        public int executeI32(double from) {
             if (from > Integer.MAX_VALUE) {
                 return (int) (from + Integer.MIN_VALUE) - Integer.MIN_VALUE;
             }
@@ -218,7 +217,7 @@ public abstract class LLVMToI32Node extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected int doI32(int from) {
+        public int executeI32(int from) {
             return from;
         }
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -89,7 +89,7 @@ public abstract class LLVMTruffleRead extends LLVMIntrinsic {
 
         @SuppressWarnings("unused")
         @Specialization(limit = "2", guards = "cachedId.equals(readStr.executeWithTarget(frame, id))")
-        protected Object cached(VirtualFrame frame, LLVMTruffleObject value, Object id,
+        public Object cached(VirtualFrame frame, LLVMTruffleObject value, Object id,
                         @Cached("createReadString()") LLVMReadStringNode readStr,
                         @Cached("readStr.executeWithTarget(frame, id)") String cachedId) {
             checkLLVMTruffleObject(value);
@@ -97,7 +97,7 @@ public abstract class LLVMTruffleRead extends LLVMIntrinsic {
         }
 
         @Specialization(replaces = "cached")
-        protected Object uncached(VirtualFrame frame, LLVMTruffleObject value, Object id,
+        public Object uncached(VirtualFrame frame, LLVMTruffleObject value, Object id,
                         @Cached("createReadString()") LLVMReadStringNode readStr) {
             checkLLVMTruffleObject(value);
             return doRead(frame, value.getObject(), readStr.executeWithTarget(frame, id), foreignRead, toLLVM);
@@ -123,7 +123,7 @@ public abstract class LLVMTruffleRead extends LLVMIntrinsic {
         }
 
         @Specialization
-        protected Object doIntrinsic(VirtualFrame frame, LLVMTruffleObject value, int id) {
+        public Object executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value, int id) {
             checkLLVMTruffleObject(value);
             return doReadIdx(frame, value.getObject(), id, foreignRead, toLLVM);
         }
@@ -136,4 +136,5 @@ public abstract class LLVMTruffleRead extends LLVMIntrinsic {
             throw new IllegalArgumentException();
         }
     }
+
 }

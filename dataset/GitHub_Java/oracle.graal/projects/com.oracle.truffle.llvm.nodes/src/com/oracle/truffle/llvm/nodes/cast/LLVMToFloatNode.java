@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.nodes.cast;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -56,8 +57,8 @@ public abstract class LLVMToFloatNode extends LLVMExpressionNode {
     @Child private ForeignToLLVM toFloat = ForeignToLLVM.create(ForeignToLLVMType.FLOAT);
 
     @Specialization
-    protected float doLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
-        return (float) toFloat.executeWithTarget(from.getValue());
+    public float executeLLVMBoxedPrimitive(VirtualFrame frame, LLVMBoxedPrimitive from) {
+        return (float) toFloat.executeWithTarget(frame, from.getValue());
     }
 
     @Child private Node isNull = Message.IS_NULL.createNode();
@@ -65,13 +66,13 @@ public abstract class LLVMToFloatNode extends LLVMExpressionNode {
     @Child private Node unbox = Message.UNBOX.createNode();
 
     @Specialization
-    protected float doTruffleObject(LLVMTruffleObject from) {
+    public float executeTruffleObject(VirtualFrame frame, LLVMTruffleObject from) {
         TruffleObject base = from.getObject();
         if (ForeignAccess.sendIsNull(isNull, base)) {
             return from.getOffset();
         } else if (ForeignAccess.sendIsBoxed(isBoxed, base)) {
             try {
-                float ptr = (float) toFloat.executeWithTarget(ForeignAccess.sendUnbox(unbox, base));
+                float ptr = (float) toFloat.executeWithTarget(frame, ForeignAccess.sendUnbox(unbox, base));
                 return ptr + from.getOffset();
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
@@ -85,37 +86,37 @@ public abstract class LLVMToFloatNode extends LLVMExpressionNode {
     public abstract static class LLVMToFloatNoZeroExtNode extends LLVMToFloatNode {
 
         @Specialization
-        protected float doDouble(byte from) {
+        public float executeDouble(byte from) {
             return from;
         }
 
         @Specialization
-        protected float doFloat(short from) {
+        public float executeFloat(short from) {
             return from;
         }
 
         @Specialization
-        protected float doFloat(int from) {
+        public float executeFloat(int from) {
             return from;
         }
 
         @Specialization
-        protected float doFloat(long from) {
+        public float executeFloat(long from) {
             return from;
         }
 
         @Specialization
-        protected float doFloat(double from) {
+        public float executeFloat(double from) {
             return (float) from;
         }
 
         @Specialization
-        protected float doFloat(LLVM80BitFloat from) {
+        public float executeFloat(LLVM80BitFloat from) {
             return from.getFloatValue();
         }
 
         @Specialization
-        protected float doDouble(float from) {
+        public float executeDouble(float from) {
             return from;
         }
     }
@@ -123,58 +124,59 @@ public abstract class LLVMToFloatNode extends LLVMExpressionNode {
     public abstract static class LLVMToFloatZeroExtNode extends LLVMToFloatNode {
 
         @Specialization
-        protected float doDouble(byte from) {
+        public float executeDouble(byte from) {
             return from & LLVMExpressionNode.I8_MASK;
         }
 
         @Specialization
-        protected float doDouble(short from) {
+        public float executeDouble(short from) {
             return from & LLVMExpressionNode.I16_MASK;
         }
 
         @Specialization
-        protected float doFloat(int from) {
+        public float executeFloat(int from) {
             return from;
         }
 
         @Specialization
-        protected float doDouble(float from) {
+        public float executeDouble(float from) {
             return from;
         }
+
     }
 
     public abstract static class LLVMToFloatBitNode extends LLVMToFloatNode {
 
         @Specialization
-        protected float doFloat(int from) {
+        public float executeFloat(int from) {
             return Float.intBitsToFloat(from);
         }
 
         @Specialization
-        protected float doDouble(float from) {
+        public float executeDouble(float from) {
             return from;
         }
 
         @Specialization
-        protected float doI1Vector(LLVMI1Vector from) {
+        public float executeI1Vector(LLVMI1Vector from) {
             int res = (int) LLVMToI64BitNode.castI1Vector(from, Integer.SIZE);
             return Float.intBitsToFloat(res);
         }
 
         @Specialization
-        protected float doI8Vector(LLVMI8Vector from) {
+        public float executeI8Vector(LLVMI8Vector from) {
             int res = (int) LLVMToI64BitNode.castI8Vector(from, Integer.SIZE / Byte.SIZE);
             return Float.intBitsToFloat(res);
         }
 
         @Specialization
-        protected float doI16Vector(LLVMI16Vector from) {
+        public float executeI16Vector(LLVMI16Vector from) {
             int res = (int) LLVMToI64BitNode.castI16Vector(from, Integer.SIZE / Short.SIZE);
             return Float.intBitsToFloat(res);
         }
 
         @Specialization
-        protected float doI32Vector(LLVMI32Vector from) {
+        public float executeI32Vector(LLVMI32Vector from) {
             if (from.getLength() != 1) {
                 CompilerDirectives.transferToInterpreter();
                 throw new AssertionError("invalid vector size!");
@@ -183,7 +185,7 @@ public abstract class LLVMToFloatNode extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected float doFloatVector(LLVMFloatVector from) {
+        public float executeFloatVector(LLVMFloatVector from) {
             if (from.getLength() != 1) {
                 CompilerDirectives.transferToInterpreter();
                 throw new AssertionError("invalid vector size!");
@@ -197,12 +199,12 @@ public abstract class LLVMToFloatNode extends LLVMExpressionNode {
         private static final float LEADING_BIT = 0x1.0p63f;
 
         @Specialization
-        protected float doFloat(int from) {
+        public float executeFloat(int from) {
             return from & LLVMExpressionNode.I32_MASK;
         }
 
         @Specialization
-        protected float doFloat(long from) {
+        public float executeFloat(long from) {
             float val = from & Long.MAX_VALUE;
             if (from < 0) {
                 val += LEADING_BIT;
@@ -211,8 +213,9 @@ public abstract class LLVMToFloatNode extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected float doDouble(float from) {
+        public float executeDouble(float from) {
             return from;
         }
     }
+
 }
