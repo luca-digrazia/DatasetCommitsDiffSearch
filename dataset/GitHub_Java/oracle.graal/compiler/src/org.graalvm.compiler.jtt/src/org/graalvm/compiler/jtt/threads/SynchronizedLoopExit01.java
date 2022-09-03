@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -29,7 +27,9 @@ package org.graalvm.compiler.jtt.threads;
 import org.graalvm.compiler.jtt.JTTTest;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
+import org.junit.rules.Timeout;
 
 /**
  * Inspired by {@code com.sun.media.sound.DirectAudioDevice$DirectDL.drain()}.
@@ -39,12 +39,11 @@ import org.junit.rules.TestRule;
  */
 public final class SynchronizedLoopExit01 extends JTTTest {
 
-    @Rule public TestRule timeout = createTimeoutSeconds(20);
+    @Rule public TestRule timeout = new DisableOnDebug(Timeout.seconds(20));
 
     protected Object object = new Object();
     protected volatile boolean drained = false;
     protected volatile boolean someBoolean = true;
-    protected volatile int someInt = 3;
 
     public boolean test() {
         boolean b = true;
@@ -61,52 +60,8 @@ public final class SynchronizedLoopExit01 extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
+        initializeForTimeout();
         runTest("test");
-    }
-
-    public synchronized boolean test1() {
-        boolean b = true;
-        while (!drained) {
-            synchronized (object) {
-                boolean c = b = someBoolean;
-                if (c || drained) {
-                    break;
-                }
-            }
-        }
-        return b;
-    }
-
-    @Test
-    public void run1() throws Throwable {
-        runTest("test1");
-    }
-
-    public synchronized boolean test2() {
-        boolean b = true;
-        while (!drained) {
-            synchronized (object) {
-                boolean c = b = someBoolean;
-                if (c || drained) {
-                    break;
-                }
-                if (someInt > 0) {
-                    throw new RuntimeException();
-                }
-            }
-            if (someInt < -10) {
-                throw new IndexOutOfBoundsException();
-            }
-        }
-        if (someInt < -5) {
-            throw new IllegalArgumentException();
-        }
-        return b;
-    }
-
-    @Test
-    public void run2() throws Throwable {
-        runTest("test2");
     }
 
 }

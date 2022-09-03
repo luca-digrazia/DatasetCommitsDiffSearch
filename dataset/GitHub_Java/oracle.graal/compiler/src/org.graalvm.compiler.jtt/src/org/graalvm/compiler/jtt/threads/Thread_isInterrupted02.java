@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -29,17 +27,17 @@
 package org.graalvm.compiler.jtt.threads;
 
 import org.graalvm.compiler.jtt.JTTTest;
-import org.graalvm.compiler.jtt.hotspot.NotOnDebug;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
 
 //Test all, mainly monitors
 public class Thread_isInterrupted02 extends JTTTest {
 
-    @Rule public TestRule timeout = NotOnDebug.create(Timeout.seconds(20));
+    @Rule public TestRule timeout = new DisableOnDebug(Timeout.seconds(20));
 
     private static final Object start = new Object();
     private static final Object end = new Object();
