@@ -45,34 +45,30 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.parser.LLVMLivenessAnalysis.LLVMLivenessAnalysisResult;
 import com.oracle.truffle.llvm.parser.LLVMPhiManager.Phi;
-import com.oracle.truffle.llvm.parser.model.attributes.Attribute;
-import com.oracle.truffle.llvm.parser.model.attributes.Attribute.Kind;
-import com.oracle.truffle.llvm.parser.model.attributes.Attribute.KnownAttribute;
 import com.oracle.truffle.llvm.parser.model.blocks.InstructionBlock;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionParameter;
-import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
+import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolResolver;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMException;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.LazyToTruffleConverter;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
-import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 
 public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
     private final LLVMParserRuntime runtime;
     private final LLVMContext context;
-    private final NodeFactory nodeFactory;
+    private final SulongNodeFactory nodeFactory;
     private final FunctionDefinition method;
     private final Source source;
     private final FrameDescriptor frame;
     private final Map<InstructionBlock, List<Phi>> phis;
     private final Map<String, Integer> labels;
 
-    LazyToTruffleConverterImpl(LLVMParserRuntime runtime, LLVMContext context, NodeFactory nodeFactory, FunctionDefinition method, Source source, FrameDescriptor frame,
+    LazyToTruffleConverterImpl(LLVMParserRuntime runtime, LLVMContext context, SulongNodeFactory nodeFactory, FunctionDefinition method, Source source, FrameDescriptor frame,
                     Map<InstructionBlock, List<Phi>> phis,
                     Map<String, Integer> labels) {
         this.runtime = runtime;
@@ -94,7 +90,7 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
 
         LLVMLivenessAnalysisResult liveness = LLVMLivenessAnalysis.computeLiveness(frame, context, phis, method);
         LLVMBitcodeFunctionVisitor visitor = new LLVMBitcodeFunctionVisitor(runtime, frame, labels, phis, nodeFactory, method.getParameters().size(),
-                        new LLVMSymbolReadResolver(runtime, method, frame, labels), method, liveness);
+                        new LLVMSymbolResolver(runtime, method, frame, labels), method, liveness);
         method.accept(visitor);
         FrameSlot[][] nullableBeforeBlock = getNullableFrameSlots(liveness.getNullableBeforeBlock());
         FrameSlot[][] nullableAfterBlock = getNullableFrameSlots(liveness.getNullableAfterBlock());
@@ -131,6 +127,7 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
     private List<LLVMExpressionNode> copyArgumentsToFrame() {
         List<FunctionParameter> parameters = method.getParameters();
         List<LLVMExpressionNode> formalParamInits = new ArrayList<>();
+
         LLVMExpressionNode stackPointerNode = nodeFactory.createFunctionArgNode(0, PrimitiveType.I64);
         formalParamInits.add(nodeFactory.createFrameWrite(runtime, PrimitiveType.I64, stackPointerNode, frame.findFrameSlot(LLVMStack.FRAME_ID), null));
 
@@ -141,25 +138,8 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
         for (FunctionParameter parameter : parameters) {
             LLVMExpressionNode parameterNode = nodeFactory.createFunctionArgNode(argIndex++, parameter.getType());
             FrameSlot slot = frame.findFrameSlot(parameter.getName());
-            if (isStructByValue(parameter)) {
-                int size = runtime.getByteSize(((PointerType) parameter.getType()).getPointeeType());
-                int alignment = runtime.getByteAlignment(((PointerType) parameter.getType()).getPointeeType());
-                formalParamInits.add(nodeFactory.createFrameWrite(runtime, parameter.getType(), nodeFactory.createCopyStructByValue(runtime, size, alignment, parameterNode), slot, null));
-            } else {
-                formalParamInits.add(nodeFactory.createFrameWrite(runtime, parameter.getType(), parameterNode, slot, null));
-            }
+            formalParamInits.add(nodeFactory.createFrameWrite(runtime, parameter.getType(), parameterNode, slot, null));
         }
         return formalParamInits;
-    }
-
-    private static boolean isStructByValue(FunctionParameter parameter) {
-        if (parameter.getType() instanceof PointerType && parameter.getParameterAttribute() != null) {
-            for (Attribute a : parameter.getParameterAttribute().getAttributes()) {
-                if (a instanceof KnownAttribute && ((KnownAttribute) a).getAttr() == Kind.BYVAL) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 }

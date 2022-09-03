@@ -85,7 +85,7 @@ public final class LLVMParserRuntime {
     private static final Comparator<Pair<Integer, ?>> ASCENDING_PRIORITY = (p1, p2) -> p1.getFirst() >= p2.getFirst() ? 1 : -1;
     private static final Comparator<Pair<Integer, ?>> DESCENDING_PRIORITY = (p1, p2) -> p1.getFirst() < p2.getFirst() ? 1 : -1;
 
-    public static LLVMParserResult parse(Source source, LLVMLanguage language, LLVMContext context, NodeFactory nodeFactory) {
+    public static LLVMParserResult parse(Source source, LLVMLanguage language, LLVMContext context, SulongNodeFactory nodeFactory) {
         BitcodeParserResult parserResult = BitcodeParserResult.getFromSource(source);
         ModelModule model = parserResult.getModel();
         StackAllocation stack = parserResult.getStackAllocation();
@@ -132,13 +132,13 @@ public final class LLVMParserRuntime {
     private final LLVMContext context;
     private final StackAllocation stack;
     private final DataLayoutConverter.DataSpecConverterImpl targetDataLayout;
-    private final NodeFactory nodeFactory;
+    private final SulongNodeFactory nodeFactory;
     private final Map<GlobalAlias, Symbol> aliases;
     private final List<LLVMExpressionNode> deallocations;
     private final LLVMScope scope;
     private final DebugInformation debugInformation;
 
-    private LLVMParserRuntime(Source source, LLVMLanguage language, LLVMContext context, StackAllocation stack, DataSpecConverterImpl targetDataLayout, NodeFactory nodeFactory,
+    private LLVMParserRuntime(Source source, LLVMLanguage language, LLVMContext context, StackAllocation stack, DataSpecConverterImpl targetDataLayout, SulongNodeFactory nodeFactory,
                     Map<GlobalAlias, Symbol> aliases) {
         this.source = source;
         this.context = context;
@@ -162,7 +162,7 @@ public final class LLVMParserRuntime {
             if (!context.getEnv().getOptions().get(SulongEngineOption.LAZY_PARSING)) {
                 lazyConverter.convert();
             }
-            functionDescriptor.declareInSulong(lazyConverter, Linkage.isWeak(function.getLinkage()));
+            functionDescriptor.declareInSulong(lazyConverter);
         }
     }
 
@@ -334,7 +334,7 @@ public final class LLVMParserRuntime {
         return context.getNativeFunctions();
     }
 
-    public NodeFactory getNodeFactory() {
+    public SulongNodeFactory getNodeFactory() {
         return nodeFactory;
     }
 
