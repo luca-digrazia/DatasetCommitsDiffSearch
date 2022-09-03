@@ -244,7 +244,7 @@ public final class DeoptimizedFrame {
     private final Deoptimizer.TargetContent targetContent;
     private final PinnedObject pin;
     private final CodePointer sourcePC;
-    private final char[] completedMessage;
+    private final String completedMessage;
 
     private DeoptimizedFrame(long sourceTotalFrameSize, SubstrateInstalledCode sourceInstalledCode, VirtualFrame topFrame, Deoptimizer.TargetContent targetContent,
                     CodePointer sourcePC) {
@@ -256,7 +256,7 @@ public final class DeoptimizedFrame {
         this.pin = PinnedObject.create(this);
         StringBuilderLog sbl = new StringBuilderLog();
         sbl.string("deoptStub: completed for DeoptimizedFrame at ").hex(pin.addressOfObject()).newline();
-        this.completedMessage = sbl.getResult().toCharArray();
+        this.completedMessage = sbl.getResult();
     }
 
     /**
@@ -311,7 +311,7 @@ public final class DeoptimizedFrame {
     }
 
     @Uninterruptible(reason = "Called from Deoptimizer.deoptStub.")
-    char[] getCompletedMessage() {
+    String getCompletedMessage() {
         return completedMessage;
     }
 
