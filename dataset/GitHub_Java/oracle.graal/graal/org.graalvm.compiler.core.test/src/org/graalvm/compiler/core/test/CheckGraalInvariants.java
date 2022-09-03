@@ -72,7 +72,6 @@ import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.PhaseSuite;
 import org.graalvm.compiler.phases.VerifyPhase;
 import org.graalvm.compiler.phases.VerifyPhase.VerificationError;
-import org.graalvm.compiler.phases.contract.VerifyNodeCosts;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.phases.verify.VerifyBailoutUsage;
@@ -115,52 +114,17 @@ public class CheckGraalInvariants extends GraalCompilerTest {
         return true;
     }
 
-    public static String relativeFileName(String absolutePath) {
-        int lastFileSeparatorIndex = absolutePath.lastIndexOf(File.separator);
-        return absolutePath.substring(lastFileSeparatorIndex >= 0 ? lastFileSeparatorIndex : 0);
-    }
-
-    public static class InvariantsTool {
-
-        protected boolean shouldProcess(String classpathEntry) {
+    private static boolean shouldProcess(String classpathEntry) {
         if (classpathEntry.endsWith(".jar")) {
             String name = new File(classpathEntry).getName();
             return name.contains("jvmci") || name.contains("graal") || name.contains("jdk.internal.vm.compiler");
         }
         return false;
-        }
-
-        protected String getClassPath() {
-            String bootclasspath;
-            if (Java8OrEarlier) {
-                bootclasspath = System.getProperty("sun.boot.class.path");
-            } else {
-                bootclasspath = System.getProperty("jdk.module.path") + File.pathSeparatorChar + System.getProperty("jdk.module.upgrade.path");
-            }
-            return bootclasspath;
-        }
-
-        protected boolean shouldLoadClass(String className) {
-            return !className.equals("module-info");
-        }
-
-        protected void handleClassLoadingException(Throwable t) {
-            GraalError.shouldNotReachHere(t);
-        }
-
-        protected void handleParsingException(Throwable t) {
-            GraalError.shouldNotReachHere(t);
-        }
     }
 
     @Test
     @SuppressWarnings("try")
     public void test() {
-        runTest(new InvariantsTool());
-    }
-
-    @SuppressWarnings("try")
-    public static void runTest(InvariantsTool tool) {
         RuntimeProvider rt = Graal.getRequiredCapability(RuntimeProvider.class);
         Providers providers = rt.getHostBackend().getProviders();
         MetaAccessProvider metaAccess = providers.getMetaAccess();
@@ -173,12 +137,17 @@ public class CheckGraalInvariants extends GraalCompilerTest {
 
         Assume.assumeTrue(VerifyPhase.class.desiredAssertionStatus());
 
-        String bootclasspath = tool.getClassPath();
+        String bootclasspath;
+        if (Java8OrEarlier) {
+            bootclasspath = System.getProperty("sun.boot.class.path");
+        } else {
+            bootclasspath = System.getProperty("jdk.module.path") + File.pathSeparatorChar + System.getProperty("jdk.module.upgrade.path");
+        }
         Assert.assertNotNull("Cannot find boot class path", bootclasspath);
 
         final List<String> classNames = new ArrayList<>();
         for (String path : bootclasspath.split(File.pathSeparator)) {
-            if (tool.shouldProcess(path)) {
+            if (shouldProcess(path)) {
                 try {
                     final ZipFile zipFile = new ZipFile(new File(path));
                     for (final Enumeration<? extends ZipEntry> entry = zipFile.entries(); entry.hasMoreElements();) {
@@ -231,7 +200,7 @@ public class CheckGraalInvariants extends GraalCompilerTest {
             // Order outer classes before the inner classes
             classNames.sort((String a, String b) -> a.compareTo(b));
             // Initialize classes in single thread to avoid deadlocking issues during initialization
-            List<Class<?>> classes = initializeClasses(tool, classNames);
+            List<Class<?>> classes = initializeClasses(classNames);
             for (Class<?> c : classes) {
                 String className = c.getName();
                 executor.execute(() -> {
@@ -265,11 +234,7 @@ public class CheckGraalInvariants extends GraalCompilerTest {
                                     // Graal bail outs on certain patterns in Java bytecode (e.g.,
                                     // unbalanced monitors introduced by jacoco).
                                 } catch (Throwable e) {
-                                    try {
-                                        tool.handleParsingException(e);
-                                    } catch (Throwable t) {
-                                        errors.add(String.format("Error while checking %s:%n%s", methodName, printStackTraceToString(e)));
-                                    }
+                                    errors.add(String.format("Error while checking %s:%n%s", methodName, printStackTraceToString(e)));
                                 }
                             });
                         }
@@ -296,17 +261,17 @@ public class CheckGraalInvariants extends GraalCompilerTest {
         }
     }
 
-    private static List<Class<?>> initializeClasses(InvariantsTool tool, List<String> classNames) {
+    private static List<Class<?>> initializeClasses(List<String> classNames) {
         List<Class<?>> classes = new ArrayList<>(classNames.size());
         for (String className : classNames) {
-            if (!tool.shouldLoadClass(className)) {
+            if (className.equals("module-info")) {
                 continue;
             }
             try {
                 Class<?> c = Class.forName(className, true, CheckGraalInvariants.class.getClassLoader());
                 classes.add(c);
-            } catch (Throwable t) {
-                tool.handleClassLoadingException(t);
+            } catch (ClassNotFoundException e) {
+                e.printStackTrace();
             }
         }
         return classes;
@@ -320,7 +285,6 @@ public class CheckGraalInvariants extends GraalCompilerTest {
             if (c.getAnnotation(NodeInfo.class) == null) {
                 throw new AssertionError(String.format("Node subclass %s requires %s annotation", c.getName(), NodeClass.class.getSimpleName()));
             }
-            VerifyNodeCosts.verifyNodeClass(c);
         }
     }
 

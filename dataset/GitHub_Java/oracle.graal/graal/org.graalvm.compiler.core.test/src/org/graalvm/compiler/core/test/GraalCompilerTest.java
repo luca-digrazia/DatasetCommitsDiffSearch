@@ -989,17 +989,14 @@ public abstract class GraalCompilerTest extends GraalTest {
      *            {@link #parseForCompile(ResolvedJavaMethod)}.
      */
     protected final CompilationResult compile(ResolvedJavaMethod installedCodeOwner, StructuredGraph graph) {
-        OptionValues options = graph == null ? getInitialOptions() : graph.getOptions();
-        return compile(installedCodeOwner, graph, new CompilationResult(), getOrCreateCompilationId(installedCodeOwner, graph), options);
+        return compile(installedCodeOwner, graph, new CompilationResult(), getOrCreateCompilationId(installedCodeOwner, graph), getInitialOptions());
     }
 
     protected final CompilationResult compile(ResolvedJavaMethod installedCodeOwner, StructuredGraph graph, CompilationIdentifier compilationId) {
-        OptionValues options = graph == null ? getInitialOptions() : graph.getOptions();
-        return compile(installedCodeOwner, graph, new CompilationResult(), compilationId, options);
+        return compile(installedCodeOwner, graph, new CompilationResult(), compilationId, getInitialOptions());
     }
 
     protected final CompilationResult compile(ResolvedJavaMethod installedCodeOwner, StructuredGraph graph, OptionValues options) {
-        assert graph == null || graph.getOptions() == options;
         return compile(installedCodeOwner, graph, new CompilationResult(), getOrCreateCompilationId(installedCodeOwner, graph), options);
     }
 
