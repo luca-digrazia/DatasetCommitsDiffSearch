@@ -23,6 +23,7 @@
 package com.oracle.graal.truffle;
 
 import static com.oracle.graal.api.code.CodeUtil.*;
+import static com.oracle.graal.compiler.GraalDebugConfig.*;
 
 import java.util.*;
 import java.util.concurrent.*;
@@ -83,7 +84,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
         this.partialEvaluator = new PartialEvaluator(metaAccessProvider, replacements, truffleCache);
 
-        if (Debug.isEnabled()) {
+        if (DebugEnabled.getValue()) {
             DebugEnvironment.initialize(System.out);
         }
     }
