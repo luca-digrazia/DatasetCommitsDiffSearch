@@ -29,10 +29,6 @@
  */
 package com.oracle.truffle.llvm.parser.factories;
 
-import java.math.BigInteger;
-import java.util.Arrays;
-import java.util.List;
-
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -389,6 +385,10 @@ import com.oracle.truffle.llvm.runtime.types.VariableBitWidthType;
 import com.oracle.truffle.llvm.runtime.types.VectorType;
 import com.oracle.truffle.llvm.runtime.types.VoidType;
 import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
+
+import java.math.BigInteger;
+import java.util.Arrays;
+import java.util.List;
 
 public class BasicNodeFactory implements NodeFactory {
 
@@ -1122,7 +1122,7 @@ public class BasicNodeFactory implements NodeFactory {
     @Override
     public LLVMExpressionNode createTypedElementPointer(LLVMParserRuntime runtime, LLVMExpressionNode aggregateAddress, LLVMExpressionNode index, long indexedTypeLength,
                     Type targetType) {
-        return LLVMAddressGetElementPtrNodeGen.create(aggregateAddress, index, indexedTypeLength);
+        return LLVMAddressGetElementPtrNodeGen.create(aggregateAddress, index, indexedTypeLength, targetType);
     }
 
     @Override
@@ -1317,7 +1317,7 @@ public class BasicNodeFactory implements NodeFactory {
         } else if (elementType instanceof PointerType) {
             return LLVMAddressArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMExpressionNode[nrElements]), elementSize, arrayAlloc);
         } else if (elementType instanceof ArrayType || elementType instanceof StructureType) {
-            return LLVMStructArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMExpressionNode[nrElements]), createMemMove(), elementSize, arrayAlloc);
+            return LLVMStructArrayLiteralNodeGen.create(arrayValues.toArray(new LLVMExpressionNode[nrElements]), createMemMove(), elementSize, elementType, arrayAlloc);
         }
         throw new AssertionError(elementType);
     }
@@ -1404,7 +1404,7 @@ public class BasicNodeFactory implements NodeFactory {
         } else {
             throw new AssertionError(llvmType);
         }
-        return LLVMInsertValueNodeGen.create(store, createMemMove(), size, offset, sourceAggregate, resultAggregate, valueToInsert);
+        return LLVMInsertValueNodeGen.create(store, createMemMove(), size, offset, llvmType, sourceAggregate, resultAggregate, valueToInsert);
     }
 
     @Override
@@ -1428,7 +1428,7 @@ public class BasicNodeFactory implements NodeFactory {
             nodes[i] = createMemoryStore(runtime, resolvedType);
             currentOffset += byteSize;
         }
-        return StructLiteralNodeGen.create(offsets, nodes, constants, alloc);
+        return StructLiteralNodeGen.create(offsets, types, nodes, constants, alloc);
     }
 
     private LLVMStoreNode createMemoryStore(LLVMParserRuntime runtime, Type resolvedType) {
