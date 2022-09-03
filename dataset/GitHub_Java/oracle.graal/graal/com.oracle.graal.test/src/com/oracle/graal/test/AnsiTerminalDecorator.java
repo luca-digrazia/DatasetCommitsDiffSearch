@@ -38,21 +38,21 @@ public class AnsiTerminalDecorator extends GraalJUnitRunListenerDecorator {
 
     @Override
     public void testSucceeded(Description description) {
-        getWriter().print(GREEN);
+        getWriter().print(BOLD_GREEN);
         super.testSucceeded(description);
         getWriter().print(RESET);
     }
 
     @Override
     public void testFailed(Failure failure) {
-        getWriter().print(RED);
+        getWriter().print(BOLD_RED);
         super.testFailed(failure);
         getWriter().print(RESET);
     }
 
     @Override
     public void testIgnored(Description description) {
-        getWriter().print(MAGENTA);
+        getWriter().print(BOLD_MAGENTA);
         super.testIgnored(description);
         getWriter().print(RESET);
     }
