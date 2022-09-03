@@ -38,6 +38,7 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.parser.util.LLVMTypeHelper;
+import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
 
 public interface LLVMParserRuntime {
 
@@ -69,6 +70,8 @@ public interface LLVMParserRuntime {
 
     FrameSlot getStackPointerSlot();
 
+    LLVMOptimizationConfiguration getOptimizationConfiguration();
+
     int getBitAlignment(LLVMBaseType type);
 
     FrameDescriptor getGlobalFrameDescriptor();
@@ -79,6 +82,16 @@ public interface LLVMParserRuntime {
      * @param destructorNode
      */
     void addDestructor(LLVMNode destructorNode);
+
+    /**
+     * Returns whether a global variable is defined (as a non <code>extern</code>) in one of the
+     * bitcode files.
+     *
+     * @param globalVarName the global variable name
+     * @return <code>true</code> whether the global variable is defined, <code>false </code>
+     *         otherwise
+     */
+    boolean isGlobalVariableDefined(String globalVarName);
 
     long getNativeHandle(String name);
 

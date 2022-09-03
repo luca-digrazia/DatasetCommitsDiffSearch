@@ -97,9 +97,9 @@ import uk.ac.man.cs.llvm.ir.model.Symbol;
 import uk.ac.man.cs.llvm.ir.model.ValueSymbol;
 import uk.ac.man.cs.llvm.ir.model.constants.BigIntegerConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.BinaryOperationConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.BlockAddressConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.CastConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.CompareConstant;
-import uk.ac.man.cs.llvm.ir.model.constants.BlockAddressConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.FloatingPointConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.GetElementPointerConstant;
 import uk.ac.man.cs.llvm.ir.model.constants.IntegerConstant;
@@ -190,7 +190,14 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
             }
             if (symbol instanceof BlockAddressConstant) {
                 BlockAddressConstant blockaddr = (BlockAddressConstant) symbol;
-                int val = method.labels().get(blockaddr.getInstructionBlock().getName());
+                // resolve(blockaddr.getMethod());
+                //
+                // if (isGlobalScope) {
+                // Map<String, Integer> functionBlocks = functionToLabelMapping.get(function);
+                // val = functionBlocks.get(basicBlock.getName());
+                // } else {
+
+                int val = method.labels().get(((ValueSymbol) blockaddr.getBlock()).getName());
                 return new LLVMAddressLiteralNode(LLVMAddress.fromLong(val));
             }
             if (symbol instanceof CastConstant) {
@@ -753,11 +760,7 @@ public final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
         LLVMBaseType llvmType = LLVMBitcodeHelper.toBaseType(zwitch.getCondition().getType()).getType();
         LLVMExpressionNode[] cases = new LLVMExpressionNode[zwitch.getCaseCount()];
         for (int i = 0; i < cases.length; i++) {
-            if (llvmType == LLVMBaseType.I8) {
-                cases[i] = new LLVMI8LiteralNode((byte) zwitch.getCaseValue(i));
-            } else if (llvmType == LLVMBaseType.I16) {
-                cases[i] = new LLVMI16LiteralNode((short) zwitch.getCaseValue(i));
-            } else if (llvmType == LLVMBaseType.I32) {
+            if (llvmType == LLVMBaseType.I32) {
                 cases[i] = new LLVMI32LiteralNode((int) zwitch.getCaseValue(i));
             } else {
                 cases[i] = new LLVMI64LiteralNode(zwitch.getCaseValue(i));

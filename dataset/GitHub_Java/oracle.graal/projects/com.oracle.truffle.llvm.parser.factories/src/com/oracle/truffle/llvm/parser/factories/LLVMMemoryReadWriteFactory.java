@@ -91,14 +91,14 @@ import com.oracle.truffle.llvm.nodes.impl.others.LLVMAccessGlobalVariableStorage
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.util.LLVMTypeHelper;
-import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
+import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
 
 public final class LLVMMemoryReadWriteFactory {
 
     private LLVMMemoryReadWriteFactory() {
     }
 
-    public static LLVMExpressionNode createLoad(ResolvedType resolvedResultType, LLVMAddressNode loadTarget) {
+    public static LLVMExpressionNode createLoad(ResolvedType resolvedResultType, LLVMAddressNode loadTarget, LLVMParserRuntime runtime) {
         LLVMBaseType resultType = LLVMTypeHelper.getLLVMType(resolvedResultType).getType();
 
         if (resolvedResultType.isVector()) {
@@ -108,12 +108,12 @@ public final class LLVMMemoryReadWriteFactory {
                             ? resolvedResultType.getBits().intValue()
                             : 0;
 
-            return createLoad(resultType, loadTarget, bits);
+            return createLoad(resultType, loadTarget, runtime.getOptimizationConfiguration(), bits);
         }
     }
 
-    public static LLVMExpressionNode createLoad(LLVMBaseType resultType, LLVMAddressNode loadTarget, int bits) {
-        if (LLVMBaseOptionFacade.valueProfileMemoryReads()) {
+    public static LLVMExpressionNode createLoad(LLVMBaseType resultType, LLVMAddressNode loadTarget, LLVMOptimizationConfiguration configuration, int bits) {
+        if (configuration.valueProfileMemoryReads()) {
             switch (resultType) {
                 case I1:
                     return new LLVMI1UninitializedLoadNode(loadTarget);

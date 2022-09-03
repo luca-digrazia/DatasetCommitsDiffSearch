@@ -523,7 +523,6 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         return factoryFacade.createArrayLiteral(arrayValues, arrayType);
     }
 
-    @SuppressWarnings("deprecation")
     private LLVMFunctionDescriptor visitFunction(FunctionDef def) {
         this.containingFunctionDef = def;
         isGlobalScope = false;

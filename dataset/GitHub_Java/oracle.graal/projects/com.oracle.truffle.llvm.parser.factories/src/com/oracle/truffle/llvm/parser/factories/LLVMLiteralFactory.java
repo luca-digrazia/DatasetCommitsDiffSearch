@@ -35,6 +35,7 @@ import java.util.List;
 
 import org.eclipse.emf.ecore.EObject;
 
+import com.intel.llvm.ireditor.types.ResolvedType;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
@@ -79,16 +80,12 @@ import com.oracle.truffle.llvm.nodes.impl.memory.LLVMStoreNodeFactory.LLVMI8Arra
 import com.oracle.truffle.llvm.nodes.impl.others.LLVMAccessGlobalVariableStorageNodeGen;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
-import com.oracle.truffle.llvm.parser.base.model.LLVMToBitcodeAdapter;
-import com.oracle.truffle.llvm.parser.base.model.types.ArrayType;
-import com.oracle.truffle.llvm.parser.base.model.types.Type;
-import com.oracle.truffle.llvm.parser.base.util.LLVMTypeHelperImpl;
+import com.oracle.truffle.llvm.parser.util.LLVMTypeHelper;
 import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunction;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
-import com.oracle.truffle.llvm.types.LLVMGlobalVariableDescriptor;
+import com.oracle.truffle.llvm.types.LLVMGlobalVariableStorage;
 import com.oracle.truffle.llvm.types.LLVMIVarBit;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
 import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
 
 public final class LLVMLiteralFactory {
@@ -100,9 +97,9 @@ public final class LLVMLiteralFactory {
     }
 
     public static LLVMExpressionNode createUndefinedValue(LLVMParserRuntime runtime, EObject t) {
-        Type resolvedType = LLVMToBitcodeAdapter.resolveType(runtime.resolve(t));
-        LLVMBaseType type = resolvedType.getLLVMBaseType();
-        if (LLVMTypeHelperImpl.isVectorType(type)) {
+        ResolvedType resolvedType = runtime.resolve(t);
+        LLVMBaseType type = LLVMTypeHelper.getLLVMType(resolvedType).getType();
+        if (LLVMTypeHelper.isVectorType(type)) {
             LLVMAddressLiteralNode addr = new LLVMAddressLiteralNode(LLVMAddress.createUndefinedAddress());
             switch (type) {
                 case I1_VECTOR:
@@ -125,7 +122,7 @@ public final class LLVMLiteralFactory {
         }
         switch (type) {
             case I_VAR_BITWIDTH:
-                int byteSize = resolvedType.sizeof();
+                int byteSize = runtime.getTypeHelper().getByteSize(resolvedType);
                 byte[] loadedBytes = new byte[byteSize];
                 Arrays.fill(loadedBytes, (byte) -1);
                 return new LLVMIVarBitLiteralNode(LLVMIVarBit.create(byteSize * Byte.SIZE, loadedBytes));
@@ -147,14 +144,14 @@ public final class LLVMLiteralFactory {
                 return new LLVMAddressLiteralNode(LLVMAddress.createUndefinedAddress());
             case FUNCTION_ADDRESS:
                 LLVMContext context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
-                LLVMFunction functionDescriptor = context.getFunctionRegistry().createFunctionDescriptor("<undefined function>", LLVMRuntimeType.ILLEGAL, new LLVMRuntimeType[0], false);
-                return LLVMFunctionLiteralNodeGen.create((LLVMFunctionDescriptor) functionDescriptor);
+                LLVMFunctionDescriptor functionDescriptor = context.getFunctionRegistry().createFunctionDescriptor("<undefined function>", LLVMRuntimeType.ILLEGAL, new LLVMRuntimeType[0], false);
+                return LLVMFunctionLiteralNodeGen.create(functionDescriptor);
             default:
                 throw new AssertionError(type);
         }
     }
 
-    public static LLVMExpressionNode createSimpleConstantNoArray(String stringValue, LLVMBaseType instructionType, Type type) {
+    public static LLVMExpressionNode createSimpleConstantNoArray(String stringValue, LLVMBaseType instructionType, ResolvedType type) {
         switch (instructionType) {
             case ARRAY:
                 throw new AssertionError("construction of array is not supported!");
@@ -167,7 +164,7 @@ public final class LLVMLiteralFactory {
             case I32:
                 return new LLVMI32LiteralNode(Integer.parseInt(stringValue));
             case I_VAR_BITWIDTH:
-                return new LLVMIVarBitLiteralNode(LLVMIVarBit.fromString(stringValue, type.getBits()));
+                return new LLVMIVarBitLiteralNode(LLVMIVarBit.fromString(stringValue, type.getBits().intValue()));
             case FLOAT:
                 if (stringValue.startsWith(HEX_VALUE_PREFIX)) {
                     long longBits = decodeHex(HEX_VALUE_PREFIX.length(), stringValue);
@@ -202,8 +199,8 @@ public final class LLVMLiteralFactory {
             case FUNCTION_ADDRESS:
                 if (stringValue.equals("null")) {
                     LLVMContext context = LLVMLanguage.INSTANCE.findContext0(LLVMLanguage.INSTANCE.createFindContextNode0());
-                    LLVMFunction functionDescriptor = context.getFunctionRegistry().createFunctionDescriptor("<zero function>", LLVMRuntimeType.ILLEGAL, new LLVMRuntimeType[0], false);
-                    return LLVMFunctionLiteralNodeGen.create((LLVMFunctionDescriptor) functionDescriptor);
+                    LLVMFunctionDescriptor functionDescriptor = context.getFunctionRegistry().createFunctionDescriptor("<zero function>", LLVMRuntimeType.ILLEGAL, new LLVMRuntimeType[0], false);
+                    return LLVMFunctionLiteralNodeGen.create(functionDescriptor);
                 } else {
                     throw new AssertionError(stringValue);
                 }
@@ -364,8 +361,8 @@ public final class LLVMLiteralFactory {
             case ADDRESS:
                 if (value instanceof LLVMAddress) {
                     return new LLVMAddressLiteralNode((LLVMAddress) value);
-                } else if (value instanceof LLVMGlobalVariableDescriptor) {
-                    return LLVMAccessGlobalVariableStorageNodeGen.create((LLVMGlobalVariableDescriptor) value);
+                } else if (value instanceof LLVMGlobalVariableStorage) {
+                    return LLVMAccessGlobalVariableStorageNodeGen.create((LLVMGlobalVariableStorage) value);
                 } else {
                     throw new AssertionError(value.getClass());
                 }
@@ -376,15 +373,14 @@ public final class LLVMLiteralFactory {
         }
     }
 
-    public static LLVMAddressNode createArrayLiteral(LLVMParserRuntime runtime, List<LLVMExpressionNode> arrayValues, ArrayType arrayType) {
+    public static LLVMAddressNode createArrayLiteral(LLVMParserRuntime runtime, List<LLVMExpressionNode> arrayValues, ResolvedType arrayType) {
         int nrElements = arrayValues.size();
-        Type elementType = arrayType.getElementType();
-        LLVMBaseType llvmElementType = elementType.getLLVMBaseType();
-        int baseTypeSize = elementType.sizeof();
+        ResolvedType elementType = arrayType.getContainedType(-1);
+        LLVMBaseType llvmElementType = LLVMTypeHelper.getLLVMType(elementType).getType();
+        int baseTypeSize = runtime.getTypeHelper().getByteSize(elementType);
         int size = nrElements * baseTypeSize;
-        LLVMAddressNode arrayAlloc = (LLVMAddressNode) runtime.allocateFunctionLifetime(LLVMToBitcodeAdapter.unresolveType(arrayType), size,
-                        runtime.getTypeHelper().getAlignmentByte(LLVMToBitcodeAdapter.unresolveType(arrayType)));
-        int byteLength = elementType.sizeof();
+        LLVMAddressNode arrayAlloc = (LLVMAddressNode) runtime.allocateFunctionLifetime(arrayType, size, runtime.getTypeHelper().getAlignmentByte(arrayType));
+        int byteLength = runtime.getTypeHelper().getByteSize(elementType);
         if (size == 0) {
             throw new AssertionError(llvmElementType + " has size of 0!");
         }
