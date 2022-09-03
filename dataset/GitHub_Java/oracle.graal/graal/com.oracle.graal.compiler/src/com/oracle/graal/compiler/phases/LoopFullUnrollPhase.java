@@ -44,7 +44,7 @@ public class LoopFullUnrollPhase extends Phase {
                 peeled = false;
                 final LoopsData dataCounted = new LoopsData(graph);
                 dataCounted.detectedCountedLoops();
-                for (LoopEx loop : dataCounted.countedLoops()) {
+                for (final LoopEx loop : dataCounted.countedLoops()) {
                     if (LoopPolicies.shouldFullUnroll(loop)) {
                         Debug.log("FullUnroll %s", loop);
                         LoopTransformations.fullUnroll(loop, runtime);
