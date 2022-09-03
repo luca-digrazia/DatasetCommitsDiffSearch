@@ -29,27 +29,35 @@
  */
 package com.oracle.truffle.llvm.parser.text;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMScope;
+import com.oracle.truffle.llvm.runtime.LLVMSymbol;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.types.PointerType;
 
 final class LLSourceMap {
 
     static final class Function {
 
         private final String name;
-        private final LinkedList<Instruction> instructionList;
+        private final ArrayDeque<Instruction> instructionList;
         private final int startLine;
         private int endLine;
 
         Function(String name, int startLine) {
             this.name = name;
             this.startLine = startLine;
-            this.instructionList = new LinkedList<>();
+            this.instructionList = new ArrayDeque<>();
         }
 
         void add(String var, int line) {
@@ -60,7 +68,7 @@ final class LLSourceMap {
             this.endLine = line;
         }
 
-        LinkedList<Instruction> getInstructionList() {
+        ArrayDeque<Instruction> getInstructionList() {
             return instructionList;
         }
 
@@ -68,17 +76,16 @@ final class LLSourceMap {
             return name;
         }
 
-        LLVMSourceLocation toSourceLocation(Source llSource) {
+        LLVMSourceLocation toSourceLocation(LLSourceMap sourceMap, LLVMParserRuntime runtime) {
+            final Source llSource = sourceMap.getLLSource();
             final SourceSection startSection = llSource.createSection(startLine);
             final int startCharIndex = startSection.getCharIndex();
             final SourceSection endSection = llSource.createSection(endLine);
             final int charLength = endSection.getCharEndIndex() - startCharIndex;
             final SourceSection totalSection = llSource.createSection(startCharIndex, charLength);
-            return LLVMSourceLocation.create(null, LLVMSourceLocation.Kind.FUNCTION, name, totalSection, null);
+            return LLVMSourceLocation.create(sourceMap.getGlobalScope(runtime.getContext(), runtime.getFileScope()), LLVMSourceLocation.Kind.FUNCTION, name, new LLSourceSection(totalSection), null);
         }
     }
-
-    private static final String LOCATION_SCOPE_TITLE = "<line>";
 
     static final class Instruction {
 
@@ -92,7 +99,7 @@ final class LLSourceMap {
 
         LLVMSourceLocation toSourceLocation(Source llSource, LLVMSourceLocation parent) {
             final SourceSection sourceSection = llSource.createSection(line);
-            return LLVMSourceLocation.create(parent, LLVMSourceLocation.Kind.LINE, LOCATION_SCOPE_TITLE, sourceSection, null);
+            return LLVMSourceLocation.createLLInstruction(parent, sourceSection);
         }
 
         String getDescriptor() {
@@ -101,23 +108,49 @@ final class LLSourceMap {
     }
 
     private final Source llSource;
-    private final Map<String, Function> entries;
+    private final Map<String, Function> functions;
+    private final List<String> globals;
+    private LLVMSourceLocation.TextModule globalScope;
 
     LLSourceMap(Source llSource) {
         this.llSource = llSource;
-        this.entries = new HashMap<>();
+        this.functions = new HashMap<>();
+        this.globals = new ArrayList<>();
+        this.globalScope = null;
     }
 
-    void register(String name, Function function) {
-        this.entries.put(name, function);
+    void registerFunction(String name, Function function) {
+        this.functions.put(name, function);
+    }
+
+    void registerGlobal(String name) {
+        globals.add(name);
+    }
+
+    private LLVMSourceLocation getGlobalScope(LLVMContext context, LLVMScope moduleScope) {
+        if (globalScope == null) {
+            globalScope = LLVMSourceLocation.createLLModule(llSource.getName(), llSource.createSection(0, llSource.getLength()));
+        }
+        if (!globals.isEmpty()) {
+            for (String globalName : globals) {
+                final LLVMSymbol actualSymbol = moduleScope.get(globalName);
+                if (actualSymbol != null && actualSymbol.isGlobalVariable()) {
+                    globalScope.addGlobal(actualSymbol.asGlobalVariable());
+                } else {
+                    globalScope.addGlobal(LLVMGlobal.create(context, globalName + " (unavailable)", PointerType.VOID, null, true));
+                }
+            }
+            globals.clear();
+        }
+        return globalScope;
     }
 
     Function getFunction(String name) {
-        return entries.get(name);
+        return functions.get(name);
     }
 
     void clearFunction(Function function) {
-        entries.remove(function.getName());
+        functions.remove(function.getName());
     }
 
     Source getLLSource() {
