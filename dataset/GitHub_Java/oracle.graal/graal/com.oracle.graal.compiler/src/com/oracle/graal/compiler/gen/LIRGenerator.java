@@ -141,7 +141,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     private LockScope curLocks;
 
 
-    public LIRGenerator(Graph graph, RiRuntime runtime, CiTarget target, FrameMap frameMap, RiResolvedMethod method, LIR lir, RiXirGenerator xir, CiAssumptions assumptions) {
+    public LIRGenerator(Graph graph, RiRuntime runtime, CiTarget target, FrameMap frameMap, RiResolvedMethod method, LIR lir, RiXirGenerator xir) {
         this.graph = graph;
         this.runtime = runtime;
         this.target = target;
@@ -150,7 +150,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         this.nodeOperands = graph.createNodeMap();
         this.lir = lir;
         this.xir = xir;
-        this.xirSupport = new XirSupport(assumptions);
+        this.xirSupport = new XirSupport();
         this.debugInfoBuilder = new DebugInfoBuilder(nodeOperands);
         this.blockLocks = new BlockMap<>(lir.cfg);
         this.blockLastState = new BlockMap<>(lir.cfg);
@@ -381,11 +381,11 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
                 if (instr instanceof GuardNode) {
                     GuardNode guardNode = (GuardNode) instr;
-                    if (guardNode.condition() instanceof IsNullNode && guardNode.negated()) {
-                        IsNullNode isNullNode = (IsNullNode) guardNode.condition();
-                        if (nextInstr instanceof Access) {
+                    if (guardNode.condition() instanceof NullCheckNode) {
+                        NullCheckNode nullCheckNode = (NullCheckNode) guardNode.condition();
+                        if (!nullCheckNode.expectedNull && nextInstr instanceof Access) {
                             Access access = (Access) nextInstr;
-                            if (isNullNode.object() == access.object() && canBeNullCheck(access.location())) {
+                            if (nullCheckNode.object() == access.object() && canBeNullCheck(access.location())) {
                                 //TTY.println("implicit null check");
                                 access.setNullCheck(true);
                                 continue;
@@ -404,8 +404,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             if (instr instanceof ValueNode) {
                 try {
                     doRoot((ValueNode) instr);
-                } catch (GraalInternalError e) {
-                    throw e.addContext(instr);
                 } catch (Throwable e) {
                     throw new GraalInternalError(e).addContext(instr);
                 }
@@ -511,7 +509,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     @Override
     public void visitCheckCast(CheckCastNode x) {
-        XirSnippet snippet = xir.genCheckCast(site(x, x.object()), toXirArgument(x.object()), toXirArgument(x.targetClassInstruction()), x.targetClass(), x.profile());
+        XirSnippet snippet = xir.genCheckCast(site(x, x.object()), toXirArgument(x.object()), toXirArgument(x.targetClassInstruction()), x.targetClass(), x.hints(), x.hintsExact());
         emitXir(snippet, x, state(), true);
         // The result of a checkcast is the unmodified object, so no need to allocate a new variable for it.
         setResult(x, operand(x.object()));
@@ -669,29 +667,25 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     @Override
-    public void emitGuardCheck(BooleanNode comp, RiDeoptReason deoptReason, RiDeoptAction action, boolean negated, long leafGraphId) {
-        if (comp instanceof IsNullNode && negated) {
-            emitNullCheckGuard(((IsNullNode) comp).object(), leafGraphId);
-        } else if (comp instanceof ConstantNode && (comp.asConstant().asBoolean() != negated)) {
+    public void emitGuardCheck(BooleanNode comp, RiDeoptReason deoptReason, RiDeoptAction action, long leafGraphId) {
+        if (comp instanceof NullCheckNode && !((NullCheckNode) comp).expectedNull) {
+            emitNullCheckGuard((NullCheckNode) comp, leafGraphId);
+        } else if (comp instanceof ConstantNode && comp.asConstant().asBoolean()) {
             // True constant, nothing to emit.
             // False constants are handled within emitBranch.
         } else {
             // Fall back to a normal branch.
             LIRDebugInfo info = state(leafGraphId);
             LabelRef stubEntry = createDeoptStub(action, deoptReason, info, comp);
-            if (negated) {
-                emitBranch(comp, stubEntry, null, info);
-            } else {
-                emitBranch(comp, null, stubEntry, info);
-            }
+            emitBranch(comp, null, stubEntry, info);
         }
     }
 
-    protected abstract void emitNullCheckGuard(ValueNode object, long leafGraphId);
+    protected abstract void emitNullCheckGuard(NullCheckNode node, long leafGraphId);
 
     public void emitBranch(BooleanNode node, LabelRef trueSuccessor, LabelRef falseSuccessor, LIRDebugInfo info) {
-        if (node instanceof IsNullNode) {
-            emitNullCheckBranch((IsNullNode) node, trueSuccessor, falseSuccessor, info);
+        if (node instanceof NullCheckNode) {
+            emitNullCheckBranch((NullCheckNode) node, trueSuccessor, falseSuccessor, info);
         } else if (node instanceof CompareNode) {
             emitCompareBranch((CompareNode) node, trueSuccessor, falseSuccessor, info);
         } else if (node instanceof InstanceOfNode) {
@@ -705,8 +699,9 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         }
     }
 
-    private void emitNullCheckBranch(IsNullNode node, LabelRef trueSuccessor, LabelRef falseSuccessor, LIRDebugInfo info) {
-        emitBranch(operand(node.object()), CiConstant.NULL_OBJECT, Condition.NE, false, falseSuccessor, info);
+    private void emitNullCheckBranch(NullCheckNode node, LabelRef trueSuccessor, LabelRef falseSuccessor, LIRDebugInfo info) {
+        Condition cond = node.expectedNull ? Condition.NE : Condition.EQ;
+        emitBranch(operand(node.object()), CiConstant.NULL_OBJECT, cond, false, falseSuccessor, info);
         if (trueSuccessor != null) {
             emitJump(trueSuccessor, null);
         }
@@ -721,8 +716,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     private void emitInstanceOfBranch(InstanceOfNode x, LabelRef trueSuccessor, LabelRef falseSuccessor, LIRDebugInfo info) {
         XirArgument obj = toXirArgument(x.object());
-        XirSnippet snippet = xir.genInstanceOf(site(x, x.object()), obj, toXirArgument(x.targetClassInstruction()), x.targetClass(), x.profile());
-        emitXir(snippet, x, info, null, false, trueSuccessor, falseSuccessor);
+        XirSnippet snippet = xir.genInstanceOf(site(x, x.object()), obj, toXirArgument(x.targetClassInstruction()), x.targetClass(), x.hints(), x.hintsExact());
+        emitXir(snippet, x, info, null, false, x.negated() ? falseSuccessor : trueSuccessor, x.negated() ? trueSuccessor : falseSuccessor);
     }
 
     public void emitConstantBranch(boolean value, LabelRef trueSuccessorBlock, LabelRef falseSuccessorBlock, LIRDebugInfo info) {
@@ -750,8 +745,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     public Variable emitConditional(BooleanNode node, CiValue trueValue, CiValue falseValue) {
-        if (node instanceof IsNullNode) {
-            return emitNullCheckConditional((IsNullNode) node, trueValue, falseValue);
+        if (node instanceof NullCheckNode) {
+            return emitNullCheckConditional((NullCheckNode) node, trueValue, falseValue);
         } else if (node instanceof CompareNode) {
             return emitCompareConditional((CompareNode) node, trueValue, falseValue);
         } else if (node instanceof InstanceOfNode) {
@@ -763,15 +758,16 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         }
     }
 
-    private Variable emitNullCheckConditional(IsNullNode node, CiValue trueValue, CiValue falseValue) {
-        return emitCMove(operand(node.object()), CiConstant.NULL_OBJECT, Condition.EQ, false, trueValue, falseValue);
+    private Variable emitNullCheckConditional(NullCheckNode node, CiValue trueValue, CiValue falseValue) {
+        Condition cond = node.expectedNull ? Condition.EQ : Condition.NE;
+        return emitCMove(operand(node.object()), CiConstant.NULL_OBJECT, cond, false, trueValue, falseValue);
     }
 
     private Variable emitInstanceOfConditional(InstanceOfNode x, CiValue trueValue, CiValue falseValue) {
         XirArgument obj = toXirArgument(x.object());
-        XirArgument trueArg = toXirArgument(trueValue);
-        XirArgument falseArg = toXirArgument(falseValue);
-        XirSnippet snippet = xir.genMaterializeInstanceOf(site(x, x.object()), obj, toXirArgument(x.targetClassInstruction()), trueArg, falseArg, x.targetClass(), x.profile());
+        XirArgument trueArg = toXirArgument(x.negated() ? falseValue : trueValue);
+        XirArgument falseArg = toXirArgument(x.negated() ? trueValue : falseValue);
+        XirSnippet snippet = xir.genMaterializeInstanceOf(site(x, x.object()), obj, toXirArgument(x.targetClassInstruction()), trueArg, falseArg, x.targetClass(), x.hints(), x.hintsExact());
         return (Variable) emitXir(snippet, null, null, false);
     }
 
@@ -840,7 +836,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             case Virtual:
                 assert callTarget.receiver().kind() == CiKind.Object : callTarget + ": " + callTarget.targetMethod().toString();
                 receiver = toXirArgument(callTarget.receiver());
-                snippet = xir.genInvokeVirtual(site(x.node(), callTarget.receiver()), receiver, targetMethod, x.isMegamorphic());
+                snippet = xir.genInvokeVirtual(site(x.node(), callTarget.receiver()), receiver, targetMethod, x.megamorph());
                 break;
             case Interface:
                 assert callTarget.receiver().kind() == CiKind.Object : callTarget;
@@ -1362,14 +1358,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
      * Implements site-specific information for the XIR interface.
      */
     static class XirSupport implements XirSite {
-        final CiAssumptions assumptions;
         ValueNode current;
         ValueNode receiver;
-
-
-        public XirSupport(CiAssumptions assumptions) {
-            this.assumptions = assumptions;
-        }
 
         public boolean isNonNull(XirArgument argument) {
             return false;
@@ -1393,10 +1383,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
         public boolean requiresArrayStoreCheck() {
             return true;
-        }
-
-        public CiAssumptions assumptions() {
-            return assumptions;
         }
 
         XirSupport site(ValueNode v, ValueNode r) {

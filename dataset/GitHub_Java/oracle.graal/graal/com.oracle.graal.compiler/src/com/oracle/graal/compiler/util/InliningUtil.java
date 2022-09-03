@@ -27,13 +27,10 @@ import java.util.*;
 import java.util.concurrent.*;
 
 import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.loop.*;
 import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.compiler.phases.CanonicalizerPhase.IsImmutablePredicate;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.calc.*;
@@ -44,7 +41,6 @@ import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
-import com.oracle.max.cri.ri.RiTypeProfile.ProfiledType;
 
 public class InliningUtil {
 
@@ -227,19 +223,21 @@ public class InliningUtil {
      */
     private static class MultiTypeGuardInlineInfo extends InlineInfo {
         public final List<RiResolvedMethod> concretes;
-        public final ProfiledType[] ptypes;
+        public final RiResolvedType[] types;
         public final int[] typesToConcretes;
+        public final double[] typeProbabilities;
         public final double notRecordedTypeProbability;
 
-        public MultiTypeGuardInlineInfo(Invoke invoke, double weight, int level, List<RiResolvedMethod> concretes, ProfiledType[] ptypes,
-                        int[] typesToConcretes, double notRecordedTypeProbability) {
+        public MultiTypeGuardInlineInfo(Invoke invoke, double weight, int level, List<RiResolvedMethod> concretes, RiResolvedType[] types,
+                        int[] typesToConcretes, double[] typeProbabilities, double notRecordedTypeProbability) {
             super(invoke, weight, level);
-            assert concretes.size() > 0 && concretes.size() <= ptypes.length : "must have at least one method but no more than types methods";
-            assert ptypes.length == typesToConcretes.length : "array lengths must match";
+            assert concretes.size() > 0 && concretes.size() <= types.length : "must have at least one method but no more than types methods";
+            assert types.length == typesToConcretes.length && types.length == typeProbabilities.length : "array length must match";
 
             this.concretes = concretes;
-            this.ptypes = ptypes;
+            this.types = types;
             this.typesToConcretes = typesToConcretes;
+            this.typeProbabilities = typeProbabilities;
             this.notRecordedTypeProbability = notRecordedTypeProbability;
         }
 
@@ -307,7 +305,7 @@ public class InliningUtil {
                 for (int j = 0; j < typesToConcretes.length; j++) {
                     if (typesToConcretes[j] == i) {
                         predecessors++;
-                        probability += ptypes[j].probability;
+                        probability += typeProbabilities[j];
                     }
                 }
 
@@ -366,9 +364,9 @@ public class InliningUtil {
             for (int i = 0; i < typesToConcretes.length; i++) {
                 if (typesToConcretes[i] == concreteMethodIndex) {
                     if (commonType == null) {
-                        commonType = ptypes[i].type;
+                        commonType = types[i];
                     } else {
-                        commonType = commonType.leastCommonAncestor(ptypes[i].type);
+                        commonType = commonType.leastCommonAncestor(types[i]);
                     }
                 }
             }
@@ -377,7 +375,7 @@ public class InliningUtil {
         }
 
         private void inlineSingleMethod(StructuredGraph graph, GraalRuntime runtime, InliningCallback callback) {
-            assert concretes.size() == 1 && ptypes.length > 1 && !shouldFallbackToInvoke() && notRecordedTypeProbability == 0;
+            assert concretes.size() == 1 && types.length > 1 && !shouldFallbackToInvoke() && notRecordedTypeProbability == 0;
 
             MergeNode calleeEntryNode = graph.add(new MergeNode());
             calleeEntryNode.setProbability(invoke.probability());
@@ -399,15 +397,15 @@ public class InliningUtil {
         }
 
         private FixedNode createDispatchOnType(StructuredGraph graph, ReadHubNode objectClassNode, BeginNode[] calleeEntryNodes, FixedNode unknownTypeSux) {
-            assert ptypes.length > 1;
+            assert types.length > 1;
 
-            int lastIndex = ptypes.length - 1;
-            double[] branchProbabilities = convertTypeToBranchProbabilities(ptypes, notRecordedTypeProbability);
-            double nodeProbability = ptypes[lastIndex].probability;
-            IfNode nextNode = createTypeCheck(graph, objectClassNode, ptypes[lastIndex].type, calleeEntryNodes[typesToConcretes[lastIndex]], unknownTypeSux, branchProbabilities[lastIndex], invoke.probability() * nodeProbability);
+            int lastIndex = types.length - 1;
+            double[] branchProbabilities = convertTypeToBranchProbabilities(typeProbabilities, notRecordedTypeProbability);
+            double nodeProbability = typeProbabilities[lastIndex];
+            IfNode nextNode = createTypeCheck(graph, objectClassNode, types[lastIndex], calleeEntryNodes[typesToConcretes[lastIndex]], unknownTypeSux, branchProbabilities[lastIndex], invoke.probability() * nodeProbability);
             for (int i = lastIndex - 1; i >= 0; i--) {
-                nodeProbability += ptypes[i].probability;
-                nextNode = createTypeCheck(graph, objectClassNode, ptypes[i].type, calleeEntryNodes[typesToConcretes[i]], nextNode, branchProbabilities[i], invoke.probability() * nodeProbability);
+                nodeProbability += typeProbabilities[i];
+                nextNode = createTypeCheck(graph, objectClassNode, types[i], calleeEntryNodes[typesToConcretes[i]], nextNode, branchProbabilities[i], invoke.probability() * nodeProbability);
             }
 
             return nextNode;
@@ -427,12 +425,12 @@ public class InliningUtil {
             return result;
         }
 
-        private static double[] convertTypeToBranchProbabilities(ProfiledType[] ptypes, double notRecordedTypeProbability) {
-            double[] result = new double[ptypes.length];
+        private static double[] convertTypeToBranchProbabilities(double[] typeProbabilities, double notRecordedTypeProbability) {
+            double[] result = new double[typeProbabilities.length];
             double total = notRecordedTypeProbability;
-            for (int i = ptypes.length - 1; i >= 0; i--) {
-                total += ptypes[i].probability;
-                result[i] = ptypes[i].probability / total;
+            for (int i = typeProbabilities.length - 1; i >= 0; i--) {
+                total += typeProbabilities[i];
+                result[i] = typeProbabilities[i] / total;
             }
             assert total > 0.99 && total < 1.01;
             return result;
@@ -499,7 +497,7 @@ public class InliningUtil {
         @Override
         public String toString() {
             StringBuilder builder = new StringBuilder(shouldFallbackToInvoke() ? "megamorphic" : "polymorphic");
-            builder.append(String.format(", %d methods with %d type checks:", concretes.size(), ptypes.length));
+            builder.append(String.format(", %d methods with %d type checks:", concretes.size(), types.length));
             for (int i = 0; i < concretes.size(); i++) {
                 builder.append(CiUtil.format("  %H.%n(%p):%r", concretes.get(i)));
             }
@@ -614,13 +612,15 @@ public class InliningUtil {
         RiProfilingInfo profilingInfo = parent.profilingInfo();
         RiTypeProfile typeProfile = profilingInfo.getTypeProfile(invoke.bci());
         if (typeProfile != null) {
-            ProfiledType[] ptypes = typeProfile.getTypes();
+            RiResolvedType[] types = typeProfile.getTypes();
+            double[] probabilities = typeProfile.getProbabilities();
 
-            if (ptypes != null && ptypes.length > 0) {
+            if (types != null && probabilities != null && types.length > 0) {
+                assert types.length == probabilities.length : "length must match";
                 double notRecordedTypeProbability = typeProfile.getNotRecordedProbability();
-                if (ptypes.length == 1 && notRecordedTypeProbability == 0) {
+                if (types.length == 1 && notRecordedTypeProbability == 0) {
                     if (optimisticOpts.inlineMonomorphicCalls()) {
-                        RiResolvedType type = ptypes[0].type;
+                        RiResolvedType type = types[0];
                         RiResolvedMethod concrete = type.resolveMethodImpl(targetMethod);
                         if (checkTargetConditions(invoke, concrete, optimisticOpts)) {
                             double weight = callback == null ? 0 : callback.inliningWeight(parent, concrete, invoke);
@@ -646,9 +646,9 @@ public class InliningUtil {
 
                         // determine concrete methods and map type to specific method
                         ArrayList<RiResolvedMethod> concreteMethods = new ArrayList<>();
-                        int[] typesToConcretes = new int[ptypes.length];
-                        for (int i = 0; i < ptypes.length; i++) {
-                            RiResolvedMethod concrete = ptypes[i].type.resolveMethodImpl(targetMethod);
+                        int[] typesToConcretes = new int[types.length];
+                        for (int i = 0; i < types.length; i++) {
+                            RiResolvedMethod concrete = types[i].resolveMethodImpl(targetMethod);
 
                             int index = concreteMethods.indexOf(concrete);
                             if (index < 0) {
@@ -669,7 +669,7 @@ public class InliningUtil {
                         }
 
                         if (canInline) {
-                            return new MultiTypeGuardInlineInfo(invoke, totalWeight, level, concreteMethods, ptypes, typesToConcretes, notRecordedTypeProbability);
+                            return new MultiTypeGuardInlineInfo(invoke, totalWeight, level, concreteMethods, types, typesToConcretes, probabilities, notRecordedTypeProbability);
                         } else {
                             Debug.log("not inlining %s because it is a polymorphic method call and at least one invoked method cannot be inlined", methodName(targetMethod, invoke));
                             return null;
@@ -769,10 +769,10 @@ public class InliningUtil {
 
     /**
      * Performs an actual inlining, thereby replacing the given invoke with the given inlineGraph.
-     *
      * @param invoke the invoke that will be replaced
      * @param inlineGraph the graph that the invoke will be replaced with
      * @param receiverNullCheck true if a null check needs to be generated for non-static inlinings, false if no such check is required
+     * @return The node that represents the return value, or null for void methods and methods that have no non-exceptional exit.
      */
     public static void inline(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck) {
         NodeInputList<ValueNode> parameters = invoke.callTarget().arguments();
@@ -903,150 +903,6 @@ public class InliningUtil {
 
         if (stateAfter.usages().isEmpty()) {
             stateAfter.safeDelete();
-        }
-    }
-
-    /**
-     * Performs replacement of a node with a snippet graph.
-     *
-     * @param replacee the node that will be replaced
-     * @param anchor the control flow replacee
-     * @param snippetGraph the graph that the replacee will be replaced with
-     * @param explodeLoops specifies if all the loops in the snippet graph are counted loops that must be completely unrolled
-     * @param args
-     */
-    public static void inlineSnippet(final RiRuntime runtime,
-                    final Node replacee,
-                    final FixedWithNextNode anchor,
-                    final StructuredGraph snippetGraph,
-                    final boolean explodeLoops,
-                    final IsImmutablePredicate immutabilityPredicate,
-                    final Object... args) {
-        Debug.scope("InliningSnippet", snippetGraph.method(), new Runnable() {
-            @Override
-            public void run() {
-                inlineSnippet0(runtime, replacee, anchor, snippetGraph, explodeLoops, immutabilityPredicate, args);
-            }
-        });
-    }
-    private static void inlineSnippet0(RiRuntime runtime,
-                    Node replacee,
-                    FixedWithNextNode anchor,
-                    StructuredGraph snippetGraph,
-                    boolean explodeLoops,
-                    IsImmutablePredicate immutabilityPredicate,
-                    Object... args) {
-        // Copy snippet graph, replacing parameters with given args in the process
-        StructuredGraph snippetCopy = new StructuredGraph(snippetGraph.name, snippetGraph.method());
-        IdentityHashMap<Node, Node> replacements = new IdentityHashMap<>();
-        replacements.put(snippetGraph.start(), snippetCopy.start());
-        int localCount = 0;
-        for (LocalNode local : snippetGraph.getNodes(LocalNode.class)) {
-            int index = local.index();
-            if (args[index] instanceof CiConstant) {
-                CiConstant arg = (CiConstant) args[index];
-                assert arg.kind.stackKind() == local.kind() : arg.kind + " != " + local.kind();
-                ConstantNode argNode = ConstantNode.forCiConstant(arg, runtime, snippetCopy);
-                replacements.put(local, argNode);
-                args[index] = null;
-            } else {
-                assert args[index] instanceof ValueNode;
-            }
-            localCount++;
-        }
-        assert localCount == args.length : "snippet argument count mismatch";
-        snippetCopy.addDuplicates(snippetGraph.getNodes(), replacements);
-        if (!replacements.isEmpty()) {
-            new CanonicalizerPhase(null, runtime, null, false, immutabilityPredicate).apply(snippetCopy);
-        }
-
-        // Explode all loops in the snippet if requested
-        if (explodeLoops && snippetCopy.hasLoops()) {
-            ControlFlowGraph cfg = ControlFlowGraph.compute(snippetCopy, true, true, false, false);
-            for (Loop loop : cfg.getLoops()) {
-                LoopBeginNode loopBegin = loop.loopBegin();
-                SuperBlock wholeLoop = LoopTransformUtil.wholeLoop(loop);
-                Debug.dump(snippetCopy, "Before exploding loop %s", loopBegin);
-                while (!loopBegin.isDeleted()) {
-                    snippetCopy.mark();
-                    LoopTransformUtil.peel(loop, wholeLoop);
-                    new CanonicalizerPhase(null, runtime, null, true, immutabilityPredicate).apply(snippetCopy);
-                }
-                Debug.dump(snippetCopy, "After exploding loop %s", loopBegin);
-            }
-        }
-
-        // Gather the nodes in the snippets that are to be inlined
-        ArrayList<Node> nodes = new ArrayList<>();
-        ReturnNode returnNode = null;
-        BeginNode entryPointNode = snippetCopy.start();
-        FixedNode firstCFGNode = entryPointNode.next();
-        replacements.clear();
-        for (Node node : snippetCopy.getNodes()) {
-            if (node == entryPointNode || node == entryPointNode.stateAfter()) {
-                // Do nothing.
-            } else if (node instanceof LocalNode) {
-                LocalNode local = (LocalNode) node;
-                int index = local.index();
-                assert args[index] instanceof ValueNode;
-                ValueNode arg = (ValueNode) args[index];
-                assert arg.kind() == local.kind();
-                replacements.put(node, arg);
-                args[index] = null;
-            } else {
-                nodes.add(node);
-                if (node instanceof ReturnNode) {
-                    returnNode = (ReturnNode) node;
-                }
-            }
-        }
-
-        // Inline the gathered snippet nodes
-        StructuredGraph graph = (StructuredGraph) replacee.graph();
-        Map<Node, Node> duplicates = graph.addDuplicates(nodes, replacements);
-
-        // Remove all frame states from the inlined snippet graph. Snippets must be atomic (i.e. free
-        // of side-effects that prevent deoptimizing to a point before the snippet).
-        for (Node node : duplicates.values()) {
-            if (node instanceof StateSplit) {
-                StateSplit stateSplit = (StateSplit) node;
-                FrameState frameState = stateSplit.stateAfter();
-                assert !stateSplit.hasSideEffect() : "snippets cannot contain side-effecting node " + node;
-                if (frameState != null) {
-                    stateSplit.setStateAfter(null);
-                }
-            }
-        }
-
-        // Rewire the control flow graph around the replacee
-        FixedNode firstCFGNodeDuplicate = (FixedNode) duplicates.get(firstCFGNode);
-        anchor.replaceAtPredecessors(firstCFGNodeDuplicate);
-        FixedNode next = anchor.next();
-        anchor.setNext(null);
-
-        // Replace all usages of the replacee with the value returned by the snippet
-        Node returnValue = null;
-        if (returnNode != null) {
-            if (returnNode.result() instanceof LocalNode) {
-                returnValue = replacements.get(returnNode.result());
-            } else {
-                returnValue = duplicates.get(returnNode.result());
-            }
-            assert returnValue != null || replacee.usages().isEmpty();
-            replacee.replaceAtUsages(returnValue);
-
-            Node returnDuplicate = duplicates.get(returnNode);
-            returnDuplicate.clearInputs();
-            returnDuplicate.replaceAndDelete(next);
-        }
-
-        // Remove the replacee from its graph
-        replacee.clearInputs();
-        replacee.replaceAtUsages(null);
-        if (replacee instanceof FixedNode) {
-            GraphUtil.killCFG((FixedNode) replacee);
-        } else {
-            replacee.safeDelete();
         }
     }
 
