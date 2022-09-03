@@ -82,12 +82,12 @@ public final class ClassIsAssignableFromNode extends BinaryOpLogicNode implement
     }
 
     @Override
-    public Stamp getSucceedingStampForX(boolean negated, Stamp xStamp, Stamp yStamp) {
+    public Stamp getSucceedingStampForX(boolean negated) {
         return null;
     }
 
     @Override
-    public Stamp getSucceedingStampForY(boolean negated, Stamp xStamp, Stamp yStamp) {
+    public Stamp getSucceedingStampForY(boolean negated) {
         return null;
     }
 

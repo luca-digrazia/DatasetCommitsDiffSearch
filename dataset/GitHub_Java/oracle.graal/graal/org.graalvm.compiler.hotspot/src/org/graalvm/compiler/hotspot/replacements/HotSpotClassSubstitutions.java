@@ -40,6 +40,7 @@ import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.hotspot.word.KlassPointer;
 import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.SnippetAnchorNode;
+import org.graalvm.compiler.nodes.extended.GuardingNode;
 
 // JaCoCo Exclude
 
@@ -79,8 +80,7 @@ public class HotSpotClassSubstitutions {
             // Class for primitive type
             return false;
         } else {
-            KlassPointer klassNonNull = ClassGetHubNode.piCastNonNull(klass, SnippetAnchorNode.anchor());
-            return klassIsArray(klassNonNull);
+            return klassIsArray(klass);
         }
     }
 
@@ -94,7 +94,8 @@ public class HotSpotClassSubstitutions {
     public static Class<?> getSuperclass(final Class<?> thisObj) {
         KlassPointer klass = ClassGetHubNode.readClass(thisObj);
         if (!klass.isNull()) {
-            KlassPointer klassNonNull = ClassGetHubNode.piCastNonNull(klass, SnippetAnchorNode.anchor());
+            GuardingNode guardNonNull = SnippetAnchorNode.anchor();
+            KlassPointer klassNonNull = ClassGetHubNode.piCastNonNull(klass, guardNonNull);
             int accessFlags = klassNonNull.readInt(klassAccessFlagsOffset(INJECTED_VMCONFIG), KLASS_ACCESS_FLAGS_LOCATION);
             if ((accessFlags & Modifier.INTERFACE) == 0) {
                 if (klassIsArray(klassNonNull)) {
@@ -122,9 +123,8 @@ public class HotSpotClassSubstitutions {
     public static Class<?> getComponentType(final Class<?> thisObj) {
         KlassPointer klass = ClassGetHubNode.readClass(thisObj);
         if (!klass.isNull()) {
-            KlassPointer klassNonNull = ClassGetHubNode.piCastNonNull(klass, SnippetAnchorNode.anchor());
-            if (klassIsArray(klassNonNull)) {
-                return PiNode.asNonNullClass(klassNonNull.readObject(arrayKlassComponentMirrorOffset(INJECTED_VMCONFIG), ARRAY_KLASS_COMPONENT_MIRROR));
+            if (klassIsArray(klass)) {
+                return PiNode.asNonNullClass(klass.readObject(arrayKlassComponentMirrorOffset(INJECTED_VMCONFIG), ARRAY_KLASS_COMPONENT_MIRROR));
             }
         } else {
             // Class for primitive type

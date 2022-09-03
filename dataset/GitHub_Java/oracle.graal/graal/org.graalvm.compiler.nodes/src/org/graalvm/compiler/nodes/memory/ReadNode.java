@@ -63,11 +63,11 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerableAccess,
     public static final NodeClass<ReadNode> TYPE = NodeClass.create(ReadNode.class);
 
     public ReadNode(AddressNode address, LocationIdentity location, Stamp stamp, BarrierType barrierType) {
-        this(address, location, stamp, null, barrierType);
+        super(TYPE, address, location, stamp, null, barrierType);
     }
 
     public ReadNode(AddressNode address, LocationIdentity location, Stamp stamp, GuardingNode guard, BarrierType barrierType) {
-        this(address, location, stamp, guard, barrierType, false, null);
+        super(TYPE, address, location, stamp, guard, barrierType);
     }
 
     public ReadNode(AddressNode address, LocationIdentity location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean nullCheck, FrameState stateBefore) {
