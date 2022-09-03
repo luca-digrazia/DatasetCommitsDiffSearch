@@ -24,6 +24,7 @@ package com.oracle.graal.nodes.type;
 
 import com.oracle.graal.api.meta.*;
 
+
 public class ObjectStamp extends Stamp {
 
     private final ResolvedJavaType type;
@@ -127,7 +128,7 @@ public class ObjectStamp extends Stamp {
     }
 
     @Override
-    public ObjectStamp join(Stamp otherStamp) {
+    public Stamp join(Stamp otherStamp) {
         if (this == otherStamp) {
             return this;
         }

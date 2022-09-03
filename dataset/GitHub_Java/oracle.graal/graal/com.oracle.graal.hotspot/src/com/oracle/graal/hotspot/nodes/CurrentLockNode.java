@@ -22,42 +22,26 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.word.*;
 
 /**
  * Intrinsic for getting the lock in the current {@linkplain BeginLockScopeNode lock scope}.
  */
-public final class CurrentLockNode extends FixedWithNextNode implements LIRGenLowerable, MonitorReference {
-
-    private int lockDepth = -1;
+public final class CurrentLockNode extends FixedWithNextNode implements LIRGenLowerable {
 
     public CurrentLockNode() {
         super(StampFactory.forWord());
     }
 
-    public int getLockDepth() {
-        return lockDepth;
-    }
-
-    public void setLockDepth(int lockDepth) {
-        this.lockDepth = lockDepth;
-    }
-
     @Override
     public void generate(LIRGenerator gen) {
-        assert lockDepth != -1;
-        HotSpotLIRGenerator hsGen = (HotSpotLIRGenerator) gen;
-        StackSlot slot = hsGen.getLockSlot(lockDepth);
         // The register allocator cannot handle stack -> register moves so we use an LEA here
-        Value result = gen.emitMove(gen.emitAddress(slot));
+        Value result = gen.emitMove(gen.emitLea(gen.peekLock()));
         gen.setResult(this, result);
     }
 

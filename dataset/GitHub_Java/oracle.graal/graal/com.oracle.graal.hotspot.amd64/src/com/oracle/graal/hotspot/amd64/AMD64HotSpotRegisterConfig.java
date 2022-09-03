@@ -62,19 +62,16 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
         return attributesMap;
     }
 
-    private final Register[] javaGeneralParameterRegisters;
-    private final Register[] nativeGeneralParameterRegisters;
+    private final Register[] generalParameterRegisters;
     private final Register[] xmmParameterRegisters = {xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7};
 
     private final CalleeSaveLayout csl;
 
     public AMD64HotSpotRegisterConfig(HotSpotVMConfig config, boolean globalStubConfig) {
         if (config.windowsOs) {
-            javaGeneralParameterRegisters = new Register[] {rdx, r8, r9, rdi, rsi, rcx};
-            nativeGeneralParameterRegisters = new Register[] {rcx, rdx, r8, r9};
+            generalParameterRegisters = new Register[] {rdx, r8, r9, rdi, rsi, rcx};
         } else {
-            javaGeneralParameterRegisters = new Register[] {rsi, rdx, rcx, r8, r9, rdi};
-            nativeGeneralParameterRegisters = new Register[] {rdi, rsi, rdx, rcx, r8, r9};
+            generalParameterRegisters = new Register[] {rsi, rdx, rcx, r8, r9, rdi};
         }
 
         if (globalStubConfig) {
@@ -110,19 +107,19 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
     @Override
     public CallingConvention getCallingConvention(Type type, JavaType returnType, JavaType[] parameterTypes, TargetDescription target, boolean stackOnly) {
         if (type == Type.NativeCall) {
-            return callingConvention(nativeGeneralParameterRegisters, returnType, parameterTypes, type, target, stackOnly);
+            throw new UnsupportedOperationException();
         }
-        return callingConvention(javaGeneralParameterRegisters, returnType, parameterTypes, type, target, stackOnly);
+        return callingConvention(returnType, parameterTypes, type, target, stackOnly);
     }
 
     public Register[] getCallingConventionRegisters(Type type, RegisterFlag flag) {
         if (flag == RegisterFlag.FPU) {
             return xmmParameterRegisters;
         }
-        return type == Type.NativeCall ? nativeGeneralParameterRegisters : javaGeneralParameterRegisters;
+        return generalParameterRegisters;
     }
 
-    private CallingConvention callingConvention(Register[] generalParameterRegisters, JavaType returnType, JavaType[] parameterTypes, Type type, TargetDescription target, boolean stackOnly) {
+    private CallingConvention callingConvention(JavaType returnType, JavaType[] parameterTypes, Type type, TargetDescription target, boolean stackOnly) {
         Value[] locations = new Value[parameterTypes.length];
 
         int currentGeneral = 0;

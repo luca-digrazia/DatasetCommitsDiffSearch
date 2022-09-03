@@ -282,7 +282,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         assert lir.lir(block) == null : "LIR list already computed for this block";
         lir.setLir(block, new ArrayList<LIRInstruction>());
 
-        append(new LabelOp(new Label(), block.align, block.softAlign));
+        append(new LabelOp(new Label(), block.align));
 
         if (GraalOptions.TraceLIRGeneratorLevel >= 1) {
             TTY.println("BEGIN Generating LIR for block B" + block.getId());
@@ -670,6 +670,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
 
+    public abstract void emitLabel(Label label, boolean align);
     public abstract void emitJump(LabelRef label, LIRFrameState info);
     public abstract void emitBranch(Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef label, LIRFrameState info);
     public abstract Variable emitCMove(Value leftVal, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue);

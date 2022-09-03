@@ -29,7 +29,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "|%|")
-public class UnsignedRemNode extends FixedBinaryNode implements Canonicalizable, Lowerable, LIRLowerable {
+public final class UnsignedRemNode extends IntegerArithmeticNode implements Canonicalizable, LIRLowerable {
 
     public UnsignedRemNode(Kind kind, ValueNode x, ValueNode y) {
         super(kind, x, y);
@@ -60,12 +60,7 @@ public class UnsignedRemNode extends FixedBinaryNode implements Canonicalizable,
     }
 
     @Override
-    public void lower(LoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
-    }
-
-    @Override
     public void generate(LIRGeneratorTool gen) {
-        gen.setResult(this, gen.emitURem(gen.operand(x()), gen.operand(y())));
+        gen.setResult(this, gen.emitRem(gen.operand(x()), gen.operand(y())));
     }
 }

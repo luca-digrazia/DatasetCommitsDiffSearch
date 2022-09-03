@@ -23,30 +23,32 @@
 package com.oracle.graal.hotspot.snippets;
 
 import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
+import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
 
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.snippets.*;
 import com.oracle.graal.snippets.ClassSubstitution.MethodSubstitution;
+import com.oracle.graal.word.*;
 
 /**
  * Snippets for {@link java.lang.Object} methods.
  */
 @ClassSubstitution(java.lang.Object.class)
 public class ObjectSnippets implements SnippetsInterface {
-    @InstanceMethodSubstitution("getClass")
-    public static Class<?> getClassSnippet(final Object thisObj) {
+    @MethodSubstitution(isStatic = false)
+    public static Class<?> getClass(final Object thisObj) {
         Word hub = loadHub(thisObj);
-        return (Class<?>) readFinalObject(hub, classMirrorOffset());
+        return unsafeCast(hub.readFinalObject(Word.signed(classMirrorOffset())), Class.class, true, true);
     }
 
-    @InstanceMethodSubstitution
+    @MethodSubstitution(isStatic = false)
     public static int hashCode(final Object thisObj) {
         Word mark = loadWordFromObject(thisObj, markOffset());
 
         // this code is independent from biased locking (although it does not look that way)
         final Word biasedLock = mark.and(biasedLockMaskInPlace());
-        if (biasedLock.toLong() == unlockedMask()) {
-            int hash = (int) (mark.toLong() >>> identityHashCodeShift());
+        if (biasedLock == Word.unsigned(unlockedMask())) {
+            int hash = (int) mark.unsignedShiftRight(identityHashCodeShift()).rawValue();
             if (hash != uninitializedIdentityHashCodeValue()) {
                 return hash;
             }

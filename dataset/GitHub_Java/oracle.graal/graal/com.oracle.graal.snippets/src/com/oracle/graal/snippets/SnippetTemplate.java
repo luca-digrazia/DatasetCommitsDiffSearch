@@ -48,21 +48,20 @@ import com.oracle.graal.word.*;
 import com.oracle.graal.word.phases.*;
 
 /**
- * A snippet template is a graph created by parsing a snippet method and then specialized by binding
- * constants to the snippet's {@link ConstantParameter} parameters.
- * 
+ * A snippet template is a graph created by parsing a snippet method and then
+ * specialized by binding constants to the snippet's {@link ConstantParameter} parameters.
+ *
  * Snippet templates can be managed in a {@link Cache}.
  */
 public class SnippetTemplate {
 
     /**
-     * A snippet template key encapsulates the method from which a snippet was built and the
-     * arguments used to specialize the snippet.
-     * 
+     * A snippet template key encapsulates the method from which a snippet was built
+     * and the arguments used to specialize the snippet.
+     *
      * @see Cache
      */
     public static class Key implements Iterable<Map.Entry<String, Object>> {
-
         public final ResolvedJavaMethod method;
         private final HashMap<String, Object> map = new HashMap<>();
         private int hash;
@@ -123,7 +122,6 @@ public class SnippetTemplate {
      * Arguments used to instantiate a template.
      */
     public static class Arguments implements Iterable<Map.Entry<String, Object>> {
-
         private final HashMap<String, Object> map = new HashMap<>();
 
         public static Arguments arguments(String name, Object value) {
@@ -160,6 +158,7 @@ public class SnippetTemplate {
         private final MetaAccessProvider runtime;
         private final TargetDescription target;
 
+
         public Cache(MetaAccessProvider runtime, TargetDescription target) {
             this.runtime = runtime;
             this.target = target;
@@ -172,13 +171,12 @@ public class SnippetTemplate {
             SnippetTemplate template = templates.get(key);
             if (template == null) {
                 template = Debug.scope("SnippetSpecialization", key.method, new Callable<SnippetTemplate>() {
-
                     @Override
                     public SnippetTemplate call() throws Exception {
                         return new SnippetTemplate(runtime, assumptions, target, key);
                     }
                 });
-                // System.out.println(key + " -> " + template);
+                //System.out.println(key + " -> " + template);
                 templates.put(key, template);
             }
             return template;
@@ -186,7 +184,6 @@ public class SnippetTemplate {
     }
 
     public abstract static class AbstractTemplates<T extends SnippetsInterface> {
-
         protected final Cache cache;
         protected final MetaAccessProvider runtime;
         protected final Assumptions assumptions;
@@ -285,7 +282,7 @@ public class SnippetTemplate {
             new SnippetIntrinsificationPhase(runtime, new BoxingMethodPool(runtime), false).apply(snippetCopy);
             new WordTypeRewriterPhase(runtime, target.wordKind).apply(snippetCopy);
 
-            new CanonicalizerPhase(null, runtime, assumptions, 0, null).apply(snippetCopy);
+            new CanonicalizerPhase(null, runtime, assumptions, 0).apply(snippetCopy);
         }
 
         // Gather the template parameters
@@ -337,14 +334,13 @@ public class SnippetTemplate {
         do {
             exploded = false;
             ExplodeLoopNode explodeLoop = snippetCopy.getNodes().filter(ExplodeLoopNode.class).first();
-            if (explodeLoop != null) { // Earlier canonicalization may have removed the loop
-                                       // altogether
+            if (explodeLoop != null) { // Earlier canonicalization may have removed the loop altogether
                 LoopBeginNode loopBegin = explodeLoop.findLoopBegin();
                 if (loopBegin != null) {
                     LoopEx loop = new LoopsData(snippetCopy).loop(loopBegin);
                     int mark = snippetCopy.getMark();
                     LoopTransformations.fullUnroll(loop, runtime, null);
-                    new CanonicalizerPhase(null, runtime, assumptions, mark, null).apply(snippetCopy);
+                    new CanonicalizerPhase(null, runtime, assumptions, mark).apply(snippetCopy);
                 }
                 FixedNode explodeLoopNext = explodeLoop.next();
                 explodeLoop.clearSuccessors();
@@ -419,10 +415,11 @@ public class SnippetTemplate {
             return true;
         }
         if (kind == Kind.Object) {
-            assert arg == null || type.isInstance(Constant.forObject(arg)) : method + ": wrong value type for " + name + ": expected " + type.getName() + ", got " + arg.getClass().getName();
+            assert arg == null || type.isInstance(Constant.forObject(arg)) :
+                method + ": wrong value type for " + name + ": expected " + type.getName() + ", got " + arg.getClass().getName();
         } else {
-            assert arg != null && kind.toBoxedJavaClass() == arg.getClass() : method + ": wrong value kind for " + name + ": expected " + kind + ", got " +
-                            (arg == null ? "null" : arg.getClass().getSimpleName());
+            assert arg != null && kind.toBoxedJavaClass() == arg.getClass() :
+                method + ": wrong value kind for " + name + ": expected " + kind + ", got " + (arg == null ? "null" : arg.getClass().getSimpleName());
         }
         return true;
     }
@@ -441,10 +438,10 @@ public class SnippetTemplate {
     private final StructuredGraph snippet;
 
     /**
-     * The named parameters of this template that must be bound to values during instantiation. For
-     * a parameter that is still live after specialization, the value in this map is either a
-     * {@link LocalNode} instance or a {@link LocalNode} array. For an eliminated parameter, the
-     * value is identical to the key.
+     * The named parameters of this template that must be bound to values during instantiation.
+     * For a parameter that is still live after specialization, the value in this map is either
+     * a {@link LocalNode} instance or a {@link LocalNode} array. For an eliminated parameter,
+     * the value is identical to the key.
      */
     private final Map<String, Object> parameters;
 
@@ -454,8 +451,7 @@ public class SnippetTemplate {
     private final ReturnNode returnNode;
 
     /**
-     * Nodes that inherit the {@link StateSplit#stateAfter()} from the replacee during
-     * instantiation.
+     * Nodes that inherit the {@link StateSplit#stateAfter()} from the replacee during instantiation.
      */
     private final List<Node> sideEffectNodes;
 
@@ -471,7 +467,7 @@ public class SnippetTemplate {
 
     /**
      * Gets the instantiation-time bindings to this template's parameters.
-     * 
+     *
      * @return the map that will be used to bind arguments to parameters when inlining this template
      */
     private IdentityHashMap<Node, Node> bind(StructuredGraph replaceeGraph, MetaAccessProvider runtime, SnippetTemplate.Arguments args) {
@@ -525,13 +521,13 @@ public class SnippetTemplate {
     }
 
     /**
-     * Logic for replacing a snippet-lowered node at its usages with the return value of the
-     * snippet. An alternative to the {@linkplain SnippetTemplate#DEFAULT_REPLACER default}
-     * replacement logic can be used to handle mismatches between the stamp of the node being
-     * lowered and the stamp of the snippet's return value.
+     * Logic for replacing a snippet-lowered node at its usages with the return value
+     * of the snippet. An alternative to the
+     * {@linkplain SnippetTemplate#DEFAULT_REPLACER default} replacement logic can be used to
+     * handle mismatches between the stamp of the node being lowered and the
+     * stamp of the snippet's return value.
      */
     public interface UsageReplacer {
-
         /**
          * Replaces all usages of {@code oldNode} with direct or indirect usages of {@code newNode}.
          */
@@ -539,11 +535,10 @@ public class SnippetTemplate {
     }
 
     /**
-     * Represents the default {@link UsageReplacer usage replacer} logic which simply delegates to
-     * {@link Node#replaceAtUsages(Node)}.
+     * Represents the default {@link UsageReplacer usage replacer} logic which
+     * simply delegates to {@link Node#replaceAtUsages(Node)}.
      */
     public static final UsageReplacer DEFAULT_REPLACER = new UsageReplacer() {
-
         @Override
         public void replace(ValueNode oldNode, ValueNode newNode) {
             oldNode.replaceAtUsages(newNode);
@@ -552,14 +547,17 @@ public class SnippetTemplate {
 
     /**
      * Replaces a given fixed node with this specialized snippet.
-     * 
+     *
      * @param runtime
      * @param replacee the node that will be replaced
      * @param replacer object that replaces the usages of {@code replacee}
      * @param args the arguments to be bound to the flattened positional parameters of the snippet
      * @return the map of duplicated nodes (original -> duplicate)
      */
-    public Map<Node, Node> instantiate(MetaAccessProvider runtime, FixedWithNextNode replacee, UsageReplacer replacer, SnippetTemplate.Arguments args) {
+    public Map<Node, Node> instantiate(MetaAccessProvider runtime,
+                    FixedWithNextNode replacee,
+                    UsageReplacer replacer,
+                    SnippetTemplate.Arguments args) {
 
         // Inline the snippet nodes, replacing parameters with the given args in the process
         String name = snippet.name == null ? "{copy}" : snippet.name + "{copy}";
@@ -625,14 +623,17 @@ public class SnippetTemplate {
 
     /**
      * Replaces a given floating node with this specialized snippet.
-     * 
+     *
      * @param runtime
      * @param replacee the node that will be replaced
      * @param replacer object that replaces the usages of {@code replacee}
      * @param lastFixedNode the CFG of the snippet is inserted after this node
      * @param args the arguments to be bound to the flattened positional parameters of the snippet
      */
-    public void instantiate(MetaAccessProvider runtime, FloatingNode replacee, UsageReplacer replacer, FixedWithNextNode lastFixedNode, SnippetTemplate.Arguments args) {
+    public void instantiate(MetaAccessProvider runtime,
+                    FloatingNode replacee,
+                    UsageReplacer replacer,
+                    FixedWithNextNode lastFixedNode, SnippetTemplate.Arguments args) {
 
         // Inline the snippet nodes, replacing parameters with the given args in the process
         String name = snippet.name == null ? "{copy}" : snippet.name + "{copy}";
@@ -691,7 +692,7 @@ public class SnippetTemplate {
             Object value = e.getValue();
             buf.append(sep);
             sep = ", ";
-            if (value == UNUSED_PARAMETER) {
+            if (value == UNUSED_PARAMETER)  {
                 buf.append("<unused> ").append(name);
             } else if (value instanceof LocalNode) {
                 LocalNode local = (LocalNode) value;
@@ -727,8 +728,10 @@ public class SnippetTemplate {
                 Varargs varargs = (Varargs) key.get(name);
                 assert checkVarargs(method, signature, i, name, varargs);
             } else {
-                assert p != null : method + ": parameter " + i + " must be annotated with exactly one of " + "@" + ConstantParameter.class.getSimpleName() + " or " + "@" +
-                                VarargsParameter.class.getSimpleName() + " or " + "@" + Parameter.class.getSimpleName();
+                assert p != null : method + ": parameter " + i + " must be annotated with exactly one of " +
+                    "@" + ConstantParameter.class.getSimpleName() + " or " +
+                    "@" + VarargsParameter.class.getSimpleName() + " or " +
+                    "@" + Parameter.class.getSimpleName();
             }
         }
         if (!key.names().containsAll(expected)) {
@@ -738,8 +741,8 @@ public class SnippetTemplate {
         if (!expected.containsAll(key.names())) {
             Set<String> namesCopy = new HashSet<>(key.names());
             namesCopy.removeAll(expected);
-            assert false : "parameter(s) " + namesCopy + " should be annotated with @" + ConstantParameter.class.getSimpleName() + " or @" + VarargsParameter.class.getSimpleName() + " in " +
-                            MetaUtil.format("%H.%n(%p)", method);
+            assert false : "parameter(s) " + namesCopy + " should be annotated with @" + ConstantParameter.class.getSimpleName() +
+                " or @" + VarargsParameter.class.getSimpleName() + " in " + MetaUtil.format("%H.%n(%p)", method);
         }
         return true;
     }

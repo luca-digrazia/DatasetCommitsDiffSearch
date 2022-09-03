@@ -29,57 +29,18 @@ import org.junit.*;
  */
 public class Math_pow extends JTTTest {
 
-    public static double test(double x, double y) {
-        return Math.pow(x, y);
+    public static double test(double pow) {
+        return Math.pow(2.0d, pow);
     }
 
     @Test
     public void run0() throws Throwable {
-        runTest("test", 2d, 0d);
+        runTest("test", 2d);
     }
 
     @Test
     public void run1() throws Throwable {
-        runTest("test", 2d, 0.5d);
+        runTest("test", 3.1d);
     }
 
-    @Test
-    public void run2() throws Throwable {
-        runTest("test", -2d, 0.5d);
-    }
-
-    @Test
-    public void run3() throws Throwable {
-        runTest("test", 2d, 1d);
-    }
-
-    @Test
-    public void run4() throws Throwable {
-        runTest("test", 2d, -1d);
-    }
-
-    @Test
-    public void run5() throws Throwable {
-        runTest("test", 2d, 2d);
-    }
-
-    @Test
-    public void run6() throws Throwable {
-        runTest("test", 2d, 3.1d);
-    }
-
-    @Test
-    public void run7() throws Throwable {
-        runTest("test", 2d, Double.NaN);
-    }
-
-    @Test
-    public void run8() throws Throwable {
-        runTest("test", Double.NaN, 0d);
-    }
-
-    @Test
-    public void run9() throws Throwable {
-        runTest("test", Double.NaN, 23d);
-    }
 }
