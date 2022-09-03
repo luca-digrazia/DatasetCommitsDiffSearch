@@ -170,17 +170,17 @@ public abstract class Source {
     /**
      * Builds new {@link Source source} from a provided character sequence. One needs to specify a
      * {@link Builder#mimeType(java.lang.String)}, possibly a {@link Builder#name(java.lang.String)}
-     * and other attributes and then can {@link Builder#build()} a new instance of the source. The
-     * given characters must not mutate after they were accessed for the first time. Sample usage:
+     * and other attributes and then can {@link Builder#build()} a new instance of the source.
+     * Sample usage:
      *
      * {@link SourceSnippets#fromAString}
      *
-     * @param characters the text to be returned by {@link Source#getCharacters()}
+     * @param text the text to be returned by {@link Source#getCharacters()}
      * @return new builder to configure additional properties
      * @since 0.28
      */
-    public static Builder<RuntimeException, MissingMIMETypeException, MissingNameException> newBuilder(CharSequence characters) {
-        return EMPTY.new Builder<>(characters);
+    public static Builder<RuntimeException, MissingMIMETypeException, MissingNameException> newBuilder(CharSequence text) {
+        return EMPTY.new Builder<>(text);
     }
 
     /**
@@ -857,19 +857,18 @@ public abstract class Source {
         /**
          * Specifies content of {@link #build() to-be-built} {@link Source}. Using this method one
          * can ignore the real content of a file or URL and use already read one, or completely
-         * different one. The given characters must not mutate after they were accessed for the
-         * first time. Example:
+         * different one. Example:
          *
          * {@link SourceSnippets#fromURLWithOwnContent}
          *
-         * @param characters the code to be available via {@link Source#getCharacters()}
+         * @param code the code to be available via {@link Source#getCharacters()}
          * @return instance of this builder - which's {@link #build()} method no longer throws an
          *         {@link IOException}
          * @since 0.28
          */
         @SuppressWarnings("unchecked")
-        public Builder<RuntimeException, E2, E3> content(CharSequence characters) {
-            this.content = characters;
+        public Builder<RuntimeException, E2, E3> content(CharSequence code) {
+            this.content = code;
             return (Builder<RuntimeException, E2, E3>) this;
         }
 
