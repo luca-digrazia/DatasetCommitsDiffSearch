@@ -22,22 +22,19 @@
  */
 package com.oracle.graal.lir.phases;
 
-import java.util.*;
-
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
 
 public abstract class AllocationPhase extends LIRPhase<AllocationPhase.AllocationContext> {
 
-    public static final class AllocationContext {
-    }
+    public static final class AllocationContext extends GenericContext {
+        public final MoveFactory spillMoveFactory;
+        public final RegisterAllocationConfig registerAllocationConfig;
 
-    @Override
-    protected final <B extends AbstractBlock<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, AllocationContext context) {
-        run(target, lirGenRes, codeEmittingOrder, linearScanOrder);
+        public AllocationContext(MoveFactory spillMoveFactory, RegisterAllocationConfig registerAllocationConfig) {
+            this.spillMoveFactory = spillMoveFactory;
+            this.registerAllocationConfig = registerAllocationConfig;
+        }
     }
-
-    protected abstract <B extends AbstractBlock<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder);
 
 }
