@@ -291,19 +291,19 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
     /**
      * Attempts to replace the following pattern:
      *
-     * <pre>
+     * <code>
      * Integer x = ...;
      * Integer y = ...;
      * if ((x == y) || x.equals(y)) { ... }
-     * </pre>
+     * </code>
      *
      * with:
      *
-     * <pre>
+     * <code>
      * Integer x = ...;
      * Integer y = ...;
      * if (x.equals(y)) { ... }
-     * </pre>
+     * </code>
      *
      * whenever the probability that the reference check will pass is relatively small.
      *
@@ -325,30 +325,21 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             return false;
         }
 
-        // The reference equality check is usually more efficient compared to a boxing check.
-        // The success of the reference equals must therefore be relatively rare, otherwise it makes
-        // no sense to eliminate it.
+        // The success of the reference equals should be relatively rare.
         if (getTrueSuccessorProbability() > 0.4) {
             return false;
         }
 
         // True branch must be empty.
-        if (trueSuccessor instanceof BeginNode || trueSuccessor instanceof LoopExitNode) {
-            if (trueSuccessor.next() instanceof EndNode) {
-                // Empty true branch.
-            } else {
-                return false;
-            }
-        } else {
+        if (!(trueSuccessor instanceof BeginNode) || !(trueSuccessor.next() instanceof EndNode)) {
             return false;
         }
 
         // False branch must only check the unboxed values.
         UnboxNode unbox = null;
-        FixedGuardNode unboxCheck = null;
+        FixedGuardNode check = null;
         for (FixedNode node : falseSuccessor.getBlockNodes()) {
-            if (!(node instanceof BeginNode || node instanceof UnboxNode || node instanceof FixedGuardNode || node instanceof EndNode ||
-                            node instanceof LoadFieldNode || node instanceof LoopExitNode)) {
+            if (!(node instanceof BeginNode || node instanceof UnboxNode || node instanceof FixedGuardNode || node instanceof EndNode || node instanceof LoadFieldNode)) {
                 return false;
             }
             if (node instanceof UnboxNode) {
@@ -367,10 +358,10 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             }
             IntegerEqualsNode equals = (IntegerEqualsNode) fixed.condition();
             if ((isUnboxedFrom(meta, equals.getX(), x) && isUnboxedFrom(meta, equals.getY(), y)) || (isUnboxedFrom(meta, equals.getX(), y) && isUnboxedFrom(meta, equals.getY(), x))) {
-                unboxCheck = fixed;
+                check = fixed;
             }
         }
-        if (unbox == null || unboxCheck == null) {
+        if (unbox == null || check == null) {
             return false;
         }
 
