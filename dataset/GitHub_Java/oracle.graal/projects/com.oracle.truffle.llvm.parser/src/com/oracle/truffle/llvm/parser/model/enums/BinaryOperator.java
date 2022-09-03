@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -51,11 +51,10 @@ public enum BinaryOperator {
     FP_DIVIDE(-1, "fdiv"),
     FP_REMAINDER(-1, "frem");
 
-    private static final BinaryOperator[] VALUES = values();
-
     public static BinaryOperator decode(int opcode, boolean isFloatingPoint) {
+        BinaryOperator[] ops = values();
         if (opcode >= 0 && opcode <= INT_XOR.ordinal()) {
-            BinaryOperator op = VALUES[opcode];
+            BinaryOperator op = ops[opcode];
             return isFloatingPoint ? op.fp() : op;
         }
         return null;
@@ -70,7 +69,7 @@ public enum BinaryOperator {
     }
 
     private BinaryOperator fp() {
-        return fpmap < 0 ? null : VALUES[fpmap];
+        return fpmap < 0 ? null : values()[fpmap];
     }
 
     public boolean isFloatingPoint() {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -34,10 +34,8 @@ public enum AsmDialect {
     AT_T(""),
     INTEL("inteldialect");
 
-    private static final AsmDialect[] VALUES = values();
-
     public static AsmDialect decode(long id) {
-        return VALUES[(int) id];
+        return values()[(int) id];
     }
 
     private final String irString;

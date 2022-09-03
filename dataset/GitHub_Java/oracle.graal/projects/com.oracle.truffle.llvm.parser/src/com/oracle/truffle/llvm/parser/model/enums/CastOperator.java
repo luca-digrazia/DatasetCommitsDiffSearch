@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -45,11 +45,10 @@ public enum CastOperator {
     BITCAST("bitcast"),
     ADDRESS_SPACE_CAST("addrspacecast");
 
-    private static final CastOperator[] VALUES = values();
-
     public static CastOperator decode(int code) {
-        if (code >= 0 && code < VALUES.length) {
-            return VALUES[code];
+        CastOperator[] ops = values();
+        if (code >= 0 && code < ops.length) {
+            return ops[code];
         }
         return null;
     }
