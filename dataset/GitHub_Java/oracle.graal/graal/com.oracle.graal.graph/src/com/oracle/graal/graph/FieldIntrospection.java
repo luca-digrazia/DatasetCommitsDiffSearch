@@ -43,14 +43,11 @@ public abstract class FieldIntrospection {
         }
     }
 
-    /**
-     * An instance of {@link Unsafe} for use within Graal.
-     */
-    public static final Unsafe unsafe = getUnsafe();
+    protected static final Unsafe unsafe = getUnsafe();
 
     private static Unsafe getUnsafe() {
         try {
-            // this will fail if Graal is not part of the boot class path
+            // this will only fail if graal is not part of the boot class path
             return Unsafe.getUnsafe();
         } catch (SecurityException e) {
             // nothing to do
