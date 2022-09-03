@@ -32,35 +32,35 @@ package com.oracle.truffle.llvm.nodes.intrinsics.c;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.java.JavaInterop;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.LLVMGlobalVariableDescriptor;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeChild(type = LLVMExpressionNode.class)
 public abstract class LLVMTruffleReadBytes extends LLVMIntrinsic {
 
     @Specialization
-    public Object executeIntrinsic(LLVMGlobalVariable value) {
-        return executeIntrinsic(value.getNativeLocation());
+    public Object executeIntrinsic(LLVMGlobalVariableDescriptor value) {
+        return executeIntrinsic(value.getNativeAddress());
     }
 
     @Specialization
     public Object executeIntrinsic(LLVMAddress value) {
         byte c;
-        long ptr = value.getVal();
+        LLVMAddress adr = value;
         int count = 0;
-        while ((c = LLVMMemory.getI8(ptr)) != 0) {
+        while ((c = LLVMMemory.getI8(adr)) != 0) {
             count++;
-            ptr += Byte.BYTES;
+            adr = adr.increment(Byte.BYTES);
         }
         byte[] bytes = new byte[count];
         count = 0;
-        ptr = value.getVal();
-        while ((c = LLVMMemory.getI8(ptr)) != 0) {
+        adr = value;
+        while ((c = LLVMMemory.getI8(adr)) != 0) {
             bytes[count++] = c;
-            ptr += Byte.BYTES;
+            adr = adr.increment(Byte.BYTES);
         }
         return JavaInterop.asTruffleObject(bytes);
     }
