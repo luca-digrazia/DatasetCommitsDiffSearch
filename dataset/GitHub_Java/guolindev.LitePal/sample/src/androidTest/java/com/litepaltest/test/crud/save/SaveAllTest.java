@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 
-import org.litepal.LitePal;
 import org.litepal.crud.DataSupport;
 import org.litepal.util.DBUtility;
 
@@ -40,7 +39,7 @@ public class SaveAllTest extends AndroidTestCase {
             cellPhone.setSerial(UUID.randomUUID().toString());
 			cellList.add(cellPhone);
 		}
-		LitePal.saveAll(cellList);
+		DataSupport.saveAll(cellList);
 		for (Cellphone cell : cellList) {
 			assertTrue(cell.isSaved());
 		}
@@ -55,9 +54,9 @@ public class SaveAllTest extends AndroidTestCase {
 			student.setAge(new Random().nextInt(20));
 			classroom.getStudentCollection().add(student);
 		}
-        LitePal.saveAll(classroom.getStudentCollection());
+		DataSupport.saveAll(classroom.getStudentCollection());
 		classroom.save();
-		List<Student> list = LitePal.where(classroomTable + "_id = ?",
+		List<Student> list = DataSupport.where(classroomTable + "_id = ?",
 				String.valueOf(classroom.get_id())).find(Student.class);
 		assertEquals(50, list.size());
 
@@ -74,9 +73,9 @@ public class SaveAllTest extends AndroidTestCase {
 			student.setClassroom(classroom);
 			studentList.add(student);
 		}
-        LitePal.saveAll(studentList);
+		DataSupport.saveAll(studentList);
 		classroom.save();
-		List<Student> list = LitePal.where(classroomTable + "_id = ?",
+		List<Student> list = DataSupport.where(classroomTable + "_id = ?",
 				String.valueOf(classroom.get_id())).find(Student.class);
 		assertEquals(50, list.size());
 	}
@@ -94,10 +93,10 @@ public class SaveAllTest extends AndroidTestCase {
 			idcardList.add(idcard);
 			studentList.add(student);
 		}
-        LitePal.saveAll(idcardList);
-        LitePal.saveAll(studentList);
+		DataSupport.saveAll(idcardList);
+		DataSupport.saveAll(studentList);
 		for (Student student : studentList) {
-			List<IdCard> result = LitePal
+			List<IdCard> result = DataSupport
 					.where(studentTable + "_id=?", String.valueOf(student.getId())).find(IdCard.class);
 			assertEquals(1, result.size());
 		}
@@ -130,13 +129,13 @@ public class SaveAllTest extends AndroidTestCase {
 			student.getTeachers().add(teacherList.get(index3));
 			studentList.add(student);
 		}
-        LitePal.saveAll(studentList);
-        LitePal.saveAll(teacherList);
+		DataSupport.saveAll(studentList);
+		DataSupport.saveAll(teacherList);
         String studentTable = DBUtility.getTableNameByClassName(Student.class.getName());
         String teacherTable = DBUtility.getTableNameByClassName(Teacher.class.getName());
         String tableName = DBUtility.getIntermediateTableName(studentTable, teacherTable);
         for (Student student : studentList) {
-			Cursor cursor = LitePal.findBySQL(
+			Cursor cursor = DataSupport.findBySQL(
 					"select * from " + tableName + " where " + studentTable + "_id=?",
 					String.valueOf(student.getId()));
 			assertEquals(3, cursor.getCount());
@@ -157,11 +156,11 @@ public class SaveAllTest extends AndroidTestCase {
             }
             classroomList.add(classroom);
         }
-        LitePal.saveAll(classroomList);
+        DataSupport.saveAll(classroomList);
         assertEquals(50, classroomList.size());
         for (Classroom classroom : classroomList) {
             assertTrue(classroom.isSaved());
-            Classroom c = LitePal.find(Classroom.class, classroom.get_id());
+            Classroom c = DataSupport.find(Classroom.class, classroom.get_id());
             assertTrue(c.getName().startsWith("classroom"));
             assertEquals(20, c.getNews().size());
             assertEquals(13, c.getNumbers().size());

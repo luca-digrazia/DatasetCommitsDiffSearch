@@ -13,7 +13,6 @@ import com.litepaltest.test.LitePalTestCase;
 
 import junit.framework.Assert;
 
-import org.litepal.LitePal;
 import org.litepal.crud.DataSupport;
 
 import java.util.ArrayList;
@@ -32,6 +31,16 @@ public class SaveTest extends LitePalTestCase {
 		Assert.assertTrue(isDataExists(getTableName(cell), cell.getId()));
 	}
 
+    public void testSaveFast() {
+        Cellphone cell = new Cellphone();
+        cell.setBrand("iPhone");
+        cell.setPrice(4998.01);
+        cell.setInStock('Y');
+        cell.setSerial(UUID.randomUUID().toString());
+        Assert.assertTrue(cell.saveFast());
+        Assert.assertTrue(isDataExists(getTableName(cell), cell.getId()));
+    }
+	
 	public void testSaveWithConstructors() {
 		Computer computer = new Computer("asus", 699.00);
 		assertTrue(computer.save());
@@ -39,14 +48,32 @@ public class SaveTest extends LitePalTestCase {
 		Computer c = getComputer(computer.getId());
 		assertEquals("asus", c.getBrand());
 		assertEquals(699.00, c.getPrice());
-		Computer cc = LitePal.find(Computer.class, computer.getId());
+		Computer cc = DataSupport.find(Computer.class, computer.getId());
 		assertEquals("asus", cc.getBrand());
 		assertEquals(699.00, cc.getPrice());
 		Product p = new Product(null);
 		p.setBrand("apple");
 		p.setPrice(1222.33);
 		p.save();
+		Product.find(Product.class, p.getId());
 	}
+
+    public void testSaveFastWithConstructors() {
+        Computer computer = new Computer("asus", 699.00);
+        assertTrue(computer.saveFast());
+        Assert.assertTrue(isDataExists(getTableName(computer), computer.getId()));
+        Computer c = getComputer(computer.getId());
+        assertEquals("asus", c.getBrand());
+        assertEquals(699.00, c.getPrice());
+        Computer cc = DataSupport.find(Computer.class, computer.getId());
+        assertEquals("asus", cc.getBrand());
+        assertEquals(699.00, cc.getPrice());
+        Product p = new Product(null);
+        p.setBrand("apple");
+        p.setPrice(1222.33);
+        p.saveFast();
+        Product.find(Product.class, p.getId());
+    }
 	
 	public void testSaveAfterDelete() {
 		Cellphone cell = new Cellphone();
@@ -133,6 +160,19 @@ public class SaveTest extends LitePalTestCase {
 		Assert.assertTrue(isDataExists(getTableName(s), s2.getId()));
 	}
 
+    public void testSaveFastAfterDelete() {
+        Cellphone cell = new Cellphone();
+        cell.setBrand("iPhone");
+        cell.setPrice(4998.01);
+        cell.setInStock('Y');
+        cell.setSerial(UUID.randomUUID().toString());
+        Assert.assertTrue(cell.saveFast());
+        Assert.assertTrue(isDataExists(getTableName(cell), cell.getId()));
+        assertTrue(cell.delete() > 0);
+        assertTrue(cell.saveFast());
+        Assert.assertTrue(isDataExists(getTableName(cell), cell.getId()));
+    }
+
     public void testSaveWithBlob() {
         byte[] b = new byte[10];
         for (int i = 0; i < b.length; i++) {
@@ -142,8 +182,8 @@ public class SaveTest extends LitePalTestCase {
         product.setBrand("Android");
         product.setPrice(2899.69);
         product.setPic(b);
-        assertTrue(product.save());
-        Product p = LitePal.find(Product.class, product.getId());
+        assertTrue(product.saveFast());
+        Product p = DataSupport.find(Product.class, product.getId());
         byte[] pic = p.getPic();
         assertEquals(b.length, pic.length);
         for (int i = 0; i < b.length; i++) {
@@ -177,7 +217,7 @@ public class SaveTest extends LitePalTestCase {
         weChatMessage.setType(1);
         assertTrue(weChatMessage.save());
         assertTrue(weChatMessage.getId() > 0);
-        WeChatMessage message1 = LitePal.find(WeChatMessage.class, weChatMessage.getId());
+        WeChatMessage message1 = DataSupport.find(WeChatMessage.class, weChatMessage.getId());
         assertEquals("Tom", message1.getFriend());
         assertEquals("Hello nice to meet you", message1.getContent());
         assertNull(message1.getTitle());
@@ -189,7 +229,7 @@ public class SaveTest extends LitePalTestCase {
         weiboMessage.setContent("Something big happens");
         weiboMessage.setFollower("Jimmy");
         weiboMessage.setNumber(123456);
-        assertTrue(weiboMessage.save());
+        assertTrue(weiboMessage.saveFast());
         assertTrue(weiboMessage.getId() > 0);
     }
 
@@ -209,7 +249,7 @@ public class SaveTest extends LitePalTestCase {
         weChatMessage.setType(1);
         assertTrue(weChatMessage.save());
         assertTrue(weChatMessage.getId() > 0);
-        WeChatMessage message1 = LitePal.find(WeChatMessage.class, weChatMessage.getId());
+        WeChatMessage message1 = DataSupport.find(WeChatMessage.class, weChatMessage.getId());
         assertEquals("Tom", message1.getFriend());
         assertEquals("Hello nice to meet you", message1.getContent());
         assertNull(message1.getTitle());
@@ -224,7 +264,7 @@ public class SaveTest extends LitePalTestCase {
         weiboMessage.setCellphone(cellphone);
         assertTrue(weiboMessage.save());
         assertTrue(weiboMessage.getId() > 0);
-        WeiboMessage message2 = LitePal.find(WeiboMessage.class, weiboMessage.getId(), true);
+        WeiboMessage message2 = DataSupport.find(WeiboMessage.class, weiboMessage.getId(), true);
         Cellphone result = message2.getCellphone();
         assertEquals(cellphone.getId(), result.getId());
         assertEquals(cellphone.getBrand(), result.getBrand());
@@ -247,7 +287,7 @@ public class SaveTest extends LitePalTestCase {
         numbers.add(4);
         classroom.setNumbers(numbers);
         classroom.save();
-        Classroom c = LitePal.find(Classroom.class, classroom.get_id());
+        Classroom c = DataSupport.find(Classroom.class, classroom.get_id());
         assertEquals("classroom1", c.getName());
         assertEquals(3, c.getNews().size());
         assertEquals(4, c.getNumbers().size());

@@ -1,13 +1,13 @@
 package com.litepaltest.model;
 
-import org.litepal.crud.LitePalSupport;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public class Classroom extends LitePalSupport {
+import org.litepal.crud.DataSupport;
+
+public class Classroom extends DataSupport {
 	private int _id;
 
 	private String name;
