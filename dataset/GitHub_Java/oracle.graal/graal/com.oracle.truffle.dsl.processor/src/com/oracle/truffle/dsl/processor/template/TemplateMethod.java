@@ -242,9 +242,7 @@ public class TemplateMethod extends MessageContainer implements Comparable<Templ
     }
 
     public void updateSignature(Signature signature) {
-        // TODO(CH): fails in normal usage - output ok though
-        // assert signature.size() >= 1;
-
+        assert signature.size() >= 1;
         int signatureIndex = 0;
         for (ActualParameter parameter : getReturnTypeAndParameters()) {
             if (!parameter.getSpecification().isSignature()) {

@@ -205,6 +205,7 @@ public class NodeParser extends TemplateParser<NodeData> {
 
             finalizeSpecializations(elements, splittedNode);
             verifyNode(splittedNode, elements);
+            expandExecutableTypeVarArgs(splittedNode);
             createPolymorphicSpecializations(splittedNode);
             assignShortCircuitsToSpecializations(splittedNode);
         }
@@ -217,68 +218,70 @@ public class NodeParser extends TemplateParser<NodeData> {
         return node;
     }
 
+    private static void expandExecutableTypeVarArgs(NodeData node) {
+        for (ExecutableTypeData executableMethod : node.getExecutableTypes()) {
+            if (!(executableMethod.getMethod().isVarArgs() && executableMethod.getSpecification().isVariableRequiredArguments())) {
+                continue;
+            }
+            int expandArguments = node.getSignatureSize() - executableMethod.getSignatureSize();
+            if (expandArguments > 0) {
+                int signatureSize = executableMethod.getSignatureSize();
+                ActualParameter parameter = executableMethod.getSignatureParameter(signatureSize - 1);
+                for (int i = 0; i < expandArguments; i++) {
+                    int newVarArgsIndex = parameter.getVarArgsIndex() + i + 1;
+                    int newSpecificationIndex = parameter.getSpecificationIndex() + i + 1;
+                    executableMethod.getParameters().add(
+                                    new ActualParameter(parameter.getSpecification(), parameter.getTypeSystemType(), newSpecificationIndex, newVarArgsIndex, parameter.isImplicit()));
+                }
+
+            }
+        }
+    }
+
     private void createPolymorphicSpecializations(NodeData node) {
         if (!node.needsRewrites(context) || !node.isPolymorphic()) {
             node.setPolymorphicSpecializations(Collections.<SpecializationData> emptyList());
             return;
         }
 
-        Signature genericSignature = node.getGenericSpecialization().getSignature();
-        Set<Signature> signatures = new TreeSet<>();
+        SpecializationData generic = node.getGenericSpecialization();
 
-        for (SpecializationData specialization1 : node.getSpecializations()) {
-            Signature signature = specialization1.getSignature();
+        List<TypeData> polymorphicSignature = new ArrayList<>();
+        // TODO we should support more optimized for boxing
+        // List<ActualParameter> updatePolymorphic = generic.getReturnTypeAndParameters();
+        List<ActualParameter> updatePolymorphic = Arrays.asList();
+        for (ActualParameter genericParameter : updatePolymorphic) {
+            if (!genericParameter.getSpecification().isSignature()) {
+                continue;
+            }
 
-            for (SpecializationData specialization2 : node.getSpecializations()) {
-                if (specialization1 == specialization2) {
+            Set<TypeData> usedTypes = new HashSet<>();
+            for (SpecializationData specialization : node.getSpecializations()) {
+                if (!specialization.isSpecialized()) {
                     continue;
                 }
-                signatures.add(signature.combine(genericSignature, specialization2.getSignature()));
-            }
-        }
-
-        while (true) {
-            List<Signature> newSignatures = new ArrayList<>();
-            for (Signature signature1 : signatures) {
-                for (Signature signature2 : signatures) {
-                    if (signature1 == signature2) {
-                        continue;
-                    }
-                    newSignatures.add(signature1.combine(genericSignature, signature2));
+                ActualParameter parameter = specialization.findParameter(genericParameter.getLocalName());
+                if (parameter == null) {
+                    throw new AssertionError("Parameter existed in generic specialization but not in specialized. param = " + genericParameter.getLocalName());
                 }
+                usedTypes.add(parameter.getTypeSystemType());
             }
-            if (!signatures.addAll(newSignatures)) {
-                break;
+
+            TypeData polymorphicType;
+            if (usedTypes.size() == 1) {
+                polymorphicType = usedTypes.iterator().next();
+            } else {
+                polymorphicType = node.getTypeSystem().getGenericTypeData();
             }
+            polymorphicSignature.add(polymorphicType);
         }
 
-        List<Signature> sortedSignatures = new ArrayList<>(signatures);
-
-        SpecializationData polymorphicGeneric = null;
-        List<SpecializationData> specializations = new ArrayList<>();
-        SpecializationData generic = node.getGenericSpecialization();
-        for (Signature signature : sortedSignatures) {
-            SpecializationData specialization = new SpecializationData(generic, false, false, true);
-
-            for (Iterator<ActualParameter> iterator = specialization.getParameters().iterator(); iterator.hasNext();) {
-                ActualParameter param = iterator.next();
-                if (param.getSpecification().isLocal()) {
-                    iterator.remove();
-                }
-            }
-
-            specialization.forceFrame(context.getTruffleTypes().getFrame());
-            specialization.setNode(node);
-            specialization.updateSignature(signature);
-            specializations.add(specialization);
-
-            if (genericSignature.equals(signature)) {
-                polymorphicGeneric = specialization;
-            }
-        }
-
-        node.setGenericPolymorphicSpecialization(polymorphicGeneric);
-        node.setPolymorphicSpecializations(specializations);
+        SpecializationData specialization = new SpecializationData(generic, false, false, true);
+        specialization.updateSignature(new Signature(polymorphicSignature));
+        specialization.setNode(node);
+        node.setGenericPolymorphicSpecialization(specialization);
+        // TODO remove polymoprhic specializations
+        node.setPolymorphicSpecializations(Collections.<SpecializationData> emptyList());
     }
 
     private NodeData parseNodeData(TypeElement templateType, TypeMirror nodeType, List<? extends Element> elements, List<TypeElement> typeHierarchy) {
@@ -332,10 +335,12 @@ public class NodeParser extends TemplateParser<NodeData> {
         nodeData.setNodeContainer(nodeContainer != null);
         nodeData.setTypeSystem(typeSystem);
         nodeData.setFields(parseFields(typeHierarchy, elements));
-        parsedNodes.put(Utils.getQualifiedName(templateType), nodeData);
-        // parseChildren invokes cyclic parsing.
-        nodeData.setChildren(parseChildren(elements, typeHierarchy));
+        nodeData.setChildren(parseChildren(nodeData, elements, typeHierarchy));
         nodeData.setExecutableTypes(groupExecutableTypes(new ExecutableTypeMethodParser(context, nodeData).parse(elements)));
+
+        // resolveChildren invokes cyclic parsing.
+        parsedNodes.put(Utils.getQualifiedName(templateType), nodeData);
+        resolveChildren(nodeData);
 
         return nodeData;
     }
@@ -384,7 +389,28 @@ public class NodeParser extends TemplateParser<NodeData> {
         return fields;
     }
 
-    private List<NodeChildData> parseChildren(List<? extends Element> elements, final List<TypeElement> typeHierarchy) {
+    private void resolveChildren(NodeData node) {
+        for (NodeChildData nodeChild : node.getChildren()) {
+            NodeData fieldNodeData = resolveNode(Utils.fromTypeMirror(nodeChild.getNodeType()));
+            nodeChild.setNode(fieldNodeData);
+            if (fieldNodeData == null) {
+                nodeChild.addError("Node type '%s' is invalid or not a valid Node.", Utils.getQualifiedName(nodeChild.getNodeType()));
+            } else if (!Utils.typeEquals(fieldNodeData.getTypeSystem().getTemplateType().asType(), (node.getTypeSystem().getTemplateType().asType()))) {
+                nodeChild.addError("The @%s of the node and the @%s of the @%s does not match. %s != %s. ", TypeSystem.class.getSimpleName(), TypeSystem.class.getSimpleName(),
+                                NodeChild.class.getSimpleName(), Utils.getSimpleName(node.getTypeSystem().getTemplateType()), Utils.getSimpleName(fieldNodeData.getTypeSystem().getTemplateType()));
+            }
+            if (fieldNodeData != null) {
+                List<ExecutableTypeData> types = nodeChild.findGenericExecutableTypes(context);
+                if (types.isEmpty()) {
+                    AnnotationValue executeWithValue = Utils.getAnnotationValue(nodeChild.getMessageAnnotation(), "executeWith");
+                    nodeChild.addError(executeWithValue, "No generic execute method found with %s evaluated arguments for node type %s.", nodeChild.getExecuteWith().size(),
+                                    Utils.getSimpleName(nodeChild.getNodeType()));
+                }
+            }
+        }
+    }
+
+    private List<NodeChildData> parseChildren(NodeData parent, List<? extends Element> elements, final List<TypeElement> typeHierarchy) {
         Set<String> shortCircuits = new HashSet<>();
         for (ExecutableElement method : ElementFilter.methodsIn(elements)) {
             AnnotationMirror mirror = Utils.findAnnotationMirror(processingEnv, method, ShortCircuit.class);
@@ -449,19 +475,13 @@ public class NodeParser extends TemplateParser<NodeData> {
                     kind = ExecutionKind.SHORT_CIRCUIT;
                 }
 
-                NodeChildData nodeChild = new NodeChildData(type, childMirror, name, childType, originalChildType, getter, cardinality, kind);
+                NodeChildData nodeChild = new NodeChildData(parent, type, childMirror, name, childType, originalChildType, getter, cardinality, kind);
 
                 parsedChildren.add(nodeChild);
 
                 verifyNodeChild(nodeChild);
                 if (nodeChild.hasErrors()) {
                     continue;
-                }
-
-                NodeData fieldNodeData = resolveNode(Utils.fromTypeMirror(childType));
-                nodeChild.setNode(fieldNodeData);
-                if (fieldNodeData == null) {
-                    nodeChild.addError("Node type '%s' is invalid or not a valid Node.", Utils.getQualifiedName(childType));
                 }
 
                 index++;
@@ -514,12 +534,6 @@ public class NodeParser extends TemplateParser<NodeData> {
             }
             child.setExecuteWith(executeWith);
             if (child.getNodeData() == null) {
-                continue;
-            }
-
-            List<ExecutableTypeData> types = child.findGenericExecutableTypes(context);
-            if (types.isEmpty()) {
-                child.addError(executeWithValue, "No generic execute method found with %s evaluated arguments for node type %s.", executeWith.size(), Utils.getSimpleName(child.getNodeType()));
                 continue;
             }
         }
@@ -670,7 +684,7 @@ public class NodeParser extends TemplateParser<NodeData> {
 
         // calculate reachability
         SpecializationData prev = null;
-        int specializationCount = 0;
+        int polymorphicCombinations = 0;
         boolean reachable = true;
         for (SpecializationData specialization : specializations) {
             if (specialization.isUninitialized()) {
@@ -687,14 +701,23 @@ public class NodeParser extends TemplateParser<NodeData> {
                 reachable = false;
             }
             if (!specialization.isGeneric()) {
-                specializationCount++;
+                int combinations = 1;
+                for (ActualParameter parameter : specialization.getParameters()) {
+                    if (!parameter.getSpecification().isSignature()) {
+                        continue;
+                    }
+                    TypeData type = parameter.getTypeSystemType();
+                    combinations *= node.getTypeSystem().lookupSourceTypes(type).size();
+                }
+                polymorphicCombinations += combinations;
             }
+
             prev = specialization;
         }
 
         // initialize polymorphic depth
         if (node.getPolymorphicDepth() < 0) {
-            node.setPolymorphicDepth(specializationCount - 1);
+            node.setPolymorphicDepth(polymorphicCombinations - 1);
         }
 
         // reduce polymorphicness if generic is not reachable
@@ -1010,9 +1033,6 @@ public class NodeParser extends TemplateParser<NodeData> {
         for (TemplateMethod method : nodeData.getAllTemplateMethods()) {
             unusedElements.remove(method.getMethod());
         }
-        if (nodeData.getExtensionElements() != null) {
-            unusedElements.removeAll(nodeData.getExtensionElements());
-        }
 
         for (NodeFieldData field : nodeData.getFields()) {
             if (field.getGetter() != null) {
@@ -1044,7 +1064,7 @@ public class NodeParser extends TemplateParser<NodeData> {
 
         boolean parametersFound = false;
         for (ExecutableElement constructor : constructors) {
-            if (!constructor.getParameters().isEmpty()) {
+            if (!constructor.getParameters().isEmpty() && !isSourceSectionConstructor(context, constructor)) {
                 parametersFound = true;
             }
         }
@@ -1067,6 +1087,10 @@ public class NodeParser extends TemplateParser<NodeData> {
 
         // not found
         nodeData.addError("Specialization constructor '%s(%s previousNode) { this(...); }' is required.", Utils.getSimpleName(type), Utils.getSimpleName(type));
+    }
+
+    static boolean isSourceSectionConstructor(ProcessorContext context, ExecutableElement constructor) {
+        return constructor.getParameters().size() == 1 && Utils.typeEquals(constructor.getParameters().get(0).asType(), context.getTruffleTypes().getSourceSection());
     }
 
     private static boolean verifySpecializationParameters(NodeData nodeData) {

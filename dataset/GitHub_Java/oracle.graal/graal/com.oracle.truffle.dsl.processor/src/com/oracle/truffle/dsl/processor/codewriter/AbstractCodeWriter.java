@@ -682,9 +682,7 @@ public abstract class AbstractCodeWriter extends CodeElementScanner<Void, Void> 
 
                 int end = Math.min(i + nextSize, string.length());
 
-                // TODO(CH): fails in normal usage - output ok though
-                // assert lineLength + (end - i) + 2 < MAX_LINE_LENGTH;
-
+                assert lineLength + (end - i) + 2 < MAX_LINE_LENGTH;
                 write("\"" + string.substring(i, end) + "\"");
                 size = nextSize;
             }
