@@ -30,6 +30,8 @@ public interface AbstractBlock<T extends AbstractBlock<T>> {
 
     Loop<T> getLoop();
 
+    void setLoop(Loop<T> loop);
+
     int getLoopDepth();
 
     boolean isLoopHeader();
@@ -55,4 +57,15 @@ public interface AbstractBlock<T extends AbstractBlock<T>> {
     void setAlign(boolean align);
 
     T getDominator();
+
+    void setDominator(T block);
+
+    List<T> getDominated();
+
+    void setDominated(List<T> blocks);
+
+    T getPostdominator();
+
+    double probability();
+
 }

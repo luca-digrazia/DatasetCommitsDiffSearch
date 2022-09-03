@@ -273,7 +273,6 @@ public final class BciBlockMapping {
     private BciBlock[] blockMap;
     public BciBlock[] loopHeaders;
 
-    private final boolean doLivenessAnalysis;
     public LocalLiveness liveness;
 
     /**
@@ -281,8 +280,7 @@ public final class BciBlockMapping {
      *
      * @param method the compiler interface method containing the code
      */
-    private BciBlockMapping(ResolvedJavaMethod method, boolean doLivenessAnalysis) {
-        this.doLivenessAnalysis = doLivenessAnalysis;
+    private BciBlockMapping(ResolvedJavaMethod method) {
         this.method = method;
         exceptionHandlers = method.getExceptionHandlers();
         stream = new BytecodeStream(method.getCode());
@@ -321,7 +319,7 @@ public final class BciBlockMapping {
         if (Debug.isLogEnabled()) {
             this.log("Before LivenessAnalysis");
         }
-        if (doLivenessAnalysis) {
+        if (OptLivenessAnalysis.getValue()) {
             try (Scope s = Debug.scope("LivenessAnalysis")) {
                 liveness = method.getMaxLocals() <= 64 ? new SmallLocalLiveness() : new LargeLocalLiveness();
                 liveness.computeLiveness();
@@ -1060,8 +1058,8 @@ public final class BciBlockMapping {
         }
     }
 
-    public static BciBlockMapping create(ResolvedJavaMethod method, boolean doLivenessAnalysis) {
-        BciBlockMapping map = new BciBlockMapping(method, doLivenessAnalysis);
+    public static BciBlockMapping create(ResolvedJavaMethod method) {
+        BciBlockMapping map = new BciBlockMapping(method);
         map.build();
         if (Debug.isDumpEnabled()) {
             Debug.dump(map, method.format("After block building %f %R %H.%n(%P)"));
