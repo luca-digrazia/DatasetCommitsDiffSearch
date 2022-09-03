@@ -108,7 +108,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     protected AMD64LIRInstruction createMove(AllocatableValue dst, Value src) {
         if (src instanceof AMD64AddressValue) {
             return new LeaOp(dst, (AMD64AddressValue) src);
-        } else if (isRegister(src) || isStackSlot(dst)) {
+        } else if (isRegister(src) || isStackSlotValue(dst)) {
             return new MoveFromRegOp(dst.getKind(), dst, src);
         } else {
             return new MoveToRegOp(dst.getKind(), dst, src);
@@ -196,7 +196,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitAddress(StackSlot address) {
+    public Variable emitAddress(StackSlotValue address) {
         Variable result = newVariable(LIRKind.value(target().wordKind));
         append(new StackLeaOp(result, address));
         return result;

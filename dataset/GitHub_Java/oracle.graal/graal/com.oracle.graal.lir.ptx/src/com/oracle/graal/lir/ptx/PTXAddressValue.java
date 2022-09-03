@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,10 +25,10 @@ package com.oracle.graal.lir.ptx;
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.ptx.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 
 /**
  * Represents an address in target machine memory, specified via some combination of a base register
@@ -38,38 +38,38 @@ public final class PTXAddressValue extends CompositeValue {
 
     private static final long serialVersionUID = 1802222435353022623L;
 
-    @Component({REG, UNUSED}) private AllocatableValue base;
+    @Component({REG, OperandFlag.ILLEGAL}) private AllocatableValue base;
     private final long displacement;
 
     /**
      * Creates an {@link PTXAddressValue} with given base register and no displacement.
-     * 
+     *
      * @param kind the kind of the value being addressed
      * @param base the base register
      */
-    public PTXAddressValue(Kind kind, AllocatableValue base) {
+    public PTXAddressValue(LIRKind kind, AllocatableValue base) {
         this(kind, base, 0);
     }
 
     /**
      * Creates an {@link PTXAddressValue} with given base register and a displacement. This is the
      * most general constructor.
-     * 
+     *
      * @param kind the kind of the value being addressed
      * @param base the base register
      * @param displacement the displacement
      */
-    public PTXAddressValue(Kind kind, AllocatableValue base, long displacement) {
+    public PTXAddressValue(LIRKind kind, AllocatableValue base, long displacement) {
         super(kind);
         this.base = base;
         this.displacement = displacement;
 
-        assert !isStackSlot(base);
+        assert !isStackSlotValue(base);
     }
 
     public PTXAddress toAddress() {
-        Register baseReg = base == AllocatableValue.UNUSED ? Register.None : asRegister(base);
-        return new PTXAddress(baseReg, displacement);
+        // Register baseReg = base.equals( == Value.ILLEGAL) ? Register.None : asRegister(base);
+        return new PTXAddress((Variable) base, displacement);
     }
 
     @Override
@@ -94,13 +94,13 @@ public final class PTXAddressValue extends CompositeValue {
     public boolean equals(Object obj) {
         if (obj instanceof PTXAddressValue) {
             PTXAddressValue addr = (PTXAddressValue) obj;
-            return getKind() == addr.getKind() && displacement == addr.displacement && base.equals(addr.base);
+            return getLIRKind().equals(addr.getLIRKind()) && displacement == addr.displacement && base.equals(addr.base);
         }
         return false;
     }
 
     @Override
     public int hashCode() {
-        return base.hashCode() ^ ((int) displacement << 4) ^ (getKind().ordinal() << 12);
+        return base.hashCode() ^ ((int) displacement << 4) ^ getLIRKind().hashCode();
     }
 }
