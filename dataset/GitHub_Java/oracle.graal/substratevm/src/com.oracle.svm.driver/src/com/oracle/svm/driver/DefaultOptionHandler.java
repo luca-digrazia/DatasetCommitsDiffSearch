@@ -30,14 +30,7 @@ import java.util.Queue;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
 
-import org.graalvm.compiler.options.OptionType;
-
-import com.oracle.svm.hosted.image.AbstractBootImage.NativeImageKind;
-
 class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
-
-    static final String helpText = NativeImage.getResource("/Help.txt");
-    static final String helpExtraText = NativeImage.getResource("/HelpExtra.txt");
 
     DefaultOptionHandler(NativeImage nativeImage) {
         super(nativeImage);
@@ -47,48 +40,26 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
     public boolean consume(Queue<String> args) {
         String headArg = args.peek();
         switch (headArg) {
-            case "--help":
+            case "-?":
+            case "-help":
                 args.poll();
-                nativeImage.showMessage(helpText);
-                nativeImage.showNewline();
-                nativeImage.apiOptionHandler.printOptions(nativeImage::showMessage);
-                nativeImage.showNewline();
-                nativeImage.optionRegistry.showOptions(null, true, nativeImage::showMessage);
-                nativeImage.showNewline();
+                nativeImage.showMessage(NativeImage.buildContext().helpText);
                 System.exit(0);
                 return true;
-            case "--version":
+            case "-X":
                 args.poll();
-                nativeImage.showMessage("SubstrateVM Version Info");
-                nativeImage.showMessage(NativeImage.svmVersion.replace(',', '\n'));
-                nativeImage.showMessage("GraalVM Version " + NativeImage.graalvmVersion);
-                System.exit(0);
-                return true;
-            case "--help-extra":
-                args.poll();
-                nativeImage.showMessage(helpExtraText);
+                nativeImage.showMessage(NativeImage.buildContext().helpTextX);
                 System.exit(0);
                 return true;
             case "-cp":
             case "-classpath":
-            case "--class-path":
                 args.poll();
                 String cpArgs = args.poll();
                 if (cpArgs == null) {
-                    NativeImage.showError(headArg + " requires class path specification");
+                    NativeImage.showError("-cp requires class path specification");
                 }
-                for (String cp : cpArgs.split(File.pathSeparator)) {
+                for (String cp : cpArgs.split(":")) {
                     nativeImage.addCustomImageClasspath(Paths.get(cp));
-                }
-                return true;
-            case "--configurations-path":
-                args.poll();
-                String configPath = args.poll();
-                if (configPath == null) {
-                    NativeImage.showError(headArg + " requires a " + File.pathSeparator + " separated list of directories");
-                }
-                for (String configDir : configPath.split(File.pathSeparator)) {
-                    nativeImage.addMacroOptionRoot(Paths.get(configDir));
                 }
                 return true;
             case "-jar":
@@ -97,43 +68,15 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                 if (jarFilePathStr == null) {
                     NativeImage.showError("-jar requires jar file specification");
                 }
-                handleJarFileArg(nativeImage.canonicalize(Paths.get(jarFilePathStr)).toFile());
+                handleJarFileArg(Paths.get(jarFilePathStr).toFile());
                 return true;
-            case "--verbose":
+            case "-verbose":
                 args.poll();
                 nativeImage.setVerbose(true);
                 return true;
-            case "--dry-run":
-                args.poll();
-                nativeImage.setDryRun(true);
-                return true;
-            case "-shared":
-            case "--shared":
-                args.poll();
-                nativeImage.addImageBuilderArg(NativeImage.oHKind + NativeImageKind.SHARED_LIBRARY.name());
-                return true;
-            case "-ea":
-                args.poll();
-                nativeImage.addImageBuilderArg(NativeImage.oH + NativeImage.enableRuntimeAssertions);
-                return true;
-            case "-g":
-                args.poll();
-                nativeImage.addImageBuilderArg(NativeImage.oHDebug + 2);
-                return true;
-            case "--expert-options":
-                args.poll();
-                String expertUserOption = OptionType.User.name();
-                nativeImage.addImageBuilderArg(NativeImage.oH + NativeImage.enablePrintFlags + expertUserOption);
-                nativeImage.addImageBuilderArg(NativeImage.oR + NativeImage.enablePrintFlags + expertUserOption);
-                return true;
-            case "--expert-options-all":
-                args.poll();
-                nativeImage.addImageBuilderArg(NativeImage.oH + NativeImage.enablePrintFlags);
-                nativeImage.addImageBuilderArg(NativeImage.oR + NativeImage.enablePrintFlags);
-                return true;
         }
 
-        String debugAttach = "--debug-attach";
+        String debugAttach = "-debug-attach";
         if (headArg.startsWith(debugAttach)) {
             String debugAttachArg = args.poll();
             String portSuffix = debugAttachArg.substring(debugAttach.length());
@@ -142,7 +85,7 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                 try {
                     debugPort = Integer.parseInt(portSuffix.substring(1));
                 } catch (NumberFormatException e) {
-                    NativeImage.showError("Invalid --debug-attach option: " + debugAttachArg);
+                    NativeImage.showError("Invalid -debug-attach option: " + debugAttachArg);
                 }
             }
             nativeImage.addImageBuilderJavaArgs("-Xdebug", "-Xrunjdwp:transport=dt_socket,server=y,address=" + debugPort + ",suspend=y");
@@ -169,6 +112,12 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
             }
             return true;
         }
+        String debugOption = "-g";
+        if (headArg.equals(debugOption)) {
+            args.poll();
+            nativeImage.addImageBuilderArg(NativeImage.oHDebug + 2);
+            return true;
+        }
         String optimizeOption = "-O";
         if (headArg.startsWith(optimizeOption)) {
             args.poll();
@@ -177,6 +126,12 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
             } else {
                 nativeImage.addImageBuilderArg(NativeImage.oHOptimize + headArg.substring(2));
             }
+            return true;
+        }
+        String enableRuntimeAssertions = "-ea";
+        if (headArg.equals(enableRuntimeAssertions)) {
+            args.poll();
+            nativeImage.addImageBuilderArg(NativeImage.oH + '+' + NativeImage.RuntimeAssertions);
             return true;
         }
         return false;
@@ -199,7 +154,7 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                 return;
             }
             nativeImage.addImageBuilderArg(NativeImage.oHClass + mainClass);
-            String jarFileName = file.getName();
+            String jarFileName = file.getName().toString();
             String jarFileNameBase = jarFileName.substring(0, jarFileName.length() - 4);
             nativeImage.addImageBuilderArg(NativeImage.oHName + jarFileNameBase);
             Path filePath = file.toPath();
