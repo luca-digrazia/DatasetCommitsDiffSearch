@@ -39,6 +39,10 @@ public abstract class SwitchNode extends ControlSplitNode {
     private double[] keyProbabilities;
     private int[] keySuccessors;
 
+    public ValueNode value() {
+        return value;
+    }
+
     /**
      * Constructs a new Switch.
      * @param value the instruction that provides the value to be switched over
@@ -63,10 +67,6 @@ public abstract class SwitchNode extends ControlSplitNode {
             }
         }
         return sum;
-    }
-
-    public ValueNode value() {
-        return value;
     }
 
     /**
