@@ -93,17 +93,13 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable, 
 
     protected MacroNode(NodeClass<? extends MacroNode> c, InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, StampPair returnStamp, ValueNode... arguments) {
         super(c, returnStamp != null ? returnStamp.getTrustedStamp() : null);
-        assertArgumentCount(targetMethod, arguments);
+        assert targetMethod.getSignature().getParameterCount(!targetMethod.isStatic()) == arguments.length;
         this.arguments = new NodeInputList<>(this, arguments);
         this.bci = bci;
         this.targetMethod = targetMethod;
         this.returnStamp = returnStamp;
         this.invokeKind = invokeKind;
         assert !isPlaceholderBci(bci);
-    }
-
-    protected void assertArgumentCount(ResolvedJavaMethod targetMethod, ValueNode... arguments) {
-        assert targetMethod.getSignature().getParameterCount(!targetMethod.isStatic()) == arguments.length;
     }
 
     public ValueNode getArgument(int i) {
