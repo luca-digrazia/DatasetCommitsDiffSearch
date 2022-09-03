@@ -443,10 +443,6 @@ public class LayoutGenerator {
             stream.print("    public");
         } else {
             stream.print("    private");
-
-            if (!layout.hasObjectTypeGuard()) {
-                stream.printf(" static");
-            }
         }
 
         if (layout.hasInstanceProperties()) {
