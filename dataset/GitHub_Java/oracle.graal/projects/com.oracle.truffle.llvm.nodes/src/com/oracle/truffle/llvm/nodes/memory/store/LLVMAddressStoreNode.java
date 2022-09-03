@@ -31,34 +31,29 @@ package com.oracle.truffle.llvm.nodes.memory.store;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
+@NodeChild(type = LLVMExpressionNode.class, value = "valueNode")
 public abstract class LLVMAddressStoreNode extends LLVMStoreNode {
 
-    public LLVMAddressStoreNode(Type type) {
-        super(type, ADDRESS_SIZE_IN_BYTES);
+    public LLVMAddressStoreNode(Type type, SourceSection source) {
+        super(type, ADDRESS_SIZE_IN_BYTES, source);
     }
 
     @Specialization
     public Object doAddress(LLVMAddress address, LLVMAddress value) {
         LLVMMemory.putAddress(address, value);
-        return null;
-    }
-
-    @Specialization
-    public Object doAddress(VirtualFrame frame, LLVMAddress address, LLVMFunctionDescriptor value, @Cached("createToNativeNode()") LLVMToNativeNode toNative) {
-        LLVMMemory.putAddress(address, toNative.executeWithTarget(frame, value));
         return null;
     }
 
@@ -122,22 +117,21 @@ public abstract class LLVMAddressStoreNode extends LLVMStoreNode {
     }
 
     @Specialization
-    public Object execute(VirtualFrame frame, LLVMAddress address, LLVMTruffleObject value, @Cached(value = "createToNativeNode()") LLVMToNativeNode toLLVMAddress) {
-        LLVMMemory.putAddress(address, toLLVMAddress.executeWithTarget(frame, value));
+    public Object execute(LLVMAddress address, LLVMTruffleObject value, @Cached(value = "getForceLLVMAddressNode()") LLVMForceLLVMAddressNode toLLVMAddress) {
+        LLVMMemory.putAddress(address, toLLVMAddress.executeWithTarget(value));
         return null;
     }
 
     @Specialization
-    public Object execute(VirtualFrame frame, LLVMBoxedPrimitive address, LLVMTruffleObject value, @Cached(value = "createToNativeNode()") LLVMToNativeNode convertAddress,
-                    @Cached(value = "createToNativeNode()") LLVMToNativeNode convertValue) {
-        LLVMMemory.putAddress(convertAddress.executeWithTarget(frame, address), convertValue.executeWithTarget(frame, value));
+    public Object execute(LLVMBoxedPrimitive address, LLVMTruffleObject value, @Cached(value = "getForceLLVMAddressNode()") LLVMForceLLVMAddressNode convertAddress,
+                    @Cached(value = "getForceLLVMAddressNode()") LLVMForceLLVMAddressNode convertValue) {
+        LLVMMemory.putAddress(convertAddress.executeWithTarget(address), convertValue.executeWithTarget(value));
         return null;
     }
 
     @Specialization
-    public Object execute(VirtualFrame frame, LLVMTruffleObject address, Object value, @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
-        foreignWrite.execute(frame, address, value);
+    public Object execute(LLVMTruffleObject address, Object value, @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
+        foreignWrite.execute(address, value);
         return null;
     }
-
 }

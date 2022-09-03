@@ -31,51 +31,52 @@ package com.oracle.truffle.llvm.nodes.memory.store;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalWriteNode;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 
+@NodeChild(type = LLVMExpressionNode.class, value = "valueNode")
 public abstract class LLVMI8StoreNode extends LLVMStoreNode {
 
-    public LLVMI8StoreNode() {
-        super(PrimitiveType.I8, 1);
+    public LLVMI8StoreNode(SourceSection source) {
+        super(PrimitiveType.I8, 1, source);
     }
 
     @Specialization
-    protected Object doOp(LLVMAddress address, byte value) {
+    public Object execute(LLVMAddress address, byte value) {
         LLVMMemory.putI8(address, value);
         return null;
     }
 
     @Specialization
-    protected Object doOp(LLVMVirtualAllocationAddress address, byte value) {
+    public Object execute(LLVMVirtualAllocationAddress address, byte value) {
         address.writeI8(value);
         return null;
     }
 
     @Specialization
-    protected Object doOp(LLVMGlobal address, byte value,
-                    @Cached(value = "createWrite()") LLVMGlobalWriteNode globalAccess) {
+    public Object execute(LLVMGlobalVariable address, byte value, @Cached(value = "createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
         globalAccess.putI8(address, value);
         return null;
     }
 
     @Specialization
-    protected Object doOp(VirtualFrame frame, LLVMTruffleObject address, byte value,
-                    @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
-        foreignWrite.execute(frame, address, value);
+    public Object execute(LLVMTruffleObject address, byte value, @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
+        foreignWrite.execute(address, value);
         return null;
     }
 
     @Specialization
-    protected Object doOp(LLVMBoxedPrimitive address, byte value) {
+    public Object execute(LLVMBoxedPrimitive address, byte value) {
         if (address.getValue() instanceof Long) {
             LLVMMemory.putI8((long) address.getValue(), value);
             return null;

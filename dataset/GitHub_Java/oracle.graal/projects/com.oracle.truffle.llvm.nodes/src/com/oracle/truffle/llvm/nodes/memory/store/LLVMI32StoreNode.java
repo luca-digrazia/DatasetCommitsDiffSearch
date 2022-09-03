@@ -31,51 +31,52 @@ package com.oracle.truffle.llvm.nodes.memory.store;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalWriteNode;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 
+@NodeChild(type = LLVMExpressionNode.class, value = "valueNode")
 public abstract class LLVMI32StoreNode extends LLVMStoreNode {
 
-    public LLVMI32StoreNode() {
-        super(PrimitiveType.I32, I32_SIZE_IN_BYTES);
+    public LLVMI32StoreNode(SourceSection source) {
+        super(PrimitiveType.I32, I32_SIZE_IN_BYTES, source);
     }
 
     @Specialization
-    protected Object doOp(LLVMGlobal address, int value,
-                    @Cached("createWrite()") LLVMGlobalWriteNode globalAccess) {
+    public Object execute(LLVMGlobalVariable address, int value, @Cached(value = "createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
         globalAccess.putI32(address, value);
         return null;
     }
 
     @Specialization
-    protected Object doOp(LLVMAddress address, int value) {
+    public Object execute(LLVMAddress address, int value) {
         LLVMMemory.putI32(address, value);
         return null;
     }
 
     @Specialization
-    protected Object doOp(LLVMVirtualAllocationAddress address, int value) {
+    public Object execute(LLVMVirtualAllocationAddress address, int value) {
         address.writeI32(value);
         return null;
     }
 
     @Specialization
-    protected Object doOp(VirtualFrame frame, LLVMTruffleObject address, int value,
-                    @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
-        foreignWrite.execute(frame, address, value);
+    public Object execute(LLVMTruffleObject address, int value, @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
+        foreignWrite.execute(address, value);
         return null;
     }
 
     @Specialization
-    protected Object doOp(LLVMBoxedPrimitive address, int value) {
+    public Object execute(LLVMBoxedPrimitive address, int value) {
         if (address.getValue() instanceof Long) {
             LLVMMemory.putI32((long) address.getValue(), value);
             return null;

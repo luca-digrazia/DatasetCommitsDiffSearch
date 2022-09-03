@@ -30,47 +30,34 @@
 package com.oracle.truffle.llvm.nodes.memory.store;
 
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.VariableBitWidthType;
 
+@NodeChild(type = LLVMExpressionNode.class, value = "valueNode")
 public abstract class LLVMIVarBitStoreNode extends LLVMStoreNode {
 
-    public LLVMIVarBitStoreNode(VariableBitWidthType type) {
-        super(type, getSize(type));
-    }
-
-    private static int getSize(VariableBitWidthType type) {
-        int nrFullBytes = type.getBitSize() / Byte.SIZE;
-        if (type.getBitSize() % Byte.SIZE != 0) {
-            nrFullBytes += 1;
-        }
-        return nrFullBytes;
+    public LLVMIVarBitStoreNode(VariableBitWidthType type, SourceSection source) {
+        super(type, 0, source);
     }
 
     @Specialization
-    protected Object doOp(VirtualFrame frame, LLVMGlobal address, LLVMIVarBit value,
-                    @Cached(value = "toNative()") LLVMToNativeNode globalAccess) {
-        LLVMMemory.putIVarBit(globalAccess.executeWithTarget(frame, address), value);
+    public Object execute(LLVMGlobalVariable address, LLVMIVarBit value, @Cached(value = "createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+        LLVMMemory.putIVarBit(globalAccess.getNativeLocation(address), value);
         return null;
     }
 
     @Specialization
-    protected Object doOp(LLVMAddress address, LLVMIVarBit value) {
+    public Object execute(LLVMAddress address, LLVMIVarBit value) {
         LLVMMemory.putIVarBit(address, value);
         return null;
     }
 
-    @Specialization
-    protected Object doOp(VirtualFrame frame, LLVMTruffleObject address, LLVMIVarBit value,
-                    @Cached("createForeignWrite()") LLVMForeignWriteNode foreignWrite) {
-        foreignWrite.execute(frame, address, value);
-        return null;
-    }
 }
