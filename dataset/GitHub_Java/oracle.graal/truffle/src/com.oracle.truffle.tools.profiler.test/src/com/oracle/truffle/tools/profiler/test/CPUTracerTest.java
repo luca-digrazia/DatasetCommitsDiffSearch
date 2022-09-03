@@ -41,7 +41,7 @@ public class CPUTracerTest extends AbstractProfilerTest {
 
     @Before
     public void setupTracer() {
-        tracer = CPUTracerInstrument.getTracer(engine);
+        tracer = CPUTracerInstrument.getSampler(engine);
         Assert.assertNotNull(tracer);
     }
 
