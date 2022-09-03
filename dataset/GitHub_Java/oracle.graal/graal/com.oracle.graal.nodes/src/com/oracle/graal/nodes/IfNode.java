@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.nodes;
 
-import java.io.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
@@ -147,20 +146,15 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                 tool.deleteBranch(falseSuccessor());
                 tool.addToWorkList(trueSuccessor());
                 ((StructuredGraph) graph()).removeSplit(this, trueSuccessor());
-                return;
             } else {
                 tool.deleteBranch(trueSuccessor());
                 tool.addToWorkList(falseSuccessor());
                 ((StructuredGraph) graph()).removeSplit(this, falseSuccessor());
-                return;
             }
         } else if (trueSuccessor().guards().isEmpty() && falseSuccessor().guards().isEmpty()) {
-            if (removeOrMaterializeIf(tool)) {
-                return;
+            if (!removeOrMaterializeIf(tool)) {
+                removeIntermediateMaterialization(tool);
             }
-        }
-        if (removeIntermediateMaterialization(tool)) {
-            return;
         }
     }
 
@@ -179,7 +173,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                 if (!phis.hasNext()) {
                     // empty if construct with no phis: remove it
                     removeEmptyIf(tool);
-                    return true;
+                    return false;
                 } else {
                     PhiNode singlePhi = phis.next();
                     if (!phis.hasNext()) {
@@ -367,10 +361,13 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                 PhiNode oldPhi = (PhiNode) oldMerge.usages().first();
                 PhiNode newPhi = graph().add(new PhiNode(oldPhi.stamp(), newMerge));
 
+                double probability = 0.0;
                 for (EndNode end : ends) {
                     newPhi.addInput(phiValues.get(end));
                     newMerge.addForwardEnd(end);
+                    probability += end.probability();
                 }
+                newMerge.setProbability(probability);
 
                 FrameState stateAfter = oldMerge.stateAfter();
                 if (stateAfter != null) {
