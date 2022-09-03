@@ -24,28 +24,29 @@ package org.graalvm.compiler.hotspot;
 
 import static org.graalvm.compiler.core.GraalCompilerOptions.ExitVMOnBailout;
 import static org.graalvm.compiler.core.GraalCompilerOptions.ExitVMOnException;
+import static org.graalvm.compiler.core.GraalCompilerOptions.PrintAfterCompilation;
 import static org.graalvm.compiler.core.GraalCompilerOptions.PrintBailout;
+import static org.graalvm.compiler.core.GraalCompilerOptions.PrintCompilation;
+import static org.graalvm.compiler.core.GraalCompilerOptions.PrintFilter;
 import static org.graalvm.compiler.core.GraalCompilerOptions.PrintStackTraceOnException;
 import static org.graalvm.compiler.core.phases.HighTier.Options.Inline;
 import static org.graalvm.compiler.java.BytecodeParserOptions.InlineDuringParsing;
 
 import java.util.List;
 
-import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.code.CompilationResult;
-import org.graalvm.compiler.core.CompilationPrinter;
-import org.graalvm.compiler.core.RetryableCompilation;
-import org.graalvm.compiler.core.common.CompilationIdentifier;
-import org.graalvm.compiler.debug.CounterKey;
+import org.graalvm.compiler.debug.Debug;
+import org.graalvm.compiler.debug.Debug.Scope;
 import org.graalvm.compiler.debug.DebugCloseable;
-import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.DebugCounter;
 import org.graalvm.compiler.debug.DebugDumpScope;
+import org.graalvm.compiler.debug.DebugTimer;
 import org.graalvm.compiler.debug.GraalError;
+import org.graalvm.compiler.debug.Management;
 import org.graalvm.compiler.debug.TTY;
-import org.graalvm.compiler.debug.TimerKey;
+import org.graalvm.compiler.debug.TimeSource;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.compiler.printer.GraalDebugHandlersFactory;
 import org.graalvm.util.EconomicMap;
 
 import jdk.vm.ci.code.BailoutException;
@@ -62,7 +63,7 @@ import jdk.vm.ci.services.JVMCIServiceLocator;
 
 public class CompilationTask {
 
-    private static final CounterKey BAILOUTS = DebugContext.counter("Bailouts");
+    private static final DebugCounter BAILOUTS = Debug.counter("Bailouts");
 
     private static final EventProvider eventProvider;
 
@@ -93,19 +94,13 @@ public class CompilationTask {
     private final boolean useProfilingInfo;
     private final OptionValues options;
 
-    final class HotSpotRetryableCompilation extends RetryableCompilation<HotSpotCompilationRequestResult> {
+    final class RetryableCompilation extends HotSpotRetryableCompilation<HotSpotCompilationRequestResult> {
         private final EventProvider.CompilationEvent compilationEvent;
         CompilationResult result;
 
-        HotSpotRetryableCompilation(EventProvider.CompilationEvent compilationEvent) {
-            super(compiler.getGraalRuntime().getOutputDirectory());
+        RetryableCompilation(EventProvider.CompilationEvent compilationEvent) {
+            super(compiler.getGraalRuntime(), options);
             this.compilationEvent = compilationEvent;
-        }
-
-        @Override
-        protected DebugContext createRetryDebugContext(OptionValues retryOptions) {
-            SnippetReflectionProvider snippetReflection = compiler.getGraalRuntime().getHostProviders().getSnippetReflection();
-            return DebugContext.create(retryOptions, new GraalDebugHandlersFactory(snippetReflection));
         }
 
         @Override
@@ -115,34 +110,65 @@ public class CompilationTask {
 
         @SuppressWarnings("try")
         @Override
-        protected HotSpotCompilationRequestResult run(DebugContext debug, Throwable retryCause) {
+        protected HotSpotCompilationRequestResult run(Throwable retryCause) {
             HotSpotResolvedJavaMethod method = getMethod();
             int entryBCI = getEntryBCI();
             final boolean isOSR = entryBCI != JVMCICompiler.INVOCATION_ENTRY_BCI;
             CompilationStatistics stats = CompilationStatistics.create(options, method, isOSR);
+            final boolean printCompilation = PrintCompilation.getValue(options) && !TTY.isSuppressed();
+            final boolean printAfterCompilation = PrintAfterCompilation.getValue(options) && !TTY.isSuppressed();
+            if (printCompilation) {
+                TTY.println(getMethodDescription() + "...");
+            }
 
-            final CompilationPrinter printer = CompilationPrinter.get(options, compilationId, method, entryBCI);
+            TTY.Filter filter = new TTY.Filter(PrintFilter.getValue(options), method);
+            final long start;
+            final long allocatedBytesBefore;
+            if (printAfterCompilation || printCompilation) {
+                final long threadId = Thread.currentThread().getId();
+                start = TimeSource.getTimeNS();
+                allocatedBytesBefore = printAfterCompilation || printCompilation ? Lazy.threadMXBean.getThreadAllocatedBytes(threadId) : 0L;
+            } else {
+                start = 0L;
+                allocatedBytesBefore = 0L;
+            }
 
-            try (DebugContext.Scope s = debug.scope("Compiling", new DebugDumpScope(getIdString(), true))) {
+            try (Scope s = Debug.scope("Compiling", new DebugDumpScope(getIdString(), true))) {
                 // Begin the compilation event.
                 compilationEvent.begin();
-                result = compiler.compile(method, entryBCI, useProfilingInfo, compilationId, options, debug);
+                result = compiler.compile(method, entryBCI, useProfilingInfo, compilationId, options);
             } catch (Throwable e) {
                 if (retryCause != null) {
                     log("Exception during retry", e);
                 }
-                throw debug.handle(e);
+                throw Debug.handle(e);
             } finally {
                 // End the compilation event.
                 compilationEvent.end();
+
+                filter.remove();
+
+                if (printAfterCompilation || printCompilation) {
+                    final long threadId = Thread.currentThread().getId();
+                    final long stop = TimeSource.getTimeNS();
+                    final long duration = (stop - start) / 1000000;
+                    final int targetCodeSize = result != null ? result.getTargetCodeSize() : -1;
+                    final int bytecodeSize = result != null ? result.getBytecodeSize() : 0;
+                    final long allocatedBytesAfter = Lazy.threadMXBean.getThreadAllocatedBytes(threadId);
+                    final long allocatedKBytes = (allocatedBytesAfter - allocatedBytesBefore) / 1024;
+
+                    if (printAfterCompilation) {
+                        TTY.println(getMethodDescription() + String.format(" | %4dms %5dB %5dB %5dkB", duration, bytecodeSize, targetCodeSize, allocatedKBytes));
+                    } else if (printCompilation) {
+                        TTY.println(String.format("%-6d JVMCI %-70s %-45s %-50s | %4dms %5dB %5dB %5dkB", getId(), "", "", "", duration, bytecodeSize, targetCodeSize, allocatedKBytes));
+                    }
+                }
             }
 
             if (result != null) {
-                try (DebugCloseable b = CodeInstallationTime.start(debug)) {
-                    installMethod(debug, result);
+                try (DebugCloseable b = CodeInstallationTime.start()) {
+                    installMethod(result);
                 }
-                // Installation is included in compilation time and memory usage reported by printer
-                printer.finish(result);
             }
             stats.finish(method, installedCode);
             if (result != null) {
@@ -150,6 +176,14 @@ public class CompilationTask {
             }
             return null;
         }
+    }
+
+    static class Lazy {
+        /**
+         * A {@link com.sun.management.ThreadMXBean} to be able to query some information about the
+         * current compiler thread, e.g. total allocated bytes.
+         */
+        static final com.sun.management.ThreadMXBean threadMXBean = (com.sun.management.ThreadMXBean) Management.getThreadMXBean();
     }
 
     public CompilationTask(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalCompiler compiler, HotSpotCompilationRequest request, boolean useProfilingInfo, boolean installAsDefault,
@@ -185,14 +219,10 @@ public class CompilationTask {
         return getRequest().getMethod();
     }
 
-    CompilationIdentifier getCompilationIdentifier() {
-        return compilationId;
-    }
-
     /**
-     * Returns the HotSpot id of this compilation.
+     * Returns the compilation id of this task.
      *
-     * @return HotSpot compile id
+     * @return compile id
      */
     public int getId() {
         return getRequest().getId();
@@ -221,43 +251,45 @@ public class CompilationTask {
     /**
      * Time spent in compilation.
      */
-    private static final TimerKey CompilationTime = DebugContext.timer("CompilationTime").doc("Time spent in compilation and code installation.");
+    private static final DebugTimer CompilationTime = Debug.timer("CompilationTime");
 
     /**
      * Counts the number of compiled {@linkplain CompilationResult#getBytecodeSize() bytecodes}.
      */
-    private static final CounterKey CompiledBytecodes = DebugContext.counter("CompiledBytecodes");
+    private static final DebugCounter CompiledBytecodes = Debug.counter("CompiledBytecodes");
 
     /**
      * Counts the number of compiled {@linkplain CompilationResult#getBytecodeSize() bytecodes} for
      * which {@linkplain CompilationResult#getTargetCode()} code was installed.
      */
-    private static final CounterKey CompiledAndInstalledBytecodes = DebugContext.counter("CompiledAndInstalledBytecodes");
+    private static final DebugCounter CompiledAndInstalledBytecodes = Debug.counter("CompiledAndInstalledBytecodes");
 
     /**
      * Counts the number of installed {@linkplain CompilationResult#getTargetCodeSize()} bytes.
      */
-    private static final CounterKey InstalledCodeSize = DebugContext.counter("InstalledCodeSize");
+    private static final DebugCounter InstalledCodeSize = Debug.counter("InstalledCodeSize");
 
     /**
      * Time spent in code installation.
      */
-    public static final TimerKey CodeInstallationTime = DebugContext.timer("CodeInstallation");
-
-    public HotSpotCompilationRequestResult runCompilation() {
-        SnippetReflectionProvider snippetReflection = compiler.getGraalRuntime().getHostProviders().getSnippetReflection();
-        try (DebugContext debug = DebugContext.create(options, new GraalDebugHandlersFactory(snippetReflection))) {
-            return runCompilation(debug);
-        }
-    }
+    public static final DebugTimer CodeInstallationTime = Debug.timer("CodeInstallation");
 
     @SuppressWarnings("try")
-    public HotSpotCompilationRequestResult runCompilation(DebugContext debug) {
+    public HotSpotCompilationRequestResult runCompilation() {
         HotSpotGraalRuntimeProvider graalRuntime = compiler.getGraalRuntime();
         GraalHotSpotVMConfig config = graalRuntime.getVMConfig();
         int entryBCI = getEntryBCI();
         boolean isOSR = entryBCI != JVMCICompiler.INVOCATION_ENTRY_BCI;
         HotSpotResolvedJavaMethod method = getMethod();
+
+        // register the compilation id in the method metrics
+        if (Debug.isMethodMeterEnabled()) {
+            if (getEntryBCI() != JVMCICompiler.INVOCATION_ENTRY_BCI) {
+                Debug.methodMetrics(method).addToMetric(getId(), "CompilationIdOSR");
+            } else {
+                Debug.methodMetrics(method).addToMetric(getId(), "CompilationId");
+            }
+        }
 
         // Log a compilation event.
         EventProvider.CompilationEvent compilationEvent = eventProvider.newCompilationEvent();
@@ -271,11 +303,11 @@ public class CompilationTask {
             }
         }
 
-        HotSpotRetryableCompilation compilation = new HotSpotRetryableCompilation(compilationEvent);
-        try (DebugCloseable a = CompilationTime.start(debug)) {
-            return compilation.runWithRetry(debug);
+        RetryableCompilation compilation = new RetryableCompilation(compilationEvent);
+        try (DebugCloseable a = CompilationTime.start()) {
+            return compilation.execute();
         } catch (BailoutException bailout) {
-            BAILOUTS.increment(debug);
+            BAILOUTS.increment();
             if (ExitVMOnBailout.getValue(options)) {
                 TTY.out.println(method.format("Bailout in %H.%n(%p)"));
                 bailout.printStackTrace(TTY.out);
@@ -318,11 +350,11 @@ public class CompilationTask {
 
                 if (compilation.result != null) {
                     compiledBytecodes = compilation.result.getBytecodeSize();
-                    CompiledBytecodes.add(debug, compiledBytecodes);
+                    CompiledBytecodes.add(compiledBytecodes);
                     if (installedCode != null) {
                         codeSize = installedCode.getSize();
-                        CompiledAndInstalledBytecodes.add(debug, compiledBytecodes);
-                        InstalledCodeSize.add(debug, codeSize);
+                        CompiledAndInstalledBytecodes.add(compiledBytecodes);
+                        InstalledCodeSize.add(codeSize);
                     }
                 }
 
@@ -346,7 +378,7 @@ public class CompilationTask {
     protected void handleException(Throwable t) {
         /*
          * Automatically enable ExitVMOnException during bootstrap or when asserts are enabled but
-         * respect ExitVMOnException if it has been explicitly set.
+         * respect ExitVMOnException if it's been explicitly set.
          */
         boolean exitVMOnException = ExitVMOnException.getValue(options);
         if (!ExitVMOnException.hasBeenSet(options)) {
@@ -372,18 +404,20 @@ public class CompilationTask {
         }
     }
 
+    private String getMethodDescription() {
+        HotSpotResolvedJavaMethod method = getMethod();
+        return String.format("%-6d JVMCI %-70s %-45s %-50s %s", getId(), method.getDeclaringClass().getName(), method.getName(), method.getSignature().toMethodDescriptor(),
+                        getEntryBCI() == JVMCICompiler.INVOCATION_ENTRY_BCI ? "" : "(OSR@" + getEntryBCI() + ") ");
+    }
+
     @SuppressWarnings("try")
-    private void installMethod(DebugContext debug, final CompilationResult compResult) {
+    private void installMethod(final CompilationResult compResult) {
         final CodeCacheProvider codeCache = jvmciRuntime.getHostJVMCIBackend().getCodeCache();
         HotSpotBackend backend = compiler.getGraalRuntime().getHostBackend();
         installedCode = null;
         Object[] context = {new DebugDumpScope(getIdString(), true), codeCache, getMethod(), compResult};
-        try (DebugContext.Scope s = debug.scope("CodeInstall", context)) {
-            installedCode = (HotSpotInstalledCode) backend.createInstalledCode(debug, getRequest().getMethod(), getRequest(), compResult,
-                            getRequest().getMethod().getSpeculationLog(), null, installAsDefault, context);
-        } catch (Throwable e) {
-            throw debug.handle(e);
-        }
+        installedCode = (HotSpotInstalledCode) backend.createInstalledCode(getRequest().getMethod(), getRequest(), compResult,
+                        getRequest().getMethod().getSpeculationLog(), null, installAsDefault, context);
     }
 
     @Override
