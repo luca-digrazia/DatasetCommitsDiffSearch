@@ -58,7 +58,7 @@ import static com.oracle.graal.compiler.common.GraalOptions.*;
  */
 public class InliningData {
 
-    private static final CallsiteHolder DUMMY_CALLSITE_HOLDER = new CallsiteHolderDummy();
+    private static final CallsiteHolder DUMMY_CALLSITE_HOLDER = new CallsiteHolder(null, 1.0, 1.0);
     // Metrics
     private static final DebugMetric metricInliningPerformed = Debug.metric("InliningPerformed");
     private static final DebugMetric metricInliningRuns = Debug.metric("InliningRuns");
@@ -88,7 +88,7 @@ public class InliningData {
 
         Assumptions rootAssumptions = context.getAssumptions();
         invocationQueue.push(new MethodInvocation(null, rootAssumptions, 1.0, 1.0));
-        pushExplorableGraph(rootGraph, 1.0, 1.0);
+        pushGraph(rootGraph, 1.0, 1.0);
     }
 
     private String checkTargetConditionsHelper(ResolvedJavaMethod method) {
@@ -336,7 +336,7 @@ public class InliningData {
         return new ExactInlineInfo(invoke, targetMethod);
     }
 
-    private void doInline(CallsiteHolderExplorable callerCallsiteHolder, MethodInvocation calleeInvocation, Assumptions callerAssumptions) {
+    private void doInline(CallsiteHolder callerCallsiteHolder, MethodInvocation calleeInvocation, Assumptions callerAssumptions) {
         StructuredGraph callerGraph = callerCallsiteHolder.graph();
         InlineInfo calleeInfo = calleeInvocation.callee();
         try {
@@ -378,10 +378,9 @@ public class InliningData {
     /**
      * @return true iff inlining was actually performed
      */
-    private boolean tryToInline(MethodInvocation calleeInvocation, MethodInvocation parentInvocation, int inliningDepth) {
-        CallsiteHolderExplorable callerCallsiteHolder = (CallsiteHolderExplorable) currentGraph();
+    private boolean tryToInline(CallsiteHolder callerCallsiteHolder, MethodInvocation calleeInvocation, MethodInvocation parentInvocation, int inliningDepth) {
         InlineInfo calleeInfo = calleeInvocation.callee();
-        assert callerCallsiteHolder.containsInvoke(calleeInfo.invoke());
+        assert iterContains(callerCallsiteHolder.graph().getInvokes(), calleeInfo.invoke());
         Assumptions callerAssumptions = parentInvocation.assumptions();
         metricInliningConsidered.increment();
 
@@ -397,19 +396,27 @@ public class InliningData {
         return false;
     }
 
+    private static <T> boolean iterContains(Iterable<T> in, T elem) {
+        for (T i : in) {
+            if (i == elem) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Process the next invoke and enqueue all its graphs for processing.
      */
     private void processNextInvoke() {
-        CallsiteHolderExplorable callsiteHolder = (CallsiteHolderExplorable) currentGraph();
+        CallsiteHolder callsiteHolder = currentGraph();
         Invoke invoke = callsiteHolder.popInvoke();
         MethodInvocation callerInvocation = currentInvocation();
         Assumptions parentAssumptions = callerInvocation.assumptions();
-        InlineInfo info = getInlineInfo(invoke, parentAssumptions);
+        Assumptions calleeAssumptions = new Assumptions(parentAssumptions.useOptimisticAssumptions());
+        InlineInfo info = populateInlineInfo(invoke, parentAssumptions, calleeAssumptions);
 
         if (info != null) {
-            Assumptions calleeAssumptions = new Assumptions(parentAssumptions.useOptimisticAssumptions());
-            info.populateInlinableElements(context, calleeAssumptions, canonicalizer);
             double invokeProbability = callsiteHolder.invokeProbability(invoke);
             double invokeRelevance = callsiteHolder.invokeRelevance(invoke);
             MethodInvocation methodInvocation = new MethodInvocation(info, calleeAssumptions, invokeProbability, invokeRelevance);
@@ -417,14 +424,26 @@ public class InliningData {
         }
     }
 
+    private InlineInfo populateInlineInfo(Invoke invoke, Assumptions parentAssumptions, Assumptions calleeAssumptions) {
+        InlineInfo info = getInlineInfo(invoke, parentAssumptions);
+        if (info == null) {
+            return null;
+        }
+        for (int i = 0; i < info.numberOfMethods(); i++) {
+            Inlineable elem = Inlineable.getInlineableElement(info.methodAt(i), info.invoke(), context.replaceAssumptions(calleeAssumptions), canonicalizer);
+            info.setInlinableElement(i, elem);
+        }
+        return info;
+    }
+
     public int graphCount() {
         return graphQueue.size();
     }
 
-    private void pushExplorableGraph(StructuredGraph graph, double probability, double relevance) {
+    private void pushGraph(StructuredGraph graph, double probability, double relevance) {
         assert graph != null;
         assert !contains(graph);
-        graphQueue.push(new CallsiteHolderExplorable(graph, probability, relevance));
+        graphQueue.push(new CallsiteHolder(graph, probability, relevance));
         assert graphQueue.size() <= maxGraphs;
     }
 
@@ -484,7 +503,7 @@ public class InliningData {
         for (int i = 0; i < info.numberOfMethods(); i++) {
             Inlineable elem = info.inlineableElementAt(i);
             if (elem instanceof InlineableGraph) {
-                pushExplorableGraph(((InlineableGraph) elem).getGraph(), invokeProbability * info.probabilityAt(i), invokeRelevance * info.relevanceAt(i));
+                pushGraph(((InlineableGraph) elem).getGraph(), invokeProbability * info.probabilityAt(i), invokeRelevance * info.relevanceAt(i));
             } else {
                 assert elem instanceof InlineableMacroNode;
                 pushDummyGraph();
@@ -583,7 +602,7 @@ public class InliningData {
             popInvocation();
             final MethodInvocation parentInvoke = currentInvocation();
             try (Debug.Scope s = Debug.scope("Inlining", inliningContext())) {
-                return tryToInline(currentInvocation, parentInvoke, inliningDepth() + 1);
+                return tryToInline(currentGraph(), currentInvocation, parentInvoke, inliningDepth() + 1);
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }
