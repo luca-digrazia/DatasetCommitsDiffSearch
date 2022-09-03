@@ -31,24 +31,17 @@ public abstract class Phase {
 
     private final String name;
     private static final ThreadLocal<Phase> currentPhase = new ThreadLocal<Phase>();
-    private final boolean shouldVerify;
 
     public Phase() {
         this.name = this.getClass().getSimpleName();
-        this.shouldVerify = true;
     }
 
     public Phase(String name) {
-        this(name, true);
-    }
-
-    public Phase(String name, boolean shouldVerify) {
         this.name = name;
-        this.shouldVerify = shouldVerify;
     }
 
     public final void apply(Graph graph) {
-        assert graph != null && (!shouldVerify || graph.verify());
+        assert graph != null && graph.verify();
 
         int startDeletedNodeCount = graph.getDeletedNodeCount();
         int startNodeCount = graph.getNodeCount();
@@ -61,7 +54,9 @@ public abstract class Phase {
             }
             GraalTimers.get(getName()).start();
         }
+        //System.out.println("Starting Phase " + getName());
         run(graph);
+        //System.out.println("Finished Phase " + getName());
         if (GraalOptions.Time) {
             GraalTimers.get(getName()).stop();
             if (oldCurrentPhase != null) {
@@ -81,7 +76,7 @@ public abstract class Phase {
             compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "After " + getName(), graph, true, false));
         }
 
-        assert !shouldVerify || graph.verify();
+        assert graph.verify();
 
         // (Item|Graph|Phase|Value)
     }

@@ -68,13 +68,11 @@ public class NodeArray extends AbstractList<Node> {
                 return variableLength;
             }
 
-            @Override
             public Node set(int index, Node element) {
                 checkIndex(index);
                 return NodeArray.this.set(fixedLength + index, element);
             }
 
-            @Override
             public void add(int index, Node element) {
                 variableLength++;
                 checkIndex(index);
@@ -87,7 +85,7 @@ public class NodeArray extends AbstractList<Node> {
 
             private void checkIndex(int index) {
                 if (index < 0 || index >= size()) {
-                    throw new IndexOutOfBoundsException("Index : " + index);
+                    throw new IndexOutOfBoundsException();
                 }
             }
 
