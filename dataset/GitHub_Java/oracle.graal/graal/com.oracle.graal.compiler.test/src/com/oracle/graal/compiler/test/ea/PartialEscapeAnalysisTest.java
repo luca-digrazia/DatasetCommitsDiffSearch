@@ -22,28 +22,19 @@
  */
 package com.oracle.graal.compiler.test.ea;
 
-import java.lang.ref.SoftReference;
+import java.lang.ref.*;
 
-import org.junit.Assert;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.api.directives.GraalDirectives;
-import com.oracle.graal.compiler.test.TypeSystemTest;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.cfg.ControlFlowGraph;
-import com.oracle.graal.nodes.extended.BoxNode;
-import com.oracle.graal.nodes.extended.UnboxNode;
-import com.oracle.graal.nodes.java.LoadFieldNode;
-import com.oracle.graal.nodes.java.LoadIndexedNode;
-import com.oracle.graal.nodes.java.NewArrayNode;
-import com.oracle.graal.nodes.java.NewInstanceNode;
-import com.oracle.graal.nodes.java.StoreFieldNode;
-import com.oracle.graal.nodes.virtual.CommitAllocationNode;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
+import com.oracle.graal.api.directives.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.phases.common.*;
 
 /**
  * The PartialEscapeAnalysisPhase is expected to remove all allocations and return the correct
@@ -127,20 +118,6 @@ public class PartialEscapeAnalysisTest extends EATestBase {
         } else {
             return null;
         }
-    }
-
-    @Test
-    public void testArrayCopy() {
-        testPartialEscapeAnalysis("testArrayCopySnippet", 0, 0);
-    }
-
-    public static Object[] array = new Object[]{1, 2, 3, 4, 5, "asdf", "asdf"};
-
-    public static Object testArrayCopySnippet(int a) {
-        Object[] tmp = new Object[]{a != 1 ? array[a] : null};
-        Object[] tmp2 = new Object[5];
-        System.arraycopy(tmp, 0, tmp2, 4, 1);
-        return tmp2[4];
     }
 
     @Test
