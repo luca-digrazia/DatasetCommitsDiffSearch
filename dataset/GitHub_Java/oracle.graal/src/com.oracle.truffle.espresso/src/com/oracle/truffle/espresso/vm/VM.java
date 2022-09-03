@@ -36,7 +36,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.nio.ByteBuffer;
-import java.nio.LongBuffer;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -62,6 +61,7 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.EspressoOptions;
+import com.oracle.truffle.espresso.Utils;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.MethodInfo;
 import com.oracle.truffle.espresso.intrinsics.SuppressFBWarnings;
@@ -76,7 +76,9 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.MetaUtil;
+import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.nodes.LinkedNode;
+import com.oracle.truffle.espresso.nodes.NativeRootNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.EspressoExitException;
@@ -331,8 +333,8 @@ public class VM extends NativeEnv {
             }
             try {
                 // Substitute raw pointer by proper `this` reference.
-                // System.err.print("Call DEFINED method: " + m.getName() +
-                // Arrays.toString(shiftedArgs));
+// System.err.print("Call DEFINED method: " + m.getName() +
+// Arrays.toString(shiftedArgs));
                 Object ret = m.invoke(this, args);
 
                 if (ret instanceof Boolean) {
@@ -348,7 +350,7 @@ public class VM extends NativeEnv {
                     ret = StaticObject.NULL;
                 }
 
-                // System.err.println(" -> " + ret);
+// System.err.println(" -> " + ret);
 
                 return ret;
             } catch (InvocationTargetException e) {
@@ -405,8 +407,14 @@ public class VM extends NativeEnv {
 
     @VmImpl
     public void JVM_Halt(int code) {
-        // Runtime.getRuntime().halt(code);
-        throw new EspressoExitException(code);
+        // TODO(peterssen): Kill the context, not the whole VM; maybe not even the context.
+        Runtime.getRuntime().halt(code);
+    }
+
+    @VmImpl
+    public void JVM_Exit(int code) {
+        // TODO(peterssen): Kill the context, not the whole VM; maybe not even the context.
+        System.exit(code);
     }
 
     @VmImpl
@@ -452,24 +460,8 @@ public class VM extends NativeEnv {
         return JniEnv.JNI_OK;
     }
 
-    /**
-     * <h3>jint GetEnv(JavaVM *vm, void **env, jint version);</h3>
-     *
-     * @param vmPtr The virtual machine instance from which the interface will be retrieved.
-     * @param envPtr pointer to the location where the JNI interface pointer for the current thread
-     *            will be placed.
-     * @param version The requested JNI version.
-     *
-     * @returns If the current thread is not attached to the VM, sets *env to NULL, and returns
-     *          JNI_EDETACHED. If the specified version is not supported, sets *env to NULL, and
-     *          returns JNI_EVERSION. Otherwise, sets *env to the appropriate interface, and returns
-     *          JNI_OK.
-     */
     @VmImpl
-    public int GetEnv(long vmPtr, long envPtr, int version) {
-        // TODO(peterssen): Check the thread is attached, and that the VM pointer matches.
-        LongBuffer buf = directByteBuffer(envPtr, 1, JavaKind.Long).asLongBuffer();
-        buf.put(jniEnv.getNativePointer());
+    public int GetEnv(long penvPtr, int version) {
         return JniEnv.JNI_OK;
     }
 
@@ -477,8 +469,6 @@ public class VM extends NativeEnv {
     public int AttachCurrentThreadAsDaemon(long penvPtr, long argsPtr) {
         return JniEnv.JNI_OK;
     }
-
-    // endregion JNI Invocation Interface
 
     @VmImpl
     @JniImpl
@@ -602,7 +592,36 @@ public class VM extends NativeEnv {
     private final ConcurrentHashMap<Long, TruffleObject> handle2Lib = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, TruffleObject> handle2Sym = new ConcurrentHashMap<>();
 
-    // region Library support
+    @VmImpl
+    public void JVM_UnloadLibrary(long handle) {
+        // TODO(peterssen): Do unload the library.
+        System.err.println("JVM_UnloadLibrary called but library was not unloaded!");
+    }
+
+    @VmImpl
+    public long JVM_FindLibraryEntry(long libHandle, String name) {
+        try {
+            TruffleObject function = NativeLibrary.lookup(handle2Lib.get(libHandle), name);
+            long handle = (long) ForeignAccess.sendUnbox(Message.UNBOX.createNode(), function);
+            if (!handle2Sym.contains(handle)) {
+                handle2Sym.put(handle, function);
+            }
+            return handle;
+        } catch (UnsupportedMessageException e) {
+            throw EspressoError.shouldNotReachHere(e);
+        } catch (UnknownIdentifierException e) {
+            return 0; // not found
+        }
+    }
+
+    @VmImpl
+    public boolean JVM_IsSupportedJNIVersion(int version) {
+        return version == JNI_VERSION_1_1 ||
+                        version == JNI_VERSION_1_2 ||
+                        version == JNI_VERSION_1_4 ||
+                        version == JNI_VERSION_1_6 ||
+                        version == JNI_VERSION_1_8;
+    }
 
     @VmImpl
     public long JVM_LoadLibrary(String name) {
@@ -621,46 +640,11 @@ public class VM extends NativeEnv {
     }
 
     @VmImpl
-    public void JVM_UnloadLibrary(long handle) {
-        // TODO(peterssen): Do unload the library.
-        System.err.println("JVM_UnloadLibrary called but library was not unloaded!");
-    }
-
-    @VmImpl
-    public long JVM_FindLibraryEntry(long libHandle, String name) {
-        if (libHandle == 0) {
-            System.err.println("JVM_FindLibraryEntry from default/global namespace (0): " + name);
-            return 0L;
-        }
-        try {
-            TruffleObject function = NativeLibrary.lookup(handle2Lib.get(libHandle), name);
-            long handle = (long) ForeignAccess.sendUnbox(Message.UNBOX.createNode(), function);
-            if (!handle2Sym.contains(handle)) {
-                handle2Sym.put(handle, function);
-            }
-            return handle;
-        } catch (UnsupportedMessageException e) {
-            throw EspressoError.shouldNotReachHere(e);
-        } catch (UnknownIdentifierException e) {
-            return 0; // not found
-        }
-    }
-
-    // endregion Library support
-
-    @VmImpl
-    public boolean JVM_IsSupportedJNIVersion(int version) {
-        return version == JNI_VERSION_1_1 ||
-                        version == JNI_VERSION_1_2 ||
-                        version == JNI_VERSION_1_4 ||
-                        version == JNI_VERSION_1_6 ||
-                        version == JNI_VERSION_1_8;
-    }
-
-    @VmImpl
     public int JVM_GetInterfaceVersion() {
         return JniEnv.JVM_INTERFACE_VERSION;
     }
+
+    // endregion JNI Invocation Interface
 
     public void dispose() {
         assert vmPtr != 0L : "Mokapot already disposed";
@@ -686,8 +670,9 @@ public class VM extends NativeEnv {
 
     @VmImpl
     public void JVM_Exit(int code) {
+        // TODO(peterssen): Kill the context, not the whole VM; maybe not even the context.
+        // unlike Halt, runs finalizers
         // System.exit(code);
-        // Unlike Halt, runs finalizers
         throw new EspressoExitException(code);
     }
 
@@ -802,68 +787,5 @@ public class VM extends NativeEnv {
 
     public TruffleObject getFunction(long handle) {
         return handle2Sym.get(handle);
-    }
-
-    /**
-     * Returns the value of the indexed component in the specified array object. The value is
-     * automatically wrapped in an object if it has a primitive type.
-     *
-     * @param array the array
-     * @param index the index
-     * @returns the (possibly wrapped) value of the indexed component in the specified array
-     * @exception NullPointerException If the specified object is null
-     * @exception IllegalArgumentException If the specified object is not an array
-     * @exception ArrayIndexOutOfBoundsException If the specified {@code index} argument is
-     *                negative, or if it is greater than or equal to the length of the specified
-     *                array
-     */
-    @VmImpl
-    @JniImpl
-    public Object JVM_GetArrayElement(Object array, int index) {
-        if (array == StaticObject.NULL) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(NullPointerException.class);
-        }
-        if (array instanceof StaticObjectArray) {
-            return EspressoLanguage.getCurrentContext().getInterpreterToVM().getArrayObject(index, array);
-        }
-        if (!array.getClass().isArray()) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(IllegalArgumentException.class, "Argument is not an array");
-        }
-        assert array.getClass().isArray() && array.getClass().getComponentType().isPrimitive();
-        if (index < 0 || index >= JVM_GetArrayLength(array)) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, "index");
-        }
-        Object elem = Array.get(array, index);
-        return guestBox(elem);
-    }
-
-    private static StaticObject guestBox(Object elem) {
-        assert elem != null && elem != StaticObject.NULL;
-        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
-        if (elem instanceof Boolean) {
-            return (StaticObject) meta.BOXED_BOOLEAN.staticMethod("valueOf", Boolean.class, boolean.class).invokeDirect((boolean) elem);
-        }
-        if (elem instanceof Byte) {
-            return (StaticObject) meta.BOXED_BYTE.staticMethod("valueOf", Byte.class, byte.class).invokeDirect((byte) elem);
-        }
-        if (elem instanceof Character) {
-            return (StaticObject) meta.BOXED_CHAR.staticMethod("valueOf", Character.class, char.class).invokeDirect((char) elem);
-        }
-        if (elem instanceof Short) {
-            return (StaticObject) meta.BOXED_SHORT.staticMethod("valueOf", Short.class, short.class).invokeDirect((short) elem);
-        }
-        if (elem instanceof Integer) {
-            return (StaticObject) meta.BOXED_INT.staticMethod("valueOf", Integer.class, int.class).invokeDirect((int) elem);
-        }
-        if (elem instanceof Float) {
-            return (StaticObject) meta.BOXED_FLOAT.staticMethod("valueOf", Float.class, float.class).invokeDirect((float) elem);
-        }
-        if (elem instanceof Double) {
-            return (StaticObject) meta.BOXED_DOUBLE.staticMethod("valueOf", Double.class, double.class).invokeDirect((double) elem);
-        }
-        if (elem instanceof Long) {
-            return (StaticObject) meta.BOXED_LONG.staticMethod("valueOf", Long.class, long.class).invokeDirect((long) elem);
-        }
-        throw EspressoError.shouldNotReachHere("Not a boxed type " + elem);
     }
 }
