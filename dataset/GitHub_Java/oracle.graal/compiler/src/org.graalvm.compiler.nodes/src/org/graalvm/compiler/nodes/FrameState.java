@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -237,8 +235,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
     }
 
     public void setOuterFrameState(FrameState x) {
-        assert x == null || (!x.isDeleted() && x.bci >= 0) : "cannot set outer frame state of:\n" + toString(this) +
-                        "\nto:\n" + toString(x) + "\nisDeleted=" + x.isDeleted();
+        assert x == null || (!x.isDeleted() && x.bci >= 0);
         updateUsages(this.outerFrameState, x);
         this.outerFrameState = x;
     }

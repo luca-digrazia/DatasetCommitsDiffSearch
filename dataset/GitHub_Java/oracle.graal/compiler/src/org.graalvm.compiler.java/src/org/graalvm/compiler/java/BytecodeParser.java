@@ -4116,7 +4116,7 @@ public class BytecodeParser implements GraphBuilderContext {
         }
     }
 
-    protected boolean needsExplicitException() {
+    private boolean needsExplicitException() {
         BytecodeExceptionMode exceptionMode = graphBuilderConfig.getBytecodeExceptionMode();
         if (exceptionMode == BytecodeExceptionMode.CheckAll || StressExplicitExceptionCode.getValue(options)) {
             return true;

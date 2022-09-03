@@ -39,6 +39,7 @@ import org.graalvm.collections.Equivalence;
 import org.graalvm.collections.UnmodifiableEconomicMap;
 import org.graalvm.collections.UnmodifiableMapCursor;
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
+import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
@@ -49,6 +50,7 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.GraalGraphError;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.graph.Graph.DuplicationReplacement;
+import org.graalvm.compiler.graph.Graph.Mark;
 import org.graalvm.compiler.graph.Graph.NodeEventScope;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeInputList;
@@ -103,7 +105,6 @@ import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -119,104 +120,43 @@ public class InliningUtil extends ValueMergeUtil {
         printInlining(info.methodAt(0), info.invoke(), inliningDepth, success, msg, args);
     }
 
-    /**
-     * @see #printInlining
-     */
     private static void printInlining(final ResolvedJavaMethod method, final Invoke invoke, final int inliningDepth, final boolean success, final String msg, final Object... args) {
         if (HotSpotPrintInlining.getValue(invoke.asNode().getOptions())) {
             Util.printInlining(method, invoke.bci(), inliningDepth, success, msg, args);
         }
     }
 
-    /**
-     * Trace a decision to inline a method.
-     *
-     * This prints a HotSpot-style inlining message to the console, and it also logs the decision to
-     * the logging stream.
-     *
-     * Phases that perform inlining should use this method to trace the inlining decisions, and use
-     * the {@link #traceNotInlinedMethod} methods only for debugging purposes.
-     */
-    public static void traceInlinedMethod(InlineInfo info, int inliningDepth, boolean allowLogging, String msg, Object... args) {
-        traceMethod(info, inliningDepth, allowLogging, true, msg, args);
+    public static void logInlinedMethod(InlineInfo info, int inliningDepth, boolean allowLogging, String msg, Object... args) {
+        logInliningDecision(info, inliningDepth, allowLogging, true, msg, args);
     }
 
-    /**
-     * Trace a decision to inline a method.
-     *
-     * This prints a HotSpot-style inlining message to the console, and it also logs the decision to
-     * the logging stream.
-     *
-     * Phases that perform inlining should use this method to trace the inlining decisions, and use
-     * the {@link #traceNotInlinedMethod} methods only for debugging purposes.
-     */
-    public static void traceInlinedMethod(Invoke invoke, int inliningDepth, boolean allowLogging, ResolvedJavaMethod method, String msg, Object... args) {
-        traceMethod(invoke, inliningDepth, allowLogging, true, method, msg, args);
+    public static void logNotInlinedMethod(InlineInfo info, int inliningDepth, String msg, Object... args) {
+        logInliningDecision(info, inliningDepth, true, false, msg, args);
     }
 
-    /**
-     * Trace a decision to not inline a method.
-     *
-     * This prints a HotSpot-style inlining message to the console, and it also logs the decision to
-     * the logging stream.
-     *
-     * Phases that perform inlining should use this method to trace the inlining decisions, and use
-     * the {@link #traceNotInlinedMethod} methods only for debugging purposes.
-     */
-    public static void traceNotInlinedMethod(InlineInfo info, int inliningDepth, String msg, Object... args) {
-        traceMethod(info, inliningDepth, true, false, msg, args);
-    }
-
-    /**
-     * Trace a decision about not inlining a method.
-     *
-     * This prints a HotSpot-style inlining message to the console, and it also logs the decision to
-     * the logging stream.
-     *
-     * Phases that perform inlining should use this method to trace the inlining decisions, and use
-     * the {@link #traceNotInlinedMethod} methods only for debugging purposes.
-     */
-    public static void traceNotInlinedMethod(Invoke invoke, int inliningDepth, ResolvedJavaMethod method, String msg, Object... args) {
-        traceMethod(invoke, inliningDepth, true, false, method, msg, args);
-    }
-
-    private static void traceMethod(Invoke invoke, int inliningDepth, boolean allowLogging, boolean success, ResolvedJavaMethod method, String msg, Object... args) {
-        if (allowLogging) {
-            DebugContext debug = invoke.asNode().getDebug();
-            printInlining(method, invoke, inliningDepth, success, msg, args);
-            if (shouldLogMethod(debug)) {
-                String methodString = methodName(method, invoke);
-                logMethod(debug, methodString, success, msg, args);
-            }
-        }
-    }
-
-    private static void traceMethod(InlineInfo info, int inliningDepth, boolean allowLogging, boolean success, String msg, final Object... args) {
+    public static void logInliningDecision(InlineInfo info, int inliningDepth, boolean allowLogging, boolean success, String msg, final Object... args) {
         if (allowLogging) {
             printInlining(info, inliningDepth, success, msg, args);
             DebugContext debug = info.graph().getDebug();
-            if (shouldLogMethod(debug)) {
-                logMethod(debug, methodName(info), success, msg, args);
+            if (shouldLogInliningDecision(debug)) {
+                logInliningDecision(debug, methodName(info), success, msg, args);
             }
         }
     }
 
-    /**
-     * Output a generic inlining decision to the logging stream (e.g. inlining termination
-     * condition).
-     *
-     * Used for debugging purposes.
-     */
+    @SuppressWarnings("try")
     public static void logInliningDecision(DebugContext debug, final String msg, final Object... args) {
-        logInlining(debug, msg, args);
+        try (DebugContext.Scope s = debug.scope(inliningDecisionsScopeString)) {
+            // Can't use log here since we are varargs
+            if (debug.isLogEnabled()) {
+                debug.logv(msg, args);
+            }
+        }
     }
 
-    /**
-     * Output a decision about not inlining a method to the logging stream, for debugging purposes.
-     */
     public static void logNotInlinedMethod(Invoke invoke, String msg) {
         DebugContext debug = invoke.asNode().getDebug();
-        if (shouldLogMethod(debug)) {
+        if (shouldLogInliningDecision(debug)) {
             String methodString = invoke.toString();
             if (invoke.callTarget() == null) {
                 methodString += " callTarget=null";
@@ -226,30 +166,33 @@ public class InliningUtil extends ValueMergeUtil {
                     methodString += " " + targetName;
                 }
             }
-            logMethod(debug, methodString, false, msg, new Object[0]);
+            logInliningDecision(debug, methodString, false, msg, new Object[0]);
         }
     }
 
-    private static void logMethod(DebugContext debug, final String methodString, final boolean success, final String msg, final Object... args) {
+    public static void logNotInlined(Invoke invoke, int inliningDepth, ResolvedJavaMethod method, String msg) {
+        logNotInlinedInvoke(invoke, inliningDepth, method, msg, new Object[0]);
+    }
+
+    public static void logNotInlinedInvoke(Invoke invoke, int inliningDepth, ResolvedJavaMethod method, String msg, Object... args) {
+        DebugContext debug = invoke.asNode().getDebug();
+        printInlining(method, invoke, inliningDepth, false, msg, args);
+        if (shouldLogInliningDecision(debug)) {
+            String methodString = methodName(method, invoke);
+            logInliningDecision(debug, methodString, false, msg, args);
+        }
+    }
+
+    private static void logInliningDecision(DebugContext debug, final String methodString, final boolean success, final String msg, final Object... args) {
         String inliningMsg = "inlining " + methodString + ": " + msg;
         if (!success) {
             inliningMsg = "not " + inliningMsg;
         }
-        logInlining(debug, inliningMsg, args);
+        logInliningDecision(debug, inliningMsg, args);
     }
 
     @SuppressWarnings("try")
-    private static void logInlining(DebugContext debug, final String msg, final Object... args) {
-        try (DebugContext.Scope s = debug.scope(inliningDecisionsScopeString)) {
-            // Can't use log here since we are varargs
-            if (debug.isLogEnabled()) {
-                debug.logv(msg, args);
-            }
-        }
-    }
-
-    @SuppressWarnings("try")
-    private static boolean shouldLogMethod(DebugContext debug) {
+    public static boolean shouldLogInliningDecision(DebugContext debug) {
         try (DebugContext.Scope s = debug.scope(inliningDecisionsScopeString)) {
             return debug.isLogEnabled();
         }
@@ -416,7 +359,7 @@ public class InliningUtil extends ValueMergeUtil {
         assert invokeNode.successors().first() != null : invoke;
         assert invokeNode.predecessor() != null;
 
-        // Do not update the inlining log when adding the duplicates.
+        Mark mark = graph.getMark();
         // Instead, attach the inlining log of the child graph to the current inlining log.
         EconomicMap<Node, Node> duplicates;
         try (InliningLog.UpdateScope scope = graph.getInliningLog().openDefaultUpdateScope()) {
@@ -438,7 +381,7 @@ public class InliningUtil extends ValueMergeUtil {
             }
         }
 
-        updateSourcePositions(invoke, inlineGraph, duplicates, !Objects.equals(inlineGraph.method(), inlineeMethod));
+        updateSourcePositions(invoke, inlineGraph, duplicates, !Objects.equals(inlineGraph.method(), inlineeMethod), mark);
         if (stateAfter != null) {
             processFrameStates(invoke, inlineGraph, duplicates, stateAtExceptionEdge, returnNodes.size() > 1);
             int callerLockDepth = stateAfter.nestedLockDepth();
@@ -661,27 +604,47 @@ public class InliningUtil extends ValueMergeUtil {
     }
 
     @SuppressWarnings("try")
-    private static void updateSourcePositions(Invoke invoke, StructuredGraph inlineGraph, UnmodifiableEconomicMap<Node, Node> duplicates, boolean isSubstitution) {
-        if (inlineGraph.mayHaveNodeSourcePosition() && invoke.stateAfter() != null) {
-            if (invoke.asNode().getNodeSourcePosition() == null) {
-                // Temporarily ignore the assert below.
-                return;
+    private static void updateSourcePositions(Invoke invoke, StructuredGraph inlineGraph, UnmodifiableEconomicMap<Node, Node> duplicates, boolean isSub, Mark mark) {
+        FixedNode invokeNode = invoke.asNode();
+        boolean isSubstitution = isSub || inlineGraph.method().getAnnotation(MethodSubstitution.class) != null || inlineGraph.method().getAnnotation(Snippet.class) != null;
+        StructuredGraph invokeGraph = invokeNode.graph();
+        assert !invokeGraph.trackNodeSourcePosition() || inlineGraph.trackNodeSourcePosition() ||
+                        isSubstitution : String.format("trackNodeSourcePosition mismatch %s %s != %s %s", invokeGraph, invokeGraph.trackNodeSourcePosition(), inlineGraph,
+                                        inlineGraph.trackNodeSourcePosition());
+        if (invokeGraph.trackNodeSourcePosition() && invoke.stateAfter() != null) {
+            final NodeSourcePosition invokePos = invoke.asNode().getNodeSourcePosition();
+            updateSourcePosition(invokeGraph, duplicates, mark, invokePos, isSubstitution);
+        }
+    }
+
+    public static void updateSourcePosition(StructuredGraph invokeGraph, UnmodifiableEconomicMap<Node, Node> duplicates, Mark mark, NodeSourcePosition invokePos, boolean isSubstitution) {
+        /*
+         * Not every duplicate node is newly created, so only update the position of the newly
+         * created nodes.
+         */
+        EconomicSet<Node> newNodes = EconomicSet.create(Equivalence.DEFAULT);
+        newNodes.addAll(invokeGraph.getNewNodes(mark));
+        EconomicMap<NodeSourcePosition, NodeSourcePosition> posMap = EconomicMap.create(Equivalence.DEFAULT);
+        UnmodifiableMapCursor<Node, Node> cursor = duplicates.getEntries();
+        while (cursor.advance()) {
+            if (!newNodes.contains(cursor.getValue())) {
+                continue;
             }
-
-            JavaConstant constantReceiver = invoke.getInvokeKind().hasReceiver() && !isSubstitution ? invoke.getReceiver().asJavaConstant() : null;
-            NodeSourcePosition invokePos = invoke.asNode().getNodeSourcePosition();
-            assert invokePos != null : "missing source information";
-
-            EconomicMap<NodeSourcePosition, NodeSourcePosition> posMap = EconomicMap.create(Equivalence.DEFAULT);
-            UnmodifiableMapCursor<Node, Node> cursor = duplicates.getEntries();
-            while (cursor.advance()) {
-                NodeSourcePosition pos = cursor.getKey().getNodeSourcePosition();
-                if (pos != null) {
-                    NodeSourcePosition callerPos = pos.addCaller(constantReceiver, invokePos);
-                    if (!posMap.containsKey(callerPos)) {
-                        posMap.put(callerPos, callerPos);
-                    }
-                    cursor.getValue().setNodeSourcePosition(posMap.get(callerPos));
+            NodeSourcePosition pos = cursor.getKey().getNodeSourcePosition();
+            if (pos != null) {
+                NodeSourcePosition callerPos = posMap.get(pos);
+                if (callerPos == null) {
+                    callerPos = pos.addCaller(invokePos, isSubstitution);
+                    posMap.put(pos, callerPos);
+                }
+                cursor.getValue().setNodeSourcePosition(callerPos);
+            } else {
+                if (isSubstitution) {
+                    /*
+                     * If no other position is provided at least attribute the substituted node to
+                     * the original invoke.
+                     */
+                    cursor.getValue().setNodeSourcePosition(invokePos);
                 }
             }
         }
@@ -946,8 +909,8 @@ public class InliningUtil extends ValueMergeUtil {
         return replacements.hasSubstitution(target, invokeBci);
     }
 
-    public static StructuredGraph getIntrinsicGraph(Replacements replacements, ResolvedJavaMethod target, int invokeBci) {
-        return replacements.getSubstitution(target, invokeBci);
+    public static StructuredGraph getIntrinsicGraph(Replacements replacements, ResolvedJavaMethod target, int invokeBci, boolean trackNodeSourcePosition) {
+        return replacements.getSubstitution(target, invokeBci, trackNodeSourcePosition);
     }
 
     public static FixedWithNextNode inlineMacroNode(Invoke invoke, ResolvedJavaMethod concrete, Class<? extends FixedWithNextNode> macroNodeClass) throws GraalError {

@@ -567,7 +567,7 @@ public class SnippetTemplate {
 
     static class Options {
         @Option(help = "Use a LRU cache for snippet templates.")//
-        public static final OptionKey<Boolean> UseSnippetTemplateCache = new OptionKey<>(true);
+        static final OptionKey<Boolean> UseSnippetTemplateCache = new OptionKey<>(true);
 
         @Option(help = "")//
         static final OptionKey<Integer> MaxTemplatesPerSnippet = new OptionKey<>(50);
@@ -651,7 +651,7 @@ public class SnippetTemplate {
                 try (DebugContext debug = openDebugContext(outer, args)) {
                     try (DebugCloseable a = SnippetTemplateCreationTime.start(debug); DebugContext.Scope s = debug.scope("SnippetSpecialization", args.info.method)) {
                         SnippetTemplates.increment(debug);
-                        template = new SnippetTemplate(options, debug, providers, snippetReflection, args, graph.trackNodeSourcePosition(), replacee);
+                        template = new SnippetTemplate(options, debug, providers, snippetReflection, args, graph.trackNodeSourcePosition());
                         if (Options.UseSnippetTemplateCache.getValue(options) && args.cacheable) {
                             templates.put(args.cacheKey, template);
                         }
@@ -701,13 +701,12 @@ public class SnippetTemplate {
      * Creates a snippet template.
      */
     @SuppressWarnings("try")
-    protected SnippetTemplate(OptionValues options, DebugContext debug, final Providers providers, SnippetReflectionProvider snippetReflection, Arguments args, boolean trackNodeSourcePosition,
-                    Node replacee) {
+    protected SnippetTemplate(OptionValues options, DebugContext debug, final Providers providers, SnippetReflectionProvider snippetReflection, Arguments args, boolean trackNodeSourcePosition) {
         this.snippetReflection = snippetReflection;
         this.info = args.info;
 
         Object[] constantArgs = getConstantArgs(args);
-        StructuredGraph snippetGraph = providers.getReplacements().getSnippet(args.info.method, args.info.original, constantArgs, trackNodeSourcePosition, replacee.getNodeSourcePosition());
+        StructuredGraph snippetGraph = providers.getReplacements().getSnippet(args.info.method, args.info.original, constantArgs, trackNodeSourcePosition);
 
         ResolvedJavaMethod method = snippetGraph.method();
         Signature signature = method.getSignature();
