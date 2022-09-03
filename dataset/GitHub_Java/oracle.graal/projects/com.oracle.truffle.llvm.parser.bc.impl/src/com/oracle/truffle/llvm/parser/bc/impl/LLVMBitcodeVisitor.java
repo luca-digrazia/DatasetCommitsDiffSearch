@@ -111,59 +111,24 @@ import com.oracle.truffle.llvm.parser.base.model.types.Type;
 
 public class LLVMBitcodeVisitor implements ModelVisitor {
 
-    public static final class BitcodeParserResult {
-        private final Model model;
-        private final LLVMPhiManager phis;
-        private final StackAllocation stackAllocation;
-        private final LLVMLabelList labels;
-
-        private BitcodeParserResult(Model model, LLVMPhiManager phis, StackAllocation stackAllocation, LLVMLabelList labels) {
-            this.model = model;
-            this.phis = phis;
-            this.stackAllocation = stackAllocation;
-            this.labels = labels;
-        }
-
-        public Model getModel() {
-            return model;
-        }
-
-        public LLVMPhiManager getPhis() {
-            return phis;
-        }
-
-        public StackAllocation getStackAllocation() {
-            return stackAllocation;
-        }
-
-        public LLVMLabelList getLabels() {
-            return labels;
-        }
-
-        public static BitcodeParserResult getFromFile(String sourcePath) {
-            final Model model = new Model();
-            new LLVMParser(model).parse(ModuleVersion.getModuleVersion(LLVMBaseOptionFacade.getLLVMVersion()), sourcePath);
-
-            final LLVMPhiManager phis = LLVMPhiManager.generate(model);
-            final StackAllocation stackAllocation = StackAllocation.generate(model);
-            final LLVMLabelList labels = LLVMLabelList.generate(model);
-
-            final TargetDataLayout layout = ((ModelModule) model.createModule()).getTargetDataLayout();
-            final DataLayoutConverter.DataSpecConverter targetDataLayout = layout != null ? DataLayoutConverter.getConverter(layout.getDataLayout()) : null;
-            LLVMMetadata.generate(model, targetDataLayout);
-
-            return new BitcodeParserResult(model, phis, stackAllocation, labels);
-        }
-    }
-
     public static LLVMParserResult getMain(Source source, LLVMContext context, NodeFactoryFacade factoryFacade) {
-        final BitcodeParserResult parserResult = BitcodeParserResult.getFromFile(source.getPath());
-        final Model model = parserResult.getModel();
-        final StackAllocation stackAllocation = parserResult.getStackAllocation();
+        Model model = new Model();
+
+        ModuleVersion llvmVersion = ModuleVersion.getModuleVersion(LLVMBaseOptionFacade.getLLVMVersion());
+        new LLVMParser(model).parse(llvmVersion, source.getPath());
+
+        LLVMPhiManager phis = LLVMPhiManager.generate(model);
+
+        final StackAllocation stackAllocation = StackAllocation.generate(model);
+
+        LLVMLabelList labels = LLVMLabelList.generate(model);
+
         final TargetDataLayout layout = ((ModelModule) model.createModule()).getTargetDataLayout();
         final DataLayoutConverter.DataSpecConverter targetDataLayout = layout != null ? DataLayoutConverter.getConverter(layout.getDataLayout()) : null;
+        LLVMMetadata.generate(model, targetDataLayout);
 
-        final LLVMBitcodeVisitor module = new LLVMBitcodeVisitor(source, context, stackAllocation, parserResult.getLabels(), parserResult.getPhis(), targetDataLayout, factoryFacade);
+        LLVMBitcodeVisitor module = new LLVMBitcodeVisitor(source, context, stackAllocation, labels, phis, targetDataLayout, factoryFacade);
+
         model.accept(module);
 
         LLVMFunction mainFunction = module.getFunction("@main");
