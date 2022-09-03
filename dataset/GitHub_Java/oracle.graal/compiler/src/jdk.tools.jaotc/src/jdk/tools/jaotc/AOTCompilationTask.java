@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,7 +33,6 @@ import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.GraalCompilerOptions;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugContext.Activation;
-import org.graalvm.compiler.debug.DebugContext.Builder;
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.printer.GraalDebugHandlersFactory;
@@ -119,7 +118,7 @@ final class AOTCompilationTask implements Runnable, Comparable<Object> {
         CompilationResult compResult = null;
         final long startTime = System.currentTimeMillis();
         SnippetReflectionProvider snippetReflection = aotBackend.getProviders().getSnippetReflection();
-        try (DebugContext debug = new Builder(graalOptions, new GraalDebugHandlersFactory(snippetReflection)).build(); Activation a = debug.activate()) {
+        try (DebugContext debug = DebugContext.create(graalOptions, new GraalDebugHandlersFactory(snippetReflection)); Activation a = debug.activate()) {
             compResult = aotBackend.compileMethod(method, debug);
         }
         final long endTime = System.currentTimeMillis();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -118,18 +118,17 @@ public final class FrameStateBuilder implements SideEffectsState {
      * @param graph the target graph of Graal nodes created by the builder
      */
     public FrameStateBuilder(GraphBuilderTool tool, ResolvedJavaMethod method, StructuredGraph graph) {
-        this(tool, new ResolvedJavaMethodBytecode(method), graph, false);
+        this(tool, new ResolvedJavaMethodBytecode(method), graph);
     }
 
     /**
      * Creates a new frame state builder for the given code attribute, method and the given target
-     * graph. Additionally specifies if nonLiveLocals should be retained.
+     * graph.
      *
      * @param code the bytecode in which the frame exists
      * @param graph the target graph of Graal nodes created by the builder
-     * @param shouldRetainLocalVariables specifies if nonLiveLocals should be retained in state.
      */
-    public FrameStateBuilder(GraphBuilderTool tool, Bytecode code, StructuredGraph graph, boolean shouldRetainLocalVariables) {
+    public FrameStateBuilder(GraphBuilderTool tool, Bytecode code, StructuredGraph graph) {
         this.tool = tool;
         if (tool instanceof BytecodeParser) {
             this.parser = (BytecodeParser) tool;
@@ -145,7 +144,7 @@ public final class FrameStateBuilder implements SideEffectsState {
 
         this.monitorIds = EMPTY_MONITOR_ARRAY;
         this.graph = graph;
-        this.clearNonLiveLocals = GraalOptions.OptClearNonLiveLocals.getValue(graph.getOptions()) && !shouldRetainLocalVariables;
+        this.clearNonLiveLocals = GraalOptions.OptClearNonLiveLocals.getValue(graph.getOptions());
         this.canVerifyKind = true;
     }
 
@@ -631,12 +630,12 @@ public final class FrameStateBuilder implements SideEffectsState {
 
     public void clearNonLiveLocals(BciBlock block, LocalLiveness liveness, boolean liveIn) {
         /*
-         * Non-live local clearing is mandatory for the entry block of an OSR compilation so that
-         * dead object slots at the OSR entry are cleared. It's not sufficient to rely on PiNodes
-         * with Kind.Illegal, because the conflicting branch might not have been parsed.
+         * (lstadler) if somebody is tempted to remove/disable this clearing code: it's possible to
+         * remove it for normal compilations, but not for OSR compilations - otherwise dead object
+         * slots at the OSR entry aren't cleared. it is also not enough to rely on PiNodes with
+         * Kind.Illegal, because the conflicting branch might not have been parsed.
          */
-        boolean isOSREntryBlock = graph.isOSR() && getMethod().equals(graph.method()) && graph.getEntryBCI() == block.startBci;
-        if (!clearNonLiveLocals && !isOSREntryBlock) {
+        if (!clearNonLiveLocals) {
             return;
         }
         if (liveIn) {

@@ -842,11 +842,7 @@ public class SubstrateAMD64Backend extends Backend {
     }
 
     @Override
-    public CompiledCode createCompiledCode(ResolvedJavaMethod method,
-                    CompilationRequest compilationRequest,
-                    CompilationResult compilationResult,
-                    boolean isDefault,
-                    OptionValues options) {
+    public CompiledCode createCompiledCode(ResolvedJavaMethod method, CompilationRequest compilationRequest, CompilationResult compilationResult, OptionValues options) {
         return new SubstrateCompiledCode(compilationResult);
     }
 

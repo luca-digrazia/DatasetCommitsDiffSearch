@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,6 +29,7 @@ import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.hotspot.HotSpotCompiledCodeBuilder;
 import org.graalvm.compiler.hotspot.stubs.Stub;
+import org.graalvm.compiler.options.OptionValues;
 
 import jdk.vm.ci.hotspot.HotSpotCompiledCode;
 
@@ -34,10 +37,12 @@ final class AOTStub implements JavaMethodInfo {
 
     private final Stub stub;
     private final Backend backend;
+    private OptionValues options;
 
-    AOTStub(Stub stub, Backend backend) {
+    AOTStub(Stub stub, Backend backend, OptionValues options) {
         this.stub = stub;
         this.backend = backend;
+        this.options = options;
     }
 
     @Override
@@ -52,7 +57,7 @@ final class AOTStub implements JavaMethodInfo {
 
     @Override
     public HotSpotCompiledCode compiledCode(CompilationResult result) {
-        return HotSpotCompiledCodeBuilder.createCompiledCode(backend.getCodeCache(), null, null, result);
+        return HotSpotCompiledCodeBuilder.createCompiledCode(backend.getCodeCache(), null, null, result, options);
     }
 
 }
