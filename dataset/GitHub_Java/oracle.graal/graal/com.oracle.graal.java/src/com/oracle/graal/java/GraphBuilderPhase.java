@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.java;
 
-import static com.oracle.graal.bytecode.Bytecodes.*;
+import static com.oracle.graal.java.bytecode.Bytecodes.*;
 import static java.lang.reflect.Modifier.*;
 
 import java.lang.reflect.*;
@@ -32,7 +32,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.JavaType.*;
 import com.oracle.graal.api.meta.JavaTypeProfile.*;
-import com.oracle.graal.bytecode.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.util.*;
@@ -40,6 +39,7 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.java.BciBlockMapping.Block;
 import com.oracle.graal.java.BciBlockMapping.ExceptionDispatchBlock;
+import com.oracle.graal.java.bytecode.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
@@ -68,7 +68,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private StructuredGraph currentGraph;
 
-    private final MetaAccessProvider runtime;
+    private final CodeCacheProvider runtime;
     private ConstantPool constantPool;
     private ResolvedJavaMethod method;
     private ProfilingInfo profilingInfo;
@@ -104,12 +104,11 @@ public final class GraphBuilderPhase extends Phase {
 
     private Block[] loopHeaders;
 
-    public GraphBuilderPhase(MetaAccessProvider runtime, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts) {
+    public GraphBuilderPhase(CodeCacheProvider runtime, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts) {
         this.graphBuilderConfig = graphBuilderConfig;
         this.optimisticOpts = optimisticOpts;
         this.runtime = runtime;
         this.log = GraalOptions.TraceBytecodeParserLevel > 0 ? new LogStream(TTY.out()) : null;
-        assert runtime != null;
     }
 
     @Override
@@ -285,7 +284,7 @@ public final class GraphBuilderPhase extends Phase {
             // this is a load of class constant which might be unresolved
             JavaType riType = (JavaType) con;
             if (riType instanceof ResolvedJavaType) {
-                frameState.push(Kind.Object, append(ConstantNode.forConstant(((ResolvedJavaType) riType).getEncoding(Representation.JavaClass), runtime, currentGraph)));
+                frameState.push(Kind.Object, append(ConstantNode.forCiConstant(((ResolvedJavaType) riType).getEncoding(Representation.JavaClass), runtime, currentGraph)));
             } else {
                 append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved, graphId)));
                 frameState.push(Kind.Object, append(ConstantNode.forObject(null, runtime, currentGraph)));
@@ -1098,8 +1097,7 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private ConstantNode appendConstant(Constant constant) {
-        assert constant != null;
-        return ConstantNode.forConstant(constant, runtime, currentGraph);
+        return ConstantNode.forCiConstant(constant, runtime, currentGraph);
     }
 
     private ValueNode append(FixedNode fixed) {
@@ -1276,7 +1274,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private ValueNode synchronizedObject(FrameStateBuilder state, ResolvedJavaMethod target) {
         if (isStatic(target.accessFlags())) {
-            return append(ConstantNode.forConstant(target.holder().getEncoding(Representation.JavaClass), runtime, currentGraph));
+            return append(ConstantNode.forCiConstant(target.holder().getEncoding(Representation.JavaClass), runtime, currentGraph));
         } else {
             return state.loadLocal(0);
         }
