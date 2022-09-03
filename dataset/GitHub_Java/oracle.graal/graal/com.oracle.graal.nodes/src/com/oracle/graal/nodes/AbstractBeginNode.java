@@ -26,24 +26,47 @@ import static com.oracle.graal.graph.iterators.NodePredicates.*;
 
 import java.util.*;
 
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(allowedUsageTypes = {InputType.Guard, InputType.Anchor})
-public abstract class AbstractBeginNode extends FixedWithNextNode implements LIRLowerable, Simplifiable, GuardingNode, AnchoringNode, IterableNodeType {
+public abstract class AbstractBeginNode extends FixedWithNextNode implements StateSplit, LIRLowerable, Simplifiable, GuardingNode, AnchoringNode, IterableNodeType {
 
-    public AbstractBeginNode() {
+    @Input(InputType.State) private FrameState stateAfter;
+
+    public FrameState stateAfter() {
+        return stateAfter;
+    }
+
+    public void setStateAfter(FrameState x) {
+        assert x == null || x.isAlive() : "frame state must be in a graph";
+        updateUsages(stateAfter, x);
+        stateAfter = x;
+    }
+
+    public boolean hasSideEffect() {
+        return false;
+    }
+
+    protected AbstractBeginNode() {
         super(StampFactory.forVoid());
     }
 
-    public AbstractBeginNode(Stamp stamp) {
+    protected AbstractBeginNode(Stamp stamp) {
         super(stamp);
+    }
+
+    public static AbstractBeginNode begin(FixedNode with) {
+        if (with instanceof AbstractBeginNode) {
+            return (AbstractBeginNode) with;
+        }
+        AbstractBeginNode begin = with.graph().add(new BeginNode());
+        begin.setNext(with);
+        return begin;
     }
 
     @Override
@@ -62,14 +85,18 @@ public abstract class AbstractBeginNode extends FixedWithNextNode implements LIR
     }
 
     public static AbstractBeginNode prevBegin(FixedNode from) {
-        for (AbstractBeginNode begin : GraphUtil.predecessorIterable(from).filter(AbstractBeginNode.class)) {
-            return begin;
+        Node prevBegin = from;
+        while (prevBegin != null) {
+            if (prevBegin instanceof AbstractBeginNode) {
+                return (AbstractBeginNode) prevBegin;
+            }
+            prevBegin = prevBegin.predecessor();
         }
         return null;
     }
 
     private void evacuateGuards(FixedNode evacuateFrom) {
-        if (!hasNoUsages()) {
+        if (!usages().isEmpty()) {
             AbstractBeginNode prevBegin = prevBegin(evacuateFrom);
             assert prevBegin != null;
             for (Node anchored : anchored().snapshot()) {
@@ -97,7 +124,7 @@ public abstract class AbstractBeginNode extends FixedWithNextNode implements LIR
 
     @Override
     public boolean verify() {
-        assertTrue(predecessor() != null || this == graph().start() || this instanceof AbstractMergeNode, "begin nodes must be connected");
+        assertTrue(predecessor() != null || this == graph().start() || this instanceof MergeNode, "begin nodes must be connected");
         return super.verify();
     }
 
@@ -119,7 +146,7 @@ public abstract class AbstractBeginNode extends FixedWithNextNode implements LIR
     }
 
     public NodeIterable<FixedNode> getBlockNodes() {
-        return new NodeIterable<FixedNode>() {
+        return new AbstractNodeIterable<FixedNode>() {
 
             @Override
             public Iterator<FixedNode> iterator() {
@@ -159,5 +186,9 @@ public abstract class AbstractBeginNode extends FixedWithNextNode implements LIR
         public void remove() {
             throw new UnsupportedOperationException();
         }
+    }
+
+    public FrameState getState() {
+        return stateAfter();
     }
 }

@@ -22,8 +22,10 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.nodes.ValueNodeInterface;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 
-public interface AnchoringNode extends ValueNodeInterface {
+public interface AnchoringNode extends NodeInterface {
 
+    ValueNode asNode();
 }

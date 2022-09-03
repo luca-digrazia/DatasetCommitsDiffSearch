@@ -22,13 +22,12 @@
  */
 package com.oracle.graal.phases.common;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.util.*;
 import java.util.Map.Entry;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -155,12 +154,12 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
 
         private void lowerToIf(GuardNode guard) {
             StructuredGraph graph = guard.graph();
-            BeginNode fastPath = graph.add(new BeginNode());
+            AbstractBeginNode fastPath = graph.add(new BeginNode());
             @SuppressWarnings("deprecation")
             DeoptimizeNode deopt = graph.add(new DeoptimizeNode(guard.action(), guard.reason(), useGuardIdAsDebugId ? guard.getId() : 0, guard.getSpeculation()));
-            BeginNode deoptBranch = BeginNode.begin(deopt);
-            BeginNode trueSuccessor;
-            BeginNode falseSuccessor;
+            AbstractBeginNode deoptBranch = AbstractBeginNode.begin(deopt);
+            AbstractBeginNode trueSuccessor;
+            AbstractBeginNode falseSuccessor;
             insertLoopExits(deopt);
             if (guard.negated()) {
                 trueSuccessor = deoptBranch;
@@ -175,12 +174,12 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
         }
 
         private void insertLoopExits(DeoptimizeNode deopt) {
-            Loop<Block> loop = block.getLoop();
+            Loop loop = block.getLoop();
             StructuredGraph graph = deopt.graph();
             while (loop != null) {
-                LoopExitNode exit = graph.add(new LoopExitNode((LoopBeginNode) loop.getHeader().getBeginNode()));
+                LoopExitNode exit = graph.add(new LoopExitNode(loop.loopBegin()));
                 graph.addBeforeFixed(deopt, exit);
-                loop = loop.getParent();
+                loop = loop.parent;
             }
         }
     }

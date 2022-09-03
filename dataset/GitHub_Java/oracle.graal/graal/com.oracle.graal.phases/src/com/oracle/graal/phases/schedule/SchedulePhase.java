@@ -29,7 +29,6 @@ import static com.oracle.graal.phases.GraalOptions.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.Verbosity;
@@ -153,7 +152,7 @@ public final class SchedulePhase extends Phase {
         }
 
         @Override
-        protected List<KillSet> processLoop(Loop<Block> loop, KillSet state) {
+        protected List<KillSet> processLoop(Loop loop, KillSet state) {
             LoopInfo<KillSet> info = ReentrantBlockIterator.processLoop(this, loop, cloneState(state));
 
             assert loop.header.getBeginNode() instanceof LoopBeginNode;
@@ -202,7 +201,7 @@ public final class SchedulePhase extends Phase {
             }
         }
 
-        BeginNode startNode = cfg.getStartBlock().getBeginNode();
+        AbstractBeginNode startNode = cfg.getStartBlock().getBeginNode();
         assert startNode instanceof StartNode;
 
         KillSet accm = foundExcludeNode ? set : excludedLocations;
@@ -650,7 +649,12 @@ public final class SchedulePhase extends Phase {
          * implies that the inputs' blocks have a total ordering via their dominance relation. So in
          * order to find the earliest block placement for this node we need to find the input block
          * that is dominated by all other input blocks.
+         * 
+         * While iterating over the inputs a set of dominator blocks of the current earliest
+         * placement is maintained. When the block of an input is not within this set, it becomes
+         * the current earliest placement and the list of dominator blocks is updated.
          */
+        BitSet dominators = new BitSet(cfg.getBlocks().length);
 
         if (node.predecessor() != null) {
             throw new SchedulingError();
@@ -663,24 +667,12 @@ public final class SchedulePhase extends Phase {
             } else {
                 inputEarliest = earliestBlock(input);
             }
-            if (earliest == null) {
+            if (!dominators.get(inputEarliest.getId())) {
                 earliest = inputEarliest;
-            } else if (earliest != inputEarliest) {
-                // Find out whether earliest or inputEarliest is earlier.
-                Block a = earliest.getDominator();
-                Block b = inputEarliest;
-                while (true) {
-                    if (a == inputEarliest || b == null) {
-                        // Nothing to change, the previous earliest block is still earliest.
-                        break;
-                    } else if (b == earliest || a == null) {
-                        // New earliest is the earliest.
-                        earliest = inputEarliest;
-                        break;
-                    }
-                    a = a.getDominator();
-                    b = b.getDominator();
-                }
+                do {
+                    dominators.set(inputEarliest.getId());
+                    inputEarliest = inputEarliest.getDominator();
+                } while (inputEarliest != null && !dominators.get(inputEarliest.getId()));
             }
         }
         if (earliest == null) {
@@ -761,7 +753,7 @@ public final class SchedulePhase extends Phase {
                     // If a FrameState is an outer FrameState this method behaves as if the inner
                     // FrameState was the actual usage, by recursing.
                     blocksForUsage(node, unscheduledUsage, closure, strategy);
-                } else if (unscheduledUsage instanceof BeginNode) {
+                } else if (unscheduledUsage instanceof AbstractBeginNode) {
                     // Only FrameStates can be connected to BeginNodes.
                     if (!(usage instanceof FrameState)) {
                         throw new SchedulingError(usage.toString());
@@ -1055,7 +1047,7 @@ public final class SchedulePhase extends Phase {
                 }
             }
 
-            if (instruction instanceof BeginNode) {
+            if (instruction instanceof AbstractBeginNode) {
                 ArrayList<ProxyNode> proxies = (instruction instanceof LoopExitNode) ? new ArrayList<>() : null;
                 for (ScheduledNode inBlock : blockToNodesMap.get(b)) {
                     if (!visited.isMarked(inBlock)) {
