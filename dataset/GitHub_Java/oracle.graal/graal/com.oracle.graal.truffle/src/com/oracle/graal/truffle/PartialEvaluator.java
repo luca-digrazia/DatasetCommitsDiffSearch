@@ -174,12 +174,11 @@ public class PartialEvaluator {
 
         @Override
         public InlineInfo shouldInlineInvoke(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments, JavaType returnType) {
-            TruffleBoundary truffleBoundary = original.getAnnotation(TruffleBoundary.class);
-            if (truffleBoundary != null) {
-                return truffleBoundary.throwsControlFlowException() ? InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION : InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
+            if (original.getAnnotation(TruffleBoundary.class) != null) {
+                return InlineInfo.DO_NOT_INLINE;
             }
             if (replacements.hasSubstitution(original, builder.bci())) {
-                return InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
+                return InlineInfo.DO_NOT_INLINE;
             }
             assert !builder.parsingIntrinsic();
 
@@ -243,21 +242,18 @@ public class PartialEvaluator {
 
         @Override
         public InlineInfo shouldInlineInvoke(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments, JavaType returnType) {
-            if (invocationPlugins.lookupInvocation(original) != null) {
-                return InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
-            } else if (loopExplosionPlugin.shouldExplodeLoops(original)) {
-                return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
+            if (invocationPlugins.lookupInvocation(original) != null || loopExplosionPlugin.shouldExplodeLoops(original)) {
+                return InlineInfo.DO_NOT_INLINE;
             }
-            TruffleBoundary truffleBoundary = original.getAnnotation(TruffleBoundary.class);
-            if (truffleBoundary != null) {
-                return truffleBoundary.throwsControlFlowException() ? InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION : InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
+            if (original.getAnnotation(TruffleBoundary.class) != null) {
+                return InlineInfo.DO_NOT_INLINE;
             }
             if (replacements.hasSubstitution(original, builder.bci())) {
-                return InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
+                return InlineInfo.DO_NOT_INLINE;
             }
 
             if (original.equals(callSiteProxyMethod) || original.equals(callDirectMethod)) {
-                return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
+                return InlineInfo.DO_NOT_INLINE;
             }
             if (hasMethodHandleArgument(arguments)) {
                 /*

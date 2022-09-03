@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,17 +33,17 @@ import java.util.concurrent.*;
 import java.util.stream.*;
 
 import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.code.CallingConvention.Type;
+import jdk.internal.jvmci.code.CallingConvention.*;
 import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.compiler.*;
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.debug.Debug.*;
 import jdk.internal.jvmci.hotspot.*;
 import jdk.internal.jvmci.meta.*;
 import jdk.internal.jvmci.service.*;
 
 import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.hotspot.*;
@@ -90,9 +90,9 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
 
         // Create compilation queue.
         CompilerThreadFactory factory = new CompilerThreadFactory("TruffleCompilerThread", new CompilerThreadFactory.DebugConfigAccess() {
-            public GraalDebugConfig getDebugConfig() {
+            public JVMCIDebugConfig getDebugConfig() {
                 if (Debug.isEnabled()) {
-                    GraalDebugConfig debugConfig = DebugEnvironment.initialize(TTY.out().out());
+                    JVMCIDebugConfig debugConfig = DebugEnvironment.initialize(TTY.out().out());
                     debugConfig.dumpHandlers().add(new TruffleTreeDumpHandler());
                     return debugConfig;
                 } else {
@@ -104,10 +104,10 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         if (selectedProcessors == 0) {
             // No manual selection made, check how many processors are available.
             int availableProcessors = Runtime.getRuntime().availableProcessors();
-            if (availableProcessors >= 12) {
-                selectedProcessors = 4;
-            } else if (availableProcessors >= 4) {
+            if (availableProcessors >= 4) {
                 selectedProcessors = 2;
+            } else if (availableProcessors >= 12) {
+                selectedProcessors = 4;
             }
         }
         selectedProcessors = Math.max(1, selectedProcessors);
@@ -198,7 +198,8 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         CallingConvention cc = getCallingConvention(providers.getCodeCache(), Type.JavaCallee, graph.method(), false);
         Backend backend = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend();
         CompilationResultBuilderFactory factory = getOptimizedCallTargetInstrumentationFactory(backend.getTarget().arch.getName(), javaMethod);
-        return compileGraph(graph, cc, javaMethod, providers, backend, graphBuilderSuite, OptimisticOptimizations.ALL, getProfilingInfo(graph), suites, lirSuites, new CompilationResult(), factory);
+        return compileGraph(graph, cc, javaMethod, providers, backend, providers.getCodeCache().getTarget(), graphBuilderSuite, OptimisticOptimizations.ALL, getProfilingInfo(graph), suites,
+                        lirSuites, new CompilationResult(), factory);
     }
 
     private static HotSpotProviders getGraalProviders() {
