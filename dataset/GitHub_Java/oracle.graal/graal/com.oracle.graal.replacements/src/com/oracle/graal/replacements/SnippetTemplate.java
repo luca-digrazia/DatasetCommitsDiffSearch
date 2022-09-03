@@ -41,7 +41,6 @@ import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.replacements.Snippet.*;
-import com.oracle.graal.replacements.Snippet.Parameter;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
 import com.oracle.graal.word.phases.*;
