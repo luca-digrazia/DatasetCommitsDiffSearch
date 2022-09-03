@@ -86,8 +86,8 @@ import jdk.vm.ci.code.Architecture;
  * struct Node {
  *   unsigned typeId
  *   signed[] properties
- *   unsigned[] inputOrderIds
  *   unsigned[] successorOrderIds
+ *   unsigned[] inputOrderIds
  * }
  * </pre>
  *
