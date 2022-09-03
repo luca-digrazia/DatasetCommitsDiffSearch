@@ -77,6 +77,11 @@ public final class SchedulePhase extends Phase {
         LATEST_OUT_OF_LOOPS
     }
 
+    public static enum MemoryScheduling {
+        NONE,
+        OPTIMAL
+    }
+
     private class KillSet implements Iterable<LocationIdentity> {
         private List<LocationIdentity> list;
 
@@ -267,13 +272,20 @@ public final class SchedulePhase extends Phase {
     private BlockMap<List<ValueNode>> blockToNodesMap;
     private BlockMap<KillSet> blockToKillSet;
     private final SchedulingStrategy selectedStrategy;
+    private final MemoryScheduling memsched;
 
     public SchedulePhase() {
         this(OptScheduleOutOfLoops.getValue() ? SchedulingStrategy.LATEST_OUT_OF_LOOPS : SchedulingStrategy.LATEST);
     }
 
     public SchedulePhase(SchedulingStrategy strategy) {
+        this.memsched = MemoryScheduling.OPTIMAL;
         this.selectedStrategy = strategy;
+    }
+
+    public SchedulePhase(SchedulingStrategy strategy, MemoryScheduling memsched) {
+        this.selectedStrategy = strategy;
+        this.memsched = memsched;
     }
 
     @Override
@@ -283,7 +295,7 @@ public final class SchedulePhase extends Phase {
         earliestCache = graph.createNodeMap();
         blockToNodesMap = new BlockMap<>(cfg);
 
-        if (selectedStrategy != SchedulingStrategy.EARLIEST) {
+        if (memsched == MemoryScheduling.OPTIMAL && selectedStrategy != SchedulingStrategy.EARLIEST) {
             blockToKillSet = new BlockMap<>(cfg);
         }
 
@@ -312,7 +324,7 @@ public final class SchedulePhase extends Phase {
 
     private void printScheduleHelper(String desc) {
         Formatter buf = new Formatter();
-        buf.format("=== %s / %s / %s ===%n", getCFG().getStartBlock().getBeginNode().graph(), selectedStrategy, desc);
+        buf.format("=== %s / %s / %s (%s) ===%n", getCFG().getStartBlock().getBeginNode().graph(), selectedStrategy, memsched, desc);
         for (Block b : getCFG().getBlocks()) {
             buf.format("==== b: %s (loopDepth: %s). ", b, b.getLoopDepth());
             buf.format("dom: %s. ", b.getDominator());
@@ -426,7 +438,7 @@ public final class SchedulePhase extends Phase {
                 break;
             case LATEST:
             case LATEST_OUT_OF_LOOPS:
-                boolean scheduleRead = node instanceof FloatingReadNode && !((FloatingReadNode) node).location().getLocationIdentity().isImmutable();
+                boolean scheduleRead = memsched == MemoryScheduling.OPTIMAL && node instanceof FloatingReadNode && !((FloatingReadNode) node).location().getLocationIdentity().isImmutable();
                 if (scheduleRead) {
                     FloatingReadNode read = (FloatingReadNode) node;
                     block = optimalBlock(read, strategy);
@@ -494,6 +506,8 @@ public final class SchedulePhase extends Phase {
      *
      */
     private Block optimalBlock(FloatingReadNode n, SchedulingStrategy strategy) {
+        assert memsched == MemoryScheduling.OPTIMAL;
+
         LocationIdentity locid = n.location().getLocationIdentity();
         assert !locid.isImmutable();
 
@@ -979,14 +993,16 @@ public final class SchedulePhase extends Phase {
         SortState state = new SortState(b, visited, beforeLastLocation, new ArrayList<>(blockToNodesMap.get(b).size() + 2));
         List<ValueNode> instructions = blockToNodesMap.get(b);
 
-        for (ValueNode i : instructions) {
-            if (i instanceof FloatingReadNode) {
-                FloatingReadNode frn = (FloatingReadNode) i;
-                if (!frn.location().getLocationIdentity().isImmutable()) {
-                    state.addRead(frn);
-                    if (nodesFor(b).contains(frn.getLastLocationAccess())) {
-                        assert !state.isBeforeLastLocation(frn);
-                        state.markBeforeLastLocation(frn);
+        if (memsched == MemoryScheduling.OPTIMAL) {
+            for (ValueNode i : instructions) {
+                if (i instanceof FloatingReadNode) {
+                    FloatingReadNode frn = (FloatingReadNode) i;
+                    if (!frn.location().getLocationIdentity().isImmutable()) {
+                        state.addRead(frn);
+                        if (nodesFor(b).contains(frn.getLastLocationAccess())) {
+                            assert !state.isBeforeLastLocation(frn);
+                            state.markBeforeLastLocation(frn);
+                        }
                     }
                 }
             }
@@ -1078,7 +1094,7 @@ public final class SchedulePhase extends Phase {
             }
         }
 
-        if (state.readsSize() != 0) {
+        if (memsched == MemoryScheduling.OPTIMAL && state.readsSize() != 0) {
             if (i instanceof MemoryCheckpoint.Single) {
                 LocationIdentity identity = ((MemoryCheckpoint.Single) i).getLocationIdentity();
                 processKillLocation(i, identity, state);
