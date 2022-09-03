@@ -25,14 +25,13 @@ package com.oracle.max.graal.nodes;
 import java.util.*;
 
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.nodes.loop.*;
+import com.oracle.max.graal.graph.iterators.*;
 import com.oracle.max.graal.nodes.spi.*;
-import com.sun.cri.ci.*;
 
 
 public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, LIRLowerable {
-
     private double loopFrequency;
+    private int nextEndIndex;
 
     public LoopBeginNode() {
         loopFrequency = 1;
@@ -46,13 +45,24 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
         this.loopFrequency = loopFrequency;
     }
 
-    public LoopEndNode loopEnd() {
-        for (LoopEndNode end : usages().filter(LoopEndNode.class)) {
-            if (end.loopBegin() == this) {
-                return end;
+    public NodeIterable<LoopEndNode> loopEnds() {
+        return usages().filter(LoopEndNode.class);
+    }
+
+    public List<LoopEndNode> orderedLoopEnds() {
+        List<LoopEndNode> snapshot = usages().filter(LoopEndNode.class).snapshot();
+        Collections.sort(snapshot, new Comparator<LoopEndNode>() {
+            @Override
+            public int compare(LoopEndNode o1, LoopEndNode o2) {
+                return o1.endIndex() - o2.endIndex();
             }
-        }
-        return null;
+        });
+        return snapshot;
+    }
+
+    public EndNode forwardEnd() {
+        assert forwardEndCount() == 1;
+        return forwardEndAt(0);
     }
 
     @Override
@@ -61,71 +71,61 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
     }
 
     @Override
-    public int phiPredecessorCount() {
-        return endCount() + 1;
-    }
-
-    @Override
-    public int phiPredecessorIndex(FixedNode pred) {
-        if (pred == forwardEdge()) {
-            return 0;
-        } else if (pred == this.loopEnd()) {
-            return 1;
+    protected void deleteEnd(EndNode end) {
+        if (end instanceof LoopEndNode) {
+            LoopEndNode loopEnd = (LoopEndNode) end;
+            loopEnd.setLoopBegin(null);
+            int idx = loopEnd.endIndex();
+            for (LoopEndNode le : loopEnds()) {
+                int leIdx = le.endIndex();
+                assert leIdx != idx;
+                if (leIdx > idx) {
+                    le.setEndIndex(leIdx - 1);
+                }
+            }
+            nextEndIndex--;
+        } else {
+            super.deleteEnd(end);
         }
-        throw ValueUtil.shouldNotReachHere("unknown pred : " + pred + "(sp=" + forwardEdge() + ", le=" + this.loopEnd() + ")");
     }
 
     @Override
-    public FixedNode phiPredecessorAt(int index) {
-        if (index == 0) {
-            return forwardEdge();
-        } else if (index == 1) {
-            return loopEnd();
+    public int phiPredecessorCount() {
+        return forwardEndCount() + loopEnds().count();
+    }
+
+    @Override
+    public int phiPredecessorIndex(EndNode pred) {
+        if (pred instanceof LoopEndNode) {
+            LoopEndNode loopEnd = (LoopEndNode) pred;
+            if (loopEnd.loopBegin() == this) {
+                assert loopEnd.endIndex() < loopEnds().count() : "Invalid endIndex : " + loopEnd;
+                return loopEnd.endIndex() + forwardEndCount();
+            }
+        } else {
+            return super.forwardEndIndex(pred);
+        }
+        throw ValueUtil.shouldNotReachHere("unknown pred : " + pred);
+    }
+
+    @Override
+    public EndNode phiPredecessorAt(int index) {
+        if (index < forwardEndCount()) {
+            return forwardEndAt(index);
+        }
+        for (LoopEndNode end : loopEnds()) {
+            int idx = index - forwardEndCount();
+            assert idx >= 0;
+            if (end.endIndex() == idx) {
+                return end;
+            }
         }
         throw ValueUtil.shouldNotReachHere();
     }
 
-    public Collection<InductionVariableNode> inductionVariables() {
-        // TODO (gd) produces useless garbage
-        List<InductionVariableNode> list = new LinkedList<InductionVariableNode>();
-        collectInductionVariables(this, list);
-        return list;
-    }
-
-    private static void collectInductionVariables(Node node, Collection<InductionVariableNode> collection) {
-        for (InductionVariableNode iv : node.usages().filter(InductionVariableNode.class)) {
-            collection.add(iv);
-            collectInductionVariables(iv, collection);
-        }
-    }
-
-    @Override
-    public Iterable<? extends Node> phiPredecessors() {
-        return Arrays.asList(new Node[]{this.forwardEdge(), this.loopEnd()});
-    }
-
-    public EndNode forwardEdge() {
-        return this.endAt(0);
-    }
-
-    public LoopCounterNode loopCounter() {
-        return loopCounter(CiKind.Long);
-    }
-
-    public LoopCounterNode loopCounter(CiKind kind) {
-        for (LoopCounterNode counter : usages().filter(LoopCounterNode.class)) {
-            if (counter.kind() == kind) {
-                return counter;
-            }
-        }
-        return graph().add(new LoopCounterNode(kind, this));
-    }
-
     @Override
     public boolean verify() {
-        assertTrue(loopEnd() != null, "missing loopEnd");
-        assertTrue(forwardEdge() != null, "missing forwardEdge");
-        assertTrue(usages().filter(LoopEndNode.class).snapshot().size() == 1, "multiple loop ends");
+        assertTrue(loopEnds().isNotEmpty(), "missing loopEnd");
         return super.verify();
     }
 
@@ -134,5 +134,14 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
         Map<Object, Object> properties = super.getDebugProperties();
         properties.put("loopFrequency", String.format("%7.1f", loopFrequency));
         return properties;
+    }
+
+    public int nextEndIndex() {
+        return nextEndIndex++;
+    }
+
+    @Override
+    public void simplify(SimplifierTool tool) {
+        // nothing yet
     }
 }
