@@ -407,7 +407,20 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     @Override
     public void visitGuardNode(GuardNode x) {
-        emitGuardComp(x.node());
+        FrameState state = lastState;
+        assert state != null : "deoptimize instruction always needs a state";
+
+        if (deoptimizationStubs == null) {
+            deoptimizationStubs = new ArrayList<DeoptimizationStub>();
+        }
+
+        DeoptimizationStub stub = new DeoptimizationStub(DeoptAction.InvalidateReprofile, state);
+        deoptimizationStubs.add(stub);
+
+        emitCompare(x.node());
+        //emitBranch(x.node(), stub.label)
+        throw new RuntimeException();
+        //lir.branch(x.condition.negate(), stub.label, stub.info);
     }
 
 
@@ -440,38 +453,28 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     @Override
     public void visitIf(If x) {
-        Condition cond = emitBooleanBranch(x.compare());
-        emitBranch(x.compare(), cond, getLIRBlock(x.trueSuccessor()), getLIRBlock(x.falseSuccessor()));
+        emitCompare(x.compare());
+        emitBranch(x.compare(), getLIRBlock(x.trueSuccessor()), getLIRBlock(x.falseSuccessor()));
         assert x.defaultSuccessor() == x.falseSuccessor() : "wrong destination above";
         LIRBlock block = getLIRBlock(x.defaultSuccessor());
         assert block != null : x;
         lir.jump(block);
     }
 
-    public void emitBranch(BooleanNode n, Condition cond, LIRBlock trueSuccessor, LIRBlock falseSucc) {
-        if (n instanceof Compare) {
-            Compare compare = (Compare) n;
-            if (compare.x().kind.isFloat() || compare.x().kind.isDouble()) {
-                LIRBlock unorderedSuccBlock = falseSucc;
-                if (compare.unorderedIsTrue()) {
-                    unorderedSuccBlock = trueSuccessor;
-                }
-                lir.branch(cond, trueSuccessor, unorderedSuccBlock);
-                return;
+    public void emitBranch(Compare compare, LIRBlock trueSuccessor, LIRBlock falseSucc) {
+        Condition cond = compare.condition();
+        if (compare.x().kind.isFloat() || compare.x().kind.isDouble()) {
+            LIRBlock unorderedSuccBlock = falseSucc;
+            if (compare.unorderedIsTrue()) {
+                unorderedSuccBlock = trueSuccessor;
             }
-        }
-        lir.branch(cond, trueSuccessor);
-    }
-
-    public Condition emitBooleanBranch(BooleanNode node) {
-        if (node instanceof Compare) {
-            return emitCompare((Compare) node);
+            lir.branch(cond, trueSuccessor, unorderedSuccBlock);
         } else {
-            throw Util.unimplemented();
+            lir.branch(cond, trueSuccessor);
         }
     }
 
-    public Condition emitCompare(Compare compare) {
+    public void emitCompare(Compare compare) {
         CiKind kind = compare.x().kind;
 
         Condition cond = compare.condition();
@@ -502,7 +505,6 @@ public abstract class LIRGenerator extends ValueVisitor {
         CiValue left = xin.result();
         CiValue right = yin.result();
         lir.cmp(cond, left, right);
-        return cond;
     }
 
     @Override
@@ -698,11 +700,11 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     @Override
     public void visitFixedGuard(FixedGuard fixedGuard) {
-        BooleanNode comp = fixedGuard.node();
+        Node comp = fixedGuard.node();
         emitGuardComp(comp);
     }
 
-    public void emitGuardComp(BooleanNode comp) {
+    public void emitGuardComp(Node comp) {
         if (comp instanceof IsNonNull) {
             IsNonNull x = (IsNonNull) comp;
             CiValue value = load(x.object());
@@ -715,19 +717,6 @@ public abstract class LIRGenerator extends ValueVisitor {
             XirArgument clazz = toXirArgument(x.type().getEncoding(Representation.ObjectHub));
             XirSnippet typeCheck = xir.genTypeCheck(site(x), toXirArgument(x.object()), clazz, x.type());
             emitXir(typeCheck, x, info, compilation.method, false);
-        } else {
-            FrameState state = lastState;
-            assert state != null : "deoptimize instruction always needs a state";
-
-            if (deoptimizationStubs == null) {
-                deoptimizationStubs = new ArrayList<DeoptimizationStub>();
-            }
-
-            DeoptimizationStub stub = new DeoptimizationStub(DeoptAction.InvalidateReprofile, state);
-            deoptimizationStubs.add(stub);
-
-            Condition cond = emitBooleanBranch(comp);
-            lir.branch(cond.negate(), stub.label, stub.info);
         }
     }
 
@@ -1438,6 +1427,9 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     @Override
     public void visitMemoryRead(MemoryRead memRead) {
+        if (memRead.guard() != null) {
+            emitGuardComp(memRead.guard());
+        }
         lir.move(new CiAddress(memRead.valueKind(), load(memRead.location()), memRead.displacement()), createResultVariable(memRead), memRead.valueKind());
     }
 
