@@ -22,12 +22,15 @@
  */
 package com.oracle.graal.hotspot;
 
+import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.nodes.StructuredGraph.*;
+import static com.oracle.graal.phases.common.InliningUtil.*;
 
 import java.lang.reflect.Modifier;
 import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CallingConvention.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
@@ -37,7 +40,6 @@ import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
 
 public final class CompilationTask implements Runnable, Comparable<CompilationTask> {
 
@@ -156,9 +158,11 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
                             // Compiling method substitution - must clone the graph
                             graph = graph.copy();
                         }
-                        InliningUtil.InlinedBytecodes.add(method.getCodeSize());
-                        return GraalCompiler.compileMethod(graalRuntime.getRuntime(), replacements, graalRuntime.getBackend(), graalRuntime.getTarget(), method, graph, graalRuntime.getCache(), plan,
-                                        optimisticOpts, method.getSpeculationLog());
+                        InlinedBytecodes.add(method.getCodeSize());
+                        HotSpotRuntime runtime = graalRuntime.getRuntime();
+                        CallingConvention cc = getCallingConvention(runtime, Type.JavaCallee, graph.method(), false);
+                        return GraalCompiler.compileGraph(graph, cc, runtime, replacements, graalRuntime.getBackend(), graalRuntime.getTarget(), graalRuntime.getCache(), plan, optimisticOpts,
+                                        method.getSpeculationLog());
                     }
                 });
             } finally {
