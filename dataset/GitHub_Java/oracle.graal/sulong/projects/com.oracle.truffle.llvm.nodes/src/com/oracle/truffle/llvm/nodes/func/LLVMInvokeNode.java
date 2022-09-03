@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -34,12 +34,14 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.GenerateWrapper;
+import com.oracle.truffle.api.instrumentation.InstrumentableNode;
 import com.oracle.truffle.api.instrumentation.ProbeNode;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.profiles.ConditionProfile;
 import com.oracle.truffle.llvm.nodes.others.LLVMValueProfilingNode;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
@@ -50,7 +52,7 @@ import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.VoidType;
 
 @GenerateWrapper
-public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
+public abstract class LLVMInvokeNode extends LLVMControlFlowNode implements InstrumentableNode {
 
     private static class LLVMInvokeNodeImpl extends LLVMInvokeNode {
 
@@ -69,7 +71,8 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
 
         LLVMInvokeNodeImpl(FunctionType type, FrameSlot resultLocation,
                         int normalSuccessor, int unwindSuccessor,
-                        LLVMStatementNode normalPhiNode, LLVMStatementNode unwindPhiNode) {
+                        LLVMStatementNode normalPhiNode, LLVMStatementNode unwindPhiNode, LLVMSourceLocation sourceSection) {
+            super(sourceSection);
             this.normalSuccessor = normalSuccessor;
             this.unwindSuccessor = unwindSuccessor;
             this.type = type;
@@ -173,12 +176,22 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
     public static final int NORMAL_SUCCESSOR = 0;
     public static final int UNWIND_SUCCESSOR = 1;
 
-    public LLVMInvokeNode() {
+    public LLVMInvokeNode(LLVMSourceLocation sourceSection) {
+        super(sourceSection);
+    }
+
+    protected LLVMInvokeNode(LLVMInvokeNode delegate) {
+        super(delegate.getSourceLocation());
     }
 
     @Override
     public WrapperNode createWrapper(ProbeNode probe) {
-        return new LLVMInvokeNodeWrapper(this, probe);
+        return new LLVMInvokeNodeWrapper(this, this, probe);
+    }
+
+    @Override
+    public boolean isInstrumentable() {
+        return getSourceLocation() != null;
     }
 
     public abstract int getNormalSuccessor();
@@ -199,11 +212,7 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
 
     @Override
     public boolean hasTag(Class<? extends Tag> tag) {
-        if (tag == StandardTags.CallTag.class || tag == StandardTags.StatementTag.class) {
-            return isSourceInstrumentationEnabled();
-        } else {
-            return super.hasTag(tag);
-        }
+        return tag == StandardTags.StatementTag.class || tag == StandardTags.CallTag.class || super.hasTag(tag);
     }
 
     public static final class LLVMSubstitutionInvokeNode extends LLVMInvokeNodeImpl {
@@ -212,8 +221,8 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
 
         public LLVMSubstitutionInvokeNode(FunctionType type, FrameSlot resultLocation, LLVMExpressionNode substitution,
                         int normalSuccessor, int unwindSuccessor,
-                        LLVMStatementNode normalPhiNode, LLVMStatementNode unwindPhiNode) {
-            super(type, resultLocation, normalSuccessor, unwindSuccessor, normalPhiNode, unwindPhiNode);
+                        LLVMStatementNode normalPhiNode, LLVMStatementNode unwindPhiNode, LLVMSourceLocation sourceSection) {
+            super(type, resultLocation, normalSuccessor, unwindSuccessor, normalPhiNode, unwindPhiNode, sourceSection);
             this.substitution = substitution;
         }
 
@@ -231,8 +240,8 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
 
         public LLVMFunctionInvokeNode(FunctionType type, FrameSlot resultLocation, LLVMExpressionNode functionNode, LLVMExpressionNode[] argumentNodes,
                         int normalSuccessor, int unwindSuccessor,
-                        LLVMStatementNode normalPhiNode, LLVMStatementNode unwindPhiNode) {
-            super(type, resultLocation, normalSuccessor, unwindSuccessor, normalPhiNode, unwindPhiNode);
+                        LLVMStatementNode normalPhiNode, LLVMStatementNode unwindPhiNode, LLVMSourceLocation sourceSection) {
+            super(type, resultLocation, normalSuccessor, unwindSuccessor, normalPhiNode, unwindPhiNode, sourceSection);
             this.argumentNodes = argumentNodes;
             this.dispatchTargetNode = LLVMLookupDispatchTargetNodeGen.create(functionNode);
             this.dispatchNode = LLVMDispatchNodeGen.create(type);

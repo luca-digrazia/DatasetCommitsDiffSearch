@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -36,20 +36,19 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.func.LLVMDispatchNodeGen.LLVMLookupDispatchForeignNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.Intrinsic;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension.UnsupportedNativeTypeException;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
@@ -79,11 +78,10 @@ public abstract class LLVMDispatchNode extends LLVMNode {
         if (signature == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             try {
-                LLVMContext context = lookupContextReference(LLVMLanguage.class).get();
+                LLVMContext context = getContextReference().get();
                 NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
                 this.signature = nfiContextExtension.getNativeSignature(type, LLVMCallNode.USER_ARGUMENT_OFFSET);
             } catch (UnsupportedNativeTypeException ex) {
-                CompilerDirectives.transferToInterpreter();
                 throw new AssertionError(ex);
             }
         }
@@ -157,9 +155,9 @@ public abstract class LLVMDispatchNode extends LLVMNode {
                     @Cached("descriptor") LLVMFunctionDescriptor cachedDescriptor,
                     @Cached("createToNativeNodes()") LLVMNativeConvertNode[] toNative,
                     @Cached("createFromNativeNode()") LLVMNativeConvertNode fromNative,
-                    @Cached("bindSymbol(cachedDescriptor)") Object cachedBoundFunction,
-                    @CachedLibrary("cachedBoundFunction") InteropLibrary nativeCall,
-                    @CachedContext(LLVMLanguage.class) ContextReference<LLVMContext> context,
+                    @Cached("createNativeCallNode()") Node nativeCall,
+                    @Cached("bindSymbol(cachedDescriptor)") TruffleObject cachedBoundFunction,
+                    @Cached("getContextReference()") ContextReference<LLVMContext> context,
                     @Cached("nativeCallStatisticsEnabled(context)") boolean statistics) {
 
         Object[] nativeArgs = prepareNativeArguments(arguments, toNative);
@@ -170,23 +168,23 @@ public abstract class LLVMDispatchNode extends LLVMNode {
         return fromNative.executeConvert(returnValue);
     }
 
-    protected Object bindSymbol(LLVMFunctionDescriptor descriptor) {
+    protected TruffleObject bindSymbol(LLVMFunctionDescriptor descriptor) {
         CompilerAsserts.neverPartOfCompilation();
         assert descriptor.getNativeFunction() != null : descriptor.getName();
-        return LLVMNativeCallUtils.bindNativeSymbol(InteropLibrary.getFactory().getUncached(), descriptor.getNativeFunction(), getSignature());
+        return LLVMNativeCallUtils.bindNativeSymbol(LLVMNativeCallUtils.getBindNode(), descriptor.getNativeFunction(), getSignature());
     }
 
     @Specialization(replaces = "doCachedNative", guards = "descriptor.isNativeFunction()")
     protected Object doNative(LLVMFunctionDescriptor descriptor, Object[] arguments,
                     @Cached("createToNativeNodes()") LLVMNativeConvertNode[] toNative,
                     @Cached("createFromNativeNode()") LLVMNativeConvertNode fromNative,
-                    @CachedLibrary(limit = "3") InteropLibrary nativeCall,
-                    @CachedLibrary(limit = "3") InteropLibrary bind,
-                    @CachedContext(LLVMLanguage.class) ContextReference<LLVMContext> context,
+                    @Cached("createNativeCallNode()") Node nativeCall,
+                    @Cached("getBindNode()") Node bindNode,
+                    @Cached("getContextReference()") ContextReference<LLVMContext> context,
                     @Cached("nativeCallStatisticsEnabled(context)") boolean statistics) {
 
         Object[] nativeArgs = prepareNativeArguments(arguments, toNative);
-        Object boundSymbol = LLVMNativeCallUtils.bindNativeSymbol(bind, descriptor.getNativeFunction(), getSignature());
+        TruffleObject boundSymbol = LLVMNativeCallUtils.bindNativeSymbol(bindNode, descriptor.getNativeFunction(), getSignature());
         Object returnValue;
         try (StackPointer save = ((StackPointer) arguments[0]).newFrame()) {
             returnValue = LLVMNativeCallUtils.callNativeFunction(statistics, context, nativeCall, boundSymbol, nativeArgs, descriptor);
@@ -201,6 +199,16 @@ public abstract class LLVMDispatchNode extends LLVMNode {
             nativeArgs[i - LLVMCallNode.USER_ARGUMENT_OFFSET] = toNative[i - LLVMCallNode.USER_ARGUMENT_OFFSET].executeConvert(arguments[i]);
         }
         return nativeArgs;
+    }
+
+    protected Node getBindNode() {
+        CompilerAsserts.neverPartOfCompilation();
+        return LLVMNativeCallUtils.getBindNode();
+    }
+
+    protected Node createNativeCallNode() {
+        CompilerAsserts.neverPartOfCompilation();
+        return Message.EXECUTE.createNode();
     }
 
     @ExplodeLoop
@@ -246,25 +254,25 @@ public abstract class LLVMDispatchNode extends LLVMNode {
 
         abstract Object execute(TruffleObject function, LLVMInteropType.Structured interopType, Object[] arguments);
 
-        @Specialization(guards = "functionType == cachedType", limit = "5")
+        @Specialization(guards = "functionType == cachedType")
         protected Object doCachedType(TruffleObject function, @SuppressWarnings("unused") LLVMInteropType.Function functionType, Object[] arguments,
                         @Cached("functionType") LLVMInteropType.Function cachedType,
-                        @CachedLibrary("function") InteropLibrary crossLanguageCall,
+                        @Cached("createCrossLanguageCallNode()") Node crossLanguageCallNode,
                         @Cached("createLLVMDataEscapeNodes()") LLVMDataEscapeNode[] dataEscapeNodes,
                         @Cached("createToLLVMNode()") ForeignToLLVM toLLVMNode) {
-            return doGeneric(function, cachedType, arguments, crossLanguageCall, dataEscapeNodes, toLLVMNode);
+            return doGeneric(function, cachedType, arguments, crossLanguageCallNode, dataEscapeNodes, toLLVMNode);
         }
 
-        @Specialization(replaces = "doCachedType", limit = "0")
+        @Specialization(replaces = "doCachedType")
         protected Object doGeneric(TruffleObject function, LLVMInteropType.Function functionType, Object[] arguments,
-                        @CachedLibrary("function") InteropLibrary crossLanguageCall,
+                        @Cached("createCrossLanguageCallNode()") Node crossLanguageCallNode,
                         @Cached("createLLVMDataEscapeNodes()") LLVMDataEscapeNode[] dataEscapeNodes,
                         @Cached("createToLLVMNode()") ForeignToLLVM toLLVMNode) {
             try {
                 Object[] args = getForeignArguments(dataEscapeNodes, arguments, functionType);
                 Object ret;
                 try (StackPointer save = ((StackPointer) arguments[0]).newFrame()) {
-                    ret = crossLanguageCall.execute(function, args);
+                    ret = ForeignAccess.sendExecute(crossLanguageCallNode, function, args);
                 }
                 if (!(type.getReturnType() instanceof VoidType) && functionType != null) {
                     LLVMInteropType retType = functionType.getReturnType();
@@ -283,12 +291,12 @@ public abstract class LLVMDispatchNode extends LLVMNode {
             }
         }
 
-        @Specialization(guards = "functionType == null", limit = "5")
+        @Specialization(guards = "functionType == null")
         protected Object doUnknownType(TruffleObject function, @SuppressWarnings("unused") LLVMInteropType.Structured functionType, Object[] arguments,
-                        @CachedLibrary("function") InteropLibrary crossLanguageCall,
+                        @Cached("createCrossLanguageCallNode()") Node crossLanguageCallNode,
                         @Cached("createLLVMDataEscapeNodes()") LLVMDataEscapeNode[] dataEscapeNodes,
                         @Cached("createToLLVMNode()") ForeignToLLVM toLLVMNode) {
-            return doGeneric(function, null, arguments, crossLanguageCall, dataEscapeNodes, toLLVMNode);
+            return doGeneric(function, null, arguments, crossLanguageCallNode, dataEscapeNodes, toLLVMNode);
         }
 
         @ExplodeLoop
@@ -313,6 +321,11 @@ public abstract class LLVMDispatchNode extends LLVMNode {
                 }
             }
             return args;
+        }
+
+        @TruffleBoundary
+        protected static Node createCrossLanguageCallNode() {
+            return Message.EXECUTE.createNode();
         }
 
         protected ForeignToLLVM createToLLVMNode() {
