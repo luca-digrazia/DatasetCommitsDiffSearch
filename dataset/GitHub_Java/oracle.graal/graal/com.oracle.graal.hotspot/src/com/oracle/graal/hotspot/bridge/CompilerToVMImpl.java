@@ -28,7 +28,6 @@ import static com.oracle.graal.hotspot.bridge.CompilerToVMImpl.CodeInstallResult
 import java.lang.reflect.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 
@@ -64,7 +63,7 @@ public class CompilerToVMImpl implements CompilerToVM {
         int result = installCode0(comp, code, info);
         if (result != OK.ordinal()) {
             if (successfulInstallations < MINIMUM_SUCCESSFUL_INSTALLATIONS_PER_FAILURE) {
-                TTY.println("Failed to install compiled code for " + comp.method + " [reason: " + CodeInstallResult.values()[result] + "]");
+                System.err.println("Failed to install compiled code for " + comp.method + " [reason: " + CodeInstallResult.values()[result] + "]");
             }
             successfulInstallations = 0L;
         } else {
