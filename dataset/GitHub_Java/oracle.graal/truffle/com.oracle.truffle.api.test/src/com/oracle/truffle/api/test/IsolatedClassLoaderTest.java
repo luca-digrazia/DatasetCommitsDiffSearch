@@ -35,13 +35,8 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 public class IsolatedClassLoaderTest {
-    private static final boolean JDK8 = System.getProperty("java.specification.version").compareTo("1.9") < 0;
-
     @Test
-    public void loadLanguageByOwnClassLoaderOnJDK8() throws Exception {
-        if (!JDK8) {
-            return;
-        }
+    public void loadLanguageByOwnClassLoader() throws Exception {
         List<URL> arr = new ArrayList<>();
         for (String entry : System.getProperty("java.class.path").split(File.pathSeparator)) {
             File cpEntry = new File(entry);
