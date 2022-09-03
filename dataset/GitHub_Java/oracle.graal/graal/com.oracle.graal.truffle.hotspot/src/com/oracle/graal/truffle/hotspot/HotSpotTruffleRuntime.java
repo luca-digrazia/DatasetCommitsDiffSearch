@@ -59,7 +59,6 @@ import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.SlowPath;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.nodes.Node;
 
 /**
  * Implementation of the Truffle runtime when running on top of Graal.
@@ -118,16 +117,9 @@ public final class HotSpotTruffleRuntime implements GraalTruffleRuntime {
         return new OptimizedCallTarget(rootNode, this, TruffleMinInvokeThreshold.getValue(), TruffleCompilationThreshold.getValue(), compilationPolicy, new HotSpotSpeculationLog());
     }
 
-    public LoopNode createLoopNode(RepeatingNode repeating) {
-        if (!(repeating instanceof Node)) {
-            throw new IllegalArgumentException("Repeating node must be of type Node.");
-        }
-        return new OptimizedLoopNode(repeating);
-    }
-
     public DirectCallNode createDirectCallNode(CallTarget target) {
         if (target instanceof OptimizedCallTarget) {
-            return new OptimizedDirectCallNode((OptimizedCallTarget) target);
+            return OptimizedDirectCallNode.create((OptimizedCallTarget) target);
         } else {
             throw new IllegalStateException(String.format("Unexpected call target class %s!", target.getClass()));
         }
