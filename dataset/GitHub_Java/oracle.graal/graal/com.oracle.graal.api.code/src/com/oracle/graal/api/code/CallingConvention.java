@@ -48,6 +48,12 @@ public class CallingConvention {
         JavaCallee(false),
 
         /**
+         * A request for the outgoing argument locations at a call site to the runtime (which may be
+         * Java or native code).
+         */
+        RuntimeCall(true),
+
+        /**
          * A request for the outgoing argument locations at a call site to external native code that
          * complies with the platform ABI.
          */
@@ -146,16 +152,6 @@ public class CallingConvention {
     }
 
     /**
-     * Gets the locations required for the arguments.
-     */
-    public AllocatableValue[] getArguments() {
-        if (argumentLocations.length == 0) {
-            return argumentLocations;
-        }
-        return argumentLocations.clone();
-    }
-
-    /**
      * Gets the locations used (and killed) by the call apart from the
      * {@linkplain #getArgument(int) arguments}.
      */
@@ -175,7 +171,7 @@ public class CallingConvention {
             sb.append(sep).append(op);
             sep = ", ";
         }
-        if (!returnLocation.equals(Value.ILLEGAL)) {
+        if (returnLocation != Value.ILLEGAL) {
             sb.append(" -> ").append(returnLocation);
         }
         if (temporaryLocations.length != 0) {

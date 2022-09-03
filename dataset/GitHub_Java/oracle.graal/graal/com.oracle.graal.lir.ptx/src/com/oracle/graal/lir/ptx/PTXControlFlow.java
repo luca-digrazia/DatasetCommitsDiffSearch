@@ -35,6 +35,7 @@ import com.oracle.graal.api.meta.Value;
 import com.oracle.graal.asm.Buffer;
 import com.oracle.graal.asm.Label;
 import com.oracle.graal.asm.NumUtil;
+import com.oracle.graal.asm.ptx.AbstractPTXAssembler;
 import com.oracle.graal.asm.ptx.PTXAssembler;
 import com.oracle.graal.graph.GraalInternalError;
 import com.oracle.graal.lir.LabelRef;
@@ -77,7 +78,9 @@ public class PTXControlFlow {
         public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
             masm.at();
             Label l = destination.label();
-            masm.bra(l.name());
+            // l.addPatchAt(tasm.asm.codeBuffer.position());
+            String target = l.isBound() ? "L" + l.toString() : AbstractPTXAssembler.UNBOUND_TARGET;
+            masm.bra(target);
         }
 
         @Override
@@ -170,7 +173,9 @@ public class PTXControlFlow {
                     masm.setp_eq_s32((int) lc, intKey);
                     masm.at();
                     Label l = keyTargets[i].label();
-                    masm.bra(l.name());
+                    l.addPatchAt(tasm.asm.codeBuffer.position());
+                    String target = l.isBound() ? "L" + l.toString() : AbstractPTXAssembler.UNBOUND_TARGET;
+                    masm.bra(target);
                 }
             } else if (key.getKind() == Kind.Long) {
                 Register longKey = asLongReg(key);
@@ -178,7 +183,9 @@ public class PTXControlFlow {
                     masm.setp_eq_s64(tasm.asLongConst(keyConstants[i]), longKey);
                     masm.at();
                     Label l = keyTargets[i].label();
-                    masm.bra(l.name());
+                    l.addPatchAt(tasm.asm.codeBuffer.position());
+                    String target = l.isBound() ? "L" + l.toString() : AbstractPTXAssembler.UNBOUND_TARGET;
+                    masm.bra(target);
                 }
             } else if (key.getKind() == Kind.Object) {
                 Register intKey = asObjectReg(key);

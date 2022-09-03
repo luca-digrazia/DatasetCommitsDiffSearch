@@ -46,17 +46,17 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
 
     @Override
     public Register[] getAllocatableRegisters() {
-        return allocatable.clone();
+        return allocatable;
     }
 
     @Override
     public EnumMap<RegisterFlag, Register[]> getCategorizedAllocatableRegisters() {
-        return categorized.clone();
+        return categorized;
     }
 
     @Override
     public RegisterAttributes[] getAttributesMap() {
-        return attributesMap.clone();
+        return attributesMap;
     }
 
     private final Register[] javaGeneralParameterRegisters;
@@ -178,7 +178,7 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
 
             if (locations[i] == null) {
                 locations[i] = StackSlot.get(kind.getStackKind(), currentStackOffset, !type.out);
-                currentStackOffset += Math.max(target.arch.getSizeInBytes(kind), target.wordSize);
+                currentStackOffset += Math.max(target.sizeInBytes(kind), target.wordSize);
             }
         }
 

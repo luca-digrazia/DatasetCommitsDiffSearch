@@ -230,7 +230,7 @@ public class PhiResolver {
 
     private void moveToTemp(Value src) {
         assert isIllegal(temp);
-        temp = gen.newVariable(src.getPlatformKind());
+        temp = gen.newVariable(src.getKind());
         emitMove(temp, src);
     }
 
