@@ -189,6 +189,7 @@ public abstract class Node implements Cloneable, Formattable {
         Node current;
 
         private void advance() {
+            assert index == -1 || current != null;
             current = null;
             index++;
             if (index == 0) {
@@ -227,35 +228,10 @@ public abstract class Node implements Cloneable, Formattable {
         }
     }
 
-    class NodeUsageWithModCountIterator extends NodeUsageIterator {
-
-        private final int expectedModCount = usageModCount();
-
-        @Override
-        public boolean hasNext() {
-            if (expectedModCount != usageModCount()) {
-                throw new ConcurrentModificationException();
-            }
-            return super.hasNext();
-        }
-
-        @Override
-        public Node next() {
-            if (expectedModCount != usageModCount()) {
-                throw new ConcurrentModificationException();
-            }
-            return super.next();
-        }
-    }
-
     class NodeUsageIterable implements NodeIterable<Node> {
 
         public NodeUsageIterator iterator() {
-            if (MODIFICATION_COUNTS_ENABLED) {
-                return new NodeUsageWithModCountIterator();
-            } else {
-                return new NodeUsageIterator();
-            }
+            return new NodeUsageIterator();
         }
 
         @Override
@@ -270,7 +246,13 @@ public abstract class Node implements Cloneable, Formattable {
 
         @Override
         public int count() {
-            return usageCount();
+            if (usage0 == null) {
+                return 0;
+            }
+            if (usage1 == null) {
+                return 1;
+            }
+            return 2 + indexOfLastNonNull(extraUsages) + 1;
         }
     }
 
@@ -367,78 +349,63 @@ public abstract class Node implements Cloneable, Formattable {
         }
     }
 
-    private int usageCount() {
-        if (usage0 == null) {
-            return 0;
-        }
-        if (usage1 == null) {
-            return 1;
-        }
-        return 2 + indexOfLastNonNull(extraUsages) + 1;
-    }
-
     /**
-     * Remove all usages between {@code fromIndex} and {@code toIndex} (exclusive), also, if
-     * {@code toIndex} is a valid usage, it is moved to {@code fromIndex}.
-     *
-     * <p>
-     * Visually,
-     *
-     * <pre>
-     * {@code
-     * [1, 2, 3, 4, 5, 6, 7].removeUsagesAndShiftFirst(1, 2) == [1, 4, 6, 7, 5, null, null]}
-     * </pre>
-     *
+     * Remove all usages between {@code fromIndex} and {@code toIndex} (inclusive).
      *
      * @param fromIndex the index of the first element to be removed
-     * @param toIndex the index after the last element to be removed
+     * @param toIndex the index of the last element to be removed
      */
-    private void removeUsagesAndShiftFirst(int fromIndex, int toIndex) {
-        assert fromIndex < toIndex;
-        int firstNullIndex = usageCount();
-        assert toIndex <= firstNullIndex;
-        int i = fromIndex;
-        int limit = toIndex;
-        if (toIndex < firstNullIndex) {
-            // move usage at toIndex to fromIndex(!)
-            movUsageTo(toIndex, fromIndex);
-            limit++;
-            i++;
-        }
-        while (i < limit && firstNullIndex > limit) {
-            movUsageTo(firstNullIndex - 1, i);
-            firstNullIndex--;
-            i++;
-        }
-        while (i < limit) {
-            if (i == 0) {
-                usage0 = null;
-            } else if (i == 1) {
-                usage1 = null;
+    private void removeUsages(int fromIndex, int toIndex) {
+        assert fromIndex >= toIndex;
+        assert toIndex < usages().count();
+        int from, holeLength;
+        if (fromIndex < INLINE_USAGE_COUNT) {
+            if (fromIndex == 0) {
+                if (toIndex == 0) {
+                    usage0 = usage1;
+                    if (extraUsages.length > 0) {
+                        usage1 = extraUsages[0];
+                    } else {
+                        usage1 = null;
+                    }
+                } else {
+                    if (extraUsages.length > toIndex - INLINE_USAGE_COUNT + 1) {
+                        usage0 = extraUsages[toIndex - INLINE_USAGE_COUNT + 1];
+                    } else {
+                        usage0 = null;
+                    }
+                    if (extraUsages.length > toIndex - INLINE_USAGE_COUNT + 2) {
+                        usage1 = extraUsages[toIndex - INLINE_USAGE_COUNT + 2];
+                    } else {
+                        usage1 = null;
+                    }
+                }
             } else {
-                extraUsages[i - INLINE_USAGE_COUNT] = null;
+                if (extraUsages.length > toIndex - INLINE_USAGE_COUNT + 1) {
+                    usage1 = extraUsages[toIndex - INLINE_USAGE_COUNT + 1];
+                } else {
+                    usage1 = null;
+                }
             }
-            i++;
-        }
-
-    }
-
-    private void movUsageTo(int usageIndex, int toIndex) {
-        assert usageIndex > toIndex;
-        if (toIndex == 0) {
-            if (usageIndex == 1) {
-                usage0 = usage1;
-                usage1 = null;
-            } else {
-                usage0 = extraUsages[usageIndex - INLINE_USAGE_COUNT];
-                extraUsages[usageIndex - INLINE_USAGE_COUNT] = null;
-            }
-        } else if (toIndex == 1) {
-            usage1 = extraUsages[usageIndex - INLINE_USAGE_COUNT];
-            extraUsages[usageIndex - INLINE_USAGE_COUNT] = null;
+            from = 0;
         } else {
-            extraUsages[toIndex - INLINE_USAGE_COUNT] = extraUsages[usageIndex - INLINE_USAGE_COUNT];
-            extraUsages[usageIndex - INLINE_USAGE_COUNT] = null;
+            from = fromIndex - INLINE_USAGE_COUNT;
+        }
+        holeLength = toIndex - fromIndex + 1;
+        int i = from;
+        while (i + holeLength < extraUsages.length) {
+            if (extraUsages[i] == null) {
+                return;
+            }
+            extraUsages[i] = extraUsages[i + holeLength];
+            i++;
+        }
+        while (i < extraUsages.length) {
+            if (extraUsages[i] == null) {
+                return;
+            }
+            extraUsages[i] = null;
+            i++;
         }
     }
 
@@ -450,7 +417,6 @@ public abstract class Node implements Cloneable, Formattable {
      */
     private boolean removeUsage(Node node) {
         assert recordsUsages();
-        assert node != null;
         // It is critical that this method maintains the invariant that
         // the usage list has no null element preceding a non-null element
         incUsageModCount();
@@ -482,19 +448,20 @@ public abstract class Node implements Cloneable, Formattable {
             }
             return true;
         }
-        int matchIndex = -1;
-        int i = 0;
-        Node n;
-        while (i < extraUsages.length && (n = extraUsages[i]) != null) {
-            if (n == node) {
-                matchIndex = i;
+        int lastNonNull = indexOfLastNonNull(extraUsages);
+        if (lastNonNull >= 0) {
+            for (int i = 0; i <= lastNonNull; ++i) {
+                Node n = extraUsages[i];
+                if (n == node) {
+                    if (i < lastNonNull) {
+                        extraUsages[i] = extraUsages[lastNonNull];
+                        extraUsages[lastNonNull] = null;
+                    } else {
+                        extraUsages[i] = null;
+                    }
+                    return true;
+                }
             }
-            i++;
-        }
-        if (matchIndex >= 0) {
-            extraUsages[matchIndex] = extraUsages[i - 1];
-            extraUsages[i - 1] = null;
-            return true;
         }
         return false;
     }
@@ -656,17 +623,17 @@ public abstract class Node implements Cloneable, Formattable {
                 }
             } else {
                 if (removeStart >= 0) {
-                    int removeEndIndex = it.index - 1;
-                    removeUsagesAndShiftFirst(removeStart, removeEndIndex);
+                    int removeEndIndex = it.index - 2;
+                    removeUsages(removeStart, removeEndIndex);
                     it.index = removeStart;
                     it.advance();
-                    removeStart = -1;
                 }
+                removeStart = -1;
             }
         }
         if (removeStart >= 0) {
-            int removeEndIndex = it.index;
-            removeUsagesAndShiftFirst(removeStart, removeEndIndex);
+            int removeEndIndex = it.index - 1;
+            removeUsages(removeStart, removeEndIndex);
         }
     }
 
@@ -834,7 +801,7 @@ public abstract class Node implements Cloneable, Formattable {
         try {
             newNode = (Node) this.clone();
         } catch (CloneNotSupportedException e) {
-            throw new GraalGraphInternalError(e).addContext(this);
+            throw new GraalInternalError(e).addContext(this);
         }
         if (clearInputsAndSuccessors) {
             nodeClass.clearInputs(newNode);
