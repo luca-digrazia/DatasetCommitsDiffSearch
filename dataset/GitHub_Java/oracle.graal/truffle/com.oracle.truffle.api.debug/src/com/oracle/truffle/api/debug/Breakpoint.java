@@ -44,6 +44,7 @@ import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.EventContext;
 import com.oracle.truffle.api.instrumentation.ExecutionEventNode;
 import com.oracle.truffle.api.instrumentation.ExecutionEventNodeFactory;
+import com.oracle.truffle.api.instrumentation.Instrumenter;
 import com.oracle.truffle.api.instrumentation.LoadSourceSectionEvent;
 import com.oracle.truffle.api.instrumentation.LoadSourceSectionListener;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
@@ -60,12 +61,11 @@ import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.vm.PolyglotEngine;
 
 /**
- * A request that guest language program execution be suspended at specified
- * {@linkplain BreakpointLocation locations} on behalf of a debugging client
- * {@linkplain DebuggerSession session}.
+ * A request, implemented using {@linkplain Instrumenter instrumentation}, that guest language
+ * program execution be suspended at specified {@linkplain BreakpointLocation locations} on behalf
+ * of a debugging client {@linkplain DebuggerSession session}.
  * <p>
  * <h4>Breakpoint lifetime</h4>
- * <p>
  * <ul>
  * <li>A client's {@link DebuggerSession} uses a {@link Builder} to create a new breakpoint,
  * choosing among multiple ways to specify the intended location. Examples include a specified
@@ -81,22 +81,15 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
  * location. The breakpoint (synchronously) {@linkplain SuspendedCallback calls back} to the
  * responsible session on the execution thread.</li>
  *
- * <li>A breakpoint may be enabled or disabled any number of times.</li>
- *
  * <li>A breakpoint that is no longer needed may be {@linkplain #dispose() disposed}. A disposed
- * breakpoint:
- * <ul>
- * <li>is disabled</li>
- * <li>is not installed in any session</li>
- * <li>can have no effect on program execution, and</li>
- * <li>may not be used again.</li>
- * </ul>
- * </li>
+ * breakpoint is no longer installed in the responsible session, can have no effect on program
+ * execution, and may not be used again.</li>
  *
  * <li>A session being {@linkplain DebuggerSession#close() closed} disposes all installed
  * breakpoints.</li>
+ *
+ * <li>Methods on disposed breakpoints must not be used.</li>
  * </ul>
- * </p>
  * <p>
  * Example usage: {@link com.oracle.truffle.api.debug.BreakpointSnippets#example()}
  *
@@ -206,7 +199,7 @@ public final class Breakpoint {
     }
 
     /**
-     * Returns <code>true</code> if this breakpoint can no longer affect execution.
+     * Returns <code>true</code> if this breakpoint has been disposed.
      *
      * @since 0.17
      */
@@ -215,10 +208,8 @@ public final class Breakpoint {
     }
 
     /**
-     * Returns whether this breakpoint is currently allowed to suspend execution.
-     * <p>
-     * New breakpoints are enabled by default. Disabled breakpoints remain installed and may be
-     * enabled/disabled arbitrarily.
+     * Returns <code>true</code> if this breakpoint is enabled. A breakpoint will only suspend the
+     * execution if it is enabled. A breakpoint is enabled by default.
      *
      * @since 0.9
      */
@@ -227,7 +218,7 @@ public final class Breakpoint {
     }
 
     /**
-     * Controls whether this breakpoint is allowed to suspend execution; enabled by default.
+     * Enables/disables this breakpoint; enabled by default.
      *
      * @param enabled <code>true</code> to activate the breakpoint, <code>false</code> to deactivate
      *            it so that it will not suspend the execution.
@@ -312,7 +303,8 @@ public final class Breakpoint {
     }
 
     /**
-     * Prevents this breakpoint from having any further effect on execution.
+     * Disables this breakpoint and removes any associated instrumentation; it becomes permanently
+     * inert.
      *
      * @since 0.9
      */
@@ -371,7 +363,7 @@ public final class Breakpoint {
     }
 
     /**
-     * Gets the number of hits left to be ignored before this breakpoint will suspend execution.
+     * Gets the number of hits left to be ignored before the execution is suspended.
      *
      * @since 0.9
      */
@@ -380,11 +372,10 @@ public final class Breakpoint {
     }
 
     /**
-     * Change the threshold for when this breakpoint should start causing a break.
-     * <p>
-     * When both an ignore count and a {@linkplain #setCondition(String) condition} are specified,
-     * the condition is evaluated first: if {@code false} it is not considered to be a hit. In other
-     * words, the ignore count is for successful conditions only.
+     * Change the threshold for when this breakpoint should start causing a break. When both an
+     * ignore count and a {@linkplain #setCondition(String) condition} are specified, the condition
+     * is evaluated first: if {@code false} it is not considered to be a hit. In other words, the
+     * ignore count is for successful conditions only.
      *
      * @since 0.9
      */
@@ -393,10 +384,8 @@ public final class Breakpoint {
     }
 
     /**
-     * Gets the number of times this breakpoint has suspended execution.
-     * <p>
-     * If the breakpoint has a condition that evaluates to {@code false}, it does not count as a
-     * hit.
+     * Number of times this breakpoint has reached, with one exception; if the breakpoint has a
+     * condition that evaluates to {@code false}, it does not count as a hit.
      *
      * @since 0.9
      */

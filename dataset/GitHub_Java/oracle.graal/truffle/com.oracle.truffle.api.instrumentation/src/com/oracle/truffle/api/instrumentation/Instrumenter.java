@@ -30,7 +30,6 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.source.SourceSection;
 
 /**
  * Provides the capabilities to attach {@link ExecutionEventNodeFactory} and
@@ -85,7 +84,7 @@ public abstract class Instrumenter {
     public abstract <T extends LoadSourceListener> EventBinding<T> attachLoadSourceListener(SourceSectionFilter filter, T listener, boolean includeExistingSources);
 
     /**
-     * Starts notifications for each {@link SourceSection} in every newly loaded {@link Source} and
+     * Starts notifications for each {@link SourceSection} in every newly loaded {@Source} and
      * returns a {@linkplain EventBinding binding} that can be used to terminate notifications. Only
      * subsequent loads will be notified unless {@code includeExistingSourceSections} is true, in
      * which case a notification for each previous load will be delivered before this method
