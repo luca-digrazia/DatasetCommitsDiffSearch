@@ -133,7 +133,6 @@ public final class DebugInfoModuleProcessor {
                 final LLVMSourceSymbol symbol = cache.getSourceSymbol(mdGlobal, isGlobal);
                 if (symbol != null) {
                     sourceGlobals.put(symbol, global);
-                    global.setSourceSymbol(symbol);
                 }
 
                 if (mdGlobal instanceof MDGlobalVariableExpression) {

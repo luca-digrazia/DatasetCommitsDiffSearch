@@ -37,9 +37,9 @@ import com.oracle.truffle.llvm.parser.metadata.MDKind;
 import com.oracle.truffle.llvm.parser.metadata.MetadataAttachmentHolder;
 import com.oracle.truffle.llvm.parser.metadata.MetadataValueList;
 import com.oracle.truffle.llvm.parser.model.SymbolImpl;
-import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceStaticMemberType;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceSymbol;
-import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceStaticMemberType;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 
 final class DebugInfoCache {
@@ -63,7 +63,7 @@ final class DebugInfoCache {
         this.typeExtractor = new DITypeExtractor(scopeBuilder, metadata, staticMembers);
     }
 
-    LLVMSourceSymbol getSourceSymbol(MDBaseNode mdVariable, boolean isStatic) {
+    LLVMSourceSymbol getSourceSymbol(MDBaseNode mdVariable, boolean isGlobal) {
         if (parsedVariables.containsKey(mdVariable)) {
             return parsedVariables.get(mdVariable);
         }
@@ -72,7 +72,7 @@ final class DebugInfoCache {
         final LLVMSourceType type = typeExtractor.parseType(mdVariable);
         final String varName = MDNameExtractor.getName(mdVariable);
 
-        final LLVMSourceSymbol symbol = LLVMSourceSymbol.create(varName, location, type, isStatic);
+        final LLVMSourceSymbol symbol = new LLVMSourceSymbol(varName, location, type, isGlobal);
         parsedVariables.put(mdVariable, symbol);
 
         if (location != null) {
