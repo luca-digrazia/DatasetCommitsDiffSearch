@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,19 +28,77 @@ import java.lang.reflect.*;
 
 import com.oracle.graal.snippets.*;
 
-/**
- * Snippets for {@link java.lang.Class} methods.
- */
 @ClassSubstitution(java.lang.Class.class)
 public class ClassSnippets implements SnippetsInterface {
-
-    public int getModifiers() {
-        Word klass = loadWordFromObject(this, klassOffset());
+    @InstanceMethodSubstitution
+    public static int getModifiers(final Class<?> thisObj) {
+        Word klass = loadWordFromObject(thisObj, klassOffset());
         if (klass == Word.zero()) {
-            // Class for primitive type
             return Modifier.ABSTRACT | Modifier.FINAL | Modifier.PUBLIC;
         } else {
             return loadIntFromWord(klass, klassModifierFlagsOffset());
         }
+    }
+
+    @InstanceMethodSubstitution
+    public static boolean isInterface(final Class<?> thisObj) {
+        Word klass = loadWordFromObject(thisObj, klassOffset());
+        if (klass == Word.zero()) {
+            return false;
+        } else {
+            int accessFlags = loadIntFromWord(klass, klassAccessFlagsOffset());
+            return (accessFlags & Modifier.INTERFACE) != 0;
+        }
+    }
+
+    @InstanceMethodSubstitution
+    public static boolean isArray(final Class<?> thisObj) {
+        Word klass = loadWordFromObject(thisObj, klassOffset());
+        if (klass == Word.zero()) {
+            return false;
+        } else {
+            int layoutHelper = loadIntFromWord(klass, klassLayoutHelperOffset());
+            return (layoutHelper & arrayKlassLayoutHelperIdentifier()) != 0;
+        }
+    }
+
+    @InstanceMethodSubstitution
+    public static boolean isPrimitive(final Class<?> thisObj) {
+        Word klass = loadWordFromObject(thisObj, klassOffset());
+        return klass == Word.zero();
+    }
+
+    @InstanceMethodSubstitution
+    public static Class<?> getSuperclass(final Class<?> thisObj) {
+        Word klass = loadWordFromObject(thisObj, klassOffset());
+        if (klass != Word.zero()) {
+            int accessFlags = loadIntFromWord(klass, klassAccessFlagsOffset());
+            if ((accessFlags & Modifier.INTERFACE) == 0) {
+                int layoutHelper = loadIntFromWord(klass, klassLayoutHelperOffset());
+                if ((layoutHelper & arrayKlassLayoutHelperIdentifier()) != 0) {
+                    return Object.class;
+                } else {
+                    Word superKlass = loadWordFromWord(klass, klassSuperKlassOffset());
+                    if (superKlass == Word.zero()) {
+                        return null;
+                    } else {
+                        return (Class<?>) loadObjectFromWord(superKlass, classMirrorOffset());
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    @InstanceMethodSubstitution
+    public static Class<?> getComponentType(final Class<?> thisObj) {
+        Word klass = loadWordFromObject(thisObj, klassOffset());
+        if (klass != Word.zero()) {
+            int layoutHelper = loadIntFromWord(klass, klassLayoutHelperOffset());
+            if ((layoutHelper & arrayKlassLayoutHelperIdentifier()) != 0) {
+                return (Class<?>) loadObjectFromWord(klass, arrayKlassComponentMirrorOffset());
+            }
+        }
+        return null;
     }
 }

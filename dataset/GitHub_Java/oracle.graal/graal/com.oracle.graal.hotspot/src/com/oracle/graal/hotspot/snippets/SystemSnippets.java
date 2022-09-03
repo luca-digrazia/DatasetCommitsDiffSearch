@@ -24,13 +24,13 @@ package com.oracle.graal.hotspot.snippets;
 
 import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
 
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
+import com.oracle.graal.api.code.RuntimeCall.Descriptor;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.snippets.*;
-import com.oracle.graal.word.*;
 
 /**
  * Snippets for {@link java.lang.System} methods.
@@ -38,8 +38,8 @@ import com.oracle.graal.word.*;
 @ClassSubstitution(java.lang.System.class)
 public class SystemSnippets implements SnippetsInterface {
 
-    public static final Descriptor JAVA_TIME_MILLIS = new Descriptor("javaTimeMillis", false, long.class);
-    public static final Descriptor JAVA_TIME_NANOS = new Descriptor("javaTimeNanos", false, long.class);
+    public static final Descriptor JAVA_TIME_MILLIS = new Descriptor("javaTimeMillis", false, Kind.Long);
+    public static final Descriptor JAVA_TIME_NANOS = new Descriptor("javaTimeNanos", false, Kind.Long);
 
     public static long currentTimeMillis() {
         return callLong(JAVA_TIME_MILLIS);
@@ -58,8 +58,8 @@ public class SystemSnippets implements SnippetsInterface {
 
         // this code is independent from biased locking (although it does not look that way)
         final Word biasedLock = mark.and(biasedLockMaskInPlace());
-        if (biasedLock == Word.unsigned(unlockedMask())) {
-            int hash = (int) mark.unsignedShiftRight(identityHashCodeShift()).rawValue();
+        if (biasedLock.toLong() == unlockedMask()) {
+            int hash = (int) (mark.toLong() >>> identityHashCodeShift());
             if (hash != uninitializedIdentityHashCodeValue()) {
                 return hash;
             }

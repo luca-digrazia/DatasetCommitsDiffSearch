@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,19 +24,30 @@ package com.oracle.graal.hotspot.snippets;
 
 import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
 
+import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.snippets.*;
-import com.oracle.graal.snippets.ClassSubstitution.MethodSubstitution;
 
-/**
- * Snippets for {@link java.lang.Object} methods.
- */
 @ClassSubstitution(java.lang.Object.class)
 public class ObjectSnippets implements SnippetsInterface {
+    @InstanceMethodSubstitution("getClass")
+    public static Class<?> getClassSnippet(final Object thisObj) {
+        Word hub = loadHub(thisObj);
+        return (Class<?>) loadObjectFromWord(hub, classMirrorOffset());
+    }
 
-    @MethodSubstitution("getClass")
-    public Class getClass_() {
-        Word hub = loadHub(this);
-        Object mirror = readFinalObject(hub, classMirrorOffset());
-        return (Class) mirror;
+    @InstanceMethodSubstitution
+    public static int hashCode(final Object thisObj) {
+        Word mark = loadWordFromObject(thisObj, markOffset());
+
+        // this code is independent from biased locking (although it does not look that way)
+        final Word biasedLock = mark.and(biasedLockMaskInPlace());
+        if (biasedLock.toLong() == unlockedMask()) {
+            int hash = (int) (mark.toLong() >>> identityHashCodeShift());
+            if (hash != uninitializedIdentityHashCodeValue()) {
+                return hash;
+            }
+        }
+
+        return IdentityHashCodeStubCall.call(thisObj);
     }
 }

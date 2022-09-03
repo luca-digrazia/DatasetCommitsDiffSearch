@@ -46,7 +46,7 @@ import com.oracle.graal.api.code.CompilationResult.DataPatch;
 import com.oracle.graal.api.code.CompilationResult.Mark;
 import com.oracle.graal.api.code.CompilationResult.Safepoint;
 import com.oracle.graal.api.code.Register.RegisterFlag;
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
+import com.oracle.graal.api.code.RuntimeCall.Descriptor;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
@@ -55,7 +55,6 @@ import com.oracle.graal.hotspot.bridge.CompilerToVM.CodeInstallResult;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.hotspot.snippets.*;
-import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
@@ -70,7 +69,7 @@ import com.oracle.graal.snippets.*;
 /**
  * HotSpot implementation of {@link GraalCodeCacheProvider}.
  */
-public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
+public abstract class HotSpotRuntime implements GraalCodeCacheProvider, SnippetProvider {
     public final HotSpotVMConfig config;
 
     protected final RegisterConfig regConfig;
@@ -82,19 +81,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
     private NewObjectSnippets.Templates newObjectSnippets;
     private MonitorSnippets.Templates monitorSnippets;
 
-    private NewInstanceStub newInstanceStub;
-    private NewArrayStub newArrayStub;
-
-    private final Map<Descriptor, HotSpotRuntimeCallTarget> runtimeCalls = new HashMap<>();
-    private final Map<ResolvedJavaMethod, Stub> stubs = new HashMap<>();
-
-    /**
-     * Holds onto objects that will be embedded in compiled code. HotSpot treats oops
-     * embedded in code as weak references so without an external strong root, such
-     * an embedded oop will quickly die. This in turn will cause the nmethod to
-     * be unloaded.
-     */
-    private final Map<Object, Object> gcRoots = new HashMap<>();
+    private final Map<Descriptor, RuntimeCall> runtimeCalls = new HashMap<>();
 
     /**
      * The offset from the origin of an array to the first element.
@@ -272,49 +259,43 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
         for (int i = 0; i < argKinds.length; i++) {
             assert argKinds[i].equals(args[i].getKind()) : descriptor + " incompatible with argument location " + i + ": " + args[i];
         }
-        HotSpotRuntimeCallTarget runtimeCall = new HotSpotRuntimeCallTarget(descriptor, address, new CallingConvention(temps, 0, ret, args), graalRuntime.getCompilerToVM());
+        HotSpotRuntimeCall runtimeCall = new HotSpotRuntimeCall(descriptor, address, new CallingConvention(temps, 0, ret, args), graalRuntime.getCompilerToVM());
         runtimeCalls.put(descriptor, runtimeCall);
-    }
-
-    /**
-     * Binds a snippet-base {@link Stub} to a runtime call descriptor.
-     *
-     * @return the linkage information for a call to the stub
-     */
-    public HotSpotRuntimeCallTarget registerStub(Descriptor descriptor, Stub stub) {
-        HotSpotRuntimeCallTarget linkage = runtimeCalls.get(descriptor);
-        assert linkage != null;
-        linkage.setStub(stub);
-        stubs.put(stub.getMethod(), stub);
-        return linkage;
     }
 
     protected abstract RegisterConfig createRegisterConfig(boolean globalStubConfig);
 
     public void installSnippets(SnippetInstaller installer, Assumptions assumptions) {
-        installer.install(ClassSnippets.class);
-        installer.install(SystemSnippets.class);
-        installer.install(UnsafeSnippets.class);
-        installer.install(ArrayCopySnippets.class);
+        if (GraalOptions.IntrinsifyObjectMethods) {
+            installer.install(ObjectSnippets.class);
+        }
+        if (GraalOptions.IntrinsifySystemMethods) {
+            installer.install(SystemSnippets.class);
+        }
+        if (GraalOptions.IntrinsifyThreadMethods) {
+            installer.install(ThreadSnippets.class);
+        }
+        if (GraalOptions.IntrinsifyUnsafeMethods) {
+            installer.install(UnsafeSnippets.class);
+        }
+        if (GraalOptions.IntrinsifyClassMethods) {
+            installer.install(ClassSnippets.class);
+        }
+        if (GraalOptions.IntrinsifyArrayCopy) {
+            installer.install(ArrayCopySnippets.class);
+        }
 
         installer.install(CheckCastSnippets.class);
         installer.install(InstanceOfSnippets.class);
         installer.install(NewObjectSnippets.class);
         installer.install(MonitorSnippets.class);
 
-        installer.install(NewInstanceStub.class);
-        installer.install(NewArrayStub.class);
-
         checkcastSnippets = new CheckCastSnippets.Templates(this, assumptions, graalRuntime.getTarget());
         instanceofSnippets = new InstanceOfSnippets.Templates(this, assumptions, graalRuntime.getTarget());
         newObjectSnippets = new NewObjectSnippets.Templates(this, assumptions, graalRuntime.getTarget(), config.useTLAB);
         monitorSnippets = new MonitorSnippets.Templates(this, assumptions, graalRuntime.getTarget(), config.useFastLocking);
-
-        newInstanceStub = new NewInstanceStub(this, assumptions, graalRuntime.getTarget());
-        newArrayStub = new NewArrayStub(this, assumptions, graalRuntime.getTarget());
-        newInstanceStub.install(graalRuntime.getCompiler());
-        newArrayStub.install(graalRuntime.getCompiler());
     }
+
 
     public HotSpotGraalRuntime getGraalRuntime() {
         return graalRuntime;
@@ -444,7 +425,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
     }
 
     @Override
-    public RegisterConfig lookupRegisterConfig(ResolvedJavaMethod method) {
+    public RegisterConfig lookupRegisterConfig(JavaMethod method) {
         return regConfig;
     }
 
@@ -650,10 +631,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
             ReadNode hub = graph.add(new ReadNode(object, location, StampFactory.forKind(wordKind())));
             hub.dependencies().add(guard);
             graph.replaceFixed(loadHub, hub);
-        } else if (n instanceof FixedGuardNode) {
-            FixedGuardNode node = (FixedGuardNode) n;
-            ValueAnchorNode newAnchor = graph.add(new ValueAnchorNode(tool.createGuard(node.condition(), node.getReason(), node.getAction(), node.isNegated(), node.getLeafGraphId())));
-            graph.replaceFixedWithFixed(node, newAnchor);
         } else if (n instanceof CheckCastNode) {
             checkcastSnippets.lower((CheckCastNode) n, tool);
         } else if (n instanceof CheckCastDynamicNode) {
@@ -701,39 +678,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
 
     @Override
     public StructuredGraph intrinsicGraph(ResolvedJavaMethod caller, int bci, ResolvedJavaMethod method, List<? extends Node> parameters) {
-        ResolvedJavaType holder = method.getDeclaringClass();
-        String fullName = method.getName() + ((HotSpotSignature) method.getSignature()).asString();
-        Kind wordKind = graalRuntime.getTarget().wordKind;
-        if (MetaUtil.isJavaLangObject(holder)) {
-            if (fullName.equals("getClass()Ljava/lang/Class;")) {
-                ValueNode obj = (ValueNode) parameters.get(0);
-                ObjectStamp stamp = (ObjectStamp) obj.stamp();
-                if (stamp.nonNull() && stamp.isExactType()) {
-                    HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) stamp.type();
-                    StructuredGraph graph = new StructuredGraph();
-                    ValueNode result = ConstantNode.forObject(type.mirror(), this, graph);
-                    ReturnNode ret = graph.add(new ReturnNode(result));
-                    graph.start().setNext(ret);
-                    return graph;
-                }
-                StructuredGraph graph = new StructuredGraph();
-                LocalNode receiver = graph.unique(new LocalNode(0, StampFactory.objectNonNull()));
-                LoadHubNode hub = graph.add(new LoadHubNode(receiver, wordKind));
-                Stamp resultStamp = StampFactory.declaredNonNull(lookupJavaType(Class.class));
-                FloatingReadNode result = graph.unique(new FloatingReadNode(hub, LocationNode.create(LocationNode.FINAL_LOCATION, Kind.Object, config.classMirrorOffset, graph), null, resultStamp));
-                ReturnNode ret = graph.add(new ReturnNode(result));
-                graph.start().setNext(hub);
-                hub.setNext(ret);
-                return graph;
-            }
-        } else if (holder.equals(lookupJavaType(Thread.class))) {
-            if (fullName.equals("currentThread()Ljava/lang/Thread;")) {
-                StructuredGraph graph = new StructuredGraph();
-                ReturnNode ret = graph.add(new ReturnNode(graph.unique(new CurrentThread(config.threadObjectOffset, this))));
-                graph.start().setNext(ret);
-                return graph;
-            }
-        }
         return null;
     }
 
@@ -745,24 +689,14 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
         return HotSpotResolvedObjectType.fromClass(clazz);
     }
 
-    public Object lookupCallTarget(Object callTarget) {
-        if (callTarget instanceof HotSpotRuntimeCallTarget) {
-            return ((HotSpotRuntimeCallTarget) callTarget).getAddress();
+    public Object lookupCallTarget(Object target) {
+        if (target instanceof HotSpotRuntimeCall) {
+            return ((HotSpotRuntimeCall) target).address;
         }
-        return callTarget;
+        return target;
     }
 
-    /**
-     * Gets the stub corresponding to a given method.
-     *
-     * @return the stub {@linkplain Stub#getMethod() implemented} by {@code method} or null if {@code method} does not
-     *         implement a stub
-     */
-    public Stub asStub(ResolvedJavaMethod method) {
-        return stubs.get(method);
-    }
-
-    public HotSpotRuntimeCallTarget lookupRuntimeCall(Descriptor descriptor) {
+    public RuntimeCall lookupRuntimeCall(Descriptor descriptor) {
         assert runtimeCalls.containsKey(descriptor) : descriptor;
         return runtimeCalls.get(descriptor);
     }
@@ -824,50 +758,38 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
     }
 
     public int convertDeoptAction(DeoptimizationAction action) {
+        // This must be kept in sync with the DeoptAction enum defined in deoptimization.hpp
         switch(action) {
-            case None: return config.deoptActionNone;
-            case RecompileIfTooManyDeopts: return config.deoptActionMaybeRecompile;
-            case InvalidateReprofile: return config.deoptActionReinterpret;
-            case InvalidateRecompile: return config.deoptActionMakeNotEntrant;
-            case InvalidateStopCompiling: return config.deoptActionMakeNotCompilable;
+            case None: return 0;
+            case RecompileIfTooManyDeopts: return 1;
+            case InvalidateReprofile: return 2;
+            case InvalidateRecompile: return 3;
+            case InvalidateStopCompiling: return 4;
             default: throw GraalInternalError.shouldNotReachHere();
         }
     }
 
     public int convertDeoptReason(DeoptimizationReason reason) {
+        // This must be kept in sync with the DeoptReason enum defined in deoptimization.hpp
         switch(reason) {
-            case None: return config.deoptReasonNone;
-            case NullCheckException: return config.deoptReasonNullCheck;
-            case BoundsCheckException: return config.deoptReasonRangeCheck;
-            case ClassCastException: return config.deoptReasonClassCheck;
-            case ArrayStoreException: return config.deoptReasonArrayCheck;
-            case UnreachedCode: return config.deoptReasonUnreached0;
-            case TypeCheckedInliningViolated: return config.deoptReasonTypeCheckInlining;
-            case OptimizedTypeCheckViolated: return config.deoptReasonOptimizedTypeCheck;
-            case NotCompiledExceptionHandler: return config.deoptReasonNotCompiledExceptionHandler;
-            case Unresolved: return config.deoptReasonUnresolved;
-            case JavaSubroutineMismatch: return config.deoptReasonJsrMismatch;
-            case ArithmeticException: return config.deoptReasonDiv0Check;
-            case RuntimeConstraint: return config.deoptReasonConstraint;
+            case None: return 0;
+            case NullCheckException: return 1;
+            case BoundsCheckException: return 2;
+            case ClassCastException: return 3;
+            case ArrayStoreException: return 4;
+            case UnreachedCode: return 5;
+            case TypeCheckedInliningViolated: return 6;
+            case OptimizedTypeCheckViolated: return 7;
+            case NotCompiledExceptionHandler: return 8;
+            case Unresolved: return 9;
+            case JavaSubroutineMismatch: return 10;
+            case ArithmeticException: return 11;
+            case RuntimeConstraint: return 12;
             default: throw GraalInternalError.shouldNotReachHere();
         }
     }
 
     public boolean needsDataPatch(Constant constant) {
         return constant.getPrimitiveAnnotation() instanceof HotSpotResolvedObjectType;
-    }
-
-    /**
-     * Registers an object created by the compiler and referenced by some generated code.
-     * HotSpot treats oops embedded in code as weak references so without an external strong root, such
-     * an embedded oop will quickly die. This in turn will cause the nmethod to be unloaded.
-     */
-    public synchronized Object registerGCRoot(Object object) {
-        Object existing = gcRoots.get(object);
-        if (existing != null) {
-            return existing;
-        }
-        gcRoots.put(object, object);
-        return object;
     }
 }

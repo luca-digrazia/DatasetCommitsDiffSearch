@@ -267,7 +267,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
         record(new MethodContents(method));
     }
 
-    public void record(Assumption assumption) {
+    private void record(Assumption assumption) {
         if (list == null) {
             list = new Assumption[4];
         } else {

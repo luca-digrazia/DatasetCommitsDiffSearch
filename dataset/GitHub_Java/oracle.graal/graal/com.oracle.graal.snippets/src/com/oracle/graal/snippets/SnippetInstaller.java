@@ -37,7 +37,6 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.snippets.ClassSubstitution.MethodSubstitution;
 import com.oracle.graal.snippets.Snippet.DefaultSnippetInliningPolicy;
 import com.oracle.graal.snippets.Snippet.SnippetInliningPolicy;
 
@@ -92,7 +91,7 @@ public class SnippetInstaller {
                     throw new RuntimeException("Snippet must not be abstract or native");
                 }
                 ResolvedJavaMethod snippet = runtime.lookupJavaMethod(method);
-                assert snippet.getCompilerStorage().get(Graph.class) == null;
+                assert snippet.getCompilerStorage().get(Graph.class) == null : method;
                 StructuredGraph graph = makeGraph(snippet, inliningPolicy(snippet));
                 //System.out.println("snippet: " + graph);
                 snippet.getCompilerStorage().put(Graph.class, graph);
@@ -106,14 +105,19 @@ public class SnippetInstaller {
                 continue;
             }
             try {
-                String name = method.getName();
-                MethodSubstitution a = method.getAnnotation(MethodSubstitution.class);
-                if (a != null) {
-                    if (!a.value().equals("")) {
-                        name = a.value();
+                InstanceMethodSubstitution methodSubstitution = method.getAnnotation(InstanceMethodSubstitution.class);
+                String originalName = method.getName();
+                Class<?>[] originalParameters = method.getParameterTypes();
+                if (methodSubstitution != null) {
+                    if (!methodSubstitution.value().isEmpty()) {
+                        originalName = methodSubstitution.value();
                     }
+                    assert originalParameters.length >= 1 : "must be a static method with the this object as its first parameter";
+                    Class<?>[] newParameters = new Class<?>[originalParameters.length - 1];
+                    System.arraycopy(originalParameters, 1, newParameters, 0, newParameters.length);
+                    originalParameters = newParameters;
                 }
-                Method originalMethod = originalClazz.getDeclaredMethod(name, method.getParameterTypes());
+                Method originalMethod = originalClazz.getDeclaredMethod(originalName, originalParameters);
                 if (!originalMethod.getReturnType().isAssignableFrom(method.getReturnType())) {
                     throw new RuntimeException("Snippet has incompatible return type");
                 }
@@ -138,7 +142,7 @@ public class SnippetInstaller {
             policyClass = snippet.inlining();
         }
         if (policyClass == SnippetInliningPolicy.class) {
-            return new DefaultSnippetInliningPolicy(runtime, pool);
+            return new DefaultSnippetInliningPolicy(pool);
         }
         try {
             return policyClass.getConstructor().newInstance();

@@ -29,22 +29,21 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-/**
- * A node that loads the {@link Thread} object for the current thread.
- */
 public final class CurrentThread extends FloatingNode implements LIRLowerable {
 
-    public CurrentThread() {
+    private int threadObjectOffset;
+
+    public CurrentThread(int threadObjectOffset) {
         super(StampFactory.declaredNonNull(HotSpotGraalRuntime.getInstance().getRuntime().lookupJavaType(Thread.class)));
+        this.threadObjectOffset = threadObjectOffset;
     }
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        HotSpotGraalRuntime runtime = HotSpotGraalRuntime.getInstance();
-        Register thread = runtime.getRuntime().threadRegister();
-        gen.setResult(this, gen.emitLoad(new Address(Kind.Object, thread.asValue(gen.target().wordKind), runtime.getConfig().threadObjectOffset), false));
+        Register thread = HotSpotGraalRuntime.getInstance().getRuntime().threadRegister();
+        gen.setResult(this, gen.emitLoad(new Address(Kind.Object, thread.asValue(gen.target().wordKind), threadObjectOffset), false));
     }
 
     @NodeIntrinsic
-    public static native Thread get();
+    public static native Thread get(@ConstantNodeParameter int threadObjectOffset);
 }

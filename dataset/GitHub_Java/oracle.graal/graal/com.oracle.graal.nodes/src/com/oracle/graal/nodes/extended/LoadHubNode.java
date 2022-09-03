@@ -27,6 +27,7 @@ import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * Loads an object's {@linkplain Representation#ObjectHub hub}, null-checking the object first.
@@ -39,7 +40,7 @@ public final class LoadHubNode extends FixedWithNextNode implements Lowerable, C
     }
 
     public LoadHubNode(ValueNode object, Kind kind) {
-        super(kind == Kind.Object ? StampFactory.objectNonNull() : StampFactory.forKind(kind));
+        super(StampFactory.forKind(kind));
         this.object = object;
     }
 
@@ -75,10 +76,9 @@ public final class LoadHubNode extends FixedWithNextNode implements Lowerable, C
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        State state = tool.getObjectState(object);
-        if (state != null) {
-            Constant constantHub = state.getVirtualObject().type().getEncoding(Representation.ObjectHub);
-            tool.replaceWithValue(ConstantNode.forConstant(constantHub, tool.getMetaAccessProvider(), graph()));
+        VirtualObjectNode virtual = tool.getVirtualState(object());
+        if (virtual != null) {
+            tool.replaceWithValue(ConstantNode.forConstant(virtual.type().getEncoding(Representation.ObjectHub), tool.getMetaAccessProvider(), graph()));
         }
     }
 }

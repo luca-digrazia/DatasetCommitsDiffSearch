@@ -136,8 +136,7 @@ public class VMToCompilerImpl implements VMToCompiler {
 
                 @Override
                 public void run() {
-                    // Snippets cannot have speculative optimizations since they have to be valid for the entire run of the VM.
-                    Assumptions assumptions = new Assumptions(false);
+                    Assumptions assumptions = new Assumptions(GraalOptions.OptAssumptions);
                     VMToCompilerImpl.this.intrinsifyArrayCopy = new IntrinsifyArrayCopyPhase(runtime, assumptions);
                     SnippetInstaller installer = new SnippetInstaller(runtime, assumptions, runtime.getGraalRuntime().getTarget());
                     GraalIntrinsics.installIntrinsics(installer);
@@ -339,8 +338,13 @@ public class VMToCompilerImpl implements VMToCompiler {
         long total = 0;
         for (int i = 0; i < maps.size(); i++) {
             DebugValueMap map = maps.get(i);
-            total += map.getCurrentValue(index);
-            total += collectTotal(map.getChildren(), index);
+            // the top level accumulates some counters -> do not process the children if we find a value
+            long value = map.getCurrentValue(index);
+            if (value == 0) {
+                total += collectTotal(map.getChildren(), index);
+            } else {
+                total += value;
+            }
         }
         return total;
     }
