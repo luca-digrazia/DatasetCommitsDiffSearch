@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2010, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,6 +29,7 @@ import com.sun.cri.ri.*;
  * deoptimization to recreate the object.
  */
 public final class CiVirtualObject extends CiValue {
+    private static final long serialVersionUID = -2907197776426346021L;
 
     private final RiType type;
     private CiValue[] values;
@@ -54,8 +55,8 @@ public final class CiVirtualObject extends CiValue {
     }
 
     @Override
-    public String name() {
-        return "vobject";
+    public String toString() {
+        return "vobject:" + id;
     }
 
     /**
@@ -110,11 +111,6 @@ public final class CiVirtualObject extends CiValue {
             return true;
         }
         return false;
-    }
-
-    @Override
-    public boolean equalsIgnoringKind(CiValue o) {
-        return equals(o);
     }
 
     /**

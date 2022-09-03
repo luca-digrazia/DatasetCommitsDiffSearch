@@ -22,8 +22,6 @@
  */
 package com.sun.cri.ci;
 
-import static com.sun.cri.ci.CiValueUtil.*;
-
 /**
  * Represents an address in target machine memory, specified via some combination of a base register, an index register,
  * a displacement and a scale. Note that the base and index registers may be {@link CiVariable variable}, that is as yet
@@ -35,7 +33,7 @@ public final class CiAddress extends CiValue {
     /**
      * A sentinel value used as a place holder in an instruction stream for an address that will be patched.
      */
-    public static final CiAddress Placeholder = new CiAddress(CiKind.Illegal, CiValue.IllegalValue);
+    public static final CiAddress Placeholder = new CiAddress(CiKind.Illegal, CiRegister.None.asValue());
 
     /**
      * Base register that defines the start of the address computation; always present.
@@ -97,7 +95,7 @@ public final class CiAddress extends CiValue {
         super(kind);
 
         this.base = base;
-        if (isConstant(index)) {
+        if (index.isConstant()) {
             long longIndex = ((CiConstant) index).asLong();
             long longDisp = displacement + longIndex * scale.value;
             if ((int) longIndex != longIndex || (int) longDisp != longDisp) {
@@ -107,8 +105,8 @@ public final class CiAddress extends CiValue {
             this.index = IllegalValue;
             this.scale = Scale.Times1;
         } else {
-            assert isIllegal(base) || isVariable(base) || isRegister(base);
-            assert isIllegal(index) || isVariable(index) || isRegister(index);
+            assert base.isIllegal() || base.isVariableOrRegister();
+            assert index.isIllegal() || index.isVariableOrRegister();
 
             this.index = index;
             this.scale = scale;
@@ -158,6 +156,26 @@ public final class CiAddress extends CiValue {
     }
 
     /**
+     * If the base register is a {@link CiRegisterValue} returns the associated {@link CiRegister}
+     * otherwise raises an exception..
+     * @return the base {@link CiRegister}
+     * @exception Error  if {@code base} is not a {@link CiRegisterValue}
+     */
+    public CiRegister base() {
+        return base.asRegister();
+    }
+
+    /**
+     * If the index register is a {@link CiRegisterValue} returns the associated {@link CiRegister}
+     * otherwise raises an exception..
+     * @return the base {@link CiRegister}
+     * @exception Error  if {@code index} is not a {@link CiRegisterValue}
+     */
+    public CiRegister index() {
+        return index.asRegister();
+    }
+
+    /**
      * Encodes the possible addressing modes as a simple value.
      */
     public enum Format {
@@ -176,8 +194,8 @@ public final class CiAddress extends CiValue {
         if (this == Placeholder) {
             return Format.PLACEHOLDER;
         }
-        assert isLegal(base);
-        if (isLegal(index)) {
+        assert base.isLegal();
+        if (index.isLegal()) {
             if (displacement != 0) {
                 return Format.BASE_INDEX_DISP;
             } else {
@@ -193,10 +211,10 @@ public final class CiAddress extends CiValue {
     }
 
     private static String s(CiValue location) {
-        if (isRegister(location)) {
-            return asRegister(location).name;
+        if (location.isRegister()) {
+            return location.asRegister().name;
         }
-        assert isVariable(location);
+        assert location.isVariable();
         return "v" + ((CiVariable) location).index;
     }
 
