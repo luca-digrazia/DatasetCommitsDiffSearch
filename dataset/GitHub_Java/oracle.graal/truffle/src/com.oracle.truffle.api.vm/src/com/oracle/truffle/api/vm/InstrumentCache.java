@@ -42,7 +42,6 @@ import java.util.TreeSet;
 import java.util.logging.Level;
 
 import com.oracle.truffle.api.TruffleOptions;
-import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 
 //TODO (chumer): maybe this class should share some code with LanguageCache?
 final class InstrumentCache {
@@ -52,7 +51,7 @@ final class InstrumentCache {
     private static final List<InstrumentCache> nativeImageCache = TruffleOptions.AOT ? new ArrayList<>() : null;
     private static List<InstrumentCache> runtimeCache;
 
-    private Class<? extends TruffleInstrument> instrumentClass;
+    private Class<?> instrumentClass;
     private final String className;
     private final String id;
     private final String name;
@@ -107,9 +106,6 @@ final class InstrumentCache {
                 break;
             }
             this.services.add(serviceName);
-        }
-        if (TruffleOptions.AOT) {
-            loadClass();
         }
     }
 
@@ -209,10 +205,9 @@ final class InstrumentCache {
         return services.toArray(new String[0]);
     }
 
-    @SuppressWarnings("unchecked")
     private void loadClass() {
         try {
-            instrumentClass = (Class<? extends TruffleInstrument>) Class.forName(className, true, loader);
+            instrumentClass = Class.forName(className, true, loader);
         } catch (Exception ex) {
             throw new IllegalStateException("Cannot initialize " + getName() + " instrument with implementation " + className, ex);
         }
