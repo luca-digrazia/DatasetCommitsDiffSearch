@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -255,9 +255,9 @@ public enum AMD64Arithmetic {
         @Opcode private final AMD64Arithmetic opcode;
         @Def({REG, HINT}) protected AllocatableValue result;
         @Use({REG, STACK}) protected AllocatableValue x;
-        protected JavaConstant y;
+        protected Constant y;
 
-        public BinaryRegConst(AMD64Arithmetic opcode, AllocatableValue result, AllocatableValue x, JavaConstant y) {
+        public BinaryRegConst(AMD64Arithmetic opcode, AllocatableValue result, AllocatableValue x, Constant y) {
             this.opcode = opcode;
             this.result = result;
             this.x = x;
@@ -306,7 +306,7 @@ public enum AMD64Arithmetic {
         }
 
         @Override
-        public void verify() {
+        protected void verify() {
             super.verify();
             verifyKind(opcode, result, x, y);
         }
@@ -320,9 +320,9 @@ public enum AMD64Arithmetic {
         @Opcode private final AMD64Arithmetic opcode;
         @Def({REG}) protected AllocatableValue result;
         @Use({REG, STACK}) protected AllocatableValue x;
-        protected JavaConstant y;
+        protected Constant y;
 
-        public BinaryRegStackConst(AMD64Arithmetic opcode, AllocatableValue result, AllocatableValue x, JavaConstant y) {
+        public BinaryRegStackConst(AMD64Arithmetic opcode, AllocatableValue result, AllocatableValue x, Constant y) {
             this.opcode = opcode;
             this.result = result;
             this.x = x;
@@ -331,30 +331,8 @@ public enum AMD64Arithmetic {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            if (isRegister(x)) {
-                switch (opcode) {
-                    case IMUL:
-                        masm.imull(asIntReg(result), asIntReg(x), y.asInt());
-                        break;
-                    case LMUL:
-                        masm.imulq(asLongReg(result), asLongReg(x), y.asInt());
-                        break;
-                    default:
-                        throw GraalInternalError.shouldNotReachHere();
-                }
-            } else {
-                assert isStackSlot(x);
-                switch (opcode) {
-                    case IMUL:
-                        masm.imull(asIntReg(result), (AMD64Address) crb.asIntAddr(x), y.asInt());
-                        break;
-                    case LMUL:
-                        masm.imulq(asLongReg(result), (AMD64Address) crb.asLongAddr(x), y.asInt());
-                        break;
-                    default:
-                        throw GraalInternalError.shouldNotReachHere();
-                }
-            }
+            AMD64Move.move(crb, masm, result, x);
+            emit(crb, masm, opcode, result, y, null);
         }
 
         @Override
@@ -444,7 +422,7 @@ public enum AMD64Arithmetic {
         }
 
         @Override
-        public void verify() {
+        protected void verify() {
             super.verify();
             // left input in rax, right input in any register but rax and rdx, result quotient in
             // rax, result remainder in rdx
@@ -509,7 +487,7 @@ public enum AMD64Arithmetic {
         }
 
         @Override
-        public void verify() {
+        protected void verify() {
             super.verify();
             verifyKind(opcode, result, x, y);
         }
@@ -768,6 +746,9 @@ public enum AMD64Arithmetic {
                 case ISUB:
                     masm.decrementl(asIntReg(dst), crb.asIntConst(src));
                     break;
+                case IMUL:
+                    masm.imull(asIntReg(dst), asIntReg(dst), crb.asIntConst(src));
+                    break;
                 case IAND:
                     masm.andl(asIntReg(dst), crb.asIntConst(src));
                     break;
@@ -798,6 +779,9 @@ public enum AMD64Arithmetic {
                     break;
                 case LSUB:
                     masm.subq(asLongReg(dst), crb.asIntConst(src));
+                    break;
+                case LMUL:
+                    masm.imulq(asLongReg(dst), asLongReg(dst), crb.asIntConst(src));
                     break;
                 case LAND:
                     masm.andq(asLongReg(dst), crb.asIntConst(src));
