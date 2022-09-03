@@ -256,9 +256,7 @@ public class SpecializationData extends TemplateMethod {
     public void forceFrame(TypeMirror frameType) {
         if (getParameters().isEmpty() || !Utils.typeEquals(getParameters().get(0).getType(), frameType)) {
             ParameterSpec frameSpec = getSpecification().findParameterSpec("frame");
-            if (frameSpec != null) {
-                getParameters().add(0, new ActualParameter(frameSpec, frameType, -1, false));
-            }
+            getParameters().add(0, new ActualParameter(frameSpec, frameType, -1, false));
         }
     }
 
