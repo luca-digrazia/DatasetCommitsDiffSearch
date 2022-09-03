@@ -32,7 +32,7 @@ import com.oracle.graal.nodes.type.*;
  * The {@code ExceptionObject} instruction represents the incoming exception object to an exception
  * handler.
  */
-public class ExceptionObjectNode extends AbstractStateSplit implements StateSplit, Lowerable, LIRLowerable, MemoryCheckpoint {
+public class ExceptionObjectNode extends AbstractStateSplit implements StateSplit, LIRLowerable, MemoryCheckpoint {
 
     /**
      * Constructs a new ExceptionObject instruction.
@@ -42,18 +42,13 @@ public class ExceptionObjectNode extends AbstractStateSplit implements StateSpli
     }
 
     @Override
-    public Object[] getLocationIdentities() {
-        return new Object[]{LocationNode.ANY_LOCATION};
+    public Object getLocationIdentity() {
+        return LocationNode.ANY_LOCATION;
     }
 
     @Override
     public void generate(LIRGeneratorTool gen) {
         gen.visitExceptionObject(this);
-    }
-
-    @Override
-    public void lower(LoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
     }
 
     @Override

@@ -206,22 +206,20 @@ public class FloatingReadPhase extends Phase {
         StructuredGraph graph = (StructuredGraph) readNode.graph();
         assert readNode.getNullCheck() == false;
         Object locationIdentity = readNode.location().locationIdentity();
-        if (locationIdentity != LocationNode.UNKNOWN_LOCATION) {
-            ValueNode lastLocationAccess = getLastLocationAccessForRead(state, locationIdentity);
-            FloatingReadNode floatingRead = graph.unique(new FloatingReadNode(readNode.object(), readNode.location(), lastLocationAccess, readNode.stamp(), readNode.dependencies()));
-            floatingRead.setNullCheck(readNode.getNullCheck());
-            ValueAnchorNode anchor = null;
-            for (GuardNode guard : readNode.dependencies().filter(GuardNode.class)) {
-                if (anchor == null) {
-                    anchor = graph.add(new ValueAnchorNode());
-                }
-                anchor.addAnchoredNode(guard);
+        ValueNode lastLocationAccess = getLastLocationAccessForRead(state, locationIdentity);
+        FloatingReadNode floatingRead = graph.unique(new FloatingReadNode(readNode.object(), readNode.location(), lastLocationAccess, readNode.stamp(), readNode.dependencies()));
+        floatingRead.setNullCheck(readNode.getNullCheck());
+        ValueAnchorNode anchor = null;
+        for (GuardNode guard : readNode.dependencies().filter(GuardNode.class)) {
+            if (anchor == null) {
+                anchor = graph.add(new ValueAnchorNode());
             }
-            if (anchor != null) {
-                graph.addAfterFixed(readNode, anchor);
-            }
-            graph.replaceFixedWithFloating(readNode, floatingRead);
+            anchor.addAnchoredNode(guard);
         }
+        if (anchor != null) {
+            graph.addAfterFixed(readNode, anchor);
+        }
+        graph.replaceFixedWithFloating(readNode, floatingRead);
     }
 
     private ValueNode getLastLocationAccessForRead(MemoryMap state, Object locationIdentity) {
