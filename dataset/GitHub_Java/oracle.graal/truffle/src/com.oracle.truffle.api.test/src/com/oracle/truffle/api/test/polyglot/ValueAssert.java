@@ -290,14 +290,8 @@ public class ValueAssert {
                         assertNull(value.as(Function.class));
                         assertNull(value.as(IsFunctionalInterfaceVarArgs.class));
                     } else if (!value.canInstantiate()) {
-                        if (value.hasMembers()) {
-                            assertFails(() -> value.as(FUNCTION).apply(null), UnsupportedOperationException.class);
-                            assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class).foobarbaz(123), UnsupportedOperationException.class);
-                        } else {
-                            assertFails(() -> value.as(FUNCTION), ClassCastException.class);
-                            assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class), ClassCastException.class);
-                        }
-
+                        assertFails(() -> value.as(FUNCTION), ClassCastException.class);
+                        assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class), ClassCastException.class);
                     }
                     break;
                 case INSTANTIABLE:
@@ -307,13 +301,8 @@ public class ValueAssert {
                         assertNull(value.as(Function.class));
                         assertNull(value.as(IsFunctionalInterfaceVarArgs.class));
                     } else if (!value.canExecute()) {
-                        if (value.hasMembers()) {
-                            assertFails(() -> value.as(FUNCTION).apply(null), UnsupportedOperationException.class);
-                            assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class).foobarbaz(123), UnsupportedOperationException.class);
-                        } else {
-                            assertFails(() -> value.as(FUNCTION), ClassCastException.class);
-                            assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class), ClassCastException.class);
-                        }
+                        assertFails(() -> value.as(FUNCTION), ClassCastException.class);
+                        assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class), ClassCastException.class);
                     }
                     break;
                 case NULL:
