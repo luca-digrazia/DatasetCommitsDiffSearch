@@ -168,13 +168,11 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
             // Save inline context for next dump.
             previousInlineContext = inlineContext;
 
-            // Capture before creating the sandbox
-            String currentScopeName = debug.getCurrentScopeName();
             try (DebugContext.Scope s = debug.sandbox("PrintingGraph", null)) {
                 // Finally, output the graph.
                 Map<Object, Object> properties = new HashMap<>();
                 properties.put("graph", graph.toString());
-                properties.put("scope", currentScopeName);
+                properties.put("scope", debug.getCurrentScopeName());
                 if (graph instanceof StructuredGraph) {
                     properties.put("compilationIdentifier", ((StructuredGraph) graph).compilationId());
                     try {
