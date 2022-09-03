@@ -36,7 +36,6 @@ import com.oracle.graal.graph.Node;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.AbstractNewObjectNode;
 import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.nodes.virtual.AllocatedObjectNode;
 import com.oracle.graal.nodes.virtual.VirtualObjectNode;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
@@ -118,7 +117,7 @@ public class InliningData {
     }
 
     public static boolean isFreshInstantiation(ValueNode arg) {
-        return (arg instanceof AbstractNewObjectNode) || (arg instanceof AllocatedObjectNode) || (arg instanceof VirtualObjectNode);
+        return (arg instanceof AbstractNewObjectNode) || (arg instanceof VirtualObjectNode);
     }
 
     private String checkTargetConditionsHelper(ResolvedJavaMethod method) {

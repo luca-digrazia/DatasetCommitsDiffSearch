@@ -22,8 +22,8 @@
  */
 package com.oracle.graal.phases.common.inlining.walker;
 
+import com.oracle.graal.api.meta.MetaUtil;
 import com.oracle.graal.api.meta.ResolvedJavaMethod;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.graph.FixedNodeProbabilityCache;
 
@@ -52,7 +52,7 @@ public final class CallsiteHolderExplorable extends CallsiteHolder {
 
     /**
      * Graph in which inlining may be performed at one or more of the callsites containined in
-     * {@link #remainingInvokes}.
+     * {@link #remainingInvokes}
      */
     private final StructuredGraph graph;
 
@@ -94,7 +94,7 @@ public final class CallsiteHolderExplorable extends CallsiteHolder {
         if (freshlyInstantiatedArguments == null || freshlyInstantiatedArguments.isEmpty()) {
             return Collections.EMPTY_SET;
         }
-        Set<ParameterNode> result = Node.newSet();
+        Set<ParameterNode> result = new HashSet<>();
         for (ParameterNode p : graph.getNodes(ParameterNode.class)) {
             if (freshlyInstantiatedArguments.get(p.index())) {
                 result.add(p);
@@ -209,6 +209,6 @@ public final class CallsiteHolderExplorable extends CallsiteHolder {
 
     @Override
     public String toString() {
-        return (graph != null ? method().format("%H.%n(%p)") : "<null method>") + remainingInvokes;
+        return (graph != null ? MetaUtil.format("%H.%n(%p)", method()) : "<null method>") + remainingInvokes;
     }
 }
