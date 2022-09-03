@@ -28,8 +28,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.nodes.RootNode;
 
 final class PolyglotCache {
 
@@ -56,14 +54,6 @@ final class PolyglotCache {
         return cache.execute;
     }
 
-    CallTarget lookupComputation(RootNode computation) {
-        Cache cache = lookupCache(void.class);
-        if (cache.computation == null && computation != null) {
-            cache.computation = Truffle.getRuntime().createCallTarget(computation);
-        }
-        return cache.computation;
-    }
-
     private Cache lookupCache(Class<?> clazz) {
         Cache cache = cachedTargets.get(clazz);
         if (cache == null) {
@@ -77,7 +67,7 @@ final class PolyglotCache {
 
         CallTarget asJava;
         CallTarget execute;
-        CallTarget computation;
+
     }
 
 }
