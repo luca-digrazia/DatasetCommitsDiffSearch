@@ -27,16 +27,15 @@ import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.debug.Debug.*;
-import jdk.internal.jvmci.debug.internal.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.bridge.CompilerToVM.CodeInstallResult;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.lir.asm.*;
@@ -181,7 +180,8 @@ public abstract class Stub {
                 try (Scope s0 = Debug.scope("StubCompilation", graph, providers.getCodeCache())) {
                     Suites defaultSuites = providers.getSuites().getDefaultSuites();
                     Suites suites = new Suites(new PhaseSuite<>(), defaultSuites.getMidTier(), defaultSuites.getLowTier());
-                    SchedulePhase schedule = emitFrontEnd(providers, target, graph, providers.getSuites().getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graph), suites);
+                    SchedulePhase schedule = emitFrontEnd(providers, target, graph, null, providers.getSuites().getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graph),
+                                    null, suites);
                     LIRSuites lirSuites = createLIRSuites();
                     emitBackEnd(graph, Stub.this, incomingCc, getInstalledCodeOwner(), backend, target, compResult, CompilationResultBuilderFactory.Default, schedule, getRegisterConfig(), lirSuites);
                 } catch (Throwable e) {
@@ -192,13 +192,11 @@ public abstract class Stub {
                 try (Scope s = Debug.scope("CodeInstall")) {
                     Stub stub = Stub.this;
                     HotSpotRuntimeStub installedCode = new HotSpotRuntimeStub(stub);
-                    HotSpotCompiledCode hsCompResult = new HotSpotCompiledRuntimeStub(compResult);
+                    HotSpotCompiledCode hsCompResult = new HotSpotCompiledRuntimeStub(stub, compResult);
 
-                    HotSpotGraalRuntime runtime = runtime();
-                    int result = runtime.getCompilerToVM().installCode(hsCompResult, installedCode, null);
-                    HotSpotVMConfig config = runtime.getConfig();
-                    if (result != config.codeInstallResultOk) {
-                        throw new JVMCIError("Error installing stub %s: %s", Stub.this, config.getCodeInstallResultDescription(result));
+                    CodeInstallResult result = runtime().getCompilerToVM().installCode(hsCompResult, installedCode, null);
+                    if (result != CodeInstallResult.OK) {
+                        throw new GraalInternalError("Error installing stub %s: %s", Stub.this, result);
                     }
                     ((HotSpotCodeCacheProvider) codeCache).logOrDump(installedCode, compResult);
                     code = installedCode;
