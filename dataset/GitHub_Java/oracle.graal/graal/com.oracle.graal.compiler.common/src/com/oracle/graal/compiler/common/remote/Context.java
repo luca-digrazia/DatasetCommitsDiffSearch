@@ -41,6 +41,7 @@ import com.oracle.graal.compiler.common.type.*;
 public class Context implements AutoCloseable {
 
     private static final ThreadLocal<Context> currentContext = new ThreadLocal<>();
+    private static final ThreadLocal<Context> previousContext = new ThreadLocal<>();
 
     private final Map<Class<?>, Fields> fieldsMap = new HashMap<>();
 
@@ -328,6 +329,9 @@ public class Context implements AutoCloseable {
                 return srcValue;
             }
             dstValue = pool.get(srcValue);
+            if (dstValue == null && previousPool != null) {
+                dstValue = previousPool.get(srcValue);
+            }
             if (dstValue == null) {
                 if (srcValue instanceof Remote) {
                     dstValue = get(srcValue);
@@ -388,11 +392,19 @@ public class Context implements AutoCloseable {
     public Context() {
         assert currentContext.get() == null : currentContext.get();
         currentContext.set(this);
-        pool = new IdentityHashMap<>();
+        Context previous = previousContext.get();
+        if (previous != null) {
+            previousPool = previous.pool;
+            pool = new IdentityHashMap<>(previousPool.size());
+        } else {
+            pool = new IdentityHashMap<>();
+            previousPool = null;
+        }
     }
 
     private final Map<Object, Object> proxies = new IdentityHashMap<>();
     private final Map<Object, Object> pool;
+    private final Map<Object, Object> previousPool;
 
     int invocationCacheHits;
     int invocationCacheMisses;
@@ -436,9 +448,22 @@ public class Context implements AutoCloseable {
     public void close() {
         assert currentContext.get() == this : currentContext.get();
         if (DEBUG) {
-            System.out.printf("proxies: %d, pool: %d, invocation cache hits: %d, invocation cache misses: %d%n", proxies.size(), pool.size(), invocationCacheHits, invocationCacheMisses);
+            int overlap = 0;
+            if (previousPool != null) {
+                for (Object key : previousPool.keySet()) {
+                    if (pool.containsKey(key)) {
+                        overlap++;
+                    }
+                }
+            }
+            if (DEBUG) {
+                System.out.printf("proxies: %d, pool: %d, overlap: %d, invocation cache hits: %d, invocation cache misses: %d%n", proxies.size(), pool.size(), overlap, invocationCacheHits,
+                                invocationCacheMisses);
+            }
         }
         currentContext.set(null);
+        previousContext.set(this);
+
     }
 
     /**
