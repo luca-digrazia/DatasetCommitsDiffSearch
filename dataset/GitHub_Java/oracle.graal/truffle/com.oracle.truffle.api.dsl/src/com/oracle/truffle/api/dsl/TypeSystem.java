@@ -24,22 +24,24 @@
  */
 package com.oracle.truffle.api.dsl;
 
-import java.lang.annotation.*;
-
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.nodes.Node;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 /**
  * <p>
  * Each {@link Node} has one {@link TypeSystem} at its root to define the types that can be used
  * throughout the system. Multiple {@link TypeSystem}s are allowed, but they cannot be mixed inside
- * a single {@link Node} hierarchy. A {@link TypeSystem} defines a list of types as its child
- * elements, in which every type precedes its super types.The latter condition ensures that the most
- * concrete type is found first when searching the list sequentially for the type of a given generic
- * value.
+ * a single {@link Node} hierarchy. A {@link TypeSystem} optionally defines a list of types as its
+ * child elements, in which every type precedes its super types. The latter condition ensures that
+ * the most concrete type is found first when searching the list sequentially for the type of a
+ * given generic value.
  * </p>
  *
  * <p>
- * Each {@link #value()} is represented as a java type. A type can specify two annotations:
+ * Each {@link #value()} is represented as a Java type. A type can specify two annotations:
  * {@link TypeCheck} and {@link TypeCast}. The {@link TypeCheck} checks whether a given generic
  * value matches to the current type. The {@link TypeCast} casts a generic type value to the current
  * type. If the {@link TypeCheck} and {@link TypeCast} annotations are not declared in the
@@ -85,6 +87,6 @@ public @interface TypeSystem {
     /**
      * The list of types as child elements of the {@link TypeSystem}. Each precedes its super type.
      */
-    Class<?>[] value();
+    Class<?>[] value() default {};
 
 }
