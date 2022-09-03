@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,40 +20,26 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.api.instrument.impl;
+package com.oracle.truffle.sl.nodes.instrument;
 
 import java.io.*;
 import java.util.*;
 
 import com.oracle.truffle.api.instrument.*;
+import com.oracle.truffle.api.instrument.impl.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.nodes.NodeFieldAccessor.NodeFieldKind;
-import com.oracle.truffle.api.source.*;
 
 /**
- * A language-agnostic for printing out various pieces of a Truffle AST.
+ * SLASTPrinter is used to print for SL's internal Truffle AST. This is used by
+ * {@link SLDefaultVisualizer} to provide a means of displaying the internal Truffle AST
  */
-public class DefaultASTPrinter implements ASTPrinter {
+public final class SLASTPrinter extends DefaultASTPrinter {
 
-    public DefaultASTPrinter() {
+    public SLASTPrinter() {
     }
 
-    public void printTree(PrintWriter p, Node node, int maxDepth, Node markNode) {
-        printTree(p, node, maxDepth, markNode, 1);
-        p.println();
-        p.flush();
-    }
-
-    public String printTreeToString(Node node, int maxDepth, Node markNode) {
-        StringWriter out = new StringWriter();
-        printTree(new PrintWriter(out), node, maxDepth, markNode);
-        return out.toString();
-    }
-
-    public String printTreeToString(Node node, int maxDepth) {
-        return printTreeToString(node, maxDepth, null);
-    }
-
+    @Override
     protected void printTree(PrintWriter p, Node node, int maxDepth, Node markNode, int level) {
         if (node == null) {
             p.print("null");
@@ -76,7 +60,7 @@ public class DefaultASTPrinter implements ASTPrinter {
 
         ArrayList<NodeFieldAccessor> childFields = new ArrayList<>();
 
-        for (NodeFieldAccessor field : NodeClass.get(node).getFields()) {
+        for (NodeFieldAccessor field : NodeClass.get(node.getClass()).getFields()) {
             if (field.getKind() == NodeFieldKind.CHILD || field.getKind() == NodeFieldKind.CHILDREN) {
                 childFields.add(field);
             } else if (field.getKind() == NodeFieldKind.DATA) {
@@ -118,65 +102,6 @@ public class DefaultASTPrinter implements ASTPrinter {
                 p.print("}");
             }
         }
-    }
-
-    protected void printChildren(PrintWriter p, int maxDepth, Node markNode, int level, NodeFieldAccessor field, Object value) {
-        printNewLine(p, level);
-        p.print(field.getName());
-        Node[] children = (Node[]) value;
-        p.print(" = [");
-        String sep = "";
-        for (Node child : children) {
-            p.print(sep);
-            sep = ", ";
-            printTree(p, child, maxDepth, markNode, level + 1);
-        }
-        p.print("]");
-    }
-
-    protected void printChild(PrintWriter p, int maxDepth, Node markNode, int level, NodeFieldAccessor field, Object value) {
-        final Node valueNode = (Node) value;
-        printNewLine(p, level, valueNode == markNode);
-        p.print(field.getName());
-        p.print(" = ");
-        printTree(p, valueNode, maxDepth, markNode, level + 1);
-    }
-
-    protected static void printNewLine(PrintWriter p, int level, boolean mark) {
-        p.println();
-        for (int i = 0; i < level; i++) {
-            if (mark && i == 0) {
-                p.print(" -->");
-            } else {
-                p.print("    ");
-            }
-        }
-    }
-
-    protected static void printNewLine(PrintWriter p, int level) {
-        printNewLine(p, level, false);
-    }
-
-    protected static String nodeName(Node node) {
-        return node.getClass().getSimpleName();
-    }
-
-    protected static String sourceInfo(Node node) {
-        final SourceSection src = node.getSourceSection();
-        if (src != null) {
-            if (src instanceof NullSourceSection) {
-                final NullSourceSection nullSection = (NullSourceSection) src;
-                return nullSection.getShortDescription();
-            } else {
-                return src.getSource().getName() + ":" + src.getStartLine();
-            }
-        }
-        return "";
-    }
-
-    protected static String instrumentInfo(InstrumentationNode node) {
-        final String info = node.instrumentationInfo();
-        return info == null ? "" : info;
     }
 
 }

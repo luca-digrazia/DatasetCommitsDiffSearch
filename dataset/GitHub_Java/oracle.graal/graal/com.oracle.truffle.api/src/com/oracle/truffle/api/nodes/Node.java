@@ -334,7 +334,11 @@ public abstract class Node implements NodeInterface, Cloneable {
      */
     public final void accept(NodeVisitor nodeVisitor) {
         if (nodeVisitor.visit(this)) {
-            NodeUtil.forEachChildRecursive(this, nodeVisitor);
+            for (Node child : this.getChildren()) {
+                if (child != null) {
+                    child.accept(nodeVisitor);
+                }
+            }
         }
     }
 

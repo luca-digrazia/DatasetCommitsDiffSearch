@@ -331,44 +331,6 @@ public final class NodeUtil {
         return true;
     }
 
-    static boolean forEachChildRecursive(Node parent, NodeVisitor visitor) {
-        NodeClass parentNodeClass = parent.getNodeClass();
-
-        for (NodeFieldAccessor field : parentNodeClass.getChildFields()) {
-            if (!visitChild((Node) field.getObject(parent), visitor)) {
-                return false;
-            }
-        }
-
-        for (NodeFieldAccessor field : parentNodeClass.getChildrenFields()) {
-            Object arrayObject = field.getObject(parent);
-            if (arrayObject == null) {
-                continue;
-            }
-            Object[] array = (Object[]) arrayObject;
-            for (int i = 0; i < array.length; i++) {
-                if (!visitChild((Node) array[i], visitor)) {
-                    return false;
-                }
-            }
-        }
-
-        return true;
-    }
-
-    private static boolean visitChild(Node child, NodeVisitor visitor) {
-        if (child == null) {
-            return true;
-        }
-        if (!visitor.visit(child)) {
-            return false;
-        }
-        if (!forEachChildRecursive(child, visitor)) {
-            return false;
-        }
-        return true;
-    }
-
     /** Returns all declared fields in the class hierarchy. */
     static Field[] getAllFields(Class<? extends Object> clazz) {
         Field[] declaredFields = clazz.getDeclaredFields();
@@ -498,23 +460,28 @@ public final class NodeUtil {
     }
 
     public static int countNodes(Node root) {
-        return countNodes(root, NodeCountFilter.NO_FILTER);
+        Iterator<Node> nodeIterator = makeRecursiveIterator(root);
+        int count = 0;
+        while (nodeIterator.hasNext()) {
+            nodeIterator.next();
+            count++;
+        }
+        return count;
     }
 
     public static int countNodes(Node root, NodeCountFilter filter) {
-        NodeCounter counter = new NodeCounter(filter);
-        root.accept(counter);
-        return counter.count;
+        Iterator<Node> nodeIterator = makeRecursiveIterator(root);
+        int count = 0;
+        while (nodeIterator.hasNext()) {
+            Node node = nodeIterator.next();
+            if (node != null && filter.isCounted(node)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     public interface NodeCountFilter {
-
-        NodeCountFilter NO_FILTER = new NodeCountFilter() {
-
-            public boolean isCounted(Node node) {
-                return true;
-            }
-        };
 
         boolean isCounted(Node node);
 
@@ -833,23 +800,5 @@ public final class NodeUtil {
             currentFrom = currentFrom.getSuperclass();
         }
         return true;
-    }
-
-    private static final class NodeCounter implements NodeVisitor {
-
-        public int count;
-        private final NodeCountFilter filter;
-
-        public NodeCounter(NodeCountFilter filter) {
-            this.filter = filter;
-        }
-
-        public boolean visit(Node node) {
-            if (filter.isCounted(node)) {
-                count++;
-            }
-            return true;
-        }
-
     }
 }

@@ -29,9 +29,9 @@ import java.util.*;
 
 import sun.misc.*;
 
-import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.nodes.NodeUtil.*;
+import com.oracle.truffle.api.nodes.NodeFieldAccessor.NodeFieldKind;
+import com.oracle.truffle.api.source.*;
 
 /**
  * Experimental API. May change without notice.
@@ -59,12 +59,12 @@ public final class PostOrderDeserializer {
 
     /**
      * Deserializes the byte stream and returns the deserialized Truffle AST node.
-     * 
+     *
      * @param bytes the trimmed byte array containing the serialized data
      * @param expectedType the expected root node type. Throws an exception if the root node is not
      *            assignable from this type.
      * @return the deserialized Truffle AST represented by the root Node.
-     * 
+     *
      * @throws UnsupportedConstantPoolTypeException thrown if a type is encountered that is not
      *             supported by the constant pool implementation.
      */
@@ -146,7 +146,7 @@ public final class PostOrderDeserializer {
 
         Node node = (Node) object;
 
-        NodeField[] nodeFields = NodeClass.get(nodeClass).getFields();
+        NodeFieldAccessor[] nodeFields = NodeClass.get(nodeClass).getFields();
         deserializeChildrenFields(node, nodeFields);
         deserializeChildFields(node, nodeFields);
         deserializeDataFields(buffer, node, nodeFields);
@@ -154,9 +154,9 @@ public final class PostOrderDeserializer {
         return node;
     }
 
-    private void deserializeDataFields(VariableLengthIntBuffer buffer, Node nodeInstance, NodeField[] nodeFields) throws UnsupportedConstantPoolTypeException {
+    private void deserializeDataFields(VariableLengthIntBuffer buffer, Node nodeInstance, NodeFieldAccessor[] nodeFields) throws UnsupportedConstantPoolTypeException {
         for (int i = 0; i < nodeFields.length; i++) {
-            NodeField field = nodeFields[i];
+            NodeFieldAccessor field = nodeFields[i];
             if (field.getKind() == NodeFieldKind.DATA) {
                 Class<?> fieldClass = field.getType();
                 long offset = field.getOffset();
@@ -169,78 +169,86 @@ public final class PostOrderDeserializer {
 
                 int cpi = buffer.get();
                 if (cpi == VariableLengthIntBuffer.NULL) {
-                    if (fieldClass == int.class) {
-                        unsafe.putInt(nodeInstance, offset, 0);
-                    } else if (fieldClass == long.class) {
-                        unsafe.putLong(nodeInstance, offset, 0L);
-                    } else if (fieldClass == float.class) {
-                        unsafe.putFloat(nodeInstance, offset, 0.0F);
-                    } else if (fieldClass == double.class) {
-                        unsafe.putDouble(nodeInstance, offset, 0.0D);
-                    } else if (fieldClass == byte.class) {
-                        unsafe.putByte(nodeInstance, offset, (byte) 0);
-                    } else if (fieldClass == short.class) {
-                        unsafe.putShort(nodeInstance, offset, (short) 0);
-                    } else if (fieldClass == char.class) {
-                        unsafe.putChar(nodeInstance, offset, (char) 0);
-                    } else if (fieldClass == boolean.class) {
-                        unsafe.putBoolean(nodeInstance, offset, false);
-                    } else {
-                        unsafe.putObject(nodeInstance, offset, null);
-                    }
+                    deserializeDataFieldsLengthNull(nodeInstance, fieldClass, offset);
                 } else {
-                    if (fieldClass == int.class) {
-                        unsafe.putInt(nodeInstance, offset, cp.getInt(cpi));
-                    } else if (fieldClass == long.class) {
-                        unsafe.putLong(nodeInstance, offset, cp.getLong(cpi));
-                    } else if (fieldClass == float.class) {
-                        unsafe.putFloat(nodeInstance, offset, cp.getFloat(cpi));
-                    } else if (fieldClass == double.class) {
-                        unsafe.putDouble(nodeInstance, offset, cp.getDouble(cpi));
-                    } else if (fieldClass == byte.class) {
-                        unsafe.putByte(nodeInstance, offset, (byte) cp.getInt(cpi));
-                    } else if (fieldClass == short.class) {
-                        unsafe.putShort(nodeInstance, offset, (short) cp.getInt(cpi));
-                    } else if (fieldClass == char.class) {
-                        unsafe.putChar(nodeInstance, offset, (char) cp.getInt(cpi));
-                    } else if (fieldClass == boolean.class) {
-                        unsafe.putBoolean(nodeInstance, offset, cp.getInt(cpi) == 1 ? true : false);
-                    } else if (fieldClass == Integer.class) {
-                        unsafe.putObject(nodeInstance, offset, cp.getInt(cpi));
-                    } else if (fieldClass == Long.class) {
-                        unsafe.putObject(nodeInstance, offset, cp.getLong(cpi));
-                    } else if (fieldClass == Float.class) {
-                        unsafe.putObject(nodeInstance, offset, cp.getFloat(cpi));
-                    } else if (fieldClass == Double.class) {
-                        unsafe.putObject(nodeInstance, offset, cp.getDouble(cpi));
-                    } else if (fieldClass == Byte.class) {
-                        unsafe.putObject(nodeInstance, offset, (byte) cp.getInt(cpi));
-                    } else if (fieldClass == Short.class) {
-                        unsafe.putObject(nodeInstance, offset, (short) cp.getInt(cpi));
-                    } else if (fieldClass == Character.class) {
-                        unsafe.putObject(nodeInstance, offset, (char) cp.getInt(cpi));
-                    } else if (fieldClass == Boolean.class) {
-                        unsafe.putObject(nodeInstance, offset, cp.getInt(cpi) == 1 ? Boolean.TRUE : Boolean.FALSE);
-                    } else {
-                        unsafe.putObject(nodeInstance, offset, cp.getObject(fieldClass, cpi));
-                    }
+                    deserializeDataFieldsDefault(nodeInstance, fieldClass, offset, cpi);
                 }
             }
         }
     }
 
-    private void deserializeChildFields(Node parent, NodeField[] nodeFields) {
+    private void deserializeDataFieldsDefault(Node nodeInstance, Class<?> fieldClass, long offset, int cpi) {
+        if (fieldClass == int.class) {
+            unsafe.putInt(nodeInstance, offset, cp.getInt(cpi));
+        } else if (fieldClass == long.class) {
+            unsafe.putLong(nodeInstance, offset, cp.getLong(cpi));
+        } else if (fieldClass == float.class) {
+            unsafe.putFloat(nodeInstance, offset, cp.getFloat(cpi));
+        } else if (fieldClass == double.class) {
+            unsafe.putDouble(nodeInstance, offset, cp.getDouble(cpi));
+        } else if (fieldClass == byte.class) {
+            unsafe.putByte(nodeInstance, offset, (byte) cp.getInt(cpi));
+        } else if (fieldClass == short.class) {
+            unsafe.putShort(nodeInstance, offset, (short) cp.getInt(cpi));
+        } else if (fieldClass == char.class) {
+            unsafe.putChar(nodeInstance, offset, (char) cp.getInt(cpi));
+        } else if (fieldClass == boolean.class) {
+            unsafe.putBoolean(nodeInstance, offset, cp.getInt(cpi) == 1 ? true : false);
+        } else if (fieldClass == Integer.class) {
+            unsafe.putObject(nodeInstance, offset, cp.getInt(cpi));
+        } else if (fieldClass == Long.class) {
+            unsafe.putObject(nodeInstance, offset, cp.getLong(cpi));
+        } else if (fieldClass == Float.class) {
+            unsafe.putObject(nodeInstance, offset, cp.getFloat(cpi));
+        } else if (fieldClass == Double.class) {
+            unsafe.putObject(nodeInstance, offset, cp.getDouble(cpi));
+        } else if (fieldClass == Byte.class) {
+            unsafe.putObject(nodeInstance, offset, (byte) cp.getInt(cpi));
+        } else if (fieldClass == Short.class) {
+            unsafe.putObject(nodeInstance, offset, (short) cp.getInt(cpi));
+        } else if (fieldClass == Character.class) {
+            unsafe.putObject(nodeInstance, offset, (char) cp.getInt(cpi));
+        } else if (fieldClass == Boolean.class) {
+            unsafe.putObject(nodeInstance, offset, cp.getInt(cpi) == 1 ? Boolean.TRUE : Boolean.FALSE);
+        } else {
+            unsafe.putObject(nodeInstance, offset, cp.getObject(fieldClass, cpi));
+        }
+    }
+
+    private static void deserializeDataFieldsLengthNull(Node nodeInstance, Class<?> fieldClass, long offset) {
+        if (fieldClass == int.class) {
+            unsafe.putInt(nodeInstance, offset, 0);
+        } else if (fieldClass == long.class) {
+            unsafe.putLong(nodeInstance, offset, 0L);
+        } else if (fieldClass == float.class) {
+            unsafe.putFloat(nodeInstance, offset, 0.0F);
+        } else if (fieldClass == double.class) {
+            unsafe.putDouble(nodeInstance, offset, 0.0D);
+        } else if (fieldClass == byte.class) {
+            unsafe.putByte(nodeInstance, offset, (byte) 0);
+        } else if (fieldClass == short.class) {
+            unsafe.putShort(nodeInstance, offset, (short) 0);
+        } else if (fieldClass == char.class) {
+            unsafe.putChar(nodeInstance, offset, (char) 0);
+        } else if (fieldClass == boolean.class) {
+            unsafe.putBoolean(nodeInstance, offset, false);
+        } else {
+            unsafe.putObject(nodeInstance, offset, null);
+        }
+    }
+
+    private void deserializeChildFields(Node parent, NodeFieldAccessor[] nodeFields) {
         for (int i = nodeFields.length - 1; i >= 0; i--) {
-            NodeField field = nodeFields[i];
+            NodeFieldAccessor field = nodeFields[i];
             if (field.getKind() == NodeFieldKind.CHILD) {
                 unsafe.putObject(parent, field.getOffset(), popNode(parent, field.getType()));
             }
         }
     }
 
-    private void deserializeChildrenFields(Node parent, NodeField[] nodeFields) {
+    private void deserializeChildrenFields(Node parent, NodeFieldAccessor[] nodeFields) {
         for (int i = nodeFields.length - 1; i >= 0; i--) {
-            NodeField field = nodeFields[i];
+            NodeFieldAccessor field = nodeFields[i];
             if (field.getKind() == NodeFieldKind.CHILDREN) {
                 unsafe.putObject(parent, field.getOffset(), popArray(parent, field.getType()));
             }
@@ -249,8 +257,9 @@ public final class PostOrderDeserializer {
 
     private static Node updateParent(Node parent, Node child) {
         if (child != null) {
-            long parentOffset = NodeClass.get(child.getClass()).getParentOffset();
-            unsafe.putObject(child, parentOffset, parent);
+            NodeClass nodeClass = NodeClass.get(child.getClass());
+            nodeClass.getNodeClassField().putObject(child, nodeClass);
+            nodeClass.getParentField().putObject(child, parent);
         }
         return child;
     }

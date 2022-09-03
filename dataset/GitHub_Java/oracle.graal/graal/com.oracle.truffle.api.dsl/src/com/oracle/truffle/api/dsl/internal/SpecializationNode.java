@@ -25,31 +25,32 @@
 package com.oracle.truffle.api.dsl.internal;
 
 import java.lang.reflect.*;
+import java.util.*;
 import java.util.concurrent.*;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.dsl.internal.RewriteEvent.RewriteEvent0;
-import com.oracle.truffle.api.dsl.internal.RewriteEvent.RewriteEvent1;
-import com.oracle.truffle.api.dsl.internal.RewriteEvent.RewriteEvent2;
-import com.oracle.truffle.api.dsl.internal.RewriteEvent.RewriteEvent3;
-import com.oracle.truffle.api.dsl.internal.RewriteEvent.RewriteEvent4;
-import com.oracle.truffle.api.dsl.internal.RewriteEvent.RewriteEventN;
+import com.oracle.truffle.api.dsl.internal.SlowPathEvent.SlowPathEvent0;
+import com.oracle.truffle.api.dsl.internal.SlowPathEvent.SlowPathEvent1;
+import com.oracle.truffle.api.dsl.internal.SlowPathEvent.SlowPathEvent2;
+import com.oracle.truffle.api.dsl.internal.SlowPathEvent.SlowPathEvent3;
+import com.oracle.truffle.api.dsl.internal.SlowPathEvent.SlowPathEvent4;
+import com.oracle.truffle.api.dsl.internal.SlowPathEvent.SlowPathEvent5;
+import com.oracle.truffle.api.dsl.internal.SlowPathEvent.SlowPathEventN;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.nodes.NodeUtil.NodeClass;
-import com.oracle.truffle.api.nodes.NodeUtil.NodeField;
+import com.oracle.truffle.api.nodes.NodeFieldAccessor;
 
 /**
  * Internal implementation dependent base class for generated specialized nodes.
  */
-@SuppressWarnings("unused")
 @NodeInfo(cost = NodeCost.NONE)
+@SuppressWarnings("unused")
 public abstract class SpecializationNode extends Node {
 
     @Child protected SpecializationNode next;
 
-    private final int index;
+    final int index;
 
     public SpecializationNode() {
         this(-1);
@@ -64,15 +65,23 @@ public abstract class SpecializationNode extends Node {
         return NodeCost.NONE;
     }
 
+    public void reset() {
+        SpecializationNode start = findStart();
+        SpecializationNode end = findEnd();
+        if (start != end) {
+            start.replace(end, "reset specialization");
+        }
+    }
+
     public static Node updateRoot(Node node) {
         updateRootImpl(((SpecializedNode) node).getSpecializationNode(), node);
         return node;
     }
 
     private static void updateRootImpl(SpecializationNode start, Node node) {
-        NodeField[] fields = NodeClass.get(start.getClass()).getFields();
+        NodeFieldAccessor[] fields = NodeClass.get(start).getFields();
         for (int i = fields.length - 1; i >= 0; i--) {
-            NodeField f = fields[i];
+            NodeFieldAccessor f = fields[i];
             if (f.getName().equals("root")) {
                 f.putObject(start, node);
                 break;
@@ -83,10 +92,9 @@ public abstract class SpecializationNode extends Node {
         }
     }
 
-    protected final SpecializationNode polymorphicMerge(SpecializationNode newNode) {
-        SpecializationNode merged = next.merge(newNode);
-        if (merged == newNode && !isSame(newNode) && count() <= 2) {
-            return removeSame(new RewriteEvent0(findParentNode(), "merged polymorphic to monomorphic"));
+    protected final SpecializationNode polymorphicMerge(SpecializationNode newNode, SpecializationNode merged) {
+        if (merged == newNode && count() <= 2) {
+            return removeSame(new SlowPathEvent0(this, "merged polymorphic to monomorphic", null));
         }
         return merged;
     }
@@ -105,11 +113,97 @@ public abstract class SpecializationNode extends Node {
 
     protected abstract Node[] getSuppliedChildren();
 
-    protected SpecializationNode merge(SpecializationNode newNode) {
-        if (this.isSame(newNode)) {
+    protected SpecializationNode merge(SpecializationNode newNode, Frame frame) {
+        if (isIdentical(newNode, frame)) {
             return this;
         }
-        return next != null ? next.merge(newNode) : newNode;
+        return next != null ? next.merge(newNode, frame) : newNode;
+    }
+
+    protected SpecializationNode merge(SpecializationNode newNode, Frame frame, Object o1) {
+        if (isIdentical(newNode, frame, o1)) {
+            return this;
+        }
+        return next != null ? next.merge(newNode, frame, o1) : newNode;
+    }
+
+    protected SpecializationNode merge(SpecializationNode newNode, Frame frame, Object o1, Object o2) {
+        if (isIdentical(newNode, frame, o1, o2)) {
+            return this;
+        }
+        return next != null ? next.merge(newNode, frame, o1, o2) : newNode;
+    }
+
+    protected SpecializationNode merge(SpecializationNode newNode, Frame frame, Object o1, Object o2, Object o3) {
+        if (isIdentical(newNode, frame, o1, o2, o3)) {
+            return this;
+        }
+        return next != null ? next.merge(newNode, frame, o1, o2, o3) : newNode;
+    }
+
+    protected SpecializationNode merge(SpecializationNode newNode, Frame frame, Object o1, Object o2, Object o3, Object o4) {
+        if (isIdentical(newNode, frame, o1, o2, o3, o4)) {
+            return this;
+        }
+        return next != null ? next.merge(newNode, frame, o1, o2, o3, o4) : newNode;
+    }
+
+    protected SpecializationNode merge(SpecializationNode newNode, Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
+        if (isIdentical(newNode, frame, o1, o2, o3, o4, o5)) {
+            return this;
+        }
+        return next != null ? next.merge(newNode, frame, o1, o2, o3, o4, o5) : newNode;
+    }
+
+    protected SpecializationNode merge(SpecializationNode newNode, Frame frame, Object... args) {
+        if (isIdentical(newNode, frame, args)) {
+            return this;
+        }
+        return next != null ? next.merge(newNode, frame, args) : newNode;
+    }
+
+    protected boolean isSame(SpecializationNode other) {
+        return getClass() == other.getClass();
+    }
+
+    protected boolean isIdentical(SpecializationNode newNode, Frame frame) {
+        return isSame(newNode);
+    }
+
+    protected boolean isIdentical(SpecializationNode newNode, Frame frame, Object o1) {
+        return isSame(newNode);
+    }
+
+    protected boolean isIdentical(SpecializationNode newNode, Frame frame, Object o1, Object o2) {
+        return isSame(newNode);
+    }
+
+    protected boolean isIdentical(SpecializationNode newNode, Frame frame, Object o1, Object o2, Object o3) {
+        return isSame(newNode);
+    }
+
+    protected boolean isIdentical(SpecializationNode newNode, Frame frame, Object o1, Object o2, Object o3, Object o4) {
+        return isSame(newNode);
+    }
+
+    protected boolean isIdentical(SpecializationNode newNode, Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
+        return isSame(newNode);
+    }
+
+    protected boolean isIdentical(SpecializationNode newNode, Frame frame, Object... args) {
+        return isSame(newNode);
+    }
+
+    protected final int countSame(SpecializationNode node) {
+        return findStart().countSameImpl(node);
+    }
+
+    private int countSameImpl(SpecializationNode node) {
+        if (next != null) {
+            return next.countSameImpl(node) + (isSame(node) ? 1 : 0);
+        } else {
+            return 0;
+        }
     }
 
     @Override
@@ -125,20 +219,64 @@ public abstract class SpecializationNode extends Node {
         return index;
     }
 
-    protected boolean isSame(SpecializationNode other) {
-        return getClass() == other.getClass();
-    }
-
     private int count() {
         return next != null ? next.count() + 1 : 1;
     }
 
+    private SpecializationNode findEnd() {
+        SpecializationNode node = this;
+        while (node.next != null) {
+            node = node.next;
+        }
+        return node;
+    }
+
+    protected final Object removeThis(final CharSequence reason, Frame frame) {
+        return removeThisImpl(reason).acceptAndExecute(frame);
+    }
+
+    protected final Object removeThis(final CharSequence reason, Frame frame, Object o1) {
+        return removeThisImpl(reason).acceptAndExecute(frame, o1);
+    }
+
+    protected final Object removeThis(final CharSequence reason, Frame frame, Object o1, Object o2) {
+        return removeThisImpl(reason).acceptAndExecute(frame, o1, o2);
+    }
+
+    protected final Object removeThis(final CharSequence reason, Frame frame, Object o1, Object o2, Object o3) {
+        return removeThisImpl(reason).acceptAndExecute(frame, o1, o2, o3);
+    }
+
+    protected final Object removeThis(final CharSequence reason, Frame frame, Object o1, Object o2, Object o3, Object o4) {
+        return removeThisImpl(reason).acceptAndExecute(frame, o1, o2, o3, o4);
+    }
+
+    protected final Object removeThis(final CharSequence reason, Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
+        return removeThisImpl(reason).acceptAndExecute(frame, o1, o2, o3, o4, o5);
+    }
+
+    protected final Object removeThis(final CharSequence reason, Frame frame, Object... args) {
+        return removeThisImpl(reason).acceptAndExecute(frame, args);
+    }
+
+    private SpecializationNode removeThisImpl(final CharSequence reason) {
+        this.replace(this.next, reason);
+        return findEnd().findStart();
+    }
+
     protected final SpecializationNode removeSame(final CharSequence reason) {
-        return atomic(new Callable<SpecializationNode>() {
-            public SpecializationNode call() throws Exception {
-                return removeImpl(SpecializationNode.this, reason);
+        SpecializationNode start = SpecializationNode.this.findStart();
+        SpecializationNode current = start;
+        while (current != null) {
+            if (current.isSame(SpecializationNode.this)) {
+                NodeUtil.nonAtomicReplace(current, current.next, reason);
+                if (current == start) {
+                    start = start.next;
+                }
             }
-        });
+            current = current.next;
+        }
+        return SpecializationNode.this.findEnd().findStart();
     }
 
     /** Find the topmost of the specialization chain. */
@@ -156,23 +294,27 @@ public abstract class SpecializationNode extends Node {
         return node;
     }
 
-    private Node findParentNode() {
+    private Node findRoot() {
         return findStart().getParent();
     }
 
-    private SpecializationNode removeImpl(SpecializationNode toRemove, CharSequence reason) {
-        SpecializationNode start = findStart();
+    private SpecializedNode findSpecializedNode() {
+        return (SpecializedNode) findEnd().findStart().getParent();
+    }
+
+    private static SpecializationNode removeSameImpl(SpecializationNode toRemove, CharSequence reason) {
+        SpecializationNode start = toRemove.findStart();
         SpecializationNode current = start;
         while (current != null) {
             if (current.isSame(toRemove)) {
-                current.replace(current.next, reason);
+                NodeUtil.nonAtomicReplace(current, current.next, reason);
                 if (current == start) {
                     start = start.next;
                 }
             }
             current = current.next;
         }
-        return start;
+        return toRemove.findEnd().findStart();
     }
 
     public Object acceptAndExecute(Frame frame) {
@@ -241,193 +383,144 @@ public abstract class SpecializationNode extends Node {
 
     protected final Object uninitialized(Frame frame) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        SpecializationNode nextSpecialization = createNext(frame);
-        if (nextSpecialization == null) {
-            nextSpecialization = createFallback();
-        }
-        if (nextSpecialization == null) {
+        SpecializationNode newNode = atomic(new InsertionEvent0(this, "insert new specialization", frame));
+        if (newNode == null) {
             return unsupported(frame);
         }
-        return insertSpecialization(nextSpecialization, new RewriteEvent0(findParentNode(), "inserted new specialization")).acceptAndExecute(frame);
+        return newNode.acceptAndExecute(frame);
     }
 
     protected final Object uninitialized(Frame frame, Object o1) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        SpecializationNode nextSpecialization = createNext(frame, o1);
-        if (nextSpecialization == null) {
-            nextSpecialization = createFallback();
-        }
-        if (nextSpecialization == null) {
+        SpecializationNode newNode = atomic(new InsertionEvent1(this, "insert new specialization", frame, o1));
+        if (newNode == null) {
             return unsupported(frame, o1);
         }
-        return insertSpecialization(nextSpecialization, new RewriteEvent1(findParentNode(), "inserted new specialization", o1)).acceptAndExecute(frame, o1);
+        return newNode.acceptAndExecute(frame, o1);
     }
 
     protected final Object uninitialized(Frame frame, Object o1, Object o2) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        SpecializationNode nextSpecialization = createNext(frame, o1, o2);
-        if (nextSpecialization == null) {
-            nextSpecialization = createFallback();
-        }
-        if (nextSpecialization == null) {
+        SpecializationNode newNode = atomic(new InsertionEvent2(this, "insert new specialization", frame, o1, o2));
+        if (newNode == null) {
             return unsupported(frame, o1, o2);
         }
-        return insertSpecialization(nextSpecialization, new RewriteEvent2(findParentNode(), "inserted new specialization", o1, o2)).acceptAndExecute(frame, o1, o2);
+        return newNode.acceptAndExecute(frame, o1, o2);
     }
 
     protected final Object uninitialized(Frame frame, Object o1, Object o2, Object o3) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        SpecializationNode nextSpecialization = createNext(frame, o1, o2, o3);
-        if (nextSpecialization == null) {
-            nextSpecialization = createFallback();
-        }
-        if (nextSpecialization == null) {
+        SpecializationNode newNode = atomic(new InsertionEvent3(this, "insert new specialization", frame, o1, o2, o3));
+        if (newNode == null) {
             return unsupported(frame, o1, o2, o3);
         }
-        return insertSpecialization(nextSpecialization, new RewriteEvent3(findParentNode(), "inserted new specialization", o1, o2, o3)).acceptAndExecute(frame, o1, o2, o3);
+        return newNode.acceptAndExecute(frame, o1, o2, o3);
     }
 
     protected final Object uninitialized(Frame frame, Object o1, Object o2, Object o3, Object o4) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        SpecializationNode nextSpecialization = createNext(frame, o1, o2, o3, o4);
-        if (nextSpecialization == null) {
-            nextSpecialization = createFallback();
-        }
-        if (nextSpecialization == null) {
+        SpecializationNode newNode = atomic(new InsertionEvent4(this, "insert new specialization", frame, o1, o2, o3, o4));
+        if (newNode == null) {
             return unsupported(frame, o1, o2, o3, o4);
         }
-        return insertSpecialization(nextSpecialization, new RewriteEvent4(findParentNode(), "inserts new specialization", o1, o2, o3, o4)).acceptAndExecute(frame, o1, o2, o3, o4);
+        return newNode.acceptAndExecute(frame, o1, o2, o3, o4);
     }
 
     protected final Object uninitialized(Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        SpecializationNode nextSpecialization = createNext(frame, o1, o2, o3, o4, o5);
-        if (nextSpecialization == null) {
-            nextSpecialization = createFallback();
+        SpecializationNode newNode = atomic(new InsertionEvent5(this, "insert new specialization", frame, o1, o2, o3, o4, o5));
+        if (newNode == null) {
+            return unsupported(frame, o1, o2, o3, o4, o5);
         }
-        if (nextSpecialization == null) {
-            unsupported(frame, o1, o2, o3, o4, o5);
-        }
-        return insertSpecialization(nextSpecialization, new RewriteEventN(findParentNode(), "inserts new specialization", o1, o2, o3, o4, o5)).acceptAndExecute(frame, o1, o2, o3, o4, o5);
+        return newNode.acceptAndExecute(frame, o1, o2, o3, o4, o5);
     }
 
     protected final Object uninitialized(Frame frame, Object... args) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        SpecializationNode nextSpecialization = createNext(frame, args);
-        if (nextSpecialization == null) {
-            nextSpecialization = createFallback();
+        SpecializationNode newNode = atomic(new InsertionEventN(this, "insert new specialization", frame, args));
+        if (newNode == null) {
+            return unsupported(frame, args);
         }
-        if (nextSpecialization == null) {
-            unsupported(frame, args);
-        }
-        return insertSpecialization(nextSpecialization, new RewriteEventN(findParentNode(), "inserts new specialization", args)).acceptAndExecute(frame, args);
-    }
-
-    private boolean needsPolymorphic() {
-        return findStart().count() == 2;
+        return newNode.acceptAndExecute(frame, args);
     }
 
     protected final Object remove(String reason, Frame frame) {
-        return removeSame(new RewriteEvent0(findParentNode(), reason)).acceptAndExecute(frame);
+        return atomic(new RemoveEvent0(this, reason, frame)).acceptAndExecute(frame);
     }
 
     protected final Object remove(String reason, Frame frame, Object o1) {
-        return removeSame(new RewriteEvent1(findParentNode(), reason, o1)).acceptAndExecute(frame, o1);
+        return atomic(new RemoveEvent1(this, reason, frame, o1)).acceptAndExecute(frame, o1);
     }
 
     protected final Object remove(String reason, Frame frame, Object o1, Object o2) {
-        return removeSame(new RewriteEvent2(findParentNode(), reason, o1, o2)).acceptAndExecute(frame, o1, o2);
+        return atomic(new RemoveEvent2(this, reason, frame, o1, o2)).acceptAndExecute(frame, o1, o2);
     }
 
     protected final Object remove(String reason, Frame frame, Object o1, Object o2, Object o3) {
-        return removeSame(new RewriteEvent3(findParentNode(), reason, o1, o2, o3)).acceptAndExecute(frame, o1, o2, o3);
+        return atomic(new RemoveEvent3(this, reason, frame, o1, o2, o3)).acceptAndExecute(frame, o1, o2, o3);
     }
 
     protected final Object remove(String reason, Frame frame, Object o1, Object o2, Object o3, Object o4) {
-        return removeSame(new RewriteEvent4(findParentNode(), reason, o1, o2, o3, o4)).acceptAndExecute(frame, o1, o2, o3, o4);
+        return atomic(new RemoveEvent4(this, reason, frame, o1, o2, o3, o4)).acceptAndExecute(frame, o1, o2, o3, o4);
     }
 
     protected final Object remove(String reason, Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
-        return removeSame(new RewriteEventN(findParentNode(), reason, o1, o2, o3, o4, o5)).acceptAndExecute(frame, o1, o2, o3, o4, o5);
+        return atomic(new RemoveEvent5(this, reason, frame, o1, o2, o3, o4, o5)).acceptAndExecute(frame, o1, o2, o3, o4, o5);
     }
 
     protected final Object remove(String reason, Frame frame, Object... args) {
-        return removeSame(new RewriteEventN(findParentNode(), reason, args)).acceptAndExecute(frame, args);
+        return atomic(new RemoveEventN(this, reason, frame, args)).acceptAndExecute(frame, args);
     }
 
     protected Object unsupported(Frame frame) {
-        throw new UnsupportedSpecializationException(findParentNode(), getSuppliedChildren());
+        throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren());
     }
 
     protected Object unsupported(Frame frame, Object o1) {
-        throw new UnsupportedSpecializationException(findParentNode(), getSuppliedChildren(), o1);
+        throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), o1);
     }
 
     protected Object unsupported(Frame frame, Object o1, Object o2) {
-        throw new UnsupportedSpecializationException(findParentNode(), getSuppliedChildren(), o1, o2);
+        throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), o1, o2);
     }
 
     protected Object unsupported(Frame frame, Object o1, Object o2, Object o3) {
-        throw new UnsupportedSpecializationException(findParentNode(), getSuppliedChildren(), o1, o2, o3);
+        throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), o1, o2, o3);
     }
 
     protected Object unsupported(Frame frame, Object o1, Object o2, Object o3, Object o4) {
-        throw new UnsupportedSpecializationException(findParentNode(), getSuppliedChildren(), o1, o2, o3, o4);
+        throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), o1, o2, o3, o4);
     }
 
     protected Object unsupported(Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
-        throw new UnsupportedSpecializationException(findParentNode(), getSuppliedChildren(), o1, o2, o3, o4, o5);
+        throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), o1, o2, o3, o4, o5);
     }
 
     protected Object unsupported(Frame frame, Object... args) {
-        throw new UnsupportedSpecializationException(findParentNode(), getSuppliedChildren(), args);
+        throw new UnsupportedSpecializationException(findRoot(), getSuppliedChildren(), args);
     }
 
-    private SpecializationNode insertSpecialization(final SpecializationNode generated, final CharSequence message) {
-        return atomic(new Callable<SpecializationNode>() {
-            public SpecializationNode call() {
-                return insert(generated, message);
-            }
-        });
-    }
-
-    private SpecializationNode insert(final SpecializationNode generated, CharSequence message) {
-        SpecializationNode start = findStart();
-        if (start == this) {
-            // fast path for first insert
-            return insertBefore(this, generated, message);
-        } else {
-            return slowSortedInsert(start, generated, message);
-        }
-    }
-
-    private static <T> SpecializationNode slowSortedInsert(SpecializationNode start, final SpecializationNode generated, final CharSequence message) {
-        final SpecializationNode merged = start.merge(generated);
+    static SpecializationNode insertSorted(SpecializationNode start, final SpecializationNode generated, final CharSequence message, final SpecializationNode merged) {
         if (merged == generated) {
             // new node
             if (start.count() == 2) {
-                insertBefore(start, start.createPolymorphic(), "insert polymorphic");
+                insertAt(start, start.createPolymorphic(), "insert polymorphic");
             }
-            SpecializationNode insertBefore = findInsertBeforeNode(generated.index, start);
-            return insertBefore(insertBefore, generated, message);
+            SpecializationNode current = start;
+            while (current != null && current.index < generated.index) {
+                current = current.next;
+            }
+            return insertAt(current, generated, message);
         } else {
             // existing node
-            merged.replace(merged, new RewriteEvent0(merged.findParentNode(), "merged specialization"));
-            return merged;
+            return start;
         }
     }
 
-    private static SpecializationNode findInsertBeforeNode(int generatedIndex, SpecializationNode start) {
-        SpecializationNode current = start;
-        while (current != null && current.index < generatedIndex) {
-            current = current.next;
-        }
-        return current;
-    }
-
-    private static <T> SpecializationNode insertBefore(SpecializationNode node, SpecializationNode insertBefore, CharSequence message) {
+    static <T> SpecializationNode insertAt(SpecializationNode node, SpecializationNode insertBefore, CharSequence reason) {
         insertBefore.next = node;
-        return node.replace(insertBefore, message);
+        // always guaranteed to be executed inside of an atomic block
+        return NodeUtil.nonAtomicReplace(node, insertBefore, reason);
     }
 
     @Override
@@ -438,7 +531,7 @@ public abstract class SpecializationNode extends Node {
 
         appendFields(b, clazz);
         if (next != null) {
-            b.append(" -> ").append(next.toString());
+            b.append("\n -> ").append(next.toString());
         }
         return b.toString();
     }
@@ -449,25 +542,318 @@ public abstract class SpecializationNode extends Node {
             return;
         }
         b.append("(");
+        String sep = "";
         for (Field field : fields) {
             if (Modifier.isStatic(field.getModifiers())) {
                 continue;
             }
+            b.append(sep);
             String name = field.getName();
             if (name.equals("root")) {
                 continue;
             }
             b.append(field.getName());
+            b.append(" = ");
             try {
                 field.setAccessible(true);
-                b.append(field.get(this));
+                Object value = field.get(this);
+                if (value instanceof Object[]) {
+                    b.append(Arrays.toString((Object[]) field.get(this)));
+                } else {
+                    b.append(field.get(this));
+                }
             } catch (IllegalArgumentException e) {
                 b.append(e.toString());
             } catch (IllegalAccessException e) {
                 b.append(e.toString());
             }
+            sep = ", ";
         }
         b.append(")");
+    }
+
+    protected static void check(Assumption assumption) throws InvalidAssumptionException {
+        if (assumption != null) {
+            assumption.check();
+        }
+    }
+
+    @ExplodeLoop
+    protected static void check(Assumption[] assumptions) throws InvalidAssumptionException {
+        if (assumptions != null) {
+            CompilerAsserts.compilationConstant(assumptions.length);
+            for (Assumption assumption : assumptions) {
+                check(assumption);
+            }
+        }
+    }
+
+    protected static boolean isValid(Assumption assumption) {
+        if (assumption != null) {
+            return assumption.isValid();
+        }
+        return true;
+    }
+
+    protected static boolean isValid(Assumption[] assumptions) {
+        if (assumptions != null) {
+            for (Assumption assumption : assumptions) {
+                if (!isValid(assumption)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private static final class InsertionEvent0 extends SlowPathEvent0 implements Callable<SpecializationNode> {
+
+        public InsertionEvent0(SpecializationNode source, String reason, Frame frame) {
+            super(source, reason, frame);
+        }
+
+        public SpecializationNode call() throws Exception {
+            SpecializationNode next = source.createNext(frame);
+            if (next == null) {
+                next = source.createFallback();
+            }
+            if (next == null) {
+                return null;
+            }
+            SpecializationNode start = source.findStart();
+            if (start.index == Integer.MAX_VALUE) {
+                return insertAt(start, next, this);
+            } else {
+                return insertSorted(start, next, this, start.merge(next, frame));
+            }
+        }
+
+    }
+
+    private static final class InsertionEvent1 extends SlowPathEvent1 implements Callable<SpecializationNode> {
+
+        public InsertionEvent1(SpecializationNode source, String reason, Frame frame, Object o1) {
+            super(source, reason, frame, o1);
+        }
+
+        public SpecializationNode call() throws Exception {
+            SpecializationNode next = source.createNext(frame, o1);
+            if (next == null) {
+                next = source.createFallback();
+            }
+            if (next == null) {
+                return null;
+            }
+            SpecializationNode start = source.findStart();
+            if (start.index == Integer.MAX_VALUE) {
+                return insertAt(start, next, this);
+            } else {
+                return insertSorted(start, next, this, start.merge(next, frame, o1));
+            }
+        }
+
+    }
+
+    private static final class InsertionEvent2 extends SlowPathEvent2 implements Callable<SpecializationNode> {
+
+        public InsertionEvent2(SpecializationNode source, String reason, Frame frame, Object o1, Object o2) {
+            super(source, reason, frame, o1, o2);
+        }
+
+        public SpecializationNode call() throws Exception {
+            SpecializationNode next = source.createNext(frame, o1, o2);
+            if (next == null) {
+                next = source.createFallback();
+            }
+            if (next == null) {
+                return null;
+            }
+            SpecializationNode start = source.findStart();
+            if (start.index == Integer.MAX_VALUE) {
+                return insertAt(start, next, this);
+            } else {
+                return insertSorted(start, next, this, start.merge(next, frame, o1, o2));
+            }
+        }
+
+    }
+
+    private static final class InsertionEvent3 extends SlowPathEvent3 implements Callable<SpecializationNode> {
+
+        public InsertionEvent3(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3) {
+            super(source, reason, frame, o1, o2, o3);
+        }
+
+        public SpecializationNode call() throws Exception {
+            SpecializationNode next = source.createNext(frame, o1, o2, o3);
+            if (next == null) {
+                next = source.createFallback();
+            }
+            if (next == null) {
+                return null;
+            }
+            SpecializationNode start = source.findStart();
+            if (start.index == Integer.MAX_VALUE) {
+                return insertAt(start, next, this);
+            } else {
+                return insertSorted(start, next, this, start.merge(next, frame, o1, o2, o3));
+            }
+        }
+
+    }
+
+    private static final class InsertionEvent4 extends SlowPathEvent4 implements Callable<SpecializationNode> {
+
+        public InsertionEvent4(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3, Object o4) {
+            super(source, reason, frame, o1, o2, o3, o4);
+        }
+
+        public SpecializationNode call() throws Exception {
+            SpecializationNode next = source.createNext(frame, o1, o2, o3, o4);
+            if (next == null) {
+                next = source.createFallback();
+            }
+            if (next == null) {
+                return null;
+            }
+            SpecializationNode start = source.findStart();
+            if (start.index == Integer.MAX_VALUE) {
+                return insertAt(start, next, this);
+            } else {
+                return insertSorted(start, next, this, start.merge(next, frame, o1, o2, o3, o4));
+            }
+        }
+
+    }
+
+    private static final class InsertionEvent5 extends SlowPathEvent5 implements Callable<SpecializationNode> {
+
+        public InsertionEvent5(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
+            super(source, reason, frame, o1, o2, o3, o4, o5);
+        }
+
+        public SpecializationNode call() throws Exception {
+            SpecializationNode next = source.createNext(frame, o1, o2, o3, o4, o5);
+            if (next == null) {
+                next = source.createFallback();
+            }
+            if (next == null) {
+                return null;
+            }
+            SpecializationNode start = source.findStart();
+            if (start.index == Integer.MAX_VALUE) {
+                return insertAt(start, next, this);
+            } else {
+                return insertSorted(start, next, this, start.merge(next, frame, o1, o2, o3, o4, o5));
+            }
+        }
+
+    }
+
+    private static final class InsertionEventN extends SlowPathEventN implements Callable<SpecializationNode> {
+
+        public InsertionEventN(SpecializationNode source, String reason, Frame frame, Object[] args) {
+            super(source, reason, frame, args);
+        }
+
+        public SpecializationNode call() throws Exception {
+            SpecializationNode next = source.createNext(frame, args);
+            if (next == null) {
+                next = source.createFallback();
+            }
+            if (next == null) {
+                return null;
+            }
+            SpecializationNode start = source.findStart();
+            if (start.index == Integer.MAX_VALUE) {
+                return insertAt(start, next, this);
+            } else {
+                return insertSorted(start, next, this, start.merge(next, frame, args));
+            }
+        }
+    }
+
+    private static final class RemoveEvent0 extends SlowPathEvent0 implements Callable<SpecializationNode> {
+
+        public RemoveEvent0(SpecializationNode source, String reason, Frame frame) {
+            super(source, reason, frame);
+        }
+
+        public SpecializationNode call() throws Exception {
+            return source.removeSame(this);
+        }
+
+    }
+
+    private static final class RemoveEvent1 extends SlowPathEvent1 implements Callable<SpecializationNode> {
+
+        public RemoveEvent1(SpecializationNode source, String reason, Frame frame, Object o1) {
+            super(source, reason, frame, o1);
+        }
+
+        public SpecializationNode call() throws Exception {
+            return source.removeSame(this);
+        }
+
+    }
+
+    private static final class RemoveEvent2 extends SlowPathEvent2 implements Callable<SpecializationNode> {
+
+        public RemoveEvent2(SpecializationNode source, String reason, Frame frame, Object o1, Object o2) {
+            super(source, reason, frame, o1, o2);
+        }
+
+        public SpecializationNode call() throws Exception {
+            return source.removeSame(this);
+        }
+
+    }
+
+    private static final class RemoveEvent3 extends SlowPathEvent3 implements Callable<SpecializationNode> {
+
+        public RemoveEvent3(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3) {
+            super(source, reason, frame, o1, o2, o3);
+        }
+
+        public SpecializationNode call() throws Exception {
+            return source.removeSame(this);
+        }
+
+    }
+
+    private static final class RemoveEvent4 extends SlowPathEvent4 implements Callable<SpecializationNode> {
+
+        public RemoveEvent4(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3, Object o4) {
+            super(source, reason, frame, o1, o2, o3, o4);
+        }
+
+        public SpecializationNode call() throws Exception {
+            return source.removeSame(this);
+        }
+
+    }
+
+    private static final class RemoveEvent5 extends SlowPathEvent5 implements Callable<SpecializationNode> {
+
+        public RemoveEvent5(SpecializationNode source, String reason, Frame frame, Object o1, Object o2, Object o3, Object o4, Object o5) {
+            super(source, reason, frame, o1, o2, o3, o4, o5);
+        }
+
+        public SpecializationNode call() throws Exception {
+            return source.removeSame(this);
+        }
+
+    }
+
+    private static final class RemoveEventN extends SlowPathEventN implements Callable<SpecializationNode> {
+
+        public RemoveEventN(SpecializationNode source, String reason, Frame frame, Object[] args) {
+            super(source, reason, frame, args);
+        }
+
+        public SpecializationNode call() throws Exception {
+            return source.removeSame(this);
+        }
     }
 
 }

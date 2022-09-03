@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,7 +26,6 @@ package com.oracle.truffle.api.nodes;
 
 import java.io.*;
 import java.lang.annotation.*;
-import java.lang.reflect.*;
 import java.net.*;
 import java.util.*;
 
@@ -34,6 +35,8 @@ import javax.xml.transform.dom.*;
 import javax.xml.transform.stream.*;
 
 import org.w3c.dom.*;
+
+import com.oracle.truffle.api.nodes.NodeFieldAccessor.NodeFieldKind;
 
 /**
  * Utility class for creating output for the ideal graph visualizer.
@@ -61,7 +64,7 @@ public class GraphPrintVisitor {
 
             dom = db.newDocument();
         } catch (ParserConfigurationException ex) {
-            System.out.println("Error while trying to instantiate DocumentBuilder " + ex);
+            throw new RuntimeException(ex);
         }
 
         graphDocument = dom.createElement("graphDocument");
@@ -113,7 +116,7 @@ public class GraphPrintVisitor {
 
         // save old nodes
         prevNodeMap = nodeMap;
-        nodeMap = new HashMap<>();
+        nodeMap = new IdentityHashMap<>();
         edgeList = new ArrayList<>();
 
         return this;
@@ -164,7 +167,7 @@ public class GraphPrintVisitor {
         }
     }
 
-    public void printToNetwork() {
+    public void printToNetwork(boolean ignoreErrors) {
         try {
             Transformer tr = TransformerFactory.newInstance().newTransformer();
             tr.setOutputProperty(OutputKeys.METHOD, "xml");
@@ -173,7 +176,9 @@ public class GraphPrintVisitor {
             BufferedOutputStream stream = new BufferedOutputStream(socket.getOutputStream(), 0x4000);
             tr.transform(new DOMSource(dom), new StreamResult(stream));
         } catch (TransformerException | IOException e) {
-            e.printStackTrace();
+            if (!ignoreErrors) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -206,13 +211,17 @@ public class GraphPrintVisitor {
 
             setNodeProperty(node, "name", node.getClass().getSimpleName().replaceFirst("Node$", ""));
             NodeInfo nodeInfo = node.getClass().getAnnotation(NodeInfo.class);
-            if (nodeInfo != null && !nodeInfo.shortName().isEmpty()) {
-                setNodeProperty(node, "shortName", nodeInfo.shortName());
+            if (nodeInfo != null) {
+                setNodeProperty(node, "cost", nodeInfo.cost());
+                if (!nodeInfo.shortName().isEmpty()) {
+                    setNodeProperty(node, "shortName", nodeInfo.shortName());
+                }
             }
-            setNodeProperty(node, "nodeType", (Node.class.isAssignableFrom(node.getClass()) ? Node.class.getSimpleName() : "other"));
-            setNodeProperty(node, "nodeClass", node.getClass().getSimpleName());
-            copyDebugProperties(node); // TODO: may overwrite property "name"? (currently allowed)
-            readNodeProperties(node);
+            setNodeProperty(node, "class", node.getClass().getSimpleName());
+            if (node instanceof Node) {
+                readNodeProperties((Node) node);
+                copyDebugProperties((Node) node);
+            }
         }
     }
 
@@ -235,7 +244,8 @@ public class GraphPrintVisitor {
 
     protected void setNodeProperty(Object node, String propertyName, Object value) {
         Element nodeElem = getElementByObject(node);
-        Element propElem = getPropertyElement(node, propertyName); // if property exists, replace its value
+        Element propElem = getPropertyElement(node, propertyName); // if property exists, replace
+                                                                   // its value
         if (null == propElem) { // if property doesn't exist, create one
             propElem = dom.createElement("p");
             propElem.setAttribute("name", propertyName);
@@ -244,38 +254,27 @@ public class GraphPrintVisitor {
         propElem.setTextContent(String.valueOf(value));
     }
 
-    private void copyDebugProperties(Object node) {
-        if (node instanceof Node) {
-            Map<String, Object> debugProperties = ((Node) node).getDebugProperties();
-            for (Map.Entry<String, Object> property : debugProperties.entrySet()) {
-                setNodeProperty(node, property.getKey(), property.getValue());
-            }
+    private void copyDebugProperties(Node node) {
+        Map<String, Object> debugProperties = node.getDebugProperties();
+        for (Map.Entry<String, Object> property : debugProperties.entrySet()) {
+            setNodeProperty(node, property.getKey(), property.getValue());
         }
     }
 
-    private void readNodeProperties(Object node) {
-        Field[] fields = NodeUtil.getAllFields(node.getClass());
-        for (Field field : fields) {
-            if (Modifier.isStatic(field.getModifiers())) {
-                continue;
-            }
-            if (Node.class.isAssignableFrom(field.getType()) || (field.getType().getComponentType() != null && Node.class.isAssignableFrom(field.getType()))) {
-                continue;
-            }
-            String key = field.getName();
-            if (field.getAnnotation(HiddenField.class) == null && getPropertyElement(node, key) == null) {
-                try {
-                    field.setAccessible(true);
-                    Object value = field.get(node);
+    private void readNodeProperties(Node node) {
+        NodeFieldAccessor[] fields = node.getNodeClass().getFields();
+        for (NodeFieldAccessor field : fields) {
+            if (field.getKind() == NodeFieldKind.DATA) {
+                String key = field.getName();
+                if (getPropertyElement(node, key) == null) {
+                    Object value = field.loadValue(node);
                     setNodeProperty(node, key, value);
-                } catch (IllegalArgumentException | IllegalAccessException e) {
-                    assert false : e;
                 }
             }
         }
     }
 
-    protected void connectNodes(Object a, Object b) {
+    protected void connectNodes(Object a, Object b, String label) {
         if (nodeMap.get(a) == null || nodeMap.get(b) == null) {
             return;
         }
@@ -295,6 +294,9 @@ public class GraphPrintVisitor {
         edgeElem.setAttribute("from", fromId);
         edgeElem.setAttribute("to", toId);
         edgeElem.setAttribute("index", String.valueOf(count));
+        if (label != null) {
+            edgeElem.setAttribute("label", label);
+        }
         edgesElement.appendChild(edgeElem);
         edgeList.add(edgeElem);
     }
@@ -305,79 +307,112 @@ public class GraphPrintVisitor {
         }
 
         // if node is visited once again, skip
-        if (getElementByObject(node) == null || NodeUtil.findAnnotation(node.getClass(), GraphDuplicate.class) != null) {
-            visitAny(node);
+        if (getElementByObject(node) != null && NodeUtil.findAnnotation(node.getClass(), GraphDuplicate.class) == null) {
+            return this;
+        }
+
+        // respect node's custom handler
+        if (NodeUtil.findAnnotation(node.getClass(), CustomGraphPrintHandler.class) != null) {
+            Class<? extends GraphPrintHandler> customHandlerClass = NodeUtil.findAnnotation(node.getClass(), CustomGraphPrintHandler.class).handler();
+            try {
+                GraphPrintHandler customHandler = customHandlerClass.newInstance();
+                customHandler.visit(node, new GraphPrintAdapter());
+            } catch (InstantiationException | IllegalAccessException e) {
+                assert false : e;
+            }
+        } else if (NodeUtil.findAnnotation(node.getClass(), NullGraphPrintHandler.class) != null) {
+            // ignore
+        } else {
+            // default handler
+            createElementForNode(node);
+
+            if (node instanceof Node) {
+                for (Map.Entry<String, Node> child : findNamedNodeChildren((Node) node).entrySet()) {
+                    visit(child.getValue());
+                    connectNodes(node, child.getValue(), child.getKey());
+                }
+            }
         }
 
         return this;
     }
 
-    private void visitAny(Object node) {
-        // respect node's custom handler
-        if (NodeUtil.findAnnotation(node.getClass(), NullGraphPrintHandler.class) != null) {
-            return;
-        }
-        if (NodeUtil.findAnnotation(node.getClass(), CustomGraphPrintHandler.class) != null) {
-            Class<? extends GraphPrintHandler> gpHandlerClass = NodeUtil.findAnnotation(node.getClass(), CustomGraphPrintHandler.class).handler();
-            try {
-                GraphPrintHandler gpHandler = gpHandlerClass.newInstance();
-                gpHandler.visit(node, new GraphPrintAdapter());
-            } catch (InstantiationException e) {
-                assert false;
-            } catch (IllegalAccessException e) {
-                assert false;
+    private static LinkedHashMap<String, Node> findNamedNodeChildren(Node node) {
+        LinkedHashMap<String, Node> nodes = new LinkedHashMap<>();
+        NodeClass nodeClass = node.getNodeClass();
+
+        for (NodeFieldAccessor field : nodeClass.getFields()) {
+            NodeFieldKind kind = field.getKind();
+            if (kind == NodeFieldKind.CHILD || kind == NodeFieldKind.CHILDREN) {
+                Object value = field.loadValue(node);
+                if (value != null) {
+                    if (kind == NodeFieldKind.CHILD) {
+                        nodes.put(field.getName(), (Node) value);
+                    } else if (kind == NodeFieldKind.CHILDREN) {
+                        Object[] children = (Object[]) value;
+                        for (int i = 0; i < children.length; i++) {
+                            if (children[i] != null) {
+                                nodes.put(field.getName() + "[" + i + "]", (Node) children[i]);
+                            }
+                        }
+                    }
+                }
             }
-            return;
         }
 
-        // default handler
-        createElementForNode(node);
-
-        List<Object> children = NodeUtil.findNodeChildren(node);
-        for (Object child : children) {
-            if (child == null) {
-                continue;
-            } else if (child instanceof Node) {
-                visit(child);
-            } else {
-                continue;
-            }
-            connectNodes(node, child);
-        }
+        return nodes;
     }
 
     public class GraphPrintAdapter {
+
         public void createElementForNode(Object node) {
             GraphPrintVisitor.this.createElementForNode(node);
         }
+
         public void visit(Object node) {
             GraphPrintVisitor.this.visit(node);
         }
+
         public void connectNodes(Object node, Object child) {
-            GraphPrintVisitor.this.connectNodes(node, child);
+            GraphPrintVisitor.this.connectNodes(node, child, null);
         }
+
         public void setNodeProperty(Object node, String propertyName, Object value) {
             GraphPrintVisitor.this.setNodeProperty(node, propertyName, value);
         }
     }
 
     public interface GraphPrintHandler {
+
         void visit(Object node, GraphPrintAdapter gPrinter);
+    }
+
+    public interface ChildSupplier {
+
+        /** Supplies an additional child if available. */
+        Object startNode(Object callNode);
+
+        void endNode(Object callNode);
+
     }
 
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.TYPE)
     public @interface CustomGraphPrintHandler {
+
         Class<? extends GraphPrintHandler> handler();
     }
+
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.TYPE)
     public @interface NullGraphPrintHandler {
     }
+
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.TYPE)
     public @interface GraphDuplicate {
     }
+
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.FIELD)
     public @interface HiddenField {
