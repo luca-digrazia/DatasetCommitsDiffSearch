@@ -28,23 +28,22 @@ import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.dsl.test.ImplicitCastTestFactory.ImplicitCast0NodeFactory;
 import com.oracle.truffle.api.dsl.test.ImplicitCastTestFactory.ImplicitCast1NodeFactory;
 import com.oracle.truffle.api.dsl.test.ImplicitCastTestFactory.ImplicitCast2NodeFactory;
-import com.oracle.truffle.api.dsl.test.NodeContainerTest.Str;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.TestRootNode;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
 import com.oracle.truffle.api.frame.*;
 
 public class ImplicitCastTest {
 
-    @TypeSystem({int.class, boolean.class, String.class, Str.class})
+    @TypeSystem({int.class, String.class, boolean.class})
     static class ImplicitCast0Types {
 
         @ImplicitCast
-        boolean castInt(int intvalue) {
+        static boolean castInt(int intvalue) {
             return intvalue == 1 ? true : false;
         }
 
         @ImplicitCast
-        boolean castString(String strvalue) {
+        static boolean castString(String strvalue) {
             return strvalue.equals("1");
         }
 
@@ -56,12 +55,12 @@ public class ImplicitCastTest {
 
         public abstract Object executeEvaluated(VirtualFrame frame, Object value2);
 
-        @Specialization(order = 1)
+        @Specialization
         public String op1(String value) {
             return value;
         }
 
-        @Specialization(order = 2)
+        @Specialization
         public boolean op1(boolean value) {
             return value;
         }
@@ -72,6 +71,7 @@ public class ImplicitCastTest {
     public void testImplicitCast0() {
         ImplicitCast0Node node = ImplicitCast0NodeFactory.create(null);
         TestRootNode<ImplicitCast0Node> root = new TestRootNode<>(node);
+        root.adoptChildren();
         Assert.assertEquals("2", root.getNode().executeEvaluated(null, "2"));
         Assert.assertEquals(true, root.getNode().executeEvaluated(null, 1));
         Assert.assertEquals("1", root.getNode().executeEvaluated(null, "1"));
@@ -81,23 +81,21 @@ public class ImplicitCastTest {
 
     @TypeSystemReference(ImplicitCast0Types.class)
     @NodeChild(value = "operand", type = ImplicitCast1Node.class)
-    // TODO temporary workaround
-    @PolymorphicLimit(1)
     abstract static class ImplicitCast1Node extends ValueNode {
 
         public abstract Object executeEvaluated(VirtualFrame frame, Object operand);
 
-        @Specialization(order = 0)
+        @Specialization
         public String op0(String value) {
             return value;
         }
 
-        @Specialization(order = 1, rewriteOn = RuntimeException.class)
+        @Specialization(rewriteOn = RuntimeException.class)
         public boolean op1(@SuppressWarnings("unused") boolean value) throws RuntimeException {
             throw new RuntimeException();
         }
 
-        @Specialization(order = 2)
+        @Specialization(contains = "op1")
         public boolean op2(boolean value) {
             return value;
         }
@@ -108,6 +106,7 @@ public class ImplicitCastTest {
     public void testImplicitCast1() {
         ImplicitCast1Node node = ImplicitCast1NodeFactory.create(null);
         TestRootNode<ImplicitCast1Node> root = new TestRootNode<>(node);
+        root.adoptChildren();
         Assert.assertEquals("2", root.getNode().executeEvaluated(null, "2"));
         Assert.assertEquals(true, root.getNode().executeEvaluated(null, 1));
         Assert.assertEquals("1", root.getNode().executeEvaluated(null, "1"));
@@ -118,21 +117,20 @@ public class ImplicitCastTest {
     @TypeSystemReference(ImplicitCast0Types.class)
     @NodeChildren({@NodeChild(value = "operand0", type = ImplicitCast2Node.class), @NodeChild(value = "operand1", type = ImplicitCast2Node.class, executeWith = "operand0")})
     // TODO temporary workaround
-    @PolymorphicLimit(1)
     abstract static class ImplicitCast2Node extends ValueNode {
 
-        @Specialization(order = 0)
+        @Specialization
         public String op0(String v0, String v1) {
             return v0 + v1;
         }
 
         @SuppressWarnings("unused")
-        @Specialization(order = 1, rewriteOn = RuntimeException.class)
+        @Specialization(rewriteOn = RuntimeException.class)
         public boolean op1(boolean v0, boolean v1) throws RuntimeException {
             throw new RuntimeException();
         }
 
-        @Specialization(order = 2)
+        @Specialization(contains = "op1")
         public boolean op2(boolean v0, boolean v1) {
             return v0 && v1;
         }
@@ -149,11 +147,34 @@ public class ImplicitCastTest {
     public void testImplicitCast2() {
         ImplicitCast2Node node = ImplicitCast2NodeFactory.create(null, null);
         TestRootNode<ImplicitCast2Node> root = new TestRootNode<>(node);
+        root.adoptChildren();
         Assert.assertEquals("42", root.getNode().executeEvaluated(null, "4", "2"));
         Assert.assertEquals(true, root.getNode().executeEvaluated(null, 1, 1));
         Assert.assertEquals("42", root.getNode().executeEvaluated(null, "4", "2"));
         Assert.assertEquals(true, root.getNode().executeEvaluated(null, 1, 1));
         Assert.assertEquals(true, root.getNode().executeEvaluated(null, true, true));
+    }
+
+    @TypeSystem({String.class, boolean.class})
+    static class ImplicitCastError1 {
+
+        @ImplicitCast
+        @ExpectError("Target type and source type of an @ImplicitCast must not be the same type.")
+        static String castInvalid(@SuppressWarnings("unused") String value) {
+            throw new AssertionError();
+        }
+
+    }
+
+    @TypeSystem({String.class, boolean.class})
+    static class ImplicitCastError2 {
+
+        @ImplicitCast
+        @ExpectError("Target type and source type of an @ImplicitCast must not be the same type.")
+        static String castInvalid(@SuppressWarnings("unused") String value) {
+            throw new AssertionError();
+        }
+
     }
 
 }
