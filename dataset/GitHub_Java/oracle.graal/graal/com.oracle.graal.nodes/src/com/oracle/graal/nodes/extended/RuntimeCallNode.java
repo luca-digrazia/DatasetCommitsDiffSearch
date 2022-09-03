@@ -42,7 +42,7 @@ public final class RuntimeCallNode extends AbstractCallNode implements LIRLowera
     }
 
     public RuntimeCallNode(RuntimeCall call, ValueNode... arguments) {
-        super(StampFactory.forKind(call.getResultKind()), arguments);
+        super(StampFactory.forKind(call.resultKind), arguments);
         this.call = call;
     }
 
