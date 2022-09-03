@@ -126,7 +126,6 @@ import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToVarINodeFactory.LLVMI64ToIV
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToVarINodeFactory.LLVMI8ToIVarNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToVarINodeFactory.LLVMIVarToIVarNodeGen;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
-import com.oracle.truffle.llvm.parser.base.model.types.IntegerType;
 import com.oracle.truffle.llvm.parser.base.model.types.Type;
 import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
@@ -150,9 +149,6 @@ public final class LLVMCastsFactory {
         this.resolvedType = targetType;
         this.conv = conv;
         this.bits = 0;
-        if (targetType instanceof IntegerType) {
-            bits = targetType.getBits();
-        }
     }
 
     private LLVMCastsFactory(LLVMBaseType targetType, LLVMConversionType conv, int bits) {
