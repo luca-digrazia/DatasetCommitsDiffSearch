@@ -31,23 +31,8 @@ import com.oracle.truffle.api.frame.*;
  */
 public abstract class LoopNode extends Node {
 
-    /*
-     * TODO Unfortunately we cannot yet use interface typed fields as child fields.
-     */
-    @Child protected Node repeatingNode;
-
-    public LoopNode(RepeatingNode repeatintNode) {
-        this.repeatingNode = (Node) repeatintNode;
-    }
-
     public abstract void executeLoop(VirtualFrame frame);
 
-    protected final boolean executeRepeatNode(VirtualFrame frame) {
-        return getRepeatNode().executeRepeating(frame);
-    }
-
-    public final RepeatingNode getRepeatNode() {
-        return (RepeatingNode) repeatingNode;
-    }
+    public abstract RepeatingNode getRepeatingNode();
 
 }
