@@ -22,20 +22,27 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.InputType;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.extended.GuardedNode;
+import com.oracle.graal.nodes.extended.GuardingNode;
 
-public abstract class FloatingGuardedNode extends FloatingNode implements GuardedNode {
+@NodeInfo
+public abstract class FloatingGuardedNode extends FloatingNode implements GuardedNode, Node.ValueNumberable {
+    public static final NodeClass<FloatingGuardedNode> TYPE = NodeClass.create(FloatingGuardedNode.class);
 
-    @Input private GuardingNode guard;
+    @OptionalInput(InputType.Guard) protected GuardingNode guard;
 
-    public FloatingGuardedNode(Stamp stamp) {
-        super(stamp);
+    protected FloatingGuardedNode(NodeClass<? extends FloatingGuardedNode> c, Stamp stamp) {
+        super(c, stamp);
     }
 
-    public FloatingGuardedNode(Stamp stamp, GuardingNode guard) {
-        super(stamp);
+    protected FloatingGuardedNode(NodeClass<? extends FloatingGuardedNode> c, Stamp stamp, GuardingNode guard) {
+        super(c, stamp);
         this.guard = guard;
     }
 
@@ -46,13 +53,7 @@ public abstract class FloatingGuardedNode extends FloatingNode implements Guarde
 
     @Override
     public void setGuard(GuardingNode guard) {
-        updateUsages(this.guard == null ? null : this.guard.asNode(), guard == null ? null : guard.asNode());
+        updateUsagesInterface(this.guard, guard);
         this.guard = guard;
     }
-
-    @Override
-    public FloatingNode asNode() {
-        return this;
-    }
-
 }

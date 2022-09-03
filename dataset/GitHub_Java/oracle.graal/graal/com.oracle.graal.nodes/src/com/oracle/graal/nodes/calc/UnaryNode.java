@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
-
 import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.Canonicalizable;
 import com.oracle.graal.nodeinfo.NodeInfo;
@@ -34,13 +33,12 @@ import com.oracle.graal.nodes.ValueNode;
  * The {@code UnaryNode} class is the base of arithmetic and bit logic operations with exactly one
  * input.
  */
-@NodeInfo(size = SIZE_1)
-public abstract class UnaryNode extends FloatingNode implements Canonicalizable.Unary<ValueNode> {
+@NodeInfo
+public abstract class UnaryNode extends FloatingNode implements Canonicalizable.Unary<ValueNode>, Node.ValueNumberable {
 
     public static final NodeClass<UnaryNode> TYPE = NodeClass.create(UnaryNode.class);
     @Input protected ValueNode value;
 
-    @Override
     public ValueNode getValue() {
         return value;
     }

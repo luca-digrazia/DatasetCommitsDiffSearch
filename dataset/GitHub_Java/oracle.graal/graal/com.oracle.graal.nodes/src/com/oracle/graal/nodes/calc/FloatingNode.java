@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,21 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import java.util.*;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
+@NodeInfo
+public abstract class FloatingNode extends ValueNode {
+    public static final NodeClass<FloatingNode> TYPE = NodeClass.create(FloatingNode.class);
 
-public abstract class FloatingNode extends ValueNode implements Node.ValueNumberable {
-
-    public FloatingNode(Stamp stamp) {
-        super(stamp);
+    public FloatingNode(NodeClass<? extends FloatingNode> c, Stamp stamp) {
+        super(c, stamp);
     }
 
-    public FloatingNode(Stamp stamp, Node... dependencies) {
-        super(stamp, dependencies);
-    }
-
-    public FloatingNode(Stamp stamp, List<Node> dependencies) {
-        super(stamp, dependencies);
+    @Override
+    public FloatingNode asNode() {
+        return this;
     }
 }

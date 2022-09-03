@@ -58,7 +58,7 @@ public class OnStackReplacementPhase extends Phase {
             // used.
             return;
         }
-        Debug.dump(Debug.INFO_LOG_LEVEL, graph, "OnStackReplacement initial");
+        Debug.dump(graph, "OnStackReplacement initial");
         EntryMarkerNode osr;
         do {
             NodeIterable<EntryMarkerNode> osrNodes = graph.getNodes(EntryMarkerNode.TYPE);
@@ -94,7 +94,7 @@ public class OnStackReplacementPhase extends Phase {
                 proxy.replaceAndDelete(proxy.value());
             }
             GraphUtil.removeFixedWithUnusedInputs(osr);
-            Debug.dump(Debug.INFO_LOG_LEVEL, graph, "OnStackReplacement loop peeling result");
+            Debug.dump(graph, "OnStackReplacement loop peeling result");
         } while (true);
 
         FrameState osrState = osr.stateAfter();
@@ -115,7 +115,7 @@ public class OnStackReplacementPhase extends Phase {
                  * we need to drop the stamp since the types we see during OSR may be too precise
                  * (if a branch was not parsed for example).
                  */
-                proxy.replaceAndDelete(graph.unique(new OSRLocalNode(i, proxy.stamp().unrestricted())));
+                proxy.replaceAndDelete(graph.add(new OSRLocalNode(i, proxy.stamp().unrestricted())));
             } else {
                 assert value == null || value instanceof OSRLocalNode;
             }
@@ -125,7 +125,7 @@ public class OnStackReplacementPhase extends Phase {
 
         GraphUtil.killCFG(start);
 
-        Debug.dump(Debug.INFO_LOG_LEVEL, graph, "OnStackReplacement result");
+        Debug.dump(graph, "OnStackReplacement result");
         new DeadCodeEliminationPhase(Required).apply(graph);
     }
 }

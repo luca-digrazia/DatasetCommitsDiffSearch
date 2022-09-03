@@ -23,17 +23,17 @@
 
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.hotspot.HotSpotVMConfig.CompressEncoding;
+import jdk.vm.ci.meta.LIRKind;
 
 import com.oracle.graal.asm.NumUtil;
 import com.oracle.graal.asm.amd64.AMD64Address.Scale;
 import com.oracle.graal.compiler.amd64.AMD64AddressLowering;
 import com.oracle.graal.compiler.amd64.AMD64AddressNode;
-import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.hotspot.CompressEncoding;
 import com.oracle.graal.hotspot.nodes.CompressionNode;
 import com.oracle.graal.hotspot.nodes.CompressionNode.CompressionOp;
 import com.oracle.graal.nodeinfo.NodeInfo;
@@ -42,15 +42,13 @@ import com.oracle.graal.nodes.calc.FloatingNode;
 import com.oracle.graal.nodes.spi.LIRLowerable;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-import jdk.vm.ci.code.Register;
-
 public class AMD64HotSpotAddressLowering extends AMD64AddressLowering {
 
     private final long heapBase;
     private final Register heapBaseRegister;
 
-    @NodeInfo(cycles = CYCLES_0, size = SIZE_0)
-    public static class HeapBaseNode extends FloatingNode implements LIRLowerable {
+    @NodeInfo
+    public static class HeapBaseNode extends FloatingNode implements LIRLowerable, Node.ValueNumberable {
 
         public static final NodeClass<HeapBaseNode> TYPE = NodeClass.create(HeapBaseNode.class);
 
@@ -61,7 +59,6 @@ public class AMD64HotSpotAddressLowering extends AMD64AddressLowering {
             this.heapBaseRegister = heapBaseRegister;
         }
 
-        @Override
         public void generate(NodeLIRBuilderTool generator) {
             LIRKind kind = generator.getLIRGeneratorTool().getLIRKind(stamp());
             generator.setResult(this, heapBaseRegister.asValue(kind));

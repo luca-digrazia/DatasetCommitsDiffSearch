@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
-
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
@@ -36,7 +33,7 @@ import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.calc.FloatingNode;
 import com.oracle.graal.nodes.extended.GuardingNode;
 
-@NodeInfo(allowedUsageTypes = {InputType.Association, InputType.Value}, cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo(allowedUsageTypes = {InputType.Association, InputType.Value})
 public final class SnippetLocationProxyNode extends FloatingNode implements Canonicalizable, Node.ValueNumberable {
 
     public static final NodeClass<SnippetLocationProxyNode> TYPE = NodeClass.create(SnippetLocationProxyNode.class);

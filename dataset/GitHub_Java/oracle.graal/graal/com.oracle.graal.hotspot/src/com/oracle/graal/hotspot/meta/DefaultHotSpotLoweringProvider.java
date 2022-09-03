@@ -184,7 +184,6 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         this.constantReflection = constantReflection;
     }
 
-    @Override
     public void initialize(HotSpotProviders providers, HotSpotVMConfig config) {
         super.initialize(providers, providers.getSnippetReflection());
 
@@ -223,7 +222,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             } else {
                 if (instanceOfNode.allowsNull()) {
                     ValueNode object = instanceOfNode.getValue();
-                    LogicNode newTypeCheck = graph.addOrUniqueWithInputs(InstanceOfNode.create(instanceOfNode.type(), object, instanceOfNode.getProfile()));
+                    LogicNode newTypeCheck = graph.addOrUniqueWithInputs(InstanceOfNode.create(instanceOfNode.type(), object, instanceOfNode.getAnchor()));
                     LogicNode newNode = LogicNode.or(graph.unique(new IsNullNode(object)), newTypeCheck, GraalDirectives.UNLIKELY_PROBABILITY);
                     instanceOfNode.replaceAndDelete(newNode);
                 }
@@ -516,7 +515,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         StructuredGraph graph = osrStart.graph();
         if (graph.getGuardsStage() == StructuredGraph.GuardsStage.FIXED_DEOPTS) {
             StartNode newStart = graph.add(new StartNode());
-            ParameterNode buffer = graph.unique(new ParameterNode(0, StampPair.createSingle(StampFactory.forKind(runtime.getTarget().wordJavaKind))));
+            ParameterNode buffer = graph.addWithoutUnique(new ParameterNode(0, StampPair.createSingle(StampFactory.forKind(runtime.getTarget().wordJavaKind))));
             ForeignCallNode migrationEnd = graph.add(new ForeignCallNode(foreignCalls, OSR_MIGRATION_END, buffer));
             migrationEnd.setStateAfter(osrStart.stateAfter());
 

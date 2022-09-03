@@ -24,13 +24,16 @@ package com.oracle.graal.hotspot.replacements;
 
 import java.lang.reflect.Method;
 
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
 import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeCycles;
 import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.NodeSize;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.ParameterNode;
 import com.oracle.graal.nodes.ReturnNode;
@@ -47,12 +50,7 @@ import com.oracle.graal.nodes.spi.VirtualizableAllocation;
 import com.oracle.graal.nodes.type.StampTool;
 import com.oracle.graal.replacements.nodes.BasicObjectCloneNode;
 
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
-@NodeInfo(cycles = NodeCycles.CYCLES_UNKNOWN, size = NodeSize.SIZE_UNKNOWN)
+@NodeInfo
 public final class ObjectCloneNode extends BasicObjectCloneNode implements VirtualizableAllocation, ArrayLengthProvider {
 
     public static final NodeClass<ObjectCloneNode> TYPE = NodeClass.create(ObjectCloneNode.class);
@@ -84,7 +82,7 @@ public final class ObjectCloneNode extends BasicObjectCloneNode implements Virtu
                 assert false : "unhandled array type " + type.getComponentType().getJavaKind();
             } else {
                 Assumptions assumptions = graph().getAssumptions();
-                type = getConcreteType(getObject().stamp());
+                type = getConcreteType(getObject().stamp(), tool.getMetaAccess());
                 if (type != null) {
                     StructuredGraph newGraph = new StructuredGraph(AllowAssumptions.from(assumptions != null));
                     ParameterNode param = newGraph.addWithoutUnique(new ParameterNode(0, StampPair.createSingle(getObject().stamp())));

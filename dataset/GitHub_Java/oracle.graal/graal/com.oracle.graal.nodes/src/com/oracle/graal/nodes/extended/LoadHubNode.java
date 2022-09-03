@@ -22,12 +22,13 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.MetaAccessProvider;
 
 import com.oracle.graal.compiler.common.type.ObjectStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.Canonicalizable;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
@@ -42,14 +43,11 @@ import com.oracle.graal.nodes.spi.Virtualizable;
 import com.oracle.graal.nodes.spi.VirtualizerTool;
 import com.oracle.graal.nodes.type.StampTool;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
-
 /**
  * Loads an object's hub. The object is not null-checked by this operation.
  */
-@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
-public final class LoadHubNode extends FloatingNode implements Lowerable, Canonicalizable, Virtualizable {
+@NodeInfo
+public final class LoadHubNode extends FloatingNode implements Lowerable, Canonicalizable, Virtualizable, Node.ValueNumberable {
 
     public static final NodeClass<LoadHubNode> TYPE = NodeClass.create(LoadHubNode.class);
     @Input ValueNode value;

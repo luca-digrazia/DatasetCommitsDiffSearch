@@ -72,7 +72,6 @@ import com.oracle.graal.debug.DebugTimer;
 import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodePosIterator;
 import com.oracle.graal.graph.Position;
 import com.oracle.graal.loop.LoopEx;
 import com.oracle.graal.loop.LoopsData;
@@ -472,7 +471,7 @@ public class SnippetTemplate {
     }
 
     @NodeInfo
-    static final class VarargsPlaceholderNode extends FloatingNode implements ArrayLengthProvider {
+    static final class VarargsPlaceholderNode extends FloatingNode implements ArrayLengthProvider, Node.ValueNumberable {
 
         public static final NodeClass<VarargsPlaceholderNode> TYPE = NodeClass.create(VarargsPlaceholderNode.class);
         protected final Varargs varargs;
@@ -711,7 +710,7 @@ public class SnippetTemplate {
             }
             snippetCopy.addDuplicates(snippetGraph.getNodes(), snippetGraph, snippetGraph.getNodeCount(), nodeReplacements);
 
-            Debug.dump(Debug.INFO_LOG_LEVEL, snippetCopy, "Before specialization");
+            Debug.dump(snippetCopy, "Before specialization");
 
             // Gather the template parameters
             parameters = new Object[parameterCount];
@@ -729,7 +728,7 @@ public class SnippetTemplate {
                         assert parameterCount < 10000;
                         int idx = (i + 1) * 10000 + j;
                         assert idx >= parameterCount : "collision in parameter numbering";
-                        ParameterNode local = snippetCopy.unique(new ParameterNode(idx, StampPair.createSingle(stamp)));
+                        ParameterNode local = snippetCopy.add(new ParameterNode(idx, StampPair.createSingle(stamp)));
                         params[j] = local;
                     }
                     parameters[i] = params;
@@ -739,10 +738,10 @@ public class SnippetTemplate {
                     for (Node usage : placeholder.usages().snapshot()) {
                         if (usage instanceof LoadIndexedNode) {
                             LoadIndexedNode loadIndexed = (LoadIndexedNode) usage;
-                            Debug.dump(Debug.INFO_LOG_LEVEL, snippetCopy, "Before replacing %s", loadIndexed);
+                            Debug.dump(snippetCopy, "Before replacing %s", loadIndexed);
                             LoadSnippetVarargParameterNode loadSnippetParameter = snippetCopy.add(new LoadSnippetVarargParameterNode(params, loadIndexed.index(), loadIndexed.stamp()));
                             snippetCopy.replaceFixedWithFixed(loadIndexed, loadSnippetParameter);
-                            Debug.dump(Debug.INFO_LOG_LEVEL, snippetCopy, "After replacing %s", loadIndexed);
+                            Debug.dump(snippetCopy, "After replacing %s", loadIndexed);
                         } else if (usage instanceof StoreIndexedNode) {
                             /*
                              * The template lowering doesn't really treat this as an array so you
@@ -831,7 +830,7 @@ public class SnippetTemplate {
 
             this.snippet = snippetCopy;
 
-            Debug.dump(Debug.INFO_LOG_LEVEL, snippet, "SnippetTemplate after fixing memory anchoring");
+            Debug.dump(snippet, "SnippetTemplate after fixing memory anchoring");
 
             StartNode entryPointNode = snippet.start();
             if (anchor.hasNoUsages()) {
@@ -875,7 +874,7 @@ public class SnippetTemplate {
             }
 
             Debug.metric("SnippetTemplateNodeCount[%#s]", args).add(nodes.size());
-            Debug.dump(Debug.INFO_LOG_LEVEL, snippet, "SnippetTemplate final state");
+            Debug.dump(snippet, "SnippetTemplate final state");
 
         } catch (Throwable ex) {
             throw Debug.handle(ex);
@@ -1244,9 +1243,7 @@ public class SnippetTemplate {
 
             LocationIdentity location = getLocationIdentity(usage);
             if (location != null) {
-                NodePosIterator iter = usage.inputs().iterator();
-                while (iter.hasNext()) {
-                    Position pos = iter.nextPosition();
+                for (Position pos : usage.inputPositions()) {
                     if (pos.getInputType() == InputType.Memory && pos.get(usage) == node) {
                         MemoryNode replacement = map.getLastLocationAccess(location);
                         if (replacement == null) {
@@ -1284,7 +1281,7 @@ public class SnippetTemplate {
             Map<Node, Node> replacements = bind(replaceeGraph, metaAccess, args);
             replacements.put(entryPointNode, AbstractBeginNode.prevBegin(replacee));
             Map<Node, Node> duplicates = replaceeGraph.addDuplicates(nodes, snippet, snippet.getNodeCount(), replacements);
-            Debug.dump(Debug.INFO_LOG_LEVEL, replaceeGraph, "After inlining snippet %s", snippet.method());
+            Debug.dump(replaceeGraph, "After inlining snippet %s", snippet.method());
 
             // Re-wire the control flow graph around the replacee
             FixedNode firstCFGNodeDuplicate = (FixedNode) duplicates.get(firstCFGNode);
@@ -1390,7 +1387,7 @@ public class SnippetTemplate {
             // Remove the replacee from its graph
             GraphUtil.killCFG(replacee);
 
-            Debug.dump(Debug.INFO_LOG_LEVEL, replaceeGraph, "After lowering %s with %s", replacee, this);
+            Debug.dump(replaceeGraph, "After lowering %s with %s", replacee, this);
             return duplicates;
         }
     }
@@ -1450,7 +1447,7 @@ public class SnippetTemplate {
             Map<Node, Node> replacements = bind(replaceeGraph, metaAccess, args);
             replacements.put(entryPointNode, tool.getCurrentGuardAnchor().asNode());
             Map<Node, Node> duplicates = replaceeGraph.addDuplicates(nodes, snippet, snippet.getNodeCount(), replacements);
-            Debug.dump(Debug.INFO_LOG_LEVEL, replaceeGraph, "After inlining snippet %s", snippetCopy.method());
+            Debug.dump(replaceeGraph, "After inlining snippet %s", snippetCopy.method());
 
             FixedWithNextNode lastFixedNode = tool.lastFixedNode();
             assert lastFixedNode != null && lastFixedNode.isAlive() : replaceeGraph + " lastFixed=" + lastFixedNode;
@@ -1480,7 +1477,7 @@ public class SnippetTemplate {
                 returnDuplicate.replaceAndDelete(next);
             }
 
-            Debug.dump(Debug.INFO_LOG_LEVEL, replaceeGraph, "After lowering %s with %s", replacee, this);
+            Debug.dump(replaceeGraph, "After lowering %s with %s", replacee, this);
         }
     }
 

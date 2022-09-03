@@ -29,7 +29,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.BytecodePosition;
@@ -38,7 +37,6 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaUtil;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import com.oracle.graal.api.replacements.MethodSubstitution;
 import com.oracle.graal.bytecode.Bytecodes;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.debug.Debug;
@@ -379,8 +377,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
      * Perform a few sanity checks on the transformation of the stack state. The current expectation
      * is that a stateAfter is being transformed into a stateDuring, so the stack depth may change.
      */
-    private boolean checkStackDepth(int oldBci, int oldStackSize, boolean oldDuringCall, boolean oldRethrowException, int newBci, int newStackSize, boolean newDuringCall,
-                    boolean newRethrowException) {
+    private boolean checkStackDepth(int oldBci, int oldStackSize, boolean oldDuringCall, boolean oldRethrowException, int newBci, int newStackSize, boolean newDuringCall, boolean newRethrowException) {
         if (BytecodeFrame.isPlaceholderBci(oldBci)) {
             return true;
         }
@@ -427,8 +424,8 @@ public final class FrameState extends VirtualState implements IterableNodeType {
     }
 
     /**
-     * Gets the number of locked monitors in this frame state and all {@linkplain #outerFrameState()
-     * outer} frame states.
+     * Gets the number of locked monitors in this frame state and all
+     * {@linkplain #outerFrameState() outer} frame states.
      */
     public int nestedLockDepth() {
         int depth = locksSize();
@@ -559,12 +556,6 @@ public final class FrameState extends VirtualState implements IterableNodeType {
                 assertTrue(state != null, "must be non-null");
             }
         }
-        /*
-         * The outermost FrameState should have a method that matches StructuredGraph.method except
-         * when it's a substitution or it's null.
-         */
-        assertTrue(outerFrameState != null || graph() == null || graph().method() == null || method == null || Objects.equals(method, graph().method()) ||
-                        graph().method().getAnnotation(MethodSubstitution.class) != null, "wrong outerFrameState %s != %s", method, graph().method());
         if (monitorIds() != null && monitorIds().size() > 0) {
             int depth = outerLockDepth();
             for (MonitorIdNode monitor : monitorIds()) {

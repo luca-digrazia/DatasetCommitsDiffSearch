@@ -24,6 +24,8 @@ package com.oracle.graal.nodes;
 
 import java.util.Iterator;
 
+import jdk.vm.ci.meta.JavaKind;
+
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
@@ -43,7 +45,7 @@ import com.oracle.graal.nodes.calc.FloatingNode;
  * {@link LoopEndNode}s.
  */
 @NodeInfo
-public abstract class PhiNode extends FloatingNode implements Canonicalizable {
+public abstract class PhiNode extends FloatingNode implements Canonicalizable, Node.ValueNumberable {
 
     public static final NodeClass<PhiNode> TYPE = NodeClass.create(PhiNode.class);
     @Input(InputType.Association) protected AbstractMergeNode merge;
@@ -138,7 +140,7 @@ public abstract class PhiNode extends FloatingNode implements Canonicalizable {
 
     public void addInput(ValueNode x) {
         assert !(x instanceof ValuePhiNode) || ((ValuePhiNode) x).merge() instanceof LoopBeginNode || ((ValuePhiNode) x).merge() != this.merge();
-        assert !(this instanceof ValuePhiNode) || x.stamp().isCompatible(stamp());
+        assert !(this instanceof ValuePhiNode) || x.stamp().isCompatible(stamp()) || (stamp().getStackKind() == JavaKind.Int && x.stamp().getStackKind().getBitCount() >= JavaKind.Int.getBitCount());
         values().add(x);
     }
 

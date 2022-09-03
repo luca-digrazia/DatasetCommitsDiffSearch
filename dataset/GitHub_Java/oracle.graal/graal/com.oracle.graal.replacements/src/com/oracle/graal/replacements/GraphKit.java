@@ -41,6 +41,7 @@ import jdk.vm.ci.meta.Signature;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.graph.Graph;
+import com.oracle.graal.graph.Node.ValueNumberable;
 import com.oracle.graal.java.FrameStateBuilder;
 import com.oracle.graal.java.GraphBuilderPhase;
 import com.oracle.graal.nodes.AbstractBeginNode;
@@ -96,9 +97,7 @@ public class GraphKit {
         this.lastFixedNode = graph.start();
 
         structures = new ArrayList<>();
-        /*
-         * Add a dummy element, so that the access of the last element never leads to an exception.
-         */
+        /* Add a dummy element, so that the access of the last element never leads to an exception. */
         structures.add(new Structure() {
         });
     }
@@ -112,8 +111,12 @@ public class GraphKit {
      *
      * @return a node similar to {@code node} if one exists, otherwise {@code node}
      */
-    public <T extends FloatingNode> T unique(T node) {
+    public <T extends FloatingNode & ValueNumberable> T unique(T node) {
         return graph.unique(changeToWord(node));
+    }
+
+    public <T extends ValueNode> T add(T node) {
+        return graph.add(changeToWord(node));
     }
 
     public <T extends ValueNode> T changeToWord(T node) {
@@ -187,11 +190,7 @@ public class GraphKit {
         Signature signature = method.getSignature();
         JavaType returnType = signature.getReturnType(null);
         assert checkArgs(method, args);
-        StampPair returnStamp = graphBuilderPlugins.getOverridingStamp(null, returnType, false);
-        if (returnStamp == null) {
-            returnStamp = StampFactory.forDeclaredType(graph.getAssumptions(), returnType, false);
-        }
-        MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, method, args, returnStamp, bci));
+        MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, method, args, StampFactory.forDeclaredType(graph.getAssumptions(), returnType, false), bci));
         InvokeNode invoke = append(new InvokeNode(callTarget, bci));
 
         if (frameStateBuilder != null) {

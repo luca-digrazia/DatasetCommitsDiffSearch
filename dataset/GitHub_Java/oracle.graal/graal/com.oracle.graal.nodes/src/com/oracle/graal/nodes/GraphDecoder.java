@@ -289,7 +289,7 @@ public class GraphDecoder {
      * that the value is defined in the loop, but used outside the loop.
      */
     @NodeInfo
-    protected static final class ProxyPlaceholder extends FloatingNode implements Canonicalizable {
+    protected static final class ProxyPlaceholder extends FloatingNode implements Canonicalizable, Node.ValueNumberable {
         public static final NodeClass<ProxyPlaceholder> TYPE = NodeClass.create(ProxyPlaceholder.class);
 
         @Input ValueNode value;
@@ -811,7 +811,6 @@ public class GraphDecoder {
                 oldStateAfter.safeDelete();
             }
         }
-
         loopExit.safeDelete();
         assert loopExitSuccessor.predecessor() == null;
         if (merge != null) {
@@ -1160,13 +1159,13 @@ public class GraphDecoder {
     }
 
     protected void detectLoops(MethodScope methodScope, FixedNode startInstruction) {
-        Debug.dump(Debug.VERBOSE_LOG_LEVEL, methodScope.graph, "Before detectLoops");
+        Debug.dump(1, methodScope.graph, "Before detectLoops");
         Set<LoopBeginNode> newLoopBegins = insertLoopBegins(methodScope, startInstruction);
 
-        Debug.dump(Debug.VERBOSE_LOG_LEVEL, methodScope.graph, "Before insertLoopExits");
+        Debug.dump(1, methodScope.graph, "Before insertLoopExits");
 
         insertLoopExits(methodScope, startInstruction, newLoopBegins);
-        Debug.dump(Debug.VERBOSE_LOG_LEVEL, methodScope.graph, "After detectLoops");
+        Debug.dump(1, methodScope.graph, "After detectLoops");
     }
 
     private static Set<LoopBeginNode> insertLoopBegins(MethodScope methodScope, FixedNode startInstruction) {
@@ -1327,7 +1326,7 @@ public class GraphDecoder {
                  * loop iteration. This is mostly the state that we want, we only need to tweak it a
                  * little bit: we need to insert the appropriate ProxyNodes for all values that are
                  * created inside the loop and that flow out of the loop.
-                 *
+                 * 
                  * In some cases, we did not create a FrameState during graph decoding: when there
                  * was no LoopExit in the original loop that we exploded. This happens for code
                  * paths that lead immediately to a DeoptimizeNode. Since the BytecodeParser does
@@ -1412,18 +1411,18 @@ public class GraphDecoder {
     protected boolean verifyEdges(MethodScope methodScope) {
         for (Node node : methodScope.graph.getNodes()) {
             assert node.isAlive();
-            node.acceptInputs((n, i) -> {
+            for (Node i : node.inputs()) {
                 assert i.isAlive();
-                assert i.usages().contains(n);
-            });
-            node.acceptSuccessors((n, s) -> {
+                assert i.usages().contains(node);
+            }
+            for (Node s : node.successors()) {
                 assert s.isAlive();
-                assert s.predecessor() == n;
-            });
+                assert s.predecessor() == node;
+            }
 
             for (Node usage : node.usages()) {
                 assert usage.isAlive();
-                assert usage.inputs().contains(node);
+                assert usage.inputs().contains(node) : node + " / " + usage + " / " + usage.inputs().count();
             }
             if (node.predecessor() != null) {
                 assert node.predecessor().isAlive();

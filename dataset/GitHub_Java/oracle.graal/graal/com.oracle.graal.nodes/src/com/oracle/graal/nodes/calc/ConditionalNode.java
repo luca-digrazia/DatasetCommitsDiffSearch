@@ -22,14 +22,14 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_2;
 import static com.oracle.graal.nodes.calc.CompareNode.createCompareNode;
+import jdk.vm.ci.meta.JavaConstant;
 
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.common.type.IntegerStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.Canonicalizable;
 import com.oracle.graal.graph.spi.CanonicalizerTool;
@@ -44,14 +44,12 @@ import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.spi.LIRLowerable;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-import jdk.vm.ci.meta.JavaConstant;
-
 /**
  * The {@code ConditionalNode} class represents a comparison that yields one of two values. Note
  * that these nodes are not built directly from the bytecode but are introduced by canonicalization.
  */
-@NodeInfo(cycles = CYCLES_0, size = SIZE_2)
-public final class ConditionalNode extends FloatingNode implements Canonicalizable, LIRLowerable {
+@NodeInfo
+public final class ConditionalNode extends FloatingNode implements Canonicalizable, LIRLowerable, Node.ValueNumberable {
 
     public static final NodeClass<ConditionalNode> TYPE = NodeClass.create(ConditionalNode.class);
     @Input(InputType.Condition) LogicNode condition;
@@ -153,7 +151,7 @@ public final class ConditionalNode extends FloatingNode implements Canonicalizab
                 }
             }
         }
-        if (condition instanceof CompareNode && ((CompareNode) condition).isIdentityComparison()) {
+        if (condition instanceof CompareNode && ((CompareNode) condition).condition() == Condition.EQ) {
             // optimize the pattern (x == y) ? x : y
             CompareNode compare = (CompareNode) condition;
             if ((compare.getX() == trueValue && compare.getY() == falseValue) || (compare.getX() == falseValue && compare.getY() == trueValue)) {

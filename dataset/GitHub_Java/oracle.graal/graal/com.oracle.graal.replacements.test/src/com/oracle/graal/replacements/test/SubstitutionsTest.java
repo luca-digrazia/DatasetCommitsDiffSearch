@@ -24,9 +24,8 @@ package com.oracle.graal.replacements.test;
 
 import static com.oracle.graal.nodeinfo.InputType.Guard;
 import static com.oracle.graal.nodeinfo.InputType.Memory;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_IGNORED;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_IGNORED;
 import static org.hamcrest.CoreMatchers.instanceOf;
+import jdk.vm.ci.meta.JavaKind;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -35,6 +34,7 @@ import com.oracle.graal.api.replacements.ClassSubstitution;
 import com.oracle.graal.api.replacements.MethodSubstitution;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.test.GraalCompilerTest;
+import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.iterators.NodeIterable;
 import com.oracle.graal.nodeinfo.NodeInfo;
@@ -53,11 +53,9 @@ import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.Registration;
 import com.oracle.graal.nodes.memory.MemoryNode;
 
-import jdk.vm.ci.meta.JavaKind;
-
 public class SubstitutionsTest extends GraalCompilerTest {
 
-    @NodeInfo(allowedUsageTypes = {Memory}, cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+    @NodeInfo(allowedUsageTypes = {Memory})
     static class TestMemory extends FixedWithNextNode implements MemoryNode {
         private static final NodeClass<TestMemory> TYPE = NodeClass.create(TestMemory.class);
 
@@ -69,8 +67,8 @@ public class SubstitutionsTest extends GraalCompilerTest {
         public static native Memory memory();
     }
 
-    @NodeInfo(allowedUsageTypes = {Guard}, cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
-    static class TestGuard extends FloatingNode implements GuardingNode {
+    @NodeInfo(allowedUsageTypes = {Guard})
+    static class TestGuard extends FloatingNode implements GuardingNode, Node.ValueNumberable {
         private static final NodeClass<TestGuard> TYPE = NodeClass.create(TestGuard.class);
 
         @Input(Memory) MemoryNode memory;
@@ -84,8 +82,8 @@ public class SubstitutionsTest extends GraalCompilerTest {
         public static native Guard guard(Memory memory);
     }
 
-    @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
-    static class TestValue extends FloatingNode {
+    @NodeInfo
+    static class TestValue extends FloatingNode implements Node.ValueNumberable {
         private static final NodeClass<TestValue> TYPE = NodeClass.create(TestValue.class);
 
         @Input(Guard) GuardingNode guard;

@@ -22,11 +22,13 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.PlatformKind;
 
-import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.hotspot.HotSpotLIRGenerator;
 import com.oracle.graal.nodeinfo.NodeInfo;
@@ -36,15 +38,11 @@ import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 import com.oracle.graal.word.Word;
 import com.oracle.graal.word.WordTypes;
 
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.PlatformKind;
-
 /**
  * Gets the address of the C++ JavaThread object for the current thread.
  */
-@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
-public final class CurrentJavaThreadNode extends FloatingNode implements LIRLowerable {
+@NodeInfo
+public final class CurrentJavaThreadNode extends FloatingNode implements LIRLowerable, Node.ValueNumberable {
     public static final NodeClass<CurrentJavaThreadNode> TYPE = NodeClass.create(CurrentJavaThreadNode.class);
 
     public CurrentJavaThreadNode(@InjectedNodeParameter WordTypes wordTypes) {

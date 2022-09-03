@@ -22,12 +22,10 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_IGNORED;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_IGNORED;
-
 import org.junit.Test;
 
 import com.oracle.graal.api.directives.GraalDirectives;
+import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.loop.InductionVariable;
 import com.oracle.graal.loop.LoopsData;
@@ -214,8 +212,8 @@ public class CountedLoopTest extends GraalCompilerTest {
         test("twoVariablesSnippet");
     }
 
-    @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
-    private static class IVPropertyNode extends FloatingNode implements LIRLowerable {
+    @NodeInfo
+    private static class IVPropertyNode extends FloatingNode implements LIRLowerable, Node.ValueNumberable {
 
         public static final NodeClass<IVPropertyNode> TYPE = NodeClass.create(IVPropertyNode.class);
 
@@ -235,7 +233,6 @@ public class CountedLoopTest extends GraalCompilerTest {
             replaceAtUsagesAndDelete(node);
         }
 
-        @Override
         public void generate(NodeLIRBuilderTool gen) {
             gen.setResult(this, gen.operand(iv));
         }
@@ -247,7 +244,6 @@ public class CountedLoopTest extends GraalCompilerTest {
         Registration r = new Registration(plugins.getInvocationPlugins(), CountedLoopTest.class);
 
         r.register2("get", IVProperty.class, int.class, new InvocationPlugin() {
-            @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg1, ValueNode arg2) {
                 IVProperty property = null;
                 if (arg1.isConstant()) {

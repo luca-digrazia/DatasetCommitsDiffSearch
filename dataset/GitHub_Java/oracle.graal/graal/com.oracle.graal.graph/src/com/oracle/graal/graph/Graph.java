@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.graph;
 
-import static com.oracle.graal.graph.Edges.Type.Successors;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -69,14 +67,14 @@ public class Graph {
     Node[] nodes;
 
     /**
-     * Source information to associate with newly created nodes.
+     * Extra context information to be added to newly created nodes.
      */
-    NodeSourcePosition currentNodeSourcePosition;
+    Object currentNodeContext;
 
     /**
-     * Records if updating of node source information is required when performing inlining.
+     * Records if context information exists (or existed) for any nodes in this graph.
      */
-    boolean seenNodeSourcePosition;
+    boolean seenNodeContext;
 
     /**
      * The number of valid entries in {@link #nodes}.
@@ -158,71 +156,57 @@ public class Graph {
         }
     }
 
-    private class NodeSourcePositionScope implements DebugCloseable {
-        private final NodeSourcePosition previous;
+    private class NodeContextScope implements DebugCloseable {
+        private final Object previous;
 
-        NodeSourcePositionScope(NodeSourcePosition sourcePosition) {
-            previous = currentNodeSourcePosition;
-            currentNodeSourcePosition = sourcePosition;
+        NodeContextScope(Object context) {
+            previous = currentNodeContext;
+            currentNodeContext = context;
+            seenNodeContext = true;
         }
 
-        @Override
         public void close() {
-            currentNodeSourcePosition = previous;
+            currentNodeContext = previous;
         }
     }
 
-    public NodeSourcePosition currentNodeSourcePosition() {
-        return currentNodeSourcePosition;
-    }
-
     /**
-     * Opens a scope in which the source information from {@code node} is copied into nodes created
-     * within the scope. If {@code node} has no source information information, no scope is opened
-     * and {@code null} is returned.
+     * Opens a scope in which the context information from {@code node} is copied into nodes created
+     * within the scope. If {@code node} has no context information, no scope is opened and
+     * {@code null} is returned.
      *
      * @return a {@link DebugCloseable} for managing the opened scope or {@code null} if no scope
      *         was opened
      */
-    public DebugCloseable withNodeSourcePosition(Node node) {
-        return withNodeSourcePosition(node.sourcePosition);
+    public DebugCloseable withNodeContext(Node node) {
+        return node.nodeContext != null ? new NodeContextScope(node.nodeContext) : null;
     }
 
     /**
-     * Opens a scope in which {@code sourcePosition} is copied into nodes created within the scope.
-     * If {@code sourcePosition == null}, no scope is opened and {@code null} is returned.
+     * Opens a scope in which {@code context} is copied into nodes created within the scope. If
+     * {@code context == null}, no scope is opened and {@code null} is returned.
      *
      * @return a {@link DebugCloseable} for managing the opened scope or {@code null} if no scope
      *         was opened
      */
-    public DebugCloseable withNodeSourcePosition(NodeSourcePosition sourcePosition) {
-        return sourcePosition != null ? new NodeSourcePositionScope(sourcePosition) : null;
+    public DebugCloseable withNodeContext(Object context) {
+        return context != null ? new NodeContextScope(context) : null;
     }
 
     /**
-     * Opens a scope in which newly created nodes do not get any source information added.
+     * Opens a scope in which newly created nodes do not get any context information added.
      *
      * @return a {@link DebugCloseable} for managing the opened scope
      */
-    public DebugCloseable withoutNodeSourcePosition() {
-        return new NodeSourcePositionScope(null);
+    public DebugCloseable withoutNodeContext() {
+        return new NodeContextScope(null);
     }
 
     /**
-     * Determines if this graph might contain nodes with source information. This is mainly useful
-     * to short circuit logic for updating those positions after inlining since that requires
-     * visiting every node in the graph.
+     * Determines if this graph might contain nodes with extra context.
      */
-    public boolean mayHaveNodeSourcePosition() {
-        assert seenNodeSourcePosition || verifyHasNoSourcePosition();
-        return seenNodeSourcePosition;
-    }
-
-    private boolean verifyHasNoSourcePosition() {
-        for (Node node : getNodes()) {
-            assert node.getNodeSourcePosition() == null;
-        }
-        return true;
+    public boolean mayHaveNodeContext() {
+        return seenNodeContext;
     }
 
     /**
@@ -426,16 +410,24 @@ public class Graph {
         return add(node);
     }
 
-    private <T extends Node> void addInputs(T node) {
-        NodePosIterator iterator = node.inputs().iterator();
-        while (iterator.hasNext()) {
-            Position pos = iterator.nextPosition();
-            Node input = pos.get(node);
-            if (input != null && !input.isAlive()) {
+    private final class AddInputsFilter extends Node.EdgeVisitor {
+
+        @Override
+        public Node apply(Node self, Node input) {
+            if (!input.isAlive()) {
                 assert !input.isDeleted();
-                pos.initialize(node, addOrUniqueWithInputs(input));
+                return addOrUniqueWithInputs(input);
+            } else {
+                return input;
             }
         }
+
+    }
+
+    private AddInputsFilter addInputsFilter = new AddInputsFilter();
+
+    private <T extends Node> void addInputs(T node) {
+        node.applyInputs(addInputsFilter);
     }
 
     private <T extends Node> T addHelper(T node) {
@@ -518,7 +510,6 @@ public class Graph {
             }
         }
 
-        @Override
         public void close() {
             assert nodeEventListener != null;
             if (nodeEventListener instanceof ChainedNodeEventListener) {
@@ -539,19 +530,16 @@ public class Graph {
             this.next = next;
         }
 
-        @Override
         public void nodeAdded(Node node) {
             head.nodeAdded(node);
             next.nodeAdded(node);
         }
 
-        @Override
         public void inputChanged(Node node) {
             head.inputChanged(node);
             next.inputChanged(node);
         }
 
-        @Override
         public void usagesDroppedToZero(Node node) {
             head.usagesDroppedToZero(node);
             next.usagesDroppedToZero(node);
@@ -600,7 +588,8 @@ public class Graph {
         assert node.graph() == this || node.graph() == null;
         assert node.getNodeClass().valueNumberable();
         assert node.getNodeClass().isLeafNode() : node.getClass();
-        cachedLeafNodes.put(new CacheEntry(node), node);
+        CacheEntry entry = new CacheEntry(node);
+        cachedLeafNodes.put(entry, node);
     }
 
     Node findNodeInCache(Node node) {
@@ -641,20 +630,18 @@ public class Graph {
             int minCount = Integer.MAX_VALUE;
             Node minCountNode = null;
             for (Node input : node.inputs()) {
-                if (input != null) {
-                    int usageCount = input.getUsageCount();
-                    if (usageCount == earlyExitUsageCount) {
-                        return null;
-                    } else if (usageCount < minCount) {
-                        minCount = usageCount;
-                        minCountNode = input;
-                    }
+                int usageCount = input.getUsageCount();
+                if (usageCount == earlyExitUsageCount) {
+                    return null;
+                } else if (usageCount < minCount) {
+                    minCount = usageCount;
+                    minCountNode = input;
                 }
             }
             if (minCountNode != null) {
                 for (Node usage : minCountNode.usages()) {
-                    if (usage != node && nodeClass == usage.getNodeClass() && node.valueEquals(usage) && nodeClass.getInputEdges().areEqualIn(node, usage) &&
-                                    nodeClass.getEdges(Successors).areEqualIn(node, usage)) {
+                    if (usage != node && nodeClass == usage.getNodeClass() && node.valueEquals(usage) && nodeClass.equalInputs(node, usage) &&
+                                    nodeClass.equalSuccessors(node, usage)) {
                         return (T) usage;
                     }
                 }
@@ -940,10 +927,8 @@ public class Graph {
         }
         int id = nodesSize;
         nodes[id] = node;
-        if (currentNodeSourcePosition != null) {
-            node.setNodeSourcePosition(currentNodeSourcePosition);
-        } else if (!seenNodeSourcePosition && node.getNodeSourcePosition() != null) {
-            seenNodeSourcePosition = true;
+        if (currentNodeContext != null) {
+            node.setNodeContext(currentNodeContext);
         }
         nodesSize++;
 
@@ -952,9 +937,6 @@ public class Graph {
         node.id = id;
         if (nodeEventListener != null) {
             nodeEventListener.nodeAdded(node);
-        }
-        if (!seenNodeSourcePosition && node.sourcePosition != null) {
-            seenNodeSourcePosition = true;
         }
         if (Fingerprint.ENABLED) {
             Fingerprint.submit("%s: %s", NodeEvent.NODE_ADDED, node);
