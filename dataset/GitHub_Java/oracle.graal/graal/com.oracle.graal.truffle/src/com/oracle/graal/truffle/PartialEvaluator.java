@@ -22,6 +22,27 @@
  */
 package com.oracle.graal.truffle;
 
+import static com.oracle.graal.nodes.StructuredGraph.NO_PROFILING_INFO;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.PrintTruffleExpansionHistogram;
+
+import java.lang.invoke.MethodHandle;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.services.Services;
+
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.debug.Debug;
@@ -74,26 +95,6 @@ import com.oracle.graal.virtual.phases.ea.PartialEscapePhase;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.services.Services;
-
-import java.lang.invoke.MethodHandle;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
-
-import static com.oracle.graal.nodes.StructuredGraph.NO_PROFILING_INFO;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.PrintTruffleExpansionHistogram;
 
 /**
  * Class performing the partial evaluation starting from the root node of an AST.
@@ -342,10 +343,8 @@ public class PartialEvaluator {
         return new CachingPEGraphDecoder(providers, newConfig, TruffleCompiler.Optimizations,
                         AllowAssumptions.from(graph.getAssumptions() != null), architecture) {
             @Override
-            protected GraphBuilderPhase.Instance createGraphBuilderPhaseInstance(IntrinsicContext initialIntrinsicContext) {
-                return new DefaultTruffleCompiler.InstrumentedGraphBuilderPhase.Instance(providers.getMetaAccess(),
-                                providers.getStampProvider(), providers.getConstantReflection(), graphBuilderConfig,
-                                optimisticOpts, initialIntrinsicContext);
+            protected GraphBuilderPhase.Instance createGraphBuilderPhaseInstance(IntrinsicContext initial) {
+                return new DefaultTruffleCompiler.InstrumentedGraphBuilderPhase.Instance(tierContext, newConfig, initial);
             }
         };
     }

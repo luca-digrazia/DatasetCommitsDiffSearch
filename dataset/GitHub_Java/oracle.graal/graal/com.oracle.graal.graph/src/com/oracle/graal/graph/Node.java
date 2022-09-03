@@ -250,7 +250,7 @@ public abstract class Node implements Cloneable, Formattable {
         extraUsages = NO_NODES;
     }
 
-    final int id() {
+    int id() {
         return id;
     }
 
