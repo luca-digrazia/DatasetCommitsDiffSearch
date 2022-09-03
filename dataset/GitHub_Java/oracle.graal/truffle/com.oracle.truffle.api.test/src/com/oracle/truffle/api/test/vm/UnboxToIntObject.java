@@ -78,7 +78,7 @@ public class UnboxToIntObject implements TruffleObject {
 
     @Override
     public ForeignAccess getForeignAccess() {
-        return UnboxToIntObjectForeign.ACCESS;
+        return UnboxToIntObjectForeign.createAccess();
     }
 
     @TruffleLanguage.Registration(mimeType = "application/x-unbox", name = "Unboxing lang", version = "0.1")
