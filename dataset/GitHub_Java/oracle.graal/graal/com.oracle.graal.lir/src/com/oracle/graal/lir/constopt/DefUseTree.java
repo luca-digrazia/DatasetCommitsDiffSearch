@@ -22,17 +22,14 @@
  */
 package com.oracle.graal.lir.constopt;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
+import java.util.*;
+import java.util.function.*;
 
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.LoadConstantOp;
-import com.oracle.graal.lir.Variable;
 
 /**
  * Represents def-use tree of a constant.
@@ -42,7 +39,7 @@ class DefUseTree {
     private final AbstractBlockBase<?> block;
     private final List<UseEntry> uses;
 
-    DefUseTree(LIRInstruction instruction, AbstractBlockBase<?> block) {
+    public DefUseTree(LIRInstruction instruction, AbstractBlockBase<?> block) {
         assert instruction instanceof LoadConstantOp : "Not a LoadConstantOp: " + instruction;
         this.instruction = (LoadConstantOp) instruction;
         this.block = block;
