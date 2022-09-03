@@ -560,48 +560,50 @@ public final class LLVMInteropTest {
     @Test
     public void test045a() {
         Runner runner = new Runner("interop045");
-        runner.export(14, "a");
-        runner.export(15, "b");
+        runner.export(JavaInterop.asTruffleObject(14), "a");
+        runner.export(JavaInterop.asTruffleObject(15), "b");
         Assert.assertEquals(1, runner.run());
     }
 
     @Test
     public void test046a() {
         Runner runner = new Runner("interop046");
-        runner.export(14, "a");
-        runner.export(14, "b");
+        runner.export(JavaInterop.asTruffleObject(14), "a");
+        runner.export(JavaInterop.asTruffleObject(14), "b");
         Assert.assertEquals(1, runner.run());
     }
 
     @Test
     public void test046b() {
         Runner runner = new Runner("interop046");
-        runner.export(14, "a");
-        runner.export(15, "b");
+        TruffleObject object = JavaInterop.asTruffleObject(new Object());
+        runner.export(object, "a");
+        runner.export(object, "b");
         Assert.assertEquals(1, runner.run());
     }
 
     @Test
     public void test047a() {
         Runner runner = new Runner("interop047");
-        runner.export(14, "a");
-        runner.export(15, "b");
+        runner.export(JavaInterop.asTruffleObject(14), "a");
+        runner.export(JavaInterop.asTruffleObject(15), "b");
         Assert.assertEquals(0, runner.run());
     }
 
     @Test
     public void test048a() {
         Runner runner = new Runner("interop048");
-        runner.export(14, "a");
-        runner.export(15, "b");
+        runner.export(JavaInterop.asTruffleObject(14), "a");
+        runner.export(JavaInterop.asTruffleObject(15), "b");
         Assert.assertEquals(0, runner.run());
     }
 
     @Test
     public void test048b() {
         Runner runner = new Runner("interop048");
-        runner.export(14, "a");
-        runner.export(14, "b");
+        TruffleObject object = JavaInterop.asTruffleObject(new Object());
+        runner.export(object, "a");
+        runner.export(object, "b");
         Assert.assertEquals(1, runner.run());
     }
 
@@ -745,68 +747,6 @@ public final class LLVMInteropTest {
     @Test
     public void test061() {
         Runner runner = new Runner("interop061");
-        Assert.assertEquals(0, runner.run());
-    }
-
-    @Test
-    public void test062() {
-        Runner runner = new Runner("interop062");
-        Object a = new Object();
-        TruffleObject to = JavaInterop.asTruffleObject(a);
-        runner.export(to, "object");
-        Assert.assertEquals(0, runner.run());
-    }
-
-    @Test
-    public void test063() {
-        Runner runner = new Runner("interop063");
-        Object a = new Object();
-        TruffleObject to = JavaInterop.asTruffleObject(a);
-        runner.export(to, "object");
-        Assert.assertEquals(0, runner.run());
-    }
-
-    @Test
-    public void test064() {
-        Runner runner = new Runner("interop064");
-        Object a = new Object();
-        TruffleObject to = JavaInterop.asTruffleObject(a);
-        runner.export(to, "object");
-        Assert.assertEquals(0, runner.run());
-    }
-
-    @Test(expected = UnsupportedOperationException.class)
-    public void test065() {
-        Runner runner = new Runner("interop065");
-        Object a = new Object();
-        TruffleObject to = JavaInterop.asTruffleObject(a);
-        runner.export(to, "object");
-        Assert.assertEquals(0, runner.run());
-    }
-
-    @Test(expected = UnsupportedOperationException.class)
-    public void test066() {
-        Runner runner = new Runner("interop066");
-        Object a = new Object();
-        TruffleObject to = JavaInterop.asTruffleObject(a);
-        runner.export(to, "object");
-        Assert.assertEquals(0, runner.run());
-    }
-
-    @Test
-    public void test067() {
-        Runner runner = new Runner("interop067");
-        Object a = new Object();
-        TruffleObject to = JavaInterop.asTruffleObject(a);
-        runner.export(to, "object");
-        Assert.assertEquals(0, runner.run());
-    }
-
-    @Test
-    public void test068() {
-        Runner runner = new Runner("interop068");
-        runner.export(true, "boxed_true");
-        runner.export(false, "boxed_false");
         Assert.assertEquals(0, runner.run());
     }
 
@@ -981,7 +921,7 @@ public final class LLVMInteropTest {
             this.fileName = fileName;
         }
 
-        void export(Object foreignObject, String name) {
+        void export(TruffleObject foreignObject, String name) {
             builder.globalSymbol(name, foreignObject);
         }
 
