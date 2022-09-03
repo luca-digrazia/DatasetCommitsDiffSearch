@@ -32,14 +32,10 @@ import com.oracle.graal.graph.iterators.*;
  */
 public interface NodeClassIterable extends NodeIterable<Node> {
 
-    /**
-     * Returns an iterator that produces all non-null values.
-     */
     @Override
     NodeClassIterator iterator();
 
-    /**
-     * Returns an iterator that produces all values, including null values.
-     */
-    NodeClassIterator withNullIterator();
+    default NodeClassIterator withNullIterator() {
+        return iterator();
+    }
 }

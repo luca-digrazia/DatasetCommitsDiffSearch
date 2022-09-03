@@ -27,7 +27,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 
-@NodeInfo
 public abstract class FloatingGuardedNode extends FloatingNode implements GuardedNode {
 
     @OptionalInput(InputType.Guard) private GuardingNode guard;

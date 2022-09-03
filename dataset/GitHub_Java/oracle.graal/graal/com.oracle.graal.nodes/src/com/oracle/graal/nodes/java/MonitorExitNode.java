@@ -35,8 +35,7 @@ import com.oracle.graal.nodes.spi.*;
  * a synchronized method, then the return value of the method will be referenced, so that it will be
  * materialized before releasing the monitor.
  */
-@NodeInfo
-public class MonitorExitNode extends AccessMonitorNode implements Virtualizable, Simplifiable, Lowerable, IterableNodeType, MonitorExit, MemoryCheckpoint.Single {
+public final class MonitorExitNode extends AccessMonitorNode implements Virtualizable, Simplifiable, Lowerable, IterableNodeType, MonitorExit, MemoryCheckpoint.Single {
 
     @OptionalInput private ValueNode escapedReturnValue;
 
@@ -46,10 +45,6 @@ public class MonitorExitNode extends AccessMonitorNode implements Virtualizable,
     public MonitorExitNode(ValueNode object, MonitorIdNode monitorId, ValueNode escapedReturnValue) {
         super(object, monitorId);
         this.escapedReturnValue = escapedReturnValue;
-    }
-
-    public ValueNode getEscapedReturnValue() {
-        return escapedReturnValue;
     }
 
     public void setEscapedReturnValue(ValueNode x) {

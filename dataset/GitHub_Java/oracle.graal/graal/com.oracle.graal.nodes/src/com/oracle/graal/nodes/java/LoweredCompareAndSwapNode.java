@@ -24,7 +24,7 @@ package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -61,11 +61,7 @@ public class LoweredCompareAndSwapNode extends FixedAccessNode implements StateS
         return newValue;
     }
 
-    public static LoweredCompareAndSwapNode create(ValueNode object, LocationNode location, ValueNode expectedValue, ValueNode newValue, BarrierType barrierType) {
-        return new LoweredCompareAndSwapNodeGen(object, location, expectedValue, newValue, barrierType);
-    }
-
-    LoweredCompareAndSwapNode(ValueNode object, LocationNode location, ValueNode expectedValue, ValueNode newValue, BarrierType barrierType) {
+    public LoweredCompareAndSwapNode(ValueNode object, LocationNode location, ValueNode expectedValue, ValueNode newValue, BarrierType barrierType) {
         super(object, location, StampFactory.forKind(Kind.Boolean.getStackKind()), barrierType);
         assert expectedValue.getKind() == newValue.getKind();
         this.expectedValue = expectedValue;
@@ -87,5 +83,13 @@ public class LoweredCompareAndSwapNode extends FixedAccessNode implements StateS
         Value address = location().generateAddress(gen, gen.getLIRGeneratorTool(), gen.operand(object()));
         Value result = gen.getLIRGeneratorTool().emitCompareAndSwap(address, gen.operand(getExpectedValue()), gen.operand(getNewValue()), Constant.INT_1, Constant.INT_0);
         gen.setResult(this, result);
+    }
+
+    public MemoryCheckpoint asMemoryCheckpoint() {
+        return this;
+    }
+
+    public MemoryPhiNode asMemoryPhi() {
+        return null;
     }
 }

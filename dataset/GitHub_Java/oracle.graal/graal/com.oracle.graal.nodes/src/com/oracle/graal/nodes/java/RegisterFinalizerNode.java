@@ -35,8 +35,7 @@ import com.oracle.graal.nodes.spi.*;
  * This node is used to perform the finalizer registration at the end of the java.lang.Object
  * constructor.
  */
-@NodeInfo
-public class RegisterFinalizerNode extends AbstractStateSplit implements Canonicalizable.Unary<ValueNode>, LIRLowerable, Virtualizable, DeoptimizingNode.DeoptAfter {
+public final class RegisterFinalizerNode extends AbstractStateSplit implements Canonicalizable.Unary<ValueNode>, LIRLowerable, Virtualizable, DeoptimizingNode.DeoptAfter {
 
     @OptionalInput(InputType.State) private FrameState deoptState;
     @Input private ValueNode value;

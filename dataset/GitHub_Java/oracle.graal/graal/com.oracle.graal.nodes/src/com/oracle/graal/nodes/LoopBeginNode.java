@@ -34,7 +34,6 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 
-@NodeInfo
 public class LoopBeginNode extends MergeNode implements IterableNodeType, LIRLowerable {
 
     private double loopFrequency;

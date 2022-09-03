@@ -22,13 +22,13 @@
  */
 package com.oracle.graal.nodes.java;
 
-import sun.misc.*;
-
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
+
+import sun.misc.*;
 
 /**
  * Represents the lowered version of an atomic read-and-write operation like
@@ -40,11 +40,7 @@ public class LoweredAtomicReadAndWriteNode extends FixedAccessNode implements St
     @Input private ValueNode newValue;
     @OptionalInput(InputType.State) private FrameState stateAfter;
 
-    public static LoweredAtomicReadAndWriteNode create(ValueNode object, LocationNode location, ValueNode newValue, BarrierType barrierType) {
-        return new LoweredAtomicReadAndWriteNodeGen(object, location, newValue, barrierType);
-    }
-
-    LoweredAtomicReadAndWriteNode(ValueNode object, LocationNode location, ValueNode newValue, BarrierType barrierType) {
+    public LoweredAtomicReadAndWriteNode(ValueNode object, LocationNode location, ValueNode newValue, BarrierType barrierType) {
         super(object, location, newValue.stamp().unrestricted(), barrierType);
         this.newValue = newValue;
     }
@@ -71,6 +67,14 @@ public class LoweredAtomicReadAndWriteNode extends FixedAccessNode implements St
         Value address = location().generateAddress(gen, gen.getLIRGeneratorTool(), gen.operand(object()));
         Value result = gen.getLIRGeneratorTool().emitAtomicReadAndWrite(address, gen.operand(getNewValue()));
         gen.setResult(this, result);
+    }
+
+    public MemoryCheckpoint asMemoryCheckpoint() {
+        return this;
+    }
+
+    public MemoryPhiNode asMemoryPhi() {
+        return null;
     }
 
     public boolean canNullCheck() {

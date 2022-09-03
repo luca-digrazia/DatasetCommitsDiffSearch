@@ -25,15 +25,14 @@ package com.oracle.graal.nodes.extended;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
 public abstract class AbstractWriteNode extends FixedAccessNode implements StateSplit, MemoryCheckpoint.Single, MemoryAccess, GuardingNode {
 
-    @Input ValueNode value;
-    @OptionalInput(InputType.State) FrameState stateAfter;
-    @OptionalInput(InputType.Memory) Node lastLocationAccess;
+    @Input private ValueNode value;
+    @OptionalInput(InputType.State) private FrameState stateAfter;
+    @OptionalInput(InputType.Memory) private Node lastLocationAccess;
 
     private final boolean initialization;
 
@@ -74,12 +73,6 @@ public abstract class AbstractWriteNode extends FixedAccessNode implements State
         this.initialization = initialization;
     }
 
-    public AbstractWriteNode(ValueNode object, ValueNode value, ValueNode location, BarrierType barrierType, GuardingNode guard, boolean initialization) {
-        super(object, location, StampFactory.forVoid(), guard, barrierType, false, null);
-        this.value = value;
-        this.initialization = initialization;
-    }
-
     @Override
     public boolean isAllowedUsageType(InputType type) {
         return (type == InputType.Guard && getNullCheck()) ? true : super.isAllowedUsageType(type);
@@ -98,5 +91,13 @@ public abstract class AbstractWriteNode extends FixedAccessNode implements State
         Node newLla = ValueNodeUtil.asNode(lla);
         updateUsages(lastLocationAccess, newLla);
         lastLocationAccess = newLla;
+    }
+
+    public MemoryCheckpoint asMemoryCheckpoint() {
+        return this;
+    }
+
+    public MemoryPhiNode asMemoryPhi() {
+        return null;
     }
 }

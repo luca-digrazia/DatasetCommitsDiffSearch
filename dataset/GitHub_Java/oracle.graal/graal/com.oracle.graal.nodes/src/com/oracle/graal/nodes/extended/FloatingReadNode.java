@@ -33,8 +33,7 @@ import com.oracle.graal.nodes.spi.*;
  * A floating read of a value from memory specified in terms of an object base and an object
  * relative location. This node does not null check the object.
  */
-@NodeInfo
-public class FloatingReadNode extends FloatingAccessNode implements IterableNodeType, LIRLowerable, Canonicalizable {
+public final class FloatingReadNode extends FloatingAccessNode implements IterableNodeType, LIRLowerable, Canonicalizable {
 
     @OptionalInput(InputType.Memory) private MemoryNode lastLocationAccess;
 
@@ -83,8 +82,7 @@ public class FloatingReadNode extends FloatingAccessNode implements IterableNode
     @Override
     public boolean verify() {
         MemoryNode lla = getLastLocationAccess();
-        assert lla == null || lla instanceof MemoryCheckpoint || lla instanceof MemoryProxy || lla instanceof MemoryPhiNode : "lastLocationAccess of " + this +
-                        " should be a MemoryCheckpoint, but is " + lla;
+        assert lla == null || lla.asMemoryCheckpoint() != null || lla.asMemoryPhi() != null : "lastLocationAccess of " + this + " should be a MemoryCheckpoint, but is " + lla;
         return super.verify();
     }
 }

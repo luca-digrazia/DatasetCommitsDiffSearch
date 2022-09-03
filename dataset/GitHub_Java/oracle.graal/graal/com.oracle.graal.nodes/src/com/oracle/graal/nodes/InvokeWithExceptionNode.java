@@ -26,7 +26,6 @@ import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
@@ -48,11 +47,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Invoke,
     private boolean useForInlining;
     private double exceptionProbability;
 
-    public static InvokeWithExceptionNode create(CallTargetNode callTarget, BeginNode exceptionEdge, int bci) {
-        return new InvokeWithExceptionNodeGen(callTarget, exceptionEdge, bci);
-    }
-
-    protected InvokeWithExceptionNode(CallTargetNode callTarget, BeginNode exceptionEdge, int bci) {
+    public InvokeWithExceptionNode(CallTargetNode callTarget, BeginNode exceptionEdge, int bci) {
         super(callTarget.returnStamp());
         this.exceptionEdge = exceptionEdge;
         this.bci = bci;
@@ -206,6 +201,12 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Invoke,
     }
 
     @Override
+    public void setProbability(BeginNode successor, double value) {
+        assert successor == next || successor == exceptionEdge;
+        this.exceptionProbability = successor == next ? 1 - value : value;
+    }
+
+    @Override
     public boolean canDeoptimize() {
         return true;
     }
@@ -230,5 +231,13 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Invoke,
     public void setGuard(GuardingNode guard) {
         updateUsagesInterface(this.guard, guard);
         this.guard = guard;
+    }
+
+    public MemoryCheckpoint asMemoryCheckpoint() {
+        return this;
+    }
+
+    public MemoryPhiNode asMemoryPhi() {
+        return null;
     }
 }
