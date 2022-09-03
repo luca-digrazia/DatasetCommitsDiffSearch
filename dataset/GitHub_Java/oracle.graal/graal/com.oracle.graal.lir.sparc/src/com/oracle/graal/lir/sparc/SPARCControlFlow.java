@@ -54,21 +54,15 @@ import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.LessEqual;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.LessEqualUnsigned;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.LessUnsigned;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.NotEqual;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Op3s.Subcc;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.CONST;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.HINT;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.ILLEGAL;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
 import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
-import static com.oracle.graal.lir.LIRValueUtil.isConstantValue;
 import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
 import static com.oracle.graal.lir.sparc.SPARCMove.const2reg;
-import static com.oracle.graal.lir.sparc.SPARCOP3Op.emitOp3;
 import static jdk.internal.jvmci.code.ValueUtil.asRegister;
-import static jdk.internal.jvmci.sparc.SPARC.CPU;
 import static jdk.internal.jvmci.sparc.SPARC.g0;
-import static jdk.internal.jvmci.sparc.SPARCKind.DWORD;
-import static jdk.internal.jvmci.sparc.SPARCKind.WORD;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -81,11 +75,10 @@ import jdk.internal.jvmci.common.JVMCIError;
 import jdk.internal.jvmci.meta.AllocatableValue;
 import jdk.internal.jvmci.meta.Constant;
 import jdk.internal.jvmci.meta.JavaConstant;
-import jdk.internal.jvmci.meta.PlatformKind;
+import jdk.internal.jvmci.meta.JavaKind;
 import jdk.internal.jvmci.meta.Value;
 import jdk.internal.jvmci.sparc.SPARC;
 import jdk.internal.jvmci.sparc.SPARC.CPUFeature;
-import jdk.internal.jvmci.sparc.SPARCKind;
 
 import com.oracle.graal.asm.Assembler;
 import com.oracle.graal.asm.Assembler.LabelHint;
@@ -94,7 +87,6 @@ import com.oracle.graal.asm.NumUtil;
 import com.oracle.graal.asm.sparc.SPARCAssembler;
 import com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict;
 import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
-import com.oracle.graal.asm.sparc.SPARCAssembler.CMOV;
 import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
@@ -140,8 +132,9 @@ public class SPARCControlFlow {
     public static final class CompareBranchOp extends SPARCBlockEndOp implements SPARCDelayedControlTransfer {
         public static final LIRInstructionClass<CompareBranchOp> TYPE = LIRInstructionClass.create(CompareBranchOp.class);
         public static final SizeEstimate SIZE = SizeEstimate.create(3);
-        static final EnumSet<SPARCKind> SUPPORTED_KINDS = EnumSet.of(DWORD, WORD);
+        static final EnumSet<JavaKind> SUPPORTED_KINDS = EnumSet.of(JavaKind.Long, JavaKind.Int, JavaKind.Object, JavaKind.Float, JavaKind.Double);
 
+        private final SPARCCompare opcode;
         @Use({REG}) protected Value x;
         @Use({REG, CONST}) protected Value y;
         private ConditionFlag conditionFlag;
@@ -149,14 +142,16 @@ public class SPARCControlFlow {
         protected LabelHint trueDestinationHint;
         protected final LabelRef falseDestination;
         protected LabelHint falseDestinationHint;
-        protected final SPARCKind kind;
+        protected final JavaKind kind;
         protected final boolean unorderedIsTrue;
         private boolean emitted = false;
         private int delaySlotPosition = -1;
         private double trueDestinationProbability;
 
-        public CompareBranchOp(Value x, Value y, Condition condition, LabelRef trueDestination, LabelRef falseDestination, SPARCKind kind, boolean unorderedIsTrue, double trueDestinationProbability) {
+        public CompareBranchOp(SPARCCompare opcode, Value x, Value y, Condition condition, LabelRef trueDestination, LabelRef falseDestination, JavaKind kind, boolean unorderedIsTrue,
+                        double trueDestinationProbability) {
             super(TYPE, SIZE);
+            this.opcode = opcode;
             this.x = x;
             this.y = y;
             this.trueDestination = trueDestination;
@@ -164,7 +159,8 @@ public class SPARCControlFlow {
             this.kind = kind;
             this.unorderedIsTrue = unorderedIsTrue;
             this.trueDestinationProbability = trueDestinationProbability;
-            conditionFlag = fromCondition(kind.isInteger(), condition, unorderedIsTrue);
+            CC conditionCodeReg = CC.forKind(kind);
+            conditionFlag = fromCondition(conditionCodeReg, condition, unorderedIsTrue);
         }
 
         @Override
@@ -179,17 +175,11 @@ public class SPARCControlFlow {
                     emitted = emitShortCompareBranch(crb, masm);
                 }
                 if (!emitted) { // No short compare/branch was used, so we go into fallback
-                    emitted = emitLongCompareBranch(crb, masm, true);
-                    masm.nop();
-                    emitted = true;
+                    SPARCCompare.emit(crb, masm, opcode, x, y);
+                    emitted = emitBranch(crb, masm, kind, conditionFlag, trueDestination, falseDestination, true, trueDestinationProbability);
                 }
             }
             assert emitted;
-        }
-
-        private boolean emitLongCompareBranch(CompilationResultBuilder crb, SPARCMacroAssembler masm, boolean withDelayedNop) {
-            emitOp3(masm, Subcc, x, y);
-            return emitBranch(crb, masm, kind, conditionFlag, trueDestination, falseDestination, withDelayedNop, trueDestinationProbability);
         }
 
         private static int getTargetPosition(Assembler asm) {
@@ -201,7 +191,8 @@ public class SPARCControlFlow {
             // When we use short branches, no delay slot is available
             int targetPosition = getTargetPosition(masm);
             if (!canUseShortBranch(crb, masm, targetPosition)) {
-                emitted = emitLongCompareBranch(crb, masm, false);
+                SPARCCompare.emit(crb, masm, opcode, x, y);
+                emitted = emitBranch(crb, masm, kind, conditionFlag, trueDestination, falseDestination, false, trueDestinationProbability);
                 if (emitted) {
                     delaySlotPosition = masm.position();
                 }
@@ -248,6 +239,9 @@ public class SPARCControlFlow {
          * @return true if the branch could be emitted
          */
         private boolean emitShortCompareBranch(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
+            Value tmpValue;
+            Value actualX = x;
+            Value actualY = y;
             ConditionFlag actualConditionFlag = conditionFlag;
             Label actualTrueTarget = trueDestination.label();
             Label actualFalseTarget = falseDestination.label();
@@ -272,7 +266,14 @@ public class SPARCControlFlow {
                     actualFalseTarget = tmpTarget;
                 }
             }
-            emitCBCond(masm, x, y, actualTrueTarget, actualConditionFlag);
+            // Keep the constant on the right
+            if (isJavaConstant(actualX)) {
+                tmpValue = actualX;
+                actualX = actualY;
+                actualY = tmpValue;
+                actualConditionFlag = actualConditionFlag.mirror();
+            }
+            emitCBCond(masm, actualX, actualY, actualTrueTarget, actualConditionFlag);
             if (needJump) {
                 masm.jmp(actualFalseTarget);
                 masm.nop();
@@ -280,16 +281,38 @@ public class SPARCControlFlow {
             return true;
         }
 
-        private void emitCBCond(SPARCMacroAssembler masm, Value actualX, Value actualY, Label actualTrueTarget, ConditionFlag cFlag) {
-            PlatformKind xKind = actualX.getPlatformKind();
-            boolean isLong = kind == SPARCKind.DWORD;
-            if (isJavaConstant(actualY)) {
-                JavaConstant c = asJavaConstant(actualY);
-                long constantY = c.isNull() ? 0 : c.asLong();
-                assert NumUtil.isInt(constantY);
-                CBCOND.emit(masm, cFlag, isLong, asRegister(actualX, xKind), (int) constantY, actualTrueTarget);
-            } else {
-                CBCOND.emit(masm, cFlag, isLong, asRegister(actualX, xKind), asRegister(actualY, xKind), actualTrueTarget);
+        private static void emitCBCond(SPARCMacroAssembler masm, Value actualX, Value actualY, Label actualTrueTarget, ConditionFlag conditionFlag) {
+            switch ((JavaKind) actualX.getLIRKind().getPlatformKind()) {
+                case Int:
+                    if (isJavaConstant(actualY)) {
+                        JavaConstant c = asJavaConstant(actualY);
+                        int constantY = c.isNull() ? 0 : c.asInt();
+                        CBCOND.emit(masm, conditionFlag, false, asRegister(actualX, JavaKind.Int), constantY, actualTrueTarget);
+                    } else {
+                        CBCOND.emit(masm, conditionFlag, false, asRegister(actualX, JavaKind.Int), asRegister(actualY, JavaKind.Int), actualTrueTarget);
+                    }
+                    break;
+                case Long:
+                    if (isJavaConstant(actualY)) {
+                        JavaConstant c = asJavaConstant(actualY);
+                        assert NumUtil.is32bit(c.asLong());
+                        int constantY = c.isNull() ? 0 : (int) c.asLong();
+                        CBCOND.emit(masm, conditionFlag, true, asRegister(actualX, JavaKind.Long), constantY, actualTrueTarget);
+                    } else {
+                        CBCOND.emit(masm, conditionFlag, true, asRegister(actualX, JavaKind.Long), asRegister(actualY, JavaKind.Long), actualTrueTarget);
+                    }
+                    break;
+                case Object:
+                    if (isJavaConstant(actualY)) {
+                        // Object constant valid can only be null
+                        assert asJavaConstant(actualY).isNull();
+                        CBCOND.emit(masm, conditionFlag, true, asRegister(actualX), 0, actualTrueTarget);
+                    } else { // this is already loaded
+                        CBCOND.emit(masm, conditionFlag, true, asRegister(actualX), asRegister(actualY), actualTrueTarget);
+                    }
+                    break;
+                default:
+                    JVMCIError.shouldNotReachHere();
             }
         }
 
@@ -297,8 +320,13 @@ public class SPARCControlFlow {
             if (!asm.hasFeature(CPUFeature.CBCOND)) {
                 return false;
             }
-            if (!((SPARCKind) x.getPlatformKind()).isInteger()) {
-                return false;
+            switch ((JavaKind) x.getPlatformKind()) {
+                case Int:
+                case Long:
+                case Object:
+                    break;
+                default:
+                    return false;
             }
             // Do not use short branch, if the y value is a constant and does not fit into simm5 but
             // fits into simm13; this means the code with CBcond would be longer as the code without
@@ -325,8 +353,7 @@ public class SPARCControlFlow {
         public void verify() {
             super.verify();
             assert SUPPORTED_KINDS.contains(kind) : kind;
-            assert !isConstantValue(x);
-            assert x.getPlatformKind().equals(kind) && (isConstantValue(y) || y.getPlatformKind().equals(kind)) : x + " " + y;
+            assert x.getPlatformKind().equals(kind) && y.getPlatformKind().equals(kind) : x + " " + y;
         }
     }
 
@@ -359,10 +386,10 @@ public class SPARCControlFlow {
         protected final ConditionFlag conditionFlag;
         protected final LabelRef trueDestination;
         protected final LabelRef falseDestination;
-        protected final SPARCKind kind;
+        protected final JavaKind kind;
         protected final double trueDestinationProbability;
 
-        public BranchOp(ConditionFlag conditionFlag, LabelRef trueDestination, LabelRef falseDestination, SPARCKind kind, double trueDestinationProbability) {
+        public BranchOp(ConditionFlag conditionFlag, LabelRef trueDestination, LabelRef falseDestination, JavaKind kind, double trueDestinationProbability) {
             super(TYPE, SIZE);
             this.trueDestination = trueDestination;
             this.falseDestination = falseDestination;
@@ -375,9 +402,14 @@ public class SPARCControlFlow {
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             emitBranch(crb, masm, kind, conditionFlag, trueDestination, falseDestination, true, trueDestinationProbability);
         }
+
+        @Override
+        public void verify() {
+            assert CompareBranchOp.SUPPORTED_KINDS.contains(kind);
+        }
     }
 
-    private static boolean emitBranch(CompilationResultBuilder crb, SPARCMacroAssembler masm, SPARCKind kind, ConditionFlag conditionFlag, LabelRef trueDestination, LabelRef falseDestination,
+    private static boolean emitBranch(CompilationResultBuilder crb, SPARCMacroAssembler masm, JavaKind kind, ConditionFlag conditionFlag, LabelRef trueDestination, LabelRef falseDestination,
                     boolean withDelayedNop, double trueDestinationProbability) {
         Label actualTarget;
         ConditionFlag actualConditionFlag;
@@ -398,11 +430,10 @@ public class SPARCControlFlow {
             // We cannot make use of the delay slot when we jump in true-case and false-case
             return false;
         }
-        if (kind.isFloat()) {
+        if (kind == JavaKind.Double || kind == JavaKind.Float) {
             masm.fbpcc(actualConditionFlag, NOT_ANNUL, actualTarget, CC.Fcc0, predictTaken);
         } else {
-            assert kind.isInteger();
-            CC cc = kind.equals(SPARCKind.WORD) ? CC.Icc : CC.Xcc;
+            CC cc = kind == JavaKind.Int ? CC.Icc : CC.Xcc;
             masm.bpcc(actualConditionFlag, NOT_ANNUL, actualTarget, cc, predictTaken);
         }
         if (withDelayedNop) {
@@ -493,21 +524,29 @@ public class SPARCControlFlow {
             protected void conditionalJump(int index, Condition condition, Label target) {
                 JavaConstant constant = (JavaConstant) keyConstants[index];
                 CC conditionCode;
-                Long bits = constant.asLong();
+                Long bits;
                 switch (constant.getJavaKind()) {
                     case Char:
                     case Byte:
                     case Short:
                     case Int:
                         conditionCode = CC.Icc;
+                        bits = constant.asLong();
                         break;
-                    case Long:
+                    case Long: {
                         conditionCode = CC.Xcc;
+                        bits = constant.asLong();
                         break;
+                    }
+                    case Object: {
+                        conditionCode = crb.codeCache.getTarget().arch.getWordKind() == JavaKind.Long ? CC.Xcc : CC.Icc;
+                        bits = constant.isDefaultForKind() ? 0L : null;
+                        break;
+                    }
                     default:
                         throw new JVMCIError("switch only supported for int, long and object");
                 }
-                ConditionFlag conditionFlag = fromCondition(keyRegister.getRegisterCategory().equals(CPU), condition, false);
+                ConditionFlag conditionFlag = fromCondition(conditionCode, condition, false);
                 LabelHint hint = requestHint(masm, target);
                 boolean isShortConstant = isSimm5(constant);
                 int cbCondPosition = masm.position();
@@ -585,8 +624,8 @@ public class SPARCControlFlow {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            Register value = asRegister(index, SPARCKind.WORD);
-            Register scratchReg = asRegister(scratch, SPARCKind.DWORD);
+            Register value = asRegister(index, JavaKind.Int);
+            Register scratchReg = asRegister(scratch, JavaKind.Long);
 
             // Compare index against jump table bounds
             int highKey = lowKey + targets.length - 1;
@@ -652,24 +691,22 @@ public class SPARCControlFlow {
 
         private final ConditionFlag condition;
         private final CC cc;
-        private final CMOV cmove;
 
-        public CondMoveOp(CMOV cmove, CC cc, ConditionFlag condition, Value trueValue, Value falseValue, Value result) {
+        public CondMoveOp(Variable result, CC cc, ConditionFlag condition, Value trueValue, Value falseValue) {
             super(TYPE);
             this.result = result;
             this.condition = condition;
             this.trueValue = trueValue;
             this.falseValue = falseValue;
             this.cc = cc;
-            this.cmove = cmove;
         }
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
             if (result.equals(trueValue)) { // We have the true value in place, do he opposite
-                cmove(masm, condition.negate(), falseValue);
+                cmove(masm, cc, result, condition.negate(), falseValue);
             } else if (result.equals(falseValue)) {
-                cmove(masm, condition, trueValue);
+                cmove(masm, cc, result, condition, trueValue);
             } else { // We have to move one of the input values to the result
                 ConditionFlag actualCondition = condition;
                 Value actualTrueValue = trueValue;
@@ -680,15 +717,7 @@ public class SPARCControlFlow {
                     actualFalseValue = trueValue;
                 }
                 SPARCMove.move(crb, masm, result, actualFalseValue, SPARCDelayedControlTransfer.DUMMY);
-                cmove(masm, actualCondition, actualTrueValue);
-            }
-        }
-
-        private void cmove(SPARCMacroAssembler masm, ConditionFlag localCondition, Value value) {
-            if (isConstantValue(value)) {
-                cmove.emit(masm, localCondition, cc, asImmediate(asJavaConstant(value)), asRegister(result));
-            } else {
-                cmove.emit(masm, localCondition, cc, asRegister(value), asRegister(result));
+                cmove(masm, cc, result, actualCondition, actualTrueValue);
             }
         }
 
@@ -705,47 +734,97 @@ public class SPARCControlFlow {
         }
     }
 
-    public static ConditionFlag fromCondition(boolean integer, Condition cond, boolean unorderedIsTrue) {
-        if (integer) {
-            switch (cond) {
-                case EQ:
-                    return Equal;
-                case NE:
-                    return NotEqual;
-                case BT:
-                    return LessUnsigned;
-                case LT:
-                    return Less;
-                case BE:
-                    return LessEqualUnsigned;
-                case LE:
-                    return LessEqual;
-                case AE:
-                    return GreaterEqualUnsigned;
-                case GE:
-                    return GreaterEqual;
-                case AT:
-                    return GreaterUnsigned;
-                case GT:
-                    return Greater;
-            }
-            throw JVMCIError.shouldNotReachHere("Unimplemented for: " + cond);
-        } else {
-            switch (cond) {
-                case EQ:
-                    return unorderedIsTrue ? F_UnorderedOrEqual : F_Equal;
-                case NE:
-                    return ConditionFlag.F_NotEqual;
-                case LT:
-                    return unorderedIsTrue ? F_UnorderedOrLess : F_Less;
-                case LE:
-                    return unorderedIsTrue ? F_UnorderedOrLessOrEqual : F_LessOrEqual;
-                case GE:
-                    return unorderedIsTrue ? F_UnorderedGreaterOrEqual : F_GreaterOrEqual;
-                case GT:
-                    return unorderedIsTrue ? F_UnorderedOrGreater : F_Greater;
-            }
-            throw JVMCIError.shouldNotReachHere("Unkown condition: " + cond);
+    private static void cmove(SPARCMacroAssembler masm, CC cc, Value result, ConditionFlag cond, Value other) {
+        switch ((JavaKind) other.getPlatformKind()) {
+            case Boolean:
+            case Byte:
+            case Short:
+            case Char:
+            case Int:
+                if (isJavaConstant(other)) {
+                    int constant;
+                    if (asJavaConstant(other).isNull()) {
+                        constant = 0;
+                    } else {
+                        constant = asJavaConstant(other).asInt();
+                    }
+                    masm.movcc(cond, cc, constant, asRegister(result));
+                } else {
+                    masm.movcc(cond, cc, asRegister(other), asRegister(result));
+                }
+                break;
+            case Long:
+            case Object:
+                if (isJavaConstant(other)) {
+                    long constant;
+                    if (asJavaConstant(other).isNull()) {
+                        constant = 0;
+                    } else {
+                        constant = asJavaConstant(other).asLong();
+                    }
+                    masm.movcc(cond, cc, (int) constant, asRegister(result));
+                } else {
+                    masm.movcc(cond, cc, asRegister(other), asRegister(result));
+                }
+                break;
+            case Float:
+                masm.fmovscc(cond, cc, asRegister(other, JavaKind.Float), asRegister(result, JavaKind.Float));
+                break;
+            case Double:
+                masm.fmovdcc(cond, cc, asRegister(other, JavaKind.Double), asRegister(result, JavaKind.Double));
+                break;
+            default:
+                throw JVMCIError.shouldNotReachHere();
         }
+    }
+
+    public static ConditionFlag fromCondition(CC conditionFlagsRegister, Condition cond, boolean unorderedIsTrue) {
+        switch (conditionFlagsRegister) {
+            case Xcc:
+            case Icc:
+                switch (cond) {
+                    case EQ:
+                        return Equal;
+                    case NE:
+                        return NotEqual;
+                    case BT:
+                        return LessUnsigned;
+                    case LT:
+                        return Less;
+                    case BE:
+                        return LessEqualUnsigned;
+                    case LE:
+                        return LessEqual;
+                    case AE:
+                        return GreaterEqualUnsigned;
+                    case GE:
+                        return GreaterEqual;
+                    case AT:
+                        return GreaterUnsigned;
+                    case GT:
+                        return Greater;
+                }
+                throw JVMCIError.shouldNotReachHere("Unimplemented for: " + cond);
+            case Fcc0:
+            case Fcc1:
+            case Fcc2:
+            case Fcc3:
+                switch (cond) {
+                    case EQ:
+                        return unorderedIsTrue ? F_UnorderedOrEqual : F_Equal;
+                    case NE:
+                        return ConditionFlag.F_NotEqual;
+                    case LT:
+                        return unorderedIsTrue ? F_UnorderedOrLess : F_Less;
+                    case LE:
+                        return unorderedIsTrue ? F_UnorderedOrLessOrEqual : F_LessOrEqual;
+                    case GE:
+                        return unorderedIsTrue ? F_UnorderedGreaterOrEqual : F_GreaterOrEqual;
+                    case GT:
+                        return unorderedIsTrue ? F_UnorderedOrGreater : F_Greater;
+                }
+                throw JVMCIError.shouldNotReachHere("Unkown condition: " + cond);
+        }
+        throw JVMCIError.shouldNotReachHere("Unknown condition flag register " + conditionFlagsRegister);
     }
 }
