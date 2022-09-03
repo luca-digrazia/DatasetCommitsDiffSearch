@@ -22,21 +22,14 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
-import com.oracle.graal.compiler.common.type.CheckedJavaType;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.java.CheckCastNode;
-import com.oracle.graal.replacements.nodes.MacroNode;
-import com.oracle.graal.replacements.nodes.MacroStateSplitNode;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.replacements.nodes.*;
 
 /**
  * {@link MacroNode Macro node} for {@link Class#cast(Object)}.
@@ -68,15 +61,15 @@ public final class ClassCastNode extends MacroStateSplitNode implements Canonica
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forJavaClass, ValueNode forObject) {
-        ValueNode folded = tryFold(forJavaClass, forObject, tool.getConstantReflection());
+        ValueNode folded = tryFold(forJavaClass, forObject, tool.getConstantReflection(), null);
         return folded != null ? folded : this;
     }
 
-    public static ValueNode tryFold(ValueNode javaClass, ValueNode object, ConstantReflectionProvider constantReflection) {
+    public static ValueNode tryFold(ValueNode javaClass, ValueNode object, ConstantReflectionProvider constantReflection, Assumptions assumptions) {
         if (javaClass != null && javaClass.isConstant()) {
             ResolvedJavaType type = constantReflection.asJavaType(javaClass.asConstant());
             if (type != null && !type.isPrimitive()) {
-                return CheckCastNode.create(CheckedJavaType.create(javaClass.graph().getAssumptions(), type), object, null, false);
+                return CheckCastNode.create(type, object, null, false, assumptions);
             }
         }
         return null;
