@@ -829,12 +829,8 @@ public final class SchedulePhase extends Phase {
                 if (fixedNode instanceof ControlSplitNode) {
                     ControlSplitNode controlSplitNode = (ControlSplitNode) fixedNode;
                     MicroBlock endBlock = entries.get(fixedNode);
-                    AbstractBeginNode primarySuccessor = controlSplitNode.getPrimarySuccessor();
-                    if (primarySuccessor != null) {
-                        endBlock.prependChildrenTo(entries.get(primarySuccessor));
-                    } else {
-                        assert endBlock.tail == null;
-                    }
+                    MicroBlock primarySuccessor = entries.get(controlSplitNode.getPrimarySuccessor());
+                    endBlock.prependChildrenTo(primarySuccessor);
                 }
             }
 

@@ -55,7 +55,6 @@ import org.graalvm.compiler.nodes.GuardNode;
 import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.LoopEndNode;
 import org.graalvm.compiler.nodes.LoopExitNode;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.PhiNode;
 import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.ProxyNode;
@@ -653,7 +652,7 @@ public class GraphUtil {
         ValueNode n = node;
         while (n instanceof PiNode) {
             PiNode piNode = (PiNode) n;
-            ObjectStamp originalStamp = (ObjectStamp) piNode.getOriginalNode().stamp(NodeView.DEFAULT);
+            ObjectStamp originalStamp = (ObjectStamp) piNode.getOriginalNode().stamp();
             if (originalStamp.nonNull()) {
                 n = piNode.getOriginalNode();
             } else {

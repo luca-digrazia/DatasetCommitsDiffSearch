@@ -472,11 +472,6 @@ public class Graph {
         }
     }
 
-    public <T extends Node> T addWithoutUniqueWithInputs(T node) {
-        addInputs(node);
-        return addHelper(node);
-    }
-
     private final class AddInputsFilter extends Node.EdgeVisitor {
 
         @Override
