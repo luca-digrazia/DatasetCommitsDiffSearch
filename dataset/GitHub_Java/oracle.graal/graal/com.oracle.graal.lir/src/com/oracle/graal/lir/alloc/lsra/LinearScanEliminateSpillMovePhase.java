@@ -76,7 +76,6 @@ public class LinearScanEliminateSpillMovePhase extends AllocationPhase {
     }
 
     // called once before assignment of register numbers
-    @SuppressWarnings("try")
     void eliminateSpillMoves() {
         try (Indent indent = Debug.logAndIndent("Eliminating unnecessary spill moves")) {
 

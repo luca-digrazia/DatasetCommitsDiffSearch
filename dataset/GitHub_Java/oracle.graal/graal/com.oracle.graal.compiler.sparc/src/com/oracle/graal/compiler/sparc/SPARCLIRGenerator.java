@@ -23,7 +23,6 @@
 
 package com.oracle.graal.compiler.sparc;
 
-import static com.oracle.graal.lir.LIRValueUtil.*;
 import static com.oracle.graal.lir.sparc.SPARCArithmetic.*;
 import static com.oracle.graal.lir.sparc.SPARCBitManipulationOp.IntrinsicOpcode.*;
 import static com.oracle.graal.lir.sparc.SPARCCompare.*;
@@ -87,11 +86,6 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         protected LIRInstruction createStackMoveIntern(AllocatableValue result, AllocatableValue input) {
             return SPARCLIRGenerator.this.createStackMove(result, input);
         }
-
-        @Override
-        protected LIRInstruction createLoadIntern(AllocatableValue result, Constant input) {
-            return SPARCLIRGenerator.this.createMoveConstant(result, input);
-        }
     }
 
     public SPARCLIRGenerator(LIRKindTool lirKindTool, Providers providers, CallingConvention cc, LIRGenerationResult lirGenRes) {
@@ -126,22 +120,9 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     protected LIRInstruction createMove(AllocatableValue dst, Value src) {
         boolean srcIsSlot = isStackSlotValue(src);
         boolean dstIsSlot = isStackSlotValue(dst);
-        if (src instanceof ConstantValue) {
-            return createMoveConstant(dst, ((ConstantValue) src).getConstant());
-        } else if (src instanceof SPARCAddressValue) {
+        if (src instanceof SPARCAddressValue) {
             return new LoadAddressOp(dst, (SPARCAddressValue) src);
-        } else {
-            assert src instanceof AllocatableValue;
-            if (srcIsSlot && dstIsSlot) {
-                throw JVMCIError.shouldNotReachHere(src.getClass() + " " + dst.getClass());
-            } else {
-                return new Move(dst, (AllocatableValue) src);
-            }
-        }
-    }
-
-    protected LIRInstruction createMoveConstant(AllocatableValue dst, Constant src) {
-        if (src instanceof JavaConstant) {
+        } else if (src instanceof JavaConstant) {
             JavaConstant javaConstant = (JavaConstant) src;
             if (canInlineConstant(javaConstant)) {
                 return new SPARCMove.LoadInlineConstant(javaConstant, dst);
@@ -149,7 +130,12 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 return new SPARCMove.LoadConstantFromTable(javaConstant, getConstantTableBase(), dst);
             }
         } else {
-            throw JVMCIError.shouldNotReachHere(src.getClass().toString());
+            assert src instanceof AllocatableValue;
+            if (srcIsSlot && dstIsSlot) {
+                throw JVMCIError.shouldNotReachHere(src.getClass() + " " + dst.getClass());
+            } else {
+                return new Move(dst, (AllocatableValue) src);
+            }
         }
     }
 
@@ -163,22 +149,8 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitMoveConstant(AllocatableValue dst, Constant src) {
-        append(createMoveConstant(dst, src));
-    }
-
-    @Override
     public void emitData(AllocatableValue dst, byte[] data) {
         append(new LoadDataAddressOp(dst, data));
-    }
-
-    @Override
-    public Value emitConstant(LIRKind kind, Constant constant) {
-        if (JavaConstant.isNull(constant)) {
-            return new ConstantValue(kind, kind.getPlatformKind().getDefaultValue());
-        } else {
-            return super.emitConstant(kind, constant);
-        }
     }
 
     protected SPARCAddressValue asAddressValue(Value address) {
@@ -224,7 +196,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         Value left;
         Value right;
         Condition actualCondition;
-        if (isJavaConstant(x)) {
+        if (isConstant(x)) {
             left = load(y);
             right = loadNonConst(x);
             actualCondition = cond.mirror();
@@ -291,8 +263,8 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     private Value loadSimm11(Value value) {
-        if (isJavaConstant(value)) {
-            JavaConstant c = asJavaConstant(value);
+        if (isConstant(value)) {
+            JavaConstant c = asConstant(value);
             if (c.isNull() || SPARCAssembler.isSimm11(c)) {
                 return value;
             }
@@ -542,16 +514,16 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     }
 
     private Variable emitBinary(LIRKind resultKind, SPARCArithmetic op, boolean commutative, Value a, Value b, LIRFrameState state) {
-        if (isJavaConstant(b) && canInlineConstant(asJavaConstant(b))) {
-            return emitBinaryConst(resultKind, op, load(a), asConstantValue(b), state);
-        } else if (commutative && isJavaConstant(a) && canInlineConstant(asJavaConstant(a))) {
-            return emitBinaryConst(resultKind, op, load(b), asConstantValue(a), state);
+        if (isConstant(b) && canInlineConstant(asConstant(b))) {
+            return emitBinaryConst(resultKind, op, load(a), asConstant(b), state);
+        } else if (commutative && isConstant(a) && canInlineConstant(asConstant(a))) {
+            return emitBinaryConst(resultKind, op, load(b), asConstant(a), state);
         } else {
             return emitBinaryVar(resultKind, op, load(a), load(b), state);
         }
     }
 
-    private Variable emitBinaryConst(LIRKind resultKind, SPARCArithmetic op, AllocatableValue a, ConstantValue b, LIRFrameState state) {
+    private Variable emitBinaryConst(LIRKind resultKind, SPARCArithmetic op, AllocatableValue a, JavaConstant b, LIRFrameState state) {
         switch (op) {
             case IADD:
             case LADD:
@@ -565,9 +537,9 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             case LXOR:
             case IMUL:
             case LMUL:
-                if (canInlineConstant(b.getJavaConstant())) {
+                if (canInlineConstant(b)) {
                     Variable result = newVariable(resultKind);
-                    append(new BinaryRegConst(op, result, a, b.getJavaConstant(), state));
+                    append(new BinaryRegConst(op, result, a, b, state));
                     return result;
                 }
                 break;
@@ -805,8 +777,8 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     private Variable emitShift(SPARCArithmetic op, Value a, Value b) {
         Variable result = newVariable(LIRKind.combine(a, b).changeType(a.getPlatformKind()));
-        if (isJavaConstant(b) && canInlineConstant(asJavaConstant(b))) {
-            append(new BinaryRegConst(op, result, load(a), asJavaConstant(b), null));
+        if (isConstant(b) && canInlineConstant((JavaConstant) b)) {
+            append(new BinaryRegConst(op, result, load(a), asConstant(b), null));
         } else {
             append(new BinaryRegReg(op, result, load(a), load(b)));
         }
@@ -1013,7 +985,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 append(new BinaryRegConst(SPARCArithmetic.IAND, result, asAllocatable(inputVal), constant, null));
             } else {
                 Variable maskVar = newVariable(LIRKind.combine(inputVal).changeType(Kind.Int));
-                emitMoveConstant(maskVar, constant);
+                emitMove(maskVar, constant);
                 append(new BinaryRegReg(IAND, result, maskVar, asAllocatable(inputVal)));
             }
             if (toBits > 32) {

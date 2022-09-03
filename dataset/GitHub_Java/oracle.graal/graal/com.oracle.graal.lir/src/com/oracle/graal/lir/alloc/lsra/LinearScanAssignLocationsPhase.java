@@ -102,7 +102,7 @@ public class LinearScanAssignLocationsPhase extends AllocationPhase {
 
         if (isIllegal(interval.location()) && interval.canMaterialize()) {
             assert mode != OperandMode.DEF;
-            return new ConstantValue(interval.kind(), interval.getMaterializedValue());
+            return interval.getMaterializedValue();
         }
         return interval.location();
     }
@@ -145,7 +145,7 @@ public class LinearScanAssignLocationsPhase extends AllocationPhase {
          * cause an assert on failure.
          */
         Value result = colorLirOperand(op, (Variable) operand, mode);
-        assert !allocator.hasCall(tempOpId) || isStackSlotValue(result) || isJavaConstant(result) || !allocator.isCallerSave(result) : "cannot have caller-save register operands at calls";
+        assert !allocator.hasCall(tempOpId) || isStackSlotValue(result) || isConstant(result) || !allocator.isCallerSave(result) : "cannot have caller-save register operands at calls";
         return result;
     }
 
@@ -217,7 +217,6 @@ public class LinearScanAssignLocationsPhase extends AllocationPhase {
         return false;
     }
 
-    @SuppressWarnings("try")
     private void assignLocations() {
         try (Indent indent = Debug.logAndIndent("assign locations")) {
             for (AbstractBlockBase<?> block : allocator.sortedBlocks()) {

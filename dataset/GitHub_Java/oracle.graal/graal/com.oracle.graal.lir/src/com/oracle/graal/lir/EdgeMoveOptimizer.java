@@ -22,17 +22,16 @@
  */
 package com.oracle.graal.lir;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.code.TargetDescription;
+import jdk.internal.jvmci.code.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.lir.StandardOp.LoadConstantOp;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.StandardOp.ValueMoveOp;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.phases.*;
 
 /**
  * This class optimizes moves, particularly those that result from eliminating SSA form.
@@ -56,7 +55,7 @@ public final class EdgeMoveOptimizer extends PostAllocationOptimizationPhase {
 
     @Override
     protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
-                    PostAllocationOptimizationContext context) {
+                    BenchmarkCounterFactory counterFactory) {
         LIR ir = lirGenRes.getLIR();
         Optimizer optimizer = new Optimizer(ir);
 
@@ -78,7 +77,7 @@ public final class EdgeMoveOptimizer extends PostAllocationOptimizationPhase {
         private final List<List<LIRInstruction>> edgeInstructionSeqences;
         private LIR ir;
 
-        Optimizer(LIR ir) {
+        public Optimizer(LIR ir) {
             this.ir = ir;
             edgeInstructionSeqences = new ArrayList<>(4);
         }

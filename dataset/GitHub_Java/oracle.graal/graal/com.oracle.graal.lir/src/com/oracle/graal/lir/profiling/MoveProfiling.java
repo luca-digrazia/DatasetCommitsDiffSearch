@@ -22,41 +22,30 @@
  */
 package com.oracle.graal.lir.profiling;
 
-import static jdk.vm.ci.code.ValueUtil.isRegister;
-import static jdk.vm.ci.code.ValueUtil.isStackSlot;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.lir.ConstantValue;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRInsertionBuffer;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.StandardOp.LoadConstantOp;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.StandardOp.ValueMoveOp;
-import com.oracle.graal.lir.gen.BenchmarkCounterFactory;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.phases.*;
 
 public class MoveProfiling extends PostAllocationOptimizationPhase {
 
     @Override
     protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
-                    PostAllocationOptimizationContext context) {
-        BenchmarkCounterFactory counterFactory = context.counterFactory;
-        new Analyzer(target, lirGenRes.getLIR(), counterFactory).run();
+                    BenchmarkCounterFactory counterFactory) {
+        new Analyzer(lirGenRes.getLIR(), counterFactory).run();
     }
 
     private static enum MoveType {
@@ -70,7 +59,7 @@ public class MoveProfiling extends PostAllocationOptimizationPhase {
         private final String name;
 
         MoveType(String dst, String src) {
-            this.name = src + '2' + dst;
+            this.name = String.format("%5s <- %s", dst, src);
         }
 
         @Override
@@ -108,14 +97,12 @@ public class MoveProfiling extends PostAllocationOptimizationPhase {
     }
 
     private static class Analyzer {
-        private final TargetDescription target;
         private final LIR lir;
         private final BenchmarkCounterFactory counterFactory;
         private final LIRInsertionBuffer buffer;
         private final int[] cnt;
 
-        public Analyzer(TargetDescription target, LIR lir, BenchmarkCounterFactory counterFactory) {
-            this.target = target;
+        public Analyzer(LIR lir, BenchmarkCounterFactory counterFactory) {
             this.lir = lir;
             this.counterFactory = counterFactory;
             this.buffer = new LIRInsertionBuffer();
@@ -152,11 +139,11 @@ public class MoveProfiling extends PostAllocationOptimizationPhase {
                 int i = cnt[type.ordinal()];
                 if (i > 0) {
                     names.add(type.toString());
-                    increments.add(new ConstantValue(target.getLIRKind(JavaKind.Int), JavaConstant.forInt(i)));
+                    increments.add(JavaConstant.forInt(i));
                 }
             }
             String[] groups = new String[names.size()];
-            Arrays.fill(groups, "MoveOperations");
+            Arrays.fill(groups, "Move Operations");
             if (names.size() > 0) { // Don't pollute LIR when nothing has to be done
                 LIRInstruction inst = counterFactory.createMultiBenchmarkCounter(names.toArray(new String[0]), groups, increments.toArray(new Value[0]));
                 assert inst != null;

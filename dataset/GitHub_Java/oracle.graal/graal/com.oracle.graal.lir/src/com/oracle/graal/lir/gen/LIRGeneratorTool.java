@@ -44,8 +44,6 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCount
         LIRInstruction createMove(AllocatableValue result, Value input);
 
         LIRInstruction createStackMove(AllocatableValue result, AllocatableValue input);
-
-        LIRInstruction createLoad(AllocatableValue result, Constant input);
     }
 
     public abstract class BlockScope implements AutoCloseable {
@@ -76,11 +74,7 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCount
 
     BlockScope getBlockScope(AbstractBlockBase<?> block);
 
-    Value emitConstant(LIRKind kind, Constant constant);
-
-    Value emitJavaConstant(JavaConstant constant);
-
-    AllocatableValue emitLoadConstant(LIRKind kind, Constant constant);
+    Value emitLoadConstant(LIRKind kind, Constant constant);
 
     Variable emitLoad(LIRKind kind, Value address, LIRFrameState state);
 
@@ -130,8 +124,6 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCount
 
     void emitMove(AllocatableValue dst, Value src);
 
-    void emitMoveConstant(AllocatableValue dst, Constant src);
-
     /**
      * Emits an op that loads the address of some raw data.
      *
@@ -158,7 +150,7 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCount
      * Emits a return instruction. Implementations need to insert a move if the input is not in the
      * correct location.
      */
-    void emitReturn(JavaKind javaKind, Value input);
+    void emitReturn(Value input);
 
     AllocatableValue asAllocatable(Value value);
 
@@ -174,12 +166,11 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCount
     /**
      * Gets the ABI specific operand used to return a value of a given kind from a method.
      *
-     * @param javaKind the {@link JavaKind} of value being returned
-     * @param lirKind the backend type of the value being returned
+     * @param kind the kind of value being returned
      * @return the operand representing the ABI defined location used return a value of kind
      *         {@code kind}
      */
-    AllocatableValue resultOperandFor(JavaKind javaKind, LIRKind lirKind);
+    AllocatableValue resultOperandFor(LIRKind kind);
 
     <I extends LIRInstruction> I append(I op);
 
@@ -210,7 +201,7 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCount
 
     Variable emitByteSwap(Value operand);
 
-    Variable emitArrayEquals(JavaKind kind, Value array1, Value array2, Value length);
+    Variable emitArrayEquals(Kind kind, Value array1, Value array2, Value length);
 
     void emitBlackhole(Value operand);
 

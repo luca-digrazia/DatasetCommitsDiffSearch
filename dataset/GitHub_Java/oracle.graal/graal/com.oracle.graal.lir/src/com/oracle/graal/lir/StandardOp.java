@@ -22,28 +22,19 @@
  */
 package com.oracle.graal.lir;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.CONST;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.HINT;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
-import static com.oracle.graal.lir.LIRValueUtil.isVariable;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static com.oracle.graal.lir.LIRValueUtil.*;
 
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterSaveLayout;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.Value;
+import com.oracle.graal.asm.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.framemap.*;
 
-import com.oracle.graal.asm.Label;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-import com.oracle.graal.lir.framemap.FrameMap;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
 /**
  * A collection of machine-independent LIR operations, as well as interfaces to be implemented for
@@ -310,6 +301,19 @@ public class StandardOp {
          */
         RegisterSaveLayout getMap(FrameMap frameMap);
 
+    }
+
+    /**
+     * An operation that takes one input and stores it in a stack slot as well as to an ordinary
+     * variable.
+     */
+    public interface StackStoreOp {
+
+        Value getInput();
+
+        AllocatableValue getResult();
+
+        StackSlotValue getStackSlot();
     }
 
     /**
