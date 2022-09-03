@@ -59,10 +59,7 @@ public final class DefaultTraceRegisterAllocationPolicy {
         Ratio,
         Loops,
         MaxFreq,
-        FreqBudget,
-        LoopRatio,
-        LoopBudget,
-        LoopMaxFreq
+        FreqBudget
     }
 
     public static class Options {
@@ -398,15 +395,6 @@ public final class DefaultTraceRegisterAllocationPolicy {
                 break;
             case FreqBudget:
                 plan.appendStrategy(new BottomUpFrequencyBudgetStrategy(plan));
-                break;
-            case LoopRatio:
-                plan.appendStrategy(new BottomUpDelegatingLoopStrategy(plan, new BottomUpRatioStrategy(plan)));
-                break;
-            case LoopMaxFreq:
-                plan.appendStrategy(new BottomUpDelegatingLoopStrategy(plan, new BottomUpMaxFrequencyStrategy(plan)));
-                break;
-            case LoopBudget:
-                plan.appendStrategy(new BottomUpDelegatingLoopStrategy(plan, new BottomUpFrequencyBudgetStrategy(plan)));
                 break;
             default:
                 throw JVMCIError.shouldNotReachHere();
