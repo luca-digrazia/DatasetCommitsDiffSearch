@@ -23,8 +23,6 @@
 
 package com.oracle.graal.hotspot.bridge;
 
-import static com.oracle.graal.graph.FieldIntrospection.*;
-
 import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
@@ -85,26 +83,7 @@ public class VMToCompilerImpl implements VMToCompiler {
         typeVoid = new HotSpotTypePrimitive(Kind.Void);
     }
 
-    private static void initMirror(HotSpotTypePrimitive type, long offset) {
-        Class< ? > mirror = type.toJava();
-        unsafe.putObject(mirror, offset, type);
-        assert unsafe.getObject(mirror, offset) == type;
-    }
-
-
     public void startCompiler() throws Throwable {
-
-        long offset = HotSpotGraalRuntime.getInstance().getConfig().graalMirrorInClassOffset;
-        initMirror(typeBoolean, offset);
-        initMirror(typeChar, offset);
-        initMirror(typeFloat, offset);
-        initMirror(typeDouble, offset);
-        initMirror(typeByte, offset);
-        initMirror(typeShort, offset);
-        initMirror(typeInt, offset);
-        initMirror(typeLong, offset);
-        initMirror(typeVoid, offset);
-
         if (GraalOptions.LogFile != null) {
             try {
                 final boolean enableAutoflush = true;
@@ -136,7 +115,7 @@ public class VMToCompilerImpl implements VMToCompiler {
                 @Override
                 public void run() {
                     VMToCompilerImpl.this.intrinsifyArrayCopy = new IntrinsifyArrayCopyPhase(runtime);
-                    SnippetInstaller installer = new SnippetInstaller(runtime, runtime.getGraalRuntime().getTarget(), HotSpotGraalRuntime.wordStamp());
+                    SnippetInstaller installer = new SnippetInstaller(runtime, runtime.getGraalRuntime().getTarget());
                     GraalIntrinsics.installIntrinsics(installer);
                     runtime.installSnippets(installer);
                 }
@@ -373,11 +352,6 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     @Override
-    public boolean compileMethod(long metaspaceMethod, final HotSpotResolvedJavaType holder, final int entryBCI, boolean blocking, int priority) throws Throwable {
-        HotSpotResolvedJavaMethod method = holder.createMethod(metaspaceMethod);
-        return compileMethod(method, entryBCI, blocking, priority);
-    }
-
     public boolean compileMethod(final HotSpotResolvedJavaMethod method, final int entryBCI, boolean blocking, int priority) throws Throwable {
         boolean osrCompilation = entryBCI != StructuredGraph.INVOCATION_ENTRY_BCI;
         if (osrCompilation && bootstrapRunning) {
@@ -415,7 +389,7 @@ public class VMToCompilerImpl implements VMToCompiler {
 
             final OptimisticOptimizations optimisticOpts = new OptimisticOptimizations(method);
             int id = compileTaskIds.incrementAndGet();
-            // OSR compilations need to be finished quickly, so they get max priority
+            // osr compilations need to be finished quickly, so they get max priority
             int queuePriority = osrCompilation ? -1 : priority;
             CompilationTask task = CompilationTask.create(graalRuntime, createPhasePlan(optimisticOpts, osrCompilation), optimisticOpts, method, entryBCI, id, queuePriority);
             if (blocking) {
@@ -440,7 +414,7 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     @Override
-    public JavaMethod createUnresolvedJavaMethod(String name, String signature, JavaType holder) {
+    public JavaMethod createJavaMethod(String name, String signature, JavaType holder) {
         return new HotSpotMethodUnresolved(name, signature, holder);
     }
 
@@ -450,18 +424,12 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     @Override
-    public JavaField createJavaField(JavaType holder, String name, JavaType type, int offset, int flags, boolean internal) {
+    public JavaField createJavaField(JavaType holder, String name, JavaType type, int offset, int flags) {
         if (offset != -1) {
             HotSpotResolvedJavaType resolved = (HotSpotResolvedJavaType) holder;
-            return resolved.createField(name, type, offset, flags, internal);
+            return resolved.createField(name, type, offset, flags);
         }
         return new HotSpotUnresolvedField(holder, name, type);
-    }
-
-    @Override
-    public ResolvedJavaMethod createResolvedJavaMethod(JavaType holder, long metaspaceMethod) {
-        HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) holder;
-        return type.createMethod(metaspaceMethod);
     }
 
     @Override
@@ -491,44 +459,8 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     @Override
-    public HotSpotTypeUnresolved createUnresolvedJavaType(String name) {
-        int dims = 0;
-        int startIndex = 0;
-        while (name.charAt(startIndex) == '[') {
-            startIndex++;
-            dims++;
-        }
-
-        // Decode name if necessary.
-        if (name.charAt(name.length() - 1) == ';') {
-            assert name.charAt(startIndex) == 'L';
-            return new HotSpotTypeUnresolved(name, name.substring(startIndex + 1, name.length() - 1), dims);
-        } else {
-            return new HotSpotTypeUnresolved(HotSpotTypeUnresolved.getFullName(name, dims), name, dims);
-        }
-    }
-
-    @Override
-    public HotSpotResolvedJavaType createResolvedJavaType(long metaspaceKlass,
-                    String name,
-                    String simpleName,
-                    Class javaMirror,
-                    boolean hasFinalizableSubclass,
-                    int sizeOrSpecies) {
-        HotSpotResolvedJavaType type = new HotSpotResolvedJavaType(
-                                        metaspaceKlass,
-                                        name,
-                                        simpleName,
-                                        javaMirror,
-                                        hasFinalizableSubclass,
-                                        sizeOrSpecies);
-
-        long offset = HotSpotGraalRuntime.getInstance().getConfig().graalMirrorInClassOffset;
-        if (!unsafe.compareAndSwapObject(javaMirror, offset, null, type)) {
-            // lost the race - return the existing value instead
-            type = (HotSpotResolvedJavaType) unsafe.getObject(javaMirror, offset);
-        }
-        return type;
+    public JavaType createJavaType(String name) {
+        return new HotSpotTypeUnresolved(name);
     }
 
     @Override
