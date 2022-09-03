@@ -275,11 +275,9 @@ public final class State extends MergeableState<State> implements Cloneable {
             return true;
         }
 
-        for (State other : withReachableStates) {
-            versionNr = Math.max(versionNr, other.versionNr) + 1;
-            if (!other.isUnreachable) {
-                isUnreachable = false;
-            }
+        for (State state : withReachableStates) {
+            versionNr = Math.max(versionNr, state.versionNr) + 1;
+            isUnreachable &= state.isUnreachable;
         }
 
         if (isUnreachable) {
