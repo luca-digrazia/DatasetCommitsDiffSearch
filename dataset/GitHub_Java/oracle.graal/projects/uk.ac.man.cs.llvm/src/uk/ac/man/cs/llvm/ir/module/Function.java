@@ -81,11 +81,7 @@ public class Function implements ParserListener {
             case VALUE_SYMTAB:
                 return new ValueSymbolTable(generator);
 
-            case METADATA:
-                return version.createMetadata(types, symbols);
-
             default:
-                System.out.printf("ENTER #12-FUNCTION-BLOCK: %s%n", block);
                 return ParserListener.DEFAULT;
         }
     }
