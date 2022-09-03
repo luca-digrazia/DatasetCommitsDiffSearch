@@ -227,21 +227,16 @@ public abstract class CompilationWrapper<T> {
                     return handleException(cause);
                 }
 
-                File dumpPath = null;
-                try {
-                    String dir = this.outputDirectory.getPath();
-                    if (dir != null) {
-                        String dumpName = PathUtilities.sanitizeFileName(toString());
-                        dumpPath = new File(dir, dumpName);
-                        dumpPath.mkdirs();
-                        if (!dumpPath.exists()) {
-                            TTY.println("Warning: could not create diagnostics directory " + dumpPath);
-                            dumpPath = null;
-                        }
-                    }
-                } catch (Throwable t) {
-                    TTY.println("Warning: could not create Graal diagnostic directory");
-                    t.printStackTrace(TTY.out);
+                String dir = this.outputDirectory.getPath();
+                if (dir == null) {
+                    return handleException(cause);
+                }
+                String dumpName = PathUtilities.sanitizeFileName(toString());
+                File dumpPath = new File(dir, dumpName);
+                dumpPath.mkdirs();
+                if (!dumpPath.exists()) {
+                    TTY.println("Warning: could not create diagnostics directory " + dumpPath);
+                    return handleException(cause);
                 }
 
                 String message;
@@ -258,19 +253,11 @@ public abstract class CompilationWrapper<T> {
                                     causeType,
                                     actionKey.getName(), ExceptionAction.Print,
                                     actionKey.getName(), ExceptionAction.Print);
-                    if (dumpPath != null) {
-                        ps.println("Retrying compilation of " + this);
-                    } else {
-                        ps.println("Not retrying compilation of " + this + " as the dump path could not be created.");
-                    }
+                    ps.println("Retrying compilation of " + this);
                     message = baos.toString();
                 }
 
                 TTY.print(message);
-                if (dumpPath == null) {
-                    return handleException(cause);
-                }
-
                 File retryLogFile = new File(dumpPath, "retry.log");
                 try (PrintStream ps = new PrintStream(new FileOutputStream(retryLogFile))) {
                     ps.print(message);
