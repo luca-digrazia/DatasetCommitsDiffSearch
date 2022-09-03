@@ -66,10 +66,8 @@ public class VerifyUsageWithEquals extends VerifyPhase<PhaseContext> {
     protected boolean verify(StructuredGraph graph, PhaseContext context) {
         for (ObjectEqualsNode cn : graph.getNodes().filter(ObjectEqualsNode.class)) {
             // bail out if we compare an object of type klass with == or != (except null checks)
-            if (checkUsage(cn.x(), cn.y(), context.getMetaAccess()) && checkUsage(cn.y(), cn.x(), context.getMetaAccess())) {
-                throw new VerificationError("Verification of " + klass.getName() + " usage failed: Comparing " + cn.x() + " and " + cn.y() + " in " + graph.method() +
-                                " must use .equals() for object equality, not '==' or '!='");
-            }
+            assert !(checkUsage(cn.x(), cn.y(), context.getMetaAccess()) && checkUsage(cn.y(), cn.x(), context.getMetaAccess())) : "Verification of " + klass.getName() + " usage failed: Comparing " +
+                            cn.x() + " and " + cn.y() + " in " + graph.method() + " must use .equals() for object equality, not '==' or '!='";
         }
         return true;
     }
