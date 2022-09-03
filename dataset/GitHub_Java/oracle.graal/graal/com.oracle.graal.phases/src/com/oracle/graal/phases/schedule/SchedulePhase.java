@@ -75,6 +75,8 @@ public final class SchedulePhase extends Phase {
         LATEST_OUT_OF_LOOPS
     }
 
+    static int created;
+
     private class LocationSet {
         private LocationIdentity firstLocation;
         private List<LocationIdentity> list;
@@ -303,7 +305,6 @@ public final class SchedulePhase extends Phase {
     private BlockMap<LocationSet> blockToKillSet;
     private final SchedulingStrategy selectedStrategy;
     private boolean scheduleConstants;
-    private NodeMap<Block> nodeToBlockMap;
 
     public SchedulePhase() {
         this(OptScheduleOutOfLoops.getValue() ? SchedulingStrategy.LATEST_OUT_OF_LOOPS : SchedulingStrategy.LATEST);
@@ -357,11 +358,6 @@ public final class SchedulePhase extends Phase {
                 for (PhiNode phi : mergeNode.phis()) {
                     nodeToBlock.set(phi, b);
                 }
-            } else if (beginNode instanceof LoopExitNode) {
-                LoopExitNode loopExitNode = (LoopExitNode) beginNode;
-                for (ProxyNode proxy : loopExitNode.proxies()) {
-                    nodeToBlock.set(proxy, b);
-                }
             }
         }
 
@@ -382,7 +378,7 @@ public final class SchedulePhase extends Phase {
                 if (visited.isMarked(phi)) {
                     for (int i = 0; i < loopBegin.getLoopEndCount(); ++i) {
                         Node node = phi.valueAt(i + loopBegin.forwardEndCount());
-                        if (node != null && !visited.isMarked(node)) {
+                        if (!visited.isMarked(node)) {
                             stack.push(node);
                             processStack(blockToNodes, nodeToBlock, visited, stack);
                         }
@@ -410,7 +406,6 @@ public final class SchedulePhase extends Phase {
         }
 
         this.blockToNodesMap = blockToNodes;
-        this.nodeToBlockMap = nodeToBlock;
     }
 
     private static void addNode(BlockMap<List<ValueNode>> blockToNodes, Block b, ValueNode endNode) {
@@ -435,9 +430,7 @@ public final class SchedulePhase extends Phase {
                     AbstractMergeNode merge = phiNode.merge();
                     for (int i = 0; i < merge.forwardEndCount(); ++i) {
                         Node input = phiNode.valueAt(i);
-                        if (input != null) {
-                            stack.push(input);
-                        }
+                        stack.push(input);
                     }
                 } else {
                     for (Node input : current.inputs()) {
@@ -566,10 +559,6 @@ public final class SchedulePhase extends Phase {
      */
     public BlockMap<List<ValueNode>> getBlockToNodesMap() {
         return blockToNodesMap;
-    }
-
-    public NodeMap<Block> getNodeToBlockMap() {
-        return this.nodeToBlockMap;
     }
 
     /**
