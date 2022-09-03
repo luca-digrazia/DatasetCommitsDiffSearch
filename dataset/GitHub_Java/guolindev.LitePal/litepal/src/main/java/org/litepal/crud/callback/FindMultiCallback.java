@@ -25,6 +25,6 @@ import java.util.List;
  */
 public interface FindMultiCallback<T> {
 
-    void onFinish(List<T> list);
+    void onFinish(List<T> t);
 
 }
