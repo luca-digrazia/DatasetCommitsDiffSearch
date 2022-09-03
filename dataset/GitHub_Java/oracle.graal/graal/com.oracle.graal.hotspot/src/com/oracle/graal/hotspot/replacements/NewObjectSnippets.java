@@ -126,13 +126,11 @@ public class NewObjectSnippets implements Snippets {
         Word hub = loadWordFromObject(elementType, arrayKlassOffset());
         if (hub.equal(Word.zero())) {
             // the array class is not yet loaded
-            DeoptimizeNode.deopt(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved);
+            DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.Unresolved);
         }
 
         int layoutHelper = readLayoutHelper(hub);
         //@formatter:off
-        // from src/share/vm/oops/klass.hpp:
-        //
         // For arrays, layout helper is a negative number, containing four
         // distinct bytes, as follows:
         //    MSB:[tag, hsz, ebt, log2(esz)]:LSB
