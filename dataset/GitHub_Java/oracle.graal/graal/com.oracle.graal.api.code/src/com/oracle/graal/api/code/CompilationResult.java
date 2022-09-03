@@ -171,23 +171,13 @@ public class CompilationResult implements Serializable {
             this.inlined = inlined;
         }
 
-        public String getDataString() {
-            if (constant != null) {
-                return constant.toString();
-            } else {
-                Formatter ret = new Formatter();
-                boolean first = true;
-                for (byte b : rawConstant) {
-                    ret.format(first ? "%02X" : " %02X", b);
-                    first = false;
-                }
-                return ret.toString();
-            }
-        }
-
         @Override
         public String toString() {
-            return String.format("%d[<data patch referring to data %s>]", pcOffset, getDataString());
+            if (constant == null) {
+                return String.format("%d[<data patch referring to %d bytes raw data>]", pcOffset, rawConstant.length);
+            } else {
+                return String.format("%d[<data patch referring to data %s>]", pcOffset, constant);
+            }
         }
     }
 
