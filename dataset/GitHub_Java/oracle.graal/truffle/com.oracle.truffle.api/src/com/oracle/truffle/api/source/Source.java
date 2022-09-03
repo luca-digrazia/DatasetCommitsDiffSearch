@@ -168,7 +168,7 @@ public abstract class Source {
      * @since 0.15
      */
     public static Builder<Source> newFromFile(File file) {
-        return EMPTY.new Builder<>(file);
+        return EMPTY.new Builder<Source>(file);
     }
 
     /**
@@ -386,7 +386,7 @@ public abstract class Source {
     }
 
     public static Builder<Source> newFromURL(URL url) {
-        return EMPTY.new Builder<>(url);
+        return EMPTY.new Builder<Source>(url);
     }
 
     /**
@@ -990,7 +990,7 @@ public abstract class Source {
         private final Object source;
         private String name;
         private String path;
-        private String mime;
+        private String mimeType;
         private String content;
         private boolean internal;
 
@@ -998,20 +998,20 @@ public abstract class Source {
             this.source = source;
         }
 
-        public Builder<R> name(String newName) {
-            this.name = newName;
+        public Builder<R> name(String name) {
+            this.name = name;
             return this;
         }
 
-        Builder<R> path(String p) {
-            this.path = p;
+        Builder<R> path(String path) {
+            this.path = path;
             return this;
         }
 
         @SuppressWarnings("unchecked")
-        public Builder<Source> mimeType(String newMimeType) {
-            Objects.nonNull(newMimeType);
-            this.mime = newMimeType;
+        public Builder<Source> mimeType(String mimeType) {
+            Objects.nonNull(mimeType);
+            this.mimeType = mimeType;
             return (Builder<Source>) this;
         }
 
@@ -1034,27 +1034,26 @@ public abstract class Source {
         }
 
         public Builder<R> content(byte[] arr, int offset, int length, Charset encoding) {
-            this.content = new String(arr, offset, length, encoding);
+            // TBD: use the array bytes as content
             return this;
         }
 
-        @SuppressWarnings("unchecked")
         public R build() throws IOException {
-            Content holder;
+            Content content;
             if (source instanceof File) {
-                holder = buildFile();
+                content = buildFile();
             } else if (source instanceof Reader) {
-                holder = buildReader();
+                content = buildReader();
             } else if (source instanceof URL) {
-                holder = buildURL();
+                content = buildURL();
             } else {
-                holder = buildString();
+                content = buildString();
             }
-            String type = this.mime == null ? holder.findMimeType() : this.mime;
-            if (type == null) {
+            String mime = mimeType == null ? content.findMimeType() : mimeType;
+            if (mime == null) {
                 throw new IOException("Unknown mime type for " + source);
             }
-            SourceImpl ret = new SourceImpl(holder, type, name, internal);
+            SourceImpl ret = new SourceImpl(content, mime, name, internal);
             return (R) ret;
         }
 
@@ -1074,25 +1073,25 @@ public abstract class Source {
                 content = read(r);
             }
             r.close();
-            LiteralSourceImpl ret = new LiteralSourceImpl(
+            LiteralSourceImpl source = new LiteralSourceImpl(
                             null, content);
-            return ret;
+            return source;
         }
 
         private Content buildURL() throws IOException {
             final URL url = (URL) source;
-            URLSourceImpl ret = new URLSourceImpl(url, content, null);
-            return ret;
+            URLSourceImpl source = new URLSourceImpl(url, content, null);
+            return source;
         }
 
-        private Content buildString() {
+        private Content buildString() throws IOException {
             final String r = (String) source;
             if (content == null) {
                 content = r;
             }
-            LiteralSourceImpl ret = new LiteralSourceImpl(
+            LiteralSourceImpl source = new LiteralSourceImpl(
                             null, content);
-            return ret;
+            return source;
         }
     }
 }
