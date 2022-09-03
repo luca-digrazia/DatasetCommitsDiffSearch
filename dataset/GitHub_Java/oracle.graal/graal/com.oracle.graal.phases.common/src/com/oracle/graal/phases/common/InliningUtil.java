@@ -435,7 +435,7 @@ public class InliningUtil {
             super(invoke);
             this.concrete = concrete;
             this.type = type;
-            assert type.isArray() || !isAbstract(type.getModifiers()) : type;
+            assert !isAbstract(type.getModifiers()) : type;
         }
 
         @Override
@@ -1139,7 +1139,7 @@ public class InliningUtil {
             }
 
             ResolvedJavaType type = ptypes[0].getType();
-            assert type.isArray() || !isAbstract(type.getModifiers());
+            assert !isAbstract(type.getModifiers());
             ResolvedJavaMethod concrete = type.resolveMethod(targetMethod);
             if (!checkTargetConditions(data, replacements, invoke, concrete, optimisticOpts)) {
                 return null;
@@ -1211,7 +1211,7 @@ public class InliningUtil {
                 if (index == -1) {
                     notRecordedTypeProbability += type.getProbability();
                 } else {
-                    assert type.getType().isArray() || !isAbstract(type.getType().getModifiers()) : type + " " + concrete;
+                    assert !isAbstract(type.getType().getModifiers());
                     usedTypes.add(type);
                     typesToConcretes.add(index);
                 }
