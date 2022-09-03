@@ -25,9 +25,10 @@ package com.oracle.max.graal.printer;
 import java.io.*;
 import java.net.*;
 import java.util.*;
-import java.util.regex.*;
 
+import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
+import com.oracle.max.criutils.*;
 import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
 
@@ -37,20 +38,20 @@ import com.oracle.max.graal.graph.*;
  */
 public class IdealGraphPrinterDumpHandler implements DebugDumpHandler {
 
-    private static final Pattern INVALID_CHAR = Pattern.compile("[^A-Za-z0-9_.-]");
+    private static final String DEFAULT_FILE_NAME = "output.igv.xml";
 
-    private final String host;
-    private final int port;
-
-    public IdealGraphPrinter printer;
-    private OutputStream stream;
-    private Socket socket;
+    private IdealGraphPrinter printer;
+    private List<String> previousInlineContext = new ArrayList<>();
+    private String fileName;
+    private String host;
+    private int port;
+    private boolean initialized;
 
     /**
      * Creates a new {@link IdealGraphPrinterDumpHandler} that writes output to a file named after the compiled method.
      */
     public IdealGraphPrinterDumpHandler() {
-        this(null, -1);
+        this.fileName = DEFAULT_FILE_NAME;
     }
 
     /**
@@ -61,135 +62,109 @@ public class IdealGraphPrinterDumpHandler implements DebugDumpHandler {
         this.port = port;
     }
 
-    private IdealGraphPrinter printer() {
-        return printer;
-    }
-
-    private Socket socket() {
-        return socket;
-    }
-
-    private void openPrinter(RiResolvedMethod method) {
-        assert stream == null && printer() == null;
-        String name;
-        if (method != null) {
-            name = method.holder().name();
-            name = name.substring(1, name.length() - 1).replace('/', '.');
-            name = name + "." + method.name();
-        } else {
-            name = "null";
-        }
-
-        openPrinter(name, method);
-    }
-
-    private void openPrinter(String title, RiResolvedMethod method) {
-        assert stream == null && printer() == null;
-        if (host != null) {
-            openNetworkPrinter(title, method);
-        } else {
-            openFilePrinter(title, method);
-        }
-    }
-
-    private void openFilePrinter(String title, RiResolvedMethod method) {
-        String filename = title + ".igv.xml";
-        filename = INVALID_CHAR.matcher(filename).replaceAll("_");
-
-        try {
-            stream = new FileOutputStream(filename);
-            printer = new IdealGraphPrinter(stream);
-            printer().begin();
-            printer().beginGroup(title, title, method, -1, "Graal");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public boolean networkAvailable() {
-        try {
-            Socket s = new Socket(host, port);
-            s.setSoTimeout(10);
-            s.close();
-            return true;
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
-    private void openNetworkPrinter(String title, RiResolvedMethod method) {
-        try {
-            socket = new Socket(host, port);
-            if (socket().getInputStream().read() == 'y') {
-                stream = new BufferedOutputStream(socket().getOutputStream(), 0x4000);
+    private void ensureInitialized() {
+        if (!initialized) {
+            initialized = true;
+            if (fileName != null) {
+                initializeFilePrinter();
             } else {
-                // server currently does not accept any input
-                socket().close();
-                socket = null;
-                return;
+                initializeNetworkPrinter();
             }
+        }
+    }
 
-
+    private void initializeFilePrinter() {
+        try {
+            FileOutputStream stream = new FileOutputStream(fileName);
             printer = new IdealGraphPrinter(stream);
-            printer().begin();
-            printer().beginGroup(title, title, method, -1, "Graal");
-            printer().flush();
-            if (socket().getInputStream().read() != 'y') {
-                // server declines input for this method
-                socket().close();
-                socket = null;
-                stream = null;
-                printer = null;
-            }
+            printer.begin();
         } catch (IOException e) {
-            System.err.println("Error opening connection to " + host + ":" + port + ": " + e);
-
-            if (socket() != null) {
-                try {
-                    socket().close();
-                } catch (IOException ioe) {
-                }
-                socket = null;
-            }
-            stream = null;
             printer = null;
         }
     }
 
-    private void closePrinter() {
-        assert (printer() != null);
-
+    private void initializeNetworkPrinter() {
         try {
-            printer().endGroup();
-            printer().end();
-
-            if (socket() != null) {
-                socket().close(); // also closes stream
-            } else {
-                stream.close();
-            }
+            Socket socket = new Socket(host, port);
+            BufferedOutputStream stream = new BufferedOutputStream(socket.getOutputStream(), 0x4000);
+            printer = new IdealGraphPrinter(stream);
+            printer.begin();
+            TTY.println("Connected to the IGV on port %d", port);
         } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
+            TTY.println("Could not connect to the IGV on port %d: %s", port, e);
             printer = null;
-            stream = null;
-            socket = null;
         }
-    }
-
-    public void compilationStarted(String groupTitle) {
-        openPrinter(groupTitle, null);
     }
 
     @Override
-    public void dump(Object object, String message) {
+    public void dump(Object object, final String message) {
         if (object instanceof Graph) {
-            Graph graph = (Graph) object;
-            List<RiResolvedMethod> inlineContext = Debug.contextSnapshot(RiResolvedMethod.class);
-            System.out.println("dumping graph");
-            for (RiResolvedMethod m : inlineContext) {
-                System.out.println("m="+m);
+            ensureInitialized();
+            final Graph graph = (Graph) object;
+
+            if (printer != null && printer.isValid()) {
+                // Get all current RiResolvedMethod instances in the context.
+                List<String> inlineContext = getInlineContext();
+                Debug.contextSnapshot(RiResolvedMethod.class);
+
+                // Reverse list such that inner method comes after outer method.
+                Collections.reverse(inlineContext);
+
+                // Check for method scopes that must be closed since the previous dump.
+                for (int i = 0; i < previousInlineContext.size(); ++i) {
+                    if (i >= inlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
+                        for (int j = previousInlineContext.size() - 1; j >= i; --j) {
+                            closeScope();
+                        }
+                        break;
+                    }
+                }
+
+                // Check for method scopes that must be opened since the previous dump.
+                for (int i = 0; i < inlineContext.size(); ++i) {
+                    if (i >= previousInlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
+                        for (int j = i; j < inlineContext.size(); ++j) {
+                            openScope(inlineContext.get(j));
+                        }
+                        break;
+                    }
+                }
+
+                // Save inline context for next dump.
+                previousInlineContext = inlineContext;
+
+                Debug.sandbox("PrintingGraph", new Runnable() {
+
+                    @Override
+                    public void run() {
+                        // Finally, output the graph.
+                        printer.print(graph, message);
+
+                    }
+                });
             }
         }
+    }
+
+    private static List<String> getInlineContext() {
+        List<String> result = new ArrayList<>();
+        for (Object o : Debug.context()) {
+            if (o instanceof RiResolvedMethod) {
+                RiResolvedMethod method = (RiResolvedMethod) o;
+                result.add(CiUtil.format("%H::%n(%p)", method));
+            } else if (o instanceof DebugDumpScope) {
+                DebugDumpScope debugDumpScope = (DebugDumpScope) o;
+                result.add(debugDumpScope.getName());
+            }
+        }
+        return result;
+    }
+
+    private void openScope(String name) {
+        printer.beginGroup(name, name, Debug.contextLookup(RiResolvedMethod.class), -1);
+    }
+
+    private void closeScope() {
+        printer.endGroup();
     }
 }
