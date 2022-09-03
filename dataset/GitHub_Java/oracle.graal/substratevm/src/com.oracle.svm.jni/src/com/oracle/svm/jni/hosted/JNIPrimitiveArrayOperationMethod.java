@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -39,20 +37,20 @@ import org.graalvm.compiler.nodes.ValuePhiNode;
 import org.graalvm.compiler.nodes.calc.IntegerLessThanNode;
 import org.graalvm.compiler.nodes.extended.BranchProbabilityNode;
 import org.graalvm.compiler.nodes.java.NewArrayNode;
-import org.graalvm.nativeimage.c.function.CEntryPoint.FatalExceptionHandler;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.WordPointer;
 
 import com.oracle.graal.pointsto.meta.HostedProviders;
+import com.oracle.svm.core.c.function.CEntryPointOptions.FatalExceptionHandler;
 import com.oracle.svm.core.c.function.CEntryPointOptions.NoEpilogue;
 import com.oracle.svm.core.c.function.CEntryPointOptions.NoPrologue;
 import com.oracle.svm.core.c.function.CEntryPointOptions.Publish;
 import com.oracle.svm.core.graal.nodes.CEntryPointEnterNode;
+import com.oracle.svm.core.graal.nodes.CEntryPointEnterNode.EnterAction;
 import com.oracle.svm.core.graal.nodes.CEntryPointLeaveNode;
 import com.oracle.svm.core.graal.nodes.CEntryPointLeaveNode.LeaveAction;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.code.CEntryPointData;
-import com.oracle.svm.hosted.code.SimpleSignature;
 import com.oracle.svm.jni.nativeapi.JNIEnvironment;
 import com.oracle.svm.jni.nativeapi.JNIObjectHandle;
 
@@ -123,7 +121,7 @@ public final class JNIPrimitiveArrayOperationMethod extends JNIGeneratedMethod {
         return sb.toString();
     }
 
-    private SimpleSignature createSignature(MetaAccessProvider metaAccess) {
+    private JNISignature createSignature(MetaAccessProvider metaAccess) {
         ResolvedJavaType objectHandleType = metaAccess.lookupJavaType(JNIObjectHandle.class);
         ResolvedJavaType intType = metaAccess.lookupJavaType(int.class);
         ResolvedJavaType returnType;
@@ -150,7 +148,7 @@ public final class JNIPrimitiveArrayOperationMethod extends JNIGeneratedMethod {
                 throw VMError.shouldNotReachHere();
             }
         }
-        return new SimpleSignature(args, returnType);
+        return new JNISignature(args, returnType);
     }
 
     @Override
@@ -161,7 +159,7 @@ public final class JNIPrimitiveArrayOperationMethod extends JNIGeneratedMethod {
         state.initializeForMethodStart(null, true, providers.getGraphBuilderPlugins());
 
         ValueNode vmThread = kit.loadLocal(0, signature.getParameterKind(0));
-        kit.append(CEntryPointEnterNode.enter(vmThread));
+        kit.append(new CEntryPointEnterNode(EnterAction.Enter, vmThread));
 
         List<ValueNode> arguments = kit.loadArguments(signature.toParameterTypes(null));
 
@@ -202,8 +200,8 @@ public final class JNIPrimitiveArrayOperationMethod extends JNIGeneratedMethod {
 
         kit.append(new CEntryPointLeaveNode(LeaveAction.Leave));
         kit.createReturn(result, (result != null) ? result.getStackKind() : JavaKind.Void);
-
-        return kit.finalizeGraph();
+        assert graph.verify();
+        return graph;
     }
 
     private ValueNode newArray(HostedProviders providers, JNIGraphKit kit, List<ValueNode> arguments) {

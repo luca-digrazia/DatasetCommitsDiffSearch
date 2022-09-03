@@ -71,6 +71,7 @@ import com.oracle.svm.core.graal.nodes.CEntryPointLeaveNode;
 import com.oracle.svm.core.graal.nodes.CEntryPointLeaveNode.LeaveAction;
 import com.oracle.svm.core.graal.nodes.CInterfaceReadNode;
 import com.oracle.svm.core.graal.nodes.VaListNextArgNode;
+import com.oracle.svm.core.snippets.SnippetRuntime;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.c.NativeLibraries;
 import com.oracle.svm.hosted.c.info.ElementInfo;
@@ -107,12 +108,6 @@ public final class JNIJavaCallWrapperMethod extends JNIGeneratedMethod {
         VARARGS,
         ARRAY,
         VA_LIST,
-    }
-
-    private static final ClassCastException cachedArgumentClassCastException;
-    static {
-        cachedArgumentClassCastException = new ClassCastException("Object argument to JNI call does not match type in Java signature");
-        cachedArgumentClassCastException.setStackTrace(new StackTraceElement[0]);
     }
 
     private final NativeLibraries nativeLibs;
@@ -221,7 +216,7 @@ public final class JNIJavaCallWrapperMethod extends JNIGeneratedMethod {
         }
 
         kit.elsePart(); // illegal parameter types
-        ConstantNode exceptionObject = kit.createObject(cachedArgumentClassCastException);
+        ConstantNode exceptionObject = kit.createObject(SnippetRuntime.cachedClassCastException);
         kit.retainPendingException(exceptionObject);
         ValueNode typeMismatchValue = null;
         if (returnKind != JavaKind.Void) {
