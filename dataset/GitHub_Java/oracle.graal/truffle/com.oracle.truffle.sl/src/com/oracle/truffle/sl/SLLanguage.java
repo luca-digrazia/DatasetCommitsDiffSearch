@@ -3,7 +3,7 @@
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
- *
+ * 
  * Subject to the condition set forth below, permission is hereby granted to any
  * person obtaining a copy of this software, associated documentation and/or
  * data (collectively the "Software"), free of charge and under any and all
@@ -11,25 +11,25 @@
  * freely licensable by each licensor hereunder covering either (i) the
  * unmodified Software as contributed to or provided by such licensor, or (ii)
  * the Larger Works (as defined below), to deal in both
- *
+ * 
  * (a) the Software, and
- *
+ * 
  * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
  * one is included with the Software each a "Larger Work" to which the Software
  * is contributed by such licensors),
- *
+ * 
  * without restriction, including without limitation the rights to copy, create
  * derivative works of, display, perform, and distribute the Software and make,
  * use, sell, offer for sale, import, export, have made, and have sold the
  * Software and the Larger Work(s), and to sublicense the foregoing rights on
  * either these or other terms.
- *
+ * 
  * This license is subject to the following condition:
- *
+ * 
  * The above copyright notice and either this complete permission notice or at a
  * minimum a reference to the UPL must be included in all copies or substantial
  * portions of the Software.
- *
+ * 
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -153,24 +153,19 @@ import com.oracle.truffle.tools.*;
  *
  */
 @TruffleLanguage.Registration(name = "SL", version = "0.5", mimeType = "application/x-sl")
-public class SLLanguage extends TruffleLanguage<SLContext> {
+public class SLLanguage extends TruffleLanguage {
     private static List<NodeFactory<? extends SLBuiltinNode>> builtins = Collections.emptyList();
     private static Visualizer visualizer = new SLDefaultVisualizer();
     private static ASTProber registeredASTProber; // non-null if prober already registered
+    private final SLContext context;
     private DebugSupportProvider debugSupport;
 
-    private SLLanguage() {
-    }
-
-    public static final SLLanguage INSTANCE = new SLLanguage();
-
-    @Override
-    protected SLContext createContext(Env env) {
-        SLContext context = new SLContext(this, new BufferedReader(env.stdIn()), new PrintWriter(env.stdOut(), true));
+    public SLLanguage(Env env) {
+        super(env);
+        context = new SLContext(this, new BufferedReader(env().stdIn()), new PrintWriter(env().stdOut(), true));
         for (NodeFactory<? extends SLBuiltinNode> builtin : builtins) {
             context.installBuiltin(builtin, true);
         }
-        return context;
     }
 
     // TODO (mlvdv) command line options
@@ -383,6 +378,10 @@ public class SLLanguage extends TruffleLanguage<SLContext> {
         return result.toString();
     }
 
+    public static SLLanguage find() {
+        return SLLanguage.findContext(SLLanguage.class);
+    }
+
     @Override
     protected CallTarget parse(Source code, Node node, String... argumentNames) throws IOException {
         final SLContext c = new SLContext(this);
@@ -402,7 +401,8 @@ public class SLLanguage extends TruffleLanguage<SLContext> {
                 if (failed[0] != null) {
                     throw new IllegalStateException(failed[0]);
                 }
-                SLContext fillIn = getContext();
+                SLLanguage current = SLLanguage.find();
+                SLContext fillIn = current.context;
                 final SLFunctionRegistry functionRegistry = fillIn.getFunctionRegistry();
                 for (SLFunction f : c.getFunctionRegistry().getFunctions()) {
                     RootCallTarget callTarget = f.getCallTarget();
@@ -418,7 +418,7 @@ public class SLLanguage extends TruffleLanguage<SLContext> {
     }
 
     @Override
-    protected Object findExportedSymbol(SLContext context, String globalName, boolean onlyExplicit) {
+    protected Object findExportedSymbol(String globalName, boolean onlyExplicit) {
         for (SLFunction f : context.getFunctionRegistry().getFunctions()) {
             if (globalName.equals(f.getName())) {
                 return f;
@@ -428,7 +428,7 @@ public class SLLanguage extends TruffleLanguage<SLContext> {
     }
 
     @Override
-    protected Object getLanguageGlobal(SLContext context) {
+    protected Object getLanguageGlobal() {
         return context;
     }
 
@@ -492,7 +492,7 @@ public class SLLanguage extends TruffleLanguage<SLContext> {
     }
 
     public SLContext getContext() {
-        return findContext();
+        return context;
     }
 
     private final class SLDebugProvider implements DebugSupportProvider {
