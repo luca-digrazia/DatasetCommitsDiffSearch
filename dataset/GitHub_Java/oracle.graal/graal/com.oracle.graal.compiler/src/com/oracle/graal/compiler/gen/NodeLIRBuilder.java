@@ -51,7 +51,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
 
@@ -213,7 +212,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     private static boolean verifyPHIKind(LIRKind derivedKind, LIRKind phiKind) {
         assert derivedKind.getPlatformKind() != Kind.Object || !derivedKind.isDerivedReference();
         PlatformKind phiPlatformKind = phiKind.getPlatformKind();
-        assert derivedKind.equals(phiKind) || derivedKind.getPlatformKind().equals(phiPlatformKind instanceof Kind ? ((Kind) phiPlatformKind).getStackKind() : phiPlatformKind);
+        assert derivedKind.getPlatformKind().equals(phiPlatformKind instanceof Kind ? ((Kind) phiPlatformKind).getStackKind() : phiPlatformKind);
         return true;
     }
 
