@@ -46,11 +46,10 @@ import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.espresso.EspressoLanguage;
-import com.oracle.truffle.espresso.vm.InterpreterToVM;
+import com.oracle.truffle.espresso.bytecode.InterpreterToVM;
 import com.oracle.truffle.espresso.impl.FieldInfo;
 import com.oracle.truffle.espresso.impl.MethodInfo;
 import com.oracle.truffle.espresso.intrinsics.Target_java_lang_Object;
@@ -82,29 +81,20 @@ public class JniEnv {
     private static final TruffleObject mokapotLibrary = NativeLibrary.loadLibrary(System.getProperty("mokapot.library", "mokapot"));
 
     // Load native library nespresso.dll (Windows) or libnespresso.so (Unixes) at runtime.
-    public static final TruffleObject nespressoLibrary = NativeLibrary.loadLibrary(System.getProperty("nespresso.library", "nespresso"));
+    private static final TruffleObject nespressoLibrary = NativeLibrary.loadLibrary(System.getProperty("nespresso.library", "nespresso"));
 
     public static final TruffleObject javaLibrary = NativeLibrary.loadLibrary(System.getProperty("java.library", "java"));
 
-    private static final TruffleObject initializeNativeContext;
-    private static final TruffleObject setMokapotEspressoJniEnv;
-    private static final TruffleObject disposeNativeContext;
-    static {
-        try {
-            initializeNativeContext = NativeLibrary.lookupAndBind(nespressoLibrary,
-                            "initializeNativeContext", "(env, (string): pointer): pointer");
+    private static final TruffleObject initializeNativeContext = NativeLibrary.lookupAndBind(nespressoLibrary,
+                    "initializeNativeContext", "(env, (string): pointer): pointer");
 
-            setMokapotEspressoJniEnv = NativeLibrary.lookupAndBind(mokapotLibrary,
-                            "Mokapot_SetJNIEnv", "(pointer): void");
-
-            disposeNativeContext = NativeLibrary.lookupAndBind(nespressoLibrary, "disposeNativeContext",
-                            "(env, pointer): void");
-        } catch (UnknownIdentifierException e) {
-            throw EspressoError.shouldNotReachHere(e);
-        }
-    }
+    private static final TruffleObject setMokapotEspressoJniEnv = NativeLibrary.lookupAndBind(mokapotLibrary,
+                    "Mokapot_SetJNIEnv", "(pointer): void");
 
     private static final TruffleObject dupClosureRef = NativeLibrary.lookup(nespressoLibrary, "dupClosureRef");
+
+    private static final TruffleObject disposeNativeContext = NativeLibrary.lookupAndBind(nespressoLibrary, "disposeNativeContext",
+                    "(env, pointer): void");
 
     private static final Map<Class<?>, NativeSimpleType> classToNative = buildClassToNative();
     private static final Map<String, Method> jniMethods = buildJniMethods();
@@ -235,8 +225,8 @@ public class JniEnv {
             assert args.length - 1 == shiftedArgs.length;
             try {
                 // Substitute raw pointer by proper `this` reference.
-                //System.err.print("Call DEFINED method: " + m.getName() +
-                //                Arrays.toString(shiftedArgs));
+                // System.err.print("Call DEFINED method: " + m.getName() +
+                // Arrays.toString(shiftedArgs));
                 Object ret = m.invoke(JniEnv.this, shiftedArgs);
                 // System.err.println(" -> " + ret);
                 if (ret instanceof Boolean) {
@@ -1032,7 +1022,7 @@ public class JniEnv {
 
     @JniImpl
     public StaticObject NewString(long unicodePtr, int len) {
-        char[] value = new char[len];
+        char[] value = new char[Math.multiplyExact(len, JavaKind.Char.getByteCount())];
         SetCharArrayRegion(value, 0, len, unicodePtr);
         return EspressoLanguage.getCurrentContext().getMeta() //
                         .STRING.metaNew() //
