@@ -167,17 +167,7 @@ public class Inflation extends BigBang {
             /*
              * Support for Java annotations.
              */
-            try {
-                /*
-                 * Get the annotations from the wrapped type since AnalysisType.getAnnotations()
-                 * defends against JDK-7183985 and we want to get the original behavior.
-                 */
-                Annotation[] annotations = type.getWrapped().getAnnotations();
-                hub.setAnnotationsEncoding(encodeAnnotations(metaAccess, annotations, hub.getAnnotationsEncoding()));
-            } catch (ArrayStoreException e) {
-                /* If we hit JDK-7183985 just encode the exception. */
-                hub.setAnnotationsEncoding(e);
-            }
+            hub.setAnnotationsEncoding(encodeAnnotations(metaAccess, type.getAnnotations(), hub.getAnnotationsEncoding()));
 
             /*
              * Support for Java enumerations.
