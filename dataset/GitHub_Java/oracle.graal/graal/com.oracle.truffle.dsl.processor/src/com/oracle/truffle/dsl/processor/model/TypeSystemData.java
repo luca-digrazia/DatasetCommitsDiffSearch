@@ -59,7 +59,7 @@ public class TypeSystemData extends Template {
             for (TypeData typeData : types) {
                 primitiveTypeMirrors.add(typeData.getPrimitiveType());
                 boxedTypeMirrors.add(typeData.getBoxedType());
-                cachedTypes.put(ElementUtils.getUniqueIdentifier(typeData.getPrimitiveType()), typeData);
+                cachedTypes.put(typeData.getPrimitiveType().toString(), typeData);
             }
         }
     }
@@ -154,7 +154,7 @@ public class TypeSystemData extends Template {
     }
 
     public int findType(TypeMirror type) {
-        TypeData data = cachedTypes.get(ElementUtils.getUniqueIdentifier(type));
+        TypeData data = cachedTypes.get(type.toString());
         if (data != null) {
             return data.getIndex();
         }
