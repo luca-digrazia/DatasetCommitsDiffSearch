@@ -94,7 +94,9 @@ import org.junit.ComparisonFailure;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.KeyInfo;
 import com.oracle.truffle.api.interop.MessageResolution;
@@ -103,16 +105,25 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.test.CompileImmediatelyCheck;
 import com.oracle.truffle.api.test.polyglot.ValueAssert.Trait;
 
 public class ValueAPITest {
 
     private Context context;
 
+    private static boolean isCompileImmediately() {
+        CallTarget target = Truffle.getRuntime().createCallTarget(new RootNode(null) {
+            @Override
+            public Object execute(VirtualFrame frame) {
+                return CompilerDirectives.inCompiledCode();
+            }
+        });
+        return (boolean) target.call();
+    }
+
     @BeforeClass
     public static void beforeClass() {
-        Assume.assumeFalse(CompileImmediatelyCheck.isCompileImmediately());
+        Assume.assumeFalse(isCompileImmediately());
     }
 
     @Before
