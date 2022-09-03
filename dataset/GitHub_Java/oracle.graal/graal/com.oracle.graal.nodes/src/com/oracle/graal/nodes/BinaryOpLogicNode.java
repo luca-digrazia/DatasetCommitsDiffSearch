@@ -22,41 +22,41 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
+import jdk.vm.ci.meta.TriState;
 
-public abstract class BinaryOpLogicNode extends LogicNode implements LIRLowerable, MemoryArithmeticLIRLowerable {
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.Graph;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
-    @Input private ValueNode x;
-    @Input private ValueNode y;
+@NodeInfo
+public abstract class BinaryOpLogicNode extends LogicNode implements LIRLowerable, Canonicalizable.Binary<ValueNode> {
 
-    public ValueNode x() {
+    public static final NodeClass<BinaryOpLogicNode> TYPE = NodeClass.create(BinaryOpLogicNode.class);
+    @Input protected ValueNode x;
+    @Input protected ValueNode y;
+
+    public ValueNode getX() {
         return x;
     }
 
-    public ValueNode y() {
+    public ValueNode getY() {
         return y;
     }
 
-    protected void setX(ValueNode x) {
-        updateUsages(this.x, x);
-        this.x = x;
-    }
-
-    protected void setY(ValueNode y) {
-        updateUsages(this.y, y);
-        this.y = y;
-    }
-
-    public BinaryOpLogicNode(ValueNode x, ValueNode y) {
-        assert x != null && y != null && x.getKind() == y.getKind();
+    public BinaryOpLogicNode(NodeClass<? extends BinaryOpLogicNode> c, ValueNode x, ValueNode y) {
+        super(c);
+        assert x != null && y != null;
         this.x = x;
         this.y = y;
     }
 
     @Override
     public boolean verify() {
-        assertTrue(x.stamp().isCompatible(y.stamp()), "stamps not compatible: %s, %s", x.stamp(), y.stamp());
         return super.verify();
     }
 
@@ -64,8 +64,34 @@ public abstract class BinaryOpLogicNode extends LogicNode implements LIRLowerabl
     public void generate(NodeLIRBuilderTool gen) {
     }
 
-    @Override
-    public boolean generate(MemoryArithmeticLIRLowerer gen, Access access) {
-        return false;
+    /**
+     * Ensure a canonical ordering of inputs for commutative nodes to improve GVN results. Order the
+     * inputs by increasing {@link Node#id} and call {@link Graph#findDuplicate(Node)} on the node
+     * if it's currently in a graph.
+     *
+     * @return the original node or another node with the same inputs, ignoring ordering.
+     */
+    @SuppressWarnings("deprecation")
+    public LogicNode maybeCommuteInputs() {
+        assert this instanceof BinaryCommutative;
+        if (!y.isConstant() && x.getId() > y.getId()) {
+            ValueNode tmp = x;
+            x = y;
+            y = tmp;
+            if (graph() != null) {
+                // See if this node already exists
+                LogicNode duplicate = graph().findDuplicate(this);
+                if (duplicate != null) {
+                    return duplicate;
+                }
+            }
+        }
+        return this;
     }
+
+    public abstract Stamp getSucceedingStampForX(boolean negated);
+
+    public abstract Stamp getSucceedingStampForY(boolean negated);
+
+    public abstract TriState tryFold(Stamp xStamp, Stamp yStamp);
 }
