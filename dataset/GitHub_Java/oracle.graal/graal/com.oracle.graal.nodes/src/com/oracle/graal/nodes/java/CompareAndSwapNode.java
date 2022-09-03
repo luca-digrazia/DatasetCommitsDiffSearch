@@ -26,7 +26,7 @@ import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -46,11 +46,7 @@ public class CompareAndSwapNode extends AbstractMemoryCheckpoint implements Lowe
     private final Kind valueKind;
     private final LocationIdentity locationIdentity;
 
-    public static CompareAndSwapNode create(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue, Kind valueKind, LocationIdentity locationIdentity) {
-        return new CompareAndSwapNodeGen(object, offset, expected, newValue, valueKind, locationIdentity);
-    }
-
-    CompareAndSwapNode(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue, Kind valueKind, LocationIdentity locationIdentity) {
+    public CompareAndSwapNode(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue, Kind valueKind, LocationIdentity locationIdentity) {
         super(StampFactory.forKind(Kind.Boolean.getStackKind()));
         assert expected.stamp().isCompatible(newValue.stamp());
         this.object = object;

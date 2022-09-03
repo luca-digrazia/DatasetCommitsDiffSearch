@@ -273,7 +273,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     }
 
     protected ReadNode createUnsafeRead(StructuredGraph graph, UnsafeLoadNode load, GuardingNode guard) {
-        boolean compressible = load.accessKind() == Kind.Object;
+        boolean compressible = (!load.object().isNullConstant() && load.accessKind() == Kind.Object);
         Kind readKind = load.accessKind();
         LocationNode location = createLocation(load);
         Stamp loadStamp = loadStamp(load.stamp(), readKind, compressible);
@@ -580,7 +580,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             SignExtendNode extend = (SignExtendNode) offset;
             if (extend.getResultBits() == 64) {
                 signExtend = true;
-                offset = extend.getValue();
+                offset = extend.getInput();
             }
         }
         if (offset instanceof IntegerAddNode) {
