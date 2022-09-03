@@ -199,13 +199,7 @@ class JavaObjectMessageResolution {
                         CompilerDirectives.transferToInterpreterAndInvalidate();
                         toJava = insert(ToJavaNode.create());
                     }
-                    int length;
-                    try {
-                        length = (int) toJava.execute(args[0], int.class, null, receiver.languageContext);
-                    } catch (ClassCastException | NullPointerException e) {
-                        // conversion failed by ToJavaNode
-                        throw UnsupportedTypeException.raise(e, args);
-                    }
+                    int length = (int) toJava.execute(args[0], int.class, null, receiver.languageContext);
                     return JavaInterop.asTruffleObject(Array.newInstance(receiver.clazz.getComponentType(), length), receiver.languageContext);
                 }
 
@@ -329,18 +323,14 @@ class JavaObjectMessageResolution {
         @Child private ArrayWriteNode arrayWrite;
         @Child private LookupFieldNode lookupField;
         @Child private WriteFieldNode writeField;
+        @Child private ToJavaNode toJava = ToJavaNode.create();
 
         public Object access(JavaObject receiver, Number index, Object value) {
             if (arrayWrite == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 arrayWrite = insert(ArrayWriteNode.create());
             }
-            try {
-                return arrayWrite.executeWithTarget(receiver, index, value);
-            } catch (ClassCastException | NullPointerException e) {
-                // conversion failed by ToJavaNode
-                throw UnsupportedTypeException.raise(e, new Object[]{value});
-            }
+            return arrayWrite.executeWithTarget(receiver, index, value);
         }
 
         public Object access(JavaObject receiver, String name, Object value) {
@@ -351,12 +341,7 @@ class JavaObjectMessageResolution {
             if (f == null) {
                 throw UnknownIdentifierException.raise(name);
             }
-            try {
-                writeField(f, receiver, value);
-            } catch (ClassCastException | NullPointerException e) {
-                // conversion failed by ToJavaNode
-                throw UnsupportedTypeException.raise(e, new Object[]{value});
-            }
+            writeField(f, receiver, value);
             return JavaObject.NULL;
         }
 

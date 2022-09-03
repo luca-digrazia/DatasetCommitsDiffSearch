@@ -247,8 +247,6 @@ public abstract class Accessor {
 
         public abstract IllegalArgumentException newIllegalArgumentException(String message, Throwable cause);
 
-        public abstract ArrayIndexOutOfBoundsException newArrayIndexOutOfBounds(String message, Throwable cause);
-
         public abstract Object getCurrentHostContext();
 
         public abstract Object legacyTckEnter(Object vm);
