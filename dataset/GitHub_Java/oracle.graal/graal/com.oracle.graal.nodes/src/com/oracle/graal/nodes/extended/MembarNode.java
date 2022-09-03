@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.max.criutils.*;
 
 /**
  * Creates a memory barrier.
@@ -47,7 +47,9 @@ public class MembarNode extends FixedWithNextNode implements LIRLowerable, Memor
         generator.emitMembar(barriers);
     }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native void memoryBarrier(@ConstantNodeParameter
-    int barriers);
+    public static void memoryBarrier(@ConstantNodeParameter int barriers) {
+        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
+    }
 }
