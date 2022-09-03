@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,12 +31,22 @@ import com.oracle.graal.lir.*;
 
 public class InstructionNumberer {
 
-    private LIRInstruction[] opIdToInstructionMap;
-    private AbstractBlock<?>[] opIdToBlockMap;
+    private final LIRInstruction[] opIdToInstructionMap;
+
+    protected InstructionNumberer(LIR lir) {
+        // Assign IDs to LIR nodes and build a mapping, lirOps, from ID to LIRInstruction node.
+        int numInstructions = 0;
+        for (AbstractBlock<?> block : lir.getControlFlowGraph().getBlocks()) {
+            numInstructions += lir.getLIRforBlock(block).size();
+        }
+
+        // initialize with correct length
+        opIdToInstructionMap = new LIRInstruction[numInstructions];
+    }
 
     /**
      * Converts an {@linkplain LIRInstruction#id instruction id} to an instruction index. All LIR
-     * instructions in a method have an index one greater than their linear-scan order predecesor
+     * instructions in a method have an index one greater than their linear-scan order predecessor
      * with the first instruction having an index of 0.
      */
     private static int opIdToIndex(int opId) {
@@ -61,16 +71,6 @@ public class InstructionNumberer {
      */
     protected void numberInstructions(LIR lir, List<? extends AbstractBlock<?>> sortedBlocks) {
 
-        // Assign IDs to LIR nodes and build a mapping, lirOps, from ID to LIRInstruction node.
-        int numInstructions = 0;
-        for (AbstractBlock<?> block : sortedBlocks) {
-            numInstructions += lir.getLIRforBlock(block).size();
-        }
-
-        // initialize with correct length
-        opIdToInstructionMap = new LIRInstruction[numInstructions];
-        opIdToBlockMap = new AbstractBlock<?>[numInstructions];
-
         int opId = 0;
         int index = 0;
         for (AbstractBlock<?> block : sortedBlocks) {
@@ -83,15 +83,15 @@ public class InstructionNumberer {
                 op.setId(opId);
 
                 opIdToInstructionMap[index] = op;
-                opIdToBlockMap[index] = block;
                 assert instructionForId(opId) == op : "must match";
 
                 index++;
                 opId += 2; // numbering of lirOps by two
             }
         }
-        assert index == numInstructions : "must match";
+        assert index == opIdToInstructionMap.length : "must match";
         assert (index << 1) == opId : "must match: " + (index << 1);
+        assert opId - 2 == maxOpId() : "must match";
     }
 
     /**
