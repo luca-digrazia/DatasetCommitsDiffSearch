@@ -64,31 +64,17 @@ public final class TruffleContext implements AutoCloseable {
 
     private static ThreadLocal<List<Object>> assertStack;
     final Object impl;
-    final boolean closeable;
+
+    TruffleContext(TruffleLanguage.Env env, Map<String, Object> config) {
+        this.impl = AccessAPI.engineAccess().createInternalContext(env.getVMObject(), config, this);
+    }
 
     TruffleContext(Object impl) {
         this.impl = impl;
-        this.closeable = false;
-    }
-
-    private TruffleContext(TruffleLanguage.Env env, Map<String, Object> config) {
-        this.impl = AccessAPI.engineAccess().createInternalContext(env.getVMObject(), config, this);
-        this.closeable = false;
-        // Initialized after this TruffleContext instance is fully set up
-        AccessAPI.engineAccess().initializeInternalContext(env.getVMObject(), impl);
-    }
-
-    /**
-     * Creates closeable context representation for use by a language.
-     */
-    private TruffleContext(Object impl, boolean closeable) {
-        this.impl = impl;
-        this.closeable = closeable;
     }
 
     private TruffleContext() {
         this.impl = null;
-        this.closeable = false;
     }
 
     static {
@@ -163,19 +149,11 @@ public final class TruffleContext implements AutoCloseable {
      * entered, then an {@link IllegalStateException} is thrown. If the context is not closed
      * explicitly, then it is automatically closed together with the parent context. If an attempt
      * to close a context was successful then consecutive calls to close have no effect.
-     * <p>
-     * Only contexts created by {@link Builder#build()} can be explicitly closed. Other instances
-     * throw {@link UnsupportedOperationException} on close attempts.
      *
-     * @throws UnsupportedOperationException when not created by {@link Builder#build()}.
      * @since 0.27
      */
-    @Override
     @TruffleBoundary
     public void close() {
-        if (!closeable) {
-            throw new UnsupportedOperationException("It's not possible to close a foreign context.");
-        }
         AccessAPI.engineAccess().closeInternalContext(impl);
     }
 
@@ -231,8 +209,7 @@ public final class TruffleContext implements AutoCloseable {
          */
         @TruffleBoundary
         public TruffleContext build() {
-            TruffleContext context = new TruffleContext(sourceEnvironment, config);
-            return new TruffleContext(context.impl, true);
+            return new TruffleContext(sourceEnvironment, config);
         }
     }
 }
