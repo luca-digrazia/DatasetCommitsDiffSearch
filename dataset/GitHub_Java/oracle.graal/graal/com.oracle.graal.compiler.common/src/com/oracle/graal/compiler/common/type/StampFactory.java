@@ -317,9 +317,8 @@ public class StampFactory {
             ResolvedJavaType resolvedJavaType = (ResolvedJavaType) returnType;
             TypeReference reference = TypeReference.create(assumptions, resolvedJavaType);
             if (resolvedJavaType.isInterface()) {
-                ResolvedJavaType implementor = resolvedJavaType.getSingleImplementor();
-                if (implementor != null && !resolvedJavaType.equals(implementor)) {
-                    TypeReference uncheckedType = TypeReference.createTrusted(assumptions, implementor);
+                TypeReference uncheckedType = TypeReference.createUnchecked(assumptions, resolvedJavaType, reference);
+                if (uncheckedType != null) {
                     return StampPair.create(StampFactory.object(reference, nonNull), StampFactory.object(uncheckedType, nonNull));
                 }
             }

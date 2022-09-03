@@ -143,11 +143,10 @@ public interface GraphBuilderContext {
      *
      * @param targetMethod the method being intrinsified
      * @param substitute the intrinsic implementation
-     * @param receiver the receiver, or null for static methods
-     * @param argsIncludingReceiver the arguments with which to inline the invocation
+     * @param args the arguments with which to inline the invocation
      * @return whether the intrinsification was successful
      */
-    boolean intrinsify(ResolvedJavaMethod targetMethod, ResolvedJavaMethod substitute, InvocationPlugin.Receiver receiver, ValueNode[] argsIncludingReceiver);
+    boolean intrinsify(ResolvedJavaMethod targetMethod, ResolvedJavaMethod substitute, ValueNode[] args);
 
     StampProvider getStampProvider();
 
@@ -179,8 +178,8 @@ public interface GraphBuilderContext {
     GraphBuilderContext getParent();
 
     /**
-     * Gets the first ancestor parsing context that is not parsing a {@linkplain #parsingIntrinsic()
-     * intrinsic}.
+     * Gets the first ancestor parsing context that is not parsing a
+     * {@linkplain #parsingIntrinsic() intrinsic}.
      */
     default GraphBuilderContext getNonIntrinsicAncestor() {
         GraphBuilderContext ancestor = getParent();

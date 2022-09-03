@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,49 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+
+import com.oracle.graal.compiler.common.type.StampPair;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
 
 /**
  * This node class can be used to create {@link MacroNode}s for simple pure functions like
  * {@link System#identityHashCode(Object)}.
  */
-public abstract class PureFunctionMacroNode extends MacroNode implements Canonicalizable {
+@NodeInfo
+public abstract class PureFunctionMacroNode extends MacroStateSplitNode implements Canonicalizable {
 
-    public PureFunctionMacroNode(Invoke invoke) {
-        super(invoke);
+    public static final NodeClass<PureFunctionMacroNode> TYPE = NodeClass.create(PureFunctionMacroNode.class);
+
+    public PureFunctionMacroNode(NodeClass<? extends MacroNode> c, InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, StampPair returnStamp, ValueNode... arguments) {
+        super(c, invokeKind, targetMethod, bci, returnStamp, arguments);
     }
 
     /**
      * This method should return either a constant that represents the result of the function, or
      * null if no such result could be determined.
      */
-    protected abstract Constant evaluate(Constant param, MetaAccessProvider metaAccess);
+    protected abstract JavaConstant evaluate(JavaConstant param, MetaAccessProvider metaAccess);
 
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (usages().isEmpty()) {
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        if (tool.allUsagesAvailable() && hasNoUsages()) {
             return null;
         } else {
             ValueNode param = arguments.get(0);
             if (param.isConstant()) {
-                Constant constant = evaluate(param.asConstant(), tool.runtime());
+                JavaConstant constant = evaluate(param.asJavaConstant(), tool.getMetaAccess());
                 if (constant != null) {
-                    return ConstantNode.forConstant(constant, tool.runtime(), graph());
+                    return ConstantNode.forConstant(constant, tool.getMetaAccess());
                 }
             }
         }

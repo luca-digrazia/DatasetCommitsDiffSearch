@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,16 +22,29 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampPair;
+import com.oracle.graal.graph.IterableNodeType;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.spi.UncheckedInterfaceProvider;
 
 /**
  * The {@code Parameter} instruction is a placeholder for an incoming argument to a function call.
  */
-@NodeInfo(nameTemplate = "Local({p#index})")
-public final class ParameterNode extends AbstractLocalNode implements IterableNodeType {
+@NodeInfo(nameTemplate = "P({p#index})")
+public final class ParameterNode extends AbstractLocalNode implements IterableNodeType, UncheckedInterfaceProvider {
 
-    public ParameterNode(int index, Stamp stamp) {
-        super(index, stamp);
+    public static final NodeClass<ParameterNode> TYPE = NodeClass.create(ParameterNode.class);
+
+    private Stamp uncheckedStamp;
+
+    public ParameterNode(int index, StampPair stamp) {
+        super(TYPE, index, stamp.getTrustedStamp());
+        this.uncheckedStamp = stamp.getUncheckedStamp();
+    }
+
+    public Stamp uncheckedStamp() {
+        return uncheckedStamp;
     }
 }

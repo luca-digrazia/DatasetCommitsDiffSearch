@@ -23,8 +23,8 @@
 package com.oracle.graal.nodes.graphbuilderconf;
 
 import com.oracle.graal.compiler.common.type.StampPair;
-import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.FloatingNode;
 
 public interface ParameterPlugin extends GraphBuilderPlugin {
-    ValueNode interceptParameter(GraphBuilderContext b, int index, StampPair stamp);
+    FloatingNode interceptParameter(GraphBuilderContext b, int index, StampPair stamp);
 }

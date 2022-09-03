@@ -23,8 +23,10 @@
 package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_0;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_0;
+import jdk.vm.ci.hotspot.HotSpotObjectConstant;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.graph.NodeClass;
@@ -33,12 +35,7 @@ import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.replacements.nodes.PureFunctionMacroNode;
 
-import jdk.vm.ci.hotspot.HotSpotObjectConstant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
-@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo
 public final class IdentityHashCodeNode extends PureFunctionMacroNode {
 
     public static final NodeClass<IdentityHashCodeNode> TYPE = NodeClass.create(IdentityHashCodeNode.class);

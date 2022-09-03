@@ -107,6 +107,7 @@ import com.oracle.graal.phases.common.instrumentation.nodes.InstrumentationEndNo
 import com.oracle.graal.phases.common.instrumentation.nodes.IsMethodInlinedNode;
 import com.oracle.graal.phases.common.instrumentation.nodes.RootNameNode;
 import com.oracle.graal.phases.common.instrumentation.nodes.RuntimePathNode;
+import com.oracle.graal.replacements.nodes.DeferredPiNode;
 import com.oracle.graal.replacements.nodes.DirectReadNode;
 import com.oracle.graal.replacements.nodes.DirectStoreNode;
 import com.oracle.graal.replacements.nodes.ReverseBytesNode;
@@ -458,7 +459,7 @@ public class StandardGraphBuilderPlugins {
         Registration r = new Registration(plugins, Class.class);
         r.register2("isInstance", Receiver.class, Object.class, new InvocationPlugin() {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver type, ValueNode object) {
-                LogicNode condition = b.add(InstanceOfDynamicNode.create(b.getAssumptions(), b.getConstantReflection(), type.get(), object, false));
+                LogicNode condition = b.add(InstanceOfDynamicNode.create(b.getAssumptions(), b.getConstantReflection(), type.get(), object));
                 b.push(JavaKind.Boolean, b.recursiveAppend(new ConditionalNode(condition).canonical(null)));
                 return true;
             }
@@ -475,7 +476,9 @@ public class StandardGraphBuilderPlugins {
     /**
      * Substitutions for improving the performance of some critical methods in {@link Edges}. These
      * substitutions improve the performance by forcing the relevant methods to be inlined
-     * (intrinsification being a special form of inlining) and removing a checked cast.
+     * (intrinsification being a special form of inlining) and removing a checked cast. The latter
+     * cannot be done directly in Java code as {@link DeferredPiNode} is not available to the
+     * project containing {@link Edges}.
      */
     private static void registerEdgesPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
         Registration r = new Registration(plugins, Edges.class);

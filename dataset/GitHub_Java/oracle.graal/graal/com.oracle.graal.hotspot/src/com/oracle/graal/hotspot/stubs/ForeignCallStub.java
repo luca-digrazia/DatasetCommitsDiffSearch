@@ -98,14 +98,14 @@ public class ForeignCallStub extends Stub {
      */
     public ForeignCallStub(HotSpotJVMCIRuntimeProvider runtime, HotSpotProviders providers, long address, ForeignCallDescriptor descriptor, boolean prependThread, Transition transition,
                     boolean reexecutable, LocationIdentity... killedLocations) {
-        super(providers, HotSpotForeignCallLinkageImpl.create(providers.getMetaAccess(), providers.getCodeCache(), providers.getWordTypes(), providers.getForeignCalls(), descriptor, 0L,
-                        PRESERVES_REGISTERS, JavaCall, JavaCallee, transition, reexecutable, killedLocations));
+        super(providers, HotSpotForeignCallLinkageImpl.create(providers.getMetaAccess(), providers.getCodeCache(), providers.getForeignCalls(), descriptor, 0L, PRESERVES_REGISTERS, JavaCall,
+                        JavaCallee, transition, reexecutable, killedLocations));
         this.jvmciRuntime = runtime;
         this.prependThread = prependThread;
         Class<?>[] targetParameterTypes = createTargetParameters(descriptor);
         ForeignCallDescriptor targetSig = new ForeignCallDescriptor(descriptor.getName() + ":C", descriptor.getResultType(), targetParameterTypes);
-        target = HotSpotForeignCallLinkageImpl.create(providers.getMetaAccess(), providers.getCodeCache(), providers.getWordTypes(), providers.getForeignCalls(), targetSig, address,
-                        DESTROYS_REGISTERS, NativeCall, NativeCall, transition, reexecutable, killedLocations);
+        target = HotSpotForeignCallLinkageImpl.create(providers.getMetaAccess(), providers.getCodeCache(), providers.getForeignCalls(), targetSig, address, DESTROYS_REGISTERS, NativeCall, NativeCall,
+                        transition, reexecutable, killedLocations);
     }
 
     /**
@@ -251,7 +251,7 @@ public class ForeignCallStub extends Stub {
         for (int i = 0; i < args.length; i++) {
             ResolvedJavaType type = providers.getMetaAccess().lookupJavaType(args[i]).resolve(accessingClass);
             StampPair stamp = StampFactory.forDeclaredType(kit.getGraph().getAssumptions(), type, false);
-            ParameterNode param = kit.add(new ParameterNode(i, stamp));
+            ParameterNode param = kit.unique(new ParameterNode(i, stamp));
             params[i] = param;
         }
         return params;

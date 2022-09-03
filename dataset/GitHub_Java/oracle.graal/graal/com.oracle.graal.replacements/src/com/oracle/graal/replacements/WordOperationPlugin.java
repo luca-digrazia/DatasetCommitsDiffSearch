@@ -45,6 +45,7 @@ import com.oracle.graal.nodes.ParameterNode;
 import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.calc.CompareNode;
 import com.oracle.graal.nodes.calc.ConditionalNode;
+import com.oracle.graal.nodes.calc.FloatingNode;
 import com.oracle.graal.nodes.calc.IntegerBelowNode;
 import com.oracle.graal.nodes.calc.IntegerEqualsNode;
 import com.oracle.graal.nodes.calc.IntegerLessThanNode;
@@ -108,7 +109,7 @@ public class WordOperationPlugin implements NodePlugin, ParameterPlugin, InlineI
     }
 
     @Override
-    public ValueNode interceptParameter(GraphBuilderContext b, int index, StampPair stamp) {
+    public FloatingNode interceptParameter(GraphBuilderContext b, int index, StampPair stamp) {
         ResolvedJavaType type = StampTool.typeOrNull(stamp.getTrustedStamp());
         if (wordTypes.isWord(type)) {
             return new ParameterNode(index, StampPair.createSingle(wordTypes.getWordStamp(type)));

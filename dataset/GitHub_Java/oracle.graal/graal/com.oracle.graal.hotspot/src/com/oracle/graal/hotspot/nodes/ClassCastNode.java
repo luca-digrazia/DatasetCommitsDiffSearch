@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,22 +22,32 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.replacements.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.replacements.nodes.*;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
+import com.oracle.graal.compiler.common.type.StampPair;
+import com.oracle.graal.compiler.common.type.TypeReference;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.java.CheckCastNode;
+import com.oracle.graal.replacements.nodes.MacroNode;
+import com.oracle.graal.replacements.nodes.MacroStateSplitNode;
 
 /**
  * {@link MacroNode Macro node} for {@link Class#cast(Object)}.
- * 
- * @see ClassSubstitutions#isInstance(Class, Object)
  */
-public class ClassCastNode extends MacroNode implements Canonicalizable {
+@NodeInfo
+public final class ClassCastNode extends MacroStateSplitNode implements Canonicalizable.Binary<ValueNode> {
 
-    public ClassCastNode(Invoke invoke) {
-        super(invoke);
+    public static final NodeClass<ClassCastNode> TYPE = NodeClass.create(ClassCastNode.class);
+
+    public ClassCastNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, StampPair returnStamp, ValueNode receiver, ValueNode object) {
+        super(TYPE, invokeKind, targetMethod, bci, returnStamp, receiver, object);
     }
 
     private ValueNode getJavaClass() {
@@ -48,17 +58,27 @@ public class ClassCastNode extends MacroNode implements Canonicalizable {
         return arguments.get(1);
     }
 
-    public ValueNode canonical(CanonicalizerTool tool) {
-        ValueNode javaClass = getJavaClass();
-        if (javaClass.isConstant()) {
-            ValueNode object = getObject();
-            Class c = (Class) javaClass.asConstant().asObject();
-            if (c != null && !c.isPrimitive()) {
-                HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromClass(c);
-                CheckCastNode checkcast = graph().add(new CheckCastNode(type, object, null, false));
-                return checkcast;
+    public ValueNode getX() {
+        return getJavaClass();
+    }
+
+    public ValueNode getY() {
+        return getObject();
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forJavaClass, ValueNode forObject) {
+        ValueNode folded = tryFold(forJavaClass, forObject, tool.getConstantReflection());
+        return folded != null ? folded : this;
+    }
+
+    public static ValueNode tryFold(ValueNode javaClass, ValueNode object, ConstantReflectionProvider constantReflection) {
+        if (javaClass != null && javaClass.isConstant()) {
+            ResolvedJavaType type = constantReflection.asJavaType(javaClass.asConstant());
+            if (type != null && !type.isPrimitive()) {
+                return CheckCastNode.create(TypeReference.createTrusted(javaClass.graph().getAssumptions(), type), object, null, false);
             }
         }
-        return this;
+        return null;
     }
 }

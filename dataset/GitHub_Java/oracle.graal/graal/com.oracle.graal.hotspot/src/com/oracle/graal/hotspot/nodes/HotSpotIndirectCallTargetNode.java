@@ -22,23 +22,30 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import java.util.*;
+import jdk.vm.ci.code.CallingConvention.Type;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import com.oracle.graal.api.code.CallingConvention.Type;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.compiler.common.type.StampPair;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.IndirectCallTargetNode;
+import com.oracle.graal.nodes.ValueNode;
 
-public class HotSpotIndirectCallTargetNode extends IndirectCallTargetNode {
+@NodeInfo
+public final class HotSpotIndirectCallTargetNode extends IndirectCallTargetNode {
+    public static final NodeClass<HotSpotIndirectCallTargetNode> TYPE = NodeClass.create(HotSpotIndirectCallTargetNode.class);
 
-    @Input private ValueNode methodOop;
+    @Input ValueNode metaspaceMethod;
 
-    public HotSpotIndirectCallTargetNode(ValueNode methodOop, ValueNode computedAddress, List<ValueNode> arguments, Stamp returnStamp, Kind[] signature, Object target, Type callType) {
-        super(computedAddress, arguments, returnStamp, signature, target, callType);
-        this.methodOop = methodOop;
+    public HotSpotIndirectCallTargetNode(ValueNode metaspaceMethod, ValueNode computedAddress, ValueNode[] arguments, StampPair returnStamp, JavaType[] signature,
+                    ResolvedJavaMethod target,
+                    Type callType, InvokeKind invokeKind) {
+        super(TYPE, computedAddress, arguments, returnStamp, signature, target, callType, invokeKind);
+        this.metaspaceMethod = metaspaceMethod;
     }
 
-    public ValueNode methodOop() {
-        return methodOop;
+    public ValueNode metaspaceMethod() {
+        return metaspaceMethod;
     }
 }

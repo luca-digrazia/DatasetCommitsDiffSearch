@@ -22,17 +22,20 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import static sun.misc.Version.*;
+import java.lang.invoke.MethodHandle;
 
-import java.lang.invoke.*;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.compiler.common.type.StampPair;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.NodeInputList;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.java.MethodCallTargetNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /**
  * A call target that replaces itself in the graph when being lowered by restoring the original
@@ -55,24 +58,22 @@ public final class ResolvedMethodHandleCallTargetNode extends MethodCallTargetNo
      * Creates a call target for an invocation on a direct target derived by resolving a constant
      * {@link MethodHandle}.
      */
-    public static MethodCallTargetNode create(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, JavaType returnType, ResolvedJavaMethod originalTargetMethod,
-                    ValueNode[] originalArguments, JavaType originalReturnType) {
-        if (jdkMajorVersion() >= 1 && jdkMinorVersion() >= 8 && jdkMicroVersion() >= 0 && jdkUpdateVersion() >= 60) {
-            // https://bugs.openjdk.java.net/browse/JDK-8072008 is targeted for 8u60
-            return new MethodCallTargetNode(invokeKind, targetMethod, arguments, returnType);
-        }
-        return new ResolvedMethodHandleCallTargetNode(invokeKind, targetMethod, arguments, returnType, originalTargetMethod, originalArguments, originalReturnType);
+    public static MethodCallTargetNode create(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, StampPair returnStamp,
+                    ResolvedJavaMethod originalTargetMethod,
+                    ValueNode[] originalArguments, StampPair originalReturnStamp) {
+        return new ResolvedMethodHandleCallTargetNode(invokeKind, targetMethod, arguments, returnStamp, originalTargetMethod, originalArguments, originalReturnStamp);
     }
 
     protected final ResolvedJavaMethod originalTargetMethod;
-    protected final JavaType originalReturnType;
+    protected final StampPair originalReturnStamp;
     @Input NodeInputList<ValueNode> originalArguments;
 
-    protected ResolvedMethodHandleCallTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, JavaType returnType, ResolvedJavaMethod originalTargetMethod,
-                    ValueNode[] originalArguments, JavaType originalReturnType) {
-        super(TYPE, invokeKind, targetMethod, arguments, returnType);
+    protected ResolvedMethodHandleCallTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, StampPair returnStamp,
+                    ResolvedJavaMethod originalTargetMethod,
+                    ValueNode[] originalArguments, StampPair originalReturnStamp) {
+        super(TYPE, invokeKind, targetMethod, arguments, returnStamp, null);
         this.originalTargetMethod = originalTargetMethod;
-        this.originalReturnType = originalReturnType;
+        this.originalReturnStamp = originalReturnStamp;
         this.originalArguments = new NodeInputList<>(this, originalArguments);
     }
 
@@ -80,7 +81,7 @@ public final class ResolvedMethodHandleCallTargetNode extends MethodCallTargetNo
     public void lower(LoweringTool tool) {
         InvokeKind replacementInvokeKind = originalTargetMethod.isStatic() ? InvokeKind.Static : InvokeKind.Special;
         MethodCallTargetNode replacement = graph().add(
-                        new MethodCallTargetNode(replacementInvokeKind, originalTargetMethod, originalArguments.toArray(new ValueNode[originalArguments.size()]), originalReturnType));
+                        new MethodCallTargetNode(replacementInvokeKind, originalTargetMethod, originalArguments.toArray(new ValueNode[originalArguments.size()]), originalReturnStamp, null));
 
         // Replace myself...
         this.replaceAndDelete(replacement);
@@ -88,6 +89,6 @@ public final class ResolvedMethodHandleCallTargetNode extends MethodCallTargetNo
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        throw GraalInternalError.shouldNotReachHere("should have replaced itself");
+        throw JVMCIError.shouldNotReachHere("should have replaced itself");
     }
 }

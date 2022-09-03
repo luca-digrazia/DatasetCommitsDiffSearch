@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,38 +22,31 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.*;
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.compiler.common.type.StampPair;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
 
+@NodeInfo
 public abstract class LoweredCallTargetNode extends CallTargetNode {
 
-    private final Stamp returnStamp;
-    private final JavaType[] signature;
-    private final ResolvedJavaMethod target;
-    private final CallingConvention.Type callType;
+    public static final NodeClass<LoweredCallTargetNode> TYPE = NodeClass.create(LoweredCallTargetNode.class);
+    protected final JavaType[] signature;
+    protected final CallingConvention.Type callType;
 
-    public LoweredCallTargetNode(List<ValueNode> arguments, Stamp returnStamp, JavaType[] signature, ResolvedJavaMethod target, CallingConvention.Type callType) {
-        super(arguments);
-        this.returnStamp = returnStamp;
+    protected LoweredCallTargetNode(NodeClass<? extends LoweredCallTargetNode> c, ValueNode[] arguments, StampPair returnStamp, JavaType[] signature,
+                    ResolvedJavaMethod target,
+                    CallingConvention.Type callType, InvokeKind invokeKind) {
+        super(c, arguments, target, invokeKind, returnStamp);
         this.signature = signature;
-        this.target = target;
         this.callType = callType;
-    }
-
-    @Override
-    public Stamp returnStamp() {
-        return returnStamp;
     }
 
     public JavaType[] signature() {
         return signature;
-    }
-
-    public ResolvedJavaMethod target() {
-        return target;
     }
 
     public CallingConvention.Type callType() {

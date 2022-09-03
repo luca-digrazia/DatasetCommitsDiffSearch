@@ -25,10 +25,20 @@ package com.oracle.graal.replacements.nodes;
 import java.lang.invoke.MethodHandle;
 import java.util.Arrays;
 
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.Assumptions.AssumptionResult;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.MethodHandleAccessProvider;
+import jdk.vm.ci.meta.MethodHandleAccessProvider.IntrinsicMethod;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.Signature;
+
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.compiler.common.type.TypeReference;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.Simplifiable;
 import com.oracle.graal.graph.spi.SimplifierTool;
@@ -42,16 +52,6 @@ import com.oracle.graal.nodes.ValueNode;
 import com.oracle.graal.nodes.java.MethodCallTargetNode;
 import com.oracle.graal.nodes.type.StampTool;
 import com.oracle.graal.nodes.util.GraphUtil;
-
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.Assumptions.AssumptionResult;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.MethodHandleAccessProvider;
-import jdk.vm.ci.meta.MethodHandleAccessProvider.IntrinsicMethod;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.Signature;
 
 /**
  * Node for invocation methods defined on the class {@link MethodHandle}.
@@ -91,7 +91,7 @@ public final class MethodHandleNode extends MacroStateSplitNode implements Simpl
             case LINK_TO_INTERFACE:
                 return getLinkToTarget(assumptions, intrinsicMethod, methodHandleAccess, original, bci, returnStamp, arguments);
             default:
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
     }
 
@@ -233,13 +233,8 @@ public final class MethodHandleNode extends MacroStateSplitNode implements Simpl
     private static void maybeCastArgument(Assumptions assumptions, ValueNode[] arguments, int index, JavaType type) {
         if (type instanceof ResolvedJavaType) {
             TypeReference targetType = TypeReference.create(assumptions, (ResolvedJavaType) type);
-            ValueNode argument = arguments[index];
-            /*
-             * When an argument is a Word type, we can have a mismatch of primitive/object types
-             * here. Not inserting a PiNode is a safe fallback, and Word types need no additional
-             * type information anyway.
-             */
-            if (targetType != null && !targetType.getType().isPrimitive() && !argument.getStackKind().isPrimitive()) {
+            if (targetType != null && !targetType.getType().isPrimitive()) {
+                ValueNode argument = arguments[index];
                 ResolvedJavaType argumentType = StampTool.typeOrNull(argument.stamp());
                 if (argumentType == null || (argumentType.isAssignableFrom(targetType.getType()) && !argumentType.equals(targetType.getType()))) {
                     PiNode piNode = new PiNode(argument, StampFactory.object(targetType));
@@ -274,7 +269,7 @@ public final class MethodHandleNode extends MacroStateSplitNode implements Simpl
                 targetArguments = Arrays.copyOfRange(arguments, 0, arguments.length - 1);
                 break;
             default:
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
         StampPair targetReturnStamp = StampFactory.forDeclaredType(assumptions, targetReturnType, false);
 

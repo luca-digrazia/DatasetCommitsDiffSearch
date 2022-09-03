@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,24 +22,22 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import java.util.*;
+import jdk.vm.ci.code.CallingConvention.Type;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import com.oracle.graal.api.code.CallingConvention.Type;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
+import com.oracle.graal.compiler.common.type.StampPair;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.DirectCallTargetNode;
+import com.oracle.graal.nodes.ValueNode;
 
-public class HotSpotDirectCallTargetNode extends DirectCallTargetNode {
+@NodeInfo
+public final class HotSpotDirectCallTargetNode extends DirectCallTargetNode {
+    public static final NodeClass<HotSpotDirectCallTargetNode> TYPE = NodeClass.create(HotSpotDirectCallTargetNode.class);
 
-    private final InvokeKind invokeKind;
-
-    public HotSpotDirectCallTargetNode(List<ValueNode> arguments, Stamp returnStamp, JavaType[] signature, ResolvedJavaMethod target, Type callType, InvokeKind invokeKind) {
-        super(arguments, returnStamp, signature, target, callType);
-        this.invokeKind = invokeKind;
+    public HotSpotDirectCallTargetNode(ValueNode[] arguments, StampPair returnStamp, JavaType[] signature, ResolvedJavaMethod target, Type callType, InvokeKind invokeKind) {
+        super(TYPE, arguments, returnStamp, signature, target, callType, invokeKind);
     }
 
-    public InvokeKind invokeKind() {
-        return invokeKind;
-    }
 }

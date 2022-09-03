@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,30 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.*;
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.compiler.common.type.StampPair;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
 
-public class IndirectCallTargetNode extends AbstractCallTargetNode {
+@NodeInfo
+public class IndirectCallTargetNode extends LoweredCallTargetNode {
+    public static final NodeClass<IndirectCallTargetNode> TYPE = NodeClass.create(IndirectCallTargetNode.class);
 
     @Input protected ValueNode computedAddress;
 
-    public IndirectCallTargetNode(ValueNode computedAddress, List<ValueNode> arguments, Stamp returnStamp, Kind[] signature, Object target, CallingConvention.Type callType) {
-        super(arguments, returnStamp, signature, target, callType);
+    public IndirectCallTargetNode(ValueNode computedAddress, ValueNode[] arguments, StampPair returnStamp, JavaType[] signature, ResolvedJavaMethod target,
+                    CallingConvention.Type callType,
+                    InvokeKind invokeKind) {
+        this(TYPE, computedAddress, arguments, returnStamp, signature, target, callType, invokeKind);
+    }
+
+    protected IndirectCallTargetNode(NodeClass<? extends IndirectCallTargetNode> c, ValueNode computedAddress, ValueNode[] arguments, StampPair returnStamp,
+                    JavaType[] signature,
+                    ResolvedJavaMethod target, CallingConvention.Type callType, InvokeKind invokeKind) {
+        super(c, arguments, returnStamp, signature, target, callType, invokeKind);
         this.computedAddress = computedAddress;
     }
 
@@ -43,12 +55,6 @@ public class IndirectCallTargetNode extends AbstractCallTargetNode {
 
     @Override
     public String targetName() {
-        if (target() instanceof JavaMethod) {
-            return "Indirect#" + ((JavaMethod) target()).name();
-        } else if (target() != null) {
-            return "Indirect#" + target().getClass().getSimpleName();
-        } else {
-            return "Indirect#null";
-        }
+        return targetMethod().format("Indirect#%h.%n");
     }
 }

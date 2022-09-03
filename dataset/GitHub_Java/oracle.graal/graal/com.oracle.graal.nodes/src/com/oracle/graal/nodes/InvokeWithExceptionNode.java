@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,8 +25,8 @@ package com.oracle.graal.nodes;
 import java.util.Map;
 
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.LocationIdentity;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
@@ -79,7 +79,6 @@ public final class InvokeWithExceptionNode extends ControlSplitNode implements I
         exceptionEdge = x;
     }
 
-    @Override
     public AbstractBeginNode next() {
         return next;
     }
@@ -89,7 +88,6 @@ public final class InvokeWithExceptionNode extends ControlSplitNode implements I
         next = x;
     }
 
-    @Override
     public CallTargetNode callTarget() {
         return callTarget;
     }
@@ -134,7 +132,6 @@ public final class InvokeWithExceptionNode extends ControlSplitNode implements I
         }
     }
 
-    @Override
     public int bci() {
         return bci;
     }
@@ -158,18 +155,15 @@ public final class InvokeWithExceptionNode extends ControlSplitNode implements I
         gen.emitInvoke(this);
     }
 
-    @Override
     public FrameState stateAfter() {
         return stateAfter;
     }
 
-    @Override
     public void setStateAfter(FrameState stateAfter) {
         updateUsages(this.stateAfter, stateAfter);
         this.stateAfter = stateAfter;
     }
 
-    @Override
     public boolean hasSideEffect() {
         return true;
     }
@@ -262,7 +256,6 @@ public final class InvokeWithExceptionNode extends ControlSplitNode implements I
         return this.next();
     }
 
-    @Override
     public Stamp uncheckedStamp() {
         return this.callTarget.returnStamp().getUncheckedStamp();
     }
