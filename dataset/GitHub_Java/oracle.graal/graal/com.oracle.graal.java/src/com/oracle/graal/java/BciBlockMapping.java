@@ -29,9 +29,9 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.bytecode.*;
+import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.*;
 
 /**
  * Builds a mapping between bytecodes and basic blocks and builds a conservative control flow graph (CFG).
@@ -163,9 +163,9 @@ public final class BciBlockMapping {
      */
     public BciBlockMapping(ResolvedJavaMethod method) {
         this.method = method;
-        exceptionHandlers = method.getExceptionHandlers();
-        stream = new BytecodeStream(method.getCode());
-        this.blockMap = new Block[method.getCodeSize()];
+        exceptionHandlers = method.exceptionHandlers();
+        stream = new BytecodeStream(method.code());
+        this.blockMap = new Block[method.codeSize()];
         this.blocks = new ArrayList<>();
         this.loopHeaders = new Block[64];
     }
@@ -233,7 +233,7 @@ public final class BciBlockMapping {
     private void makeExceptionEntries() {
         // start basic blocks at all exception handler blocks and mark them as exception entries
         for (ExceptionHandler h : this.exceptionHandlers) {
-            Block xhandler = makeBlock(h.getHandlerBCI());
+            Block xhandler = makeBlock(h.handlerBCI());
             xhandler.isExceptionEntry = true;
         }
     }
@@ -486,7 +486,7 @@ public final class BciBlockMapping {
 
         for (int i = exceptionHandlers.length - 1; i >= 0; i--) {
             ExceptionHandler h = exceptionHandlers[i];
-            if (h.getStartBCI() <= bci && bci < h.getEndBCI()) {
+            if (h.startBCI() <= bci && bci < h.endBCI()) {
                 if (h.isCatchAll()) {
                     // Discard all information about succeeding exception handlers, since they can never be reached.
                     lastHandler = null;
@@ -500,7 +500,7 @@ public final class BciBlockMapping {
                     curHandler.endBci = -1;
                     curHandler.deoptBci = bci;
                     curHandler.handler = h;
-                    curHandler.successors.add(blockMap[h.getHandlerBCI()]);
+                    curHandler.successors.add(blockMap[h.handlerBCI()]);
                     if (lastHandler != null) {
                         curHandler.successors.add(lastHandler);
                     }
@@ -749,10 +749,10 @@ public final class BciBlockMapping {
     }
 
     private void computeLocalLiveness(Block block) {
-        block.localsLiveIn = new BitSet(method.getMaxLocals());
-        block.localsLiveOut = new BitSet(method.getMaxLocals());
-        block.localsLiveGen = new BitSet(method.getMaxLocals());
-        block.localsLiveKill = new BitSet(method.getMaxLocals());
+        block.localsLiveIn = new BitSet(method.maxLocals());
+        block.localsLiveOut = new BitSet(method.maxLocals());
+        block.localsLiveGen = new BitSet(method.maxLocals());
+        block.localsLiveKill = new BitSet(method.maxLocals());
 
         if (block.startBci < 0 || block.endBci < 0) {
             return;
@@ -762,7 +762,7 @@ public final class BciBlockMapping {
         while (stream.currentBCI() <= block.endBci) {
             switch (stream.currentBC()) {
                 case RETURN:
-                    if (method.isConstructor() && method.getDeclaringClass().isClass(Object.class)) {
+                    if (method.isConstructor() && method.holder().superType() == null) {
                         // return from Object.init implicitly registers a finalizer
                         // for the receiver if needed, so keep it alive.
                         loadOne(block, 0);
