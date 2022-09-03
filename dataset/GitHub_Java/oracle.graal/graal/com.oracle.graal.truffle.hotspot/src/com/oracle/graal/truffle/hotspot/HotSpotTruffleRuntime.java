@@ -79,8 +79,6 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         installOptimizedCallTargetCallDirect();
         lookupCallMethods(getGraalProviders().getMetaAccess());
 
-        installDefaultListeners();
-
         // Create compilation queue.
         CompilerThreadFactory factory = new CompilerThreadFactory("TruffleCompilerThread", new CompilerThreadFactory.DebugConfigAccess() {
             public GraalDebugConfig getDebugConfig() {
@@ -94,7 +92,6 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
             }
         });
         compileQueue = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(), factory);
-
     }
 
     private static void installOptimizedCallTargetCallDirect() {
@@ -110,24 +107,16 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
 
     @Override
     public RootCallTarget createCallTarget(RootNode rootNode) {
-        return createCallTargetImpl(null, rootNode);
-    }
-
-    private RootCallTarget createCallTargetImpl(OptimizedCallTarget source, RootNode rootNode) {
         CompilationPolicy compilationPolicy;
         if (acceptForCompilation(rootNode)) {
             compilationPolicy = new CounterBasedCompilationPolicy();
         } else {
             compilationPolicy = new InterpreterOnlyCompilationPolicy();
         }
-        OptimizedCallTarget target = new OptimizedCallTarget(source, rootNode, this, compilationPolicy, new HotSpotSpeculationLog());
+        OptimizedCallTarget target = new OptimizedCallTarget(rootNode, this, TruffleMinInvokeThreshold.getValue(), TruffleCompilationThreshold.getValue(), compilationPolicy,
+                        new HotSpotSpeculationLog());
         callTargets.put(target, null);
         return target;
-    }
-
-    @Override
-    public RootCallTarget createClonedCallTarget(OptimizedCallTarget source, RootNode root) {
-        return createCallTargetImpl(source, root);
     }
 
     @Override
@@ -208,22 +197,21 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
             @Override
             public void run() {
                 try (Scope s = Debug.scope("Truffle", new TruffleDebugJavaMethod(optimizedCallTarget))) {
-                    truffleCompiler.compileMethod(optimizedCallTarget);
-                    optimizedCallTarget.notifyCompilationFinished();
+                    truffleCompiler.compileMethodImpl(optimizedCallTarget);
+                    optimizedCallTarget.compilationFinished(null);
                 } catch (Throwable e) {
-                    optimizedCallTarget.notifyCompilationFailed(e);
+                    optimizedCallTarget.compilationFinished(e);
                 }
             }
         };
         Future<?> future = compileQueue.submit(r);
         this.compilations.put(optimizedCallTarget, future);
-        getCompilationNotify().notifyCompilationQueued(optimizedCallTarget);
 
         if (!mayBeAsynchronous) {
             try {
                 future.get();
             } catch (ExecutionException e) {
-                if (TruffleCompilationExceptionsAreThrown.getValue() && !(e.getCause() instanceof BailoutException) && !((BailoutException) e.getCause()).isPermanent()) {
+                if (TruffleCompilationExceptionsAreThrown.getValue()) {
                     throw new RuntimeException(e.getCause());
                 } else {
                     // silently ignored
@@ -235,13 +223,11 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     }
 
     @Override
-    public boolean cancelInstalledTask(OptimizedCallTarget optimizedCallTarget, Object source, CharSequence reason) {
+    public boolean cancelInstalledTask(OptimizedCallTarget optimizedCallTarget) {
         Future<?> codeTask = this.compilations.get(optimizedCallTarget);
         if (codeTask != null && isCompiling(optimizedCallTarget)) {
             this.compilations.remove(optimizedCallTarget);
-            boolean result = codeTask.cancel(true);
-            getCompilationNotify().notifyCompilationDequeued(optimizedCallTarget, source, reason);
-            return result;
+            return codeTask.cancel(true);
         }
         return false;
     }
@@ -259,11 +245,6 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     }
 
     @Override
-    public Collection<OptimizedCallTarget> getQueuedCallTargets() {
-        return compilations.keySet().stream().filter(e -> !compilations.get(e).isDone()).collect(Collectors.toList());
-    }
-
-    @Override
     public boolean isCompiling(OptimizedCallTarget optimizedCallTarget) {
         Future<?> codeTask = this.compilations.get(optimizedCallTarget);
         if (codeTask != null) {
@@ -277,9 +258,8 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     }
 
     @Override
-    public void invalidateInstalledCode(OptimizedCallTarget optimizedCallTarget, Object source, CharSequence reason) {
+    public void invalidateInstalledCode(OptimizedCallTarget optimizedCallTarget) {
         HotSpotGraalRuntime.runtime().getCompilerToVM().invalidateInstalledCode(optimizedCallTarget);
-        getCompilationNotify().notifyCompilationInvalidated(optimizedCallTarget, source, reason);
     }
 
     @Override
