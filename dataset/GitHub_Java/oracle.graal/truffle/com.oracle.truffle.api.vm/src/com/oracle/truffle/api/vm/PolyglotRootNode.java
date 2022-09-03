@@ -148,6 +148,8 @@ abstract class PolyglotRootNode extends RootNode {
     }
 
     private static final class AsJavaRootNode extends PolyglotRootNode {
+        @Child private ConvertNode returnConvertNode;
+        @Child private Node executeNode;
         @Child private Node toJavaNode;
 
         private final Class<? extends TruffleObject> receiverType;
@@ -157,6 +159,7 @@ abstract class PolyglotRootNode extends RootNode {
         AsJavaRootNode(PolyglotEngine engine, Class<? extends TruffleObject> receiverType) {
             super(engine);
             this.receiverType = receiverType;
+            this.returnConvertNode = new ConvertNode();
             this.toJavaNode = Access.JAVA_INTEROP.createToJavaNode();
         }
 
@@ -164,12 +167,8 @@ abstract class PolyglotRootNode extends RootNode {
         protected Object executeImpl(VirtualFrame frame) {
             Object[] args = frame.getArguments();
             final Class<?> targetType = (Class<?>) args[1];
-            if (receiverType.isInstance(args[0])) {
-                final TruffleObject value = receiverType.cast(args[0]);
-                return Access.JAVA_INTEROP.toJava(toJavaNode, targetType, value);
-            } else {
-                throw new ClassCastException();
-            }
+            final TruffleObject value = receiverType.cast(args[0]);
+            return Access.JAVA_INTEROP.toJava(toJavaNode, targetType, value);
         }
 
     }
