@@ -25,6 +25,10 @@ package org.graalvm.compiler.hotspot.amd64.test;
 
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.REG;
 
+import org.junit.Assume;
+import org.junit.Before;
+import org.junit.Test;
+
 import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.asm.amd64.AMD64Address;
 import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
@@ -49,12 +53,8 @@ import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.replacements.ReplacementsImpl;
 import org.graalvm.compiler.replacements.classfile.ClassfileBytecodeProvider;
-import org.junit.Assume;
-import org.junit.Before;
-import org.junit.Test;
 
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.amd64.AMD64.CPUFeature;
@@ -167,8 +167,8 @@ public class StubAVXTest extends LIRTest {
 
     private static class TestStub extends SnippetStub {
 
-        TestStub(OptionValues options, HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
-            super("testStub", options, providers, linkage);
+        TestStub(HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
+            super("testStub", providers, linkage);
         }
 
         @Snippet
@@ -219,7 +219,7 @@ public class StubAVXTest extends LIRTest {
         HotSpotProviders providers = (HotSpotProviders) getProviders();
         HotSpotForeignCallsProviderImpl foreignCalls = (HotSpotForeignCallsProviderImpl) providers.getForeignCalls();
         HotSpotForeignCallLinkage linkage = foreignCalls.registerStubCall(TEST_STUB, true, HotSpotForeignCallLinkage.Transition.LEAF_NOFP);
-        linkage.setCompiledStub(new TestStub(getInitialOptions(), providers, linkage));
+        linkage.setCompiledStub(new TestStub(providers, linkage));
         runTest("testStub");
     }
 }

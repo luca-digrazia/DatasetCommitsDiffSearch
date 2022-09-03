@@ -22,19 +22,18 @@
  */
 package org.graalvm.compiler.jtt.jdk;
 
-import org.junit.Test;
-
-import sun.misc.Unsafe;
+import static org.graalvm.compiler.options.OptionValues.GLOBAL;
 
 import org.graalvm.compiler.jtt.JTTTest;
+import org.junit.Assume;
+import org.junit.Test;
 
 public class Unsafe_compareAndSwapNullCheck extends JTTTest {
 
-    static final Unsafe unsafe = UnsafeAccess01.getUnsafe();
     static final long valueOffset;
     static {
         try {
-            valueOffset = unsafe.objectFieldOffset(Unsafe_compareAndSwap.class.getDeclaredField("value"));
+            valueOffset = UNSAFE.objectFieldOffset(Unsafe_compareAndSwap.class.getDeclaredField("value"));
         } catch (Exception ex) {
             throw new Error(ex);
         }
@@ -46,11 +45,13 @@ public class Unsafe_compareAndSwapNullCheck extends JTTTest {
     public static void test(Unsafe_compareAndSwapNullCheck u, long expected, long newValue) {
         @SuppressWarnings("unused")
         long l = u.lng;
-        unsafe.compareAndSwapLong(u, valueOffset, expected, newValue);
+        UNSAFE.compareAndSwapLong(u, valueOffset, expected, newValue);
     }
 
     @Test
     public void run0() throws Throwable {
-        runTest(EMPTY, false, true, "test", null, 1L, 2L);
+        // GR-2921: Unsafe_compareAndSwapNullCheck test crashes on jdk9
+        Assume.assumeTrue(Java8OrEarlier);
+        runTest(GLOBAL, EMPTY, false, true, "test", null, 1L, 2L);
     }
 }
