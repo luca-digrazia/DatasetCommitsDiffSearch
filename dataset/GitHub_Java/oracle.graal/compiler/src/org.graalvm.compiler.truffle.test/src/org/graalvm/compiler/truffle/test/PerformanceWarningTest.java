@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -52,7 +52,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 
-public class PerformanceWarningTest extends TruffleCompilerImplTest {
+public class PerformanceWarningTest {
 
     // Marker object indicating that no performance warnings are expected.
     private static final String[] EMPTY_PERF_WARNINGS = new String[0];
@@ -61,56 +61,49 @@ public class PerformanceWarningTest extends TruffleCompilerImplTest {
     @SuppressWarnings("unused") private static final VirtualObject1 object1 = new VirtualObject1();
     @SuppressWarnings("unused") private static final VirtualObject2 object2 = new VirtualObject2();
     @SuppressWarnings("unused") private static final SubClass object3 = new SubClass();
-    @SuppressWarnings("unused") private static final L9a object4 = new L9a();
-    @SuppressWarnings("unused") private static final L9b object5 = new L9b();
 
     @Test
     public void testVirtualCall() {
-        testHelper(truffleCompiler, new RootNodeVirtualCall(), true, "perf warn", "execute");
+        testHelper(new RootNodeVirtualCall(), true, "perf warn", "execute");
     }
 
     @Test
     public void testDeepStack() {
-        testHelper(truffleCompiler, new RootNodeDeepStack(), true, "perf warn", "foo", "bar", "execute");
+        testHelper(new RootNodeDeepStack(), true, "perf warn", "foo", "bar", "execute");
     }
 
     @Test
     public void testInstanceOf() {
-        testHelper(truffleCompiler, new RootNodeInstanceOf(), false, "perf info", "foo", "bar", "execute");
+        testHelper(new RootNodeInstanceOf(), false, "perf info", "foo", "bar", "execute");
     }
 
     @Test
     public void testCombined() {
-        testHelper(truffleCompiler, new RootNodeCombined(), true, "perf info", "perf warn", "foo", "bar", "execute");
+        testHelper(new RootNodeCombined(), true, "perf info", "perf warn", "foo", "bar", "execute");
     }
 
     @Test
     public void testBoundaryCall() {
-        testHelper(truffleCompiler, new RootNodeBoundaryCall(), false, EMPTY_PERF_WARNINGS);
+        testHelper(new RootNodeBoundaryCall(), false, EMPTY_PERF_WARNINGS);
     }
 
     @Test
     public void testBoundaryVirtualCall() {
-        testHelper(truffleCompiler, new RootNodeBoundaryVirtualCall(), false, EMPTY_PERF_WARNINGS);
+        testHelper(new RootNodeBoundaryVirtualCall(), false, EMPTY_PERF_WARNINGS);
     }
 
     @Test
-    public void testInterfaceCast() {
-        testHelper(truffleCompiler, new RootNodeInterfaceCast(), false, "perf info", Interface.class.getSimpleName(), "foo", "bar", "execute");
+    public void testCast() {
+        testHelper(new RootNodeCast(), false, "perf info", "foo", "bar", "execute");
     }
 
     @Test
     public void testSingleImplementor() {
-        testHelper(truffleCompiler, new RootNodeInterfaceSingleImplementorCall(), false, EMPTY_PERF_WARNINGS);
-    }
-
-    @Test
-    public void testSlowClassCast() {
-        testHelper(truffleCompiler, new RootNodeDeepClass(), false, "perf info", L8.class.getSimpleName(), "foo", "execute");
+        testHelper(new RootNodeInterfaceSingleImplementorCall(), false, "perf info", "type check", "foo");
     }
 
     @SuppressWarnings("try")
-    private static void testHelper(TruffleCompilerImpl compiler, RootNode rootNode, boolean expectException, String... outputStrings) {
+    private static void testHelper(RootNode rootNode, boolean expectException, String... outputStrings) {
 
         GraalTruffleRuntime runtime = GraalTruffleRuntime.getRuntime();
         OptimizedCallTarget target = (OptimizedCallTarget) runtime.createCallTarget(rootNode);
@@ -126,6 +119,7 @@ public class PerformanceWarningTest extends TruffleCompilerImplTest {
                 DebugContext debug = DebugContext.create(options, DebugHandlersFactory.LOADER);
                 try (DebugCloseable d = debug.disableIntercept(); DebugContext.Scope s = debug.scope("PerformanceWarningTest")) {
                     final OptimizedCallTarget compilable = target;
+                    TruffleCompilerImpl compiler = (TruffleCompilerImpl) runtime.newTruffleCompiler();
                     CompilationIdentifier compilationId = compiler.createCompilationIdentifier(compilable);
                     TruffleInliningPlan inliningPlan = new TruffleInlining(compilable, new DefaultInliningPolicy());
                     compiler.compileAST(debug, compilable, inliningPlan, compilationId, null, null);
@@ -147,7 +141,7 @@ public class PerformanceWarningTest extends TruffleCompilerImplTest {
             Assert.assertEquals("", output);
         } else {
             for (String s : outputStrings) {
-                Assert.assertTrue(String.format("Root node class %s: \"%s\" not found in output \"%s\"", rootNode.getClass().getName(), s, output), output.contains(s));
+                Assert.assertTrue(String.format("Root node class %s: \"%s\" not found in output \"%s\"", rootNode.getClass(), s, output), output.contains(s));
             }
         }
     }
@@ -254,7 +248,7 @@ public class PerformanceWarningTest extends TruffleCompilerImplTest {
         }
     }
 
-    private final class RootNodeInterfaceCast extends TestRootNode {
+    private final class RootNodeCast extends TestRootNode {
         protected Object obj;
 
         @Override
@@ -329,48 +323,4 @@ public class PerformanceWarningTest extends TruffleCompilerImplTest {
     private static class SubClass extends SingleImplementorClass {
     }
 
-    private static class L1 {
-    }
-
-    private static class L2 extends L1 {
-    }
-
-    private static class L3 extends L2 {
-    }
-
-    private static class L4 extends L3 {
-    }
-
-    private static class L5 extends L4 {
-    }
-
-    private static class L6 extends L5 {
-    }
-
-    private static class L7 extends L6 {
-    }
-
-    private static class L8 extends L7 {
-    }
-
-    private static class L9a extends L8 {
-    }
-
-    private static class L9b extends L8 {
-    }
-
-    private final class RootNodeDeepClass extends TestRootNode {
-        protected Object obj;
-
-        @Override
-        public Object execute(VirtualFrame frame) {
-            foo();
-            return null;
-        }
-
-        @SuppressWarnings("unused")
-        private void foo() {
-            L8 c = (L8) obj;
-        }
-    }
 }
