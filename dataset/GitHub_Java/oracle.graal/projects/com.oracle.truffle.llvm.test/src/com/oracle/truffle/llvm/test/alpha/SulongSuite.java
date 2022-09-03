@@ -30,44 +30,56 @@
 package com.oracle.truffle.llvm.test.alpha;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
+import java.util.List;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
-import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
-import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
+import com.oracle.truffle.llvm.LLVM;
+import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
+import com.oracle.truffle.llvm.tools.util.ProcessUtil;
 
 @RunWith(Parameterized.class)
-public final class SulongSuite extends BaseSuiteHarness {
+public class SulongSuite {
 
-    private static final Path SULONG_SUITE_DIR = new File(LLVMOptions.ENGINE.projectRoot() + "/../cache/tests/sulong").toPath();
-    private static final Path SULONG_SOURCE_DIR = new File(LLVMOptions.ENGINE.projectRoot() + "/../tests/sulong").toPath();
-    private static final Path SULONG_CONFIG_DIR = new File(LLVMOptions.ENGINE.projectRoot() + "/../tests/sulong/configs").toPath();
+    private static final Path SULONG_SUITE_DIR = new File(LLVMBaseOptionFacade.getProjectRoot() + "/tests/cache/tests/sulong").toPath();
+    private static final Predicate<? super Path> isExecutable = f -> f.getFileName().toString().endsWith(".out");
+    private static final Predicate<? super Path> notExecutable = f -> !isExecutable.test(f);
+    private static final Predicate<? super Path> isFile = f -> f.toFile().isFile();
 
     @Parameter(value = 0) public Path path;
     @Parameter(value = 1) public String testName;
 
-    @Parameters(name = "{1}")
+    @Parameters(name = "{index}: {1}")
     public static Collection<Object[]> data() {
-        return collectTestCases(SULONG_CONFIG_DIR, SULONG_SUITE_DIR);
+        try {
+            return Files.walk(SULONG_SUITE_DIR).filter(isExecutable).map(f -> f.getParent()).map(f -> new Object[]{f, f.getFileName().toString()}).collect(Collectors.toList());
+        } catch (IOException e) {
+            throw new AssertionError("Test cases not found", e);
+        }
     }
 
-    @Override
-    protected Path getTestDirectory() {
-        return path;
-    }
+    @Test
+    public void test() throws Exception {
+        assert Files.walk(path).filter(isExecutable).count() == 1;
+        Path referenceFile = Files.walk(path).filter(isExecutable).findFirst().get();
+        List<Path> testCandidates = Files.walk(path).filter(isFile).filter(notExecutable).collect(Collectors.toList());
 
-    @Override
-    protected Path getSuiteDirectory() {
-        return SULONG_SUITE_DIR;
-    }
+        final int referenceResult = ProcessUtil.executeNativeCommand(referenceFile.toAbsolutePath().toString()).getReturnValue();
 
-    @AfterClass
-    public static void printStatistics() {
-        printStatistics("Sulong", SULONG_SOURCE_DIR, SULONG_CONFIG_DIR, f -> true);
+        for (Path candidate : testCandidates) {
+            int sulongResult = LLVM.executeMain(candidate.toAbsolutePath().toFile());
+            Assert.assertEquals(candidate.getFileName().toString() + " in " + path.toAbsolutePath().toString() + " failed.", referenceResult, sulongResult);
+        }
     }
 }
