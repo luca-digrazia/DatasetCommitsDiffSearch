@@ -61,7 +61,7 @@ public interface Invoke extends StateSplit, Lowerable, DeoptimizingNode.DeoptDur
     void setPolymorphic(boolean value);
 
     default ResolvedJavaMethod getTargetMethod() {
-        return callTarget() != null ? callTarget().targetMethod() : null;
+        return callTarget().targetMethod();
     }
 
     /**
