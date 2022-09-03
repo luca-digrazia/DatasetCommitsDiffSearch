@@ -63,6 +63,10 @@ public class LLVMTypeHelper {
         this.runtime = runtime;
     }
 
+    public int getByteSize(Type type) {
+        return getByteSize(LLVMToBitcodeAdapter.unresolveType(type));
+    }
+
     public int getByteSize(ResolvedType type) {
         int bits = type.getBits().intValue();
         if (type instanceof ResolvedIntegerType || type instanceof ResolvedFloatingType) {
@@ -283,6 +287,10 @@ public class LLVMTypeHelper {
         return ((ResolvedStructType) currentType).isPacked();
     }
 
+    public int computePaddingByte(int currentOffset, Type type) {
+        return computePaddingByte(currentOffset, LLVMToBitcodeAdapter.unresolveType(type));
+    }
+
     public int computePaddingByte(int currentOffset, ResolvedType type) {
         int alignmentByte = getAlignmentByte(type);
         if (alignmentByte == 0) {
@@ -294,6 +302,10 @@ public class LLVMTypeHelper {
 
     interface LayoutConverter {
         int getBitAlignment(LLVMBaseType type);
+    }
+
+    public int getAlignmentByte(Type field) {
+        return getAlignmentByte(LLVMToBitcodeAdapter.unresolveType(field));
     }
 
     public int getAlignmentByte(ResolvedType field) {
