@@ -27,9 +27,6 @@ import java.util.concurrent.*;
 
 import junit.framework.*;
 
-import com.oracle.graal.api.*;
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.phases.PhasePlan.PhasePosition;
@@ -41,6 +38,8 @@ import com.oracle.graal.graph.Node.Verbosity;
 import com.oracle.graal.java.*;
 import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 /**
  * Base class for Graal compiler unit tests. These are white box tests
@@ -60,11 +59,13 @@ import com.oracle.graal.nodes.*;
  */
 public abstract class GraphTest {
 
-    protected final ExtendedRiRuntime runtime;
+    protected final GraalCompiler graalCompiler;
+    protected final GraalRuntime runtime;
 
     public GraphTest() {
         Debug.enable();
-        this.runtime = Graal.getRuntime().getCapability(ExtendedRiRuntime.class);
+        this.graalCompiler = GraalAccess.getGraalCompiler();
+        this.runtime = graalCompiler.runtime;
     }
 
     protected void assertEquals(StructuredGraph expected, StructuredGraph graph) {
@@ -117,7 +118,7 @@ public abstract class GraphTest {
         return result.toString();
     }
 
-    protected ExtendedRiRuntime runtime() {
+    protected GraalRuntime runtime() {
         return runtime;
     }
 
@@ -147,53 +148,23 @@ public abstract class GraphTest {
 
     private static int compilationId = 0;
 
-    protected void test(String name, Object... args) {
-        Method method = getMethod(name);
-        Object expect = null;
-        Throwable exception = null;
-        try {
-            // This gives us both the expected return value as well as ensuring that the method to be compiled is fully resolved
-            expect = method.invoke(null, args);
-        } catch (InvocationTargetException e) {
-            exception = e.getTargetException();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        InstalledCode compiledMethod = compile(runtime.getResolvedJavaMethod(method), parse(method));
-        compiledMethod.method();
-
-        if (exception != null) {
-            try {
-                compiledMethod.executeVarargs(args);
-                Assert.fail("expected " + exception);
-            } catch (Throwable e) {
-                Assert.assertEquals(exception.getClass(), e.getClass());
-            }
-        } else {
-            Object actual = compiledMethod.executeVarargs(args);
-            Assert.assertEquals(expect, actual);
-        }
-    }
-
-    protected InstalledCode compile(final ResolvedJavaMethod method, final StructuredGraph graph) {
-        return Debug.scope("Compiling", new DebugDumpScope(String.valueOf(compilationId++), true), new Callable<InstalledCode>() {
-            public InstalledCode call() throws Exception {
-                CompilationResult targetMethod = runtime.compile(method, graph);
+    protected RiCompiledMethod compile(final RiResolvedMethod method, final StructuredGraph graph) {
+        return Debug.scope("Compiling", new DebugDumpScope(String.valueOf(compilationId++), true), new Callable<RiCompiledMethod>() {
+            public RiCompiledMethod call() throws Exception {
+                CiTargetMethod targetMethod = runtime.compile(method, graph);
                 return addMethod(method, targetMethod);
             }
         });
     }
 
-    protected InstalledCode addMethod(final ResolvedJavaMethod method, final CompilationResult tm) {
-        GraalCompiler graalCompiler = Graal.getRuntime().getCapability(GraalCompiler.class);
-        assert graalCompiler != null;
-        return Debug.scope("CodeInstall", new Object[] {graalCompiler, method}, new Callable<InstalledCode>() {
+    protected RiCompiledMethod addMethod(final RiResolvedMethod method, final CiTargetMethod tm) {
+        return Debug.scope("CodeInstall", new Object[] {graalCompiler, method}, new Callable<RiCompiledMethod>() {
             @Override
-            public InstalledCode call() throws Exception {
-                final CodeInfo[] info = Debug.isDumpEnabled() ? new CodeInfo[1] : null;
-                InstalledCode installedMethod = runtime.addMethod(method, tm, info);
+            public RiCompiledMethod call() throws Exception {
+                final RiCodeInfo[] info = Debug.isDumpEnabled() ? new RiCodeInfo[1] : null;
+                RiCompiledMethod installedMethod = runtime.addMethod(method, tm, info);
                 if (info != null) {
-                    Debug.dump(new Object[] {tm, info[0]}, "After code installation");
+                    Debug.dump(info[0], "After code installation");
                 }
                 return installedMethod;
             }
@@ -213,7 +184,7 @@ public abstract class GraphTest {
      * Parses a Java method to produce a graph.
      */
     protected StructuredGraph parse(Method m) {
-        ResolvedJavaMethod riMethod = runtime.getResolvedJavaMethod(m);
+        RiResolvedMethod riMethod = runtime.getRiMethod(m);
         StructuredGraph graph = new StructuredGraph(riMethod);
         new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.ALL).apply(graph);
         return graph;
@@ -223,7 +194,7 @@ public abstract class GraphTest {
      * Parses a Java method to produce a graph.
      */
     protected StructuredGraph parseProfiled(Method m) {
-        ResolvedJavaMethod riMethod = runtime.getResolvedJavaMethod(m);
+        RiResolvedMethod riMethod = runtime.getRiMethod(m);
         StructuredGraph graph = new StructuredGraph(riMethod);
         new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL).apply(graph);
         return graph;
