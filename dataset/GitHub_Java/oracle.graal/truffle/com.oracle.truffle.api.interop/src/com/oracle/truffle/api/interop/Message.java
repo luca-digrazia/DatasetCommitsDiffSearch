@@ -519,13 +519,13 @@ public abstract class Message {
      * {@link #toString(com.oracle.truffle.api.interop.Message)} method, it is guaranteed to be
      * successfully recognized (if the classpath of the system remains the same).
      *
-     * @param messageId canonical string representation of a message
+     * @param message canonical string representation of a message
      * @return the message
      * @throws IllegalArgumentException if the string does not represent known message
      * @since 0.9
      */
-    public static Message valueOf(String messageId) {
-        switch (messageId) {
+    public static Message valueOf(String message) {
+        switch (message) {
             case "READ":
                 return Message.READ;
             case "WRITE":
@@ -552,11 +552,11 @@ public abstract class Message {
                 return Message.createInvoke(0);
         }
         if (!TruffleOptions.AOT) {
-            initializeMessageClass(messageId);
+            initializeMessageClass(message);
         }
-        Message instance = CLASS_TO_MESSAGE.get(messageId);
+        Message instance = CLASS_TO_MESSAGE.get(message);
         if (instance == null) {
-            throw new IllegalArgumentException("Cannot find existing message instance for " + messageId);
+            throw new IllegalArgumentException("Cannot find existing message instance for " + message);
         }
         return instance;
     }
