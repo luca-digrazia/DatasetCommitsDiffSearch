@@ -30,7 +30,6 @@ import com.sun.cri.ci.*;
 public final class EndNode extends FixedNode {
     public static final int SUCCESSOR_COUNT = 0;
     public static final int INPUT_COUNT = 0;
-
     public EndNode(Graph graph) {
         super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
@@ -61,10 +60,10 @@ public final class EndNode extends FixedNode {
 
     @Override
     public boolean verify() {
-        assertTrue(inputs().size() == 0);
-        assertTrue(successors().size() == 0);
-        assertTrue(usages().size() <= 1);
-        assertTrue(predecessors().size() <= 1);
+        assertTrue(inputs().size() == 0, "inputs empty");
+        assertTrue(successors().size() == 0, "successors empty");
+        assertTrue(usages().size() <= 1, "at most one usage");
+        assertTrue(predecessors().size() <= 1, "at most one predecessor");
         return true;
     }
 }
