@@ -59,6 +59,8 @@ public final class TraceRegisterAllocationPhase extends AllocationPhase {
         // @formatter:off
         @Option(help = "Use inter-trace register hints.", type = OptionType.Debug)
         public static final StableOptionValue<Boolean> TraceRAuseInterTraceHints = new StableOptionValue<>(true);
+        @Option(help = "Use special allocator for trivial blocks.", type = OptionType.Debug)
+        public static final StableOptionValue<Boolean> TraceRAtrivialBlockAllocator = new StableOptionValue<>(true);
         @Option(help = "Share information about spilled values to other traces.", type = OptionType.Debug)
         public static final StableOptionValue<Boolean> TraceRAshareSpillInformation = new StableOptionValue<>(true);
         @Option(help = "Reuse spill slots for global move resolution cycle breaking.", type = OptionType.Debug)
@@ -102,7 +104,7 @@ public final class TraceRegisterAllocationPhase extends AllocationPhase {
                     if (trivialTracesCounter.isEnabled() && isTrivialTrace(lir, trace)) {
                         trivialTracesCounter.increment();
                     }
-                    if (DefaultTraceRegisterAllocationPolicy.Options.TraceRAtrivialBlockAllocator.getValue() && isTrivialTrace(lir, trace)) {
+                    if (Options.TraceRAtrivialBlockAllocator.getValue() && isTrivialTrace(lir, trace)) {
                         TRACE_TRIVIAL_ALLOCATOR.apply(target, lirGenRes, trace, traceContext, false);
                     } else {
                         if (linarScanAllocator == null) {
