@@ -77,7 +77,7 @@ public class CPUSamplerTest extends AbstractProfilerTest {
         Assert.assertFalse(sampler.hasData());
 
         for (int i = 0; i < executionCount; i++) {
-            eval(defaultSourceForSampling);
+            execute(defaultSourceForSampling);
         }
 
         Assert.assertNotEquals(0, sampler.getSampleCount());
@@ -109,7 +109,7 @@ public class CPUSamplerTest extends AbstractProfilerTest {
         sampler.setFilter(NO_INTERNAL_ROOT_TAG_FILTER);
         sampler.setCollecting(true);
         for (int i = 0; i < executionCount; i++) {
-            eval(defaultSourceForSampling);
+            execute(defaultSourceForSampling);
         }
 
         Collection<ProfilerNode<CPUSampler.Payload>> children = sampler.getRootNodes();
@@ -157,7 +157,7 @@ public class CPUSamplerTest extends AbstractProfilerTest {
         sampler.setFilter(NO_INTERNAL_ROOT_TAG_FILTER);
         sampler.setCollecting(true);
         for (int i = 0; i < executionCount; i++) {
-            eval(defaultRecursiveSourceForSampling);
+            execute(defaultRecursiveSourceForSampling);
         }
 
         Collection<ProfilerNode<CPUSampler.Payload>> children = sampler.getRootNodes();
@@ -197,7 +197,7 @@ public class CPUSamplerTest extends AbstractProfilerTest {
         sampler.setStackLimit(2);
         sampler.setCollecting(true);
         for (int i = 0; i < executionCount; i++) {
-            eval(defaultSourceForSampling);
+            execute(defaultSourceForSampling);
         }
         Assert.assertTrue(sampler.hasStackOverflowed());
     }
@@ -206,11 +206,12 @@ public class CPUSamplerTest extends AbstractProfilerTest {
         Assert.assertEquals("Timeline length and self hit count to not match!", payload.getSelfHitCount(), payload.getSelfHitTimes().size());
     }
 
-    @TruffleLanguage.Registration(id = RecreateShadowStackTestLanguage.ID, name = "RecreateShadowStackTestLanguage", version = "0.1")
+    @TruffleLanguage.Registration(id = RecreateShadowStackTestLanguage.ID, mimeType = RecreateShadowStackTestLanguage.MIME_TYPE, name = "RecreateShadowStackTestLanguage", version = "0.1")
     @ProvidedTags({StandardTags.StatementTag.class, StandardTags.RootTag.class})
     public static class RecreateShadowStackTestLanguage extends TruffleLanguage<Integer> {
 
         public static final String ID = "RecreateShadowStackTestLanguage";
+        public static final String MIME_TYPE = "RecreateShadowStackTestLanguageMime";
 
         @Override
         protected Integer createContext(Env env) {
@@ -455,7 +456,7 @@ public class CPUSamplerTest extends AbstractProfilerTest {
             @Override
             public void run() {
                 for (int i = 0; i < executionCount; i++) {
-                    eval(defaultSourceForSampling);
+                    execute(defaultSourceForSampling);
                 }
             }
         };
@@ -463,7 +464,7 @@ public class CPUSamplerTest extends AbstractProfilerTest {
             @Override
             public void run() {
                 for (int i = 0; i < executionCount; i++) {
-                    eval(defaultRecursiveSourceForSampling);
+                    execute(defaultRecursiveSourceForSampling);
                 }
             }
         };
@@ -517,7 +518,7 @@ public class CPUSamplerTest extends AbstractProfilerTest {
             @Override
             public void run() {
                 for (int i = 0; i < executionCount; i++) {
-                    eval(defaultSourceForSampling);
+                    execute(defaultSourceForSampling);
                 }
             }
         };
@@ -558,17 +559,14 @@ public class CPUSamplerTest extends AbstractProfilerTest {
     }
 
     @Test
-    public void testThreadSafe() throws InterruptedException {
+    public void testThreadSafe() {
         sampler.setFilter(NO_INTERNAL_ROOT_TAG_FILTER);
         sampler.setCollecting(true);
         Runnable runnable = new Runnable() {
             @Override
             public void run() {
                 while (true) {
-                    eval(defaultSourceForSampling);
-                    if (Thread.interrupted()) {
-                        break;
-                    }
+                    execute(defaultSourceForSampling);
                 }
             }
         };
@@ -588,7 +586,6 @@ public class CPUSamplerTest extends AbstractProfilerTest {
         } finally {
             execThread.interrupt();
         }
-        execThread.join(1000);
 
     }
 
