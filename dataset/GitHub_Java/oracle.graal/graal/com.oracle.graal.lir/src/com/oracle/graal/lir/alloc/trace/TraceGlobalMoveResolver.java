@@ -285,7 +285,6 @@ final class TraceGlobalMoveResolver {
         return getSpillMoveFactory().createMove(toOpr, fromOpr);
     }
 
-    @SuppressWarnings("try")
     private void resolveMappings() {
         try (Indent indent = Debug.logAndIndent("resolveMapping")) {
             assert verifyBeforeResolve();
@@ -336,7 +335,6 @@ final class TraceGlobalMoveResolver {
         assert checkEmpty();
     }
 
-    @SuppressWarnings("try")
     private void breakCycle(int spillCandidate) {
         // no move could be processed because there is a cycle in the move list
         // (e.g. r1 . r2, r2 . r1), so one interval must be spilled to memory
@@ -357,7 +355,6 @@ final class TraceGlobalMoveResolver {
         }
     }
 
-    @SuppressWarnings("try")
     private void printMapping() {
         try (Indent indent = Debug.logAndIndent("Mapping")) {
             for (int i = mappingFrom.size() - 1; i >= 0; i--) {
