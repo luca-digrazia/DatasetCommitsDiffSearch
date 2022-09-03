@@ -29,57 +29,56 @@
  */
 package com.oracle.truffle.llvm.parser.bc.impl;
 
-import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
-import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDeclaration;
-import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDefinition;
-import com.oracle.truffle.llvm.parser.base.model.visitors.FunctionVisitor;
-import com.oracle.truffle.llvm.parser.base.model.globals.GlobalAlias;
-import com.oracle.truffle.llvm.parser.base.model.globals.GlobalConstant;
-import com.oracle.truffle.llvm.parser.base.model.globals.GlobalVariable;
-import com.oracle.truffle.llvm.parser.base.model.blocks.InstructionBlock;
-import com.oracle.truffle.llvm.parser.base.model.visitors.InstructionVisitor;
-import com.oracle.truffle.llvm.parser.base.model.blocks.MetadataBlock;
-import com.oracle.truffle.llvm.parser.base.model.blocks.MetadataBlock.MetadataReference;
-import com.oracle.truffle.llvm.parser.base.model.types.MetadataReferenceType;
-import com.oracle.truffle.llvm.parser.base.model.Model;
-import com.oracle.truffle.llvm.parser.base.model.visitors.ModelVisitor;
-import com.oracle.truffle.llvm.parser.base.model.symbols.Symbol;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.integer.IntegerConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.constants.MetadataConstant;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.AllocateInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.BinaryOperationInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.BranchInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.CallInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.CastInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.CompareInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ConditionalBranchInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ExtractElementInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ExtractValueInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.GetElementPointerInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.IndirectBranchInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.InsertElementInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.InsertValueInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.LoadInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.PhiInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ReturnInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.SelectInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ShuffleVectorInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.StoreInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.SwitchInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.SwitchOldInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.UnreachableInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.VoidCallInstruction;
-import com.oracle.truffle.llvm.parser.base.model.metadata.MetadataFnNode;
-import com.oracle.truffle.llvm.parser.base.model.metadata.MetadataLocalVariable;
-import com.oracle.truffle.llvm.parser.base.model.metadata.MetadataBaseNode;
-import com.oracle.truffle.llvm.parser.base.model.metadata.MetadataBasicType;
-import com.oracle.truffle.llvm.parser.base.model.metadata.MetadataCompositeType;
-import com.oracle.truffle.llvm.parser.base.model.metadata.MetadataDerivedType;
-import com.oracle.truffle.llvm.parser.base.model.metadata.MetadataNode;
-import com.oracle.truffle.llvm.parser.base.model.metadata.MetadataString;
-import com.oracle.truffle.llvm.parser.base.model.types.PointerType;
-import com.oracle.truffle.llvm.parser.base.model.types.StructureType;
-import com.oracle.truffle.llvm.parser.base.model.types.Type;
+import uk.ac.man.cs.llvm.ir.model.FunctionDeclaration;
+import uk.ac.man.cs.llvm.ir.model.FunctionDefinition;
+import uk.ac.man.cs.llvm.ir.model.FunctionVisitor;
+import uk.ac.man.cs.llvm.ir.model.GlobalAlias;
+import uk.ac.man.cs.llvm.ir.model.GlobalConstant;
+import uk.ac.man.cs.llvm.ir.model.GlobalVariable;
+import uk.ac.man.cs.llvm.ir.model.InstructionBlock;
+import uk.ac.man.cs.llvm.ir.model.InstructionVisitor;
+import uk.ac.man.cs.llvm.ir.model.MetadataBlock;
+import uk.ac.man.cs.llvm.ir.model.MetadataBlock.MetadataReference;
+import uk.ac.man.cs.llvm.ir.model.MetadataReferenceType;
+import uk.ac.man.cs.llvm.ir.model.Model;
+import uk.ac.man.cs.llvm.ir.model.ModelVisitor;
+import uk.ac.man.cs.llvm.ir.model.Symbol;
+import uk.ac.man.cs.llvm.ir.model.constants.IntegerConstant;
+import uk.ac.man.cs.llvm.ir.model.constants.MetadataConstant;
+import uk.ac.man.cs.llvm.ir.model.elements.AllocateInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.BinaryOperationInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.BranchInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.CallInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.CastInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.CompareInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.ConditionalBranchInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.ExtractElementInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.ExtractValueInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.GetElementPointerInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.IndirectBranchInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.InsertElementInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.InsertValueInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.LoadInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.PhiInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.ReturnInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.SelectInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.ShuffleVectorInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.StoreInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.SwitchInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.SwitchOldInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.UnreachableInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.VoidCallInstruction;
+import uk.ac.man.cs.llvm.ir.model.metadata.MetadataFnNode;
+import uk.ac.man.cs.llvm.ir.model.metadata.MetadataLocalVariable;
+import uk.ac.man.cs.llvm.ir.model.metadata.MetadataBaseNode;
+import uk.ac.man.cs.llvm.ir.model.metadata.MetadataBasicType;
+import uk.ac.man.cs.llvm.ir.model.metadata.MetadataCompositeType;
+import uk.ac.man.cs.llvm.ir.model.metadata.MetadataDerivedType;
+import uk.ac.man.cs.llvm.ir.model.metadata.MetadataNode;
+import uk.ac.man.cs.llvm.ir.model.metadata.MetadataString;
+import uk.ac.man.cs.llvm.ir.types.PointerType;
+import uk.ac.man.cs.llvm.ir.types.StructureType;
+import uk.ac.man.cs.llvm.ir.types.Type;
 
 /**
  * Parse all those "@llvm.dbg.declare" call instructions and add the fitting Metadata reference to
@@ -87,18 +86,15 @@ import com.oracle.truffle.llvm.parser.base.model.types.Type;
  */
 public final class LLVMMetadata implements ModelVisitor {
 
-    public static LLVMMetadata generate(Model model, DataLayoutConverter.DataSpecConverter targetDataLayout) {
-        LLVMMetadata visitor = new LLVMMetadata(targetDataLayout);
+    public static LLVMMetadata generate(Model model) {
+        LLVMMetadata visitor = new LLVMMetadata();
 
         model.accept(visitor);
 
         return visitor;
     }
 
-    private final DataLayoutConverter.DataSpecConverter targetDataLayout;
-
-    private LLVMMetadata(DataLayoutConverter.DataSpecConverter targetDataLayout) {
-        this.targetDataLayout = targetDataLayout;
+    private LLVMMetadata() {
     }
 
     @Override
@@ -128,7 +124,7 @@ public final class LLVMMetadata implements ModelVisitor {
     public void visit(Type type) {
     }
 
-    private final class LLVMMetadataFunctionVisitor implements FunctionVisitor, InstructionVisitor {
+    private static final class LLVMMetadataFunctionVisitor implements FunctionVisitor, InstructionVisitor {
         private InstructionBlock currentBlock = null;
 
         private final MetadataBlock metadata;
@@ -229,19 +225,19 @@ public final class LLVMMetadata implements ModelVisitor {
         public void visit(ExtractValueInstruction extract) {
         }
 
-        private void setElementPointerName(GetElementPointerInstruction gep, MetadataDerivedType element) {
+        private static void setElementPointerName(GetElementPointerInstruction gep, MetadataDerivedType element) {
             if (element.getName().isPresent()) {
                 gep.setReferenceName(((MetadataString) element.getName().get()).getString());
             }
         }
 
-        private void setElementPointerName(GetElementPointerInstruction gep, MetadataCompositeType element) {
+        private static void setElementPointerName(GetElementPointerInstruction gep, MetadataCompositeType element) {
             if (element.getName().isPresent()) {
                 gep.setReferenceName(((MetadataString) element.getName().get()).getString());
             }
         }
 
-        private void setElementPointerName(GetElementPointerInstruction gep, MetadataBaseNode element) {
+        private static void setElementPointerName(GetElementPointerInstruction gep, MetadataBaseNode element) {
             if (element instanceof MetadataDerivedType) {
                 setElementPointerName(gep, (MetadataDerivedType) element);
             } else if (element instanceof MetadataCompositeType) {
@@ -249,7 +245,7 @@ public final class LLVMMetadata implements ModelVisitor {
             }
         }
 
-        private long getOffset(MetadataBaseNode element) {
+        private static long getOffset(MetadataBaseNode element) {
             // TODO: simplify design by using interfaces/abstract classes
             if (element instanceof MetadataDerivedType) {
                 return ((MetadataDerivedType) element).getOffset();
@@ -259,7 +255,7 @@ public final class LLVMMetadata implements ModelVisitor {
             throw new AssertionError("unknow node type: " + element);
         }
 
-        private void parseCompositeTypeStruct(GetElementPointerInstruction gep, StructureType struct, MetadataCompositeType node) {
+        private static void parseCompositeTypeStruct(GetElementPointerInstruction gep, StructureType struct, MetadataCompositeType node) {
             struct.setName(((MetadataString) node.getName().get()).getString());
 
             MetadataNode elements = (MetadataNode) node.getMemberDescriptors().get();
@@ -267,7 +263,7 @@ public final class LLVMMetadata implements ModelVisitor {
             Symbol idx = gep.getIndices().get(1);
             int parsedIndex = idx instanceof IntegerConstant ? (int) ((IntegerConstant) (idx)).getValue() : 0;
 
-            long elementOffset = struct.getIndexOffset(parsedIndex, targetDataLayout);
+            long elementOffset = struct.getElementOffset(parsedIndex);
             for (MetadataReference element : elements) {
                 if (getOffset(element.get()) == elementOffset) {
                     setElementPointerName(gep, element.get());
@@ -276,14 +272,14 @@ public final class LLVMMetadata implements ModelVisitor {
             }
         }
 
-        private void parseCompositeTypeStructBitcast(GetElementPointerInstruction gep, CastInstruction cast, MetadataCompositeType node) {
+        private static void parseCompositeTypeStructBitcast(GetElementPointerInstruction gep, CastInstruction cast, MetadataCompositeType node) {
             MetadataNode elements = (MetadataNode) node.getMemberDescriptors().get();
 
             Symbol idx = gep.getIndices().get(0);
             int parsedIndex = idx instanceof IntegerConstant ? (int) ((IntegerConstant) (idx)).getValue() : 0;
 
             // TODO: correct sizeof?
-            int elementOffset = parsedIndex * cast.getType().getSize(targetDataLayout);
+            int elementOffset = parsedIndex * cast.getType().sizeof();
 
             for (int i = 0; i < elements.size(); i++) {
                 MetadataBaseNode element = elements.get(i).get();
