@@ -47,7 +47,6 @@ public abstract class Word implements Signed, Unsigned, Pointer {
      /**
       * The canonical {@link Operation} represented by a method in the {@link Word} class.
       */
-     // @formatter:off
      public enum Opcode {
          NODE_CLASS,
          COMPARISON,
@@ -62,7 +61,6 @@ public abstract class Word implements Signed, Unsigned, Pointer {
          TO_OBJECT,
          TO_RAW_VALUE,
     }
-     // @formatter:on
 
     private static Word box(long val) {
         return HostedWord.box(val);
