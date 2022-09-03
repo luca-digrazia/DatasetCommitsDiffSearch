@@ -25,11 +25,8 @@
 package com.oracle.svm.hosted;
 
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.BiConsumer;
 
 import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
@@ -38,7 +35,6 @@ import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
-import org.graalvm.nativeimage.Feature.DuringAnalysisAccess;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
@@ -51,7 +47,6 @@ import com.oracle.graal.pointsto.api.PointstoOptions;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
-import com.oracle.graal.pointsto.meta.AnalysisUniverse;
 import com.oracle.graal.pointsto.meta.HostedProviders;
 import com.oracle.svm.core.annotate.UnknownClass;
 import com.oracle.svm.core.annotate.UnknownObjectField;
@@ -83,8 +78,6 @@ public final class SVMHost implements HostVM {
     private final ClassInitializationFeature classInitializationFeature;
     private final HostedStringDeduplication stringTable;
 
-    private final List<BiConsumer<DuringAnalysisAccess, Class<?>>> classReachabilityListeners;
-
     public SVMHost(OptionValues options, Platform platform, AnalysisPolicy analysisPolicy, ClassLoader classLoader) {
         this.options = options;
         this.platform = platform;
@@ -92,7 +85,6 @@ public final class SVMHost implements HostVM {
         this.classLoader = classLoader;
         this.classInitializationFeature = ClassInitializationFeature.singleton();
         this.stringTable = HostedStringDeduplication.singleton();
-        this.classReachabilityListeners = new ArrayList<>();
     }
 
     @Override
@@ -255,21 +247,5 @@ public final class SVMHost implements HostVM {
 
     public static boolean isUnknownPrimitiveField(AnalysisField field) {
         return field.getAnnotation(UnknownPrimitiveField.class) != null;
-    }
-
-    public void registerClassReachabilityListener(BiConsumer<DuringAnalysisAccess, Class<?>> listener) {
-        classReachabilityListeners.add(listener);
-    }
-
-    void notifyClassReachabilityListener(AnalysisUniverse universe, DuringAnalysisAccess access) {
-        for (AnalysisType type : universe.getTypes()) {
-            if ((type.isInTypeCheck() || type.isInstantiated()) && !type.getReachabilityListenerNotified()) {
-                type.setReachabilityListenerNotified(true);
-
-                for (BiConsumer<DuringAnalysisAccess, Class<?>> listener : classReachabilityListeners) {
-                    listener.accept(access, type.getJavaClass());
-                }
-            }
-        }
     }
 }
