@@ -192,9 +192,9 @@ public final class Debugger {
             }
             final StepStrategy strategy = currentDebugContext.strategy;
             if (strategy != null && strategy.wouldHaltAt(eventContext)) {
-                currentDebugContext.trace("REDUNDANT HALT, breakpoint@" + breakpoint.getLocationDescription());
+                currentDebugContext.trace("DOUBLE HALT, skip breakpoint at " + breakpoint.getLocationDescription());
             } else {
-                currentDebugContext.halt(eventContext, mFrame, HaltPosition.BEFORE, breakpoint);
+                currentDebugContext.halt(eventContext, mFrame, HaltPosition.BEFORE, "Breakpoint");
             }
         }
     };
@@ -433,7 +433,7 @@ public final class Debugger {
 
         @TruffleBoundary
         protected final void halt(EventContext eventContext, MaterializedFrame mFrame, HaltPosition haltPosition) {
-            debugContext.halt(eventContext, mFrame, haltPosition, this);
+            debugContext.halt(eventContext, mFrame, haltPosition, description());
         }
 
         @TruffleBoundary
@@ -448,6 +448,16 @@ public final class Debugger {
             }
         }
 
+        @TruffleBoundary
+        protected final void suspendUserBreakpoints() {
+            breakpoints.setActive(false);
+        }
+
+        @SuppressWarnings("unused")
+        protected final void restoreUserBreakpoints() {
+            breakpoints.setActive(true);
+        }
+
         /**
          * Reconfigures debugger so that this strategy will be in effect when execution continues.
          */
@@ -458,7 +468,7 @@ public final class Debugger {
          */
         protected abstract void unsetStrategy();
 
-        String description() {
+        private String description() {
             return name + "<" + actionID + ">";
         }
     }
@@ -985,7 +995,7 @@ public final class Debugger {
          * @param haltReason what caused the halt
          */
         @TruffleBoundary
-        private void halt(EventContext eventContext, MaterializedFrame mFrame, HaltPosition position, Object cause) {
+        private void halt(EventContext eventContext, MaterializedFrame mFrame, HaltPosition position, String haltReason) {
             if (disposed) {
                 throw new IllegalStateException("DebugExecutionContexts are single-use.");
             }
@@ -998,7 +1008,7 @@ public final class Debugger {
             haltedPosition = position;
             running = false;
 
-            if (cause instanceof StepStrategy) {
+            if (haltReason.startsWith("Step")) {
                 clearAction();
             }
             clearPause();
@@ -1029,17 +1039,10 @@ public final class Debugger {
                 }
             });
             contextStack = Collections.unmodifiableList(frames);
-            String haltReason = null;
 
             if (TRACE) {
-                if (cause instanceof StepStrategy) {
-                    haltReason = ((StepStrategy) cause).description();
-                } else if (cause instanceof Breakpoint) {
-                    haltReason = "breakpoint@" + ((Breakpoint) cause).getLocationDescription();
-                } else {
-                    haltReason = cause.toString();
-                }
-                trace("HALT %s: (%s) stack base=%d", haltedPosition.toString(), haltReason, contextStackBase);
+                final String reason = haltReason;
+                trace("HALT %s: (%s) stack base=%d", haltedPosition.toString(), reason, contextStackBase);
             }
 
             try {
@@ -1054,7 +1057,8 @@ public final class Debugger {
                 // Presume that the client has set a new strategy (or default to Continue)
                 running = true;
                 if (TRACE) {
-                    trace("RESUME %s : (%s) stack base=%d", haltedPosition.toString(), haltReason, contextStackBase);
+                    final String reason = haltReason;
+                    trace("RESUME %s : (%s) stack base=%d", haltedPosition.toString(), reason, contextStackBase);
                 }
             } finally {
                 haltedEventContext = null;
