@@ -22,9 +22,7 @@
  */
 package com.oracle.graal.hotspot;
 
-import static com.oracle.graal.hotspot.CompileTheWorld.Options.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.nodes.StructuredGraph.*;
 import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.io.*;
@@ -36,97 +34,16 @@ import java.util.jar.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.HotSpotOptions.OptionConsumer;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.options.*;
-import com.oracle.graal.options.OptionValue.OverrideScope;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.replacements.*;
 
 /**
  * This class implements compile-the-world functionality in Graal.
  */
 public final class CompileTheWorld {
-
-    static class Options {
-        // @formatter:off
-        @Option(help = "Compile all methods in all classes on given class path")
-        public static final OptionValue<String> CompileTheWorldClasspath = new OptionValue<>(null);
-        @Option(help = "First class to consider when using -XX:+CompileTheWorld")
-        public static final OptionValue<Integer> CompileTheWorldStartAt = new OptionValue<>(1);
-        @Option(help = "Last class to consider when using -XX:+CompileTheWorld")
-        public static final OptionValue<Integer> CompileTheWorldStopAt = new OptionValue<>(Integer.MAX_VALUE);
-        @Option(help = "Option value overrides to use during compile the world. For example, " +
-                       "to disable inlining and partial escape analysis specify '-PartialEscapeAnalysis -Inline'. " +
-                       "The format for each option is the same as on the command line just without the '-G:' prefix.")
-        public static final OptionValue<String> CompileTheWorldConfig = new OptionValue<>(null);
-        // @formatter:on
-    }
-
-    /**
-     * A mechanism for overriding Graal options that effect compilation. A {@link Config} object
-     * should be used in a try-with-resources statement to ensure overriding of options is scoped
-     * properly. For example:
-     * 
-     * <pre>
-     *     Config config = ...;
-     *     try (AutoCloseable s = config == null ? null : config.apply()) {
-     *         // perform a Graal compilation
-     *     }
-     * </pre>
-     */
-    @SuppressWarnings("serial")
-    static class Config extends HashMap<OptionValue<?>, Object> implements AutoCloseable, OptionConsumer {
-        OverrideScope scope;
-
-        /**
-         * Creates a {@link Config} object by parsing a set of space separated override options.
-         * 
-         * @param options a space separated set of option value settings with each option setting in
-         *            a format compatible with
-         *            {@link HotSpotOptions#parseOption(String, OptionConsumer)}
-         */
-        Config(String options) {
-            for (String option : options.split("\\s+")) {
-                if (!HotSpotOptions.parseOption(option, this)) {
-                    throw new GraalInternalError("Invalid option specified: %s", option);
-                }
-            }
-        }
-
-        /**
-         * Applies the overrides represented by this object. The overrides are in effect until
-         * {@link #close()} is called on this object.
-         */
-        Config apply() {
-            assert scope == null;
-            scope = OptionValue.override(this);
-            return this;
-        }
-
-        public void close() {
-            assert scope != null;
-            scope.close();
-
-            scope = null;
-
-        }
-
-        public void set(OptionDescriptor desc, Object value) {
-            put(desc.getOptionValue(), value);
-        }
-    }
-
-    static Config parseConfig(String input) {
-        if (input == null) {
-            return null;
-        } else {
-            return new Config(input);
-        }
-    }
 
     /**
      * This is our magic token to trigger reading files from the boot class path.
@@ -137,13 +54,13 @@ public final class CompileTheWorld {
     private final HotSpotGraalRuntime runtime = runtime();
     private final VMToCompilerImpl vmToCompiler = (VMToCompilerImpl) runtime.getVMToCompiler();
 
-    /** List of Zip/Jar files to compile (see {@link #CompileTheWorldClasspath}. */
+    /** List of Zip/Jar files to compile (see {@link GraalOptions#CompileTheWorld}. */
     private final String files;
 
-    /** Class index to start compilation at (see {@link #CompileTheWorldStartAt}. */
+    /** Class index to start compilation at (see {@link GraalOptions#CompileTheWorldStartAt}. */
     private final int startAt;
 
-    /** Class index to stop compilation at (see {@link #CompileTheWorldStopAt}. */
+    /** Class index to stop compilation at (see {@link GraalOptions#CompileTheWorldStopAt}. */
     private final int stopAt;
 
     // Counters
@@ -152,30 +69,28 @@ public final class CompileTheWorld {
     private long compileTime = 0;
 
     private boolean verbose;
-    private final Config config;
 
     /**
-     * Creates a compile-the-world instance with default values from
-     * {@link Options#CompileTheWorldClasspath}, {@link Options#CompileTheWorldStartAt} and
-     * {@link Options#CompileTheWorldStopAt}.
+     * Create a compile-the-world instance with default values from
+     * {@link GraalOptions#CompileTheWorld}, {@link GraalOptions#CompileTheWorldStartAt} and
+     * {@link GraalOptions#CompileTheWorldStopAt}.
      */
     public CompileTheWorld() {
-        this(CompileTheWorldClasspath.getValue(), parseConfig(CompileTheWorldConfig.getValue()), CompileTheWorldStartAt.getValue(), CompileTheWorldStopAt.getValue(), true);
+        this(CompileTheWorld.getValue(), CompileTheWorldStartAt.getValue(), CompileTheWorldStopAt.getValue(), true);
     }
 
     /**
-     * Creates a compile-the-world instance.
+     * Create a compile-the-world instance.
      * 
      * @param files {@link File#pathSeparator} separated list of Zip/Jar files to compile
      * @param startAt index of the class file to start compilation at
      * @param stopAt index of the class file to stop compilation at
      */
-    public CompileTheWorld(String files, Config config, int startAt, int stopAt, boolean verbose) {
+    public CompileTheWorld(String files, int startAt, int stopAt, boolean verbose) {
         this.files = files;
         this.startAt = startAt;
         this.stopAt = stopAt;
         this.verbose = verbose;
-        this.config = config;
 
         // We don't want the VM to exit when a method fails to compile...
         ExitVMOnException.setValue(false);
@@ -186,10 +101,12 @@ public final class CompileTheWorld {
     }
 
     /**
-     * Compiles all methods in all classes in the Zip/Jar archive files in
-     * {@link #CompileTheWorldClasspath}. If {@link #CompileTheWorldClasspath} contains the magic
-     * token {@link #SUN_BOOT_CLASS_PATH} passed up from HotSpot we take the files from the boot
-     * class path.
+     * Compile all methods in all classes in the Zip/Jar files in
+     * {@link GraalOptions#CompileTheWorld}. If the GraalOptions.CompileTheWorld contains the magic
+     * token {@link CompileTheWorld#SUN_BOOT_CLASS_PATH} passed up from HotSpot we take the files
+     * from the boot class path.
+     * 
+     * @throws Throwable
      */
     public void compile() throws Throwable {
         if (SUN_BOOT_CLASS_PATH.equals(files)) {
@@ -228,7 +145,7 @@ public final class CompileTheWorld {
     }
 
     /**
-     * Compiles all methods in all classes in the Zip/Jar files passed.
+     * Compile all methods in all classes in the Zip/Jar files passed.
      * 
      * @param fileList {@link File#pathSeparator} separated list of Zip/Jar files to compile
      * @throws Throwable
@@ -269,7 +186,7 @@ public final class CompileTheWorld {
                 String className = je.getName().substring(0, je.getName().length() - ".class".length());
                 classFileCounter++;
 
-                try (AutoCloseable s = config == null ? null : config.apply()) {
+                try {
                     // Load and initialize class
                     Class<?> javaClass = Class.forName(className.replace('/', '.'), true, loader);
 
@@ -316,49 +233,25 @@ public final class CompileTheWorld {
     }
 
     /**
-     * A compilation task that creates a fresh compilation suite for its compilation. This is
-     * required so that a CTW compilation can be {@linkplain Config configured} differently from a
-     * VM triggered compilation.
-     */
-    static class CTWCompilationTask extends CompilationTask {
-
-        CTWCompilationTask(HotSpotBackend backend, PhasePlan plan, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, HotSpotResolvedJavaMethod method, int entryBCI, int id) {
-            super(backend, plan, optimisticOpts, profilingInfo, method, entryBCI, id);
-        }
-
-        @Override
-        protected Suites getSuites(HotSpotProviders providers) {
-            return providers.getSuites().createSuites();
-        }
-    }
-
-    /**
-     * Compiles a method and gathers some statistics.
+     * Helper method to schedule a method for compilation and gather some statistics.
      */
     private void compileMethod(HotSpotResolvedJavaMethod method) {
         try {
             long start = System.currentTimeMillis();
-
-            final ProfilingInfo profilingInfo = method.getCompilationProfilingInfo(false);
-            final OptimisticOptimizations optimisticOpts = new OptimisticOptimizations(profilingInfo);
-            int id = vmToCompiler.allocateCompileTaskId();
-            HotSpotBackend backend = runtime.getHostBackend();
-            PhasePlan phasePlan = vmToCompiler.createPhasePlan(backend.getProviders(), optimisticOpts, false);
-            CompilationTask task = new CTWCompilationTask(backend, phasePlan, optimisticOpts, profilingInfo, method, INVOCATION_ENTRY_BCI, id);
-            task.runCompilation();
-
+            vmToCompiler.compileMethod(method, StructuredGraph.INVOCATION_ENTRY_BCI, true);
             compileTime += (System.currentTimeMillis() - start);
             compiledMethodsCounter++;
             method.reprofile();  // makes the method also not-entrant
         } catch (Throwable t) {
             // Catch everything and print a message
-            println("CompileTheWorldClasspath (%d) : Error compiling method: %s", classFileCounter, MetaUtil.format("%H.%n(%p):%r", method));
+            println("CompileTheWorld (%d) : Error compiling method: %s", classFileCounter, MetaUtil.format("%H.%n(%p):%r", method));
             t.printStackTrace(TTY.cachedOut);
         }
     }
 
     /**
-     * Determines if a method should be compiled (Cf. CompilationPolicy::can_be_compiled).
+     * Helper method for CompileTheWorld to determine if a method should be compiled (Cf.
+     * CompilationPolicy::can_be_compiled).
      * 
      * @return true if it can be compiled, false otherwise
      */
