@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.debug.GraalError.unimplemented;
 import static com.oracle.graal.java.BytecodeParserOptions.DumpDuringGraphBuilding;
 import static com.oracle.graal.java.BytecodeParserOptions.FailedLoopExplosionIsFatal;
 import static com.oracle.graal.java.BytecodeParserOptions.MaximumLoopExplosionCount;
+import static jdk.vm.ci.common.JVMCIError.unimplemented;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,7 +33,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
+import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.debug.Debug;
@@ -83,18 +94,6 @@ import com.oracle.graal.nodes.util.GraphUtil;
 import com.oracle.graal.options.Option;
 import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.phases.common.inlining.InliningUtil;
-
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * A graph decoder that performs partial evaluation, i.e., that performs method inlining and
@@ -195,11 +194,6 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
 
         @Override
-        public ConstantFieldProvider getConstantFieldProvider() {
-            return constantFieldProvider;
-        }
-
-        @Override
         public StructuredGraph getGraph() {
             return methodScope.graph;
         }
@@ -291,7 +285,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         public void setStateAfter(StateSplit stateSplit) {
             Node stateAfter = decodeFloatingNode(methodScope.caller, methodScope.callerLoopScope, methodScope.invokeData.stateAfterOrderId);
             getGraph().add(stateAfter);
-            FrameState fs = (FrameState) handleFloatingNodeAfterAdd(methodScope.caller, methodScope.callerLoopScope, stateAfter);
+            FrameState fs = (FrameState) handleFloatingNodeAfterAdd(methodScope.caller, methodScope.callerLoopScope, stateAfter, true);
             stateSplit.setStateAfter(fs);
         }
 
@@ -356,9 +350,8 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
     }
 
-    public PEGraphDecoder(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider, StampProvider stampProvider,
-                    Architecture architecture) {
-        super(metaAccess, constantReflection, constantFieldProvider, stampProvider, true, architecture);
+    public PEGraphDecoder(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, StampProvider stampProvider, Architecture architecture) {
+        super(metaAccess, constantReflection, stampProvider, true, architecture);
     }
 
     protected static LoopExplosionKind loopExplosionKind(ResolvedJavaMethod method, LoopExplosionPlugin loopExplosionPlugin) {
@@ -797,25 +790,17 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
     }
 
     @Override
-    protected Node addFloatingNode(MethodScope s, Node node) {
-        Node addedNode = super.addFloatingNode(s, node);
+    protected Node handleFloatingNodeAfterAdd(MethodScope s, LoopScope loopScope, Node node, boolean isNewlyAdded) {
         PEMethodScope methodScope = (PEMethodScope) s;
-        NodeSourcePosition pos = node.getNodeSourcePosition();
+
         if (methodScope.isInlinedMethod()) {
-            if (pos != null) {
+            NodeSourcePosition pos = node.getNodeSourcePosition();
+            if (isNewlyAdded && pos != null) {
                 NodeSourcePosition bytecodePosition = methodScope.getBytecodePosition();
                 node.setNodeSourcePosition(pos.addCaller(bytecodePosition));
             }
-        }
-        return addedNode;
-    }
-
-    @Override
-    protected Node handleFloatingNodeAfterAdd(MethodScope s, LoopScope loopScope, Node node) {
-        PEMethodScope methodScope = (PEMethodScope) s;
-
-        if (methodScope.isInlinedMethod()) {
             if (node instanceof FrameState) {
+                assert isNewlyAdded;
                 FrameState frameState = (FrameState) node;
 
                 ensureOuterStateDecoded(methodScope);
@@ -834,6 +819,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
                                 invokeArgsList);
 
             } else if (node instanceof MonitorIdNode) {
+                assert isNewlyAdded;
                 ensureOuterStateDecoded(methodScope);
                 InliningUtil.processMonitorId(methodScope.outerState, (MonitorIdNode) node);
                 return node;
