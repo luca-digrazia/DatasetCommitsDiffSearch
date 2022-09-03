@@ -24,9 +24,8 @@ package com.oracle.graal.jtt.hotspot;
 
 import java.util.*;
 
-import org.junit.*;
-
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 // @formatter:off
 public class Test6186134 extends JTTTest {

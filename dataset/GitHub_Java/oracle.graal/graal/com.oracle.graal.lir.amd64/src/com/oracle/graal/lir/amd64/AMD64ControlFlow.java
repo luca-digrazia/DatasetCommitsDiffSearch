@@ -374,7 +374,7 @@ public class AMD64ControlFlow {
         }
 
         JumpTable jt = new JumpTable(jumpTablePos, lowKey, highKey, 4);
-        tasm.compilationResult.addAnnotation(jt);
+        tasm.targetMethod.addAnnotation(jt);
     }
 
     private static void floatJcc(AMD64MacroAssembler masm, ConditionFlag condition, boolean unorderedIsTrue, Label label) {

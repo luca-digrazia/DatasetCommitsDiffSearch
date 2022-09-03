@@ -23,7 +23,7 @@
 package com.oracle.graal.jtt.hotspot;
 
 import com.oracle.graal.jtt.*;
-import com.oracle.graal.test.*;
+import org.junit.*;
 
 //@formatter:off
 
@@ -50,7 +50,7 @@ public class Test6850611 extends JTTTest {
         return 95;
     }
 
-    @LongTest
+    @Test
     public void run0() throws Throwable {
         runTest("test");
     }

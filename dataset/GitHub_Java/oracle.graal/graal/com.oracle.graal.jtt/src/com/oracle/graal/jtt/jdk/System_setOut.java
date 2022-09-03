@@ -24,8 +24,8 @@ package com.oracle.graal.jtt.jdk;
 
 import java.io.*;
 
-import com.oracle.graal.test.*;
 import com.oracle.graal.jtt.*;
+import org.junit.*;
 
 /*
  */
@@ -47,18 +47,16 @@ public class System_setOut extends JTTTest {
     }
 
     private static void doPrint(int n) {
-        PrintStream out = System.out;
         for (int i = 0; i < n; i++) {
-            out.print('x');
+            System.out.print('x');
         }
     }
 
     public static void main(String[] args) throws Exception {
-        PrintStream out = System.out;
-        out.println(test(10000));
+        System.out.println(test(10000));
     }
 
-    @LongTest
+    @Test
     public void run0() throws Throwable {
         runTest("test", 10000);
     }
