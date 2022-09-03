@@ -1334,7 +1334,7 @@ public class NodeParser extends AbstractParser<NodeData> {
         }
 
         if (!frameTypes.isEmpty()) {
-            frameTypes = ElementUtils.uniqueSortedTypes(frameTypes, false);
+            frameTypes = ElementUtils.uniqueSortedTypes(frameTypes);
             TypeMirror frameType;
             if (frameTypes.size() == 1) {
                 frameType = frameTypes.iterator().next();
@@ -1369,7 +1369,7 @@ public class NodeParser extends AbstractParser<NodeData> {
                     }
                     usedTypes.add(parameter.getType());
                 }
-                usedTypes = ElementUtils.uniqueSortedTypes(usedTypes, false);
+                usedTypes = ElementUtils.uniqueSortedTypes(usedTypes);
 
                 if (usedTypes.size() == 1) {
                     polymorphicType = usedTypes.iterator().next();

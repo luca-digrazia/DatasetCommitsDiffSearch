@@ -24,7 +24,11 @@ package com.oracle.truffle.dsl.processor.model;
 
 import java.util.*;
 
+import javax.lang.model.element.*;
+import javax.lang.model.type.*;
+
 import com.oracle.truffle.dsl.processor.*;
+import com.oracle.truffle.dsl.processor.expression.*;
 import com.oracle.truffle.dsl.processor.java.*;
 
 public final class SpecializationData extends TemplateMethod {
@@ -33,15 +37,16 @@ public final class SpecializationData extends TemplateMethod {
         UNINITIALIZED,
         SPECIALIZED,
         POLYMORPHIC,
-        GENERIC
+        FALLBACK
     }
 
     private final NodeData node;
-    private final SpecializationKind kind;
+    private SpecializationKind kind;
     private final List<SpecializationThrowsData> exceptions;
     private List<GuardExpression> guards = Collections.emptyList();
+    private List<CacheExpression> caches = Collections.emptyList();
+    private List<AssumptionExpression> assumptionExpressions = Collections.emptyList();
     private List<ShortCircuitData> shortCircuits;
-    private List<String> assumptions = Collections.emptyList();
     private final Set<SpecializationData> contains = new TreeSet<>();
     private final Set<String> containsNames = new TreeSet<>();
     private final Set<SpecializationData> excludedBy = new TreeSet<>();
@@ -49,6 +54,7 @@ public final class SpecializationData extends TemplateMethod {
     private SpecializationData insertBefore;
     private boolean reachable;
     private int index;
+    private DSLExpression limitExpression;
 
     public SpecializationData(NodeData node, TemplateMethod template, SpecializationKind kind, List<SpecializationThrowsData> exceptions) {
         super(template);
@@ -60,6 +66,61 @@ public final class SpecializationData extends TemplateMethod {
         for (SpecializationThrowsData exception : exceptions) {
             exception.setSpecialization(this);
         }
+    }
+
+    public boolean isCacheBoundByGuard(CacheExpression cacheExpression) {
+        for (GuardExpression expression : getGuards()) {
+            if (expression.getExpression().findBoundVariableElements().contains(cacheExpression.getParameter().getVariableElement())) {
+                return true;
+            }
+        }
+
+        // check all next binding caches if they are bound by guard
+        Set<VariableElement> boundVariables = cacheExpression.getExpression().findBoundVariableElements();
+        boolean found = false;
+        for (CacheExpression expression : getCaches()) {
+            if (cacheExpression == expression) {
+                found = true;
+            } else if (found) {
+                if (boundVariables.contains(expression.getParameter().getVariableElement())) {
+                    if (isCacheBoundByGuard(expression)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    public void setKind(SpecializationKind kind) {
+        this.kind = kind;
+    }
+
+    public boolean isDynamicParameterBound(DSLExpression expression) {
+        Set<VariableElement> boundVariables = expression.findBoundVariableElements();
+        for (Parameter parameter : getDynamicParameters()) {
+            if (boundVariables.contains(parameter.getVariableElement())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public Parameter findByVariable(VariableElement variable) {
+        for (Parameter parameter : getParameters()) {
+            if (ElementUtils.variableEquals(parameter.getVariableElement(), variable)) {
+                return parameter;
+            }
+        }
+        return null;
+    }
+
+    public DSLExpression getLimitExpression() {
+        return limitExpression;
+    }
+
+    public void setLimitExpression(DSLExpression limitExpression) {
+        this.limitExpression = limitExpression;
     }
 
     public void setInsertBefore(SpecializationData insertBefore) {
@@ -113,11 +174,13 @@ public final class SpecializationData extends TemplateMethod {
             sinks.addAll(exceptions);
         }
         if (guards != null) {
-            for (GuardExpression guard : guards) {
-                if (guard.isResolved()) {
-                    sinks.add(guard.getResolvedGuard());
-                }
-            }
+            sinks.addAll(guards);
+        }
+        if (caches != null) {
+            sinks.addAll(caches);
+        }
+        if (assumptionExpressions != null) {
+            sinks.addAll(assumptionExpressions);
         }
         return sinks;
     }
@@ -129,18 +192,24 @@ public final class SpecializationData extends TemplateMethod {
         if (!getGuards().isEmpty()) {
             return true;
         }
-        if (!getAssumptions().isEmpty()) {
+        if (!getAssumptionExpressions().isEmpty()) {
             return true;
         }
-        for (Parameter parameter : getSignatureParameters()) {
-            ExecutableTypeData type = parameter.getSpecification().getExecution().getChild().findExecutableType(context, parameter.getTypeSystemType());
-            if (type.hasUnexpectedValue(context)) {
-                return true;
-            }
-            if (type.getReturnType().getTypeSystemType().needsCastTo(parameter.getTypeSystemType())) {
-                return true;
-            }
 
+        for (Parameter parameter : getSignatureParameters()) {
+            NodeChildData child = parameter.getSpecification().getExecution().getChild();
+            if (child != null) {
+                ExecutableTypeData type = child.findExecutableType(parameter.getType());
+                if (type == null) {
+                    type = child.findAnyGenericExecutableType(context);
+                }
+                if (type.hasUnexpectedValue(context)) {
+                    return true;
+                }
+                if (ElementUtils.needsCastTo(type.getReturnType(), parameter.getType())) {
+                    return true;
+                }
+            }
         }
         return false;
     }
@@ -179,65 +248,6 @@ public final class SpecializationData extends TemplateMethod {
         return index;
     }
 
-    public boolean isContainedBy(SpecializationData next) {
-        if (compareTo(next) > 0) {
-            // must be declared after the current specialization
-            return false;
-        }
-
-        Iterator<Parameter> currentSignature = getSignatureParameters().iterator();
-        Iterator<Parameter> nextSignature = next.getSignatureParameters().iterator();
-
-        while (currentSignature.hasNext() && nextSignature.hasNext()) {
-            TypeData currentType = currentSignature.next().getTypeSystemType();
-            TypeData prevType = nextSignature.next().getTypeSystemType();
-
-            if (!currentType.isImplicitSubtypeOf(prevType)) {
-                return false;
-            }
-        }
-
-        for (String nextAssumption : next.getAssumptions()) {
-            if (!getAssumptions().contains(nextAssumption)) {
-                return false;
-            }
-        }
-
-        Iterator<GuardExpression> nextGuards = next.getGuards().iterator();
-        while (nextGuards.hasNext()) {
-            GuardExpression nextGuard = nextGuards.next();
-            boolean implied = false;
-            for (GuardExpression currentGuard : getGuards()) {
-                if (currentGuard.implies(nextGuard)) {
-                    implied = true;
-                    break;
-                }
-            }
-            if (!implied) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    public String createReferenceName() {
-        StringBuilder b = new StringBuilder();
-
-        b.append(getMethodName());
-        b.append("(");
-
-        String sep = "";
-        for (Parameter parameter : getParameters()) {
-            b.append(sep);
-            b.append(ElementUtils.getSimpleName(parameter.getType()));
-            sep = ", ";
-        }
-
-        b.append(")");
-        return b.toString();
-    }
-
     public NodeData getNode() {
         return node;
     }
@@ -250,8 +260,8 @@ public final class SpecializationData extends TemplateMethod {
         return kind == SpecializationKind.SPECIALIZED;
     }
 
-    public boolean isGeneric() {
-        return kind == SpecializationKind.GENERIC;
+    public boolean isFallback() {
+        return kind == SpecializationKind.FALLBACK;
     }
 
     public boolean isUninitialized() {
@@ -274,14 +284,6 @@ public final class SpecializationData extends TemplateMethod {
         return shortCircuits;
     }
 
-    public List<String> getAssumptions() {
-        return assumptions;
-    }
-
-    public void setAssumptions(List<String> assumptions) {
-        this.assumptions = assumptions;
-    }
-
     public SpecializationData findNextSpecialization() {
         List<SpecializationData> specializations = node.getSpecializations();
         for (int i = 0; i < specializations.size() - 1; i++) {
@@ -294,13 +296,41 @@ public final class SpecializationData extends TemplateMethod {
 
     @Override
     public String toString() {
-        return String.format("%s [id = %s, method = %s, guards = %s, signature = %s]", getClass().getSimpleName(), getId(), getMethod(), getGuards(), getTypeSignature());
+        return String.format("%s [id = %s, method = %s, guards = %s, signature = %s]", getClass().getSimpleName(), getId(), getMethod(), getGuards(), getDynamicTypes());
     }
 
-    public boolean hasFrame(ProcessorContext context) {
-        for (Parameter param : getParameters()) {
-            if (ElementUtils.typeEquals(param.getType(), context.getTruffleTypes().getFrame())) {
-                return true;
+    public boolean isFrameUsed() {
+        return getFrame() != null;
+    }
+
+    public List<CacheExpression> getCaches() {
+        return caches;
+    }
+
+    public void setCaches(List<CacheExpression> caches) {
+        this.caches = caches;
+    }
+
+    public void setAssumptionExpressions(List<AssumptionExpression> assumptionExpressions) {
+        this.assumptionExpressions = assumptionExpressions;
+    }
+
+    public List<AssumptionExpression> getAssumptionExpressions() {
+        return assumptionExpressions;
+    }
+
+    public boolean hasMultipleInstances() {
+        if (!getCaches().isEmpty()) {
+            for (GuardExpression guard : getGuards()) {
+                DSLExpression guardExpression = guard.getExpression();
+                Set<VariableElement> boundVariables = guardExpression.findBoundVariableElements();
+                if (isDynamicParameterBound(guardExpression)) {
+                    for (CacheExpression cache : getCaches()) {
+                        if (boundVariables.contains(cache.getParameter().getVariableElement())) {
+                            return true;
+                        }
+                    }
+                }
             }
         }
         return false;
@@ -312,25 +342,32 @@ public final class SpecializationData extends TemplateMethod {
         }
 
         if (!prev.getExceptions().isEmpty()) {
+            // may get excluded by exception
+            return true;
+        }
+
+        if (hasMultipleInstances()) {
+            // may fallthrough due to limit
             return true;
         }
 
         Iterator<Parameter> currentSignature = getSignatureParameters().iterator();
         Iterator<Parameter> prevSignature = prev.getSignatureParameters().iterator();
 
+        TypeSystemData typeSystem = prev.getNode().getTypeSystem();
         while (currentSignature.hasNext() && prevSignature.hasNext()) {
-            TypeData currentType = currentSignature.next().getTypeSystemType();
-            TypeData prevType = prevSignature.next().getTypeSystemType();
+            TypeMirror currentType = currentSignature.next().getType();
+            TypeMirror prevType = prevSignature.next().getType();
 
-            if (!currentType.isImplicitSubtypeOf(prevType)) {
+            if (!typeSystem.isImplicitSubtypeOf(currentType, prevType)) {
                 return true;
             }
         }
 
-        for (String prevAssumption : prev.getAssumptions()) {
-            if (!getAssumptions().contains(prevAssumption)) {
-                return true;
-            }
+        if (!prev.getAssumptionExpressions().isEmpty()) {
+            // TODO: chumer: we could at least check reachability after trivial assumptions
+            // not sure if this is worth it.
+            return true;
         }
 
         Iterator<GuardExpression> prevGuards = prev.getGuards().iterator();
@@ -345,4 +382,14 @@ public final class SpecializationData extends TemplateMethod {
 
         return false;
     }
+
+    public CacheExpression findCache(Parameter resolvedParameter) {
+        for (CacheExpression cache : getCaches()) {
+            if (cache.getParameter() == resolvedParameter) {
+                return cache;
+            }
+        }
+        return null;
+    }
+
 }
