@@ -23,15 +23,13 @@
 package com.oracle.graal.truffle.nodes.typesystem;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.calc.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.truffle.nodes.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.truffle.api.*;
 
 /**
@@ -57,8 +55,8 @@ public class CustomizedUnsafeLoadFinalNode extends FixedWithNextNode implements 
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (object.isConstant() && !object.isNullConstant() && offset.isConstant() && condition.isConstant() && condition.asConstant().asInt() == 1) {
-            Constant constant = tool.getConstantReflection().readUnsafeConstant(accessKind, object.asConstant(), offset.asConstant().asLong());
+        if (object.isConstant() && !object.isNullConstant() && offset.isConstant()) {
+            Constant constant = tool.getConstantReflection().readUnsafeConstant(accessKind, object.asConstant().asObject(), offset.asConstant().asLong(), accessKind == Kind.Object);
             return ConstantNode.forConstant(constant, tool.getMetaAccess(), graph());
         }
         return this;
@@ -88,11 +86,12 @@ public class CustomizedUnsafeLoadFinalNode extends FixedWithNextNode implements 
     @Override
     public void lower(LoweringTool tool) {
         CompareNode compare = CompareNode.createCompareNode(graph(), Condition.EQ, condition, ConstantNode.forBoolean(true, graph()));
+        Object locationIdentityObject = location.asConstant().asObject();
         LocationIdentity locationIdentity;
-        if (!location.isConstant() || location.asConstant().isNull()) {
+        if (locationIdentityObject == null) {
             locationIdentity = LocationIdentity.ANY_LOCATION;
         } else {
-            locationIdentity = ObjectLocationIdentity.create(location.asConstant());
+            locationIdentity = ObjectLocationIdentity.create(locationIdentityObject);
         }
         UnsafeLoadNode result = graph().add(new UnsafeLoadNode(object, offset, accessKind, locationIdentity, compare));
         graph().replaceFixedWithFixed(this, result);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,20 +38,20 @@ public class TestMetaAccessProvider extends TypeUniverse {
 
     @Test
     public void lookupJavaTypeTest() {
-        for (Class<?> c : classes) {
+        for (Class c : classes) {
             ResolvedJavaType type = metaAccess.lookupJavaType(c);
             assertNotNull(type);
             assertEquals(c.getModifiers(), type.getModifiers());
             if (!type.isArray()) {
                 assertEquals(type.getName(), toInternalName(c.getName()));
-                assertEquals(type.toJavaName(), c.getName());
+                assertEquals(toJavaName(type), c.getName());
             }
         }
     }
 
     @Test
     public void lookupJavaMethodTest() {
-        for (Class<?> c : classes) {
+        for (Class c : classes) {
             for (Method reflect : c.getDeclaredMethods()) {
                 ResolvedJavaMethod method = metaAccess.lookupJavaMethod(reflect);
                 assertNotNull(method);
@@ -65,7 +65,7 @@ public class TestMetaAccessProvider extends TypeUniverse {
 
     @Test
     public void lookupJavaFieldTest() {
-        for (Class<?> c : classes) {
+        for (Class c : classes) {
             for (Field reflect : c.getDeclaredFields()) {
                 ResolvedJavaField field = metaAccess.lookupJavaField(reflect);
                 assertNotNull(field);
@@ -79,9 +79,9 @@ public class TestMetaAccessProvider extends TypeUniverse {
 
     @Test
     public void lookupJavaTypeConstantTest() {
-        for (JavaConstant c : constants) {
+        for (Constant c : constants) {
             if (c.getKind() == Kind.Object && !c.isNull()) {
-                Object o = snippetReflection.asObject(Object.class, c);
+                Object o = snippetReflection.asObject(c);
                 ResolvedJavaType type = metaAccess.lookupJavaType(c);
                 assertNotNull(type);
                 assertTrue(type.equals(metaAccess.lookupJavaType(o.getClass())));

@@ -22,30 +22,18 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import java.lang.reflect.Modifier;
-import java.util.Arrays;
+import java.lang.reflect.*;
+import java.util.*;
 
-import com.oracle.graal.api.meta.Constant;
-import com.oracle.graal.api.meta.JavaType;
-import com.oracle.graal.api.meta.ResolvedJavaField;
-import com.oracle.graal.api.meta.ResolvedJavaMethod;
-import com.oracle.graal.api.meta.ResolvedJavaType;
-import com.oracle.graal.graph.GraalInternalError;
-import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.hotspot.meta.HotSpotResolvedJavaMethod;
-import com.oracle.graal.hotspot.meta.HotSpotResolvedObjectType;
-import com.oracle.graal.hotspot.meta.HotSpotSignature;
-import com.oracle.graal.nodes.CallTargetNode;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.InvokeNode;
-import com.oracle.graal.nodes.PiNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.java.SelfReplacingMethodCallTargetNode;
-import com.oracle.graal.nodes.spi.Canonicalizable;
-import com.oracle.graal.nodes.type.StampFactory;
-import com.oracle.graal.replacements.nodes.MacroNode;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.replacements.nodes.*;
 
 /**
  * Common base class for method handle invoke nodes.
@@ -60,7 +48,7 @@ public abstract class AbstractMethodHandleNode extends MacroNode implements Cano
     // Replacement method data
     private ResolvedJavaMethod replacementTargetMethod;
     private JavaType replacementReturnType;
-    @Input private NodeInputList<ValueNode> replacementArguments;
+    @Input private final NodeInputList<ValueNode> replacementArguments;
 
     /**
      * Search for an instance field with the given name in a class.
@@ -174,11 +162,11 @@ public abstract class AbstractMethodHandleNode extends MacroNode implements Cano
         Constant vmtarget = memberNameVmtargetField.readValue(memberName);
 
         // Create a method from the vmtarget pointer
-        Class<?> c = (Class<?>) clazz.asObject();
+        Class<?> c = (Class<?>) HotSpotObjectConstant.asObject(clazz);
         HotSpotResolvedObjectType holderClass = (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromClass(c);
-        HotSpotResolvedJavaMethod targetMethod = holderClass.createMethod(vmtarget.asLong());
+        HotSpotResolvedJavaMethod targetMethod = HotSpotResolvedJavaMethod.fromMetaspace(vmtarget.asLong());
 
-        // In lamda forms we erase signature types to avoid resolving issues
+        // In lambda forms we erase signature types to avoid resolving issues
         // involving class loaders. When we optimize a method handle invoke
         // to a direct call we must cast the receiver and arguments to its
         // actual types.
@@ -200,7 +188,7 @@ public abstract class AbstractMethodHandleNode extends MacroNode implements Cano
 
         // Try to get the most accurate receiver type
         if (this instanceof MethodHandleLinkToVirtualNode || this instanceof MethodHandleLinkToInterfaceNode) {
-            ResolvedJavaType receiverType = getReceiver().objectStamp().type();
+            ResolvedJavaType receiverType = ObjectStamp.typeOrNull(getReceiver().stamp());
             if (receiverType != null) {
                 ResolvedJavaMethod concreteMethod = receiverType.findUniqueConcreteMethod(targetMethod);
                 if (concreteMethod != null) {
@@ -233,7 +221,7 @@ public abstract class AbstractMethodHandleNode extends MacroNode implements Cano
             ResolvedJavaType targetType = (ResolvedJavaType) type;
             if (!targetType.isPrimitive()) {
                 ValueNode argument = arguments.get(index);
-                ResolvedJavaType argumentType = argument.objectStamp().type();
+                ResolvedJavaType argumentType = ObjectStamp.typeOrNull(argument.stamp());
                 if (argumentType == null || (argumentType.isAssignableFrom(targetType) && !argumentType.equals(targetType))) {
                     PiNode piNode = graph().unique(new PiNode(argument, StampFactory.declared(targetType)));
                     arguments.set(index, piNode);
@@ -273,9 +261,20 @@ public abstract class AbstractMethodHandleNode extends MacroNode implements Cano
             ValueNode[] args = replacementArguments.toArray(new ValueNode[replacementArguments.size()]);
             callTarget = new SelfReplacingMethodCallTargetNode(invokeKind, targetMethod, targetArguments, returnType, replacementTargetMethod, args, replacementReturnType);
         }
-
         graph().add(callTarget);
-        InvokeNode invoke = graph().add(new InvokeNode(callTarget, getBci()));
+
+        // The call target can have a different return type than the invoker,
+        // e.g. the target returns an Object but the invoker void. In this case
+        // we need to use the stamp of the invoker. Note: always using the
+        // invoker's stamp would be wrong because it's a less concrete type
+        // (usually java.lang.Object).
+        InvokeNode invoke;
+        if (stamp() == StampFactory.forVoid()) {
+            invoke = new InvokeNode(callTarget, getBci(), stamp());
+        } else {
+            invoke = new InvokeNode(callTarget, getBci());
+        }
+        graph().add(invoke);
         invoke.setStateAfter(stateAfter());
         return invoke;
     }

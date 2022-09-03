@@ -45,8 +45,6 @@ import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.NoOp;
 import com.oracle.graal.lir.amd64.*;
-import com.oracle.graal.lir.amd64.AMD64ControlFlow.CondMoveOp;
-import com.oracle.graal.lir.amd64.AMD64Move.CompareAndSwapOp;
 import com.oracle.graal.lir.amd64.AMD64Move.LeaDataOp;
 import com.oracle.graal.lir.amd64.AMD64Move.LoadOp;
 import com.oracle.graal.lir.amd64.AMD64Move.MoveFromRegOp;
@@ -54,7 +52,6 @@ import com.oracle.graal.lir.amd64.AMD64Move.MoveToRegOp;
 import com.oracle.graal.lir.amd64.AMD64Move.StoreConstantOp;
 import com.oracle.graal.lir.amd64.AMD64Move.StoreOp;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 
 /**
@@ -457,41 +454,17 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     }
 
     @Override
-    public Value emitCompress(Value pointer, CompressEncoding encoding, boolean nonNull) {
-        if (pointer.getPlatformKind() == Kind.Object) {
-            Variable result = newVariable(NarrowOopStamp.NarrowOop);
-            append(new AMD64HotSpotMove.CompressPointer(result, asAllocatable(pointer), getProviders().getRegisters().getHeapBaseRegister().asValue(), encoding, nonNull));
-            return result;
-        } else {
-            assert pointer.getPlatformKind() == Kind.Long;
-            Variable result = newVariable(Kind.Int);
-            AllocatableValue base = Value.ILLEGAL;
-            if (encoding.base != 0) {
-                base = newVariable(Kind.Long);
-                append(new AMD64Move.MoveToRegOp(Kind.Long, base, Constant.forLong(encoding.base)));
-            }
-            append(new AMD64HotSpotMove.CompressPointer(result, asAllocatable(pointer), base, encoding, nonNull));
-            return result;
-        }
+    public Value emitCompress(Value pointer, CompressEncoding encoding) {
+        Variable result = newVariable(NarrowOopStamp.NarrowOop);
+        append(new AMD64HotSpotMove.CompressPointer(result, asAllocatable(pointer), getProviders().getRegisters().getHeapBaseRegister().asValue(), encoding));
+        return result;
     }
 
     @Override
-    public Value emitUncompress(Value pointer, CompressEncoding encoding, boolean nonNull) {
-        if (pointer.getPlatformKind() == NarrowOopStamp.NarrowOop) {
-            Variable result = newVariable(Kind.Object);
-            append(new AMD64HotSpotMove.UncompressPointer(result, asAllocatable(pointer), getProviders().getRegisters().getHeapBaseRegister().asValue(), encoding, nonNull));
-            return result;
-        } else {
-            assert pointer.getPlatformKind() == Kind.Int;
-            Variable result = newVariable(Kind.Long);
-            AllocatableValue base = Value.ILLEGAL;
-            if (encoding.base != 0) {
-                base = newVariable(Kind.Long);
-                append(new AMD64Move.MoveToRegOp(Kind.Long, base, Constant.forLong(encoding.base)));
-            }
-            append(new AMD64HotSpotMove.UncompressPointer(result, asAllocatable(pointer), base, encoding, nonNull));
-            return result;
-        }
+    public Value emitUncompress(Value pointer, CompressEncoding encoding) {
+        Variable result = newVariable(Kind.Object);
+        append(new AMD64HotSpotMove.UncompressPointer(result, asAllocatable(pointer), getProviders().getRegisters().getHeapBaseRegister().asValue(), encoding));
+        return result;
     }
 
     @Override
@@ -507,20 +480,4 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         }
     }
 
-    @Override
-    public Value emitCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
-        PlatformKind kind = newValue.getPlatformKind();
-        assert kind == expectedValue.getPlatformKind();
-        Kind memKind = getMemoryKind(kind);
-
-        AMD64AddressValue addressValue = asAddressValue(address);
-        RegisterValue raxRes = AMD64.rax.asValue(kind);
-        emitMove(raxRes, expectedValue);
-        append(new CompareAndSwapOp(memKind, raxRes, addressValue, raxRes, asAllocatable(newValue)));
-
-        assert trueValue.getPlatformKind() == falseValue.getPlatformKind();
-        Variable result = newVariable(trueValue.getPlatformKind());
-        append(new CondMoveOp(result, Condition.EQ, asAllocatable(trueValue), falseValue));
-        return result;
-    }
 }

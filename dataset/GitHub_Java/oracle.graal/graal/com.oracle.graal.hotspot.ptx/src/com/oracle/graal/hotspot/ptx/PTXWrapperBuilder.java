@@ -25,18 +25,19 @@ package com.oracle.graal.hotspot.ptx;
 import static com.oracle.graal.api.meta.DeoptimizationAction.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.api.meta.LocationIdentity.*;
+import static com.oracle.graal.api.meta.MetaUtil.*;
 import static com.oracle.graal.asm.NumUtil.*;
 import static com.oracle.graal.hotspot.ptx.PTXHotSpotBackend.*;
 import static com.oracle.graal.hotspot.ptx.PTXWrapperBuilder.LaunchArg.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.nodes.ConstantNode.*;
+import static java.lang.reflect.Modifier.*;
 
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.java.*;
@@ -46,6 +47,7 @@ import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
@@ -59,8 +61,8 @@ import com.oracle.graal.word.*;
  * <li>PINNED: a buffer into which the address of pinned objects is saved.</li>
  * <li>OBJECT_OFFSETS: the offsets of the object values in PARAMS.</li>
  * </ul>
- *
- *
+ * 
+ * 
  * The PARAMS buffer is the {@code CU_LAUNCH_PARAM_BUFFER_POINTER} buffer passed in the
  * {@code extra} argument to the {@code cuLaunchKernel} function. This buffer contains the
  * parameters to the call. The buffer is word aligned and each parameter is aligned in the buffer
@@ -72,13 +74,13 @@ import com.oracle.graal.word.*;
  * The object pointers in PARAMS are specified by OBJECT_OFFSETS.
  * <p>
  * As a concrete example, for a kernel whose Java method signature is:
- *
+ * 
  * <pre>
  *     static int kernel(int p1, short p2, Object p3, long p4)
  * </pre>
- *
+ * 
  * the graph created is shown below as psuedo-code:
- *
+ * 
  * <pre>
  *     int kernel_wrapper(int p1, short p2, oop p3, long p4) {
  *         address kernelAddr = kernel.start;
@@ -119,7 +121,7 @@ public class PTXWrapperBuilder extends GraphKit {
     /**
      * The size of the buffer holding the kernel parameters and the extra word for storing the
      * pointer to device memory for the return value.
-     *
+     * 
      * @see LaunchArg#ParametersAndReturnValueBufferSize
      */
     int bufSize;
@@ -150,7 +152,7 @@ public class PTXWrapperBuilder extends GraphKit {
 
     /**
      * Creates the graph implementing the CPU to GPU transition.
-     *
+     * 
      * @param method a method that has been compiled to GPU binary code
      * @param kernel the installed GPU binary for {@code method}
      * @see PTXWrapperBuilder
@@ -161,7 +163,7 @@ public class PTXWrapperBuilder extends GraphKit {
         int intSize = Integer.SIZE / Byte.SIZE;
         Kind wordKind = providers.getCodeCache().getTarget().wordKind;
         Signature sig = method.getSignature();
-        boolean isStatic = method.isStatic();
+        boolean isStatic = isStatic(method.getModifiers());
         int sigCount = sig.getParameterCount(false);
         javaParameters = new ParameterNode[(!isStatic ? 1 : 0) + sigCount];
         javaParameterOffsetsInKernelParametersBuffer = new int[javaParameters.length];
@@ -192,7 +194,7 @@ public class PTXWrapperBuilder extends GraphKit {
 
         InvokeNode kernelStart = createInvoke(getClass(), "getKernelStart", ConstantNode.forConstant(HotSpotObjectConstant.forObject(kernel), providers.getMetaAccess(), getGraph()));
 
-        AllocaNode buf = append(AllocaNode.create(bufSize / wordSize, new BitSet()));
+        AllocaNode buf = append(new AllocaNode(bufSize / wordSize, new BitSet()));
         ValueNode objectParametersOffsets;
         ValueNode pinnedObjects;
         ConstantNode nullWord = ConstantNode.forIntegerKind(wordKind, 0L, getGraph());
@@ -202,22 +204,22 @@ public class PTXWrapperBuilder extends GraphKit {
         } else {
             int intsPerWord = wordSize / intSize;
             int slots = roundUp(objectSlots.size(), intsPerWord);
-            objectParametersOffsets = append(AllocaNode.create(slots, new BitSet()));
+            objectParametersOffsets = append(new AllocaNode(slots, new BitSet()));
             // No refmap for pinned objects list since kernel execution is (currently) GC unsafe
-            pinnedObjects = append(AllocaNode.create(objectSlots.size(), new BitSet()));
+            pinnedObjects = append(new AllocaNode(objectSlots.size(), new BitSet()));
 
             // Initialize the object parameter offsets array
             int index = 0;
             for (int slot : objectSlots) {
                 int offset = slot * wordSize;
                 LocationNode location = ConstantLocationNode.create(FINAL_LOCATION, Kind.Int, index * intSize, getGraph());
-                append(WriteNode.create(objectParametersOffsets, ConstantNode.forInt(offset, getGraph()), location, BarrierType.NONE, false));
+                append(new WriteNode(objectParametersOffsets, ConstantNode.forInt(offset, getGraph()), location, BarrierType.NONE, false, false));
                 index++;
             }
         }
 
         Map<LaunchArg, ValueNode> args = new EnumMap<>(LaunchArg.class);
-        args.put(Thread, append(ReadRegisterNode.create(providers.getRegisters().getThreadRegister(), true, false)));
+        args.put(Thread, append(new ReadRegisterNode(providers.getRegisters().getThreadRegister(), true, false)));
         args.put(Kernel, kernelStart);
         args.put(DimX, forInt(1, getGraph()));
         args.put(DimY, forInt(1, getGraph()));
@@ -234,12 +236,12 @@ public class PTXWrapperBuilder extends GraphKit {
             ParameterNode javaParameter = javaParameters[javaParametersIndex];
             int javaParameterOffset = javaParameterOffsetsInKernelParametersBuffer[javaParametersIndex];
             LocationNode location = ConstantLocationNode.create(FINAL_LOCATION, javaParameter.getKind(), javaParameterOffset, getGraph());
-            append(WriteNode.create(buf, javaParameter, location, BarrierType.NONE, false));
+            append(new WriteNode(buf, javaParameter, location, BarrierType.NONE, false, false));
             updateDimArg(method, sig, sigIndex++, args, javaParameter);
         }
         if (returnKind != Kind.Void) {
             LocationNode location = ConstantLocationNode.create(FINAL_LOCATION, wordKind, bufSize - wordSize, getGraph());
-            append(WriteNode.create(buf, nullWord, location, BarrierType.NONE, false));
+            append(new WriteNode(buf, nullWord, location, BarrierType.NONE, false, false));
         }
 
         HIRFrameStateBuilder fsb = new HIRFrameStateBuilder(method, getGraph(), true);
@@ -247,7 +249,7 @@ public class PTXWrapperBuilder extends GraphKit {
         getGraph().start().setStateAfter(fs);
 
         ValueNode[] launchArgsArray = args.values().toArray(new ValueNode[args.size()]);
-        ForeignCallNode result = append(ForeignCallNode.create(providers.getForeignCalls(), CALL_KERNEL, launchArgsArray));
+        ForeignCallNode result = append(new ForeignCallNode(providers.getForeignCalls(), CALL_KERNEL, launchArgsArray));
         result.setStateAfter(fs);
 
         InvokeNode getObjectResult = null;
@@ -261,13 +263,13 @@ public class PTXWrapperBuilder extends GraphKit {
             case Short:
             case Char:
             case Int:
-                returnValue = unique(NarrowNode.create(result, 32));
+                returnValue = unique(new NarrowNode(result, 32));
                 break;
             case Long:
                 returnValue = result;
                 break;
             case Float: {
-                ValueNode asInt = unique(NarrowNode.create(result, 32));
+                ValueNode asInt = unique(new NarrowNode(result, 32));
                 returnValue = ReinterpretNode.reinterpret(Kind.Float, asInt);
                 break;
             }
@@ -282,7 +284,7 @@ public class PTXWrapperBuilder extends GraphKit {
                 throw new GraalInternalError("%s return kind not supported", returnKind);
         }
 
-        append(ReturnNode.create(returnValue));
+        append(new ReturnNode(returnValue));
 
         if (Debug.isDumpEnabled()) {
             Debug.dump(getGraph(), "Initial kernel launch graph");
@@ -298,7 +300,7 @@ public class PTXWrapperBuilder extends GraphKit {
 
     /**
      * Computes offset and size of space in PARAMS for a Java parameter.
-     *
+     * 
      * @param kind the kind of the parameter
      * @param javaParametersIndex the index of the Java parameter
      */
@@ -314,7 +316,7 @@ public class PTXWrapperBuilder extends GraphKit {
         } else {
             stamp = StampFactory.forKind(kind);
         }
-        javaParameters[javaParametersIndex] = unique(ParameterNode.create(javaParametersIndex, stamp));
+        javaParameters[javaParametersIndex] = unique(new ParameterNode(javaParametersIndex, stamp));
         bufSize += kindByteSize;
     }
 
@@ -324,9 +326,9 @@ public class PTXWrapperBuilder extends GraphKit {
      */
     private void updateDimArg(ResolvedJavaMethod method, Signature sig, int sigIndex, Map<LaunchArg, ValueNode> launchArgs, ParameterNode javaParameter) {
         if (sigIndex >= 0) {
-            ParallelOver parallelOver = method.getParameterAnnotation(ParallelOver.class, sigIndex);
+            ParallelOver parallelOver = getParameterAnnotation(ParallelOver.class, sigIndex, method);
             if (parallelOver != null && sig.getParameterType(sigIndex, method.getDeclaringClass()).equals(providers.getMetaAccess().lookupJavaType(int[].class))) {
-                ArrayLengthNode dimension = append(ArrayLengthNode.create(javaParameter));
+                ArrayLengthNode dimension = append(new ArrayLengthNode(javaParameter));
                 LaunchArg argKey = LaunchArg.valueOf(LaunchArg.class, "Dim" + parallelOver.dimension());
                 ValueNode existing = launchArgs.put(argKey, dimension);
                 if (existing != null && existing instanceof ArrayLengthNode) {

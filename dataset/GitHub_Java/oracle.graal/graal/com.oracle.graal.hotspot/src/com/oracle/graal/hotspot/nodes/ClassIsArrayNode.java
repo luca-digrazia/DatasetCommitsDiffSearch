@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,10 +31,9 @@ import com.oracle.graal.replacements.nodes.*;
 
 /**
  * {@link MacroNode Macro node} for {@link Class#isArray()}.
- *
+ * 
  * @see ClassSubstitutions#isArray(Class)
  */
-@NodeInfo
 public class ClassIsArrayNode extends MacroNode implements Canonicalizable {
 
     public ClassIsArrayNode(Invoke invoke) {
@@ -49,9 +48,9 @@ public class ClassIsArrayNode extends MacroNode implements Canonicalizable {
     public Node canonical(CanonicalizerTool tool) {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
-            Class<?> c = (Class<?>) HotSpotObjectConstant.asObject(javaClass.asConstant());
+            Class c = (Class) HotSpotObjectConstant.asObject(javaClass.asConstant());
             if (c != null) {
-                return ConstantNode.forBoolean(c.isArray());
+                return ConstantNode.forBoolean(c.isArray(), graph());
             }
         }
         return this;

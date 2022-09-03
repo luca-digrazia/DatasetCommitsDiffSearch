@@ -42,7 +42,7 @@ import static com.oracle.graal.hotspot.stubs.NewArrayStub.*;
 import static com.oracle.graal.hotspot.stubs.NewInstanceStub.*;
 import static com.oracle.graal.hotspot.stubs.StubUtil.*;
 import static com.oracle.graal.hotspot.stubs.UnwindExceptionToCallerStub.*;
-import static com.oracle.graal.hotspot.meta.DefaultHotSpotLoweringProvider.RuntimeCalls.*;
+import static com.oracle.graal.hotspot.meta.HotSpotLoweringProvider.RuntimeCalls.*;
 import static com.oracle.graal.nodes.java.RegisterFinalizerNode.*;
 import static com.oracle.graal.replacements.Log.*;
 import static com.oracle.graal.replacements.MathSubstitutionsX86.*;
@@ -69,20 +69,21 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
     }
 
     public static ForeignCallDescriptor lookupArraycopyDescriptor(Kind kind, boolean aligned, boolean disjoint) {
-        return arraycopyDescriptors[aligned ? 1 : 0][disjoint ? 1 : 0].get(kind);
+        return (ForeignCallDescriptor) arraycopyDescriptors[aligned ? 1 : 0][disjoint ? 1 : 0].get(kind);
     }
 
-    @SuppressWarnings("unchecked") private static final EnumMap<Kind, ForeignCallDescriptor>[][] arraycopyDescriptors = new EnumMap[2][2];
+    private static final EnumMap[][] arraycopyDescriptors = new EnumMap[2][2];
 
     static {
         // Populate the EnumMap instances
         for (int i = 0; i < arraycopyDescriptors.length; i++) {
             for (int j = 0; j < arraycopyDescriptors[i].length; j++) {
-                arraycopyDescriptors[i][j] = new EnumMap<>(Kind.class);
+                arraycopyDescriptors[i][j] = new EnumMap<Kind, ForeignCallDescriptor>(Kind.class);
             }
         }
     }
 
+    @SuppressWarnings("unchecked")
     private static ForeignCallDescriptor registerArraycopyDescriptor(Kind kind, boolean aligned, boolean disjoint) {
         String name = kind + (aligned ? "Aligned" : "") + (disjoint ? "Disjoint" : "") + "Arraycopy";
         ForeignCallDescriptor desc = new ForeignCallDescriptor(name, void.class, Word.class, Word.class, Word.class);

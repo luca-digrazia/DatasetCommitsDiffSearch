@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot.server;
 
-import static com.oracle.graal.graph.util.CollectionsAccess.*;
-
 import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
@@ -34,7 +32,7 @@ import com.oracle.graal.hotspot.meta.*;
 
 public class ReplacingStreams {
 
-    private Map<Object, Placeholder> objectMap = newIdentityMap();
+    private IdentityHashMap<Object, Placeholder> objectMap = new IdentityHashMap<>();
     private ArrayList<Object> objectList = new ArrayList<>();
 
     private ReplacingOutputStream output;
@@ -170,12 +168,12 @@ public class ReplacingStreams {
             }
 
             // is the object a constant of object type?
-            if (obj.getClass() == JavaConstant.class) {
-                JavaConstant constant = (JavaConstant) obj;
+            if (obj.getClass() == Constant.class) {
+                Constant constant = (Constant) obj;
                 if (constant.getKind() != Kind.Object) {
                     return obj;
                 }
-                Object contents = HotSpotObjectConstantImpl.asObject(constant);
+                Object contents = HotSpotObjectConstant.asObject(constant);
                 if (contents == null) {
                     return obj;
                 }
@@ -185,12 +183,12 @@ public class ReplacingStreams {
                 }
                 placeholder = objectMap.get(contents);
                 if (placeholder != null) {
-                    return HotSpotObjectConstantImpl.forObject(placeholder);
+                    return HotSpotObjectConstant.forObject(placeholder);
                 }
                 if (contents instanceof Remote) {
-                    return HotSpotObjectConstantImpl.forObject(createRemoteCallPlaceholder(contents));
+                    return HotSpotObjectConstant.forObject(createRemoteCallPlaceholder(contents));
                 }
-                return HotSpotObjectConstantImpl.forObject(createDummyPlaceholder(contents));
+                return HotSpotObjectConstant.forObject(createDummyPlaceholder(contents));
             }
             return obj;
         }

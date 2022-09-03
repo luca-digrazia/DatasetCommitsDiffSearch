@@ -25,13 +25,13 @@ package com.oracle.graal.api.replacements;
 import com.oracle.graal.api.meta.*;
 
 /**
- * Reflection operations on values represented as {@linkplain JavaConstant constants} for the
- * processing of snippets. Snippets need a direct access to the value of object constants, which is
- * not allowed in other parts of Graal to enforce compiler-VM separation.
+ * Reflection operations on values represented as {@linkplain Constant constants} for the processing
+ * of snippets. Snippets need a direct access to the value of object constants, which is not allowed
+ * in other parts of Graal to enforce compiler-VM separation.
  * <p>
  * This interface must not be used in Graal code that is not related to snippet processing.
  */
-public interface SnippetReflectionProvider extends Remote {
+public interface SnippetReflectionProvider {
 
     /**
      * Creates a boxed {@link Kind#Object object} constant.
@@ -39,7 +39,7 @@ public interface SnippetReflectionProvider extends Remote {
      * @param object the object value to box
      * @return a constant containing {@code object}
      */
-    JavaConstant forObject(Object object);
+    Constant forObject(Object object);
 
     /**
      * Returns the object reference the given constant represents. The constant must have kind
@@ -48,7 +48,7 @@ public interface SnippetReflectionProvider extends Remote {
      * @param constant the to access
      * @return the object value of the constant
      */
-    Object asObject(JavaConstant constant);
+    Object asObject(Constant constant);
 
     /**
      * Creates a boxed constant for the given kind from an Object. The object needs to be of the
@@ -58,7 +58,7 @@ public interface SnippetReflectionProvider extends Remote {
      * @param value the Java boxed value: a {@link Byte} instance for {@link Kind#Byte}, etc.
      * @return the boxed copy of {@code value}
      */
-    JavaConstant forBoxed(Kind kind, Object value);
+    Constant forBoxed(Kind kind, Object value);
 
     /**
      * Returns the value of this constant as a boxed Java value.
@@ -66,5 +66,5 @@ public interface SnippetReflectionProvider extends Remote {
      * @param constant the constant to box
      * @return the value of the constant
      */
-    Object asBoxedValue(JavaConstant constant);
+    Object asBoxedValue(Constant constant);
 }

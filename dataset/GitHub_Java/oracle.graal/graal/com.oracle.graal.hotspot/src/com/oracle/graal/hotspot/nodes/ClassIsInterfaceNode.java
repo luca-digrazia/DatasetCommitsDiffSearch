@@ -31,10 +31,9 @@ import com.oracle.graal.replacements.nodes.*;
 
 /**
  * {@link MacroNode Macro node} for {@link Class#isInterface()}.
- *
+ * 
  * @see ClassSubstitutions#isInterface(Class)
  */
-@NodeInfo
 public class ClassIsInterfaceNode extends MacroNode implements Canonicalizable {
 
     public ClassIsInterfaceNode(Invoke invoke) {
@@ -49,9 +48,9 @@ public class ClassIsInterfaceNode extends MacroNode implements Canonicalizable {
     public Node canonical(CanonicalizerTool tool) {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
-            Class<?> c = (Class<?>) HotSpotObjectConstant.asObject(javaClass.asConstant());
+            Class c = (Class) HotSpotObjectConstant.asObject(javaClass.asConstant());
             if (c != null) {
-                return ConstantNode.forBoolean(c.isInterface());
+                return ConstantNode.forBoolean(c.isInterface(), graph());
             }
         }
         return this;

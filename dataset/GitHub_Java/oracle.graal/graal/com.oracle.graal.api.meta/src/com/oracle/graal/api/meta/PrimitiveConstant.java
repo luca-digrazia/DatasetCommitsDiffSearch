@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,7 +38,7 @@ public class PrimitiveConstant extends Constant {
     private final long primitive;
 
     protected PrimitiveConstant(Kind kind, long primitive) {
-        super(LIRKind.value(kind));
+        super(kind);
         this.primitive = primitive;
 
         assert kind.isPrimitive() || kind == Kind.Illegal;
@@ -104,7 +104,7 @@ public class PrimitiveConstant extends Constant {
             case Double:
                 return Double.valueOf(asDouble());
             default:
-                throw new IllegalArgumentException("unexpected kind " + getKind());
+                throw new IllegalArgumentException();
         }
     }
 

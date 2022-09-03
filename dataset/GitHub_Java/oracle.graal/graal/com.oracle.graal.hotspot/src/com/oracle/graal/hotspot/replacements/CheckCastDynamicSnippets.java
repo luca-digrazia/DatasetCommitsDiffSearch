@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,19 +31,19 @@ import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 import static com.oracle.graal.replacements.SnippetTemplate.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
+import com.oracle.graal.word.*;
 
 /**
  * Snippet used for lowering {@link CheckCastDynamicNode}.
@@ -51,12 +51,12 @@ import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
 public class CheckCastDynamicSnippets implements Snippets {
 
     @Snippet
-    public static Object checkcastDynamic(KlassPointer hub, Object object) {
+    public static Object checkcastDynamic(Word hub, Object object) {
         if (probability(NOT_FREQUENT_PROBABILITY, object == null)) {
             isNull.inc();
         } else {
             GuardingNode anchorNode = SnippetAnchorNode.anchor();
-            KlassPointer objectHub = loadHubIntrinsic(object, anchorNode);
+            Word objectHub = loadHubIntrinsic(object, getWordKind(), anchorNode);
             if (!checkUnknownSubType(hub, objectHub)) {
                 DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
             }

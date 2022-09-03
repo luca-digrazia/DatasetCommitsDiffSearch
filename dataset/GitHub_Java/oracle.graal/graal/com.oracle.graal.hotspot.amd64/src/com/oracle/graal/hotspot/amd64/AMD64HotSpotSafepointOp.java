@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,7 @@ package com.oracle.graal.hotspot.amd64;
 
 import static com.oracle.graal.amd64.AMD64.*;
 import static com.oracle.graal.asm.NumUtil.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
@@ -51,7 +51,7 @@ public class AMD64HotSpotSafepointOp extends AMD64LIRInstruction {
         this.state = state;
         this.config = config;
         if (isPollingPageFar(config) || ImmutableCode.getValue()) {
-            temp = tool.getLIRGeneratorTool().newVariable(LIRKind.value(tool.getLIRGeneratorTool().target().wordKind));
+            temp = tool.getLIRGeneratorTool().newVariable(tool.getLIRGeneratorTool().target().wordKind);
         } else {
             // Don't waste a register if it's unneeded
             temp = Value.ILLEGAL;
@@ -75,9 +75,9 @@ public class AMD64HotSpotSafepointOp extends AMD64LIRInstruction {
     public static void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler asm, HotSpotVMConfig config, boolean atReturn, LIRFrameState state, Register scratch) {
         assert !atReturn || state == null : "state is unneeded at return";
         if (ImmutableCode.getValue()) {
-            Kind hostWordKind = Kind.Long;
+            Kind hostWordKind = HotSpotGraalRuntime.getHostWordKind();
             int alignment = hostWordKind.getBitCount() / Byte.SIZE;
-            JavaConstant pollingPageAddress = JavaConstant.forIntegerKind(hostWordKind, config.safepointPollingAddress);
+            Constant pollingPageAddress = Constant.forIntegerKind(hostWordKind, config.safepointPollingAddress);
             // This move will be patched to load the safepoint page from a data segment
             // co-located with the immutable code.
             asm.movq(scratch, (AMD64Address) crb.recordDataReferenceInCode(pollingPageAddress, alignment));

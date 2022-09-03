@@ -63,7 +63,7 @@ public abstract class Constant extends Value {
         assert NULL_OBJECT.isNull();
     }
 
-    protected Constant(PlatformKind kind) {
+    protected Constant(Kind kind) {
         super(kind);
     }
 
@@ -138,11 +138,7 @@ public abstract class Constant extends Value {
     public abstract double asDouble();
 
     public String toValueString() {
-        if (getKind() == Kind.Illegal) {
-            return "illegal";
-        } else {
-            return getKind().format(asBoxedPrimitive());
-        }
+        return getKind().format(asBoxedPrimitive());
     }
 
     @Override

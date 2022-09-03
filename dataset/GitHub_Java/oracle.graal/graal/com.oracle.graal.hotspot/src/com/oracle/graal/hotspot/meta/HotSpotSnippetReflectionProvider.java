@@ -28,22 +28,22 @@ import com.oracle.graal.api.replacements.*;
 public class HotSpotSnippetReflectionProvider implements SnippetReflectionProvider {
 
     @Override
-    public JavaConstant forObject(Object object) {
-        return HotSpotObjectConstantImpl.forObject(object);
+    public Constant forObject(Object object) {
+        return HotSpotObjectConstant.forObject(object);
     }
 
     @Override
-    public Object asObject(JavaConstant constant) {
-        return HotSpotObjectConstantImpl.asObject(constant);
+    public Object asObject(Constant constant) {
+        return HotSpotObjectConstant.asObject(constant);
     }
 
     @Override
-    public JavaConstant forBoxed(Kind kind, Object value) {
-        return HotSpotObjectConstantImpl.forBoxedValue(kind, value);
+    public Constant forBoxed(Kind kind, Object value) {
+        return HotSpotObjectConstant.forBoxedValue(kind, value);
     }
 
     @Override
-    public Object asBoxedValue(JavaConstant constant) {
-        return HotSpotObjectConstantImpl.asBoxedValue(constant);
+    public Object asBoxedValue(Constant constant) {
+        return HotSpotObjectConstant.asBoxedValue(constant);
     }
 }

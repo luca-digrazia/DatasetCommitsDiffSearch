@@ -24,9 +24,10 @@ package com.oracle.graal.compiler.test;
 
 import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.compiler.GraalCompiler.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.nodes.ConstantNode.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
+import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.atomic.*;
@@ -40,7 +41,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.baseline.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
@@ -169,7 +169,7 @@ public abstract class GraalCompilerTest extends GraalTest {
     protected void assertEquals(StructuredGraph expected, StructuredGraph graph, boolean excludeVirtual, boolean checkConstants) {
         String expectedString = getCanonicalGraphString(expected, excludeVirtual, checkConstants);
         String actualString = getCanonicalGraphString(graph, excludeVirtual, checkConstants);
-        String mismatchString = "mismatch in graphs:\n========= expected (" + expected + ") =========\n" + expectedString + "\n\n========= actual (" + graph + ") =========\n" + actualString;
+        String mismatchString = "mismatch in graphs:\n========= expected =========\n" + expectedString + "\n\n========= actual =========\n" + actualString;
 
         if (!excludeVirtual && getNodeCountExcludingUnusedConstants(expected) != getNodeCountExcludingUnusedConstants(graph)) {
             Debug.dump(expected, "Node count not matching - expected");
@@ -275,6 +275,76 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     private static AtomicInteger compilationId = new AtomicInteger();
+
+    /**
+     * Compares two given objects for {@linkplain Assert#assertEquals(Object, Object) equality}.
+     * Does a deep copy equality comparison if {@code expected} is an array.
+     */
+    protected void assertEquals(Object expected, Object actual) {
+        if (expected != null && expected.getClass().isArray()) {
+            Assert.assertTrue(expected != null);
+            Assert.assertTrue(actual != null);
+            Assert.assertEquals(expected.getClass(), actual.getClass());
+            if (expected instanceof int[]) {
+                Assert.assertArrayEquals((int[]) expected, (int[]) actual);
+            } else if (expected instanceof byte[]) {
+                Assert.assertArrayEquals((byte[]) expected, (byte[]) actual);
+            } else if (expected instanceof char[]) {
+                Assert.assertArrayEquals((char[]) expected, (char[]) actual);
+            } else if (expected instanceof short[]) {
+                Assert.assertArrayEquals((short[]) expected, (short[]) actual);
+            } else if (expected instanceof float[]) {
+                Assert.assertArrayEquals((float[]) expected, (float[]) actual, 0.0f);
+            } else if (expected instanceof long[]) {
+                Assert.assertArrayEquals((long[]) expected, (long[]) actual);
+            } else if (expected instanceof double[]) {
+                Assert.assertArrayEquals((double[]) expected, (double[]) actual, 0.0d);
+            } else if (expected instanceof boolean[]) {
+                new ExactComparisonCriteria().arrayEquals(null, expected, actual);
+            } else if (expected instanceof Object[]) {
+                Assert.assertArrayEquals((Object[]) expected, (Object[]) actual);
+            } else {
+                Assert.fail("non-array value encountered: " + expected);
+            }
+        } else {
+            Assert.assertEquals(expected, actual);
+        }
+    }
+
+    @SuppressWarnings("serial")
+    public static class MultiCauseAssertionError extends AssertionError {
+
+        private Throwable[] causes;
+
+        public MultiCauseAssertionError(String message, Throwable... causes) {
+            super(message);
+            this.causes = causes;
+        }
+
+        @Override
+        public void printStackTrace(PrintStream out) {
+            super.printStackTrace(out);
+            int num = 0;
+            for (Throwable cause : causes) {
+                if (cause != null) {
+                    out.print("cause " + (num++));
+                    cause.printStackTrace(out);
+                }
+            }
+        }
+
+        @Override
+        public void printStackTrace(PrintWriter out) {
+            super.printStackTrace(out);
+            int num = 0;
+            for (Throwable cause : causes) {
+                if (cause != null) {
+                    out.print("cause " + (num++) + ": ");
+                    cause.printStackTrace(out);
+                }
+            }
+        }
+    }
 
     protected void testN(int n, final String name, final Object... args) {
         final List<Throwable> errors = new ArrayList<>(n);
@@ -528,7 +598,7 @@ public abstract class GraalCompilerTest extends GraalTest {
                 actual.exception.printStackTrace();
                 Assert.fail("expected " + expect.returnValue + " but got an exception");
             }
-            assertDeepEquals(expect.returnValue, actual.returnValue);
+            assertEquals(expect.returnValue, actual.returnValue);
         }
     }
 
@@ -605,7 +675,7 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     protected InstalledCode addMethod(final ResolvedJavaMethod method, final CompilationResult compResult) {
-        return getCodeCache().addMethod(method, compResult, null, null);
+        return getCodeCache().addMethod(method, compResult, null);
     }
 
     /**

@@ -23,7 +23,7 @@
 package com.oracle.graal.compiler.test.backend;
 
 import static com.oracle.graal.api.code.CodeUtil.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.util.*;
 
@@ -33,15 +33,15 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
 import com.oracle.graal.lir.StandardOp.MoveOp;
-import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.schedule.*;
 
@@ -80,20 +80,18 @@ public class AllocatorTest extends GraalCompilerTest {
             }
         }
 
-        private ValueProcedure collectStatsProc = new ValueProcedure() {
-
-            @Override
-            public Value doValue(Value value) {
-                if (ValueUtil.isRegister(value)) {
-                    final Register reg = ValueUtil.asRegister(value);
-                    registers.add(reg);
-                }
-                return value;
-            }
-        };
-
         private void collectStats(final LIRInstruction instr) {
-            instr.forEachOutput(collectStatsProc);
+            instr.forEachOutput(new ValueProcedure() {
+
+                @Override
+                public Value doValue(Value value) {
+                    if (ValueUtil.isRegister(value)) {
+                        final Register reg = ValueUtil.asRegister(value);
+                        registers.add(reg);
+                    }
+                    return value;
+                }
+            });
 
             if (instr instanceof MoveOp) {
                 MoveOp move = (MoveOp) instr;

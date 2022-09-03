@@ -32,6 +32,7 @@ import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.test.*;
 
 /**
  * In the following tests, the usages of local variable "a" are replaced with the integer constant
@@ -50,10 +51,10 @@ public class CompiledMethodTest extends GraalCompilerTest {
         return f1 + " " + arg1 + " " + arg2 + " " + arg3;
     }
 
-    @Test
+    @LongTest
     public void test1() {
         Method method = getMethod("testMethod");
-        final StructuredGraph graph = parseEager(method);
+        final StructuredGraph graph = parse(method);
         new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), new Assumptions(false)));
         new DeadCodeEliminationPhase().apply(graph);
 
@@ -73,10 +74,10 @@ public class CompiledMethodTest extends GraalCompilerTest {
         }
     }
 
-    @Test
+    @LongTest
     public void test3() {
         Method method = getMethod("testMethod");
-        final StructuredGraph graph = parseEager(method);
+        final StructuredGraph graph = parse(method);
         final ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(method);
         InstalledCode compiledMethod = getCode(javaMethod, graph);
         try {
@@ -87,10 +88,10 @@ public class CompiledMethodTest extends GraalCompilerTest {
         }
     }
 
-    @Test
+    @LongTest
     public void test4() {
         Method method = getMethod("testMethodVirtual");
-        final StructuredGraph graph = parseEager(method);
+        final StructuredGraph graph = parse(method);
         final ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(method);
         InstalledCode compiledMethod = getCode(javaMethod, graph);
         try {

@@ -27,7 +27,6 @@ import static com.oracle.graal.nodes.ConstantNode.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
 
@@ -45,8 +44,8 @@ public class AheadOfTimeVerificationPhase extends VerifyPhase<PhaseContext> {
     @Override
     protected boolean verify(StructuredGraph graph, PhaseContext context) {
         for (ConstantNode node : getConstantNodes(graph)) {
-            if (node.recordsUsages()) {
-                if (isObject(node) && !isNullReference(node) && !isInternedString(node) && !isDirectMethodHandle(node) && !isBoundMethodHandle(node)) {
+            if (node.recordsUsages() || !node.gatherUsages(graph).isEmpty()) {
+                if (isObject(node) && !isNullReference(node) && !isInternedString(node)) {
                     throw new VerificationError("illegal object constant: " + node);
                 }
             }
@@ -60,20 +59,6 @@ public class AheadOfTimeVerificationPhase extends VerifyPhase<PhaseContext> {
 
     private static boolean isNullReference(ConstantNode node) {
         return isObject(node) && node.asConstant().isNull();
-    }
-
-    private static boolean isDirectMethodHandle(ConstantNode node) {
-        if (!isObject(node)) {
-            return false;
-        }
-        return "Ljava/lang/invoke/DirectMethodHandle;".equals(StampTool.typeOrNull(node).getName());
-    }
-
-    private static boolean isBoundMethodHandle(ConstantNode node) {
-        if (!isObject(node)) {
-            return false;
-        }
-        return StampTool.typeOrNull(node).getName().startsWith("Ljava/lang/invoke/BoundMethodHandle");
     }
 
     @SuppressFBWarnings(value = "ES_COMPARING_STRINGS_WITH_EQ", justification = "reference equality is what we want")

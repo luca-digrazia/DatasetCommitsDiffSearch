@@ -26,7 +26,7 @@ import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 
-public final class HotSpotMetaspaceConstant extends PrimitiveConstant implements HotSpotConstant {
+public final class HotSpotMetaspaceConstant extends PrimitiveConstant {
 
     private static final long serialVersionUID = 1003463314013122983L;
 
