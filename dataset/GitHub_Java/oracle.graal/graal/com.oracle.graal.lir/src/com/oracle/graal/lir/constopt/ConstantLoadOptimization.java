@@ -24,7 +24,6 @@ package com.oracle.graal.lir.constopt;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRValueUtil.*;
-import static com.oracle.graal.lir.phases.LIRPhase.Options.*;
 
 import java.util.*;
 
@@ -53,7 +52,7 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
     public static class Options {
         // @formatter:off
         @Option(help = "Enable constant load optimization.", type = OptionType.Debug)
-        public static final NestedBooleanOptionValue LIROptConstantLoadOptimization = new NestedBooleanOptionValue(LIROptimization, true);
+        public static final OptionValue<Boolean> LIROptConstantLoadOptimization = new OptionValue<>(true);
         // @formatter:on
     }
 
