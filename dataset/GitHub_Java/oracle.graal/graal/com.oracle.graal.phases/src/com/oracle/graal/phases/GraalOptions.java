@@ -141,6 +141,7 @@ public final class GraalOptions {
     public static int     PrintBinaryGraphPort               = 4445;
 
     // Other printing settings
+    public static boolean PrintAddressMap                    = ____;
     public static boolean PrintQueue                         = ____;
     public static boolean PrintCompilation                   = ____;
     public static boolean PrintProfilingInformation          = ____;
@@ -170,7 +171,6 @@ public final class GraalOptions {
     public static boolean GenAssertionCode                   = ____;
     public static boolean AlignCallsForPatching              = true;
     public static boolean ResolveClassBeforeStaticInvoke     = true;
-    public static boolean CanOmitFrame                       = true;
 
     // Translating tableswitch instructions
     public static int     SequentialSwitchLimit              = 4;

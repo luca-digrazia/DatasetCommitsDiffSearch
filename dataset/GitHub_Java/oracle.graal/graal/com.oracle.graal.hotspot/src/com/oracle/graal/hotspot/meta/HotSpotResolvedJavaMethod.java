@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.graph.FieldIntrospection.*;
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 
 import java.lang.annotation.*;
 import java.lang.reflect.*;
@@ -64,6 +63,7 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         this.metaspaceMethod = metaspaceMethod;
         this.holder = holder;
         HotSpotGraalRuntime.getInstance().getCompilerToVM().initializeMethod(metaspaceMethod, this);
+        AddressMap.log(metaspaceMethod, MetaUtil.format("%H.%n(%P):%R", this));
     }
 
     @Override
@@ -200,9 +200,10 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         ProfilingInfo info;
 
         if (GraalOptions.UseProfilingInformation && methodData == null) {
-            long metaspaceMethodData = unsafeReadWord(metaspaceMethod + HotSpotGraalRuntime.getInstance().getConfig().methodDataOffset);
+            long metaspaceMethodData = unsafe.getLong(null, metaspaceMethod + HotSpotGraalRuntime.getInstance().getConfig().methodDataOffset);
             if (metaspaceMethodData != 0) {
                 methodData = new HotSpotMethodData(metaspaceMethodData);
+                AddressMap.log(metaspaceMethodData, MetaUtil.format("MethodData{%H.%n(%P):%R}", this));
             }
         }
 

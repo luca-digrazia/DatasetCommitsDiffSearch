@@ -254,10 +254,7 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
 
     @Override
     public boolean isInstance(Constant obj) {
-        if (obj.getKind().isObject() && !obj.isNull()) {
-            return javaMirror.isInstance(obj.asObject());
-        }
-        return false;
+        return javaMirror.isInstance(obj);
     }
 
     @Override
@@ -395,11 +392,6 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
     }
 
     @Override
-    public boolean isClass(Class c) {
-        return c == javaMirror;
-    }
-
-    @Override
     public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
         return javaMirror.getAnnotation(annotationClass);
     }
@@ -411,7 +403,8 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
 
     @Override
     public Constant klass() {
-        return new Constant(HotSpotGraalRuntime.getInstance().getTarget().wordKind, metaspaceKlass, this);
+        Kind wordKind = HotSpotGraalRuntime.getInstance().getTarget().wordKind;
+        return wordKind.isLong() ? Constant.forLong(metaspaceKlass) : Constant.forInt((int) metaspaceKlass);
     }
 
     public boolean isPrimaryType() {
@@ -425,5 +418,13 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
 
     public long prototypeMarkWord() {
         return HotSpotGraalRuntime.getInstance().getCompilerToVM().getPrototypeMarkWord(this);
+    }
+
+    public long address() {
+        return metaspaceKlass;
+    }
+
+    public String symbol() {
+        return javaMirror.getName();
     }
 }
