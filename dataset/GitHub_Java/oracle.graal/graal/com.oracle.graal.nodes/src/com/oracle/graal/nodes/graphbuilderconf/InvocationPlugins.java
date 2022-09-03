@@ -352,11 +352,6 @@ public class InvocationPlugins {
         public int hashCode() {
             return this.method.getName().hashCode();
         }
-
-        @Override
-        public String toString() {
-            return "ResolvedJavaMethodKey<" + method + ">";
-        }
     }
 
     /**
@@ -506,7 +501,7 @@ public class InvocationPlugins {
         private volatile Map<ResolvedJavaMethodKey, InvocationPlugin> entries;
 
         void initializeMap() {
-            if (isClosed()) {
+            if (entries == null) {
                 if (registrations.isEmpty()) {
                     entries = Collections.emptyMap();
                 } else {
@@ -533,14 +528,14 @@ public class InvocationPlugins {
         }
 
         public InvocationPlugin get(ResolvedJavaMethod method) {
-            if (isClosed()) {
+            if (entries == null) {
                 initializeMap();
             }
             return entries.get(new ResolvedJavaMethodKey(method));
         }
 
         public void register(MethodKey methodKey, boolean allowOverwrite) {
-            assert isClosed() : "registration is closed: " + methodKey + " " + Arrays.toString(entries.keySet().toArray());
+            assert entries == null : "registration is closed";
             if (allowOverwrite) {
                 int index = registrations.indexOf(methodKey);
                 if (index >= 0) {
@@ -551,10 +546,6 @@ public class InvocationPlugins {
                 assert !registrations.contains(methodKey) : "a value is already registered for " + declaringType + "." + methodKey;
             }
             registrations.add(methodKey);
-        }
-
-        public boolean isClosed() {
-            return entries == null;
         }
     }
 
