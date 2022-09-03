@@ -33,7 +33,7 @@ import com.oracle.graal.lir.asm.*;
  * Restores registers from stack slots.
  */
 @Opcode("RESTORE_REGISTER")
-public class AMD64RestoreRegistersOp extends AMD64LIRInstruction {
+public final class AMD64RestoreRegistersOp extends AMD64LIRInstruction {
 
     /**
      * The slots from which the registers are restored.
@@ -50,21 +50,14 @@ public class AMD64RestoreRegistersOp extends AMD64LIRInstruction {
         this.save = save;
     }
 
-    protected Register[] getSavedRegisters() {
-        return save.savedRegisters;
-    }
-
-    protected void restoreRegister(TargetMethodAssembler tasm, AMD64MacroAssembler masm, Register register, StackSlot input) {
-        RegisterValue result = register.asValue(input.getKind());
-        AMD64Move.move(tasm, masm, result, input);
-    }
-
     @Override
     public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-        Register[] savedRegisters = getSavedRegisters();
+        Register[] savedRegisters = save.savedRegisters;
         for (int i = 0; i < savedRegisters.length; i++) {
             if (savedRegisters[i] != null) {
-                restoreRegister(tasm, masm, savedRegisters[i], slots[i]);
+                StackSlot input = slots[i];
+                RegisterValue result = savedRegisters[i].asValue(input.getKind());
+                AMD64Move.move(tasm, masm, result, input);
             }
         }
     }
