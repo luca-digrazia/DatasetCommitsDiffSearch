@@ -47,13 +47,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.jar.Attributes;
 import java.util.jar.JarFile;
-import java.util.jar.Manifest;
 import static org.graalvm.component.installer.BundleConstants.GRAALVM_CAPABILITY;
 import static org.graalvm.component.installer.CommonConstants.CAP_GRAALVM_VERSION;
-import org.graalvm.component.installer.jar.JarMetaLoader;
 import org.graalvm.component.installer.model.ComponentInfo;
 import org.graalvm.component.installer.persist.ComponentPackageLoader;
-import org.graalvm.component.installer.remote.FileDownloader;
+import org.graalvm.component.installer.persist.FileDownloader;
 
 /**
  *
@@ -108,7 +106,6 @@ public final class GenerateCatalog {
             throw new IOException("Cannot compute digest " + ex.getLocalizedMessage(), ex);
         }
         ByteBuffer bb = ByteBuffer.allocate(2048);
-        boolean updated = false;
         try (
                         InputStream is = new FileInputStream(f);
                         ReadableByteChannel bch = Channels.newChannel(is)) {
@@ -121,11 +118,7 @@ public final class GenerateCatalog {
                 bb.flip();
                 fileDigest.update(bb);
                 bb.clear();
-                updated = true;
             }
-        }
-        if (!updated) {
-            fileDigest.update(new byte[0]);
         }
 
         return fileDigest.digest();
@@ -180,7 +173,7 @@ public final class GenerateCatalog {
     private void readCommandLine() throws IOException {
         SimpleGetopt getopt = new SimpleGetopt(OPTIONS) {
             @Override
-            public RuntimeException err(String messageKey, Object... args) {
+            RuntimeException err(String messageKey, Object... args) {
                 ComponentInstaller.printErr(messageKey, args);
                 System.exit(1);
                 return null;
@@ -188,7 +181,7 @@ public final class GenerateCatalog {
         }.ignoreUnknownCommands(true);
         getopt.setParameters(new LinkedList<>(params));
         getopt.process();
-        this.env = new Environment(null, getopt.getPositionalParameters(), getopt.getOptValues());
+        this.env = new Environment(null, null, getopt.getPositionalParameters(), getopt.getOptValues());
         this.env.setAllOutputToErr(true);
 
         String pb = env.optValue("p");
@@ -317,17 +310,13 @@ public final class GenerateCatalog {
             File f = spec.f;
             byte[] hash = computeHash(f);
             try (JarFile jf = new JarFile(f)) {
-                ComponentPackageLoader ldr = new JarMetaLoader(jf, env);
+                ComponentPackageLoader ldr = new ComponentPackageLoader(jf, env);
                 ComponentInfo info = ldr.createComponentInfo();
                 String prefix = findComponentPrefix(info);
                 if (!graalVMReleases.containsKey(prefix)) {
                     graalVMReleases.put(prefix, new GraalVersion(version, os, arch));
                 }
-                Manifest mf = jf.getManifest();
-                if (mf == null) {
-                    throw new IOException("No manifest in " + spec);
-                }
-                Attributes atts = mf.getMainAttributes();
+                Attributes atts = jf.getManifest().getMainAttributes();
                 String bid = atts.getValue(BundleConstants.BUNDLE_ID).toLowerCase();
                 String bl = atts.getValue(BundleConstants.BUNDLE_NAME);
 

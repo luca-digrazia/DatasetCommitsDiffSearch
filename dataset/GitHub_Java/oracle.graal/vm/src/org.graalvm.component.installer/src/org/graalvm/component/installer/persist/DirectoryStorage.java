@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,17 +30,12 @@ import org.graalvm.component.installer.model.ComponentStorage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.text.MessageFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
-import java.util.Date;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -51,7 +46,6 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.graalvm.component.installer.BundleConstants;
 import org.graalvm.component.installer.CommonConstants;
 import org.graalvm.component.installer.Feedback;
@@ -83,22 +77,6 @@ public class DirectoryStorage implements ComponentStorage {
      * The "replaced files" metadata fileName relative to the registry.
      */
     private static final String PATH_REPLACED_FILES = "replaced-files.properties"; // NOI18N
-
-    /**
-     *
-     * Template for license accepted records.
-     */
-    private static final String LICENSE_DIR = "licenses"; // NOI18N'
-
-    /**
-     * Template for license accepted records.
-     */
-    private static final String LICENSE_CONTENTS_NAME = LICENSE_DIR + "/{0}"; // NOI18N'
-
-    /**
-     * Template for license accepted records.
-     */
-    private static final String LICENSE_FILE_TEMPLATE = LICENSE_DIR + "/{0}.accepted/{1}"; // NOI18N'
 
     /**
      * 
@@ -182,7 +160,7 @@ public class DirectoryStorage implements ComponentStorage {
 
     /**
      * Loads list of components.
-     *
+     * 
      * @return component IDs
      * @throws IOException
      */
@@ -198,17 +176,13 @@ public class DirectoryStorage implements ComponentStorage {
                 return Files.isRegularFile(child.toPath()) && child.getName().endsWith(COMPONENT_FILE_SUFFIX);
             }
         });
-        if (files != null) {
-            Set<String> result = new HashSet<>();
-            for (File f : files) {
-                String s = registryPath.relativize(f.toPath()).toString();
-                int e = s.length() - COMPONENT_FILE_SUFFIX.length();
-                result.add(s.substring(0, e));
-            }
-            return result;
-        } else {
-            throw new IllegalArgumentException("File listing of " + d + " returned null.");
+        Set<String> result = new HashSet<>();
+        for (File f : files) {
+            String s = registryPath.relativize(f.toPath()).toString();
+            int e = s.length() - COMPONENT_FILE_SUFFIX.length();
+            result.add(s.substring(0, e));
         }
+        return result;
     }
 
     @SuppressWarnings("unchecked")
@@ -221,7 +195,7 @@ public class DirectoryStorage implements ComponentStorage {
         String name = getRequiredProperty(BundleConstants.BUNDLE_NAME);
         String version = getRequiredProperty(BundleConstants.BUNDLE_VERSION);
 
-        String license = loaded.getProperty(BundleConstants.BUNDLE_LICENSE_PATH);
+        String license = loaded.getProperty(META_LICENSE_FILE);
 
         ci = new ComponentInfo(id, name, version);
         if (license != null) {
@@ -244,7 +218,6 @@ public class DirectoryStorage implements ComponentStorage {
             }
         }
         ci.addWorkingDirectories(ll);
-        ci.setLicenseType(loaded.getProperty(BundleConstants.BUNDLE_LICENSE_TYPE));
         return ci;
     }
 
@@ -263,7 +236,7 @@ public class DirectoryStorage implements ComponentStorage {
 
     /**
      * Loads component files into its metadata.
-     *
+     * 
      * @param ci the component metadata
      * @return initialized ComponentInfo
      * @throws IOException on I/O errors
@@ -347,7 +320,7 @@ public class DirectoryStorage implements ComponentStorage {
 
     /**
      * Deletes component's files.
-     *
+     * 
      * @param id component id
      * @throws IOException
      */
@@ -361,7 +334,7 @@ public class DirectoryStorage implements ComponentStorage {
 
     /**
      * Will persist component's metadata.
-     *
+     * 
      * @param info
      * @throws IOException on failure
      */
@@ -382,10 +355,7 @@ public class DirectoryStorage implements ComponentStorage {
         p.setProperty(BundleConstants.BUNDLE_NAME, info.getName());
         p.setProperty(BundleConstants.BUNDLE_VERSION, info.getVersionString());
         if (info.getLicensePath() != null) {
-            p.setProperty(BundleConstants.BUNDLE_LICENSE_PATH, info.getLicensePath());
-        }
-        if (info.getLicenseType() != null) {
-            p.setProperty(BundleConstants.BUNDLE_LICENSE_TYPE, info.getLicenseType());
+            p.setProperty(META_LICENSE_FILE, info.getLicensePath());
         }
         for (String k : info.getRequiredGraalValues().keySet()) {
             String v = info.getRequiredGraalValues().get(k);
@@ -410,65 +380,5 @@ public class DirectoryStorage implements ComponentStorage {
 
         Files.write(listFile, entries, StandardOpenOption.CREATE,
                         StandardOpenOption.TRUNCATE_EXISTING);
-    }
-
-    @Override
-    public Date licenseAccepted(ComponentInfo info, String licenseID) {
-        try {
-            String fn = MessageFormat.format(LICENSE_FILE_TEMPLATE, licenseID, info.getId());
-            Path listFile = registryPath.resolve(SystemUtils.fromCommonString(fn));
-            if (!Files.isReadable(listFile)) {
-                return null;
-            }
-            return new Date(Files.getLastModifiedTime(listFile).toMillis());
-        } catch (IOException ex) {
-            throw feedback.failure("ERR_CannotReadAcceptance", ex, licenseID);
-        }
-    }
-
-    @Override
-    public void recordLicenseAccepted(ComponentInfo info, String licenseID, String licenseText) throws IOException {
-        if (licenseID == null) {
-            clearRecordedLicenses();
-            return;
-        }
-        String fn = MessageFormat.format(LICENSE_FILE_TEMPLATE, licenseID, info.getId());
-        Path listFile = registryPath.resolve(SystemUtils.fromCommonString(fn));
-        if (listFile == null) {
-            throw new IllegalArgumentException(licenseID);
-        }
-        Path dir = listFile.getParent();
-        if (dir == null) {
-            throw new IllegalArgumentException(licenseID);
-        }
-        if (!Files.isDirectory(dir)) {
-            // create the directory
-            Files.createDirectories(dir);
-            Path contentsFile = registryPath.resolve(SystemUtils.fromCommonString(
-                            MessageFormat.format(LICENSE_CONTENTS_NAME, licenseID)));
-            Files.write(contentsFile, Arrays.asList(licenseText.split("\n")));
-        }
-        Date d = new Date();
-        Files.write(listFile, Collections.singletonList(d.toString()), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-    }
-
-    void clearRecordedLicenses() throws IOException {
-        Path listFile = registryPath.resolve(LICENSE_DIR);
-        if (Files.isDirectory(listFile)) {
-            try (Stream<Path> paths = Files.walk(listFile)) {
-                paths.sorted(Comparator.reverseOrder()).forEach((p) -> {
-                    try {
-                        if (p.equals(listFile)) {
-                            return;
-                        }
-                        Files.delete(p);
-                    } catch (IOException ex) {
-                        throw new UncheckedIOException(ex);
-                    }
-                });
-            } catch (UncheckedIOException ex) {
-                throw ex.getCause();
-            }
-        }
     }
 }

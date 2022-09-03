@@ -34,14 +34,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import org.graalvm.component.installer.CommandInput;
-import org.graalvm.component.installer.Commands;
 import org.graalvm.component.installer.Feedback;
 import org.graalvm.component.installer.InstallerCommand;
 import static org.graalvm.component.installer.Commands.DO_NOT_PROCESS_OPTIONS;
@@ -90,7 +83,8 @@ public class RebuildImageCommand implements InstallerCommand {
                         line = line.substring(0, i) + substProcessName +
                                         line.substring(i + processName.length());
                     }
-                    feedback.verbatimOut(line, false);
+                    System.out.println(line);
+                    System.out.flush();
                 }
             } catch (IOException ex) {
                 terminated = ex;
@@ -102,13 +96,9 @@ public class RebuildImageCommand implements InstallerCommand {
     public int execute() throws IOException {
         ProcessBuilder pb = new ProcessBuilder();
         List<String> commandLine = new ArrayList<>();
-        // enforce relative path
         Path toolPath = input.getGraalHomePath().resolve(SystemUtils.fromCommonString(feedback.l10n("REBUILD_ToolRelativePath")));
         String procName = toolPath.toAbsolutePath().toString();
         commandLine.add(procName);
-        if (input.optValue(Commands.OPTION_VERBOSE) != null) {
-            commandLine.add("--verbose"); // NOI18N
-        }
         while (input.hasParameter()) {
             commandLine.add(input.nextParameter());
         }
@@ -117,24 +107,21 @@ public class RebuildImageCommand implements InstallerCommand {
         pb.directory(input.getGraalHomePath().toFile());
         pb.redirectInput(Redirect.INHERIT);
         pb.redirectError(Redirect.INHERIT);
-        
-        ExecutorService connectors = Executors.newCachedThreadPool();
         try {
             int exitCode;
             Process p = pb.start();
+
             OutputRewriter rw = new OutputRewriter(p.getInputStream(), procName,
                             feedback.l10n("REBUILD_RewriteRebuildToolName")); // NOI18N
-            Future<?> ioWriter = connectors.submit(rw);
+            Thread rwThread = new Thread(rw);
+            rwThread.start();
             exitCode = p.waitFor();
-            ioWriter.get(1000, TimeUnit.MILLISECONDS);
+            rwThread.join(1000);
             if (rw.terminated != null) {
                 feedback.error("REBUILD_ImageToolInterrupted", rw.terminated);
             }
             return exitCode;
-        } catch (ExecutionException ex) {
-            feedback.error("REBUILD_ErrorCommunicatingImageTool", ex, ex.getLocalizedMessage());
-            return 3;
-        } catch (TimeoutException | InterruptedException ex) {
+        } catch (InterruptedException ex) {
             feedback.error("REBUILD_ImageToolInterrupted", ex);
             return 1;
         }
