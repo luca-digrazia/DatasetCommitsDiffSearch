@@ -29,35 +29,30 @@
  */
 package com.oracle.truffle.llvm.parser.base.model.enums;
 
-public enum Visibility {
+public enum ThreadLocal {
 
-    DEFAULT("default", 0L),
-    HIDDEN("hidden", 1L),
-    PROTECTED("protected", 2L);
-
-    private final String irString;
-
-    Visibility(String irString, long encodedValue) {
-        this.irString = irString;
-        this.encodedValue = encodedValue;
-    }
+    NOT_THREADLOCAL(0L),
+    THREADLOCAL(1L),
+    DEFAULT_TLS_MODEL(2L),
+    INITIALEXEC(3L),
+    LOCALEXEC(4L);
 
     private final long encodedValue;
+
+    ThreadLocal(long encodedValue) {
+        this.encodedValue = encodedValue;
+    }
 
     public long getEncodedValue() {
         return encodedValue;
     }
 
-    public static Visibility decode(long value) {
-        for (Visibility visibility : values()) {
-            if (visibility.getEncodedValue() == value) {
-                return visibility;
+    public static ThreadLocal decode(long value) {
+        for (ThreadLocal threadLocal : values()) {
+            if (threadLocal.getEncodedValue() == value) {
+                return threadLocal;
             }
         }
-        return DEFAULT;
-    }
-
-    public String getIrString() {
-        return irString;
+        return THREADLOCAL;
     }
 }

@@ -29,18 +29,10 @@
  */
 package com.oracle.truffle.llvm.parser.base.model.enums;
 
-public enum Visibility {
+public enum SynchronizationScope {
 
-    DEFAULT("default", 0L),
-    HIDDEN("hidden", 1L),
-    PROTECTED("protected", 2L);
-
-    private final String irString;
-
-    Visibility(String irString, long encodedValue) {
-        this.irString = irString;
-        this.encodedValue = encodedValue;
-    }
+    SINGLE_THREAD(0L),
+    CROSS_THREAD(1L);
 
     private final long encodedValue;
 
@@ -48,16 +40,16 @@ public enum Visibility {
         return encodedValue;
     }
 
-    public static Visibility decode(long value) {
-        for (Visibility visibility : values()) {
-            if (visibility.getEncodedValue() == value) {
-                return visibility;
-            }
-        }
-        return DEFAULT;
+    SynchronizationScope(long encodedValue) {
+        this.encodedValue = encodedValue;
     }
 
-    public String getIrString() {
-        return irString;
+    public static SynchronizationScope decode(long id) {
+        for (SynchronizationScope synchronizationScope : values()) {
+            if (synchronizationScope.getEncodedValue() == id) {
+                return synchronizationScope;
+            }
+        }
+        return CROSS_THREAD;
     }
 }
