@@ -32,8 +32,6 @@ import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(allowedUsageTypes = {InputType.Extension})
 public abstract class CallTargetNode extends ValueNode implements LIRLowerable {
-    public static final NodeClass TYPE = NodeClass.get(CallTargetNode.class);
-
     public enum InvokeKind {
         Interface(false),
         Special(true),
@@ -67,15 +65,15 @@ public abstract class CallTargetNode extends ValueNode implements LIRLowerable {
     protected ResolvedJavaMethod targetMethod;
     protected InvokeKind invokeKind;
 
-    protected CallTargetNode(NodeClass c, ValueNode[] arguments, ResolvedJavaMethod targetMethod, InvokeKind invokeKind) {
-        super(c, StampFactory.forVoid());
+    public CallTargetNode(ValueNode[] arguments, ResolvedJavaMethod targetMethod, InvokeKind invokeKind) {
+        super(StampFactory.forVoid());
         this.targetMethod = targetMethod;
         this.invokeKind = invokeKind;
         this.arguments = new NodeInputList<>(this, arguments);
     }
 
-    protected CallTargetNode(NodeClass c, List<ValueNode> arguments, ResolvedJavaMethod targetMethod, InvokeKind invokeKind) {
-        super(c, StampFactory.forVoid());
+    public CallTargetNode(List<ValueNode> arguments, ResolvedJavaMethod targetMethod, InvokeKind invokeKind) {
+        super(StampFactory.forVoid());
         this.targetMethod = targetMethod;
         this.invokeKind = invokeKind;
         this.arguments = new NodeInputList<>(this, arguments);
