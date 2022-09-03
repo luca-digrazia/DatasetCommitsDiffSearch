@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
+import com.oracle.graal.cri.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -51,9 +52,9 @@ public final class ArrayLengthNode extends FixedWithNextNode implements Canonica
             assert length != null;
             return length;
         }
-        MetaAccessProvider runtime = tool.runtime();
+        RiRuntime runtime = tool.runtime();
         if (runtime != null && array().isConstant() && !array().isNullConstant()) {
-            Constant constantValue = array().asConstant();
+            CiConstant constantValue = array().asConstant();
             if (constantValue != null && constantValue.isNonNull()) {
                 return ConstantNode.forInt(runtime.getArrayLength(constantValue), graph());
             }
@@ -62,7 +63,7 @@ public final class ArrayLengthNode extends FixedWithNextNode implements Canonica
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(CiLoweringTool tool) {
         tool.getRuntime().lower(this, tool);
     }
 }

@@ -22,8 +22,8 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -40,14 +40,14 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
      * @param object the receiver object
      * @param field the compiler interface field
      */
-    public LoadFieldNode(ValueNode object, ResolvedJavaField field, long leafGraphId) {
+    public LoadFieldNode(ValueNode object, RiResolvedField field, long leafGraphId) {
         super(createStamp(field), object, field, leafGraphId);
     }
 
-    private static Stamp createStamp(ResolvedJavaField field) {
-        Kind kind = field.kind();
-        if (kind == Kind.Object && field.type() instanceof ResolvedJavaType) {
-            return StampFactory.declared((ResolvedJavaType) field.type());
+    private static Stamp createStamp(RiResolvedField field) {
+        CiKind kind = field.kind(false);
+        if (kind == CiKind.Object && field.type() instanceof RiResolvedType) {
+            return StampFactory.declared((RiResolvedType) field.type());
         } else {
             return StampFactory.forKind(kind);
         }
@@ -55,16 +55,16 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        MetaAccessProvider runtime = tool.runtime();
+        RiRuntime runtime = tool.runtime();
         if (runtime != null) {
-            Constant constant = null;
+            CiConstant constant = null;
             if (isStatic()) {
                 constant = field().constantValue(null);
             } else if (object().isConstant() && !object().isNullConstant()) {
                 constant = field().constantValue(object().asConstant());
             }
             if (constant != null) {
-                return ConstantNode.forConstant(constant, runtime, graph());
+                return ConstantNode.forCiConstant(constant, runtime, graph());
             }
         }
         return this;

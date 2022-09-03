@@ -22,12 +22,12 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.JavaType.*;
+import com.oracle.graal.cri.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.max.cri.ri.*;
+import com.oracle.max.cri.ri.RiType.*;
 
 // TODO (chaeubl) this should be a FloatingNode but Lowering is not possible in that case
 public final class ReadHubNode extends FixedWithNextNode implements Lowerable, Canonicalizable {
@@ -43,17 +43,17 @@ public final class ReadHubNode extends FixedWithNextNode implements Lowerable, C
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(CiLoweringTool tool) {
         tool.getRuntime().lower(this, tool);
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        MetaAccessProvider runtime = tool.runtime();
+        RiRuntime runtime = tool.runtime();
         if (runtime != null) {
             ObjectStamp stamp = object.objectStamp();
 
-            ResolvedJavaType exactType;
+            RiResolvedType exactType;
             if (stamp.isExactType()) {
                 exactType = stamp.type();
             } else if (stamp.type() != null && tool.assumptions() != null) {
@@ -66,7 +66,7 @@ public final class ReadHubNode extends FixedWithNextNode implements Lowerable, C
             }
 
             if (exactType != null) {
-                return ConstantNode.forConstant(exactType.getEncoding(Representation.ObjectHub), runtime, graph());
+                return ConstantNode.forCiConstant(exactType.getEncoding(Representation.ObjectHub), runtime, graph());
             }
         }
         return this;
