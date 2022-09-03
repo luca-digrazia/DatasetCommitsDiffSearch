@@ -41,10 +41,7 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.llvm.runtime.interop.LLVMFunctionMessageResolutionForeign;
-import com.oracle.truffle.llvm.runtime.memory.LLVMStack.NeedsStack;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 
 public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject, Comparable<LLVMFunctionDescriptor> {
@@ -113,13 +110,6 @@ public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject
     }
 
     abstract static class Function {
-
-        final boolean weak;
-
-        Function(boolean weak) {
-            this.weak = weak;
-        }
-
         void resolve(@SuppressWarnings("unused") LLVMFunctionDescriptor descriptor) {
             // nothing to do
         }
@@ -128,31 +118,25 @@ public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject
     static final class LazyLLVMIRFunction extends Function {
         private final LazyToTruffleConverter converter;
 
-        LazyLLVMIRFunction(LazyToTruffleConverter converter, boolean weak) {
-            super(weak);
+        LazyLLVMIRFunction(LazyToTruffleConverter converter) {
             this.converter = converter;
         }
 
         @Override
         void resolve(LLVMFunctionDescriptor descriptor) {
-            descriptor.setFunction(new LLVMIRFunction(converter.convert(), weak));
+            descriptor.setFunction(new LLVMIRFunction(converter.convert()));
         }
     }
 
     static final class LLVMIRFunction extends Function {
         private final RootCallTarget callTarget;
 
-        LLVMIRFunction(RootCallTarget callTarget, boolean weak) {
-            super(weak);
+        LLVMIRFunction(RootCallTarget callTarget) {
             this.callTarget = callTarget;
         }
     }
 
     static final class UnresolvedFunction extends Function {
-
-        UnresolvedFunction() {
-            super(true);
-        }
 
         @Override
         void resolve(LLVMFunctionDescriptor descriptor) {
@@ -179,7 +163,6 @@ public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject
         private final Intrinsic intrinsic;
 
         NativeIntrinsicFunction(Intrinsic intrinsic) {
-            super(false);
             this.intrinsic = intrinsic;
         }
     }
@@ -188,7 +171,6 @@ public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject
         private final TruffleObject nativeFunction;
 
         NativeFunction(TruffleObject nativeFunction) {
-            super(false);
             this.nativeFunction = nativeFunction;
         }
     }
@@ -232,35 +214,6 @@ public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject
         return getFunction() instanceof LLVMIRFunction || getFunction() instanceof LazyLLVMIRFunction;
     }
 
-    private static class NeedsStackPointer {
-        boolean condition = false;
-    }
-
-    public boolean needsStackPointer() {
-        if (isLLVMIRFunction()) {
-            final NeedsStackPointer needsStackPointer = new NeedsStackPointer();
-
-            getLLVMIRFunction().getRootNode().accept(new NodeVisitor() {
-
-                @Override
-                public boolean visit(Node node) {
-                    Class<?> nodeClass = node.getClass();
-                    while (nodeClass != null) {
-                        if (nodeClass.isAnnotationPresent(NeedsStack.class)) {
-                            needsStackPointer.condition = true;
-                            break;
-                        }
-                        nodeClass = nodeClass.getSuperclass();
-                    }
-                    return true;
-                }
-            });
-            return needsStackPointer.condition;
-        } else {
-            return false;
-        }
-    }
-
     public boolean isNativeIntrinsicFunction() {
         getFunction().resolve(this);
         return getFunction() instanceof NativeIntrinsicFunction;
@@ -271,26 +224,12 @@ public final class LLVMFunctionDescriptor implements LLVMFunction, TruffleObject
         return getFunction() instanceof NativeFunction;
     }
 
-    private void declareInSulong(Function newFunction) {
-        if (function.weak) {
-            // existing function is weak (or undefined)
-            setFunction(newFunction);
-        } else {
-            // existing function is strong
-            if (newFunction.weak) {
-                // ignore
-            } else {
-                throw new AssertionError("Found multiple strong declarations of function " + getName() + ".");
-            }
-        }
+    public void declareInSulong(LazyToTruffleConverter converter) {
+        setFunction(new LazyLLVMIRFunction(converter));
     }
 
-    public void declareInSulong(LazyToTruffleConverter converter, boolean weak) {
-        declareInSulong(new LazyLLVMIRFunction(converter, weak));
-    }
-
-    public void declareInSulong(RootCallTarget callTarget, boolean weak) {
-        declareInSulong(new LLVMIRFunction(callTarget, weak));
+    public void declareInSulong(RootCallTarget callTarget) {
+        setFunction(new LLVMIRFunction(callTarget));
     }
 
     public RootCallTarget getLLVMIRFunction() {
