@@ -103,8 +103,6 @@ public abstract class ShapeImpl extends Shape {
     protected final Assumption validAssumption;
     @CompilationFinal protected volatile Assumption leafAssumption;
 
-    public static final String NO_FASTPATH_PROPERTY_ADD_MESSAGE = "don't add object properties in compiled code";
-
     /**
      * Shape transition map; lazily initialized.
      *
@@ -392,7 +390,7 @@ public abstract class ShapeImpl extends Shape {
      * @see #addProperty(Property)
      */
     private ShapeImpl addPropertyInternal(Property prop, boolean ensureValid) {
-        CompilerAsserts.neverPartOfCompilation(NO_FASTPATH_PROPERTY_ADD_MESSAGE);
+        CompilerAsserts.neverPartOfCompilation();
         assert prop.isShadow() || !(this.hasProperty(prop.getKey())) : "duplicate property " + prop.getKey();
 
         AddPropertyTransition addTransition = new AddPropertyTransition(prop);
