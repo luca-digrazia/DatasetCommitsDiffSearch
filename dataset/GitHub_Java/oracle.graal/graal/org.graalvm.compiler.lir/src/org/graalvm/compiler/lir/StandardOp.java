@@ -36,6 +36,7 @@ import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
 import org.graalvm.compiler.lir.framemap.FrameMap;
+import org.graalvm.compiler.lir.ssa.SSAUtil;
 import org.graalvm.util.EconomicSet;
 
 import jdk.vm.ci.code.Register;
@@ -56,6 +57,19 @@ public class StandardOp {
      * must be the last operation in the block.
      */
     public interface BlockEndOp {
+        void setOutgoingValues(Value[] values);
+
+        int getOutgoingSize();
+
+        Value getOutgoingValue(int idx);
+
+        void clearOutgoingValues();
+
+        /**
+         * The number of {@link SSAUtil phi} operands in the {@link #getOutgoingValue outgoing}
+         * array.
+         */
+        int getPhiSize();
     }
 
     public interface NullCheck {
@@ -106,6 +120,9 @@ public class StandardOp {
             numbPhis = numPhis;
         }
 
+        /**
+         * @see BlockEndOp#getPhiSize
+         */
         public int getPhiSize() {
             return numbPhis;
         }
@@ -176,6 +193,7 @@ public class StandardOp {
         public static final EnumSet<OperandFlag> outgoingFlags = EnumSet.of(REG, STACK, CONST, OUTGOING);
 
         @Alive({REG, STACK, CONST, OUTGOING}) private Value[] outgoingValues;
+        private int numberOfPhis;
 
         protected AbstractBlockEndOp(LIRInstructionClass<? extends AbstractBlockEndOp> c) {
             super(c);
@@ -183,20 +201,39 @@ public class StandardOp {
         }
 
         public void setPhiValues(Value[] values) {
+            setOutgoingValues(values);
+            setNumberOfPhis(values.length);
+        }
+
+        private void setNumberOfPhis(int numPhis) {
+            assert numberOfPhis == 0;
+            numberOfPhis = numPhis;
+        }
+
+        @Override
+        public int getPhiSize() {
+            return numberOfPhis;
+        }
+
+        @Override
+        public void setOutgoingValues(Value[] values) {
             assert this.outgoingValues.length == 0;
             assert values != null;
             this.outgoingValues = values;
         }
 
-        public int getPhiSize() {
+        @Override
+        public int getOutgoingSize() {
             return outgoingValues.length;
         }
 
+        @Override
         public Value getOutgoingValue(int idx) {
             assert checkRange(idx);
             return outgoingValues[idx];
         }
 
+        @Override
         public void clearOutgoingValues() {
             outgoingValues = Value.NO_VALUES;
         }
