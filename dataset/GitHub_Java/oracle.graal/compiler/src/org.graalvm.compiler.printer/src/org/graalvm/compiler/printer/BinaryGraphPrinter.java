@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.nio.channels.WritableByteChannel;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -65,10 +64,9 @@ import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.phases.schedule.SchedulePhase;
-import org.graalvm.graphio.GraphProtocol;
 
 public class BinaryGraphPrinter
-                extends GraphProtocol<BinaryGraphPrinter.GraphInfo, Node, NodeClass<?>, Edges, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition>
+                extends AbstractGraphPrinter<BinaryGraphPrinter.GraphInfo, Node, NodeClass<?>, Edges, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition, InputType>
                 implements GraphPrinter {
     private SnippetReflectionProvider snippetReflection;
 
@@ -142,6 +140,12 @@ public class BinaryGraphPrinter
     }
 
     @Override
+    protected final Edges findEdges(Node node, boolean dumpInputs) {
+        NodeClass<?> nodeClass = node.getNodeClass();
+        return findClassEdges(nodeClass, dumpInputs);
+    }
+
+    @Override
     protected final Edges findClassEdges(NodeClass<?> nodeClass, boolean dumpInputs) {
         return nodeClass.getEdges(dumpInputs ? Inputs : Successors);
     }
@@ -177,9 +181,8 @@ public class BinaryGraphPrinter
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    protected void findNodeProperties(Node node, Map<String, Object> props, GraphInfo info) {
-        node.getDebugProperties((Map) props);
+    protected void findNodeProperties(Node node, Map<Object, Object> props, GraphInfo info) {
+        node.getDebugProperties(props);
         Graph graph = info.graph;
         ControlFlowGraph cfg = info.cfg;
         NodeMap<Block> nodeToBlocks = info.nodeToBlocks;
@@ -227,7 +230,7 @@ public class BinaryGraphPrinter
         } else {
             if (node instanceof ConstantNode) {
                 ConstantNode cn = (ConstantNode) node;
-                updateStringPropertiesForConstant((Map) props, cn);
+                updateStringPropertiesForConstant(props, cn);
             }
             props.put("category", "floating");
         }
@@ -293,13 +296,13 @@ public class BinaryGraphPrinter
     }
 
     @Override
+    protected Node findNode(GraphInfo graph, Node node, Edges edges, int i) {
+        return Edges.getNode(node, edges.getOffsets(), i);
+    }
+
+    @Override
     protected List<Node> findNodes(GraphInfo graph, Node node, Edges edges, int i) {
-        if (i < edges.getDirectCount()) {
-            node = Edges.getNode(node, edges.getOffsets(), i);
-            return Collections.singletonList(node);
-        } else {
-            return Edges.getNodeList(node, edges.getOffsets(), i);
-        }
+        return Edges.getNodeList(node, edges.getOffsets(), i);
     }
 
     @Override
