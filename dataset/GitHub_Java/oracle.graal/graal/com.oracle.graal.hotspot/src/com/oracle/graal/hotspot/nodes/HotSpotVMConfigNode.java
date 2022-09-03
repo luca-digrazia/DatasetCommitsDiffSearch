@@ -144,7 +144,7 @@ public class HotSpotVMConfigNode extends FloatingNode implements LIRLowerable, C
         }
         if (!GeneratePIC.getValue()) {
             if (markId == cardTableAddressMark(config)) {
-                return ConstantNode.forLong(config.cardtableStartAddress());
+                return ConstantNode.forLong(config.cardtableStartAddress);
             } else if (markId == heapTopAddressMark(config)) {
                 return ConstantNode.forLong(config.heapTopAddress);
             } else if (markId == heapEndAddressMark(config)) {
@@ -152,7 +152,7 @@ public class HotSpotVMConfigNode extends FloatingNode implements LIRLowerable, C
             } else if (markId == crcTableAddressMark(config)) {
                 return ConstantNode.forLong(config.crcTableAddress);
             } else if (markId == logOfHeapRegionGrainBytesMark(config)) {
-                return ConstantNode.forLong(config.logOfHRGrainBytes);
+                return ConstantNode.forInt(config.logOfHRGrainBytes);
             } else if (markId == inlineContiguousAllocationSupportedMark(config)) {
                 return ConstantNode.forBoolean(config.inlineContiguousAllocationSupported);
             } else {
