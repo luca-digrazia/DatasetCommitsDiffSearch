@@ -34,20 +34,20 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import com.oracle.truffle.llvm.parser.metadata.MDLocation;
-import com.oracle.truffle.llvm.parser.model.attributes.AttributesCodeEntry;
 import com.oracle.truffle.llvm.parser.model.blocks.InstructionBlock;
 import com.oracle.truffle.llvm.parser.model.generators.FunctionGenerator;
 import com.oracle.truffle.llvm.parser.model.symbols.Symbols;
 import com.oracle.truffle.llvm.parser.records.FunctionRecord;
 import com.oracle.truffle.llvm.parser.records.Records;
 import com.oracle.truffle.llvm.parser.scanner.Block;
+import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.types.AggregateType;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType.PrimitiveKind;
+import com.oracle.truffle.llvm.parser.metadata.MDLocation;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.VectorType;
@@ -71,14 +71,11 @@ public final class Function implements ParserListener {
 
     private final List<Integer> implicitIndices = new ArrayList<>();
 
-    private final ParameterAttributes paramAttributes;
-
-    Function(Types types, List<Type> symbols, FunctionGenerator generator, int mode, ParameterAttributes paramAttributes) {
+    Function(Types types, List<Type> symbols, FunctionGenerator generator, int mode) {
         this.types = types;
         this.symbols = symbols;
         this.generator = generator;
         this.mode = mode;
-        this.paramAttributes = paramAttributes;
     }
 
     @Override
@@ -96,6 +93,7 @@ public final class Function implements ParserListener {
                 return new Metadata(types, generator);
 
             default:
+                LLVMLogger.info("Entering Unknown Block inside Function: " + block);
                 return ParserListener.DEFAULT;
         }
     }
@@ -255,10 +253,6 @@ public final class Function implements ParserListener {
                 createCompareExchange(args, record);
                 break;
 
-            case ATOMICRMW:
-                createAtomicReadModifyWrite(args);
-                break;
-
             default:
                 throw new UnsupportedOperationException("Unsupported Record: " + record);
         }
@@ -268,7 +262,8 @@ public final class Function implements ParserListener {
 
     private void createInvoke(long[] args) {
         int i = 0;
-        final AttributesCodeEntry paramAttr = paramAttributes.getCodeEntry(args[i++]);
+
+        i++; // parameter attributes
         final long ccInfo = args[i++];
 
         final int normalSuccessorBlock = (int) (args[i++]);
@@ -306,7 +301,7 @@ public final class Function implements ParserListener {
             }
         }
         final Type returnType = functionType.getReturnType();
-        instructionBlock.createInvoke(returnType, target, arguments, normalSuccessorBlock, unwindSuccessorBlock, paramAttr);
+        instructionBlock.createInvoke(returnType, target, arguments, normalSuccessorBlock, unwindSuccessorBlock);
         if (!(returnType instanceof VoidType)) {
             symbols.add(returnType);
         }
@@ -372,8 +367,7 @@ public final class Function implements ParserListener {
     private static final int CALL_HAS_EXPLICITTYPE_SHIFT = 15;
 
     private void createFunctionCall(long[] args) {
-        int i = 0;
-        final AttributesCodeEntry paramAttr = paramAttributes.getCodeEntry(args[i++]);
+        int i = 1;
         final long ccinfo = args[i++];
 
         FunctionType functionType = null;
@@ -422,7 +416,7 @@ public final class Function implements ParserListener {
         }
 
         final Type returnType = functionType.getReturnType();
-        instructionBlock.createCall(returnType, callee, arguments, paramAttr);
+        instructionBlock.createCall(returnType, callee, arguments);
 
         if (returnType != VoidType.INSTANCE) {
             symbols.add(returnType);
@@ -585,6 +579,7 @@ public final class Function implements ParserListener {
             // this we have to add an extractelvalue instruction. llvm does the same thing
             createExtractValue(new long[]{1, 0});
             implicitIndices.add(symbols.size() - 1); // register the implicit index
+            LLVMLogger.info("cmpxchg implicitly inserted an extractelement instruction.");
         }
     }
 
@@ -637,23 +632,6 @@ public final class Function implements ParserListener {
         final long synchronizationScope = args[i];
 
         instructionBlock.createAtomicStore(destination, source, align, isVolatile, atomicOrdering, synchronizationScope);
-    }
-
-    private void createAtomicReadModifyWrite(long[] args) {
-        int i = 0;
-
-        final int ptr = getIndex(args[i++]);
-        final Type ptrType = symbols.get(ptr);
-        final int value = getIndex(args[i++]);
-        final int opcode = (int) args[i++];
-        final boolean isVolatile = args[i++] != 0;
-        final long atomicOrdering = args[i++];
-        final long synchronizationScope = args[i];
-
-        final Type type = ((PointerType) ptrType).getPointeeType();
-
-        instructionBlock.createAtomicReadModifyWrite(type, ptr, value, opcode, isVolatile, atomicOrdering, synchronizationScope);
-        symbols.add(type);
     }
 
     private void createBinaryOperation(long[] args) {
