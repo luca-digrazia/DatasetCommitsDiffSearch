@@ -145,7 +145,7 @@ public class MetaUtil {
     }
 
     public static Object unwrap(Object object) {
-        if (StaticObject.isNull(object)) {
+        if (object == StaticObject.NULL) {
             return null;
         }
         if (object instanceof StaticObjectWrapper) {

@@ -14,12 +14,11 @@ import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 public class Target_sun_reflect_NativeMethodAccessorImpl {
     @Intrinsic
     public static Object invoke0(@Type(Method.class) StaticObject method, Object receiver, @Type(Object[].class) StaticObject args) {
-        StaticObject curMethod = method;
         MethodInfo target = null;
         while (target == null) {
-            target = (MethodInfo) ((StaticObjectImpl) curMethod).getHiddenField("$$method_info");
+            target = (MethodInfo) ((StaticObjectImpl) method).getHiddenField("$$method_info");
             if (target == null) {
-                curMethod = (StaticObject) meta(curMethod).declaredField("root").get();
+                method = (StaticObject) meta(method).declaredField("root").get();
             }
         }
         Meta.Method m = meta(target);
