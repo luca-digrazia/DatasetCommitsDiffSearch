@@ -51,7 +51,6 @@ import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
-import org.graalvm.options.OptionType;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Instrument;
 import org.graalvm.polyglot.Language;
@@ -963,7 +962,24 @@ public abstract class Launcher {
                         throw exit();
                     }
                     if (arg.startsWith("--native.")) {
-                        setNativeOption(arg.substring("--native.".length()));
+                        int eqIdx = arg.indexOf('=');
+                        String key;
+                        String value;
+                        if (eqIdx < 0) {
+                            key = arg.substring("--native.".length());
+                            value = null;
+                        } else {
+                            key = arg.substring("--native.".length(), eqIdx);
+                            value = arg.substring(eqIdx + 1);
+                        }
+                        if (value == null) {
+                            value = "true";
+                        }
+                        OptionDescriptor descriptor = RuntimeOptions.getOptions().get(key);
+                        if (descriptor == null) {
+                            throw abort("Unknown native option: " + key);
+                        }
+                        RuntimeOptions.set(key, descriptor.getKey().getType().convert(value));
                     }
                     iterator.remove();
                 } else if (arg.equals("--polyglot")) {
@@ -984,93 +1000,6 @@ public abstract class Launcher {
                 assert jvmArgs.isEmpty();
                 execNativePolyglot(remainingArgs, polyglotOptions);
             }
-        }
-
-        private void setNativeOption(String arg) {
-            if (arg.startsWith("Dgraal.")) {
-                setGraalStyleRuntimeOption(arg.substring("Dgraal.".length()));
-            } else if (arg.startsWith("D")) {
-                setSystemProperty(arg.substring("D".length()));
-            } else if (arg.startsWith("XX:")) {
-                setRuntimeOption(arg.substring("XX:".length()));
-            } else {
-                throw abort("Unrecognized --native option: '--native." + arg + "'. Such arguments should start with '--native.D' or '--native.XX:'");
-            }
-        }
-
-        private void setGraalStyleRuntimeOption(String arg) {
-            int eqIdx = arg.indexOf('=');
-            String key;
-            String value;
-            if (eqIdx < 0) {
-                key = arg;
-                value = "";
-            } else {
-                key = arg.substring(0, eqIdx);
-                value = arg.substring(eqIdx + 1);
-            }
-            OptionDescriptor descriptor = RuntimeOptions.getOptions().get(key);
-            if (descriptor == null) {
-                throw abort("Unknown native option: " + key);
-            }
-            try {
-                RuntimeOptions.set(key, descriptor.getKey().getType().convert(value));
-            } catch (IllegalArgumentException iae) {
-                throw abort("Invalid argument: '--native." + arg + "': " + iae.getMessage());
-            }
-
-        }
-
-        public void setSystemProperty(String arg) {
-            int eqIdx = arg.indexOf('=');
-            String key;
-            String value;
-            if (eqIdx < 0) {
-                key = arg;
-                value = "";
-            } else {
-                key = arg.substring(0, eqIdx);
-                value = arg.substring(eqIdx + 1);
-            }
-            System.setProperty(key, value);
-        }
-
-        public void setRuntimeOption(String arg) {
-            int eqIdx = arg.indexOf('=');
-            String key;
-            Object value;
-            if (arg.startsWith("+") || arg.startsWith("-")) {
-                if (eqIdx >= 0) {
-                    throw abort("Invalid argument: '--native." + arg + "': Use either +/- or =, but not both");
-                }
-                key = arg.substring(1);
-                OptionDescriptor descriptor = RuntimeOptions.getOptions().get(key);
-                if (descriptor == null) {
-                    throw abort("Unknown native option: " + key);
-                }
-                if (!isBooleanOption(descriptor)) {
-                    throw abort("Invalid argument: " + key + " is not a boolean option, set it with --native.XX:" + key + "=...");
-                }
-                value = arg.startsWith("+");
-            } else if (eqIdx >= 0) {
-                key = arg.substring(0, eqIdx);
-                OptionDescriptor descriptor = RuntimeOptions.getOptions().get(key);
-                if (descriptor == null) {
-                    throw abort("Unknown native option: " + key);
-                }
-                try {
-                    value = descriptor.getKey().getType().convert(arg.substring(eqIdx + 1));
-                } catch (IllegalArgumentException iae) {
-                    throw abort("Invalid argument: '--native." + arg + "': " + iae.getMessage());
-                }
-            } else {
-                throw abort("Invalid argument: '--native." + arg + "': prefix boolean options with + or -, suffix other options with =<value>");
-            }
-            RuntimeOptions.set(key, value);
-        }
-
-        private boolean isBooleanOption(OptionDescriptor descriptor) {
-            return descriptor.getKey().getType().equals(OptionType.defaultType(Boolean.class));
         }
 
         private void printJvmHelp() {
@@ -1096,15 +1025,8 @@ public abstract class Launcher {
                 sortedOptions.put(descriptor.getName(), descriptor);
             }
             for (Entry<String, OptionDescriptor> entry : sortedOptions.entrySet()) {
-                OptionDescriptor descriptor = entry.getValue();
-                if (isBooleanOption(descriptor)) {
-                    printOption("--native.XX:\u00b1" + entry.getKey(), descriptor.getHelp());
-                } else {
-                    printOption("--native.XX:" + entry.getKey() + "=<value>", descriptor.getHelp());
-                }
+                printOption("--native." + entry.getKey() + "=<value>", entry.getValue().getHelp());
             }
-            System.out.println("System properties:");
-            printOption("--native.D<property>=<value>", "Sets a system property");
         }
 
         private void execNativePolyglot(List<String> args, Map<String, String> polyglotOptions) {
