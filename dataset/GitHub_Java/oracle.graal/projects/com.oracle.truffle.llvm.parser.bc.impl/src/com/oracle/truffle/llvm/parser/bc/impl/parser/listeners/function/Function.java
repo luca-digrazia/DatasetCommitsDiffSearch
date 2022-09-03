@@ -117,7 +117,7 @@ public class Function implements ParserListener {
          * improved in the future, but for now we simply parse those instructions before checking
          * for an existing InstructionGenerator. Otherwise we would cause an RuntimeException.
          */
-        if (record == FunctionRecord.FUNC_CODE_DEBUG_LOC) {
+        if (record == FunctionRecord.DEBUG_LOC) {
             /*
              * TODO: implement intial debugging support
              *
@@ -138,7 +138,7 @@ public class Function implements ParserListener {
             return;
         }
 
-        if (record == FunctionRecord.FUNC_CODE_DEBUG_LOC_AGAIN) {
+        if (record == FunctionRecord.DEBUG_LOC_AGAIN) {
             return;
         }
 
@@ -375,7 +375,7 @@ public class Function implements ParserListener {
         int opcode = (int) args[i++];
 
         Type type = operandType instanceof VectorType
-                        ? new VectorType(IntegerType.BOOLEAN, ((VectorType) operandType).getElementCount())
+                        ? new VectorType(IntegerType.BOOLEAN, ((VectorType) operandType).getLength())
                         : IntegerType.BOOLEAN;
 
         code.createCompare(type, opcode, lhs, rhs);
@@ -553,7 +553,7 @@ public class Function implements ParserListener {
         int mask = getIndex(args[2]);
 
         Type subtype = ((VectorType) symbols.get(vector1).getType()).getElementType();
-        int length = ((VectorType) symbols.get(mask).getType()).getElementCount();
+        int length = ((VectorType) symbols.get(mask).getType()).getLength();
         Type type = new VectorType(subtype, length);
 
         code.createShuffleVector(type, vector1, vector2, mask);
