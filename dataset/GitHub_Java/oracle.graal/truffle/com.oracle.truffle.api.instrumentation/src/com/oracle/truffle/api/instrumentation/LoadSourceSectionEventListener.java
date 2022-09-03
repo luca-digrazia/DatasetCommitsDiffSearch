@@ -24,32 +24,38 @@
  */
 package com.oracle.truffle.api.instrumentation;
 
+import com.oracle.truffle.api.TruffleRuntime;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.source.SourceSection;
 
 /**
- * Represents a source load event from a {@link LoadSourceEventListener}.
+ * A listener attached by an {@link Instrumenter} to specific locations of a guest language program
+ * to listen to sources section load events.
  *
- * Instances of {@link LoadSourceEvent} should be neither stored, cached nor hashed. The equality
- * and hashing behavior is undefined.
- *
- * @see LoadSourceEventListener
  * @since 0.15
  */
-public final class LoadSourceEvent {
-
-    private final Source source;
-
-    LoadSourceEvent(Source source) {
-        this.source = source;
-    }
+public interface LoadSourceSectionEventListener {
 
     /**
-     * Returns the loaded source that caused this event.
+     * Invoked whenever a new {@link SourceSection source section} is loaded. The listener might be
+     * notified for one source section multiple times but never with the same instrumented node. The
+     * order in which multiple source section event listeners are notified matches the order they
+     * are
+     * {@link Instrumenter#attachLoadSourceListener(SourceSectionFilter, LoadSourceEventListener, boolean)
+     * attached}.
      *
+     * <b>Implementation Note:</b> Source load events are notified when the guest language
+     * implementation uses a new {@link Source source} by invoking
+     * {@link TruffleRuntime#createCallTarget(RootNode)} with a root node that uses a new source in
+     * {@link Node#getSourceSection()}. It assumes that all nodes of an AST have the same
+     * {@link Source source} as their root.
+     * </p>
+     *
+     * @param event an event with context information
      * @since 0.15
      */
-    public Source getSource() {
-        return source;
-    }
+    void onLoad(LoadSourceSectionEvent event);
 
 }

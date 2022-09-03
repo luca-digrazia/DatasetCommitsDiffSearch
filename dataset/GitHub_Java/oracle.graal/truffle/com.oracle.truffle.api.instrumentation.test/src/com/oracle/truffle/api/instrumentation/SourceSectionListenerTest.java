@@ -156,7 +156,7 @@ public class SourceSectionListenerTest extends AbstractInstrumentationTest {
             env.registerService(this);
         }
 
-        private class SourceSectionListener implements LoadSourceSectionListener {
+        private class SourceSectionListener implements LoadSourceSectionEventListener {
 
             private final List<LoadSourceSectionEvent> events;
 
@@ -189,7 +189,7 @@ public class SourceSectionListenerTest extends AbstractInstrumentationTest {
 
         @Override
         protected void onCreate(Env env) {
-            env.getInstrumenter().attachLoadSourceSectionListener(SourceSectionFilter.newBuilder().build(), new LoadSourceSectionListener() {
+            env.getInstrumenter().attachLoadSourceSectionListener(SourceSectionFilter.newBuilder().build(), new LoadSourceSectionEventListener() {
                 public void onLoad(LoadSourceSectionEvent event) {
                     throw new TestLoadSourceSectionExceptionClass();
                 }
