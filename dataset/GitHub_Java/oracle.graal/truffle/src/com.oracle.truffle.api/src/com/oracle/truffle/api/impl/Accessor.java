@@ -30,7 +30,6 @@ import java.lang.reflect.Type;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.locks.Lock;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
@@ -94,8 +93,6 @@ public abstract class Accessor {
         public abstract int getRootNodeBits(RootNode root);
 
         public abstract void setRootNodeBits(RootNode root, int bits);
-
-        public abstract Lock getLock(Node node);
     }
 
     public abstract static class DumpSupport {
@@ -108,12 +105,6 @@ public abstract class Accessor {
         public abstract CallTarget canHandleTarget(Object access);
 
         public abstract boolean isTruffleObject(Object value);
-
-        public abstract void checkInteropType(Object result);
-
-        public abstract Object createDefaultNodeObject(Node node);
-
-        public abstract boolean isValidNodeObject(Object obj);
     }
 
     public abstract static class JavaInteropSupport {
@@ -241,7 +232,7 @@ public abstract class Accessor {
 
         public abstract Iterable<Scope> createDefaultTopScope(TruffleLanguage<?> language, Object context, Object global);
 
-        public abstract RuntimeException wrapHostException(Object languageContext, Throwable exception);
+        public abstract RuntimeException wrapHostException(Throwable exception);
 
         public abstract RootNode wrapHostBoundary(ExecutableNode executableNode, Supplier<String> name);
 
@@ -274,9 +265,6 @@ public abstract class Accessor {
         public abstract <T> T getOrCreateRuntimeData(Object sourceVM, Supplier<T> constructor);
 
         public abstract String getValueInfo(Object languageContext, Object value);
-
-        public abstract Class<? extends TruffleLanguage<?>> getLanguageClass(LanguageInfo language);
-
     }
 
     public abstract static class LanguageSupport {

@@ -250,8 +250,7 @@ public final class NodeUtil {
     }
 
     /*
-     * Slow version of child adoption. Unlike the adoptChildrenHelper this method traverses (and
-     * counts) all nodes, i.e. including the ones already adopted.
+     * Slow version of child adoption.
      */
     static int adoptChildrenAndCountHelper(Node currentNode) {
         int count = 0;

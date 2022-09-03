@@ -246,7 +246,7 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     int adoptChildrenAndCount() {
-        CompilerAsserts.neverPartOfCompilation();
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         return 1 + NodeUtil.adoptChildrenAndCountHelper(this);
     }
 
