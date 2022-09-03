@@ -38,9 +38,9 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
  */
 public class StringSubstitutionTestBase extends MethodSubstitutionTest {
 
-    protected ResolvedJavaMethod realMethod = null;
-    protected ResolvedJavaMethod testMethod = null;
-    protected InstalledCode testCode = null;
+    private ResolvedJavaMethod realMethod = null;
+    private ResolvedJavaMethod testMethod = null;
+    private InstalledCode testCode = null;
 
     protected final String[] testData = new String[]{
                     "A", "\uFF21", "AB", "A", "a", "Ab", "AA", "\uFF21",
