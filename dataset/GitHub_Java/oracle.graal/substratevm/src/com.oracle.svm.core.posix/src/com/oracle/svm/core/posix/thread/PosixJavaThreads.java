@@ -28,22 +28,29 @@ import static com.oracle.svm.core.posix.headers.Pthread.PTHREAD_STACK_MIN;
 import static com.oracle.svm.core.posix.headers.Pthread.pthread_attr_destroy;
 import static com.oracle.svm.core.posix.headers.Pthread.pthread_mutex_init;
 
+import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.Isolate;
 import org.graalvm.nativeimage.ObjectHandle;
+import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platform.HOSTED_ONLY;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
+import org.graalvm.nativeimage.c.function.CEntryPointContext;
 import org.graalvm.nativeimage.c.function.CEntryPointLiteral;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
+import org.graalvm.nativeimage.c.struct.RawField;
+import org.graalvm.nativeimage.c.struct.RawStructure;
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
+import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordBase;
 import org.graalvm.word.WordFactory;
 
@@ -65,9 +72,9 @@ import com.oracle.svm.core.posix.headers.Errno;
 import com.oracle.svm.core.posix.headers.LibC;
 import com.oracle.svm.core.posix.headers.Pthread;
 import com.oracle.svm.core.posix.headers.Pthread.pthread_attr_t;
+import com.oracle.svm.core.posix.headers.darwin.DarwinPthread;
 import com.oracle.svm.core.posix.headers.Sched;
 import com.oracle.svm.core.posix.headers.Time;
-import com.oracle.svm.core.posix.headers.darwin.DarwinPthread;
 import com.oracle.svm.core.posix.headers.linux.LinuxPthread;
 import com.oracle.svm.core.posix.pthread.PthreadConditionUtils;
 import com.oracle.svm.core.thread.JavaThreads;
@@ -76,6 +83,11 @@ import com.oracle.svm.core.thread.ParkEvent.ParkEventFactory;
 import com.oracle.svm.core.util.VMError;
 
 public final class PosixJavaThreads extends JavaThreads {
+
+    @Fold
+    public static PosixJavaThreads singleton() {
+        return (PosixJavaThreads) JavaThreads.singleton();
+    }
 
     @SuppressFBWarnings(value = "BC", justification = "Cast for @TargetClass")
     private static Target_java_lang_Thread toTarget(Thread thread) {
@@ -87,7 +99,7 @@ public final class PosixJavaThreads extends JavaThreads {
     }
 
     @Override
-    protected void doStartThread(Thread thread, long stackSize) {
+    protected void start0(Thread thread, long stackSize) {
         pthread_attr_t attributes = StackValue.get(pthread_attr_t.class);
         PosixUtils.checkStatusIs0(
                         Pthread.pthread_attr_init(attributes),
@@ -112,7 +124,12 @@ public final class PosixJavaThreads extends JavaThreads {
                         "PosixJavaThreads.start0: pthread_attr_setguardsize");
 
         ThreadStartData startData = UnmanagedMemory.malloc(SizeOf.get(ThreadStartData.class));
-        prepareStartData(thread, startData);
+        startData.setIsolate(CEntryPointContext.getCurrentIsolate());
+        startData.setThreadHandle(ObjectHandles.getGlobal().create(thread));
+
+        if (!thread.isDaemon()) {
+            JavaThreads.singleton().signalNonDaemonThreadStart();
+        }
 
         Pthread.pthread_tPointer newThread = StackValue.get(Pthread.pthread_tPointer.class);
         PosixUtils.checkStatusIs0(
@@ -141,32 +158,20 @@ public final class PosixJavaThreads extends JavaThreads {
      * Failures are ignored.
      */
     @Override
-    protected void setNativeName(Thread thread, String name) {
-        if (!hasThreadIdentifier(thread)) {
-            /*
-             * The thread was not started from Java code, but started from C code and attached
-             * manually to SVM. We do not want to interfere with such threads.
-             */
-            return;
-        }
-
-        if (IsDefined.isDarwin() && thread != Thread.currentThread()) {
-            /* Darwin only allows setting the name of the current thread. */
-            return;
-        }
-
-        /* Use at most 15 characters from the right end of the name. */
-        final int startIndex = Math.max(0, name.length() - 15);
-        final String pthreadName = name.substring(startIndex);
-        assert pthreadName.length() < 16 : "thread name for pthread has a maximum length of 16 characters including the terminating 0";
-        try (CCharPointerHolder threadNameHolder = CTypeConversion.toCString(pthreadName)) {
-            if (IsDefined.isLinux()) {
-                LinuxPthread.pthread_setname_np(getPthreadIdentifier(thread), threadNameHolder.get());
-            } else if (IsDefined.isDarwin()) {
-                assert thread == Thread.currentThread() : "Darwin only allows setting the name of the current thread";
-                DarwinPthread.pthread_setname_np(threadNameHolder.get());
-            } else {
-                VMError.unsupportedFeature("PosixJavaThreads.setNativeName on unknown OS");
+    protected void setNativeName(String name) {
+        if (hasThreadIdentifier(Thread.currentThread())) {
+            /* Use at most 15 characters from the right end of the name. */
+            final int startIndex = Math.max(0, name.length() - 15);
+            final String pthreadName = name.substring(startIndex);
+            assert pthreadName.length() < 16 : "thread name for pthread has a maximum length of 16 characters including the terminating 0";
+            try (CCharPointerHolder threadNameHolder = CTypeConversion.toCString(pthreadName)) {
+                if (IsDefined.isLinux()) {
+                    LinuxPthread.pthread_setname_np(getPthreadIdentifier(Thread.currentThread()), threadNameHolder.get());
+                } else if (IsDefined.isDarwin()) {
+                    DarwinPthread.pthread_setname_np(threadNameHolder.get());
+                } else {
+                    VMError.unsupportedFeature("PosixJavaThreads.setNativeName on unknown OS");
+                }
             }
         }
     }
@@ -174,6 +179,22 @@ public final class PosixJavaThreads extends JavaThreads {
     @Override
     protected void yield() {
         Sched.sched_yield();
+    }
+
+    @RawStructure
+    interface ThreadStartData extends PointerBase {
+
+        @RawField
+        ObjectHandle getThreadHandle();
+
+        @RawField
+        void setThreadHandle(ObjectHandle handle);
+
+        @RawField
+        Isolate getIsolate();
+
+        @RawField
+        void setIsolate(Isolate vm);
     }
 
     private static final CEntryPointLiteral<CFunctionPointer> pthreadStartRoutine = CEntryPointLiteral.create(PosixJavaThreads.class, "pthreadStartRoutine", ThreadStartData.class);
@@ -196,18 +217,53 @@ public final class PosixJavaThreads extends JavaThreads {
         ObjectHandle threadHandle = data.getThreadHandle();
         UnmanagedMemory.free(data);
 
-        threadStartRoutine(threadHandle);
+        Thread thread = ObjectHandles.getGlobal().get(threadHandle);
+
+        boolean status = singleton().assignJavaThread(thread, false);
+        VMError.guarantee(status, "currentThread already initialized");
+
+        /*
+         * Destroy the handle only after setting currentThread, since the lock used by destroy
+         * requires the current thread.
+         */
+        ObjectHandles.getGlobal().destroy(threadHandle);
+
+        /* Complete the initialization of the thread, now that it is (nearly) running. */
+        setPthreadIdentifier(thread, Pthread.pthread_self());
+        singleton().setNativeName(thread.getName());
+
+        singleton().noteThreadStart(thread);
+
+        try {
+            thread.run();
+        } catch (Throwable ex) {
+            dispatchUncaughtException(thread, ex);
+        } finally {
+            exit(thread);
+            singleton().noteThreadFinish(thread);
+        }
 
         return WordFactory.nullPointer();
     }
 
-    @Override
-    protected void noteThreadStart(Thread thread) {
-        /* Complete the initialization of the thread, now that it is (nearly) running. */
-        setPthreadIdentifier(thread, Pthread.pthread_self());
-        setNativeName(thread, thread.getName());
+    private void noteThreadStart(Thread thread) {
+        totalThreads.incrementAndGet();
+        int lThreads = liveThreads.incrementAndGet();
+        peakThreads.set(Integer.max(peakThreads.get(), lThreads));
+        if (thread.isDaemon()) {
+            daemonThreads.incrementAndGet();
+        } else {
+            nonDaemonThreads.incrementAndGet();
+        }
+    }
 
-        super.noteThreadStart(thread);
+    private void noteThreadFinish(Thread thread) {
+        liveThreads.decrementAndGet();
+        if (thread.isDaemon()) {
+            daemonThreads.decrementAndGet();
+        } else {
+            nonDaemonThreads.decrementAndGet();
+        }
     }
 }
 
@@ -217,7 +273,7 @@ final class Target_java_lang_Thread {
     @Inject @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)//
     boolean hasPthreadIdentifier;
 
-    /** Every thread started by {@link PosixJavaThreads#doStartThread} has an opaque pthread_t. */
+    /** Every thread started by {@link PosixJavaThreads#start0} has an opaque pthread_t. */
     @Inject @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)//
     Pthread.pthread_t pthreadIdentifier;
 }

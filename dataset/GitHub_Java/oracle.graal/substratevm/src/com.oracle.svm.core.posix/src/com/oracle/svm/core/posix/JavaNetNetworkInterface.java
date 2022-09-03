@@ -654,7 +654,7 @@ public class JavaNetNetworkInterface {
         // 899     int addr_size;
         int addr_size;
         // 900     int flags = 0;
-        CIntPointer flags_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+        CIntPointer flags_Pointer = StackValue.get(CIntPointer.class);
         flags_Pointer.write(0);
         // 901
         // 902     /*
@@ -921,7 +921,7 @@ public class JavaNetNetworkInterface {
             // 1068         if (errno != EPROTONOSUPPORT) {
             if (Errno.errno() != Errno.EPROTONOSUPPORT()) {
                 // 1069             NET_ThrowByNameWithLastError(env , JNU_JAVANETPKG "SocketException", "Socket creation failed");
-                throw new SocketException(PosixUtils.lastErrorString("Socket creation failed"));
+                throw new SocketException("Socket creation failed");
             }
             // 1071         return -1;
         }

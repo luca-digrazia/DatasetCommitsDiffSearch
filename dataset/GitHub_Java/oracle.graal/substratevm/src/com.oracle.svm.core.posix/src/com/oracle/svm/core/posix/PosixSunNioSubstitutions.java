@@ -27,6 +27,7 @@ package com.oracle.svm.core.posix;
 import java.io.IOException;
 
 import org.graalvm.nativeimage.StackValue;
+import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
@@ -103,7 +104,7 @@ public final class PosixSunNioSubstitutions {
         @Substitute
         static void interrupt(int fd) throws IOException {
             // 096     int fakebuf[1];
-            CIntPointer fakebuf = StackValue.get(1, CIntPointer.class);
+            CIntPointer fakebuf = StackValue.get(1, SizeOf.get(CIntPointer.class));
             // 097     fakebuf[0] = 1;
             fakebuf.write(0, 1);
             // 098     if (write(fd, fakebuf, 1) < 0) {

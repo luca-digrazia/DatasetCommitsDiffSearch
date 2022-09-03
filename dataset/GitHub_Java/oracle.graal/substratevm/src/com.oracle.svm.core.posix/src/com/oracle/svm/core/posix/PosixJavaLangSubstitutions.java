@@ -54,17 +54,15 @@ import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.LibCHelper;
 import com.oracle.svm.core.SubstrateOptions;
+import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.annotate.InjectAccessors;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
-import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.heap.NoAllocationVerifier;
-import com.oracle.svm.core.jdk.JDK8OrEarlier;
-import com.oracle.svm.core.jdk.JDK9OrLater;
 import com.oracle.svm.core.posix.headers.Dirent;
 import com.oracle.svm.core.posix.headers.Dirent.DIR;
 import com.oracle.svm.core.posix.headers.Dirent.dirent;
@@ -160,11 +158,11 @@ final class Target_java_lang_ProcessEnvironment {
                 int valLength = (int) LibC.strlen(valBeg).rawValue();
 
                 byte[] var = new byte[varLength];
-                CTypeConversion.asByteBuffer(varBeg, varLength).get(var);
+                SubstrateUtil.wrapAsByteBuffer(varBeg, varLength).get(var);
                 result[2 * j] = var;
 
                 byte[] val = new byte[valLength];
-                CTypeConversion.asByteBuffer(valBeg, valLength).get(val);
+                SubstrateUtil.wrapAsByteBuffer(valBeg, valLength).get(val);
                 result[2 * j + 1] = val;
 
                 j++;
@@ -203,7 +201,7 @@ final class Target_java_lang_ProcessEnvironment_Value {
     public static native Target_java_lang_ProcessEnvironment_Value valueOf(byte[] bytes);
 }
 
-@TargetClass(className = "java.lang.UNIXProcess", onlyWith = JDK8OrEarlier.class)
+@TargetClass(className = "java.lang.UNIXProcess")
 @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Target_java_lang_UNIXProcess {
 
@@ -409,36 +407,6 @@ final class Target_java_lang_UNIXProcess {
     }
 }
 
-@TargetClass(className = "java.lang.ProcessImpl")
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
-final class Target_java_lang_ProcessImpl {
-
-    @Substitute //
-    @TargetElement(onlyWith = JDK9OrLater.class) //
-    @SuppressWarnings({"unused", "static-method"})
-    private /* native */ int forkAndExec(
-                    int mode,
-                    byte[] helperpath,
-                    byte[] prog,
-                    byte[] argBlock,
-                    int argc,
-                    byte[] envBlock,
-                    int envc,
-                    byte[] dir,
-                    int[] fds,
-                    boolean redirectErrorStream)
-                    throws IOException {
-        throw VMError.unsupportedFeature("JDK9OrLater: Target_java_lang_ProcessImpl.forkAndExec");
-    }
-
-    @Substitute //
-    @TargetElement(onlyWith = JDK9OrLater.class) //
-    private static /* native */ void init() {
-        throw VMError.unsupportedFeature("JDK9OrLater: Target_java_lang_ProcessImpl.init");
-    }
-}
-
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Java_lang_UNIXProcess_Supplement {
 
     static final ThreadFactory reaperFactory = new ThreadFactory() {
@@ -696,7 +664,7 @@ final class Java_lang_UNIXProcess_Supplement {
     }
 }
 
-@TargetClass(className = "java.lang.UNIXProcess", innerClass = "ProcessPipeInputStream", onlyWith = JDK8OrEarlier.class)
+@TargetClass(className = "java.lang.UNIXProcess", innerClass = "ProcessPipeInputStream")
 @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Target_java_lang_UNIXProcess_ProcessPipeInputStream {
     @Alias
@@ -707,7 +675,7 @@ final class Target_java_lang_UNIXProcess_ProcessPipeInputStream {
     native void processExited();
 }
 
-@TargetClass(className = "java.lang.UNIXProcess", innerClass = "ProcessPipeOutputStream", onlyWith = JDK8OrEarlier.class)
+@TargetClass(className = "java.lang.UNIXProcess", innerClass = "ProcessPipeOutputStream")
 @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Target_java_lang_UNIXProcess_ProcessPipeOutputStream {
     @Alias
@@ -748,7 +716,6 @@ final class Target_java_lang_System {
 }
 
 @TargetClass(className = "java.lang.Shutdown")
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Target_java_lang_Shutdown {
 
     @Substitute
@@ -773,7 +740,6 @@ final class Target_java_lang_Runtime {
 }
 
 /** Dummy class to have a class with the file's name. */
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 public final class PosixJavaLangSubstitutions {
 
     /** Private constructor: No instances. */
