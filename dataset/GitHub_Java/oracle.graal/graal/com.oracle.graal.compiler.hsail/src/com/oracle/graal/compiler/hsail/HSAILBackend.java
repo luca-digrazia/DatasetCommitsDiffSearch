@@ -51,8 +51,8 @@ public class HSAILBackend extends Backend {
     private Map<String, String> paramTypeMap = new HashMap<>();
     private Buffer codeBuffer;
 
-    public HSAILBackend(MetaAccessProvider metaAccess, CodeCacheProvider codeCache, TargetDescription target) {
-        super(metaAccess, codeCache, target);
+    public HSAILBackend(CodeCacheProvider runtime, TargetDescription target) {
+        super(runtime, target);
         paramTypeMap.put("HotSpotResolvedPrimitiveType<int>", "s32");
         paramTypeMap.put("HotSpotResolvedPrimitiveType<float>", "f32");
         paramTypeMap.put("HotSpotResolvedPrimitiveType<double>", "f64");
@@ -60,21 +60,13 @@ public class HSAILBackend extends Backend {
     }
 
     @Override
-    public boolean shouldAllocateRegisters() {
-        return true;
-    }
-
-    /**
-     * Use the HSAIL register set when the compilation target is HSAIL.
-     */
-    @Override
     public FrameMap newFrameMap() {
-        return new HSAILFrameMap(getCodeCache(), target, new HSAILRegisterConfig());
+        return new HSAILFrameMap(runtime(), target, runtime().lookupRegisterConfig());
     }
 
     @Override
     public LIRGenerator newLIRGenerator(StructuredGraph graph, FrameMap frameMap, CallingConvention cc, LIR lir) {
-        return new HSAILLIRGenerator(graph, getMetaAccess(), getCodeCache(), target, frameMap, cc, lir);
+        return new HSAILLIRGenerator(graph, runtime(), target, frameMap, cc, lir);
     }
 
     public String getPartialCodeString() {
@@ -104,7 +96,7 @@ public class HSAILBackend extends Backend {
         FrameMap frameMap = lirGen.frameMap;
         AbstractAssembler masm = new HSAILAssembler(target);
         HotSpotFrameContext frameContext = new HotSpotFrameContext();
-        TargetMethodAssembler tasm = new TargetMethodAssembler(target, getCodeCache(), frameMap, masm, frameContext, compilationResult);
+        TargetMethodAssembler tasm = new TargetMethodAssembler(target, runtime(), frameMap, masm, frameContext, compilationResult);
         tasm.setFrameSize(frameMap.frameSize());
         return tasm;
     }
@@ -142,12 +134,12 @@ public class HSAILBackend extends Backend {
         int pidx = 0;
         for (int i = 0; i < totalParamCount; i++) {
             if (i == 0 && !isStatic) {
-                paramtypes[i] = getMetaAccess().lookupJavaType(Object.class);
+                paramtypes[i] = runtime().lookupJavaType(Object.class);
                 paramNames[i] = "%_this";
             } else if (i < nonConstantParamCount) {
                 if (isObjectLambda && (i == (nonConstantParamCount))) {
                     // Set up the gid register mapping.
-                    paramtypes[i] = getMetaAccess().lookupJavaType(int.class);
+                    paramtypes[i] = runtime().lookupJavaType(int.class);
                     paramNames[i] = "%_gid";
                 } else {
                     paramtypes[i] = signature.getParameterType(pidx++, null);

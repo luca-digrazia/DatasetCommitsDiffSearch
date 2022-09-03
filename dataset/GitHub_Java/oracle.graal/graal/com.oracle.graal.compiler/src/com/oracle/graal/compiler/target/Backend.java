@@ -29,33 +29,22 @@ import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.util.*;
 
 /**
  * The {@code Backend} class represents a compiler backend for Graal.
  */
 public abstract class Backend {
 
-    private final Providers providers;
+    private final CodeCacheProvider runtime;
+    public final TargetDescription target;
 
-    protected Backend(Providers providers) {
-        this.providers = providers;
+    protected Backend(CodeCacheProvider runtime, TargetDescription target) {
+        this.runtime = runtime;
+        this.target = target;
     }
 
-    public Providers getProviders() {
-        return providers;
-    }
-
-    public CodeCacheProvider getCodeCache() {
-        return providers.getCodeCache();
-    }
-
-    public ForeignCallsProvider getForeignCalls() {
-        return providers.getForeignCalls();
-    }
-
-    public TargetDescription getTarget() {
-        return providers.getCodeCache().getTarget();
+    public CodeCacheProvider runtime() {
+        return runtime;
     }
 
     public abstract FrameMap newFrameMap();
@@ -65,8 +54,6 @@ public abstract class Backend {
     protected abstract AbstractAssembler createAssembler(FrameMap frameMap);
 
     public abstract TargetMethodAssembler newAssembler(LIRGenerator lirGen, CompilationResult compilationResult);
-
-    public abstract boolean shouldAllocateRegisters();
 
     /**
      * Emits the code for a given graph.
