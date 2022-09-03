@@ -34,13 +34,13 @@ import com.oracle.graal.nodes.type.*;
 @NodeInfo(shortName = "+")
 public class IntegerAddNode extends IntegerArithmeticNode implements Canonicalizable, NarrowableArithmeticNode {
 
-    public IntegerAddNode(ValueNode x, ValueNode y) {
-        super(StampTool.add(x.stamp(), y.stamp()), x, y);
+    public IntegerAddNode(Stamp stamp, ValueNode x, ValueNode y) {
+        super(stamp, x, y);
     }
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(StampTool.add(getX().stamp(), getY().stamp()));
+        return updateStamp(StampTool.add(x().stamp(), y().stamp()));
     }
 
     @Override
@@ -51,29 +51,29 @@ public class IntegerAddNode extends IntegerArithmeticNode implements Canonicaliz
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (getX().isConstant() && !getY().isConstant()) {
-            return graph().unique(new IntegerAddNode(getY(), getX()));
+        if (x().isConstant() && !y().isConstant()) {
+            return graph().unique(new IntegerAddNode(stamp(), y(), x()));
         }
-        if (getX() instanceof IntegerSubNode) {
-            IntegerSubNode sub = (IntegerSubNode) getX();
-            if (sub.getY() == getY()) {
+        if (x() instanceof IntegerSubNode) {
+            IntegerSubNode sub = (IntegerSubNode) x();
+            if (sub.y() == y()) {
                 // (a - b) + b
-                return sub.getX();
+                return sub.x();
             }
         }
-        if (getY() instanceof IntegerSubNode) {
-            IntegerSubNode sub = (IntegerSubNode) getY();
-            if (sub.getY() == getX()) {
+        if (y() instanceof IntegerSubNode) {
+            IntegerSubNode sub = (IntegerSubNode) y();
+            if (sub.y() == x()) {
                 // b + (a - b)
-                return sub.getX();
+                return sub.x();
             }
         }
-        if (getX().isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(getX().asConstant(), getY().asConstant()), graph());
-        } else if (getY().isConstant()) {
-            long c = getY().asConstant().asLong();
+        if (x().isConstant()) {
+            return ConstantNode.forPrimitive(evalConst(x().asConstant(), y().asConstant()), graph());
+        } else if (y().isConstant()) {
+            long c = y().asConstant().asLong();
             if (c == 0) {
-                return getX();
+                return x();
             }
             // canonicalize expressions like "(a + 1) + 2"
             BinaryNode reassociated = BinaryNode.reassociate(this, ValueNode.isConstantPredicate());
@@ -81,20 +81,20 @@ public class IntegerAddNode extends IntegerArithmeticNode implements Canonicaliz
                 return reassociated;
             }
         }
-        if (getX() instanceof NegateNode) {
-            return IntegerArithmeticNode.sub(graph(), getY(), ((NegateNode) getX()).getValue());
-        } else if (getY() instanceof NegateNode) {
-            return IntegerArithmeticNode.sub(graph(), getX(), ((NegateNode) getY()).getValue());
+        if (x() instanceof NegateNode) {
+            return IntegerArithmeticNode.sub(graph(), y(), ((NegateNode) x()).getValue());
+        } else if (y() instanceof NegateNode) {
+            return IntegerArithmeticNode.sub(graph(), x(), ((NegateNode) y()).getValue());
         }
         return this;
     }
 
     @Override
     public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        Value op1 = builder.operand(getX());
-        assert op1 != null : getX() + ", this=" + this;
-        Value op2 = builder.operand(getY());
-        if (!getY().isConstant() && !FloatAddNode.livesLonger(this, getY(), builder)) {
+        Value op1 = builder.operand(x());
+        assert op1 != null : x() + ", this=" + this;
+        Value op2 = builder.operand(y());
+        if (!y().isConstant() && !FloatAddNode.livesLonger(this, y(), builder)) {
             Value op = op1;
             op1 = op2;
             op2 = op;

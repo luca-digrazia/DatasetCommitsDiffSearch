@@ -22,30 +22,15 @@
  */
 package com.oracle.graal.phases.common;
 
-import com.oracle.graal.graph.Graph.NodeEventScope;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.util.*;
-import com.oracle.graal.phases.tiers.*;
 
-public class CleanTypeProfileProxyPhase extends BasePhase<PhaseContext> {
-
-    private CanonicalizerPhase canonicalizer;
-
-    public CleanTypeProfileProxyPhase(CanonicalizerPhase canonicalizer) {
-        this.canonicalizer = canonicalizer;
-    }
+public class CleanTypeProfileProxyPhase extends Phase {
 
     @Override
-    protected void run(StructuredGraph graph, PhaseContext context) {
-        HashSetNodeEventListener listener = new HashSetNodeEventListener();
-        try (NodeEventScope s = graph.trackNodeEvents(listener)) {
-            for (TypeProfileProxyNode proxy : graph.getNodes(TypeProfileProxyNode.class)) {
-                graph.replaceFloating(proxy, proxy.getValue());
-            }
-        }
-        if (!listener.getNodes().isEmpty()) {
-            canonicalizer.applyIncremental(graph, context, listener.getNodes());
+    protected void run(StructuredGraph graph) {
+        for (TypeProfileProxyNode proxy : graph.getNodes(TypeProfileProxyNode.class)) {
+            graph.replaceFloating(proxy, proxy.getValue());
         }
         assert graph.getNodes(TypeProfileProxyNode.class).count() == 0;
     }

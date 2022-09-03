@@ -25,6 +25,7 @@ package com.oracle.graal.nodes.calc;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
@@ -77,20 +78,20 @@ public class ZeroExtendNode extends IntegerConvertNode {
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        ValueNode ret = canonicalConvert(forValue);
-        if (ret != this) {
+    public Node canonical(CanonicalizerTool tool) {
+        ValueNode ret = canonicalConvert();
+        if (ret != null) {
             return ret;
         }
 
-        if (forValue instanceof ZeroExtendNode) {
+        if (getValue() instanceof ZeroExtendNode) {
             // xxxx -(zero-extend)-> 0000 xxxx -(zero-extend)-> 00000000 0000xxxx
             // ==> xxxx -(zero-extend)-> 00000000 0000xxxx
-            ZeroExtendNode other = (ZeroExtendNode) forValue;
-            return new ZeroExtendNode(other.getValue(), getResultBits());
+            ZeroExtendNode other = (ZeroExtendNode) getValue();
+            return graph().unique(new ZeroExtendNode(other.getValue(), getResultBits()));
         }
-        if (forValue instanceof NarrowNode) {
-            NarrowNode narrow = (NarrowNode) forValue;
+        if (getValue() instanceof NarrowNode) {
+            NarrowNode narrow = (NarrowNode) getValue();
             Stamp inputStamp = narrow.getValue().stamp();
             if (inputStamp instanceof IntegerStamp && inputStamp.isCompatible(stamp())) {
                 IntegerStamp istamp = (IntegerStamp) inputStamp;

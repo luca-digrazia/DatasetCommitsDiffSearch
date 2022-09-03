@@ -46,8 +46,8 @@ import com.oracle.graal.nodes.util.*;
  * Such evaluator comes handy when visiting a {@link com.oracle.graal.nodes.FixedNode} N, just
  * before updating the state for N. At the pre-state, an {@link EquationalReasoner} can be used to
  * reduce N's inputs (actually only those inputs of Value and Condition
- * {@link com.oracle.graal.nodeinfo.InputType InputType}). For an explanation of where it's
- * warranted to replace "old input" with "reduced input", see the inline comments in method
+ * {@link com.oracle.graal.graph.InputType InputType}). For an explanation of where it's warranted
+ * to replace "old input" with "reduced input", see the inline comments in method
  * {@link EquationalReasoner#deverbosify(com.oracle.graal.graph.Node n) deverbosify(Node n)}
  * </p>
  *
@@ -332,20 +332,11 @@ public final class EquationalReasoner {
         }
         FlowUtil.inferStampAndCheck(changed);
         added.add(changed);
-
-        if (changed instanceof Canonicalizable) {
-            ValueNode canon = (ValueNode) ((Canonicalizable) changed).canonical(tool);
-            if (canon != null && !canon.isAlive()) {
-                assert !canon.isDeleted();
-                canon = graph.addOrUniqueWithInputs(canon);
-            }
-            // might be already in `added`, no problem adding it again.
-            added.add(canon);
-            rememberSubstitution(f, canon);
-            return canon;
-        } else {
-            return changed;
-        }
+        ValueNode canon = (ValueNode) changed.canonical(tool);
+        // might be already in `added`, no problem adding it again.
+        added.add(canon);
+        rememberSubstitution(f, canon);
+        return canon;
     }
 
     /**
@@ -454,7 +445,7 @@ public final class EquationalReasoner {
      *
      */
     private LogicNode baseCaseInstanceOfNode(InstanceOfNode instanceOf) {
-        ValueNode scrutinee = GraphUtil.unproxify(instanceOf.getValue());
+        ValueNode scrutinee = GraphUtil.unproxify(instanceOf.object());
         if (!FlowUtil.hasLegalObjectStamp(scrutinee)) {
             return instanceOf;
         }
@@ -479,7 +470,7 @@ public final class EquationalReasoner {
      *
      */
     private FloatingNode baseCaseIsNullNode(IsNullNode isNu) {
-        ValueNode object = isNu.getValue();
+        ValueNode object = isNu.object();
         if (!FlowUtil.hasLegalObjectStamp(object)) {
             return isNu;
         }
@@ -498,11 +489,11 @@ public final class EquationalReasoner {
      *         otherwise the unmodified argument.
      */
     private LogicNode baseCaseObjectEqualsNode(ObjectEqualsNode equals) {
-        if (!FlowUtil.hasLegalObjectStamp(equals.getX()) || !FlowUtil.hasLegalObjectStamp(equals.getY())) {
+        if (!FlowUtil.hasLegalObjectStamp(equals.x()) || !FlowUtil.hasLegalObjectStamp(equals.y())) {
             return equals;
         }
-        ValueNode x = GraphUtil.unproxify(equals.getX());
-        ValueNode y = GraphUtil.unproxify(equals.getY());
+        ValueNode x = GraphUtil.unproxify(equals.x());
+        ValueNode y = GraphUtil.unproxify(equals.y());
         if (state.isNull(x) && state.isNonNull(y) || state.isNonNull(x) && state.isNull(y)) {
             metricObjectEqualsRemoved.increment();
             return falseConstant;
@@ -664,7 +655,7 @@ public final class EquationalReasoner {
         try (Debug.Scope s = Debug.scope("Downcast", payload)) {
             assert payload != anchor : payload.graph().toString();
             metricDowncasting.increment();
-            PiNode result = graph.unique(PiNode.create(payload, newStamp, anchor.asNode()));
+            PiNode result = graph.unique(new PiNode(payload, newStamp, anchor.asNode()));
             // we've possibly got a new node in the graph --- bookkeeping is in order.
             added.add(result);
             if (remember) {

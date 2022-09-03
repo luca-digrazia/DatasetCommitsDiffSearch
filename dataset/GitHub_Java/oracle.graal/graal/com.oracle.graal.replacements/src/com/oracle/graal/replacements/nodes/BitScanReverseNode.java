@@ -24,32 +24,29 @@ package com.oracle.graal.replacements.nodes;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 
-public class BitScanReverseNode extends UnaryNode implements LIRLowerable {
+public class BitScanReverseNode extends UnaryNode implements LIRLowerable, Canonicalizable {
 
     public BitScanReverseNode(ValueNode value) {
         super(StampFactory.forInteger(Kind.Int, 0, ((PrimitiveStamp) value.stamp()).getBits()), value);
-        assert value.getKind() == Kind.Int || value.getKind() == Kind.Long;
     }
 
     @Override
-    public boolean inferStamp() {
-        IntegerStamp valueStamp = (IntegerStamp) getValue().stamp();
-        int min;
-        int max;
-        long mask = IntegerStamp.defaultMask(valueStamp.getBits());
-        int lastAlwaysSetBit = scan(valueStamp.downMask() & mask);
-        if (lastAlwaysSetBit == -1) {
-            min = -1;
-        } else {
-            min = lastAlwaysSetBit;
+    public Node canonical(CanonicalizerTool tool) {
+        if (getValue().isConstant()) {
+            Constant c = getValue().asConstant();
+            if (c.getKind() == Kind.Int) {
+                return ConstantNode.forInt(31 - Integer.numberOfLeadingZeros(c.asInt()), graph());
+            } else if (c.getKind() == Kind.Long) {
+                return ConstantNode.forInt(63 - Long.numberOfLeadingZeros(c.asLong()), graph());
+            }
         }
-        int lastMaybeSetBit = scan(valueStamp.upMask() & mask);
-        max = lastMaybeSetBit;
-        return updateStamp(StampFactory.forInteger(Kind.Int, min, max));
+        return this;
     }
 
     @NodeIntrinsic

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,7 +35,7 @@ import com.oracle.graal.nodes.type.*;
 /**
  * A node that attaches a type profile to a proxied input node.
  */
-public final class TypeProfileProxyNode extends UnaryNode implements IterableNodeType, ValueProxy {
+public final class TypeProfileProxyNode extends UnaryNode implements Canonicalizable, IterableNodeType, ValueProxy {
 
     private final JavaTypeProfile profile;
     private transient ResolvedJavaType lastCheckedType;
@@ -71,12 +71,12 @@ public final class TypeProfileProxyNode extends UnaryNode implements IterableNod
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        if (StampTool.isExactType(forValue)) {
+    public Node canonical(CanonicalizerTool tool) {
+        if (StampTool.isExactType(getValue())) {
             // The profile is useless - we know the type!
-            return forValue;
-        } else if (forValue instanceof TypeProfileProxyNode) {
-            TypeProfileProxyNode other = (TypeProfileProxyNode) forValue;
+            return getValue();
+        } else if (getValue() instanceof TypeProfileProxyNode) {
+            TypeProfileProxyNode other = (TypeProfileProxyNode) getValue();
             JavaTypeProfile otherProfile = other.getProfile();
             if (otherProfile == lastCheckedProfile) {
                 // We have already incorporated the knowledge about this profile => abort.
@@ -87,33 +87,33 @@ public final class TypeProfileProxyNode extends UnaryNode implements IterableNod
             if (newProfile.equals(otherProfile)) {
                 // We are useless - just use the other proxy node.
                 Debug.log("Canonicalize with other proxy node.");
-                return forValue;
+                return getValue();
             }
             if (newProfile != this.profile) {
                 Debug.log("Improved profile via other profile.");
-                return new TypeProfileProxyNode(forValue, newProfile);
+                return TypeProfileProxyNode.create(getValue(), newProfile);
             }
-        } else if (StampTool.typeOrNull(forValue) != null) {
-            ResolvedJavaType type = StampTool.typeOrNull(forValue);
+        } else if (StampTool.typeOrNull(getValue()) != null) {
+            ResolvedJavaType type = StampTool.typeOrNull(getValue());
             ResolvedJavaType uniqueConcrete = type.findUniqueConcreteSubtype();
             if (uniqueConcrete != null) {
                 // Profile is useless => remove.
                 Debug.log("Profile useless, there is enough static type information available.");
-                return forValue;
+                return getValue();
             }
             if (Objects.equals(type, lastCheckedType)) {
                 // We have already incorporate the knowledge about this type => abort.
                 return this;
             }
             lastCheckedType = type;
-            JavaTypeProfile newProfile = this.profile.restrict(type, StampTool.isObjectNonNull(forValue));
+            JavaTypeProfile newProfile = this.profile.restrict(type, StampTool.isObjectNonNull(getValue()));
             if (newProfile != this.profile) {
                 Debug.log("Improved profile via static type information.");
                 if (newProfile.getTypes().length == 0) {
                     // Only null profiling is not beneficial enough to keep the node around.
-                    return forValue;
+                    return getValue();
                 }
-                return new TypeProfileProxyNode(forValue, newProfile);
+                return TypeProfileProxyNode.create(getValue(), newProfile);
             }
         }
         return this;

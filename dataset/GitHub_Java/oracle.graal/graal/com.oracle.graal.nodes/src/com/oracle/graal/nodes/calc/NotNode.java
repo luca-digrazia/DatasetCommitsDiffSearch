@@ -24,6 +24,7 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
@@ -33,7 +34,7 @@ import com.oracle.graal.nodes.type.*;
 /**
  * Binary negation of long or integer values.
  */
-public final class NotNode extends UnaryNode implements ArithmeticLIRLowerable, NarrowableArithmeticNode {
+public final class NotNode extends UnaryNode implements Canonicalizable, ArithmeticLIRLowerable, NarrowableArithmeticNode {
 
     @Override
     public boolean inferStamp() {
@@ -56,12 +57,12 @@ public final class NotNode extends UnaryNode implements ArithmeticLIRLowerable, 
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        if (forValue.isConstant()) {
-            return ConstantNode.forConstant(evalConst(forValue.asConstant()), null);
+    public Node canonical(CanonicalizerTool tool) {
+        if (getValue().isConstant()) {
+            return ConstantNode.forPrimitive(evalConst(getValue().asConstant()), graph());
         }
-        if (forValue instanceof NotNode) {
-            return ((NotNode) forValue).getValue();
+        if (getValue() instanceof NotNode) {
+            return ((NotNode) getValue()).getValue();
         }
         return this;
     }

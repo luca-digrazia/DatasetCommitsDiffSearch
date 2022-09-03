@@ -24,12 +24,13 @@ package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 
-public class UnboxNode extends UnaryNode implements Virtualizable, Lowerable {
+public class UnboxNode extends UnaryNode implements Virtualizable, Lowerable, Canonicalizable {
 
     private final Kind boxingKind;
 
@@ -60,18 +61,21 @@ public class UnboxNode extends UnaryNode implements Virtualizable, Lowerable {
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        if (forValue.isConstant()) {
-            Constant constant = forValue.asConstant();
+    public Node canonical(CanonicalizerTool tool) {
+        if (getValue().isConstant()) {
+            Constant constant = getValue().asConstant();
             Constant unboxed = tool.getConstantReflection().unboxPrimitive(constant);
             if (unboxed != null && unboxed.getKind() == boxingKind) {
-                return ConstantNode.forConstant(unboxed, tool.getMetaAccess());
+                return ConstantNode.forConstant(unboxed, tool.getMetaAccess(), graph());
             }
-        } else if (forValue instanceof BoxNode) {
-            BoxNode box = (BoxNode) forValue;
+        } else if (getValue() instanceof BoxNode) {
+            BoxNode box = (BoxNode) getValue();
             if (boxingKind == box.getBoxingKind()) {
                 return box.getValue();
             }
+        }
+        if (usages().isEmpty()) {
+            return null;
         }
         return this;
     }
