@@ -87,7 +87,6 @@ public final class DefaultTraceRegisterAllocationPolicy {
     public static class BottomUpStrategy extends AllocationStrategy {
 
         public BottomUpStrategy(TraceRegisterAllocationPolicy plan) {
-            // explicitly specify the enclosing instance for the superclass constructor call
             plan.super();
         }
 
@@ -119,7 +118,6 @@ public final class DefaultTraceRegisterAllocationPolicy {
     public static final class TraceLinearScanStrategy extends AllocationStrategy {
 
         public TraceLinearScanStrategy(TraceRegisterAllocationPolicy plan) {
-            // explicitly specify the enclosing instance for the superclass constructor call
             plan.super();
         }
 
