@@ -22,12 +22,15 @@
  */
 package com.oracle.graal.graph;
 
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 import static com.oracle.graal.graph.Graph.*;
 import static com.oracle.graal.graph.Node.*;
 
 import java.util.*;
 
+import com.oracle.graal.compiler.common.FieldIntrospection.FieldInfo;
 import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.NodeClass.EdgeInfo;
 
 /**
  * Describes {@link Node} fields representing the set of inputs for the node or the set of the
@@ -46,10 +49,33 @@ public abstract class Edges extends Fields {
     private final int directCount;
     private final Type type;
 
-    public Edges(Class<?> nodeClass, Type type, int directCount, long[] offsets, Map<Long, String> names, Map<Long, Class<?>> types) {
-        super(nodeClass, offsets, names, types);
+    public Edges(Type type, int directCount, ArrayList<? extends FieldInfo> edges) {
+        super(edges);
         this.type = type;
         this.directCount = directCount;
+    }
+
+    public static void translateInto(Edges edges, ArrayList<EdgeInfo> infos) {
+        for (int index = 0; index < edges.getCount(); index++) {
+            infos.add(new EdgeInfo(edges.offsets[index], edges.getName(index), edges.getType(index)));
+        }
+    }
+
+    private static Node getNode(Node node, long offset) {
+        return (Node) unsafe.getObject(node, offset);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static NodeList<Node> getNodeList(Node node, long offset) {
+        return (NodeList<Node>) unsafe.getObject(node, offset);
+    }
+
+    private static void putNode(Node node, long offset, Node value) {
+        unsafe.putObject(node, offset, value);
+    }
+
+    private static void putNodeList(Node node, long offset, NodeList<?> value) {
+        unsafe.putObject(node, offset, value);
     }
 
     /**
@@ -69,7 +95,7 @@ public abstract class Edges extends Fields {
      */
     public Node getNode(Node node, int index) {
         assert index >= 0 && index < directCount;
-        return getObject(node, index, Node.class);
+        return getNode(node, offsets[index]);
     }
 
     /**
@@ -80,10 +106,9 @@ public abstract class Edges extends Fields {
      *            {@link #getDirectCount()})
      * @return the {@link NodeList} at the other edge of the requested edge
      */
-    @SuppressWarnings("unchecked")
     public NodeList<Node> getNodeList(Node node, int index) {
         assert index >= directCount && index < getCount();
-        return getObject(node, index, NodeList.class);
+        return getNodeList(node, offsets[index]);
     }
 
     /**
@@ -117,7 +142,7 @@ public abstract class Edges extends Fields {
      * @param toNode the node to which the edges should be copied.
      */
     public void copy(Node fromNode, Node toNode) {
-        assert fromNode.getNodeClass().getClazz() == clazz && toNode.getNodeClass().getClazz() == clazz;
+        assert fromNode.getNodeClass().getClazz() == toNode.getNodeClass().getClazz();
         int index = 0;
         while (index < getDirectCount()) {
             initializeNode(toNode, index, getNode(fromNode, index));
@@ -152,7 +177,7 @@ public abstract class Edges extends Fields {
         }
         while (index < getCount()) {
             NodeList<Node> list = getNodeList(node, index);
-            assert list != null : clazz;
+            assert list != null : this;
             if (list.replaceFirst(key, replacement)) {
                 return true;
             }
@@ -175,12 +200,12 @@ public abstract class Edges extends Fields {
      * @param value the node to be written to the edge
      */
     public void initializeNode(Node node, int index, Node value) {
-        putObject(node, index, value);
+        putNode(node, offsets[index], value);
     }
 
     public void initializeList(Node node, int index, NodeList<Node> value) {
         assert index >= directCount;
-        putObject(node, index, value);
+        putNodeList(node, offsets[index], value);
     }
 
     /**
@@ -193,8 +218,8 @@ public abstract class Edges extends Fields {
      */
     public void setNode(Node node, int index, Node value) {
         assert index < directCount;
-        Node old = getObject(node, index, Node.class);
-        putObject(node, index, value);
+        Node old = getNode(node, offsets[index]);
+        putNode(node, offsets[index], value);
         update(node, old, value);
     }
 
@@ -218,7 +243,7 @@ public abstract class Edges extends Fields {
      * Determines if the edges of two given nodes are the same.
      */
     public boolean areEqualIn(Node node, Node other) {
-        assert node.getNodeClass().getClazz() == clazz && other.getNodeClass().getClazz() == clazz;
+        assert node.getNodeClass().getClazz() == other.getNodeClass().getClazz();
         int index = 0;
         while (index < directCount) {
             if (getNode(other, index) != getNode(node, index)) {
