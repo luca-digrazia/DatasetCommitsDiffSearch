@@ -111,7 +111,12 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
             };
             csl = new CalleeSaveLayout(0, -1, 8, regs);
         } else {
-            csl = null;
+            // We reserve space for saving RBP but don't explicitly specify
+            // it as a callee save register since we explicitly do the saving
+            // with push and pop in HotSpotFrameContext
+            final int size = 8;
+            final Register[] regs = {};
+            csl = new CalleeSaveLayout(0, size, 8, regs);
         }
 
         attributesMap = RegisterAttributes.createMap(this, AMD64.allRegisters);
