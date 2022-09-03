@@ -623,7 +623,7 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private JavaTypeProfile getProfileForTypeCheck(ResolvedJavaType type) {
-        if (!optimisticOpts.useTypeCheckHints() || TypeCheckHints.canHaveSubtype(type)) {
+        if (!optimisticOpts.useTypeCheckHints() || TypeCheckHints.isFinalClass(type)) {
             return null;
         } else {
             ResolvedJavaType uniqueSubtype = type.findUniqueConcreteSubtype();
@@ -1088,60 +1088,32 @@ public final class GraphBuilderPhase extends Phase {
         ValueNode value = frameState.ipop();
 
         int nofCases = bs.numberOfCases();
+
+        Map<Integer, Integer> bciToSuccessorIndex = new HashMap<>();
+        int successorCount = currentBlock.successors.size();
+        for (int i = 0; i < successorCount; i++) {
+            assert !bciToSuccessorIndex.containsKey(currentBlock.successors.get(i).startBci);
+            if (!bciToSuccessorIndex.containsKey(currentBlock.successors.get(i).startBci)) {
+                bciToSuccessorIndex.put(currentBlock.successors.get(i).startBci, i);
+            }
+        }
+
         double[] keyProbabilities = switchProbability(nofCases + 1, bci);
 
-        Map<Integer, SuccessorInfo> bciToBlockSuccessorIndex = new HashMap<>();
-        for (int i = 0; i < currentBlock.successors.size(); i++) {
-            assert !bciToBlockSuccessorIndex.containsKey(currentBlock.successors.get(i).startBci);
-            if (!bciToBlockSuccessorIndex.containsKey(currentBlock.successors.get(i).startBci)) {
-                bciToBlockSuccessorIndex.put(currentBlock.successors.get(i).startBci, new SuccessorInfo(i));
-            }
-        }
-
-        ArrayList<Block> actualSuccessors = new ArrayList<>();
         int[] keys = new int[nofCases];
         int[] keySuccessors = new int[nofCases + 1];
-        int deoptSuccessorIndex = -1;
-        int nextSuccessorIndex = 0;
-        for (int i = 0; i < nofCases + 1; i++) {
-            if (i < nofCases) {
-                keys[i] = bs.keyAt(i);
-            }
-
-            if (isNeverExecutedCode(keyProbabilities[i])) {
-                if (deoptSuccessorIndex < 0) {
-                    deoptSuccessorIndex = nextSuccessorIndex++;
-                    actualSuccessors.add(null);
-                }
-                keySuccessors[i] = deoptSuccessorIndex;
-            } else {
-                int targetBci = i >= nofCases ? bs.defaultTarget() : bs.targetAt(i);
-                SuccessorInfo info = bciToBlockSuccessorIndex.get(targetBci);
-                if (info.actualIndex < 0) {
-                    info.actualIndex = nextSuccessorIndex++;
-                    actualSuccessors.add(currentBlock.successors.get(info.blockIndex));
-                }
-                keySuccessors[i] = info.actualIndex;
-            }
+        for (int i = 0; i < nofCases; i++) {
+            keys[i] = bs.keyAt(i);
+            keySuccessors[i] = bciToSuccessorIndex.get(bs.targetAt(i));
         }
+        keySuccessors[nofCases] = bciToSuccessorIndex.get(bs.defaultTarget());
 
-        double[] successorProbabilities = IntegerSwitchNode.successorProbabilites(actualSuccessors.size(), keySuccessors, keyProbabilities);
-        IntegerSwitchNode switchNode = currentGraph.add(new IntegerSwitchNode(value, actualSuccessors.size(), keys, keyProbabilities, keySuccessors));
-        for (int i = 0; i < actualSuccessors.size(); i++) {
-            switchNode.setBlockSuccessor(i, createBlockTarget(successorProbabilities[i], actualSuccessors.get(i), frameState));
+        double[] successorProbabilities = IntegerSwitchNode.successorProbabilites(successorCount, keySuccessors, keyProbabilities);
+        IntegerSwitchNode lookupSwitch = currentGraph.add(new IntegerSwitchNode(value, successorCount, keys, keyProbabilities, keySuccessors));
+        for (int i = 0; i < successorCount; i++) {
+            lookupSwitch.setBlockSuccessor(i, createBlockTarget(successorProbabilities[i], currentBlock.successors.get(i), frameState));
         }
-
-        append(switchNode);
-    }
-
-    private static class SuccessorInfo {
-        int blockIndex;
-        int actualIndex;
-
-        public SuccessorInfo(int blockSuccessorIndex) {
-            this.blockIndex = blockSuccessorIndex;
-            actualIndex = -1;
-        }
+        append(lookupSwitch);
     }
 
     private ConstantNode appendConstant(Constant constant) {
@@ -1234,16 +1206,11 @@ public final class GraphBuilderPhase extends Phase {
 
     private FixedNode createTarget(double probability, Block block, FrameStateBuilder stateAfter) {
         assert probability >= 0 && probability <= 1.01 : probability;
-        if (isNeverExecutedCode(probability)) {
+        if (probability == 0 && optimisticOpts.removeNeverExecutedCode() && entryBCI == StructuredGraph.INVOCATION_ENTRY_BCI) {
             return currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.UnreachedCode, graphId));
         } else {
-            assert block != null;
             return createTarget(block, stateAfter);
         }
-    }
-
-    private boolean isNeverExecutedCode(double probability) {
-        return probability == 0 && optimisticOpts.removeNeverExecutedCode() && entryBCI == StructuredGraph.INVOCATION_ENTRY_BCI;
     }
 
     private FixedNode createTarget(Block block, FrameStateBuilder state) {
