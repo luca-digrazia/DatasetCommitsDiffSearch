@@ -236,7 +236,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             }
             if (getCompilationProfile().interpreterCall(this)) {
                 // synchronous compile -> call again to take us to the compiled code
-                return doInvoke(args);
+                return callBoundary(args);
             }
         } else {
             // We come here from compiled code

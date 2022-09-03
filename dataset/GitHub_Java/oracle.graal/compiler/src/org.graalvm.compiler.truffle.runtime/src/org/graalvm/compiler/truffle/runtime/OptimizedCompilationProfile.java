@@ -27,7 +27,6 @@ package org.graalvm.compiler.truffle.runtime;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleArgumentTypeSpeculation;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleCompileImmediately;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleInvalidationReprofileCount;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleLowTier;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleMinInvokeThreshold;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleReplaceReprofileCount;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleReturnTypeSpeculation;
@@ -60,8 +59,6 @@ public class OptimizedCompilationProfile {
     private int interpreterCallAndLoopCount;
     private int compilationCallThreshold;
     private int compilationCallAndLoopThreshold;
-    private boolean lowTierEnabled;
-    private boolean compileImmediately;
 
     private long timestamp;
 
@@ -92,8 +89,6 @@ public class OptimizedCompilationProfile {
         this.compilationCallThreshold = Math.min(callThreshold, callAndLoopThreshold);
         this.compilationCallAndLoopThreshold = callAndLoopThreshold;
         this.timestamp = System.nanoTime();
-        this.lowTierEnabled = TruffleCompilerOptions.getValue(TruffleLowTier);
-        this.compileImmediately = TruffleCompilerOptions.getValue(TruffleCompileImmediately);
     }
 
     @Override
@@ -164,7 +159,7 @@ public class OptimizedCompilationProfile {
     void profileDirectCall(Object[] args) {
         Assumption typesAssumption = profiledArgumentTypesAssumption;
         if (typesAssumption == null) {
-            if (CompilerDirectives.inInterpreterOrLowTier()) {
+            if (CompilerDirectives.inInterpreter()) {
                 initializeProfiledArgumentTypes(args);
             }
         } else {
@@ -205,7 +200,7 @@ public class OptimizedCompilationProfile {
 
     final void profileReturnValue(Object result) {
         Assumption returnTypeAssumption = profiledReturnTypeAssumption;
-        if (CompilerDirectives.inInterpreterOrLowTier() && returnTypeAssumption == null) {
+        if (CompilerDirectives.inInterpreter() && returnTypeAssumption == null) {
             // we only profile return values in the interpreter as we don't want to deoptimize
             // for immediate compiles.
             if (TruffleCompilerOptions.getValue(TruffleReturnTypeSpeculation)) {
@@ -290,31 +285,10 @@ public class OptimizedCompilationProfile {
         ensureProfiling(1, replaceBackoff);
     }
 
-    final boolean interpreterOrLowTierCall(OptimizedCallTarget callTarget) {
-        if (lowTierEnabled) {
-            int intCallCount = ++interpreterCallCount;
-            int intAndLoopCallCount = ++interpreterCallAndLoopCount;
-            if (CompilerDirectives.inInterpreter() && !callTarget.isCompiling() && !compilationFailed) {
-                // check if call target is hot enough to get compiled in low tier, but took not too long to get hot
-                if ((intAndLoopCallCount >= compilationCallAndLoopThreshold && intCallCount >= compilationCallThreshold && !isDeferredCompile(callTarget)) ||
-                                compileImmediately) {
-                    return callTarget.compile();
-                }
-            } else if (CompilerDirectives.inLowTier() && !callTarget.isCompiling() && !compilationFailed) {
-                if ((intAndLoopCallCount >= compilationCallAndLoopThreshold && intCallCount >= compilationCallThreshold) || compileImmediately) {
-                    return callTarget.compile();
-                }
-            }
-            return false;
-        } else {
-            return interpreterCall(callTarget);
-        }
-    }
-
-    private boolean interpreterCall(OptimizedCallTarget callTarget) {
+    final boolean interpreterCall(OptimizedCallTarget callTarget) {
         int intCallCount = ++interpreterCallCount;
         int intAndLoopCallCount = ++interpreterCallAndLoopCount;
-        if (CompilerDirectives.inInterpreter() && !callTarget.isCompiling() && !compilationFailed) {
+        if (!callTarget.isCompiling() && !compilationFailed) {
             // check if call target is hot enough to get compiled, but took not too long to get hot
             if ((intAndLoopCallCount >= compilationCallAndLoopThreshold && intCallCount >= compilationCallThreshold && !isDeferredCompile(callTarget)) ||
                             TruffleCompilerOptions.getValue(TruffleCompileImmediately)) {
