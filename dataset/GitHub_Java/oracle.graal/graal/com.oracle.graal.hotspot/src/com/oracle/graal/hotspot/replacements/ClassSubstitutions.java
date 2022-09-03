@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,14 +22,19 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
-import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.nodes.PiNode.*;
 
 import java.lang.reflect.*;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.hotspot.word.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.ClassSubstitution.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.word.*;
 
 /**
@@ -38,58 +43,69 @@ import com.oracle.graal.word.*;
 @ClassSubstitution(java.lang.Class.class)
 public class ClassSubstitutions {
 
-    @MethodSubstitution(isStatic = false)
+    @MacroSubstitution(macro = ClassGetModifiersNode.class, isStatic = false)
+    @MethodSubstitution(isStatic = false, forced = true)
     public static int getModifiers(final Class<?> thisObj) {
-        Word klass = loadWordFromObject(thisObj, klassOffset());
-        if (klass.equal(0)) {
+        KlassPointer klass = ClassGetHubNode.readClass(thisObj);
+        if (klass.isNull()) {
             // Class for primitive type
             return Modifier.ABSTRACT | Modifier.FINAL | Modifier.PUBLIC;
         } else {
-            return klass.readInt(klassModifierFlagsOffset(), FINAL_LOCATION);
+            return klass.readInt(klassModifierFlagsOffset(), KLASS_MODIFIER_FLAGS_LOCATION);
         }
     }
 
-    @MethodSubstitution(isStatic = false)
+    // This MacroSubstitution should be removed once non-null klass pointers can be optimized
+    @MacroSubstitution(macro = ClassIsInterfaceNode.class, isStatic = false)
+    @MethodSubstitution(isStatic = false, forced = true)
     public static boolean isInterface(final Class<?> thisObj) {
-        Word klass = loadWordFromObject(thisObj, klassOffset());
-        if (klass.equal(0)) {
+        KlassPointer klass = ClassGetHubNode.readClass(thisObj);
+        if (klass.isNull()) {
             return false;
         } else {
-            int accessFlags = klass.readInt(klassAccessFlagsOffset(), FINAL_LOCATION);
+            int accessFlags = klass.readInt(klassAccessFlagsOffset(), KLASS_ACCESS_FLAGS_LOCATION);
             return (accessFlags & Modifier.INTERFACE) != 0;
         }
     }
 
-    @MethodSubstitution(isStatic = false)
+    // This MacroSubstitution should be removed once non-null klass pointers can be optimized
+    @MacroSubstitution(macro = ClassIsArrayNode.class, isStatic = false)
+    @MethodSubstitution(isStatic = false, forced = true)
     public static boolean isArray(final Class<?> thisObj) {
-        Word klass = loadWordFromObject(thisObj, klassOffset());
-        if (klass.equal(0)) {
+        KlassPointer klass = ClassGetHubNode.readClass(thisObj);
+        if (klass.isNull()) {
             return false;
         } else {
-            return (readLayoutHelper(klass) & arrayKlassLayoutHelperIdentifier()) != 0;
+            return klassIsArray(klass);
         }
     }
 
-    @MethodSubstitution(isStatic = false)
+    // This MacroSubstitution should be removed once non-null klass pointers can be optimized
+    @MacroSubstitution(macro = ClassIsPrimitiveNode.class, isStatic = false)
+    @MethodSubstitution(isStatic = false, forced = true)
     public static boolean isPrimitive(final Class<?> thisObj) {
-        Word klass = loadWordFromObject(thisObj, klassOffset());
-        return klass.equal(0);
+        KlassPointer klass = ClassGetHubNode.readClass(thisObj);
+        return klass.isNull();
     }
 
+    @MacroSubstitution(macro = ClassGetClassLoader0Node.class, isStatic = false)
+    public static native ClassLoader getClassLoader0(Class<?> thisObj);
+
+    @MacroSubstitution(macro = ClassGetSuperclassNode.class, isStatic = false)
     @MethodSubstitution(isStatic = false)
     public static Class<?> getSuperclass(final Class<?> thisObj) {
-        Word klass = loadWordFromObject(thisObj, klassOffset());
-        if (klass.notEqual(0)) {
-            int accessFlags = klass.readInt(klassAccessFlagsOffset(), FINAL_LOCATION);
+        KlassPointer klass = ClassGetHubNode.readClass(thisObj);
+        if (!klass.isNull()) {
+            int accessFlags = klass.readInt(klassAccessFlagsOffset(), KLASS_ACCESS_FLAGS_LOCATION);
             if ((accessFlags & Modifier.INTERFACE) == 0) {
-                if ((readLayoutHelper(klass) & arrayKlassLayoutHelperIdentifier()) != 0) {
+                if (klassIsArray(klass)) {
                     return Object.class;
                 } else {
-                    Word superKlass = klass.readWord(klassSuperKlassOffset(), FINAL_LOCATION);
+                    Word superKlass = klass.readWord(klassSuperKlassOffset(), KLASS_SUPER_KLASS_LOCATION);
                     if (superKlass.equal(0)) {
                         return null;
                     } else {
-                        return unsafeCast(superKlass.readObject(classMirrorOffset(), FINAL_LOCATION), Class.class, true, true);
+                        return piCastExactNonNull(superKlass.readObject(classMirrorOffset(), CLASS_MIRROR_LOCATION), Class.class);
                     }
                 }
             }
@@ -97,19 +113,44 @@ public class ClassSubstitutions {
         return null;
     }
 
+    @MacroSubstitution(macro = ClassGetComponentTypeNode.class, isStatic = false)
     @MethodSubstitution(isStatic = false)
     public static Class<?> getComponentType(final Class<?> thisObj) {
-        Word klass = loadWordFromObject(thisObj, klassOffset());
-        if (klass.notEqual(0)) {
-            if ((readLayoutHelper(klass) & arrayKlassLayoutHelperIdentifier()) != 0) {
-                return unsafeCast(klass.readObject(arrayKlassComponentMirrorOffset(), FINAL_LOCATION), Class.class, true, true);
+        KlassPointer klass = ClassGetHubNode.readClass(thisObj);
+        if (!klass.isNull()) {
+            if (klassIsArray(klass)) {
+                return piCastExactNonNull(klass.readObject(arrayKlassComponentMirrorOffset(), ARRAY_KLASS_COMPONENT_MIRROR), Class.class);
             }
         }
         return null;
     }
 
+    @MacroSubstitution(macro = ClassIsInstanceNode.class, isStatic = false)
     @MethodSubstitution(isStatic = false)
-    public static boolean isInstance(final Class<?> thisObj, Object obj) {
-        return !isPrimitive(thisObj) && ConditionalNode.materializeIsInstance(thisObj, obj);
+    public static boolean isInstance(Class<?> thisObj, Object obj) {
+        return ConditionalNode.materializeIsInstance(thisObj, obj);
     }
+
+    @MacroSubstitution(macro = ClassIsAssignableFromNode.class, isStatic = false)
+    @MethodSubstitution(isStatic = false)
+    public static boolean isAssignableFrom(Class<?> thisClass, Class<?> otherClass) {
+        if (BranchProbabilityNode.probability(BranchProbabilityNode.NOT_LIKELY_PROBABILITY, otherClass == null)) {
+            DeoptimizeNode.deopt(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.NullCheckException);
+            return false;
+        }
+        GuardingNode anchorNode = SnippetAnchorNode.anchor();
+        KlassPointer thisHub = ClassGetHubNode.readClass(thisClass, anchorNode);
+        KlassPointer otherHub = ClassGetHubNode.readClass(otherClass, anchorNode);
+        if (thisHub.isNull() || otherHub.isNull()) {
+            // primitive types, only true if equal.
+            return thisClass == otherClass;
+        }
+        if (!TypeCheckSnippetUtils.checkUnknownSubType(thisHub, otherHub)) {
+            return false;
+        }
+        return true;
+    }
+
+    @MacroSubstitution(macro = ClassCastNode.class, isStatic = false)
+    public static native Object cast(final Class<?> thisObj, Object obj);
 }

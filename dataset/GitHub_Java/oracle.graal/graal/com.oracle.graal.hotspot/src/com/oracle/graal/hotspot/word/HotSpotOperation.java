@@ -22,16 +22,13 @@
  */
 package com.oracle.graal.hotspot.word;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import java.lang.annotation.*;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 public @interface HotSpotOperation {
 
-    enum HotspotOpcode {
+    public enum HotspotOpcode {
         FROM_POINTER,
         TO_KLASS_POINTER,
         TO_METHOD_POINTER,

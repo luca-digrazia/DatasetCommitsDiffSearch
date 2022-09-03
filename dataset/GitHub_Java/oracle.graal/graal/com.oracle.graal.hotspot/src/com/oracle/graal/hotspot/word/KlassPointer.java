@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,13 +22,10 @@
  */
 package com.oracle.graal.hotspot.word;
 
-import static com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode.POINTER_EQ;
-import static com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode.POINTER_NE;
-import static com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode.READ_KLASS_POINTER;
-import static com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode.TO_KLASS_POINTER;
+import static com.oracle.graal.hotspot.word.HotSpotOperation.HotspotOpcode.*;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.word.Pointer;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.word.*;
 import com.oracle.graal.word.Word.Opcode;
 import com.oracle.graal.word.Word.Operation;
 
@@ -47,8 +44,8 @@ public abstract class KlassPointer extends MetaspacePointer {
     public static native KlassPointer fromWord(Pointer pointer);
 
     @HotSpotOperation(opcode = READ_KLASS_POINTER)
-    public native KlassPointer readKlassPointer(int offset, LocationIdentity locationIdentity);
+    public native KlassPointer readKlassPointer(int secondarySuperCacheOffset, LocationIdentity secondarySuperCacheLocation);
 
     @Operation(opcode = Opcode.WRITE_POINTER)
-    public native void writeKlassPointer(int offset, KlassPointer t, LocationIdentity locationIdentity);
+    public native void writeKlassPointer(int secondarySuperCacheOffset, KlassPointer t, LocationIdentity secondarySuperCacheLocation);
 }

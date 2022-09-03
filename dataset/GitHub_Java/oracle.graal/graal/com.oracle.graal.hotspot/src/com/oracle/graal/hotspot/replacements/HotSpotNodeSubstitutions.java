@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,6 +27,7 @@ import static com.oracle.graal.nodes.PiNode.*;
 
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.word.*;
 
 @ClassSubstitution(Node.class)
@@ -39,9 +40,9 @@ public class HotSpotNodeSubstitutions {
     @MethodSubstitution(isStatic = false)
     public static NodeClass getNodeClass(final Node node) {
         // HotSpot creates the NodeClass for each Node subclass while initializing it
-        // so we are guaranteed to read a non-null value here. The fact that NodeClass
-        // is final will automatically make the stamp of the PiNode exact.
-        Word klass = loadHub(node);
-        return piCastNonNull(klass.readObject(Word.signed(klassNodeClassOffset()), KLASS_NODE_CLASS), NodeClass.class);
+        // so we are guaranteed to read a non-null value here. As long as NodeClass
+        // is final, the stamp of the PiNode below will automatically be exact.
+        KlassPointer klass = loadHub(node);
+        return piCastNonNull(klass.readObject(Word.signed(instanceKlassNodeClassOffset()), KLASS_NODE_CLASS), NodeClass.class);
     }
 }

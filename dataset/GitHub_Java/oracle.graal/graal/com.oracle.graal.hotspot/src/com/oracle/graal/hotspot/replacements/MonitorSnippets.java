@@ -70,7 +70,7 @@ public class MonitorSnippets implements Snippets {
     public static class Options {
 
         //@formatter:off
-        @Option(help = "", type = OptionType.Debug)
+        @Option(help = "")
         private static final OptionValue<Boolean> ProfileMonitors = new OptionValue<>(false);
         //@formatter:on
     }

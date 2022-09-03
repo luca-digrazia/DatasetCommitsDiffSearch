@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -37,12 +36,23 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class JavaReadNode extends FixedAccessNode implements Lowerable, GuardingNode, Canonicalizable {
 
-    protected final Kind readKind;
     protected final boolean compressible;
 
-    public JavaReadNode(Kind readKind, ValueNode object, LocationNode location, BarrierType barrierType, boolean compressible) {
-        super(object, location, StampFactory.forKind(readKind), barrierType);
-        this.readKind = readKind;
+    public static JavaReadNode create(ValueNode object, LocationNode location, BarrierType barrierType, boolean compressible) {
+        return new JavaReadNode(object, location, barrierType, compressible);
+    }
+
+    public static JavaReadNode create(ValueNode object, LocationNode location, Stamp readStamp, BarrierType barrierType, boolean compressible) {
+        return new JavaReadNode(object, location, readStamp, barrierType, compressible);
+    }
+
+    protected JavaReadNode(ValueNode object, LocationNode location, BarrierType barrierType, boolean compressible) {
+        super(object, location, StampFactory.forKind(location.getValueKind()), barrierType);
+        this.compressible = compressible;
+    }
+
+    protected JavaReadNode(ValueNode object, LocationNode location, Stamp readStamp, BarrierType barrierType, boolean compressible) {
+        super(object, location, readStamp, barrierType);
         this.compressible = compressible;
     }
 
@@ -52,10 +62,6 @@ public class JavaReadNode extends FixedAccessNode implements Lowerable, Guarding
 
     public boolean canNullCheck() {
         return true;
-    }
-
-    public Kind getReadKind() {
-        return readKind;
     }
 
     public boolean isCompressible() {
