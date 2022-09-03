@@ -50,6 +50,7 @@ import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.util.*;
 
 /**
  * The {@code GraphBuilder} class parses the bytecode of a method and builds the IR graph.
@@ -1692,7 +1693,20 @@ public class GraphBuilderPhase extends Phase {
     }
 
     private static boolean isBlockEnd(Node n) {
-        return n instanceof ControlSplitNode || n instanceof ControlSinkNode;
+        return trueSuccessorCount(n) > 1 || n instanceof ReturnNode || n instanceof UnwindNode || n instanceof DeoptimizeNode;
+    }
+
+    private static int trueSuccessorCount(Node n) {
+        if (n == null) {
+            return 0;
+        }
+        int i = 0;
+        for (Node s : n.successors()) {
+            if (Util.isFixed(s)) {
+                i++;
+            }
+        }
+        return i;
     }
 
     private void iterateBytecodesForBlock(Block block) {
