@@ -106,8 +106,9 @@ public abstract class LLVMAllocInstruction extends LLVMExpressionNode {
         abstract UniqueSlot getUniqueSlot();
 
         @Specialization
-        protected LLVMNativePointer doOp(VirtualFrame frame) {
-            return LLVMNativePointer.create(getUniqueSlot().toPointer(frame, getStackPointerSlot()));
+        protected LLVMNativePointer doOp(VirtualFrame frame,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return LLVMNativePointer.create(getUniqueSlot().toPointer(frame, memory, getStackPointerSlot()));
         }
     }
 

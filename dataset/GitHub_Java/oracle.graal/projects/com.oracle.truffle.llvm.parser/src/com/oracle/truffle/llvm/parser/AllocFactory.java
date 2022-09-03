@@ -27,39 +27,23 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.runtime.memory;
+package com.oracle.truffle.llvm.parser;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack.UniquesRegion;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.types.Type;
 
-public abstract class LLVMUniquesRegionAllocNode extends LLVMNode {
-    private final UniquesRegion uniquesRegion;
+public interface AllocFactory {
 
-    @CompilationFinal private FrameSlot stackPointer;
+    LLVMExpressionNode createAlloc(NodeFactory nodeFactory, LLVMContext context, Type type);
 
-    public LLVMUniquesRegionAllocNode(UniquesRegion uniquesRegion) {
-        this.uniquesRegion = uniquesRegion;
+    static AllocFactory createAllocaFactory() {
+        return (nodeFactory, context, type) -> nodeFactory.createAlloca(context, type);
     }
 
-    public abstract void execute(VirtualFrame frame);
-
-    protected FrameSlot getStackPointerSlot() {
-        if (stackPointer == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            stackPointer = getRootNode().getFrameDescriptor().findFrameSlot(LLVMStack.FRAME_ID);
-        }
-        return stackPointer;
-    }
-
-    @Specialization
-    protected void doOp(VirtualFrame frame, @Cached("getLLVMMemory()") LLVMMemory memory) {
-        uniquesRegion.allocate(frame, memory, getStackPointerSlot());
+    static AllocFactory createUniqueAllocFactory(UniquesRegion uniquesRegion) {
+        return (nodeFactory, context, type) -> nodeFactory.createUniqueAlloc(context, type, uniquesRegion);
     }
 
 }

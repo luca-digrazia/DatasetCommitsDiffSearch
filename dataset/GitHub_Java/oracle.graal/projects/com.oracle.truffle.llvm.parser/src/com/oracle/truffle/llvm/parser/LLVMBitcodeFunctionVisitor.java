@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -36,68 +36,57 @@ import java.util.Map;
 
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.llvm.parser.LLVMLivenessAnalysis.LLVMLivenessAnalysisResult;
 import com.oracle.truffle.llvm.parser.LLVMPhiManager.Phi;
+import com.oracle.truffle.llvm.parser.metadata.debuginfo.SourceVariable;
 import com.oracle.truffle.llvm.parser.model.blocks.InstructionBlock;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
+import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
 import com.oracle.truffle.llvm.parser.model.visitors.FunctionVisitor;
-import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolResolver;
-import com.oracle.truffle.llvm.parser.util.LLVMFrameIDs;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStack.UniquesRegion;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 
 final class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
 
-    private final LLVMParserRuntime module;
-
+    private final LLVMContext context;
+    private final ExternalLibrary library;
     private final FrameDescriptor frame;
-
-    private final List<LLVMExpressionNode> blocks = new ArrayList<>();
-
-    private final Map<String, Integer> labels;
-
+    private final UniquesRegion uniquesRegion;
+    private final List<LLVMStatementNode> blocks;
     private final Map<InstructionBlock, List<Phi>> phis;
-
-    private final List<LLVMNode> instructions = new ArrayList<>();
-
-    private final LLVMSymbolResolver symbolResolver;
-
-    private final SulongNodeFactory nodeFactory;
-
+    private final LLVMSymbolReadResolver symbols;
+    private final NodeFactory nodeFactory;
     private final int argCount;
-
     private final FunctionDefinition function;
+    private final LLVMLivenessAnalysisResult liveness;
+    private final List<FrameSlot> notNullable;
+    private final LLVMRuntimeDebugInformation dbgInfoHandler;
+    private boolean initDebugValues;
 
-    LLVMBitcodeFunctionVisitor(LLVMParserRuntime module, FrameDescriptor frame, Map<String, Integer> labels,
-                    Map<InstructionBlock, List<Phi>> phis, SulongNodeFactory nodeFactory, int argCount, LLVMSymbolResolver symbolResolver, FunctionDefinition functionDefinition) {
-        this.module = module;
+    LLVMBitcodeFunctionVisitor(LLVMContext context, ExternalLibrary library, FrameDescriptor frame, UniquesRegion uniquesRegion, Map<InstructionBlock, List<Phi>> phis, NodeFactory nodeFactory,
+                    int argCount,
+                    LLVMSymbolReadResolver symbols,
+                    FunctionDefinition functionDefinition, LLVMLivenessAnalysisResult liveness, List<FrameSlot> notNullable, LLVMRuntimeDebugInformation dbgInfoHandler) {
+        this.context = context;
+        this.library = library;
         this.frame = frame;
-        this.labels = labels;
+        this.uniquesRegion = uniquesRegion;
         this.phis = phis;
-        this.symbolResolver = symbolResolver;
+        this.symbols = symbols;
         this.nodeFactory = nodeFactory;
         this.argCount = argCount;
         this.function = functionDefinition;
+        this.liveness = liveness;
+        this.notNullable = notNullable;
+        this.dbgInfoHandler = dbgInfoHandler;
+        this.blocks = new ArrayList<>();
+        this.initDebugValues = dbgInfoHandler.isEnabled();
     }
 
-    void addInstruction(LLVMNode node) {
-        instructions.add(node);
-    }
-
-    void addTerminatingInstruction(LLVMControlFlowNode node, int blockId, String blockName) {
-        blocks.add(nodeFactory.createBasicBlockNode(module, getBlock(), node, blockId, blockName));
-        instructions.add(node);
-    }
-
-    int getArgCount() {
-        return argCount;
-    }
-
-    public LLVMExpressionNode[] getBlock() {
-        return instructions.toArray(new LLVMExpressionNode[instructions.size()]);
-    }
-
-    public List<LLVMExpressionNode> getBlocks() {
+    public List<LLVMStatementNode> getBlocks() {
         return Collections.unmodifiableList(blocks);
     }
 
@@ -105,46 +94,28 @@ final class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
         return function;
     }
 
-    public LLVMParserRuntime getRuntime() {
-        return module;
-    }
-
-    public FrameDescriptor getFrame() {
-        return frame;
-    }
-
-    FrameSlot getReturnSlot() {
-        return getSlot(LLVMFrameIDs.FUNCTION_RETURN_VALUE_FRAME_SLOT_ID);
-    }
-
-    FrameSlot getExceptionSlot() {
-        return getSlot(LLVMFrameIDs.FUNCTION_EXCEPTION_VALUE_FRAME_SLOT_ID);
-    }
-
-    FrameSlot getSlot(String name) {
-        return frame.findFrameSlot(name);
-    }
-
-    FrameSlot getStackSlot() {
-        return getSlot(LLVMFrameIDs.STACK_ADDRESS_FRAME_SLOT_ID);
-    }
-
-    LLVMSymbolResolver getSymbolResolver() {
-        return symbolResolver;
-    }
-
-    public Map<String, Integer> labels() {
-        return labels;
-    }
-
-    Map<InstructionBlock, List<Phi>> getPhiManager() {
-        return phis;
-    }
-
     @Override
     public void visit(InstructionBlock block) {
-        this.instructions.clear();
-        block.accept(new LLVMBitcodeInstructionVisitor(this, block, nodeFactory));
-    }
+        List<Phi> blockPhis = phis.get(block);
+        ArrayList<LLVMLivenessAnalysis.NullerInformation> blockNullerInfos = liveness.getNullableWithinBlock()[block.getBlockIndex()];
+        LLVMBitcodeInstructionVisitor visitor = new LLVMBitcodeInstructionVisitor(frame, uniquesRegion, blockPhis, nodeFactory, argCount, symbols, context, library, blockNullerInfos,
+                        notNullable, dbgInfoHandler);
 
+        if (initDebugValues) {
+            for (SourceVariable variable : function.getSourceFunction().getVariables()) {
+                final LLVMStatementNode initNode = dbgInfoHandler.createInitializer(variable);
+                if (initNode != null) {
+                    visitor.addInstructionUnchecked(initNode);
+                }
+            }
+            initDebugValues = false;
+        }
+
+        for (int i = 0; i < block.getInstructionCount(); i++) {
+            Instruction instruction = block.getInstruction(i);
+            visitor.setInstructionIndex(i);
+            instruction.accept(visitor);
+        }
+        blocks.add(nodeFactory.createBasicBlockNode(visitor.getInstructions(), visitor.getControlFlowNode(), block.getBlockIndex(), block.getName()));
+    }
 }

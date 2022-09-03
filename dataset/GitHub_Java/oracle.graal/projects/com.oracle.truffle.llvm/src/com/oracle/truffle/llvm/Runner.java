@@ -74,6 +74,7 @@ import com.oracle.truffle.llvm.RunnerFactory.SulongLibraryMessageResolutionFacto
 import com.oracle.truffle.llvm.RunnerFactory.SulongLibraryMessageResolutionFactory.LookupNodeGen;
 import com.oracle.truffle.llvm.nodes.func.LLVMGlobalRootNode;
 import com.oracle.truffle.llvm.nodes.others.LLVMStaticInitsBlockNode;
+import com.oracle.truffle.llvm.parser.AllocFactory;
 import com.oracle.truffle.llvm.parser.LLVMParser;
 import com.oracle.truffle.llvm.parser.LLVMParserResult;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
@@ -772,11 +773,10 @@ public final class Runner {
 
     private RootCallTarget createGlobalVariableInitializer(LLVMParserResult parserResult) {
         FrameDescriptor rootFrame = StackManager.createRootFrame();
-        LLVMParserRuntime runtime = parserResult.getRuntime();
-        LLVMSymbolReadResolver symbolResolver = new LLVMSymbolReadResolver(runtime, rootFrame);
+        LLVMSymbolReadResolver symbolResolver = new LLVMSymbolReadResolver(parserResult.getRuntime(), rootFrame, AllocFactory.createAllocaFactory());
         final List<LLVMStatementNode> globalNodes = new ArrayList<>();
         for (GlobalVariable global : parserResult.getDefinedGlobals()) {
-            final LLVMStatementNode store = createGlobalInitialization(runtime, symbolResolver, global);
+            final LLVMStatementNode store = createGlobalInitialization(symbolResolver, global);
             if (store != null) {
                 globalNodes.add(store);
             }
@@ -790,7 +790,7 @@ public final class Runner {
         return null;
     }
 
-    private LLVMStatementNode createGlobalInitialization(LLVMParserRuntime runtime, LLVMSymbolReadResolver symbolResolver, GlobalVariable global) {
+    private LLVMStatementNode createGlobalInitialization(LLVMSymbolReadResolver symbolResolver, GlobalVariable global) {
         if (global == null || global.getValue() == null) {
             return null;
         }
@@ -800,10 +800,7 @@ public final class Runner {
             final Type type = global.getType().getPointeeType();
             final int size = context.getByteSize(type);
 
-            // for fetching the address of the global that we want to initialize, we must use the
-            // file scope because we are initializing the globals of the current file
-            LLVMGlobal globalDescriptor = runtime.getFileScope().getGlobalVariable(global.getName());
-            final LLVMExpressionNode globalVarAddress = nodeFactory.createLiteral(globalDescriptor, new PointerType(global.getType()));
+            final LLVMExpressionNode globalVarAddress = symbolResolver.resolve(global);
             if (size != 0) {
                 if (type instanceof ArrayType || type instanceof StructureType) {
                     return nodeFactory.createStore(context, globalVarAddress, constant, type, null);

@@ -35,8 +35,14 @@ import java.util.List;
 
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.llvm.parser.AllocFactory;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
+import com.oracle.truffle.llvm.parser.NodeFactory;
+import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType;
+import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
+import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionKind;
 import com.oracle.truffle.llvm.parser.model.SymbolImpl;
+import com.oracle.truffle.llvm.parser.model.enums.Flag;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionParameter;
@@ -62,13 +68,11 @@ import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstruction;
 import com.oracle.truffle.llvm.parser.model.visitors.ValueInstructionVisitor;
 import com.oracle.truffle.llvm.parser.util.LLVMBitcodeTypeHelper;
-import com.oracle.truffle.llvm.runtime.GetStackSpaceFactory;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
-import com.oracle.truffle.llvm.runtime.NodeFactory;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.types.AggregateType;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
@@ -90,7 +94,7 @@ public final class LLVMSymbolReadResolver {
     private final LLVMContext context;
     private final NodeFactory nodeFactory;
     private final FrameDescriptor frame;
-    private final GetStackSpaceFactory getStackSpaceFactory;
+    private final AllocFactory allocFactory;
 
     private final InternalVisitor visitor = new InternalVisitor();
     private LLVMExpressionNode resolvedNode = null;
@@ -164,7 +168,7 @@ public final class LLVMSymbolReadResolver {
                 if (arraySize == 0) {
                     resolvedNode = null;
                 } else {
-                    LLVMExpressionNode target = getStackSpaceFactory.createGetStackSpace(nodeFactory, context, type);
+                    LLVMExpressionNode target = allocFactory.createAlloc(nodeFactory, context, type);
                     resolvedNode = nodeFactory.createZeroNode(target, arraySize);
                 }
             }
@@ -176,7 +180,7 @@ public final class LLVMSymbolReadResolver {
                     final LLVMNativePointer minusOneNode = LLVMNativePointer.create(-1);
                     resolvedNode = nodeFactory.createLiteral(minusOneNode, new PointerType(structureType));
                 } else {
-                    LLVMExpressionNode addressnode = getStackSpaceFactory.createGetStackSpace(nodeFactory, context, structureType);
+                    LLVMExpressionNode addressnode = allocFactory.createAlloc(nodeFactory, context, structureType);
                     resolvedNode = nodeFactory.createZeroNode(addressnode, structSize);
                 }
             }
@@ -214,7 +218,7 @@ public final class LLVMSymbolReadResolver {
             for (int i = 0; i < array.getElementCount(); i++) {
                 values.add(resolve(array.getElement(i)));
             }
-            resolvedNode = nodeFactory.createArrayLiteral(context, values, array.getType(), getStackSpaceFactory);
+            resolvedNode = nodeFactory.createArrayLiteral(context, values, array.getType(), allocFactory);
         }
 
         @Override
@@ -226,7 +230,7 @@ public final class LLVMSymbolReadResolver {
                 types[i] = constant.getElementType(i);
                 constants[i] = resolve(constant.getElement(i));
             }
-            resolvedNode = nodeFactory.createStructureConstantNode(context, constant.getType(), getStackSpaceFactory, constant.isPacked(), types, constants);
+            resolvedNode = nodeFactory.createStructureConstantNode(context, constant.getType(), allocFactory, constant.isPacked(), types, constants);
         }
 
         @Override
@@ -252,14 +256,17 @@ public final class LLVMSymbolReadResolver {
         public void visit(BinaryOperationConstant operation) {
             final LLVMExpressionNode lhs = resolve(operation.getLHS());
             final LLVMExpressionNode rhs = resolve(operation.getRHS());
+            final Type baseType = operation.getType();
 
-            resolvedNode = LLVMBitcodeTypeHelper.createArithmeticInstruction(nodeFactory, lhs, rhs, operation.getOperator());
-            if (resolvedNode != null) {
+            final LLVMArithmeticInstructionType arithmeticInstructionType = LLVMBitcodeTypeHelper.toArithmeticInstructionType(operation.getOperator());
+            if (arithmeticInstructionType != null) {
+                resolvedNode = nodeFactory.createArithmeticOperation(lhs, rhs, arithmeticInstructionType, baseType, Flag.EMPTY_ARRAY);
                 return;
             }
 
-            resolvedNode = LLVMBitcodeTypeHelper.createLogicalInstructionType(nodeFactory, lhs, rhs, operation.getOperator());
-            if (resolvedNode != null) {
+            final LLVMLogicalInstructionKind logicalInstructionType = LLVMBitcodeTypeHelper.toLogicalInstructionType(operation.getOperator());
+            if (logicalInstructionType != null) {
+                resolvedNode = nodeFactory.createLogicalOperation(lhs, rhs, logicalInstructionType, baseType, Flag.EMPTY_ARRAY);
                 return;
             }
 
@@ -275,8 +282,9 @@ public final class LLVMSymbolReadResolver {
 
         @Override
         public void visit(CastConstant constant) {
+            final LLVMConversionType type = LLVMBitcodeTypeHelper.toConversionType(constant.getOperator());
             final LLVMExpressionNode fromNode = resolve(constant.getValue());
-            resolvedNode = LLVMBitcodeTypeHelper.createCast(nodeFactory, fromNode, constant.getType(), constant.getValue().getType(), constant.getOperator());
+            resolvedNode = nodeFactory.createCast(fromNode, constant.getType(), constant.getValue().getType(), type);
         }
 
         @Override
@@ -361,7 +369,7 @@ public final class LLVMSymbolReadResolver {
             if (constant.isCString()) {
                 values.add(nodeFactory.createLiteral((byte) 0, PrimitiveType.I8));
             }
-            resolvedNode = nodeFactory.createArrayLiteral(context, values, constant.getType(), getStackSpaceFactory);
+            resolvedNode = nodeFactory.createArrayLiteral(context, values, constant.getType(), allocFactory);
         }
 
         @Override
@@ -371,21 +379,21 @@ public final class LLVMSymbolReadResolver {
 
         @Override
         public void visit(FunctionDeclaration toResolve) {
-            LLVMManagedPointer value = LLVMManagedPointer.create(runtime.lookupFunction(toResolve.getName(), toResolve.isOverridable()));
+            LLVMFunctionDescriptor value = runtime.lookupFunction(toResolve.getName(), toResolve.isExported());
             resolvedNode = nodeFactory.createLiteral(value, toResolve.getType());
         }
 
         @Override
         public void visit(FunctionDefinition toResolve) {
-            LLVMManagedPointer value = LLVMManagedPointer.create(runtime.lookupFunction(toResolve.getName(), toResolve.isOverridable()));
+            LLVMFunctionDescriptor value = runtime.lookupFunction(toResolve.getName(), toResolve.isExported());
             resolvedNode = nodeFactory.createLiteral(value, toResolve.getType());
         }
 
         @Override
         public void visit(GlobalAlias alias) {
-            LLVMSymbol symbol = runtime.lookupSymbol(alias.getName(), alias.isOverridable());
+            LLVMSymbol symbol = runtime.lookupSymbol(alias.getName(), alias.isExported());
             if (symbol.isFunction()) {
-                LLVMManagedPointer value = LLVMManagedPointer.create(symbol.asFunction());
+                LLVMFunctionDescriptor value = symbol.asFunction();
                 resolvedNode = nodeFactory.createLiteral(value, alias.getType());
             } else if (symbol.isGlobalVariable()) {
                 LLVMGlobal value = symbol.asGlobalVariable();
@@ -397,7 +405,7 @@ public final class LLVMSymbolReadResolver {
 
         @Override
         public void visit(GlobalVariable global) {
-            LLVMGlobal value = runtime.lookupGlobal(global.getName(), global.isOverridable());
+            LLVMGlobal value = runtime.lookupGlobal(global.getName(), global.isExported());
             resolvedNode = nodeFactory.createLiteral(value, new PointerType(global.getType()));
         }
 
@@ -414,12 +422,12 @@ public final class LLVMSymbolReadResolver {
         }
     }
 
-    public LLVMSymbolReadResolver(LLVMParserRuntime runtime, FrameDescriptor frame, GetStackSpaceFactory getStackSpaceFactory) {
+    public LLVMSymbolReadResolver(LLVMParserRuntime runtime, FrameDescriptor frame, AllocFactory allocFactory) {
         this.runtime = runtime;
         this.nodeFactory = runtime.getNodeFactory();
         this.context = runtime.getContext();
         this.frame = frame;
-        this.getStackSpaceFactory = getStackSpaceFactory;
+        this.allocFactory = allocFactory;
     }
 
     public static Integer evaluateIntegerConstant(SymbolImpl constant) {
