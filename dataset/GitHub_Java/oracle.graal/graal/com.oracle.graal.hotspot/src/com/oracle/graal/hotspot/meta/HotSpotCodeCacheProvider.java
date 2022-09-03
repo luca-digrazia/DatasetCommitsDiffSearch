@@ -251,14 +251,14 @@ public abstract class HotSpotCodeCacheProvider implements CodeCacheProvider {
     }
 
     public boolean needsDataPatch(Constant constant) {
-        return constant instanceof HotSpotMetaspaceConstant;
+        return constant.getPrimitiveAnnotation() != null;
     }
 
     public Data createDataItem(Constant constant, int alignment) {
-        if (constant instanceof HotSpotMetaspaceConstant) {
-            return new MetaspaceData(alignment, constant.asLong(), HotSpotMetaspaceConstant.getMetaspaceObject(constant), false);
+        if (constant.getPrimitiveAnnotation() != null) {
+            return new MetaspaceData(alignment, constant.asLong(), constant.getPrimitiveAnnotation(), false);
         } else if (constant.getKind().isObject()) {
-            return new OopData(alignment, HotSpotObjectConstant.asObject(constant), false);
+            return new OopData(alignment, constant.asObject(), false);
         } else {
             return new PrimitiveData(constant, alignment);
         }
