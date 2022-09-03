@@ -768,10 +768,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             if (tool.getLoweringType() == LoweringType.AFTER_GUARDS) {
                 newObjectSnippets.lower((NewArrayNode) n);
             }
-        } else if (n instanceof DynamicNewArrayNode) {
-            if (tool.getLoweringType() == LoweringType.AFTER_GUARDS) {
-                newObjectSnippets.lower((DynamicNewArrayNode) n);
-            }
         } else if (n instanceof MonitorEnterNode) {
             if (tool.getLoweringType() == LoweringType.AFTER_GUARDS) {
                 monitorSnippets.lower((MonitorEnterNode) n, tool);
@@ -1072,17 +1068,9 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     public Suites createSuites() {
         Suites ret = Suites.createDefaultSuites();
 
-        if (AOTCompilation.getValue()) {
-            // lowering introduces class constants, therefore it must be after lowering
-            ret.getHighTier().appendPhase(new LoadJavaMirrorWithKlassPhase());
-            if (VerifyPhases.getValue()) {
-                ret.getHighTier().appendPhase(new AheadOfTimeVerifcationPhase());
-            }
-        }
-
-        ret.getMidTier().appendPhase(new WriteBarrierAdditionPhase());
+        ret.getMidTier().addPhase(new WriteBarrierAdditionPhase());
         if (VerifyPhases.getValue()) {
-            ret.getMidTier().appendPhase(new WriteBarrierVerificationPhase());
+            ret.getMidTier().addPhase(new WriteBarrierVerificationPhase());
         }
 
         return ret;
