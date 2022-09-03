@@ -513,7 +513,9 @@ public class ValueAssert {
         }
 
         if (value.fitsInDouble()) {
-            value.asDouble();
+            double doubleValue = value.asDouble();
+            // 2147483647: fitsInFloat() is true, but (float)value.asDouble() != value.asDouble()
+            assertEquals(Double.compare((float) doubleValue, doubleValue) == 0 || value.fitsInInt(), value.fitsInFloat());
         } else {
             assertFails(() -> value.asDouble(), ClassCastException.class);
         }

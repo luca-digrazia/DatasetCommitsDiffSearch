@@ -48,7 +48,6 @@ import java.util.concurrent.Callable;
 
 import org.hamcrest.CoreMatchers;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
@@ -591,7 +590,6 @@ public class JavaInteropTest {
         f.toString();
     }
 
-    @Ignore("Interface not accessible")
     @Test
     public void executableAsFunctionalInterface3() throws Exception {
         assumeTrue("JDK 9 or later", System.getProperty("java.specification.version").compareTo("1.9") >= 0);

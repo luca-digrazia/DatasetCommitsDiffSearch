@@ -173,7 +173,7 @@ class TruffleMap<K, V> extends AbstractMap<K, V> {
         }
 
         private final class ElementsIterator implements Iterator<Entry<K, V>> {
-            private int index;
+            private long index;
 
             ElementsIterator() {
                 index = 0;

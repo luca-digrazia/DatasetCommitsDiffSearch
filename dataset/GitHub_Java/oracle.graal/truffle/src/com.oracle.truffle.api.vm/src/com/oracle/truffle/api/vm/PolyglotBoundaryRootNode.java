@@ -24,6 +24,8 @@
  */
 package com.oracle.truffle.api.vm;
 
+import static com.oracle.truffle.api.vm.PolyglotImpl.wrapGuestException;
+
 import java.util.function.Supplier;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -35,7 +37,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 /*
  * TODO merge this with PolyglotValue.PolyglotNode
  */
-@SuppressWarnings("deprecation")
 final class PolyglotBoundaryRootNode extends RootNode {
 
     private static final Object UNINITIALIZED_CONTEXT = new Object();
@@ -78,7 +79,7 @@ final class PolyglotBoundaryRootNode extends RootNode {
             return executable.execute(frame);
         } catch (Throwable e) {
             CompilerDirectives.transferToInterpreter();
-            throw PolyglotImpl.wrapGuestException(((PolyglotLanguageContext) languageContext), e);
+            throw wrapGuestException(((PolyglotLanguageContext) languageContext), e);
         } finally {
             if (needsEnter) {
                 context.leave(prev);

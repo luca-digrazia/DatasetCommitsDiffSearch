@@ -799,33 +799,21 @@ public class ValueHostConversionTest {
         assertEquals(42, value.getMember("foo").execute((float) 42).asInt());
         assertEquals(42, value.getMember("foo").execute((double) 42).asInt());
 
-        // TODO currently broken -> fix
-        // assertHostPolyglotException(() -> value.getMember("foo").execute((Object) null),
-        // NullPointerException.class, "");
-        // assertHostPolyglotException(() -> value.getMember("foo").execute(""),
-        // ClassCastException.class,
-        // "");
-        // assertHostPolyglotException(() -> value.getMember("foo").execute(42.2d),
-        // ClassCastException.class, "");
-        // assertHostPolyglotException(() -> value.getMember("foo").execute(42.2f),
-        // ClassCastException.class, "");
-        // assertHostPolyglotException(() -> value.getMember("foo").execute(Float.NaN),
-        // ClassCastException.class, "");
-        // assertHostPolyglotException(() -> value.getMember("foo").execute(Double.NaN),
-        // ClassCastException.class, "");
+        assertHostPolyglotException(() -> value.getMember("foo").execute((Object) null), NullPointerException.class);
+        assertHostPolyglotException(() -> value.getMember("foo").execute(""), ClassCastException.class);
+        assertHostPolyglotException(() -> value.getMember("foo").execute(42.2d), ClassCastException.class);
+        assertHostPolyglotException(() -> value.getMember("foo").execute(42.2f), ClassCastException.class);
+        assertHostPolyglotException(() -> value.getMember("foo").execute(Float.NaN), ClassCastException.class);
+        assertHostPolyglotException(() -> value.getMember("foo").execute(Double.NaN), ClassCastException.class);
     }
 
-    // private static void assertHostPolyglotException(Runnable r, Class<?> hostExceptionType,
-    // String
-    // message) {
-    // try {
-    // r.run();
-    // } catch (PolyglotException e) {
-    // assertTrue(e.isHostException());
-    // assertTrue(e.asHostException().getClass().getName(),
-    // hostExceptionType.isInstance(e.asHostException()));
-    // assertEquals(message, e.getMessage());
-    // }
-    // }
+    private static void assertHostPolyglotException(Runnable r, Class<?> hostExceptionType) {
+        try {
+            r.run();
+        } catch (PolyglotException e) {
+            assertTrue(e.isHostException());
+            assertTrue(e.asHostException().getClass().getName(), hostExceptionType.isInstance(e.asHostException()));
+        }
+    }
 
 }
