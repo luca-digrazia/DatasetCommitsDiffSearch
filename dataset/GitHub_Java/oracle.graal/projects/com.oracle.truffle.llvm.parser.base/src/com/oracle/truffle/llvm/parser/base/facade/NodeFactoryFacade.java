@@ -56,6 +56,8 @@ import com.oracle.truffle.llvm.parser.base.model.types.Type;
 import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
+import com.oracle.truffle.llvm.parser.instructions.LLVMFloatComparisonType;
+import com.oracle.truffle.llvm.parser.instructions.LLVMIntegerComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionType;
 import com.oracle.truffle.llvm.types.LLVMFunction;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
@@ -67,27 +69,35 @@ import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor.LLVMRuntimeType;
  */
 public interface NodeFactoryFacade {
 
-    LLVMExpressionNode createInsertElement(LLVMParserRuntime runtime, LLVMBaseType resultType, LLVMExpressionNode vector, Object type, LLVMExpressionNode element, LLVMExpressionNode index);
+    /**
+     * Sets up the facade with its {@link LLVMParserRuntime} before its first use.
+     *
+     * @param runtime
+     */
+    // also update {@link NodeFactoryFacadeComposite} when changing or removing this name
+    void setUpFacade(LLVMParserRuntime runtime);
 
-    LLVMExpressionNode createExtractElement(LLVMParserRuntime runtime, LLVMBaseType resultType, LLVMExpressionNode vector, LLVMExpressionNode index);
+    LLVMParserRuntime getRuntime();
 
-    LLVMExpressionNode createShuffleVector(LLVMParserRuntime runtime, LLVMBaseType llvmType, LLVMExpressionNode target, LLVMExpressionNode vector1, LLVMExpressionNode vector2,
-                    LLVMExpressionNode mask);
+    LLVMExpressionNode createInsertElement(LLVMBaseType resultType, LLVMExpressionNode vector, Object type, LLVMExpressionNode element, LLVMExpressionNode index);
 
-    LLVMExpressionNode createLoad(LLVMParserRuntime runtime, Type resolvedResultType, LLVMExpressionNode loadTarget);
+    LLVMExpressionNode createExtractElement(LLVMBaseType resultType, LLVMExpressionNode vector, LLVMExpressionNode index);
 
-    LLVMNode createStore(LLVMParserRuntime runtime, LLVMExpressionNode pointerNode, LLVMExpressionNode valueNode, Type type);
+    LLVMExpressionNode createShuffleVector(LLVMBaseType llvmType, LLVMExpressionNode target, LLVMExpressionNode vector1, LLVMExpressionNode vector2, LLVMExpressionNode mask);
 
-    LLVMExpressionNode createLogicalOperation(LLVMParserRuntime runtime, LLVMExpressionNode left, LLVMExpressionNode right, LLVMLogicalInstructionType opCode, LLVMBaseType llvmType,
-                    LLVMExpressionNode target);
+    LLVMExpressionNode createLoad(Type resolvedResultType, LLVMExpressionNode loadTarget);
 
-    LLVMExpressionNode createUndefinedValue(LLVMParserRuntime runtime, Type t);
+    LLVMNode createStore(LLVMExpressionNode pointerNode, LLVMExpressionNode valueNode, Type type);
 
-    LLVMExpressionNode createLiteral(LLVMParserRuntime runtime, Object value, LLVMBaseType type);
+    LLVMExpressionNode createLogicalOperation(LLVMExpressionNode left, LLVMExpressionNode right, LLVMLogicalInstructionType opCode, LLVMBaseType llvmType, LLVMExpressionNode target);
 
-    LLVMExpressionNode createSimpleConstantNoArray(LLVMParserRuntime runtime, String stringValue, LLVMBaseType instructionType, Type type);
+    LLVMExpressionNode createUndefinedValue(Type t);
 
-    LLVMExpressionNode createVectorLiteralNode(LLVMParserRuntime runtime, List<LLVMExpressionNode> listValues, LLVMExpressionNode target, LLVMBaseType type);
+    LLVMExpressionNode createLiteral(Object value, LLVMBaseType type);
+
+    LLVMExpressionNode createSimpleConstantNoArray(String stringValue, LLVMBaseType instructionType, Type type);
+
+    LLVMExpressionNode createVectorLiteralNode(List<LLVMExpressionNode> listValues, LLVMExpressionNode target, LLVMBaseType type);
 
     /**
      * This method allows to substitute calls to functions with nodes. The implementer is either
@@ -101,11 +111,11 @@ public interface NodeFactoryFacade {
      * @param numberOfExplicitArguments number of explicit arguments passed to function
      * @return the created intrinsic
      */
-    LLVMNode tryCreateFunctionSubstitution(LLVMParserRuntime runtime, FunctionType declaration, LLVMExpressionNode[] argNodes, int numberOfExplicitArguments);
+    LLVMNode tryCreateFunctionSubstitution(FunctionType declaration, LLVMExpressionNode[] argNodes, int numberOfExplicitArguments);
 
-    LLVMNode createRetVoid(LLVMParserRuntime runtime);
+    LLVMNode createRetVoid();
 
-    LLVMNode createNonVoidRet(LLVMParserRuntime runtime, LLVMExpressionNode retValue, Type resolvedType);
+    LLVMNode createNonVoidRet(LLVMExpressionNode retValue, Type resolvedType);
 
     LLVMExpressionNode createFunctionArgNode(int argIndex, LLVMBaseType paramType);
 
@@ -118,22 +128,27 @@ public interface NodeFactoryFacade {
      */
     LLVMNode createFunctionArgNode(int argIndex, Class<? extends Node> clazz);
 
-    LLVMNode createFunctionCall(LLVMParserRuntime runtime, LLVMExpressionNode functionNode, LLVMExpressionNode[] argNodes, LLVMBaseType llvmType);
+    LLVMNode createFunctionCall(LLVMExpressionNode functionNode, LLVMExpressionNode[] argNodes, LLVMBaseType llvmType);
 
-    LLVMExpressionNode createFrameRead(LLVMParserRuntime runtime, LLVMBaseType llvmType, FrameSlot frameSlot);
+    LLVMExpressionNode createFrameRead(LLVMBaseType llvmType, FrameSlot frameSlot);
 
-    LLVMNode createFrameWrite(LLVMParserRuntime runtime, LLVMBaseType llvmType, LLVMExpressionNode result, FrameSlot slot);
+    LLVMNode createFrameWrite(LLVMBaseType llvmType, LLVMExpressionNode result, FrameSlot slot);
 
-    FrameSlotKind getFrameSlotKind(LLVMParserRuntime runtime, Type type);
+    FrameSlotKind getFrameSlotKind(Type type);
 
-    LLVMExpressionNode createComparison(LLVMParserRuntime runtime, CompareOperator operator, Type type, LLVMExpressionNode lhs, LLVMExpressionNode rhs);
+    @Deprecated
+    LLVMExpressionNode createIntegerComparison(LLVMExpressionNode left, LLVMExpressionNode right, LLVMBaseType llvmType, LLVMIntegerComparisonType type);
 
-    LLVMExpressionNode createCast(LLVMParserRuntime runtime, LLVMExpressionNode fromNode, Type targetType, Type fromType, LLVMConversionType type);
+    @Deprecated
+    LLVMExpressionNode createFloatComparison(LLVMExpressionNode left, LLVMExpressionNode right, LLVMBaseType llvmType, LLVMFloatComparisonType type);
 
-    LLVMExpressionNode createArithmeticOperation(LLVMParserRuntime runtime, LLVMExpressionNode left, LLVMExpressionNode right, LLVMArithmeticInstructionType instr, LLVMBaseType llvmType,
-                    LLVMExpressionNode target);
+    LLVMExpressionNode createComparison(CompareOperator operator, Type type, LLVMExpressionNode lhs, LLVMExpressionNode rhs);
 
-    LLVMExpressionNode createExtractValue(LLVMParserRuntime runtime, LLVMBaseType type, LLVMExpressionNode targetAddress);
+    LLVMExpressionNode createCast(LLVMExpressionNode fromNode, Type targetType, Type fromType, LLVMConversionType type);
+
+    LLVMExpressionNode createArithmeticOperation(LLVMExpressionNode left, LLVMExpressionNode right, LLVMArithmeticInstructionType instr, LLVMBaseType llvmType, LLVMExpressionNode target);
+
+    LLVMExpressionNode createExtractValue(LLVMBaseType type, LLVMExpressionNode targetAddress);
 
     /**
      * Creates an getelementptr (GEP) instruction.
@@ -144,11 +159,11 @@ public interface NodeFactoryFacade {
      * @param indexedTypeLength
      * @return the getelementptr node
      */
-    LLVMExpressionNode createGetElementPtr(LLVMParserRuntime runtime, LLVMBaseType indexType, LLVMExpressionNode aggregateAddress, LLVMExpressionNode index, int indexedTypeLength);
+    LLVMExpressionNode createGetElementPtr(LLVMBaseType indexType, LLVMExpressionNode aggregateAddress, LLVMExpressionNode index, int indexedTypeLength);
 
     Class<?> getJavaClass(LLVMExpressionNode llvmExpressionNode);
 
-    LLVMExpressionNode createSelect(LLVMParserRuntime runtime, Type type, LLVMExpressionNode condition, LLVMExpressionNode trueValue, LLVMExpressionNode falseValue);
+    LLVMExpressionNode createSelect(Type type, LLVMExpressionNode condition, LLVMExpressionNode trueValue, LLVMExpressionNode falseValue);
 
     /**
      * Creates a zero vector initializer.
@@ -159,7 +174,7 @@ public interface NodeFactoryFacade {
      *
      * @return the zero vector initializer
      */
-    LLVMExpressionNode createZeroVectorInitializer(LLVMParserRuntime runtime, int nrElements, LLVMExpressionNode target, LLVMBaseType llvmType);
+    LLVMExpressionNode createZeroVectorInitializer(int nrElements, LLVMExpressionNode target, LLVMBaseType llvmType);
 
     /**
      * Creates a node representing an <code>unreachable</code> instruction.
@@ -168,18 +183,18 @@ public interface NodeFactoryFacade {
      * @see <a href="http://llvm.org/docs/LangRef.html#unreachable-instruction">Unreachable in the
      *      LLVM Language Reference Manual</a>
      */
-    LLVMNode createUnreachableNode(LLVMParserRuntime runtime);
+    LLVMNode createUnreachableNode();
 
-    LLVMNode createIndirectBranch(LLVMParserRuntime runtime, LLVMExpressionNode value, int[] labelTargets, LLVMNode[] phiWrites);
+    LLVMNode createIndirectBranch(LLVMExpressionNode value, int[] labelTargets, LLVMNode[] phiWrites);
 
-    LLVMNode createSwitch(LLVMParserRuntime runtime, LLVMExpressionNode cond, int defaultLabel, int[] otherLabels, LLVMExpressionNode[] cases,
+    LLVMNode createSwitch(LLVMExpressionNode cond, int defaultLabel, int[] otherLabels, LLVMExpressionNode[] cases,
                     LLVMBaseType llvmType, LLVMNode[] phiWriteNodes);
 
-    LLVMNode createConditionalBranch(LLVMParserRuntime runtime, int trueIndex, int falseIndex, LLVMExpressionNode conditionNode, LLVMNode[] truePhiWriteNodes, LLVMNode[] falsePhiWriteNodes);
+    LLVMNode createConditionalBranch(int trueIndex, int falseIndex, LLVMExpressionNode conditionNode, LLVMNode[] truePhiWriteNodes, LLVMNode[] falsePhiWriteNodes);
 
-    LLVMNode createUnconditionalBranch(LLVMParserRuntime runtime, int unconditionalIndex, LLVMNode[] phiWrites);
+    LLVMNode createUnconditionalBranch(int unconditionalIndex, LLVMNode[] phiWrites);
 
-    LLVMExpressionNode createArrayLiteral(LLVMParserRuntime runtime, List<LLVMExpressionNode> arrayValues, Type arrayType);
+    LLVMExpressionNode createArrayLiteral(List<LLVMExpressionNode> arrayValues, Type arrayType);
 
     /**
      * Creates an <code>alloca</code> node with a certain number of elements.
@@ -193,14 +208,13 @@ public interface NodeFactoryFacade {
      *            allocated
      * @return a node that allocates the specified number of elements
      */
-    LLVMExpressionNode createAlloc(LLVMParserRuntime runtime, Type type, int byteSize, int alignment, LLVMBaseType numElementsType, LLVMExpressionNode numElements);
+    LLVMExpressionNode createAlloc(Type type, int byteSize, int alignment, LLVMBaseType numElementsType, LLVMExpressionNode numElements);
 
-    LLVMExpressionNode createInsertValue(LLVMParserRuntime runtime, LLVMExpressionNode resultAggregate, LLVMExpressionNode sourceAggregate, int size, int offset, LLVMExpressionNode valueToInsert,
-                    LLVMBaseType llvmType);
+    LLVMExpressionNode createInsertValue(LLVMExpressionNode resultAggregate, LLVMExpressionNode sourceAggregate, int size, int offset, LLVMExpressionNode valueToInsert, LLVMBaseType llvmType);
 
-    LLVMExpressionNode createZeroNode(LLVMParserRuntime runtime, LLVMExpressionNode addressNode, int size);
+    LLVMExpressionNode createZeroNode(LLVMExpressionNode addressNode, int size);
 
-    LLVMExpressionNode createEmptyStructLiteralNode(LLVMParserRuntime runtime, LLVMExpressionNode alloca, int byteSize);
+    LLVMExpressionNode createEmptyStructLiteralNode(LLVMExpressionNode alloca, int byteSize);
 
     /**
      * Creates the global root (e.g., the main function in C).
@@ -211,7 +225,7 @@ public interface NodeFactoryFacade {
      * @param sourceFile
      * @return the global root
      */
-    RootNode createGlobalRootNode(LLVMParserRuntime runtime, RootCallTarget mainCallTarget, Object[] args, Source sourceFile, LLVMRuntimeType[] mainTypes);
+    RootNode createGlobalRootNode(RootCallTarget mainCallTarget, Object[] args, Source sourceFile, LLVMRuntimeType[] mainTypes);
 
     /**
      * Wraps the global root (e.g., the main function in C) to convert its result.
@@ -220,7 +234,7 @@ public interface NodeFactoryFacade {
      * @param returnType
      * @return the wrapped global root
      */
-    RootNode createGlobalRootNodeWrapping(LLVMParserRuntime runtime, RootCallTarget mainCallTarget, LLVMRuntimeType returnType);
+    RootNode createGlobalRootNodeWrapping(RootCallTarget mainCallTarget, LLVMRuntimeType returnType);
 
     /**
      * Creates a structure literal node.
@@ -232,7 +246,7 @@ public interface NodeFactoryFacade {
      * @param constants the structure members
      * @return the constructed structure literal
      */
-    LLVMExpressionNode createStructureConstantNode(LLVMParserRuntime runtime, Type structureType, boolean packed, Type[] types, LLVMExpressionNode[] constants);
+    LLVMExpressionNode createStructureConstantNode(Type structureType, boolean packed, Type[] types, LLVMExpressionNode[] constants);
 
     /**
      * Creates a basic block node.
@@ -241,7 +255,7 @@ public interface NodeFactoryFacade {
      * @param terminatorNode the terminator instruction node that changes control flow
      * @return the basic block node
      */
-    LLVMNode createBasicBlockNode(LLVMParserRuntime runtime, LLVMNode[] statementNodes, LLVMNode terminatorNode, int blockId, String blockName);
+    LLVMNode createBasicBlockNode(LLVMNode[] statementNodes, LLVMNode terminatorNode, int blockId, String blockName);
 
     /**
      * Creates a node that groups together several basic blocks in a function and returns the
@@ -253,7 +267,7 @@ public interface NodeFactoryFacade {
      * @param slotNullerAfterNodes
      * @return the function block node
      */
-    LLVMExpressionNode createFunctionBlockNode(LLVMParserRuntime runtime, FrameSlot returnSlot, List<? extends LLVMNode> basicBlockNodes, LLVMStackFrameNuller[][] indexToSlotNuller,
+    LLVMExpressionNode createFunctionBlockNode(FrameSlot returnSlot, List<? extends LLVMNode> basicBlockNodes, LLVMStackFrameNuller[][] indexToSlotNuller,
                     LLVMStackFrameNuller[][] slotNullerAfterNodes);
 
     /**
@@ -266,8 +280,7 @@ public interface NodeFactoryFacade {
      * @param functionHeader
      * @return a function root node
      */
-    RootNode createFunctionStartNode(LLVMParserRuntime runtime, LLVMExpressionNode functionBodyNode, LLVMNode[] beforeFunction, LLVMNode[] afterFunction, SourceSection sourceSection,
-                    FrameDescriptor frameDescriptor,
+    RootNode createFunctionStartNode(LLVMExpressionNode functionBodyNode, LLVMNode[] beforeFunction, LLVMNode[] afterFunction, SourceSection sourceSection, FrameDescriptor frameDescriptor,
                     FunctionDefinition functionHeader);
 
     /**
@@ -286,7 +299,7 @@ public interface NodeFactoryFacade {
      * @param retType the type the inline assembler instruction produces
      * @return an inline assembler node
      */
-    LLVMNode createInlineAssemblerExpression(LLVMParserRuntime runtime, String asmExpression, String asmFlags, LLVMExpressionNode[] args, LLVMBaseType retType);
+    LLVMNode createInlineAssemblerExpression(String asmExpression, String asmFlags, LLVMExpressionNode[] args, LLVMBaseType retType);
 
     /**
      * Gets factories that provide substitutions for (standard library) functions. The substitutions
@@ -305,23 +318,23 @@ public interface NodeFactoryFacade {
      */
     RootNode createFunctionSubstitutionRootNode(LLVMNode intrinsicNode);
 
-    Object allocateGlobalVariable(LLVMParserRuntime runtime, GlobalVariable globalVariable);
+    Object allocateGlobalVariable(GlobalVariable globalVariable);
 
-    Object allocateGlobalConstant(LLVMParserRuntime runtime, GlobalConstant globalConstant);
+    Object allocateGlobalConstant(GlobalConstant globalConstant);
 
-    RootNode createStaticInitsRootNode(LLVMParserRuntime runtime, LLVMNode[] staticInits);
+    RootNode createStaticInitsRootNode(LLVMNode[] staticInits);
 
     /**
      * Returns whether function calls expect an implicit stack pointer argument.
      *
      * @return true if the parser should pass an implicit stack pointer argument for function calls
      */
-    Optional<Boolean> hasStackPointerArgument(LLVMParserRuntime runtime);
+    Optional<Boolean> hasStackPointerArgument();
 
-    LLVMStackFrameNuller createFrameNuller(LLVMParserRuntime runtime, String identifier, LLVMType type, FrameSlot slot);
+    LLVMStackFrameNuller createFrameNuller(String identifier, LLVMType type, FrameSlot slot);
 
     LLVMFunction createFunctionDescriptor(String name, LLVMRuntimeType returnType, boolean varArgs, LLVMRuntimeType[] paramTypes, int functionIndex);
 
-    LLVMFunction createAndRegisterFunctionDescriptor(LLVMParserRuntime runtime, String name, LLVMRuntimeType convertType, boolean varArgs, LLVMRuntimeType[] convertTypes);
+    LLVMFunction createAndRegisterFunctionDescriptor(String name, LLVMRuntimeType convertType, boolean varArgs, LLVMRuntimeType[] convertTypes);
 
 }

@@ -31,12 +31,15 @@ package com.oracle.truffle.llvm.parser.impl;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.oracle.truffle.llvm.parser.base.model.globals.GlobalConstant;
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EObject;
 
@@ -68,6 +71,8 @@ import com.intel.llvm.ireditor.lLVM_IR.InlineAsm;
 import com.intel.llvm.ireditor.lLVM_IR.InlineAssembler;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_alloca;
+import com.intel.llvm.ireditor.lLVM_IR.Instruction_and;
+import com.intel.llvm.ireditor.lLVM_IR.Instruction_ashr;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_atomicrmw;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_br;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_call_nonVoid;
@@ -81,24 +86,23 @@ import com.intel.llvm.ireditor.lLVM_IR.Instruction_icmp;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_indirectbr;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_insertelement;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_insertvalue;
-import com.intel.llvm.ireditor.lLVM_IR.Instruction_invoke_nonVoid;
-import com.intel.llvm.ireditor.lLVM_IR.Instruction_landingpad;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_load;
+import com.intel.llvm.ireditor.lLVM_IR.Instruction_lshr;
+import com.intel.llvm.ireditor.lLVM_IR.Instruction_or;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_ret;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_select;
+import com.intel.llvm.ireditor.lLVM_IR.Instruction_shl;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_shufflevector;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_store;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_switch;
 import com.intel.llvm.ireditor.lLVM_IR.Instruction_unreachable;
+import com.intel.llvm.ireditor.lLVM_IR.Instruction_xor;
 import com.intel.llvm.ireditor.lLVM_IR.LocalValue;
 import com.intel.llvm.ireditor.lLVM_IR.LocalValueRef;
-import com.intel.llvm.ireditor.lLVM_IR.MetadataNode;
-import com.intel.llvm.ireditor.lLVM_IR.MetadataNodeElement;
 import com.intel.llvm.ireditor.lLVM_IR.MiddleInstruction;
 import com.intel.llvm.ireditor.lLVM_IR.Model;
 import com.intel.llvm.ireditor.lLVM_IR.NamedMetadata;
 import com.intel.llvm.ireditor.lLVM_IR.NamedMiddleInstruction;
-import com.intel.llvm.ireditor.lLVM_IR.NamedTerminatorInstruction;
 import com.intel.llvm.ireditor.lLVM_IR.Parameter;
 import com.intel.llvm.ireditor.lLVM_IR.Parameters;
 import com.intel.llvm.ireditor.lLVM_IR.SimpleConstant;
@@ -114,7 +118,6 @@ import com.intel.llvm.ireditor.lLVM_IR.Undef;
 import com.intel.llvm.ireditor.lLVM_IR.ValueRef;
 import com.intel.llvm.ireditor.lLVM_IR.VectorConstant;
 import com.intel.llvm.ireditor.lLVM_IR.ZeroInitializer;
-import com.intel.llvm.ireditor.lLVM_IR.impl.Instruction_brImpl;
 import com.intel.llvm.ireditor.types.ResolvedArrayType;
 import com.intel.llvm.ireditor.types.ResolvedType;
 import com.intel.llvm.ireditor.types.ResolvedVectorType;
@@ -124,70 +127,43 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeUtil;
-import com.oracle.truffle.llvm.nativeint.NativeLookup;
+import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.llvm.context.nativeint.NativeLookup;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMContext;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMMetadataNode;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMStatementNode;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMStructWriteNode;
-import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI1Node;
-import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMI32VectorNode;
-import com.oracle.truffle.llvm.nodes.impl.exception.LLVMInvokeNode;
-import com.oracle.truffle.llvm.nodes.impl.exception.LLVMLandingPadNode.LLVMAddressLandingPadNode;
-import com.oracle.truffle.llvm.nodes.impl.func.LLVMCallNode;
-import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionBodyNode;
-import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionStartNode;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMMemCopyFactory.LLVMMemI32CopyFactory;
-import com.oracle.truffle.llvm.nodes.impl.others.LLVMBlockNode;
-import com.oracle.truffle.llvm.nodes.impl.others.LLVMBlockNode.LLVMBlockControlFlowNode;
-import com.oracle.truffle.llvm.nodes.impl.others.LLVMBlockNode.LLVMBlockNoControlFlowNode;
-import com.oracle.truffle.llvm.nodes.impl.others.LLVMPhiNode;
-import com.oracle.truffle.llvm.nodes.impl.others.LLVMStackFrameNuller;
-import com.oracle.truffle.llvm.nodes.impl.others.LLVMStackFrameNuller.LLVMBooleanNuller;
-import com.oracle.truffle.llvm.nodes.impl.others.LLVMStackFrameNuller.LLVMByteNuller;
-import com.oracle.truffle.llvm.nodes.impl.others.LLVMStackFrameNuller.LLVMDoubleNull;
-import com.oracle.truffle.llvm.nodes.impl.others.LLVMStackFrameNuller.LLVMFloatNuller;
-import com.oracle.truffle.llvm.nodes.impl.others.LLVMStackFrameNuller.LLVMIntNuller;
-import com.oracle.truffle.llvm.nodes.impl.others.LLVMStackFrameNuller.LLVMLongNuller;
-import com.oracle.truffle.llvm.nodes.impl.others.LLVMStackFrameNuller.LLVMObjectNuller;
-import com.oracle.truffle.llvm.nodes.impl.others.LLVMWrappedStatementNode;
+import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
-import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
-import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
+import com.oracle.truffle.llvm.parser.LLVMParserResult;
+import com.oracle.truffle.llvm.parser.LLVMType;
+import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
+import com.oracle.truffle.llvm.parser.base.facade.NodeFactoryFacade;
+import com.oracle.truffle.llvm.parser.base.util.LLVMParserAsserts;
+import com.oracle.truffle.llvm.parser.base.util.LLVMParserResultImpl;
 import com.oracle.truffle.llvm.parser.impl.LLVMPhiVisitor.Phi;
-import com.oracle.truffle.llvm.parser.impl.layout.DataLayoutConverter;
-import com.oracle.truffle.llvm.parser.impl.layout.DataLayoutConverter.DataSpecConverter;
-import com.oracle.truffle.llvm.parser.impl.layout.DataLayoutParser;
-import com.oracle.truffle.llvm.parser.impl.layout.DataLayoutParser.DataTypeSpecification;
+import com.oracle.truffle.llvm.parser.impl.lifetime.LLVMLifeTimeAnalysisResult;
+import com.oracle.truffle.llvm.parser.impl.lifetime.LLVMLifeTimeAnalysisVisitor;
 import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMFloatComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMIntegerComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionType;
-import com.oracle.truffle.llvm.parser.util.LLVMTypeHelper;
-import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
-import com.oracle.truffle.llvm.runtime.LLVMOptions;
+import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.LLVMParserException;
 import com.oracle.truffle.llvm.runtime.LLVMParserException.ParserErrorCause;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
+import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunction;
-import com.oracle.truffle.llvm.types.LLVMMetadata;
-import com.oracle.truffle.llvm.types.memory.LLVMHeap;
 import com.oracle.truffle.llvm.types.memory.LLVMStack;
 
 /**
  * This class traverses the LLVM IR AST as provided by the <code>com.intel.llvm.ireditor</code>
  * project and returns an executable AST.
  */
-public class LLVMVisitor implements LLVMParserRuntime {
+public final class LLVMVisitor implements LLVMParserRuntimeTextual {
 
     private static final int HEX_BASE = 16;
 
@@ -196,37 +172,84 @@ public class LLVMVisitor implements LLVMParserRuntime {
 
     private static final TypeResolver typeResolver = new TypeResolver();
     private FrameDescriptor frameDescriptor;
-    private LLVMContext currentContext;
+    private FrameDescriptor globalFrameDescriptor;
     private List<LLVMNode> functionEpilogue;
     private Map<FunctionHeader, Map<String, Integer>> functionToLabelMapping;
     private final Map<LLVMFunction, RootCallTarget> functionCallTargets = new HashMap<>();
+    private Map<String, Object> globalVariableScope = new HashMap<>();
+    private final Map<String, com.oracle.truffle.llvm.parser.base.model.types.Type> variableTypes = new HashMap<>();
     private Map<String, Integer> labelList;
     private FrameSlot retSlot;
     private FrameSlot stackPointerSlot;
     private FunctionDef containingFunctionDef;
     private NodeFactoryFacade factoryFacade;
-    private final LLVMOptimizationConfiguration optimizationConfiguration;
 
     private Map<BasicBlock, List<Phi>> phiRefs;
 
     private NativeLookup nativeLookup;
 
-    public LLVMVisitor(LLVMContext context, LLVMOptimizationConfiguration optimizationConfiguration) {
-        currentContext = context;
-        this.optimizationConfiguration = optimizationConfiguration;
-        LLVMTypeHelper.setParserRuntime(this);
+    private Object[] mainArgs;
+
+    private Source sourceFile;
+    private Source mainSourceFile;
+
+    private LLVMTypeHelper typeHelper;
+
+    public LLVMVisitor(Object[] mainArgs, Source sourceFile, Source mainSourceFile) {
+        this.mainArgs = mainArgs;
+        this.sourceFile = sourceFile;
+        this.mainSourceFile = mainSourceFile;
+        typeHelper = new LLVMTypeHelper(this);
     }
 
-    public List<LLVMFunction> visit(Model model, NodeFactoryFacade facade) {
+    private static LLVMFunction searchFunction(Map<LLVMFunction, RootCallTarget> parsedFunctions, String toSearch) {
+        for (LLVMFunction func : parsedFunctions.keySet()) {
+            if (func.getName().equals(toSearch)) {
+                return func;
+            }
+        }
+        return null;
+    }
+
+    public LLVMParserResult getMain(Model model, NodeFactoryFacade facade) {
+        Map<LLVMFunction, RootCallTarget> parsedFunctions = visit(model, facade);
+        LLVMFunction mainFunction = searchFunction(parsedFunctions, "@main");
+        LLVMNode[] globalVarInits = globalNodes.toArray(new LLVMNode[globalNodes.size()]);
+        RootCallTarget globalVarInitsTarget = Truffle.getRuntime().createCallTarget(factoryFacade.createStaticInitsRootNode(globalVarInits));
+        deallocations = globalDeallocations.toArray(new LLVMNode[globalDeallocations.size()]);
+        RootCallTarget globalVarDeallocsTarget = Truffle.getRuntime().createCallTarget(factoryFacade.createStaticInitsRootNode(deallocations));
+        LLVMNode[] destructorFunctionsArray = destructorFunctions.toArray(new LLVMNode[destructorFunctions.size()]);
+        RootCallTarget destructorFunctionsTarget = Truffle.getRuntime().createCallTarget(
+                        factoryFacade.createStaticInitsRootNode(destructorFunctionsArray));
+        List<RootCallTarget> destructorFunctionCallTargets = new ArrayList<>(1);
+        destructorFunctionCallTargets.add(destructorFunctionsTarget);
+        LLVMNode[] constructorFunctionsArray = constructorFunctions.toArray(new LLVMNode[constructorFunctions.size()]);
+        RootCallTarget constructorFunctionsTarget = Truffle.getRuntime().createCallTarget(
+                        factoryFacade.createStaticInitsRootNode(constructorFunctionsArray));
+        List<RootCallTarget> constructorFunctionCallTargets = new ArrayList<>(1);
+        constructorFunctionCallTargets.add(constructorFunctionsTarget);
+        if (mainFunction == null) {
+            return new LLVMParserResultImpl(null, globalVarInitsTarget, globalVarDeallocsTarget, constructorFunctionCallTargets, destructorFunctionCallTargets, parsedFunctions);
+        }
+        RootCallTarget mainCallTarget = parsedFunctions.get(mainFunction);
+        RootNode globalFunction = factoryFacade.createGlobalRootNode(mainCallTarget, mainArgs, mainSourceFile, mainFunction.getParameterTypes());
+        RootCallTarget globalFunctionRoot = Truffle.getRuntime().createCallTarget(globalFunction);
+        RootNode globalRootNode = factoryFacade.createGlobalRootNodeWrapping(globalFunctionRoot, mainFunction.getReturnType());
+        RootCallTarget wrappedCallTarget = Truffle.getRuntime().createCallTarget(globalRootNode);
+        return new LLVMParserResultImpl(wrappedCallTarget, globalVarInitsTarget, globalVarDeallocsTarget, constructorFunctionCallTargets, destructorFunctionCallTargets, parsedFunctions);
+    }
+
+    public Map<LLVMFunction, RootCallTarget> visit(Model model, NodeFactoryFacade facade) {
         this.factoryFacade = facade;
+        this.nativeLookup = new NativeLookup(facade);
         List<EObject> objects = model.eContents();
         List<LLVMFunction> functions = new ArrayList<>();
-        List<LLVMNode> globalNodes = new ArrayList<>();
+        globalNodes = new ArrayList<>();
         List<GlobalVariable> staticVars = new ArrayList<>();
         functionToLabelMapping = new HashMap<>();
         setTargetInfo(objects);
-        allocateGlobals(this, objects);
-        this.nativeLookup = new NativeLookup(facade);
+        allocateGlobals(objects);
+        allocateAliases(objects);
         for (EObject object : objects) {
             if (object instanceof FunctionDef) {
                 phiRefs = LLVMPhiVisitor.visit((FunctionDef) object);
@@ -237,9 +260,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
             } else if (object instanceof TargetInfo) {
                 // already parsed
             } else if (object instanceof NamedMetadata) {
-                if (LLVMOptions.debugEnabled()) {
-                    System.err.println(object + " not supported!");
-                }
+                LLVMLogger.info(object + " not supported!");
             } else if (object instanceof FunctionDecl) {
                 // not needed for the moment
             } else if (object instanceof AttributeGroup) {
@@ -251,21 +272,53 @@ public class LLVMVisitor implements LLVMParserRuntime {
             } else if (object instanceof TypeDef) {
                 // do nothing
             } else if (object instanceof Alias) {
-                // do nothing, visit later when alias is referenced
+                // do nothing
             } else if (object instanceof InlineAsm) {
-                if (LLVMOptions.debugEnabled()) {
-                    System.err.println("ignoring module level inline assembler!");
-                }
+                LLVMLogger.info("ignoring module level inline assembler!");
             } else {
                 throw new AssertionError(object);
             }
         }
-        currentContext.getFunctionRegistry().register(functionCallTargets);
         List<LLVMNode> globalVarNodes = addGlobalVars(this, staticVars);
         globalNodes.addAll(globalVarNodes);
-        LLVMAddress[] deallocations = globalDeallocations.toArray(new LLVMAddress[globalDeallocations.size()]);
-        currentContext.setStaticInits(globalNodes.toArray(new LLVMNode[globalNodes.size()]), deallocations);
-        return functions;
+        return functionCallTargets;
+    }
+
+    private void allocateAliases(List<EObject> objects) {
+        boolean resolvedAllAliases;
+        boolean madeProgress;
+        Object unresolvedAlias = null;
+        do {
+            resolvedAllAliases = true;
+            madeProgress = false;
+            for (EObject object : objects) {
+                if (object instanceof Alias) {
+                    Alias alias = (Alias) object;
+                    if (aliases.get(alias) == null) {
+                        GlobalValueDef aliasee = alias.getAliasee().getRef();
+                        Object globalVar;
+                        if (aliasee instanceof GlobalVariable) {
+                            globalVar = globalVariableScope.get(((GlobalVariable) aliasee).getName());
+                        } else if (aliasee instanceof Alias) {
+                            globalVar = aliases.get(aliasee);
+                        } else {
+                            continue;
+                        }
+                        if (globalVar == null) {
+                            resolvedAllAliases = false;
+                            unresolvedAlias = alias.getName();
+                        } else {
+                            aliases.put(alias, globalVar);
+                            madeProgress = true;
+                        }
+                    }
+                }
+            }
+            if (!resolvedAllAliases && !madeProgress) {
+                LLVMLogger.info("Could not resolve all aliases (e.g., " + unresolvedAlias + ")");
+                break;
+            }
+        } while (!resolvedAllAliases);
     }
 
     private static void setTargetInfo(List<EObject> objects) {
@@ -276,45 +329,59 @@ public class LLVMVisitor implements LLVMParserRuntime {
         }
     }
 
-    private static void allocateGlobals(LLVMVisitor visitor, List<EObject> objects) {
+    private void allocateGlobals(List<EObject> objects) {
         for (EObject object : objects) {
             if (object instanceof GlobalVariable) {
-                visitor.findOrAllocateGlobal((GlobalVariable) object);
+                GlobalVariable globalVar = (GlobalVariable) object;
+                com.oracle.truffle.llvm.parser.base.model.globals.GlobalVariable resolveGlobalVariable = LLVMToBitcodeAdapter.resolveGlobalVariable(
+                                (LLVMParserRuntimeTextual) factoryFacade.getRuntime(), globalVar);
+                globalVariableScope.put(globalVar.getName(), findOrAllocateGlobal(resolveGlobalVariable));
             }
         }
     }
 
+    private void addFunctionAttribute(GlobalVariable globalVar, List<LLVMNode> targetList) {
+        ResolvedArrayType type = (ResolvedArrayType) typeResolver.resolve(globalVar.getType());
+        int size = type.getSize();
+        Object allocGlobalVariable = globalVariableScope.get(globalVar.getName());
+        ResolvedType structType = type.getContainedType(0);
+        int structSize = typeHelper.getByteSize(structType);
+        for (int i = 0; i < size; i++) {
+            LLVMExpressionNode globalVarAddress = factoryFacade.createLiteral(allocGlobalVariable, LLVMBaseType.ADDRESS);
+            LLVMExpressionNode iNode = factoryFacade.createLiteral(i, LLVMBaseType.I32);
+            LLVMExpressionNode structPointer = factoryFacade.createGetElementPtr(LLVMBaseType.I32, globalVarAddress, iNode, structSize);
+            LLVMExpressionNode loadedStruct = factoryFacade.createLoad(TextToBCConverter.convert(structType), structPointer);
+            ResolvedType functionType = structType.getContainedType(1);
+            int indexedTypeLength = typeHelper.getAlignmentByte(functionType);
+            LLVMExpressionNode oneLiteralNode = factoryFacade.createLiteral(1, LLVMBaseType.I32);
+            LLVMExpressionNode functionLoadTarget = factoryFacade.createGetElementPtr(LLVMBaseType.I32, loadedStruct, oneLiteralNode, indexedTypeLength);
+            LLVMExpressionNode loadedFunction = factoryFacade.createLoad(TextToBCConverter.convert(functionType), functionLoadTarget);
+            LLVMExpressionNode[] argNodes = new LLVMExpressionNode[]{factoryFacade.createFrameRead(LLVMBaseType.ADDRESS, getStackPointerSlot())};
+            assert argNodes.length == factoryFacade.getArgStartIndex().get();
+            LLVMNode functionCall = factoryFacade.createFunctionCall(loadedFunction, argNodes, LLVMBaseType.VOID);
+            targetList.add(functionCall);
+        }
+    }
+
+    private final List<LLVMNode> destructorFunctions = new ArrayList<>();
+    private final List<LLVMNode> constructorFunctions = new ArrayList<>();
+
     private List<LLVMNode> addGlobalVars(LLVMVisitor visitor, List<GlobalVariable> globalVariables) {
-        List<LLVMNode> globalNodes = new ArrayList<>();
+        frameDescriptor = globalFrameDescriptor = new FrameDescriptor();
+        stackPointerSlot = frameDescriptor.addFrameSlot(STACK_ADDRESS_FRAME_SLOT_ID, FrameSlotKind.Object);
+        List<LLVMNode> globalVarNodes = new ArrayList<>();
         for (GlobalVariable globalVar : globalVariables) {
             LLVMNode globalVarWrite = visitor.visitGlobalVariable(globalVar);
             if (globalVarWrite != null) {
-                globalNodes.add(globalVarWrite);
+                globalVarNodes.add(globalVarWrite);
             }
             if (globalVar.getName().equals("@llvm.global_ctors")) {
-                ResolvedArrayType type = (ResolvedArrayType) typeResolver.resolve(globalVar.getType());
-                int size = type.getSize();
-                LLVMAddress allocGlobalVariable = findOrAllocateGlobal(globalVar);
-                ResolvedType structType = type.getContainedType(0);
-                int structSize = LLVMTypeHelper.getByteSize(structType);
-                for (int i = 0; i < size; i++) {
-                    LLVMExpressionNode globalVarAddress = factoryFacade.createLiteral(allocGlobalVariable, LLVMBaseType.ADDRESS);
-                    LLVMExpressionNode iNode = factoryFacade.createLiteral(i, LLVMBaseType.I32);
-                    LLVMAddressNode structPointer = (LLVMAddressNode) factoryFacade.createGetElementPtr(LLVMBaseType.I32, globalVarAddress, iNode, structSize);
-                    LLVMAddressNode loadedStruct = (LLVMAddressNode) factoryFacade.createLoad(structType, structPointer);
-                    ResolvedType functionType = structType.getContainedType(1);
-                    int indexedTypeLength = LLVMTypeHelper.getAlignmentByte(functionType);
-                    LLVMExpressionNode oneLiteralNode = factoryFacade.createLiteral(1, LLVMBaseType.I32);
-                    LLVMAddressNode functionLoadTarget = (LLVMAddressNode) factoryFacade.createGetElementPtr(LLVMBaseType.I32, loadedStruct, oneLiteralNode, indexedTypeLength);
-                    LLVMFunctionNode loadedFunction = (LLVMFunctionNode) factoryFacade.createLoad(functionType, functionLoadTarget);
-                    LLVMNode functionCall = factoryFacade.createFunctionCall(loadedFunction, new LLVMExpressionNode[0], LLVMBaseType.VOID);
-                    globalNodes.add(functionCall);
-                }
-            } else if (globalVar.getName().equals("llvm.global_dtors")) {
-                throw new AssertionError("destructors not yet supported!");
+                addFunctionAttribute(globalVar, constructorFunctions);
+            } else if (globalVar.getName().equals("@llvm.global_dtors")) {
+                addFunctionAttribute(globalVar, destructorFunctions);
             }
         }
-        return globalNodes;
+        return globalVarNodes;
     }
 
     private static void visitTargetInfo(TargetInfo object) {
@@ -324,8 +391,14 @@ public class LLVMVisitor implements LLVMParserRuntime {
                 // ignore
                 break;
             case "datalayout":
-                List<DataTypeSpecification> dataLayout = DataLayoutParser.parseDataLayout(object.getLayout());
-                layoutConverter = DataLayoutConverter.getConverter(dataLayout);
+                String layout = object.getLayout();
+                if (layout != null) {
+                    // remove enclosing quotes
+                    layout = layout.substring(1, layout.length() - 2);
+                    layoutConverter = DataLayoutConverter.getConverter(layout);
+                } else {
+                    throw new AssertionError("Invalid Layout!");
+                }
                 break;
             default:
                 throw new AssertionError(infoType + " not supported!");
@@ -350,24 +423,14 @@ public class LLVMVisitor implements LLVMParserRuntime {
         } else {
             LLVMExpressionNode constant = visitConstant(globalVariable.getType(), initialValue);
             if (constant != null) {
-                LLVMBaseType llvmType = getLLVMType(globalVariable.getType());
                 ResolvedType resolvedType = resolve(globalVariable.getType());
-                int byteSize = LLVMTypeHelper.getByteSize(resolvedType);
-                LLVMAddress allocGlobalVariable = findOrAllocateGlobal(globalVariable);
+                int byteSize = typeHelper.getByteSize(resolvedType);
+                Object allocGlobalVariable = globalVariableScope.get(globalVariable.getName());
                 if (byteSize == 0) {
                     return null;
                 } else {
                     LLVMExpressionNode globalVarAddress = factoryFacade.createLiteral(allocGlobalVariable, LLVMBaseType.ADDRESS);
-                    LLVMNode storeNode;
-                    if (llvmType == LLVMBaseType.ARRAY || llvmType == LLVMBaseType.STRUCT) {
-                        LLVMExpressionNode isVolatileNode = factoryFacade.createLiteral(false, LLVMBaseType.I1);
-                        LLVMExpressionNode alignNode = factoryFacade.createLiteral(0, LLVMBaseType.I32);
-                        LLVMExpressionNode lengthNode = factoryFacade.createLiteral(byteSize, LLVMBaseType.I32);
-                        storeNode = LLVMMemI32CopyFactory.create((LLVMAddressNode) globalVarAddress, (LLVMAddressNode) constant, (LLVMI32Node) lengthNode, (LLVMI32Node) alignNode,
-                                        (LLVMI1Node) isVolatileNode);
-                    } else {
-                        storeNode = getStoreNode((LLVMAddressNode) globalVarAddress, constant, globalVariable.getType());
-                    }
+                    LLVMNode storeNode = getStoreNode(globalVarAddress, constant, globalVariable.getType());
                     return storeNode;
                 }
             } else {
@@ -377,20 +440,17 @@ public class LLVMVisitor implements LLVMParserRuntime {
         }
     }
 
-    private final Map<GlobalVariable, LLVMAddress> globalVars = new HashMap<>();
-    private final List<LLVMAddress> globalDeallocations = new ArrayList<>();
+    private final Map<Alias, Object> aliases = new HashMap<>();
+    private final List<LLVMNode> globalDeallocations = new ArrayList<>();
     private boolean isGlobalScope;
 
-    private LLVMAddress findOrAllocateGlobal(GlobalVariable globalVariable) {
-        if (globalVars.containsKey(globalVariable)) {
-            return globalVars.get(globalVariable);
+    private Object findOrAllocateGlobal(com.oracle.truffle.llvm.parser.base.model.globals.GlobalValueSymbol globalVariable) {
+        if (globalVariable instanceof com.oracle.truffle.llvm.parser.base.model.globals.GlobalVariable) {
+            return factoryFacade.allocateGlobalVariable((com.oracle.truffle.llvm.parser.base.model.globals.GlobalVariable) globalVariable);
+        } else if (globalVariable instanceof GlobalConstant) {
+            return factoryFacade.allocateGlobalConstant((GlobalConstant) globalVariable);
         } else {
-            ResolvedType resolvedType = resolve(globalVariable.getType());
-            int byteSize = LLVMTypeHelper.getByteSize(resolvedType);
-            LLVMAddress allocation = LLVMHeap.allocateMemory(byteSize);
-            globalVars.put(globalVariable, allocation);
-            globalDeallocations.add(allocation);
-            return allocation;
+            throw new AssertionError();
         }
     }
 
@@ -401,7 +461,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
     }
 
     private LLVMExpressionNode getArrayLiteral(List<LLVMExpressionNode> arrayValues, ResolvedType arrayType) {
-        return factoryFacade.createArrayLiteral(arrayValues, arrayType);
+        return factoryFacade.createArrayLiteral(arrayValues, TextToBCConverter.convert(arrayType));
     }
 
     private LLVMFunction visitFunction(FunctionDef def) {
@@ -409,19 +469,20 @@ public class LLVMVisitor implements LLVMParserRuntime {
         isGlobalScope = false;
         frameDescriptor = new FrameDescriptor();
         isGlobalScope = false;
-        retSlot = frameDescriptor.addFrameSlot(FUNCTION_RETURN_VALUE_FRAME_SLOT_ID);
+        if (!resolve(def.getHeader().getRettype()).isVoid()) {
+            retSlot = frameDescriptor.addFrameSlot(FUNCTION_RETURN_VALUE_FRAME_SLOT_ID);
+        }
         stackPointerSlot = frameDescriptor.addFrameSlot(STACK_ADDRESS_FRAME_SLOT_ID, FrameSlotKind.Object);
         functionEpilogue = new ArrayList<>();
         LLVMAttributeVisitor.visitFunctionHeader(def.getHeader());
         labelList = getBlockLabelIndexMapping(def);
         List<LLVMNode> formalParameters = getFormalParametersInit(def);
-        LLVMBlockNode block = getFunctionBlockStatements(def);
-        String functionName = def.getHeader().getName();
-        LLVMFunctionBodyNode functionBodyNode = new LLVMFunctionBodyNode(block, retSlot);
+        LLVMExpressionNode block = getFunctionBlockStatements(def);
         LLVMNode[] beforeFunction = formalParameters.toArray(new LLVMNode[formalParameters.size()]);
         LLVMNode[] afterFunction = functionEpilogue.toArray(new LLVMNode[functionEpilogue.size()]);
-        LLVMFunctionStartNode rootNode = new LLVMFunctionStartNode(functionBodyNode, stackPointerSlot, beforeFunction, afterFunction, frameDescriptor, functionName);
-        if (LLVMOptions.printFunctionASTs()) {
+        RootNode rootNode = factoryFacade.createFunctionStartNode(block, beforeFunction, afterFunction, sourceFile.createSection(1), frameDescriptor,
+                        LLVMToBitcodeAdapter.resolveFunctionDef(this, def));
+        if (LLVMOptions.DEBUG.printFunctionASTs()) {
             NodeUtil.printTree(System.out, rootNode);
         }
         LLVMFunction function = createLLVMFunctionFromHeader(def.getHeader());
@@ -430,53 +491,42 @@ public class LLVMVisitor implements LLVMParserRuntime {
         return function;
     }
 
-    private LLVMBlockNode getFunctionBlockStatements(FunctionDef def) {
+    private LLVMExpressionNode getFunctionBlockStatements(FunctionDef def) {
         List<LLVMNode> allFunctionNodes = new ArrayList<>();
         int currentIndex = 0;
         int[] basicBlockIndices = new int[def.getBasicBlocks().size()];
         int i = 0;
         for (BasicBlock basicBlock : def.getBasicBlocks()) {
-            List<LLVMNode> statementNodes = visitBasicBlock(basicBlock);
-            currentIndex += statementNodes.size();
-            basicBlockIndices[i++] = currentIndex - 1;
-            allFunctionNodes.addAll(statementNodes);
+            LLVMNode statementNodes = visitBasicBlock(basicBlock);
+            basicBlockIndices[i++] = currentIndex;
+            currentIndex++;
+            allFunctionNodes.add(statementNodes);
         }
-        LLVMStackFrameNuller[][] indexToSlotNuller = new LLVMStackFrameNuller[currentIndex][];
-        i = 0;
+
+        Map<BasicBlock, FrameSlot[]> deadSlotsAtBeginBlock;
         Map<BasicBlock, FrameSlot[]> deadSlotsAfterBlock;
-        if (LLVMOptions.lifeTimeAnalysisEnabled()) {
-            deadSlotsAfterBlock = LLVMLifeTimeAnalysisVisitor.visit(def, frameDescriptor);
-        } else {
-            deadSlotsAfterBlock = new HashMap<>();
-        }
-        for (BasicBlock basicBlock : def.getBasicBlocks()) {
-            FrameSlot[] deadSlots = deadSlotsAfterBlock.get(basicBlock);
-            indexToSlotNuller[basicBlockIndices[i++]] = getSlotNullerNode(deadSlots);
-        }
-        int size = allFunctionNodes.size();
-        boolean lastStatementIsControl = allFunctionNodes.get(size - 1) instanceof LLVMStatementNode;
-        if (!lastStatementIsControl) {
-            throw new IllegalStateException("last statement in basic block should be control statement");
-        }
-        boolean containsControlFlow = size != 1 && allFunctionNodes.stream().limit(allFunctionNodes.size() - 1).anyMatch(node -> node instanceof LLVMStatementNode);
-        if (containsControlFlow) {
-            LLVMStatementNode[] statements = new LLVMStatementNode[allFunctionNodes.size()];
-            for (i = 0; i < allFunctionNodes.size(); i++) {
-                LLVMNode currentNode = allFunctionNodes.get(i);
-                if (currentNode instanceof LLVMStatementNode) {
-                    statements[i] = (LLVMStatementNode) currentNode;
-                } else {
-                    final int successorIndex = i + 1;
-                    statements[i] = new LLVMWrappedStatementNode(currentNode, successorIndex);
-                }
-            }
-            return new LLVMBlockControlFlowNode(statements, indexToSlotNuller);
-        } else {
-            return new LLVMBlockNoControlFlowNode(allFunctionNodes.toArray(new LLVMNode[allFunctionNodes.size()]));
-        }
+        LLVMLifeTimeAnalysisResult analysisResult = LLVMLifeTimeAnalysisVisitor.visit(def, frameDescriptor);
+        deadSlotsAtBeginBlock = analysisResult.getBeginDead();
+        deadSlotsAfterBlock = analysisResult.getEndDead();
+        LLVMStackFrameNuller[][] slotNullerBeginNodes = getSlotNuller(def, currentIndex, basicBlockIndices, deadSlotsAtBeginBlock);
+        LLVMStackFrameNuller[][] slotNullerAfterNodes = getSlotNuller(def, currentIndex, basicBlockIndices, deadSlotsAfterBlock);
+        return factoryFacade.createFunctionBlockNode(retSlot, allFunctionNodes, slotNullerBeginNodes, slotNullerAfterNodes);
     }
 
-    private static LLVMStackFrameNuller[] getSlotNullerNode(FrameSlot[] deadSlots) {
+    private LLVMStackFrameNuller[][] getSlotNuller(FunctionDef def, int size, int[] basicBlockIndices, Map<BasicBlock, FrameSlot[]> deadSlotsAfterBlock) {
+        LLVMStackFrameNuller[][] indexToSlotNuller = new LLVMStackFrameNuller[size][];
+        int i = 0;
+        for (BasicBlock basicBlock : def.getBasicBlocks()) {
+            FrameSlot[] deadSlots = deadSlotsAfterBlock.get(basicBlock);
+            if (deadSlots != null) {
+                LLVMParserAsserts.assertNoNullElement(deadSlots);
+                indexToSlotNuller[basicBlockIndices[i++]] = getSlotNullerNode(deadSlots);
+            }
+        }
+        return indexToSlotNuller;
+    }
+
+    private LLVMStackFrameNuller[] getSlotNullerNode(FrameSlot[] deadSlots) {
         if (deadSlots == null) {
             return new LLVMStackFrameNuller[0];
         }
@@ -485,30 +535,19 @@ public class LLVMVisitor implements LLVMParserRuntime {
         for (FrameSlot slot : deadSlots) {
             nullers[i++] = getNullerNode(slot);
         }
+        LLVMParserAsserts.assertNoNullElement(nullers);
         return nullers;
     }
 
-    private static LLVMStackFrameNuller getNullerNode(FrameSlot slot) {
-        switch (slot.getKind()) {
-            case Boolean:
-                return new LLVMBooleanNuller(slot);
-            case Byte:
-                return new LLVMByteNuller(slot);
-            case Int:
-                return new LLVMIntNuller(slot);
-            case Long:
-                return new LLVMLongNuller(slot);
-            case Float:
-                return new LLVMFloatNuller(slot);
-            case Double:
-                return new LLVMDoubleNull(slot);
-            case Object:
-                return new LLVMObjectNuller(slot);
-            case Illegal:
-                throw new AssertionError("illegal");
-            default:
-                throw new AssertionError();
-        }
+    private LLVMStackFrameNuller getNullerNode(FrameSlot slot) {
+        String identifier = (String) slot.getIdentifier();
+        LLVMType type = LLVMTypeHelper.getLLVMType(variableTypes.get(identifier));
+        return factoryFacade.createFrameNuller(identifier, type, slot);
+    }
+
+    private boolean needsStackPointerArgument() {
+        Optional<Boolean> hasStackPointerArgument = factoryFacade.hasStackPointerArgument();
+        return hasStackPointerArgument.isPresent() && hasStackPointerArgument.get();
     }
 
     private List<LLVMNode> getFormalParametersInit(FunctionDef def) {
@@ -516,7 +555,11 @@ public class LLVMVisitor implements LLVMParserRuntime {
         List<LLVMNode> formalParamInits = new ArrayList<>();
         FunctionHeader functionHeader = def.getHeader();
         EList<Parameter> pars = functionHeader.getParameters().getParameters();
-        int argIndex = LLVMCallNode.ARG_START_INDEX;
+        if (needsStackPointerArgument()) {
+            LLVMExpressionNode stackPointerNode = factoryFacade.createFunctionArgNode(0, LLVMBaseType.ADDRESS);
+            formalParamInits.add(factoryFacade.createFrameWrite(LLVMBaseType.ADDRESS, stackPointerNode, getStackPointerSlot()));
+        }
+        int argIndex = factoryFacade.getArgStartIndex().get();
         if (resolve(functionHeader.getRettype()).isStruct()) {
             LLVMExpressionNode functionRetParNode = factoryFacade.createFunctionArgNode(argIndex++, LLVMBaseType.STRUCT);
             LLVMNode retValue = createAssignment((String) retSlot.getIdentifier(), functionRetParNode, functionHeader.getRettype());
@@ -524,7 +567,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         }
         for (Parameter par : pars) {
             LLVMExpressionNode parNode;
-            LLVMBaseType paramType = getLLVMType(par.getType());
+            LLVMBaseType paramType = getLLVMType(par.getType()).getType();
             parNode = factoryFacade.createFunctionArgNode(argIndex, paramType);
             argIndex++;
             formalParamInits.add(createAssignment(par.getName(), parNode, par.getType().getType()));
@@ -537,82 +580,55 @@ public class LLVMVisitor implements LLVMParserRuntime {
         return getWriteNode(writeValue, frameSlot, type);
     }
 
-    private Map<String, Integer> getBlockLabelIndexMapping(FunctionDef functionDef) {
+    private static Map<String, Integer> getBlockLabelIndexMapping(FunctionDef functionDef) {
         int labelIndex = 0;
         HashMap<String, Integer> labels = new HashMap<>();
         for (BasicBlock basicBlock : functionDef.getBasicBlocks()) {
             labels.put(basicBlock.getName(), labelIndex);
-            int nrInstructions = basicBlock.getInstructions().size();
-            int nrAdditionalPhiAssignments = phiRefs.get(basicBlock).size();
-            labelIndex += nrInstructions + nrAdditionalPhiAssignments;
+            labelIndex++;
         }
         return labels;
     }
 
-    public static DataSpecConverter layoutConverter;
+    public static DataLayoutConverter.DataSpecConverter layoutConverter;
 
-    private List<LLVMNode> visitBasicBlock(BasicBlock basicBlock) {
+    private LLVMNode[] deallocations;
+
+    private List<LLVMNode> globalNodes;
+
+    private BasicBlock currentBasicBlock;
+
+    private LLVMNode visitBasicBlock(BasicBlock basicBlock) {
+        currentBasicBlock = basicBlock;
         List<LLVMNode> statements = new ArrayList<>(basicBlock.getInstructions().size());
         for (Instruction instr : basicBlock.getInstructions()) {
-            List<LLVMNode> instrInstructions = visitInstruction(basicBlock, instr);
+            List<LLVMNode> instrInstructions = visitInstruction(instr);
             for (LLVMNode instruction : instrInstructions) {
                 statements.add(instruction);
             }
         }
-        return statements;
+        LLVMNode[] statementNodes = new LLVMNode[statements.size() - 1];
+        System.arraycopy(statements.toArray(new LLVMNode[statementNodes.length]), 0, statementNodes, 0, statementNodes.length);
+        LLVMParserAsserts.assertNoNullElement(statementNodes);
+        LLVMNode terminatorNode = statements.get(statements.size() - 1);
+        int basicBlockIndex = getIndexFromBasicBlock(basicBlock);
+        LLVMNode basicBlockNode = factoryFacade.createBasicBlockNode(statementNodes, terminatorNode, basicBlockIndex, basicBlock.getName());
+        return basicBlockNode;
     }
 
-    private List<LLVMNode> visitInstruction(BasicBlock basicBlock, Instruction instr) {
+    private List<LLVMNode> visitInstruction(Instruction instr) {
         if (instr instanceof TerminatorInstruction) {
             List<LLVMNode> statements = new ArrayList<>();
-            if (!phiRefs.get(basicBlock).isEmpty()) {
-                List<Phi> phiValues = phiRefs.get(basicBlock);
-                if (isConditionalBranch(instr)) {
-                    Instruction_brImpl conditionalBranch = (Instruction_brImpl) ((TerminatorInstruction) instr).getInstruction();
-                    for (Phi valueRef : phiValues) {
-                        FrameSlot phiSlot = frameDescriptor.findOrAddFrameSlot(valueRef.getAssignTo());
-                        LLVMExpressionNode visitValueRef = visitValueRef(valueRef.getValueRef(), valueRef.getType());
-                        assert conditionalBranch.getTrue().getRef() == valueRef.getStartingInstr().eContainer() || conditionalBranch.getFalse().getRef() == valueRef.getStartingInstr().eContainer();
-                        boolean isTrueCondition = conditionalBranch.getTrue().getRef() == valueRef.getStartingInstr().eContainer();
-                        LLVMI1Node conditionNode = (LLVMI1Node) visitValueRef(conditionalBranch.getCondition().getRef(), conditionalBranch.getCondition().getType());
-                        LLVMNode phiWriteNode = getWriteNode(visitValueRef, phiSlot, valueRef.getType());
-                        LLVMNode conditionalPhiWriteNode;
-                        if (isTrueCondition) {
-                            conditionalPhiWriteNode = factoryFacade.createConditionalPhiWriteNode(conditionNode, phiWriteNode);
-                        } else {
-                            LLVMExpressionNode rightNode = factoryFacade.createLiteral(true, LLVMBaseType.I1);
-                            LLVMExpressionNode create = factoryFacade.createLogicalOperation(conditionNode, rightNode, LLVMLogicalInstructionType.XOR, LLVMBaseType.I1, null);
-                            conditionalPhiWriteNode = factoryFacade.createConditionalPhiWriteNode(create, phiWriteNode);
-                        }
-                        statements.add(conditionalPhiWriteNode);
-                    }
-                } else {
-                    for (Phi valueRef : phiValues) {
-                        FrameSlot phiSlot = frameDescriptor.findOrAddFrameSlot(valueRef.getAssignTo());
-                        LLVMExpressionNode visitValueRef = visitValueRef(valueRef.getValueRef(), valueRef.getType());
-                        LLVMNode phiWriteNode = getWriteNode(visitValueRef, phiSlot, valueRef.getType());
-                        statements.add(phiWriteNode);
-                    }
-                }
-            }
             LLVMNode visitTerminatorInstruction = visitTerminatorInstruction((TerminatorInstruction) instr);
             statements.add(visitTerminatorInstruction);
             return statements;
         } else if (instr instanceof MiddleInstruction) {
             return visitMiddleInstruction((MiddleInstruction) instr);
         } else if (instr instanceof StartingInstruction) {
-            return Arrays.asList(visitStartingInstruction((StartingInstruction) instr));
+            return Collections.emptyList();
         } else {
             throw new AssertionError(instr);
         }
-    }
-
-    private static boolean isConditionalBranch(Instruction instr) {
-        return ((TerminatorInstruction) instr).getInstruction() instanceof Instruction_brImpl && ((Instruction_brImpl) ((TerminatorInstruction) instr).getInstruction()).getUnconditional() == null;
-    }
-
-    private static LLVMNode visitStartingInstruction(@SuppressWarnings("unused") StartingInstruction instr) {
-        return new LLVMPhiNode();
     }
 
     private List<LLVMNode> visitMiddleInstruction(MiddleInstruction middleInstr) {
@@ -631,10 +647,11 @@ public class LLVMVisitor implements LLVMParserRuntime {
     }
 
     private LLVMNode visitFunctionCall(Callee callee, EList<Argument> args, ResolvedType retType) throws AssertionError {
-        if (callee instanceof InlineAssembler) {
-            throw new LLVMUnsupportedException(UnsupportedReason.INLINE_ASSEMBLER);
-        }
         List<LLVMExpressionNode> argNodes = new ArrayList<>(args.size());
+        if (needsStackPointerArgument()) {
+            LLVMExpressionNode stackPointerRead = factoryFacade.createFrameRead(LLVMBaseType.ADDRESS, getStackPointerSlot());
+            argNodes.add(stackPointerRead);
+        }
         if (retType.isStruct()) {
             argNodes.add(allocateFunctionLifetime(retType));
         }
@@ -644,14 +661,18 @@ public class LLVMVisitor implements LLVMParserRuntime {
         LLVMExpressionNode[] finalArgs = argNodes.toArray(new LLVMExpressionNode[argNodes.size()]);
         if (callee instanceof GlobalValueRef && ((GlobalValueRef) callee).getConstant().getRef() instanceof FunctionHeader) {
             FunctionHeader functionHeader = (FunctionHeader) ((GlobalValueRef) callee).getConstant().getRef();
-            String functionName = functionHeader.getName();
-            if (functionName.startsWith("@llvm.")) {
-                return factoryFacade.createLLVMIntrinsic(functionName, finalArgs, containingFunctionDef);
+            LLVMNode optionalSubstitutionNode = factoryFacade.tryCreateFunctionSubstitution(LLVMToBitcodeAdapter.resolveFunctionHeader(this, functionHeader), finalArgs,
+                            LLVMToBitcodeAdapter.resolveFunctionDef(this, containingFunctionDef).getArgumentTypes().length);
+            if (optionalSubstitutionNode != null) {
+                return optionalSubstitutionNode;
             }
+        } else if (callee instanceof InlineAssembler) {
+            String asmSnippet = ((InlineAssembler) callee).getAssembler();
+            String asmFlags = ((InlineAssembler) callee).getFlags();
+            return factoryFacade.createInlineAssemblerExpression(asmSnippet, asmFlags, finalArgs, LLVMTypeHelper.getLLVMType(retType).getType());
         }
         LLVMExpressionNode func = visitValueRef((ValueRef) callee, null);
-        LLVMFunctionNode functionNode = (LLVMFunctionNode) func;
-        return factoryFacade.createFunctionCall(functionNode, finalArgs, LLVMTypeHelper.getLLVMType(retType));
+        return factoryFacade.createFunctionCall(func, finalArgs, LLVMTypeHelper.getLLVMType(retType).getType());
     }
 
     private LLVMNode visitStoreInstruction(Instruction_store instr) {
@@ -659,14 +680,14 @@ public class LLVMVisitor implements LLVMParserRuntime {
         TypedValue index = instr.getValue();
         LLVMExpressionNode pointerNode = visitValueRef(pointer.getRef(), pointer.getType());
         LLVMExpressionNode valueNode = visitValueRef(index.getRef(), index.getType());
-        return getStoreNode((LLVMAddressNode) pointerNode, valueNode, index.getType());
+        return getStoreNode(pointerNode, valueNode, index.getType());
     }
 
-    private LLVMNode getStoreNode(LLVMAddressNode pointerNode, LLVMExpressionNode valueNode, Type type) {
-        return factoryFacade.createStore(pointerNode, valueNode, resolve(type));
+    private LLVMNode getStoreNode(LLVMExpressionNode pointerNode, LLVMExpressionNode valueNode, Type type) {
+        return factoryFacade.createStore(pointerNode, valueNode, TextToBCConverter.convert(resolve(type)));
     }
 
-    private LLVMBaseType getLLVMType(EObject object) {
+    private LLVMType getLLVMType(EObject object) {
         if (object == null) {
             throw new AssertionError();
         }
@@ -678,7 +699,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         EObject instr = namedMiddleInstr.getInstruction();
         String name = namedMiddleInstr.getName();
         LLVMExpressionNode result;
-        FrameSlot frameSlot = frameDescriptor.findOrAddFrameSlot(name);
+        FrameSlot frameSlot = findOrAddFrameSlot(name, namedMiddleInstr);
         if (instr instanceof BinaryInstruction) {
             BinaryInstruction binaryInstruction = (BinaryInstruction) instr;
             result = visitBinaryArithmeticInstruction(binaryInstruction);
@@ -707,8 +728,6 @@ public class LLVMVisitor implements LLVMParserRuntime {
             result = visitExtractElement((Instruction_extractelement) instr);
         } else if (instr instanceof Instruction_insertelement) {
             result = visitInsertElement((Instruction_insertelement) instr);
-        } else if (instr instanceof Instruction_landingpad) {
-            result = visitLandingPad((Instruction_landingpad) instr);
         } else if (instr instanceof Instruction_extractvalue) {
             result = visitExtractValue((Instruction_extractvalue) instr);
         } else if (instr instanceof Instruction_shufflevector) {
@@ -731,48 +750,37 @@ public class LLVMVisitor implements LLVMParserRuntime {
     private LLVMExpressionNode visitShuffleVector(Instruction_shufflevector instr) {
         LLVMExpressionNode vector1 = visitValueRef(instr.getVector1().getRef(), instr.getVector1().getType());
         LLVMExpressionNode vector2 = visitValueRef(instr.getVector2().getRef(), instr.getVector2().getType());
-        LLVMI32VectorNode mask = (LLVMI32VectorNode) visitValueRef(instr.getMask().getRef(), instr.getMask().getType());
+        LLVMExpressionNode mask = visitValueRef(instr.getMask().getRef(), instr.getMask().getType());
         ResolvedType resultType = resolve(instr.getVector1().getType());
         ResolvedVectorType resultVectorType = resultType.asVector();
         LLVMExpressionNode target = allocateFunctionLifetime(resultVectorType);
-        LLVMBaseType llvmType = getLLVMType(instr.getVector1().getType());
+        LLVMBaseType llvmType = getLLVMType(instr.getVector1().getType()).getType();
         return factoryFacade.createShuffleVector(llvmType, target, vector1, vector2, mask);
     }
 
     private LLVMExpressionNode visitExtractValue(Instruction_extractvalue instr) {
-        LLVMAddressNode aggregate = (LLVMAddressNode) visitValueRef(instr.getAggregate().getRef(), instr.getAggregate().getType());
+        LLVMExpressionNode aggregate = visitValueRef(instr.getAggregate().getRef(), instr.getAggregate().getType());
         EList<Constant> indices = instr.getIndices();
         if (indices.size() != 1) {
             throw new AssertionError("not yet supported");
         }
-        LLVMAddressNode targetAddress = (LLVMAddressNode) getConstantElementPtr(aggregate, instr.getAggregate().getType(), indices);
-        LLVMBaseType type = getLLVMType(instr);
+        LLVMExpressionNode targetAddress = getConstantElementPtr(aggregate, instr.getAggregate().getType(), indices);
+        LLVMBaseType type = getLLVMType(instr).getType();
         return factoryFacade.createExtractValue(type, targetAddress);
-    }
-
-    private LLVMExpressionNode visitLandingPad(Instruction_landingpad instr) {
-        Type resultType = instr.getResultType();
-        LLVMBaseType llvmType = getLLVMType(resultType);
-        switch (llvmType) {
-            case STRUCT:
-                return new LLVMAddressLandingPadNode();
-            default:
-                throw new AssertionError(llvmType);
-        }
     }
 
     private LLVMExpressionNode visitExtractElement(Instruction_extractelement instr) {
         LLVMExpressionNode vector = visitValueRef(instr.getVector().getRef(), instr.getVector().getType());
         LLVMExpressionNode index = visitValueRef(instr.getIndex().getRef(), instr.getIndex().getType());
-        LLVMBaseType resultType = LLVMTypeHelper.getLLVMType(resolve(instr));
+        LLVMBaseType resultType = LLVMTypeHelper.getLLVMType(resolve(instr)).getType();
         return factoryFacade.createExtractElement(resultType, vector, index);
     }
 
     private LLVMExpressionNode visitInsertElement(Instruction_insertelement instr) {
         LLVMExpressionNode vector = visitValueRef(instr.getVector().getRef(), instr.getVector().getType());
-        LLVMI32Node index = (LLVMI32Node) visitValueRef(instr.getIndex().getRef(), instr.getIndex().getType());
+        LLVMExpressionNode index = visitValueRef(instr.getIndex().getRef(), instr.getIndex().getType());
         LLVMExpressionNode element = visitValueRef(instr.getElement().getRef(), instr.getElement().getType());
-        LLVMBaseType resultType = LLVMTypeHelper.getLLVMType(resolve(instr));
+        LLVMBaseType resultType = LLVMTypeHelper.getLLVMType(resolve(instr)).getType();
         return factoryFacade.createInsertElement(resultType, vector, instr.getVector().getType(), element, index);
     }
 
@@ -780,27 +788,29 @@ public class LLVMVisitor implements LLVMParserRuntime {
         EList<Constant> indices = insertValue.getIndices();
         TypedValue aggregate = insertValue.getAggregate();
         TypedValue element = insertValue.getElement();
-        int size = LLVMTypeHelper.getByteSize(resolve(aggregate.getType()));
+        int size = typeHelper.getByteSize(resolve(aggregate.getType()));
         LLVMExpressionNode resultAggregate = allocateFunctionLifetime(resolve(aggregate.getType()));
-        LLVMAddressNode sourceAggregate = (LLVMAddressNode) visitValueRef(aggregate.getRef(), aggregate.getType());
+        LLVMExpressionNode sourceAggregate = visitValueRef(aggregate.getRef(), aggregate.getType());
         LLVMExpressionNode valueToInsert = visitValueRef(element.getRef(), element.getType());
-        List<LLVMI32Node> indexNodes = new ArrayList<>();
+        List<Integer> constants = new ArrayList<>();
         for (Constant c : indices) {
-            LLVMExpressionNode constantNode = visitConstant(c, c);
-            indexNodes.add((LLVMI32Node) constantNode);
+            constants.add((Integer) LLVMConstantEvaluator.evaluateConstant(this, c));
         }
-        int index = indexNodes.get(0).executeI32(null);
-        int offset = LLVMTypeHelper.goIntoTypeGetLengthByte(resolve(aggregate.getType()), index);
-        assert indexNodes.size() == 1;
-        LLVMBaseType llvmType = getLLVMType(element);
+        if (constants.size() != 1) {
+            throw new AssertionError(constants);
+        }
+        int index = constants.get(0);
+        int offset = typeHelper.goIntoTypeGetLengthByte(resolve(aggregate.getType()), index);
+        LLVMBaseType llvmType = getLLVMType(element).getType();
         return factoryFacade.createInsertValue(resultAggregate, sourceAggregate, size, offset, valueToInsert, llvmType);
     }
 
+    @SuppressWarnings("deprecation")
     private LLVMExpressionNode visitFcmpInstruction(Instruction_fcmp instr) {
         String condition = instr.getCondition();
         LLVMExpressionNode left = visitValueRef(instr.getOp1(), instr.getType());
         LLVMExpressionNode right = visitValueRef(instr.getOp2(), instr.getType());
-        LLVMBaseType llvmType = getLLVMType(instr.getType());
+        LLVMBaseType llvmType = getLLVMType(instr.getType()).getType();
         return factoryFacade.createFloatComparison(left, right, llvmType, LLVMFloatComparisonType.fromString(condition));
     }
 
@@ -809,9 +819,9 @@ public class LLVMVisitor implements LLVMParserRuntime {
         ValueRef op2 = instr.getOp2();
         LLVMExpressionNode left = visitValueRef(op1, instr.getType());
         LLVMExpressionNode right = visitValueRef(op2, instr.getType());
-        LLVMBaseType llvmType = getLLVMType(instr.getType());
+        LLVMBaseType llvmType = getLLVMType(instr.getType()).getType();
         LLVMExpressionNode target = allocateVectorResultIfVector(instr);
-        return factoryFacade.createLogicalOperation(left, right, instr, llvmType, target);
+        return factoryFacade.createLogicalOperation(left, right, getLogicalInstructionType(instr), llvmType, target);
     }
 
     private LLVMExpressionNode allocateVectorResultIfVector(EObject type) {
@@ -825,19 +835,36 @@ public class LLVMVisitor implements LLVMParserRuntime {
         return target;
     }
 
+    private static LLVMLogicalInstructionType getLogicalInstructionType(BitwiseBinaryInstruction instr) {
+        if (instr instanceof Instruction_and) {
+            return LLVMLogicalInstructionType.AND;
+        } else if (instr instanceof Instruction_or) {
+            return LLVMLogicalInstructionType.OR;
+        } else if (instr instanceof Instruction_shl) {
+            return LLVMLogicalInstructionType.SHIFT_LEFT;
+        } else if (instr instanceof Instruction_lshr) {
+            return LLVMLogicalInstructionType.LOGICAL_SHIFT_RIGHT;
+        } else if (instr instanceof Instruction_ashr) {
+            return LLVMLogicalInstructionType.ARITHMETIC_SHIFT_RIGHT;
+        } else if (instr instanceof Instruction_xor) {
+            return LLVMLogicalInstructionType.XOR;
+        } else {
+            throw new AssertionError(instr);
+        }
+    }
+
     private LLVMExpressionNode visitSelectInstr(Instruction_select instr) {
-        LLVMI1Node condition = (LLVMI1Node) visitValueRef(instr.getCondition().getRef(), instr.getCondition().getType());
+        LLVMExpressionNode condition = visitValueRef(instr.getCondition().getRef(), instr.getCondition().getType());
         LLVMExpressionNode trueValue = visitValueRef(instr.getValue1().getRef(), instr.getValue1().getType());
         LLVMExpressionNode falseValue = visitValueRef(instr.getValue2().getRef(), instr.getValue2().getType());
-        LLVMBaseType llvmType = getLLVMType(instr.getValue1().getType());
-        return factoryFacade.createSelect(llvmType, condition, trueValue, falseValue);
+        return factoryFacade.createSelect(TextToBCConverter.convert(resolve(instr.getValue1().getType())), condition, trueValue, falseValue);
     }
 
     private LLVMExpressionNode visitGetElementPtr(Instruction_getelementptr getElementPtr) {
         TypedValue base = getElementPtr.getBase();
         Type baseType = base.getType();
-        LLVMAddressNode baseNode = (LLVMAddressNode) visitValueRef(base.getRef(), baseType);
-        LLVMAddressNode currentAddress = baseNode;
+        LLVMExpressionNode baseNode = visitValueRef(base.getRef(), baseType);
+        LLVMExpressionNode currentAddress = baseNode;
         List<ValueRef> refs = new ArrayList<>();
         List<Type> types = new ArrayList<>();
         EList<TypedValue> indices = getElementPtr.getIndices();
@@ -848,24 +875,24 @@ public class LLVMVisitor implements LLVMParserRuntime {
         return getElementPtr(currentAddress, baseType, refs, types);
     }
 
-    private LLVMExpressionNode getElementPtr(LLVMAddressNode baseAddress, Type baseType, List<ValueRef> refs, List<Type> types) {
-        LLVMAddressNode currentAddress = baseAddress;
+    private LLVMExpressionNode getElementPtr(LLVMExpressionNode baseAddress, Type baseType, List<ValueRef> refs, List<Type> types) {
+        LLVMExpressionNode currentAddress = baseAddress;
         ResolvedType currentType = resolve(baseType);
         for (int i = 0; i < refs.size(); i++) {
             ValueRef currentRef = refs.get(i);
             Type type = types.get(i);
             Integer constantIndex = evaluateIndexAsConstant(currentRef);
             if (constantIndex == null) {
-                int indexedTypeLength = LLVMTypeHelper.goIntoTypeGetLengthByte(currentType, 1);
+                int indexedTypeLength = typeHelper.goIntoTypeGetLengthByte(currentType, 1);
                 currentType = LLVMTypeHelper.goIntoType(currentType, 1);
                 LLVMExpressionNode valueRef = visitValueRef(currentRef, type);
-                currentAddress = (LLVMAddressNode) factoryFacade.createGetElementPtr(getLLVMType(type), currentAddress, valueRef, indexedTypeLength);
+                currentAddress = factoryFacade.createGetElementPtr(getLLVMType(type).getType(), currentAddress, valueRef, indexedTypeLength);
             } else {
-                int indexedTypeLength = LLVMTypeHelper.goIntoTypeGetLengthByte(currentType, constantIndex);
+                int indexedTypeLength = typeHelper.goIntoTypeGetLengthByte(currentType, constantIndex);
                 currentType = LLVMTypeHelper.goIntoType(currentType, constantIndex);
                 if (indexedTypeLength != 0) {
                     LLVMExpressionNode constantNode;
-                    switch (getLLVMType(type)) {
+                    switch (getLLVMType(type).getType()) {
                         case I32:
                             constantNode = factoryFacade.createLiteral(1, LLVMBaseType.I32);
                             break;
@@ -875,7 +902,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
                         default:
                             throw new AssertionError();
                     }
-                    currentAddress = (LLVMAddressNode) factoryFacade.createGetElementPtr(getLLVMType(type), currentAddress, constantNode, indexedTypeLength);
+                    currentAddress = factoryFacade.createGetElementPtr(getLLVMType(type).getType(), currentAddress, constantNode, indexedTypeLength);
                 }
             }
         }
@@ -887,24 +914,30 @@ public class LLVMVisitor implements LLVMParserRuntime {
             GlobalValueRef ref = (GlobalValueRef) currentRef;
             if (ref.getConstant() instanceof SimpleConstant) {
                 SimpleConstant simpleConstant = (SimpleConstant) ref.getConstant();
-                return Integer.parseInt(simpleConstant.getValue());
+                try {
+                    return Integer.parseInt(simpleConstant.getValue());
+                } catch (NumberFormatException e) {
+                    LLVMLogger.info("GEP index overflow (still parse as int");
+                    return (int) Long.parseLong(simpleConstant.getValue());
+                }
             }
         }
         return null;
     }
 
     private LLVMNode getWriteNode(LLVMExpressionNode result, FrameSlot slot, EObject type) {
-        LLVMBaseType baseType = getLLVMType(type);
-        FrameSlotKind frameSlotKind = factoryFacade.getFrameSlotKind(baseType);
+        LLVMBaseType baseType = getLLVMType(type).getType();
+        FrameSlotKind frameSlotKind = factoryFacade.getFrameSlotKind(TextToBCConverter.convert(resolve(type)));
         slot.setKind(frameSlotKind);
         return factoryFacade.createFrameWrite(baseType, result, slot);
     }
 
+    @SuppressWarnings("deprecation")
     private LLVMExpressionNode visitIcmpInstruction(Instruction_icmp instr) {
         String condition = instr.getCondition();
         LLVMExpressionNode left = visitValueRef(instr.getOp1(), instr.getType());
         LLVMExpressionNode right = visitValueRef(instr.getOp2(), instr.getType());
-        LLVMBaseType llvmType = getLLVMType(instr.getType());
+        LLVMBaseType llvmType = getLLVMType(instr.getType()).getType();
         return factoryFacade.createIntegerComparison(left, right, llvmType, LLVMIntegerComparisonType.fromString(condition));
     }
 
@@ -912,18 +945,19 @@ public class LLVMVisitor implements LLVMParserRuntime {
         TypedValue pointer = instr.getPointer();
         LLVMExpressionNode pointerNode = visitValueRef(pointer.getRef(), pointer.getType());
         ResolvedType resolvedResultType = resolve(instr);
-        LLVMAddressNode loadTarget = (LLVMAddressNode) pointerNode;
-        return factoryFacade.createLoad(resolvedResultType, loadTarget);
+        LLVMExpressionNode loadTarget = pointerNode;
+        return factoryFacade.createLoad(TextToBCConverter.convert(resolvedResultType), loadTarget);
     }
 
     private LLVMExpressionNode visitAllocaInstruction(Instruction_alloca instr) {
         TypedValue numElementsVal = instr.getNumElements();
         Type type = instr.getType();
+        ResolvedType resolvedInstructionType = resolve(type);
         String alignmentString = instr.getAlignment();
         int alignment = 0;
         if (alignmentString == null) {
             if (layoutConverter != null) {
-                alignment = LLVMTypeHelper.getAlignmentByte(resolve(instr.getType()));
+                alignment = typeHelper.getAlignmentByte(resolvedInstructionType);
             }
         } else {
             alignment = Integer.parseInt(alignmentString.substring("align ".length()));
@@ -931,15 +965,15 @@ public class LLVMVisitor implements LLVMParserRuntime {
         if (alignment == 0) {
             alignment = LLVMStack.NO_ALIGNMENT_REQUIREMENTS;
         }
-        int byteSize = LLVMTypeHelper.getByteSize(resolve(type));
+        int byteSize = typeHelper.getByteSize(resolvedInstructionType);
         LLVMExpressionNode alloc;
         if (numElementsVal == null) {
-            alloc = factoryFacade.createAlloc(byteSize, alignment);
+            alloc = factoryFacade.createAlloc(TextToBCConverter.convert(resolvedInstructionType), byteSize, alignment, null, null);
         } else {
             Type numElementsType = instr.getNumElements().getType();
-            LLVMBaseType llvmType = getLLVMType(numElementsType);
+            LLVMBaseType llvmType = getLLVMType(numElementsType).getType();
             LLVMExpressionNode numElements = visitValueRef(numElementsVal.getRef(), numElementsType);
-            alloc = factoryFacade.createAlloc(llvmType, numElements, byteSize, alignment);
+            alloc = factoryFacade.createAlloc(TextToBCConverter.convert(resolvedInstructionType), byteSize, alignment, llvmType, numElements);
         }
         return alloc;
     }
@@ -958,7 +992,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         LLVMExpressionNode right = visitValueRef(op2, instr.getType());
         LLVMExpressionNode target = allocateVectorResultIfVector(instr);
         LLVMArithmeticInstructionType instructionType = LLVMArithmeticInstructionType.fromString(instr.getOpcode());
-        return factoryFacade.createArithmeticOperation(left, right, instructionType, getLLVMType(instr.getType()), target);
+        return factoryFacade.createArithmeticOperation(left, right, instructionType, getLLVMType(instr.getType()).getType(), target);
     }
 
     private LLVMExpressionNode visitConversionConstruction(ConversionInstruction instr) {
@@ -966,7 +1000,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         LLVMExpressionNode fromNode = visitValueRef(instr.getValue(), instr.getFromType());
         ResolvedType targetType = resolve(instr.getTargetType());
         ResolvedType fromType = resolve(instr.getFromType());
-        return factoryFacade.createCast(fromNode, targetType, fromType, type);
+        return factoryFacade.createCast(fromNode, TextToBCConverter.convert(targetType), TextToBCConverter.convert(fromType), type);
     }
 
     private LLVMExpressionNode visitValueRef(ValueRef valueRef, Type type) {
@@ -991,26 +1025,15 @@ public class LLVMVisitor implements LLVMParserRuntime {
         } else if (constant instanceof ArrayConstant) {
             return visitArrayConstantStore((ArrayConstant) constant);
         } else {
-            if (resolve(type).isMetadata()) {
-                return new LLVMMetadataNode(null);
-            }
             if (constant.getRef() instanceof FunctionHeader) {
                 FunctionHeader header = (FunctionHeader) constant.getRef();
                 LLVMFunction function = createLLVMFunctionFromHeader(header);
                 return factoryFacade.createLiteral(function, LLVMBaseType.FUNCTION_ADDRESS);
             } else if (constant.getRef() instanceof GlobalVariable) {
                 GlobalVariable globalVariable = (GlobalVariable) constant.getRef();
-                String globalVarName = globalVariable.getName();
-                String linkage = globalVariable.getLinkage();
-                if ("external".equals(linkage)) {
-                    long getNativeSymbol = nativeLookup.getNativeHandle(globalVarName);
-                    LLVMAddress nativeSymbolAddress = LLVMAddress.fromLong(getNativeSymbol);
-                    return factoryFacade.createLiteral(nativeSymbolAddress, LLVMBaseType.ADDRESS);
-                } else {
-                    LLVMAddress findOrAllocateGlobal = findOrAllocateGlobal(globalVariable);
-                    assert findOrAllocateGlobal != null;
-                    return factoryFacade.createLiteral(findOrAllocateGlobal, LLVMBaseType.ADDRESS);
-                }
+                Object findOrAllocateGlobal = globalVariableScope.get(globalVariable.getName());
+                assert findOrAllocateGlobal != null;
+                return factoryFacade.createLiteral(findOrAllocateGlobal, LLVMBaseType.ADDRESS);
             } else if (constant instanceof ZeroInitializer) {
                 return visitZeroInitializer(type);
             } else if (constant instanceof ConstantExpression_convert) {
@@ -1031,26 +1054,10 @@ public class LLVMVisitor implements LLVMParserRuntime {
                 return visitVectorConstant((VectorConstant) constant);
             } else if (constant.getRef() instanceof Alias) {
                 return visitAliasConstant((Alias) constant.getRef());
-            } else if (constant instanceof MetadataNode) {
-                return visitMetadataNode((MetadataNode) constant);
             } else {
                 throw new AssertionError(constant);
             }
         }
-    }
-
-    private static LLVMExpressionNode visitMetadataNode(MetadataNode constant) {
-        EList<MetadataNodeElement> metaDataElements = constant.getElements();
-        List<LLVMMetadata> metaDatas = new ArrayList<>();
-        for (MetadataNodeElement metaData : metaDataElements) {
-            metaDatas.add(visitMetaData(metaData));
-        }
-        assert metaDataElements.size() == 1;
-        return new LLVMMetadataNode(metaDatas.get(0));
-    }
-
-    private static LLVMMetadata visitMetaData(@SuppressWarnings("unused") MetadataNodeElement metaData) {
-        return new LLVMMetadata();
     }
 
     private LLVMExpressionNode visitAliasConstant(Alias ref) {
@@ -1059,6 +1066,18 @@ public class LLVMVisitor implements LLVMParserRuntime {
         if (aliaseeRef instanceof FunctionHeader) {
             LLVMFunction function = createLLVMFunctionFromHeader((FunctionHeader) aliaseeRef);
             return factoryFacade.createLiteral(function, LLVMBaseType.FUNCTION_ADDRESS);
+        } else if (aliaseeRef instanceof GlobalVariable) {
+            GlobalVariable originalVar = (GlobalVariable) aliaseeRef;
+            Object globalVar = globalVariableScope.get(originalVar.getName());
+            LLVMParserAsserts.assertNotNull(globalVar);
+            return factoryFacade.createLiteral(globalVar, LLVMBaseType.ADDRESS);
+        } else if (aliaseeRef instanceof Alias) {
+            Object globalVar = aliases.get(ref);
+            LLVMParserAsserts.assertNotNull(globalVar);
+            return factoryFacade.createLiteral(globalVar, LLVMBaseType.ADDRESS);
+        } else if (aliasee.getBitcast() != null) {
+            GlobalValueRef constant = aliasee.getBitcast().getConstant();
+            return visitValueRef(constant, aliasee.getBitcast().getTargetType());
         } else {
             throw new AssertionError(aliaseeRef);
         }
@@ -1069,7 +1088,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         ResolvedType targetType = resolve(conv.getTargetType());
         ResolvedType fromType = resolve(conv.getFromType());
         LLVMConversionType type = LLVMConversionType.fromString(conv.getOpcode());
-        return factoryFacade.createCast(visitValueRef(conv.getConstant(), conv.getFromType()), targetType, fromType, type);
+        return factoryFacade.createCast(visitValueRef(conv.getConstant(), conv.getFromType()), TextToBCConverter.convert(targetType), TextToBCConverter.convert(fromType), type);
     }
 
     private LLVMExpressionNode visitVectorConstant(VectorConstant constant) {
@@ -1077,7 +1096,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         ResolvedVectorType type = (ResolvedVectorType) resolve(constant);
         List<LLVMExpressionNode> listValues = visitConstantList(list);
         LLVMExpressionNode target = allocateVectorResult(constant);
-        return factoryFacade.createVectorLiteralNode(listValues, target, type);
+        return factoryFacade.createVectorLiteralNode(listValues, target, LLVMTypeHelper.getLLVMType(type).getType());
     }
 
     private List<LLVMExpressionNode> visitConstantList(ConstantList list) throws AssertionError {
@@ -1094,7 +1113,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         LLVMExpressionNode right = visitValueRef(constant.getOp2().getRef(), constant.getOp2().getType());
         String opCode = constant.getOpcode();
         LLVMExpressionNode target = allocateVectorResultIfVector(constant);
-        LLVMBaseType llvmType = getLLVMType(constant);
+        LLVMBaseType llvmType = getLLVMType(constant).getType();
         if (LLVMLogicalInstructionType.isLogicalInstruction(opCode)) {
             LLVMLogicalInstructionType opType = LLVMLogicalInstructionType.fromString(opCode);
             return factoryFacade.createLogicalOperation(left, right, opType, llvmType, target);
@@ -1105,11 +1124,12 @@ public class LLVMVisitor implements LLVMParserRuntime {
         throw new AssertionError(opCode);
     }
 
+    @SuppressWarnings("deprecation")
     private LLVMExpressionNode visitConstantExpressionCompare(ConstantExpression_compare constant) {
         String condition = constant.getCondition();
         LLVMExpressionNode left = visitValueRef(constant.getOp1().getRef(), constant.getOp1().getType());
         LLVMExpressionNode right = visitValueRef(constant.getOp2().getRef(), constant.getOp2().getType());
-        LLVMBaseType llvmType = getLLVMType(constant.getOp1().getType());
+        LLVMBaseType llvmType = getLLVMType(constant.getOp1().getType()).getType();
         if (LLVMIntegerComparisonType.isIntegerCondition(condition)) {
             return factoryFacade.createIntegerComparison(left, right, llvmType, LLVMIntegerComparisonType.fromString(condition));
         } else if (LLVMFloatComparisonType.isFloatCondition(condition)) {
@@ -1134,11 +1154,11 @@ public class LLVMVisitor implements LLVMParserRuntime {
     }
 
     private LLVMExpressionNode visitConstantGetElementPtr(ConstantExpression_getelementptr constant) {
-        LLVMAddressNode baseNode = (LLVMAddressNode) visitValueRef(constant.getConstant(), constant.getConstantType());
+        LLVMExpressionNode baseNode = visitValueRef(constant.getConstant(), constant.getConstantType());
         return getConstantElementPtr(baseNode, constant.getConstantType(), constant.getIndices());
     }
 
-    private LLVMExpressionNode getConstantElementPtr(LLVMAddressNode baseAddress, Type baseType, EList<Constant> indices) {
+    private LLVMExpressionNode getConstantElementPtr(LLVMExpressionNode baseAddress, Type baseType, EList<Constant> indices) {
         LLVMExpressionNode currentAddress = baseAddress;
         ResolvedType currentType = resolve(baseType);
         ResolvedType parentType = null;
@@ -1147,23 +1167,23 @@ public class LLVMVisitor implements LLVMParserRuntime {
             Number evaluateConstant = (Number) LLVMConstantEvaluator.evaluateConstant(this, index);
             assert evaluateConstant.longValue() == evaluateConstant.intValue();
             int val = evaluateConstant.intValue();
-            int indexedTypeLength = LLVMTypeHelper.goIntoTypeGetLengthByte(currentType, val);
+            int indexedTypeLength = typeHelper.goIntoTypeGetLengthByte(currentType, val);
             currentOffset += indexedTypeLength;
             parentType = currentType;
             currentType = LLVMTypeHelper.goIntoType(currentType, val);
         }
         if (currentType != null && !LLVMTypeHelper.isPackedStructType(parentType)) {
-            currentOffset += LLVMTypeHelper.computePaddingByte(currentOffset, currentType);
+            currentOffset += typeHelper.computePaddingByte(currentOffset, currentType);
         }
         if (currentOffset != 0) {
             LLVMExpressionNode oneValueNode = factoryFacade.createLiteral(1, LLVMBaseType.I32);
-            currentAddress = factoryFacade.createGetElementPtr(currentAddress, oneValueNode, currentOffset);
+            currentAddress = factoryFacade.createGetElementPtr(LLVMBaseType.I32, currentAddress, oneValueNode, currentOffset);
         }
         return currentAddress;
     }
 
     private LLVMExpressionNode visitZeroInitializer(EObject type) {
-        LLVMBaseType llvmType = getLLVMType(type);
+        LLVMBaseType llvmType = getLLVMType(type).getType();
         if (resolve(type).isVector()) {
             return visitZeroVectorInitializer(type);
         }
@@ -1181,13 +1201,13 @@ public class LLVMVisitor implements LLVMParserRuntime {
         ResolvedVectorType vectorType = (ResolvedVectorType) resolve(type);
         int nrElements = vectorType.getSize();
         LLVMExpressionNode target = allocateVectorResult(type);
-        LLVMBaseType llvmType = LLVMTypeHelper.getLLVMType(vectorType);
+        LLVMBaseType llvmType = LLVMTypeHelper.getLLVMType(vectorType).getType();
         return factoryFacade.createZeroVectorInitializer(nrElements, target, llvmType);
     }
 
     private LLVMExpressionNode visitZeroStructInitializer(EObject type) {
         ResolvedType resolvedType = resolve(type);
-        int size = LLVMTypeHelper.getByteSize(resolvedType);
+        int size = typeHelper.getByteSize(resolvedType);
         if (size == 0) {
             LLVMAddress minusOneNode = LLVMAddress.fromLong(-1);
             return factoryFacade.createLiteral(minusOneNode, LLVMBaseType.ADDRESS);
@@ -1200,7 +1220,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
 
     private LLVMExpressionNode visitZeroArrayInitializer(EObject type) {
         ResolvedArrayType resolvedType = (ResolvedArrayType) resolve(type);
-        int size = LLVMTypeHelper.getByteSize(resolvedType);
+        int size = typeHelper.getByteSize(resolvedType);
         if (size == 0) {
             // zero-size array, not allowed per C and C++ standard
             return null;
@@ -1213,40 +1233,30 @@ public class LLVMVisitor implements LLVMParserRuntime {
     private LLVMExpressionNode visitStructureConstant(StructureConstant structure) {
         ConstantList list = structure.getList();
         EList<TypedConstant> typedConstants = list.getTypedConstants();
-        int[] offsets = new int[typedConstants.size()];
-        Node[] nodes = new LLVMStructWriteNode[typedConstants.size()];
-        int i = 0;
-        int currentOffset = 0;
         boolean packed = structure.getPacked() != null;
-        int structSize = LLVMTypeHelper.getStructureSizeByte(structure, typeResolver);
-        // FIXME alignment
-        LLVMExpressionNode alloc = allocateFunctionLifetime(structSize, LLVMStack.NO_ALIGNMENT_REQUIREMENTS);
-        for (TypedConstant constant : typedConstants) {
-            ResolvedType resolvedType = resolve(constant.getType());
-            if (!packed) {
-                currentOffset += LLVMTypeHelper.computePaddingByte(currentOffset, resolvedType);
-            }
-            offsets[i] = currentOffset;
+        ResolvedType[] types = new ResolvedType[typedConstants.size()];
+        LLVMExpressionNode[] constants = new LLVMExpressionNode[(typedConstants.size())];
+        for (int i = 0; i < types.length; i++) {
+            TypedConstant constant = typedConstants.get(i);
+            types[i] = resolve(constant.getType());
             LLVMExpressionNode parsedConstant = visitConstant(constant.getType(), constant.getValue());
-            int byteSize = LLVMTypeHelper.getByteSize(resolvedType);
-            nodes[i] = factoryFacade.createStructWriteNode(parsedConstant, resolvedType);
-            currentOffset += byteSize;
-            i++;
+            constants[i] = parsedConstant;
         }
         GlobalValueDef ref = structure.getRef();
         if (ref != null) {
             throw new AssertionError();
         }
-        return factoryFacade.createStructLiteralNode(offsets, nodes, alloc);
+        ResolvedType structureType = resolve(structure);
+        return factoryFacade.createStructureConstantNode(TextToBCConverter.convert(structureType), packed, TextToBCConverter.convertTypes(types), constants);
     }
 
     private LLVMExpressionNode getUndefinedValueNode(EObject type) {
-        LLVMBaseType llvmType = getLLVMType(type);
+        LLVMBaseType llvmType = getLLVMType(type).getType();
         if (llvmType != LLVMBaseType.ARRAY && llvmType != LLVMBaseType.STRUCT) {
-            return factoryFacade.createUndefinedValue(type);
+            return factoryFacade.createUndefinedValue(TextToBCConverter.convert(resolve(type)));
         } else {
             ResolvedType resolvedType = resolve(type);
-            int byteSize = LLVMTypeHelper.getByteSize(resolvedType);
+            int byteSize = typeHelper.getByteSize(resolvedType);
             LLVMExpressionNode alloca = allocateFunctionLifetime(resolvedType);
             return factoryFacade.createEmptyStructLiteralNode(alloca, byteSize);
         }
@@ -1256,22 +1266,22 @@ public class LLVMVisitor implements LLVMParserRuntime {
         Type returnType = header.getRettype();
         Parameters parameters = header.getParameters();
         EList<Parameter> params = parameters.getParameters();
-        LLVMBaseType llvmReturnType = getLLVMType(returnType);
+        LLVMType llvmReturnType = getLLVMType(returnType);
         boolean varArgs = parameters.getVararg() != null;
-        LLVMBaseType[] llvmParamTypes = new LLVMBaseType[params.size()];
+        LLVMType[] llvmParamTypes = new LLVMType[params.size()];
         for (int i = 0; i < params.size(); i++) {
             llvmParamTypes[i] = getLLVMType(params.get(i).getType().getType());
         }
-        return LLVMFunction.create(header.getName(), LLVMTypeHelper.convertType(llvmReturnType), LLVMTypeHelper.convertTypes(llvmParamTypes), varArgs);
+        return factoryFacade.createAndRegisterFunctionDescriptor(header.getName(), LLVMTypeHelper.convertType(llvmReturnType), varArgs, LLVMTypeHelper.convertTypes(llvmParamTypes));
     }
 
     private LLVMExpressionNode parseSimpleConstant(EObject type, SimpleConstant simpleConst) {
-        LLVMBaseType instructionType = getLLVMType(type);
+        LLVMBaseType instructionType = getLLVMType(type).getType();
         String stringValue = simpleConst.getValue();
         if (instructionType == LLVMBaseType.ARRAY) {
             ResolvedType resolvedType = resolve(type);
             ResolvedType containedType = resolvedType.getContainedType(0);
-            LLVMBaseType arrayElementType = LLVMTypeHelper.getLLVMType(containedType);
+            LLVMBaseType arrayElementType = LLVMTypeHelper.getLLVMType(containedType).getType();
             switch (arrayElementType) {
                 case I8:
                     final Pattern pattern = Pattern.compile("c\"(.+?)\"");
@@ -1307,7 +1317,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
         } else if (instructionType == LLVMBaseType.STRUCT) {
             throw new AssertionError(simpleConst);
         } else {
-            return factoryFacade.createSimpleConstantNoArray(stringValue, instructionType, resolve(type));
+            return factoryFacade.createSimpleConstantNoArray(stringValue, instructionType, TextToBCConverter.convert(resolve(type)));
         }
     }
 
@@ -1319,18 +1329,19 @@ public class LLVMVisitor implements LLVMParserRuntime {
     private FrameSlot findOrAddFrameSlot(String name, EObject obj) {
         ResolvedType type = resolve(obj);
         FrameSlot frameSlot = frameDescriptor.findOrAddFrameSlot(name);
+        variableTypes.put(name, TextToBCConverter.convert(type));
         if (frameSlot == null) {
             throw new AssertionError("frame slot is null!");
         }
         if (frameSlot.getKind() == FrameSlotKind.Illegal) {
-            frameSlot.setKind(factoryFacade.getFrameSlotKind(type));
+            frameSlot.setKind(factoryFacade.getFrameSlotKind(TextToBCConverter.convert(type)));
         }
-        assert frameSlot.getKind() == factoryFacade.getFrameSlotKind(type);
+        assert frameSlot.getKind() == factoryFacade.getFrameSlotKind(TextToBCConverter.convert(type));
         return frameSlot;
     }
 
     private LLVMExpressionNode getReadNodeForSlot(FrameSlot frameSlot, EObject type) {
-        LLVMBaseType llvmType = getLLVMType(type);
+        LLVMBaseType llvmType = getLLVMType(type).getType();
         return factoryFacade.createFrameRead(llvmType, frameSlot);
     }
 
@@ -1346,21 +1357,9 @@ public class LLVMVisitor implements LLVMParserRuntime {
             return visitSwitch((Instruction_switch) termInstruction);
         } else if (termInstruction instanceof Instruction_indirectbr) {
             return visitIndirectBranch((Instruction_indirectbr) termInstruction);
-        } else if (termInstruction instanceof NamedTerminatorInstruction) {
-            return visitNamedTerminator((NamedTerminatorInstruction) termInstruction);
         } else {
             throw new AssertionError(termInstruction);
         }
-    }
-
-    private LLVMNode visitNamedTerminator(NamedTerminatorInstruction termInstruction) {
-        Instruction_invoke_nonVoid invoke = termInstruction.getInstruction();
-        int normalContinueIndex = getIndexFromBasicBlock(invoke.getToLabel().getRef());
-        int exceptionIndex = getIndexFromBasicBlock(invoke.getExceptionLabel().getRef());
-        Callee callee = invoke.getCallee();
-        EList<Argument> args = invoke.getArgs().getArguments();
-        LLVMNode callInstruction = visitFunctionCall(callee, args, resolve(invoke));
-        return new LLVMInvokeNode(normalContinueIndex, exceptionIndex, callInstruction);
     }
 
     private LLVMNode visitIndirectBranch(Instruction_indirectbr instr) {
@@ -1370,7 +1369,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
             labelTargets[i] = getIndexFromBasicBlock(destinations.get(i).getRef());
         }
         LLVMExpressionNode value = visitValueRef(instr.getAddress().getRef(), instr.getAddress().getType());
-        return factoryFacade.createIndirectBranch(value, labelTargets);
+        return factoryFacade.createIndirectBranch(value, labelTargets, getUnconditionalPhiWriteNodes());
     }
 
     private LLVMNode visitSwitch(Instruction_switch switchInstr) {
@@ -1385,8 +1384,10 @@ public class LLVMVisitor implements LLVMParserRuntime {
         for (int i = 0; i < caseConditions.size(); i++) {
             cases[i] = visitValueRef(caseConditions.get(i).getRef(), caseConditions.get(i).getType());
         }
-        LLVMBaseType llvmType = getLLVMType(switchInstr.getComparisonValue().getType());
-        return factoryFacade.createSwitch(cond, defaultLabel, otherLabels, cases, llvmType);
+        LLVMParserAsserts.assertNoNullElement(cases);
+        LLVMNode[] phiWriteNodes = getUnconditionalPhiWriteNodes();
+        LLVMBaseType llvmType = getLLVMType(switchInstr.getComparisonValue().getType()).getType();
+        return factoryFacade.createSwitch(cond, defaultLabel, otherLabels, cases, llvmType, phiWriteNodes);
     }
 
     private LLVMNode visitBr(Instruction_br brInstruction) {
@@ -1397,12 +1398,46 @@ public class LLVMVisitor implements LLVMParserRuntime {
             int trueIndex = getIndexFromBasicBlock(trueBasicBlock);
             BasicBlock falseBasicBlock = brInstruction.getFalse().getRef();
             int falseIndex = getIndexFromBasicBlock(falseBasicBlock);
-            return factoryFacade.createConditionalBranch(trueIndex, falseIndex, conditionNode);
+            List<LLVMNode> trueConditionPhiWriteNodes = new ArrayList<>();
+            List<LLVMNode> falseConditionPhiWriteNodes = new ArrayList<>();
+            if (!phiRefs.get(currentBasicBlock).isEmpty()) {
+                List<Phi> phiValues = phiRefs.get(currentBasicBlock);
+                for (Phi phi : phiValues) {
+                    FrameSlot phiSlot = findOrAddFrameSlot(phi.getAssignTo(), phi.getType());
+                    LLVMExpressionNode phiValueNode = visitValueRef(phi.getValueRef(), phi.getType());
+                    boolean isTrueCondition = brInstruction.getTrue().getRef() == phi.getStartingInstr().eContainer();
+                    LLVMNode phiWriteNode = getWriteNode(phiValueNode, phiSlot, phi.getType());
+                    if (isTrueCondition) {
+                        trueConditionPhiWriteNodes.add(phiWriteNode);
+                    } else {
+                        falseConditionPhiWriteNodes.add(phiWriteNode);
+                    }
+                }
+            }
+            LLVMNode[] truePhiWriteNodesArr = trueConditionPhiWriteNodes.toArray(new LLVMNode[trueConditionPhiWriteNodes.size()]);
+            LLVMNode[] falsePhiWriteNodesArr = falseConditionPhiWriteNodes.toArray(new LLVMNode[falseConditionPhiWriteNodes.size()]);
+            return factoryFacade.createConditionalBranch(trueIndex, falseIndex, conditionNode, truePhiWriteNodesArr, falsePhiWriteNodesArr);
         } else {
+            LLVMNode[] unconditionalPhiWriteNodeArr = getUnconditionalPhiWriteNodes();
             BasicBlock unconditional = brInstruction.getUnconditional().getRef();
             int unconditionalIndex = getIndexFromBasicBlock(unconditional);
-            return factoryFacade.createUnconditionalBranch(unconditionalIndex);
+            return factoryFacade.createUnconditionalBranch(unconditionalIndex, unconditionalPhiWriteNodeArr);
         }
+    }
+
+    private LLVMNode[] getUnconditionalPhiWriteNodes() {
+        List<LLVMNode> unconditionalPhiWriteNode = new ArrayList<>();
+        if (!phiRefs.get(currentBasicBlock).isEmpty()) {
+            List<Phi> phiValues = phiRefs.get(currentBasicBlock);
+            for (Phi phi : phiValues) {
+                FrameSlot phiSlot = findOrAddFrameSlot(phi.getAssignTo(), phi.getType());
+                LLVMExpressionNode phiValueNode = visitValueRef(phi.getValueRef(), phi.getType());
+                LLVMNode phiWriteNode = getWriteNode(phiValueNode, phiSlot, phi.getType());
+                unconditionalPhiWriteNode.add(phiWriteNode);
+            }
+        }
+        LLVMNode[] unconditionalPhiWriteNodeArr = unconditionalPhiWriteNode.toArray(new LLVMNode[unconditionalPhiWriteNode.size()]);
+        return unconditionalPhiWriteNodeArr;
     }
 
     private int getIndexFromBasicBlock(BasicBlock trueBasicBlock) {
@@ -1420,14 +1455,14 @@ public class LLVMVisitor implements LLVMParserRuntime {
         } else {
             LLVMExpressionNode retValue = visitValueRef(val.getRef(), val.getType());
             ResolvedType resolvedType = resolve(val.getType());
-            retSlot.setKind(factoryFacade.getFrameSlotKind(resolvedType));
-            return factoryFacade.createNonVoidRet(retValue, resolvedType);
+            retSlot.setKind(factoryFacade.getFrameSlotKind(TextToBCConverter.convert(resolvedType)));
+            return factoryFacade.createNonVoidRet(retValue, TextToBCConverter.convert(resolvedType));
         }
     }
 
     @Override
-    public LLVMExpressionNode allocateVectorResult(EObject type) {
-        ResolvedVectorType vector = (ResolvedVectorType) resolve(type);
+    public LLVMExpressionNode allocateVectorResult(Object type) {
+        ResolvedVectorType vector = (ResolvedVectorType) resolve((EObject) type);
         return allocateFunctionLifetime(vector);
     }
 
@@ -1437,19 +1472,19 @@ public class LLVMVisitor implements LLVMParserRuntime {
     }
 
     public LLVMExpressionNode allocateFunctionLifetime(ResolvedType resolvedType) {
-        int alignment = LLVMTypeHelper.getAlignmentByte(resolvedType);
-        int size = LLVMTypeHelper.getByteSize(resolvedType);
-        return allocateFunctionLifetime(size, alignment);
+        int alignment = typeHelper.getAlignmentByte(resolvedType);
+        int size = typeHelper.getByteSize(resolvedType);
+        return allocateFunctionLifetime(TextToBCConverter.convert(resolvedType), size, alignment);
     }
 
     public LLVMExpressionNode allocateFunctionLifetime(int size, ResolvedType resolvedType) {
-        int alignment = LLVMTypeHelper.getAlignmentByte(resolvedType);
-        return allocateFunctionLifetime(size, alignment);
+        int alignment = typeHelper.getAlignmentByte(resolvedType);
+        return allocateFunctionLifetime(TextToBCConverter.convert(resolvedType), size, alignment);
     }
 
     @Override
-    public LLVMExpressionNode allocateFunctionLifetime(int size, int alignment) {
-        return factoryFacade.createAlloc(size, alignment);
+    public LLVMExpressionNode allocateFunctionLifetime(com.oracle.truffle.llvm.parser.base.model.types.Type type, int size, int alignment) {
+        return factoryFacade.createAlloc(type, size, alignment, null, null);
     }
 
     @Override
@@ -1458,19 +1493,63 @@ public class LLVMVisitor implements LLVMParserRuntime {
     }
 
     @Override
-    public LLVMAddress getGlobalAddress(GlobalVariable var) {
-        return globalVars.get(var);
+    public Object getGlobalAddress(com.oracle.truffle.llvm.parser.base.model.globals.GlobalValueSymbol var) {
+        return findOrAllocateGlobal(var);
     }
 
+    @Override
     public FrameSlot getStackPointerSlot() {
         return stackPointerSlot;
     }
 
-    public LLVMOptimizationConfiguration getOptimizationConfiguration() {
-        return optimizationConfiguration;
+    @Override
+    public int getByteAlignment(com.oracle.truffle.llvm.parser.base.model.types.Type type) {
+        return type.getAlignment(layoutConverter);
     }
 
-    public int getBitAlignment(LLVMBaseType type) {
-        return layoutConverter.getBitAlignment(type);
+    @Override
+    public int getByteSize(com.oracle.truffle.llvm.parser.base.model.types.Type type) {
+        return type.getSize(layoutConverter);
     }
+
+    @Override
+    public int getBytePadding(int offset, com.oracle.truffle.llvm.parser.base.model.types.Type type) {
+        return com.oracle.truffle.llvm.parser.base.model.types.Type.getPadding(offset, type, layoutConverter);
+    }
+
+    @Override
+    public int getIndexOffset(int index, com.oracle.truffle.llvm.parser.base.model.types.Type type) {
+        return type.getIndexOffset(index, layoutConverter);
+    }
+
+    @Override
+    public FrameDescriptor getGlobalFrameDescriptor() {
+        return globalFrameDescriptor;
+    }
+
+    @Override
+    public FrameDescriptor getMethodFrameDescriptor() {
+        return frameDescriptor;
+    }
+
+    @Override
+    public void addDestructor(LLVMNode destructorNode) {
+        globalDeallocations.add(destructorNode);
+    }
+
+    @Override
+    public long getNativeHandle(String name) {
+        return nativeLookup.getNativeHandle(name);
+    }
+
+    @Override
+    public Map<String, com.oracle.truffle.llvm.parser.base.model.types.Type> getVariableNameTypesMapping() {
+        return variableTypes;
+    }
+
+    @Override
+    public NodeFactoryFacade getNodeFactoryFacade() {
+        return factoryFacade;
+    }
+
 }
