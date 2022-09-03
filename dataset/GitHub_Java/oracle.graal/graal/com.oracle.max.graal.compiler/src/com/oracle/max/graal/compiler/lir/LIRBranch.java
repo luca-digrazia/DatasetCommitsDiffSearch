@@ -22,41 +22,135 @@
  */
 package com.oracle.max.graal.compiler.lir;
 
-import com.oracle.max.graal.nodes.calc.*;
+import com.oracle.max.asm.*;
+import com.oracle.max.graal.compiler.ir.*;
 import com.sun.cri.ci.*;
 
-public abstract class LIRBranch extends LIRInstruction {
+/**
+ * @author Marcelo Cintra
+ * @author Thomas Wuerthinger
+ *
+ */
+public class LIRBranch extends LIRInstruction {
+
+    private Condition cond;
+    private Label label;
 
     /**
-     * The condition when this branch is taken, or {@code null} if it is an unconditional branch.
+     * The target block of this branch.
      */
-    protected Condition cond;
+    private LIRBlock block;
 
     /**
-     * For floating point branches only. True when the branch should be taken when the comparison is unordered.
+     * This is the unordered block for a float branch.
      */
-    protected boolean unorderedIsTrue;
+    private LIRBlock unorderedBlock;
+
+
+    public LIRBranch(Condition cond, Label label) {
+        this(cond, label, null);
+    }
 
     /**
-     * The target of this branch.
+     * Creates a new LIRBranch instruction.
+     *
+     * @param cond the branch condition
+     * @param label target label
+     *
      */
-    protected LabelRef destination;
-
-
-    public LIRBranch(LIROpcode code, Condition cond, boolean unorderedIsTrue, LabelRef destination, LIRDebugInfo info) {
-        super(code, CiValue.IllegalValue, info, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS);
+    public LIRBranch(Condition cond, Label label, LIRDebugInfo info) {
+        super(LIROpcode.Branch, CiValue.IllegalValue, info, false);
         this.cond = cond;
-        this.unorderedIsTrue = unorderedIsTrue;
-        this.destination = destination;
+        this.label = label;
     }
 
-    public LabelRef destination() {
-        return destination;
+    /**
+     * Creates a new LIRBranch instruction.
+     *
+     * @param cond
+     * @param kind
+     * @param block
+     *
+     */
+    public LIRBranch(Condition cond, LIRBlock block) {
+        super(LIROpcode.Branch, CiValue.IllegalValue, block.debugInfo(), false);
+        this.cond = cond;
+        this.label = block.label();
+        this.block = block;
+        this.unorderedBlock = null;
     }
 
-    public void negate(LabelRef newDestination) {
-        destination = newDestination;
+    public LIRBranch(Condition cond, LIRBlock block, LIRBlock ublock) {
+        super(LIROpcode.CondFloatBranch, CiValue.IllegalValue, (block.debugInfo() != null ? block.debugInfo() : (ublock != null ? ublock.debugInfo() : null)), false);
+        this.cond = cond;
+        this.label = block.label();
+        this.block = block;
+        this.unorderedBlock = ublock;
+    }
+
+    /**
+     * @return the condition
+     */
+    public Condition cond() {
+        return cond;
+    }
+
+    public Label label() {
+        return label;
+    }
+
+    public LIRBlock block() {
+        return block;
+    }
+
+    public LIRBlock unorderedBlock() {
+        return unorderedBlock;
+    }
+
+    public void changeBlock(LIRBlock b) {
+        assert block != null : "must have old block";
+        assert block.label() == label() : "must be equal";
+        assert b != null;
+
+        this.block = b;
+        this.label = b.label();
+    }
+
+    public void negateCondition() {
         cond = cond.negate();
-        unorderedIsTrue = !unorderedIsTrue;
+    }
+
+    @Override
+    public void emitCode(LIRAssembler masm) {
+        masm.emitBranch(this);
+    }
+
+    @Override
+    public String operationString(OperandFormatter operandFmt) {
+        StringBuilder buf = new StringBuilder(cond().operator).append(' ');
+        if (block() != null) {
+            buf.append("[B").append(block.blockID()).append(']');
+        } else if (label().isBound()) {
+            buf.append("[label:0x").append(Integer.toHexString(label().position())).append(']');
+        } else {
+            buf.append("[label:??]");
+        }
+        if (unorderedBlock() != null) {
+            buf.append("unordered: [B").append(unorderedBlock().blockID()).append(']');
+        }
+        return buf.toString();
+    }
+
+    public void substitute(LIRBlock oldBlock, LIRBlock newBlock) {
+        assert newBlock != null;
+        if (block == oldBlock) {
+            block = newBlock;
+            LIRInstruction instr = newBlock.lir().instructionsList().get(0);
+            assert instr instanceof LIRLabel : "first instruction of block must be label";
+            label = ((LIRLabel) instr).label();
+        }
+        if (unorderedBlock == oldBlock) {
+            unorderedBlock = newBlock;
+        }
     }
 }

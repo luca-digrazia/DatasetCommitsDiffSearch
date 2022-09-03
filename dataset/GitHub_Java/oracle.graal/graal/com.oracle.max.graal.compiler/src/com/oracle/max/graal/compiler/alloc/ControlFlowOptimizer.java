@@ -130,8 +130,6 @@ final class ControlFlowOptimizer {
                             ((LIRBranch) instr).substitute(block, newTarget);
                         } else if (instr instanceof LIRTableSwitch) {
                             ((LIRTableSwitch) instr).substitute(block, newTarget);
-                        } else if (instr instanceof LIRXirInstruction) {
-                            ((LIRXirInstruction) instr).substitute(block, newTarget);
                         }
                     }
                 }

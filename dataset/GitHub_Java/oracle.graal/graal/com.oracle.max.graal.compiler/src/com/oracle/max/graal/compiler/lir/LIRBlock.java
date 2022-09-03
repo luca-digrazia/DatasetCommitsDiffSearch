@@ -276,12 +276,7 @@ public final class LIRBlock {
         if (instructionsList.size() == 0) {
             return false;
         }
-        LIRInstruction lirInstruction = instructionsList.get(instructionsList.size() - 1);
-        if (lirInstruction instanceof LIRXirInstruction) {
-            LIRXirInstruction lirXirInstruction = (LIRXirInstruction) lirInstruction;
-            return (lirXirInstruction.falseSuccessor() != null) && (lirXirInstruction.trueSuccessor() != null);
-        }
-        LIROpcode code = lirInstruction.code;
+        LIROpcode code = instructionsList.get(instructionsList.size() - 1).code;
         return code == LIROpcode.Branch || code == LIROpcode.TableSwitch;
     }
 }

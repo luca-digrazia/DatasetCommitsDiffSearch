@@ -183,15 +183,4 @@ public class LIRXirInstruction extends LIRInstruction {
 
         return sb.toString();
     }
-
-
-    public void substitute(LIRBlock block, LIRBlock newTarget) {
-        if (trueSuccessor == block) {
-            trueSuccessor = newTarget;
-        }
-
-        if (falseSuccessor == block) {
-            falseSuccessor = newTarget;
-        }
-    }
 }
