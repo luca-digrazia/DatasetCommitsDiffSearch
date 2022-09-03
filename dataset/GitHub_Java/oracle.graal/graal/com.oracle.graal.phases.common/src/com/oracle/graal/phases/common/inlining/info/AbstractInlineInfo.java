@@ -33,6 +33,9 @@ import com.oracle.graal.phases.common.inlining.InliningUtil;
 import com.oracle.graal.phases.common.inlining.info.elem.Inlineable;
 import com.oracle.graal.phases.common.inlining.info.elem.InlineableMacroNode;
 import com.oracle.graal.phases.common.inlining.info.elem.InlineableGraph;
+import com.oracle.graal.phases.common.inlining.walker.CallsiteHolder;
+import com.oracle.graal.phases.common.inlining.walker.CallsiteHolderDummy;
+import com.oracle.graal.phases.common.inlining.walker.CallsiteHolderExplorable;
 import com.oracle.graal.phases.tiers.HighTierContext;
 
 public abstract class AbstractInlineInfo implements InlineInfo {
@@ -54,22 +57,22 @@ public abstract class AbstractInlineInfo implements InlineInfo {
     }
 
     protected static Collection<Node> inline(Invoke invoke, ResolvedJavaMethod concrete, Inlineable inlineable, Assumptions assumptions, boolean receiverNullCheck) {
-        List<Node> canonicalizeNodes = new ArrayList<>();
+        Collection<Node> parameterUsages = new ArrayList<>();
         if (inlineable instanceof InlineableGraph) {
             StructuredGraph calleeGraph = ((InlineableGraph) inlineable).getGraph();
-            Map<Node, Node> duplicateMap = InliningUtil.inline(invoke, calleeGraph, receiverNullCheck, canonicalizeNodes);
-            getInlinedParameterUsages(canonicalizeNodes, calleeGraph, duplicateMap);
+            Map<Node, Node> duplicateMap = InliningUtil.inline(invoke, calleeGraph, receiverNullCheck);
+            getInlinedParameterUsages(parameterUsages, calleeGraph, duplicateMap);
         } else {
             assert inlineable instanceof InlineableMacroNode;
 
             Class<? extends FixedWithNextNode> macroNodeClass = ((InlineableMacroNode) inlineable).getMacroNodeClass();
             FixedWithNextNode macroNode = InliningUtil.inlineMacroNode(invoke, concrete, macroNodeClass);
-            canonicalizeNodes.add(macroNode);
+            parameterUsages.add(macroNode);
         }
 
         InliningUtil.InlinedBytecodes.add(concrete.getCodeSize());
         assumptions.recordMethodContents(concrete);
-        return canonicalizeNodes;
+        return parameterUsages;
     }
 
     public static void getInlinedParameterUsages(Collection<Node> parameterUsages, StructuredGraph calleeGraph, Map<Node, Node> duplicateMap) {
@@ -90,14 +93,14 @@ public abstract class AbstractInlineInfo implements InlineInfo {
         }
     }
 
-    public final int determineNodeCount() {
-        int nodes = 0;
-        for (int i = 0; i < numberOfMethods(); i++) {
-            Inlineable elem = inlineableElementAt(i);
-            if (elem != null) {
-                nodes += elem.getNodeCount();
-            }
+    public final CallsiteHolder buildCallsiteHolderForElement(int index, double invokeProbability, double invokeRelevance) {
+        Inlineable elem = inlineableElementAt(index);
+        if (elem instanceof InlineableGraph) {
+            InlineableGraph ig = (InlineableGraph) elem;
+            return new CallsiteHolderExplorable(ig.getGraph(), invokeProbability * probabilityAt(index), invokeRelevance * relevanceAt(index));
+        } else {
+            assert elem instanceof InlineableMacroNode;
+            return CallsiteHolderDummy.DUMMY_CALLSITE_HOLDER;
         }
-        return nodes;
     }
 }
