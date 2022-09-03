@@ -71,15 +71,15 @@ public final class DefaultTruffleSplittingStrategy implements TruffleSplittingSt
             return false;
         }
 
-        OptimizedCallTarget callTarget = call.getCallTarget();
-        int nodeCount = callTarget.getNonTrivialNodeCount();
+        OptimizedCallTarget splitTarget = call.getCallTarget();
+        int nodeCount = splitTarget.getNonTrivialNodeCount();
         if (nodeCount > TruffleCompilerOptions.TruffleSplittingMaxCalleeSize.getValue()) {
             return false;
         }
 
         // disable recursive splitting for now
         OptimizedCallTarget root = (OptimizedCallTarget) call.getRootNode().getCallTarget();
-        if (root == callTarget || root.getSourceCallTarget() == callTarget) {
+        if (root == splitTarget || root.getSourceCallTarget() == splitTarget) {
             // recursive call found
             return false;
         }
