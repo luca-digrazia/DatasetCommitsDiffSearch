@@ -60,7 +60,7 @@ import com.oracle.graal.nodeinfo.*;
 public abstract class Node implements Cloneable, Formattable {
 
     public final static boolean USE_GENERATED_NODES = Boolean.parseBoolean(System.getProperty("graal.useGeneratedNodes", "true"));
-    public final static boolean USE_UNSAFE_TO_CLONE = Boolean.parseBoolean(System.getProperty("graal.useUnsafeToClone", "true"));
+    public final static boolean USE_UNSAFE_TO_CLONE = Boolean.parseBoolean(System.getProperty("graal.useUnsafeToClone", "false"));
 
     static final int DELETED_ID_START = -1000000000;
     static final int INITIAL_ID = -1;
@@ -772,8 +772,7 @@ public abstract class Node implements Cloneable, Formattable {
      */
     final Node clone(Graph into, EnumSet<Edges.Type> edgesToCopy) {
         NodeClass nodeClass = getNodeClass();
-        boolean isValueNumberableLeaf = nodeClass.valueNumberable() && nodeClass.isLeafNode();
-        if (isValueNumberableLeaf) {
+        if (nodeClass.valueNumberable() && nodeClass.isLeafNode()) {
             Node otherNode = into.findNodeInCache(this);
             if (otherNode != null) {
                 return otherNode;
@@ -804,7 +803,7 @@ public abstract class Node implements Cloneable, Formattable {
         into.register(newNode);
         newNode.extraUsages = NO_NODES;
 
-        if (isValueNumberableLeaf) {
+        if (nodeClass.valueNumberable() && nodeClass.isLeafNode()) {
             into.putNodeIntoCache(newNode);
         }
         newNode.afterClone(this);
