@@ -26,8 +26,25 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
+import com.oracle.graal.hotspot.meta.*;
 
 public class NarrowOopStamp extends AbstractObjectStamp {
+
+    public static final PlatformKind NarrowOop = new PlatformKind() {
+
+        public String name() {
+            return "NarrowOop";
+        }
+
+        @Override
+        public String toString() {
+            return name();
+        }
+
+        public Constant getDefaultValue() {
+            return HotSpotCompressedNullConstant.COMPRESSED_NULL;
+        }
+    };
 
     private final CompressEncoding encoding;
 
@@ -55,7 +72,7 @@ public class NarrowOopStamp extends AbstractObjectStamp {
 
     @Override
     public LIRKind getLIRKind(LIRKindTool tool) {
-        return LIRKind.reference(Kind.Int);
+        return LIRKind.reference(NarrowOop);
     }
 
     @Override
