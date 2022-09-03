@@ -194,7 +194,7 @@ public interface CompilerToVM {
 
     void initializeConfiguration(HotSpotVMConfig config);
 
-    long resolveMethod(HotSpotResolvedObjectType klass, String name, String signature);
+    JavaMethod resolveMethod(HotSpotResolvedObjectType klass, String name, String signature);
 
     HotSpotResolvedJavaField[] getInstanceFields(HotSpotResolvedObjectType klass);
 
