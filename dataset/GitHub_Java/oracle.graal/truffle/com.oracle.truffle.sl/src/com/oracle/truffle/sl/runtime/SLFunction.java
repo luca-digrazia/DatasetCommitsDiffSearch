@@ -42,11 +42,9 @@ package com.oracle.truffle.sl.runtime;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.utilities.CyclicAssumption;
-import com.oracle.truffle.sl.nodes.SLUndefinedFunctionRootNode;
 
 /**
  * Represents a SL function. On the Truffle level, a callable element is represented by a
@@ -81,7 +79,6 @@ public final class SLFunction implements TruffleObject {
 
     protected SLFunction(String name) {
         this.name = name;
-        this.callTarget = Truffle.getRuntime().createCallTarget(new SLUndefinedFunctionRootNode(name));
         this.callTargetStable = new CyclicAssumption(name);
     }
 
