@@ -22,21 +22,16 @@
  */
 package com.oracle.graal.compiler.test.ea;
 
-import jdk.vm.ci.meta.JavaConstant;
+import org.junit.*;
 
-import org.junit.Assert;
-import org.junit.Test;
-
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.loop.DefaultLoopPolicies;
-import com.oracle.graal.loop.phases.LoopFullUnrollPhase;
-import com.oracle.graal.loop.phases.LoopPeelingPhase;
-import com.oracle.graal.nodes.extended.ValueAnchorNode;
-import com.oracle.graal.nodes.virtual.AllocatedObjectNode;
-import com.oracle.graal.nodes.virtual.CommitAllocationNode;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.schedule.SchedulePhase;
-import com.oracle.graal.virtual.phases.ea.PartialEscapePhase;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.loop.phases.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.schedule.*;
+import com.oracle.graal.virtual.phases.ea.*;
 
 /**
  * The PartialEscapeAnalysisPhase is expected to remove all allocations and return the correct
@@ -229,7 +224,7 @@ public class EscapeAnalysisTest extends EATestBase {
 
         protected Integer value;
 
-        MyException(Integer value) {
+        public MyException(Integer value) {
             super((Throwable) null);
             this.value = value;
         }
@@ -313,8 +308,8 @@ public class EscapeAnalysisTest extends EATestBase {
     @Test
     public void testFullyUnrolledLoop() {
         prepareGraph("testFullyUnrolledLoopSnippet", false);
-        new LoopFullUnrollPhase(new CanonicalizerPhase(), new DefaultLoopPolicies()).apply(graph, context);
-        new PartialEscapePhase(false, new CanonicalizerPhase()).apply(graph, context);
+        new LoopFullUnrollPhase(new CanonicalizerPhase(true)).apply(graph, context);
+        new PartialEscapePhase(false, new CanonicalizerPhase(true)).apply(graph, context);
         Assert.assertEquals(1, returnNodes.size());
         Assert.assertTrue(returnNodes.get(0).result() instanceof AllocatedObjectNode);
         CommitAllocationNode commit = ((AllocatedObjectNode) returnNodes.get(0).result()).getCommit();
@@ -344,7 +339,7 @@ public class EscapeAnalysisTest extends EATestBase {
     @Test
     public void testPeeledLoop() {
         prepareGraph("testPeeledLoopSnippet", false);
-        new LoopPeelingPhase(new DefaultLoopPolicies()).apply(graph);
+        new LoopPeelingPhase().apply(graph);
         new SchedulePhase().apply(graph);
     }
 
