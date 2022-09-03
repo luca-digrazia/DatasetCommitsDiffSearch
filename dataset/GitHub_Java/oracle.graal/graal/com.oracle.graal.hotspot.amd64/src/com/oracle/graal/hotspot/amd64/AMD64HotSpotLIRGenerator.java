@@ -71,13 +71,10 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
     private final HotSpotVMConfig config;
 
-    private final Object stub;
-
-    protected AMD64HotSpotLIRGenerator(StructuredGraph graph, Object stub, HotSpotProviders providers, HotSpotVMConfig config, FrameMap frameMap, CallingConvention cc, LIR lir) {
+    protected AMD64HotSpotLIRGenerator(StructuredGraph graph, HotSpotProviders providers, HotSpotVMConfig config, FrameMap frameMap, CallingConvention cc, LIR lir) {
         super(graph, providers, frameMap, cc, lir);
         assert config.basicLockSize == 8;
         this.config = config;
-        this.stub = stub;
     }
 
     @Override
@@ -157,10 +154,11 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     }
 
     @Override
-    protected void emitPrologue(StructuredGraph graph) {
+    protected void emitPrologue() {
 
         CallingConvention incomingArguments = cc;
 
+        RegisterValue rbpParam = rbp.asValue(Kind.Long);
         Value[] params = new Value[incomingArguments.getArgumentCount() + 1];
         for (int i = 0; i < params.length - 1; i++) {
             params[i] = toStackKind(incomingArguments.getArgument(i));
@@ -171,7 +169,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
                 }
             }
         }
-        params[params.length - 1] = rbp.asValue(Kind.Long);
+        params[params.length - 1] = rbpParam;
 
         emitIncomingValues(params);
 
@@ -208,7 +206,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     @Override
     protected boolean needOnlyOopMaps() {
         // Stubs only need oop maps
-        return stub != null;
+        return graph.start() instanceof StubStartNode;
     }
 
     /**
@@ -236,18 +234,22 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     }
 
     Stub getStub() {
-        return (Stub) stub;
+        if (graph.start() instanceof StubStartNode) {
+            return ((StubStartNode) graph.start()).getStub();
+        }
+        return null;
     }
 
     @Override
     public Variable emitForeignCall(ForeignCallLinkage linkage, DeoptimizingNode info, Value... args) {
+        Stub stub = getStub();
         boolean destroysRegisters = linkage.destroysRegisters();
 
         AMD64SaveRegistersOp save = null;
         StackSlot[] savedRegisterLocations = null;
         if (destroysRegisters) {
-            if (getStub() != null) {
-                if (getStub().preservesRegisters()) {
+            if (stub != null) {
+                if (stub.preservesRegisters()) {
                     Register[] savedRegisters = frameMap.registerConfig.getAllocatableRegisters();
                     savedRegisterLocations = new StackSlot[savedRegisters.length];
                     for (int i = 0; i < savedRegisters.length; i++) {
@@ -274,8 +276,8 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         }
 
         if (destroysRegisters) {
-            if (getStub() != null) {
-                if (getStub().preservesRegisters()) {
+            if (stub != null) {
+                if (stub.preservesRegisters()) {
                     assert !calleeSaveInfo.containsKey(currentRuntimeCallInfo);
                     calleeSaveInfo.put(currentRuntimeCallInfo, save);
 
@@ -345,24 +347,6 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     @Override
     public void emitTailcall(Value[] args, Value address) {
         append(new AMD64TailcallOp(args, address));
-    }
-
-    @Override
-    public void emitCCall(long address, CallingConvention nativeCallingConvention, Value[] args, int numberOfFloatingPointArguments) {
-        Value[] argLocations = new Value[args.length];
-        frameMap.callsMethod(nativeCallingConvention);
-        // TODO(mg): in case a native function uses floating point varargs, the ABI requires that
-        // RAX contains the length of the varargs
-        AllocatableValue numberOfFloatingPointArgumentsRegister = AMD64.rax.asValue();
-        emitMove(numberOfFloatingPointArgumentsRegister, Constant.forInt(numberOfFloatingPointArguments));
-        for (int i = 0; i < args.length; i++) {
-            Value arg = args[i];
-            AllocatableValue loc = nativeCallingConvention.getArgument(i);
-            emitMove(loc, arg);
-            argLocations[i] = loc;
-        }
-        Value ptr = emitMove(Constant.forLong(address));
-        append(new AMD64CCall(nativeCallingConvention.getReturn(), ptr, numberOfFloatingPointArgumentsRegister, argLocations));
     }
 
     @Override
@@ -483,7 +467,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     @Override
     public Variable emitLoad(Kind kind, Value address, Access access) {
         AMD64AddressValue loadAddress = asAddressValue(address);
-        Variable result = newVariable(kind.getStackKind());
+        Variable result = newVariable(kind);
         LIRFrameState state = null;
         if (access instanceof DeoptimizingNode) {
             state = state((DeoptimizingNode) access);

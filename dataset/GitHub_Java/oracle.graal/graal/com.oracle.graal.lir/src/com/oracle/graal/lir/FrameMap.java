@@ -122,10 +122,6 @@ public abstract class FrameMap {
         return frameSize;
     }
 
-    public int outgoingSize() {
-        return outgoingSize;
-    }
-
     /**
      * Determines if any space is used in the frame apart from the
      * {@link Architecture#getReturnAddressSize() return address slot}.
@@ -320,7 +316,7 @@ public abstract class FrameMap {
         spillSize += (slots * target.wordSize);
 
         if (!objects.isEmpty()) {
-            assert objects.length() <= slots;
+            assert objects.length() < slots;
             StackSlot result = null;
             for (int slotIndex = 0; slotIndex < slots; slotIndex++) {
                 StackSlot objectSlot = null;
@@ -382,6 +378,4 @@ public abstract class FrameMap {
             }
         }
     }
-
-    public abstract LIRInstruction createSpillMove(AllocatableValue result, Value input);
 }
