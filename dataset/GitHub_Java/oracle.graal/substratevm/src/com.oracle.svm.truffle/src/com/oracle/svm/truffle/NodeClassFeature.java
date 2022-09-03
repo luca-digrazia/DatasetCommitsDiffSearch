@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -34,10 +32,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.hosted.Feature;
 
-import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
+import com.oracle.graal.pointsto.constraints.UnsupportedFeatureException;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.svm.core.annotate.AnnotateOriginal;
 import com.oracle.svm.core.annotate.NeverInline;
@@ -48,16 +46,18 @@ import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.graal.hosted.GraalFeature;
 import com.oracle.svm.graal.hosted.GraalObjectReplacer;
 import com.oracle.svm.graal.meta.SubstrateType;
+import com.oracle.svm.hosted.FeatureImpl.BeforeAnalysisAccessImpl;
 import com.oracle.svm.hosted.FeatureImpl.DuringAnalysisAccessImpl;
-import com.oracle.svm.hosted.FeatureImpl.DuringSetupAccessImpl;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeClass;
 
+import jdk.vm.ci.meta.MetaAccessProvider;
+
 public class NodeClassFeature implements Feature {
 
-    private AnalysisMetaAccess metaAccess;
     private GraalObjectReplacer graalObjectReplacer;
+    private MetaAccessProvider metaAccess;
 
     private final Set<Class<?>> registeredClasses = new HashSet<>();
 
@@ -67,10 +67,9 @@ public class NodeClassFeature implements Feature {
     }
 
     @Override
-    public void duringSetup(DuringSetupAccess access) {
-        metaAccess = ((DuringSetupAccessImpl) access).getMetaAccess();
+    public void duringSetup(DuringSetupAccess config) {
         graalObjectReplacer = ImageSingletons.lookup(GraalFeature.class).getObjectReplacer();
-        access.registerObjectReplacer(this::replaceNodeFieldAccessor);
+        config.registerObjectReplacer(this::replaceNodeFieldAccessor);
     }
 
     @SuppressWarnings("deprecation")
@@ -89,19 +88,37 @@ public class NodeClassFeature implements Feature {
     }
 
     @Override
-    public void duringAnalysis(DuringAnalysisAccess access) {
-        for (Class<?> clazz : access.reachableSubtypes(Node.class)) {
-            registerUnsafeAccess(access, clazz.asSubclass(Node.class));
+    public void beforeAnalysis(BeforeAnalysisAccess a) {
+        BeforeAnalysisAccessImpl access = (BeforeAnalysisAccessImpl) a;
 
-            AnalysisType type = ((DuringAnalysisAccessImpl) access).getMetaAccess().lookupJavaType(clazz);
+        metaAccess = access.getMetaAccess();
+    }
+
+    @Override
+    public void duringAnalysis(DuringAnalysisAccess a) {
+        DuringAnalysisAccessImpl access = (DuringAnalysisAccessImpl) a;
+
+        for (Class<? extends Node> clazz : access.findSubclasses(Node.class)) {
+            AnalysisType type;
+            try {
+                type = access.getMetaAccess().lookupJavaType(clazz);
+            } catch (UnsupportedFeatureException ex) {
+                /* The node class is not available on Substrate VM, so ignore it. */
+                continue;
+            }
+
             if (type.isInstantiated()) {
+                for (Class<?> cur = clazz; cur != Object.class; cur = cur.getSuperclass()) {
+                    registerUnsafeAccess(access, clazz);
+                }
+
                 graalObjectReplacer.createType(type);
             }
         }
     }
 
     @SuppressWarnings("deprecation")
-    private void registerUnsafeAccess(DuringAnalysisAccess access, Class<? extends Node> clazz) {
+    private void registerUnsafeAccess(DuringAnalysisAccessImpl access, Class<? extends Node> clazz) {
         if (registeredClasses.contains(clazz)) {
             return;
         }
@@ -133,7 +150,7 @@ public class NodeClassFeature implements Feature {
                  * It's a normal non-child data field of the node. Such fields are written with
                  * Unsafe in the NodeUtil.deepCopyImpl.
                  */
-                ((DuringAnalysisAccessImpl) access).registerAsFrozenUnsafeAccessed(field);
+                access.registerAsFrozenUnsafeAccessed(field);
             }
 
             /* All other fields are only read with Unsafe. */

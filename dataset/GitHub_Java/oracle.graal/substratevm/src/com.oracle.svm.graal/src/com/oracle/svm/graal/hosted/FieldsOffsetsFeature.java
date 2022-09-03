@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,10 +24,12 @@ package com.oracle.svm.graal.hosted;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.function.Function;
 
+import jdk.vm.ci.meta.MetaAccessProvider;
 import org.graalvm.compiler.core.common.FieldIntrospection;
 import org.graalvm.compiler.core.common.Fields;
 import org.graalvm.compiler.graph.Edges;
@@ -50,12 +50,10 @@ import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.graal.GraalSupport;
 import com.oracle.svm.hosted.FeatureImpl.BeforeAnalysisAccessImpl;
 import com.oracle.svm.hosted.FeatureImpl.CompilationAccessImpl;
-import com.oracle.svm.hosted.FeatureImpl.DuringAnalysisAccessImpl;
-import com.oracle.svm.hosted.FeatureImpl.DuringSetupAccessImpl;
 import com.oracle.svm.hosted.GraalEdgeUnsafePartition;
+import com.oracle.svm.hosted.ImageClassLoader;
 import com.oracle.svm.hosted.meta.HostedMetaAccess;
 
-import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 
 /**
@@ -107,7 +105,6 @@ public class FieldsOffsetsFeature implements Feature {
 
     static class FieldsOffsetsReplacements {
         protected final Map<long[], FieldsOffsetsReplacement> replacements = new IdentityHashMap<>();
-        protected boolean newValuesAvailable;
     }
 
     protected static Map<long[], FieldsOffsetsReplacement> getReplacements() {
@@ -115,12 +112,9 @@ public class FieldsOffsetsFeature implements Feature {
     }
 
     @Override
-    public void duringSetup(DuringSetupAccess a) {
-        DuringSetupAccessImpl access = (DuringSetupAccessImpl) a;
-
+    public void duringSetup(DuringSetupAccess config) {
         ImageSingletons.add(FieldsOffsetsReplacements.class, new FieldsOffsetsReplacements());
-        access.registerObjectReplacer(FieldsOffsetsFeature::replaceFieldsOffsets);
-        access.registerClassReachabilityListener(FieldsOffsetsFeature::classReachabilityListener);
+        config.registerObjectReplacer(FieldsOffsetsFeature::replaceFieldsOffsets);
     }
 
     private static Object replaceFieldsOffsets(Object source) {
@@ -129,7 +123,7 @@ public class FieldsOffsetsFeature implements Feature {
              * All instances of Fields must have been registered before, otherwise we miss the
              * substitution of its offsets array.
              */
-            assert !ImageSingletons.lookup(FieldsOffsetsReplacements.class).newValuesAvailable || getReplacements().containsKey(((Fields) source).getOffsets());
+            assert getReplacements().containsKey(((Fields) source).getOffsets());
 
         } else if (source instanceof long[]) {
             FieldsOffsetsReplacement replacement = getReplacements().get(source);
@@ -150,32 +144,26 @@ public class FieldsOffsetsFeature implements Feature {
         return source;
     }
 
-    /* Invoked once for every class that is reachable in the native image. */
-    private static void classReachabilityListener(DuringAnalysisAccess a, Class<?> newlyReachableClass) {
-        DuringAnalysisAccessImpl access = (DuringAnalysisAccessImpl) a;
-
-        if (Node.class.isAssignableFrom(newlyReachableClass) && newlyReachableClass != Node.class) {
-            FieldsOffsetsFeature.<NodeClass<?>> registerClass(newlyReachableClass, GraalSupport.get().nodeClasses, NodeClass::get, false, access);
-
-        } else if (LIRInstruction.class.isAssignableFrom(newlyReachableClass) && newlyReachableClass != LIRInstruction.class) {
-            FieldsOffsetsFeature.<LIRInstructionClass<?>> registerClass(newlyReachableClass, GraalSupport.get().instructionClasses, LIRInstructionClass::get, true, access);
-
-        } else if (CompositeValue.class.isAssignableFrom(newlyReachableClass) && newlyReachableClass != CompositeValue.class) {
-            FieldsOffsetsFeature.<CompositeValueClass<?>> registerClass(newlyReachableClass, GraalSupport.get().compositeValueClasses, CompositeValueClass::get, true, access);
-        }
+    @Override
+    public void beforeAnalysis(BeforeAnalysisAccess access) {
+        BeforeAnalysisAccessImpl config = (BeforeAnalysisAccessImpl) access;
+        GraalSupport.get().nodeClasses = FieldsOffsetsFeature.<NodeClass<?>> registerClasses(Node.class, NodeClass::get, false, config);
+        GraalSupport.get().instructionClasses = FieldsOffsetsFeature.<LIRInstructionClass<?>> registerClasses(LIRInstruction.class, LIRInstructionClass::get, true, config);
+        GraalSupport.get().compositeValueClasses = FieldsOffsetsFeature.<CompositeValueClass<?>> registerClasses(CompositeValue.class, CompositeValueClass::get, true, config);
     }
 
-    private static <R extends FieldIntrospection<?>> void registerClass(Class<?> clazz, Map<Class<?>, R> registry, Function<Class<?>, R> lookup, boolean excludeAbstract,
-                    DuringAnalysisAccessImpl access) {
-        assert !registry.containsKey(clazz);
-
-        if (!excludeAbstract || !Modifier.isAbstract(clazz.getModifiers())) {
-            R nodeClass = lookup.apply(clazz);
-            registry.put(clazz, nodeClass);
-            registerFields(nodeClass, access);
-
-            access.requireAnalysisIteration();
+    private static <R extends FieldIntrospection<?>> HashMap<Class<?>, R> registerClasses(Class<?> baseClass, Function<Class<?>, R> lookup, boolean excludeAbstract,
+                    BeforeAnalysisAccessImpl config) {
+        HashMap<Class<?>, R> result = new HashMap<>();
+        for (Class<?> clazz : config.findSubclasses(baseClass)) {
+            if (clazz != baseClass && !ImageClassLoader.isHostedClass(clazz) && (!excludeAbstract || !Modifier.isAbstract(clazz.getModifiers()))) {
+                R nodeClass = lookup.apply(clazz);
+                result.put(clazz, nodeClass);
+                config.registerAsUsed(config.getMetaAccess().lookupJavaType(clazz));
+                registerFields(nodeClass, config);
+            }
         }
+        return result;
     }
 
     private static void registerFields(FieldIntrospection<?> introspection, BeforeAnalysisAccessImpl config) {
@@ -239,7 +227,6 @@ public class FieldsOffsetsFeature implements Feature {
 
             replacement.newValuesAvailable = true;
         }
-        ImageSingletons.lookup(FieldsOffsetsReplacements.class).newValuesAvailable = true;
     }
 
     @Override

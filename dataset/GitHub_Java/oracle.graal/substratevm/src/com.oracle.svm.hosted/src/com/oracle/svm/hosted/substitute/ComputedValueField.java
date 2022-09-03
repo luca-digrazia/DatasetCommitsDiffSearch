@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -50,19 +48,12 @@ import com.oracle.svm.hosted.c.GraalAccess;
 import com.oracle.svm.hosted.meta.HostedField;
 import com.oracle.svm.hosted.meta.HostedMetaAccess;
 
-import jdk.vm.ci.common.NativeImageReinitialize;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
-/**
- * Wraps a field whose value is recomputed when added to an image.
- *
- * @see RecomputeFieldValue
- * @see NativeImageReinitialize
- */
 public class ComputedValueField implements ReadableJavaField, ComputedValue {
 
     private final ResolvedJavaField original;
@@ -147,11 +138,6 @@ public class ComputedValueField implements ReadableJavaField, ComputedValue {
             result = result & ~Modifier.FINAL;
         }
         return result;
-    }
-
-    @Override
-    public int getOffset() {
-        return original.getOffset();
     }
 
     @Override

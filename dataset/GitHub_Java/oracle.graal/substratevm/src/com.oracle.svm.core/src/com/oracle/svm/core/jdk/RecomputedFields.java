@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,7 +24,6 @@ package com.oracle.svm.core.jdk;
 
 //Checkstyle: stop
 
-import static com.oracle.svm.core.annotate.RecomputeFieldValue.Kind.ArrayBaseOffset;
 import static com.oracle.svm.core.annotate.RecomputeFieldValue.Kind.AtomicFieldUpdaterOffset;
 import static com.oracle.svm.core.annotate.RecomputeFieldValue.Kind.FromAlias;
 import static com.oracle.svm.core.annotate.RecomputeFieldValue.Kind.Reset;
@@ -51,7 +48,6 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
-import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
@@ -67,7 +63,6 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
-import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.config.ObjectLayout;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.VMError;
@@ -90,9 +85,6 @@ final class Target_sun_util_calendar_ZoneInfoFile {
 @TargetClass(className = "java.nio.DirectByteBuffer")
 @SuppressWarnings("unused")
 final class Target_java_nio_DirectByteBuffer {
-    @Alias @RecomputeFieldValue(kind = ArrayBaseOffset, declClass = byte[].class) //
-    static long arrayBaseOffset;
-
     @Alias
     protected Target_java_nio_DirectByteBuffer(int cap, long addr, FileDescriptor fd, Runnable unmapper) {
     }
@@ -122,6 +114,8 @@ final class Target_java_nio_charset_CoderResult_Cache {
 final class Target_java_util_concurrent_atomic_AtomicReferenceFieldUpdater_AtomicReferenceFieldUpdaterImpl {
     @Alias @RecomputeFieldValue(kind = AtomicFieldUpdaterOffset) //
     private long offset;
+
+    @Alias private static sun.misc.Unsafe U;
 
     /** the same as tclass, used for checks */
     @Alias private final Class<?> cclass;
@@ -162,7 +156,7 @@ final class Target_java_util_concurrent_atomic_AtomicReferenceFieldUpdater_Atomi
         this.cclass = tclass;
         this.tclass = tclass;
         this.vclass = vclass;
-        this.offset = UnsafeAccess.UNSAFE.objectFieldOffset(field);
+        this.offset = U.objectFieldOffset(field);
     }
 }
 
@@ -170,6 +164,8 @@ final class Target_java_util_concurrent_atomic_AtomicReferenceFieldUpdater_Atomi
 final class Target_java_util_concurrent_atomic_AtomicIntegerFieldUpdater_AtomicIntegerFieldUpdaterImpl {
     @Alias @RecomputeFieldValue(kind = AtomicFieldUpdaterOffset) //
     private long offset;
+
+    @Alias private static sun.misc.Unsafe U;
 
     /** the same as tclass, used for checks */
     @Alias private final Class<?> cclass;
@@ -199,7 +195,7 @@ final class Target_java_util_concurrent_atomic_AtomicIntegerFieldUpdater_AtomicI
         // access checks are disabled
         this.cclass = tclass;
         this.tclass = tclass;
-        this.offset = UnsafeAccess.UNSAFE.objectFieldOffset(field);
+        this.offset = U.objectFieldOffset(field);
     }
 }
 
@@ -207,6 +203,8 @@ final class Target_java_util_concurrent_atomic_AtomicIntegerFieldUpdater_AtomicI
 final class Target_java_util_concurrent_atomic_AtomicLongFieldUpdater_CASUpdater {
     @Alias @RecomputeFieldValue(kind = AtomicFieldUpdaterOffset) //
     private long offset;
+
+    @Alias private static sun.misc.Unsafe U;
 
     /** the same as tclass, used for checks */
     @Alias private final Class<?> cclass;
@@ -236,7 +234,7 @@ final class Target_java_util_concurrent_atomic_AtomicLongFieldUpdater_CASUpdater
         // access checks are disabled
         this.cclass = tclass;
         this.tclass = tclass;
-        this.offset = UnsafeAccess.UNSAFE.objectFieldOffset(field);
+        this.offset = U.objectFieldOffset(field);
     }
 
 }
@@ -245,6 +243,8 @@ final class Target_java_util_concurrent_atomic_AtomicLongFieldUpdater_CASUpdater
 final class Target_java_util_concurrent_atomic_AtomicLongFieldUpdater_LockedUpdater {
     @Alias @RecomputeFieldValue(kind = AtomicFieldUpdaterOffset) //
     private long offset;
+
+    @Alias private static sun.misc.Unsafe U;
 
     /** the same as tclass, used for checks */
     @Alias private final Class<?> cclass;
@@ -274,7 +274,7 @@ final class Target_java_util_concurrent_atomic_AtomicLongFieldUpdater_LockedUpda
         // access checks are disabled
         this.cclass = tclass;
         this.tclass = tclass;
-        this.offset = UnsafeAccess.UNSAFE.objectFieldOffset(field);
+        this.offset = U.objectFieldOffset(field);
     }
 }
 
@@ -352,23 +352,12 @@ class AtomicFieldUpdaterFeature implements Feature {
 final class Target_java_util_concurrent_ForkJoinPool {
 
     @Alias static /* final */ int MAX_CAP;
-
-    @Alias //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
-    static /* final */ int LIFO_QUEUE;
-
+    @Alias static /* final */ int LIFO_QUEUE;
     @Alias static /* final */ ForkJoinWorkerThreadFactory defaultForkJoinWorkerThreadFactory;
 
-    @Alias //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
-    @SuppressWarnings("unused") //
+    @Alias
+    @SuppressWarnings("unused")
     protected Target_java_util_concurrent_ForkJoinPool(int parallelism, ForkJoinWorkerThreadFactory factory, UncaughtExceptionHandler handler, int mode, String workerNamePrefix) {
-    }
-
-    @Alias //
-    @TargetElement(onlyWith = JDK9OrLater.class) //
-    @SuppressWarnings("unused") //
-    private Target_java_util_concurrent_ForkJoinPool(byte forCommonPoolOnly) {
     }
 
     /**
@@ -388,14 +377,8 @@ final class Target_java_util_concurrent_ForkJoinPool {
      */
     @Alias @InjectAccessors(CommonInjector.class) //
     static /* final */ ForkJoinPool common;
-
     @Alias //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
     static /* final */ int commonParallelism;
-
-    @Alias //
-    @TargetElement(onlyWith = JDK9OrLater.class) //
-    static /* final */ int COMMON_PARALLELISM;
 
     /**
      * An injected field to replace ForkJoinPool.common.
@@ -421,54 +404,34 @@ final class Target_java_util_concurrent_ForkJoinPool {
         /** Ensure that the common pool variables are initialized. */
         protected static void ensureCommonPoolIsInitialized() {
             if (injectedCommon.get() == null) {
-                if (GraalServices.Java8OrEarlier) {
-                    initializeCommonPool_JDK8OrEarlier();
-                } else {
-                    initializeCommonPool_JDK9OrLater();
-                }
-            }
-        }
-
-        protected static void initializeCommonPool_JDK8OrEarlier() {
-            /* "common" and "commonParallelism" have to be set together. */
-            /*
-             * This is a simplified version of ForkJoinPool.makeCommonPool(), without the dynamic
-             * class loading for factory and handler based on system properties.
-             */
-            int parallelism = Runtime.getRuntime().availableProcessors() - 1;
-            if (!SubstrateOptions.MultiThreaded.getValue()) {
+                /* "common" and "commonParallelism" have to be set together. */
                 /*
-                 * Using "parallelism = 0" gets me a ForkJoinPool that does not try to start any
-                 * threads, which is what I want if I am not multi-threaded.
+                 * This is a simplified version of ForkJoinPool.makeCommonPool(), without the
+                 * dynamic class loading for factory and handler based on system properties.
                  */
-                parallelism = 0;
+                int parallelism = Runtime.getRuntime().availableProcessors() - 1;
+                if (!SubstrateOptions.MultiThreaded.getValue()) {
+                    /*
+                     * Using "parallelism = 0" gets me a ForkJoinPool that does not try to start any
+                     * threads, which is what I want if I am not multi-threaded.
+                     */
+                    parallelism = 0;
+                }
+                if (parallelism > MAX_CAP) {
+                    parallelism = MAX_CAP;
+                }
+                final Target_java_util_concurrent_ForkJoinPool proposedPool = //
+                                new Target_java_util_concurrent_ForkJoinPool(parallelism, defaultForkJoinWorkerThreadFactory, null, LIFO_QUEUE, "ForkJoinPool.commonPool-worker-");
+                /* The assignment to "injectedCommon" is atomic to prevent races. */
+                injectedCommon.compareAndSet(null, proposedPool);
+                final ForkJoinPool actualPool = Util_java_util_concurrent_ForkJoinPool.as_ForkJoinPool(injectedCommon.get());
+                /*
+                 * The assignment to "commonParallelism" can race because multiple assignments are
+                 * idempotent once "injectedCommon" is set. This code is a copy of the relevant part
+                 * of the static initialization block in ForkJoinPool.
+                 */
+                commonParallelism = actualPool.getParallelism();
             }
-            if (parallelism > MAX_CAP) {
-                parallelism = MAX_CAP;
-            }
-            final Target_java_util_concurrent_ForkJoinPool proposedPool = new Target_java_util_concurrent_ForkJoinPool(parallelism, defaultForkJoinWorkerThreadFactory, null, LIFO_QUEUE,
-                            "ForkJoinPool.commonPool-worker-");
-            /* The assignment to "injectedCommon" is atomic to prevent races. */
-            injectedCommon.compareAndSet(null, proposedPool);
-            final ForkJoinPool actualPool = Util_java_util_concurrent_ForkJoinPool.as_ForkJoinPool(injectedCommon.get());
-            /*
-             * The assignment to "commonParallelism" can race because multiple assignments are
-             * idempotent once "injectedCommon" is set. This code is a copy of the relevant part of
-             * the static initialization block in ForkJoinPool.
-             */
-            commonParallelism = actualPool.getParallelism();
-        }
-
-        protected static void initializeCommonPool_JDK9OrLater() {
-            /* "common" and "commonParallelism" have to be set together. */
-            /*
-             * TODO: This should be a simplified version of ForkJoinPool(byte), , without the
-             * dynamic class loading for factory and handler based on system properties.
-             *
-             * Among the problems is that the public ForkJoinPool constructor that takes a
-             * `parallelism` argument now throws an `IllegalArgumentException` if passed a `0`.
-             */
-            throw VMError.unsupportedFeature("Target_java_util_concurrent_ForkJoinPool.CommonInjector.initializeCommonPool_JDK9OrLater()");
         }
     }
 
@@ -516,10 +479,7 @@ final class Target_java_util_concurrent_ForkJoinTask_ExceptionNode {
 
 @TargetClass(java.util.concurrent.Exchanger.class)
 final class Target_java_util_concurrent_Exchanger {
-
-    @Alias //
-    @TargetElement(onlyWith = JDK8OrEarlier.class) //
-    @RecomputeFieldValue(kind = Kind.Custom, declClass = ExchangerABASEComputer.class) //
+    @Alias @RecomputeFieldValue(kind = Kind.Custom, declClass = ExchangerABASEComputer.class) //
     private static /* final */ int ABASE;
 
 }
