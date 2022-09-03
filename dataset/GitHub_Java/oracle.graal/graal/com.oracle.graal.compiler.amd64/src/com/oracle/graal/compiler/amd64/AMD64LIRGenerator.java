@@ -711,8 +711,8 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo) {
-        LIRFrameState info = state();
+    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo, long leafGraphId) {
+        LIRFrameState info = state(leafGraphId);
         LabelRef stubEntry = createDeoptStub(action, reason, info, deoptInfo);
         append(new JumpOp(stubEntry, info));
     }
@@ -845,9 +845,9 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    protected void emitNullCheckGuard(ValueNode object) {
+    protected void emitNullCheckGuard(ValueNode object, long leafGraphId) {
         Variable value = load(operand(object));
-        LIRFrameState info = state();
+        LIRFrameState info = state(leafGraphId);
         append(new NullCheckOp(value, info));
     }
 
