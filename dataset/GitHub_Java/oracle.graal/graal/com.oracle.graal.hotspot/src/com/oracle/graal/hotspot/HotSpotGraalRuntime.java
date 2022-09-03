@@ -22,10 +22,9 @@
  */
 package com.oracle.graal.hotspot;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.Options.*;
-import static sun.reflect.Reflection.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.lang.reflect.*;
 import java.util.*;
@@ -35,15 +34,12 @@ import sun.reflect.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.stack.*;
-import com.oracle.graal.api.collections.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.bridge.*;
-import com.oracle.graal.hotspot.events.*;
 import com.oracle.graal.hotspot.logging.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.options.*;
@@ -56,26 +52,9 @@ import com.oracle.graal.runtime.*;
  */
 public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider, StackIntrospection {
 
-    private static final HotSpotGraalRuntime instance;
-
-    /**
-     * Initializes the native part of the Graal runtime.
-     */
-    private static native void init(Class<?> compilerToVMClass);
-
+    private static final HotSpotGraalRuntime instance = new HotSpotGraalRuntime();
     static {
-        init(CompilerToVMImpl.class);
-
-        // The options must be processed before any code using them...
-        HotSpotOptions.initialize();
-
-        // ... including code in the constructor
-        instance = new HotSpotGraalRuntime();
-
-        // Why deferred initialization? See comment in completeInitialization().
         instance.completeInitialization();
-
-        registerFieldsToFilter(HotSpotGraalRuntime.class, "instance");
     }
 
     /**
@@ -92,6 +71,10 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
         }
         assert instance != null;
         return instance;
+    }
+
+    static {
+        Reflection.registerFieldsToFilter(HotSpotGraalRuntime.class, "instance");
     }
 
     /**
@@ -119,8 +102,6 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
 
         this.vmToCompiler = toCompiler;
         this.compilerToVm = toVM;
-
-        this.vmToCompiler.startRuntime();
     }
 
     // Options must not be directly declared in HotSpotGraalRuntime - see VerifyOptionsPhase
@@ -275,8 +256,6 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
             }
             registerBackend(factory.createBackend(this, hostBackend));
         }
-
-        eventProvider = createEventProvider();
     }
 
     private HotSpotBackend registerBackend(HotSpotBackend backend) {
@@ -380,39 +359,15 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
         return getClass().getSimpleName();
     }
 
-    private final NodeCollectionsProvider nodeCollectionsProvider = new DefaultNodeCollectionsProvider();
-
-    private final EventProvider eventProvider;
-
-    private EventProvider createEventProvider() {
-        if (config.flightRecorder) {
-            ServiceLoader<EventProvider> sl = ServiceLoader.loadInstalled(EventProvider.class);
-            EventProvider singleProvider = null;
-            for (EventProvider ep : sl) {
-                assert singleProvider == null : String.format("multiple %s service implementations found: %s and %s", EventProvider.class.getName(), singleProvider.getClass().getName(),
-                                ep.getClass().getName());
-                singleProvider = ep;
-            }
-            return singleProvider;
-        }
-        return new EmptyEventProvider();
-    }
-
     @SuppressWarnings("unchecked")
     @Override
     public <T> T getCapability(Class<T> clazz) {
         if (clazz == RuntimeProvider.class) {
             return (T) this;
-        } else if (clazz == CollectionsProvider.class || clazz == NodeCollectionsProvider.class) {
-            return (T) nodeCollectionsProvider;
         } else if (clazz == StackIntrospection.class) {
             return (T) this;
         } else if (clazz == SnippetReflectionProvider.class) {
             return (T) getHostProviders().getSnippetReflection();
-        } else if (clazz == MethodHandleAccessProvider.class) {
-            return (T) getHostProviders().getMethodHandleAccess();
-        } else if (clazz == EventProvider.class) {
-            return (T) eventProvider;
         }
         return null;
     }
