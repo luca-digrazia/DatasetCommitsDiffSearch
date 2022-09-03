@@ -25,6 +25,7 @@ package com.oracle.graal.compiler.alloc;
 import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.compiler.GraalDebugConfig.*;
+import static com.oracle.graal.compiler.common.cfg.AbstractBlock.*;
 import static com.oracle.graal.lir.LIRValueUtil.*;
 
 import java.util.*;
@@ -41,13 +42,14 @@ import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.LIRInstruction.InstructionStateProcedure;
 import com.oracle.graal.lir.LIRInstruction.InstructionValueProcedure;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.LIRInstruction.StateProcedure;
 import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.options.*;
 import com.oracle.graal.phases.util.*;
 
 /**
@@ -67,6 +69,13 @@ public final class LinearScan {
     boolean callKillsRegisters;
 
     private static final int SPLIT_INTERVALS_CAPACITY_RIGHT_SHIFT = 1;
+
+    public static class Options {
+        // @formatter:off
+        @Option(help = "Enable spill position optimization")
+        public static final OptionValue<Boolean> LSRAOptimizeSpillPosition = new OptionValue<>(true);
+        // @formatter:on
+    }
 
     public static class BlockData {
 
@@ -441,9 +450,14 @@ public final class LinearScan {
 
                 if (defLoopDepth < spillLoopDepth) {
                     // the loop depth of the spilling position is higher then the loop depth
-                    // at the definition of the interval . move write to memory out of loop
-                    // by storing at definitin of the interval
-                    interval.setSpillState(SpillState.StoreAtDefinition);
+                    // at the definition of the interval . move write to memory out of loop.
+                    if (Options.LSRAOptimizeSpillPosition.getValue()) {
+                        // find best spill position in dominator the tree
+                        interval.setSpillState(SpillState.SpillInDominator);
+                    } else {
+                        // store at definition of the interval
+                        interval.setSpillState(SpillState.StoreAtDefinition);
+                    }
                 } else {
                     // the interval is currently spilled only once, so for now there is no
                     // reason to store the interval at the definition
@@ -453,12 +467,18 @@ public final class LinearScan {
             }
 
             case OneSpillStore: {
-                // the interval is spilled more then once, so it is better to store it to
-                // memory at the definition
-                interval.setSpillState(SpillState.StoreAtDefinition);
+                if (Options.LSRAOptimizeSpillPosition.getValue()) {
+                    // the interval is spilled more then once
+                    interval.setSpillState(SpillState.SpillInDominator);
+                } else {
+                    // it is better to store it to
+                    // memory at the definition
+                    interval.setSpillState(SpillState.StoreAtDefinition);
+                }
                 break;
             }
 
+            case SpillInDominator:
             case StoreAtDefinition:
             case StartInMemory:
             case NoOptimization:
@@ -476,11 +496,57 @@ public final class LinearScan {
         abstract boolean apply(Interval i);
     }
 
-    private static final IntervalPredicate mustStoreAtDefinition = new IntervalPredicate() {
+    private static Interval addToListSortedByDefinition(Interval first, Interval interval) {
+        assert first != null;
+        if (first == Interval.EndMarker) {
+            interval.next = Interval.EndMarker;
+            return interval;
+        }
+
+        int spillPos = interval.spillDefinitionPos();
+        if (first.spillDefinitionPos() > spillPos) {
+            interval.next = first;
+            return interval;
+        }
+        Interval current = first;
+        while (current.next != Interval.EndMarker && current.next.spillDefinitionPos() < spillPos) {
+            current = current.next;
+        }
+        interval.next = current.next;
+        current.next = interval;
+        return first;
+    }
+
+    private Interval.Pair createSortedByDefinitionLists(IntervalPredicate isList1, IntervalPredicate isList2) {
+        assert isSorted(sortedIntervals) : "interval list is not sorted";
+
+        Interval list1 = Interval.EndMarker;
+        Interval list2 = Interval.EndMarker;
+
+        Interval v;
+
+        int n = sortedIntervals.length;
+        for (int i = 0; i < n; i++) {
+            v = sortedIntervals[i];
+            if (v == null) {
+                continue;
+            }
+
+            if (isList1.apply(v)) {
+                list1 = addToListSortedByDefinition(list1, v);
+            } else if (isList2 == null || isList2.apply(v)) {
+                list2 = addToListSortedByDefinition(list2, v);
+            }
+        }
+
+        return new Interval.Pair(list1, list2);
+    }
+
+    private static final IntervalPredicate mustStoreAtDominatorORDefinition = new IntervalPredicate() {
 
         @Override
         public boolean apply(Interval i) {
-            return i.isSplitParent() && i.spillState() == SpillState.StoreAtDefinition;
+            return i.isSplitParent() && (i.spillState() == SpillState.StoreAtDefinition || i.spillState() == SpillState.SpillInDominator);
         }
     };
 
@@ -491,7 +557,7 @@ public final class LinearScan {
             // collect all intervals that must be stored after their definition.
             // the list is sorted by Interval.spillDefinitionPos
             Interval interval;
-            interval = createUnhandledLists(mustStoreAtDefinition, null).first;
+            interval = createSortedByDefinitionLists(mustStoreAtDominatorORDefinition, null).first;
             if (DetailedAsserts.getValue()) {
                 checkIntervals(interval);
             }
@@ -501,9 +567,8 @@ public final class LinearScan {
                 List<LIRInstruction> instructions = ir.getLIRforBlock(block);
                 int numInst = instructions.size();
 
-                // iterate all instructions of the block. skip the first
-                // because it is always a label
-                for (int j = 1; j < numInst; j++) {
+                // iterate all instructions of the block.
+                for (int j = 0; j < numInst; j++) {
                     LIRInstruction op = instructions.get(j);
                     int opId = op.id();
 
@@ -530,7 +595,8 @@ public final class LinearScan {
                         // insert move from register to stack just after
                         // the beginning of the interval
                         assert interval == Interval.EndMarker || interval.spillDefinitionPos() >= opId : "invalid order";
-                        assert interval == Interval.EndMarker || (interval.isSplitParent() && interval.spillState() == SpillState.StoreAtDefinition) : "invalid interval";
+                        assert interval == Interval.EndMarker ||
+                                        (interval.isSplitParent() && (interval.spillState() == SpillState.StoreAtDefinition || interval.spillState() == SpillState.SpillInDominator)) : "invalid interval";
 
                         while (interval != Interval.EndMarker && interval.spillDefinitionPos() == opId) {
                             if (!interval.canMaterialize()) {
@@ -540,13 +606,30 @@ public final class LinearScan {
                                     insertionBuffer.init(instructions);
                                 }
 
-                                AllocatableValue fromLocation = interval.location();
+                                // if we spill in a dominator we need to find the right location
+                                AllocatableValue fromLocation = interval.spillState() == SpillState.SpillInDominator ? interval.getSplitChildAtOpId(opId, OperandMode.DEF, this).location()
+                                                : interval.location();
                                 AllocatableValue toLocation = canonicalSpillOpr(interval);
 
                                 assert isRegister(fromLocation) : "from operand must be a register but is: " + fromLocation + " toLocation=" + toLocation + " spillState=" + interval.spillState();
                                 assert isStackSlot(toLocation) : "to operand must be a stack slot";
 
-                                insertionBuffer.append(j + 1, ir.getSpillMoveFactory().createMove(toLocation, fromLocation));
+                                if (interval.spillState() == SpillState.SpillInDominator) {
+                                    /*
+                                     * SpillInDominator spill positions are always at the beginning
+                                     * of a basic block. We need to skip the moves inserted by data
+                                     * flow resolution to ensure data integrity.
+                                     */
+                                    assert isBlockBegin(opId) && j == 0 : "SpillInDominator spill position must be at the beginning of a block!";
+                                    int pos = 1;
+                                    while (instructions.get(pos).id() == -1) {
+                                        pos++;
+                                    }
+                                    assert pos < instructions.size() : String.format("Cannot move spill move out of the current block! (pos: %d, #inst: %d, block: %s", pos, instructions.size(), block);
+                                    insertionBuffer.append(pos, ir.getSpillMoveFactory().createMove(toLocation, fromLocation));
+                                } else {
+                                    insertionBuffer.append(j + 1, ir.getSpillMoveFactory().createMove(toLocation, fromLocation));
+                                }
 
                                 Debug.log("inserting move after definition of interval %d to stack slot %s at opId %d", interval.operandNumber, interval.spillSlot(), opId);
                             }
@@ -570,13 +653,11 @@ public final class LinearScan {
         while (temp != Interval.EndMarker) {
             assert temp.spillDefinitionPos() > 0 : "invalid spill definition pos";
             if (prev != null) {
-                assert temp.from() >= prev.from() : "intervals not sorted";
                 assert temp.spillDefinitionPos() >= prev.spillDefinitionPos() : "when intervals are sorted by from :  then they must also be sorted by spillDefinitionPos";
             }
 
             assert temp.spillSlot() != null || temp.canMaterialize() : "interval has no spill slot assigned";
             assert temp.spillDefinitionPos() >= temp.from() : "invalid order";
-            assert temp.spillDefinitionPos() <= temp.from() + 2 : "only intervals defined once at their start-pos can be optimized";
 
             Debug.log("interval %d (from %d to %d) must be stored at %d", temp.operandNumber, temp.from(), temp.to(), temp.spillDefinitionPos());
 
@@ -1662,6 +1743,9 @@ public final class LinearScan {
         // included in the oop map
         iw.walkBefore(op.id());
 
+        // TODO(je) we could pass this as parameter
+        AbstractBlock<?> block = blockForId(op.id());
+
         // Iterate through active intervals
         for (Interval interval = iw.activeLists.get(RegisterBinding.Fixed); interval != Interval.EndMarker; interval = interval.next) {
             Value operand = interval.operand;
@@ -1684,11 +1768,25 @@ public final class LinearScan {
                 // Spill optimization: when the stack value is guaranteed to be always correct,
                 // then it must be added to the oop map even if the interval is currently in a
                 // register
-                if (interval.alwaysInMemory() && op.id() > interval.spillDefinitionPos() && !interval.location().equals(interval.spillSlot())) {
-                    assert interval.spillDefinitionPos() > 0 : "position not set correctly";
-                    assert interval.spillSlot() != null : "no spill slot assigned";
-                    assert !isRegister(interval.operand) : "interval is on stack :  so stack slot is registered twice";
-                    info.markLocation(interval.spillSlot(), frameMap);
+                int spillPos = interval.spillDefinitionPos();
+                if (interval.spillState() != SpillState.SpillInDominator) {
+                    if (interval.alwaysInMemory() && op.id() > interval.spillDefinitionPos() && !interval.location().equals(interval.spillSlot())) {
+                        assert interval.spillDefinitionPos() > 0 : "position not set correctly";
+                        assert spillPos > 0 : "position not set correctly";
+                        assert interval.spillSlot() != null : "no spill slot assigned";
+                        assert !isRegister(interval.operand) : "interval is on stack :  so stack slot is registered twice";
+                        info.markLocation(interval.spillSlot(), frameMap);
+                    }
+                } else {
+                    AbstractBlock<?> spillBlock = blockForId(spillPos);
+                    if (interval.alwaysInMemory() && !interval.location().equals(interval.spillSlot())) {
+                        if ((spillBlock.equals(block) && op.id() > spillPos) || AbstractBlock.dominates(spillBlock, block)) {
+                            assert spillPos > 0 : "position not set correctly";
+                            assert interval.spillSlot() != null : "no spill slot assigned";
+                            assert !isRegister(interval.operand) : "interval is on stack :  so stack slot is registered twice";
+                            info.markLocation(interval.spillSlot(), frameMap);
+                        }
+                    }
                 }
             }
         }
@@ -1753,6 +1851,13 @@ public final class LinearScan {
                 return operand;
             }
         };
+        InstructionStateProcedure stateProc = new InstructionStateProcedure() {
+
+            @Override
+            protected void doState(LIRInstruction op, LIRFrameState state) {
+                computeDebugInfo(iw, op, state);
+            }
+        };
 
         for (int j = 0; j < numInst; j++) {
             final LIRInstruction op = instructions.get(j);
@@ -1784,13 +1889,7 @@ public final class LinearScan {
             op.forEachOutput(assignProc);
 
             // compute reference map and debug information
-            op.forEachState(new StateProcedure() {
-
-                @Override
-                protected void doState(LIRFrameState state) {
-                    computeDebugInfo(iw, op, state);
-                }
-            });
+            op.forEachState(stateProc);
 
             // remove useless moves
             if (move != null) {
@@ -1843,6 +1942,14 @@ public final class LinearScan {
                 throw Debug.handle(e);
             }
 
+            if (Options.LSRAOptimizeSpillPosition.getValue()) {
+                try (Scope s = Debug.scope("OptimizeSpillPosition")) {
+                    optimizeSpillPosition();
+                } catch (Throwable e) {
+                    throw Debug.handle(e);
+                }
+            }
+
             try (Scope s = Debug.scope("ResolveDataFlow")) {
                 resolveDataFlow();
             } catch (Throwable e) {
@@ -1861,8 +1968,17 @@ public final class LinearScan {
                     verify();
                 }
 
-                eliminateSpillMoves();
-                assignLocations();
+                try (Scope s1 = Debug.scope("EliminateSpillMove")) {
+                    eliminateSpillMoves();
+                } catch (Throwable e) {
+                    throw Debug.handle(e);
+                }
+
+                try (Scope s1 = Debug.scope("AssignLocations")) {
+                    assignLocations();
+                } catch (Throwable e) {
+                    throw Debug.handle(e);
+                }
 
                 if (DetailedAsserts.getValue()) {
                     verifyIntervals();
@@ -1873,6 +1989,165 @@ public final class LinearScan {
 
             printLir("After register number assignment", true);
         }
+    }
+
+    private DebugMetric betterSpillPos = Debug.metric("BetterSpillPosition");
+    private DebugMetric betterSpillPosWithLowerProbability = Debug.metric("BetterSpillPositionWithLowerProbability");
+
+    private void optimizeSpillPosition() {
+        for (Interval interval : intervals) {
+            if (interval != null && interval.isSplitParent() && interval.spillState() == SpillState.SpillInDominator) {
+                AbstractBlock<?> defBlock = blockForId(interval.spillDefinitionPos());
+                AbstractBlock<?> spillBlock = null;
+                Interval firstSpillChild = null;
+                try (Indent indent = Debug.logAndIndent("interval %s (%s)", interval, defBlock)) {
+                    for (Interval splitChild : interval.getSplitChildren()) {
+                        if (isStackSlot(splitChild.location())) {
+                            if (firstSpillChild == null || splitChild.from() < firstSpillChild.from()) {
+                                firstSpillChild = splitChild;
+                            } else {
+                                assert firstSpillChild.from() < splitChild.from();
+                            }
+                            // iterate all blocks where the interval has use positions
+                            for (AbstractBlock<?> splitBlock : blocksForInterval(splitChild)) {
+                                if (dominates(defBlock, splitBlock)) {
+                                    Debug.log("Split interval %s, block %s", splitChild, splitBlock);
+                                    if (spillBlock == null) {
+                                        spillBlock = splitBlock;
+                                    } else {
+                                        spillBlock = nearestCommonDominator(spillBlock, splitBlock);
+                                        assert spillBlock != null;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (spillBlock == null) {
+                        // no spill interval
+                        interval.setSpillState(SpillState.StoreAtDefinition);
+                    } else {
+                        // move out of loops
+                        if (defBlock.getLoopDepth() < spillBlock.getLoopDepth()) {
+                            spillBlock = moveSpillOutOfLoop(defBlock, spillBlock);
+                        }
+
+                        /*
+                         * If the spill block is the begin of the first split child (aka the value
+                         * is on the stack) spill in the dominator.
+                         */
+                        assert firstSpillChild != null;
+                        if (!defBlock.equals(spillBlock) && spillBlock.equals(blockForId(firstSpillChild.from()))) {
+                            AbstractBlock<?> dom = spillBlock.getDominator();
+                            Debug.log("Spill block (%s) is the beginning of a spill child -> use dominator (%s)", spillBlock, dom);
+                            spillBlock = dom;
+                        }
+
+                        if (!defBlock.equals(spillBlock)) {
+                            assert dominates(defBlock, spillBlock);
+                            betterSpillPos.increment();
+                            Debug.log("Better spill position found (Block %s)", spillBlock);
+
+                            if (defBlock.probability() <= spillBlock.probability()) {
+                                // better spill block has the same probability -> do nothing
+                                interval.setSpillState(SpillState.StoreAtDefinition);
+                            } else {
+                                betterSpillPosWithLowerProbability.increment();
+                                interval.setSpillDefinitionPos(getFirstLirInstructionId(spillBlock));
+                            }
+                        } else {
+                            // definition is the best choice
+                            interval.setSpillState(SpillState.StoreAtDefinition);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Iterate over all {@link AbstractBlock blocks} of an interval.
+     */
+    private class IntervalBlockIterator implements Iterator<AbstractBlock<?>> {
+
+        Range range;
+        AbstractBlock<?> block;
+
+        public IntervalBlockIterator(Interval interval) {
+            range = interval.first();
+            block = blockForId(range.from);
+        }
+
+        public AbstractBlock<?> next() {
+            AbstractBlock<?> currentBlock = block;
+            int nextBlockIndex = block.getLinearScanNumber() + 1;
+            if (nextBlockIndex < sortedBlocks.size()) {
+                block = sortedBlocks.get(nextBlockIndex);
+                if (range.to <= getFirstLirInstructionId(block)) {
+                    range = range.next;
+                    if (range == Range.EndMarker) {
+                        block = null;
+                    } else {
+                        block = blockForId(range.from);
+                    }
+                }
+            } else {
+                block = null;
+            }
+            return currentBlock;
+        }
+
+        public boolean hasNext() {
+            return block != null;
+        }
+    }
+
+    private Iterable<AbstractBlock<?>> blocksForInterval(Interval interval) {
+        return new Iterable<AbstractBlock<?>>() {
+            public Iterator<AbstractBlock<?>> iterator() {
+                return new IntervalBlockIterator(interval);
+            }
+        };
+    }
+
+    private static AbstractBlock<?> moveSpillOutOfLoop(AbstractBlock<?> defBlock, AbstractBlock<?> spillBlock) {
+        int defLoopDepth = defBlock.getLoopDepth();
+        for (AbstractBlock<?> block = spillBlock.getDominator(); !defBlock.equals(block); block = block.getDominator()) {
+            assert block != null : "spill block not dominated by definition block?";
+            if (block.getLoopDepth() <= defLoopDepth) {
+                assert block.getLoopDepth() == defLoopDepth : "Cannot spill an interval outside of the loop where it is defined!";
+                return block;
+            }
+        }
+        return defBlock;
+    }
+
+    private AbstractBlock<?> nearestCommonDominator(AbstractBlock<?> a, AbstractBlock<?> b) {
+        assert a != null;
+        assert b != null;
+        try (Indent indent = Debug.logAndIndent("nearest common dominator of %s and %s", a, b)) {
+
+            if (a.equals(b)) {
+                return a;
+            }
+
+            // collect a's dominators
+            BitSet aDom = new BitSet(sortedBlocks.size());
+
+            // a != b
+            for (AbstractBlock<?> x = a; x != null; x = x.getDominator()) {
+                aDom.set(x.getId());
+            }
+
+            // walk b's dominator
+            for (AbstractBlock<?> x = b; x != null; x = x.getDominator()) {
+                if (aDom.get(x.getId())) {
+                    Debug.log("found %s", x);
+                    return x;
+                }
+            }
+        }
+        Debug.log("no common dominator found");
+        return null;
     }
 
     void printIntervals(String label) {
