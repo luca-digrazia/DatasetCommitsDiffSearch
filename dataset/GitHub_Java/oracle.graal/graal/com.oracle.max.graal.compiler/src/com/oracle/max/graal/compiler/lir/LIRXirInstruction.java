@@ -24,69 +24,76 @@ package com.oracle.max.graal.compiler.lir;
 
 import java.util.*;
 
+import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.gen.*;
 import com.sun.cri.ci.*;
-import com.sun.cri.ci.CiValue.Formatter;
 import com.sun.cri.ri.*;
 import com.sun.cri.xir.*;
 
-public abstract class LIRXirInstruction extends LIRInstruction {
+public class LIRXirInstruction extends LIRInstruction {
 
     public final CiValue[] originalOperands;
     public final int outputOperandIndex;
-    public final int[] inputOperandIndices;
-    public final int[] tempOperandIndices;
+    public final int[] operandIndices;
     public final XirSnippet snippet;
     public final RiMethod method;
+    public final int inputTempCount;
+    public final int tempCount;
+    public final int inputCount;
+    public final List<CiValue> pointerSlots;
     public final LIRDebugInfo infoAfter;
-    private LabelRef trueSuccessor;
-    private LabelRef falseSuccessor;
+    private LIRBlock trueSuccessor;
+    private LIRBlock falseSuccessor;
 
-    public LIRXirInstruction(LIROpcode opcode,
-                             XirSnippet snippet,
+    public LIRXirInstruction(XirSnippet snippet,
                              CiValue[] originalOperands,
                              CiValue outputOperand,
-                             CiValue[] inputs, CiValue[] temps,
-                             int[] inputOperandIndices, int[] tempOperandIndices,
+                             int inputTempCount,
+                             int tempCount,
+                             CiValue[] operands,
+                             int[] operandIndices,
                              int outputOperandIndex,
                              LIRDebugInfo info,
                              LIRDebugInfo infoAfter,
-                             RiMethod method) {
-        // Note that we register the XIR input operands as Alive, because the XIR specification allows that input operands
-        // are used at any time, even when the temp operands and the actual output operands have already be assigned.
-        super(opcode, outputOperand, info, LIRInstruction.NO_OPERANDS, inputs, temps);
+                             RiMethod method,
+                             List<CiValue> pointerSlots) {
+        super(LIROpcode.Xir, outputOperand, info, false, inputTempCount, tempCount, operands);
         this.infoAfter = infoAfter;
+        this.pointerSlots = pointerSlots;
+        assert this.pointerSlots == null || this.pointerSlots.size() >= 0;
         this.method = method;
         this.snippet = snippet;
-        this.inputOperandIndices = inputOperandIndices;
-        this.tempOperandIndices = tempOperandIndices;
+        this.operandIndices = operandIndices;
         this.outputOperandIndex = outputOperandIndex;
         this.originalOperands = originalOperands;
+        this.inputTempCount = inputTempCount;
+        this.tempCount = tempCount;
+        this.inputCount = operands.length - inputTempCount - tempCount;
+
+        GraalMetrics.LIRXIRInstructions++;
     }
 
 
-    public void setFalseSuccessor(LabelRef falseSuccessor) {
+    public void setFalseSuccessor(LIRBlock falseSuccessor) {
         this.falseSuccessor = falseSuccessor;
     }
 
 
-    public void setTrueSuccessor(LabelRef trueSuccessor) {
+    public void setTrueSuccessor(LIRBlock trueSuccessor) {
         this.trueSuccessor = trueSuccessor;
     }
 
-    public LabelRef falseSuccessor() {
+    public LIRBlock falseSuccessor() {
         return falseSuccessor;
     }
 
-    public LabelRef trueSuccessor() {
+    public LIRBlock trueSuccessor() {
         return trueSuccessor;
     }
 
     public CiValue[] getOperands() {
-        for (int i = 0; i < inputOperandIndices.length; i++) {
-            originalOperands[inputOperandIndices[i]] = alive(i);
-        }
-        for (int i = 0; i < tempOperandIndices.length; i++) {
-            originalOperands[tempOperandIndices[i]] = temp(i);
+        for (int i = 0; i < operandIndices.length; i++) {
+            originalOperands[operandIndices[i]] = operand(i);
         }
         if (outputOperandIndex != -1) {
             originalOperands[outputOperandIndex] = result();
@@ -94,16 +101,26 @@ public abstract class LIRXirInstruction extends LIRInstruction {
         return originalOperands;
     }
 
+    /**
+     * Emits target assembly code for this instruction.
+     *
+     * @param masm the target assembler
+     */
+    @Override
+    public void emitCode(LIRAssembler masm) {
+        masm.emitXir(this);
+    }
+
      /**
      * Prints this instruction.
      */
     @Override
-    public String operationString(Formatter operandFmt) {
+    public String operationString(OperandFormatter operandFmt) {
         return toString(operandFmt);
     }
 
     @Override
-    public String toString(Formatter operandFmt) {
+    public String toString(OperandFormatter operandFmt) {
         StringBuilder sb = new StringBuilder();
         sb.append("XIR: ");
 
@@ -122,7 +139,9 @@ public abstract class LIRXirInstruction extends LIRInstruction {
                 sb.append(operandFmt.format(a.constant));
             } else {
                 Object o = a.object;
-                if (o instanceof CiValue) {
+                if (o instanceof LIRItem) {
+                    sb.append(operandFmt.format(((LIRItem) o).result()));
+                } else if (o instanceof CiValue) {
                     sb.append(operandFmt.format((CiValue) o));
                 } else {
                     sb.append(o);
@@ -163,5 +182,16 @@ public abstract class LIRXirInstruction extends LIRInstruction {
         appendDebugInfo(sb, operandFmt, info);
 
         return sb.toString();
+    }
+
+
+    public void substitute(LIRBlock block, LIRBlock newTarget) {
+        if (trueSuccessor == block) {
+            trueSuccessor = newTarget;
+        }
+
+        if (falseSuccessor == block) {
+            falseSuccessor = newTarget;
+        }
     }
 }

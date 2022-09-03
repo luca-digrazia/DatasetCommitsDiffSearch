@@ -367,7 +367,7 @@ public class AMD64LIRGenerator extends LIRGenerator {
             return;
         }
 
-        assert Util.archKindsEqual(x.x().kind, x.kind) && Util.archKindsEqual(x.y().kind, x.kind) : "wrong parameter types: " + Bytecodes.nameOf(x.opcode) + ", x: " + x.x() + ", y: " + x.y() + ", kind: " + x.kind;
+        assert Util.archKindsEqual(x.x().kind, x.kind) && Util.archKindsEqual(x.y().kind, x.kind) : "wrong parameter types: " + Bytecodes.nameOf(x.opcode);
         switch (x.kind) {
             case Float:
             case Double:

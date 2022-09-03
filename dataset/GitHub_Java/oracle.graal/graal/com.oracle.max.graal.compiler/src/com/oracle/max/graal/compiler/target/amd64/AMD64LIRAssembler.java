@@ -2110,10 +2110,6 @@ public final class AMD64LIRAssembler extends LIRAssembler {
             default:
                 throw Util.shouldNotReachHere();
         }
-        if (code == 0) TTY.println("deopt stub with code=" + code);
-        if (code == 0) {
-            throw new RuntimeException();
-        }
         masm.movq(rscratch1, code);
         directCall(CiRuntimeCall.Deoptimize, stub.info);
         shouldNotReachHere();

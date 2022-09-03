@@ -25,7 +25,6 @@ package com.oracle.max.graal.compiler.alloc;
 import java.util.*;
 
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.graph.*;
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.lir.*;
@@ -43,7 +42,7 @@ final class ControlFlowOptimizer {
      */
     public static void optimize(IR ir) {
         ControlFlowOptimizer optimizer = new ControlFlowOptimizer(ir);
-        List<LIRBlock> code = ir.codeEmittingOrder();
+        List<LIRBlock> code = ir.linearScanOrder();
         optimizer.reorderShortLoops(code);
         optimizer.deleteEmptyBlocks(code);
         optimizer.deleteUnnecessaryJumps(code);

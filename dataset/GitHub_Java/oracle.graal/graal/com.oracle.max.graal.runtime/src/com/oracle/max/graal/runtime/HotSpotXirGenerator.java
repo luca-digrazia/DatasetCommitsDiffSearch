@@ -636,7 +636,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
 
         @Override
         protected XirTemplate create(CiXirAssembler asm, long flags) {
-            asm.restart(CiKind.Void);
+            XirOperand result = asm.restart(CiKind.Boolean);
             XirParameter object = asm.createInputParameter("object", CiKind.Object);
             final XirOperand hub;
             hub = asm.createConstantInputParameter("hub", CiKind.Object);
@@ -654,13 +654,14 @@ public class HotSpotXirGenerator implements RiXirGenerator {
 
             asm.pload(CiKind.Object, objHub, object, asm.i(config.hubOffset), false);
             // if we get an exact match: succeed immediately
+            asm.mov(result, asm.b(true));
             asm.jeq(trueSucc, objHub, hub);
             asm.jmp(slowPath);
 
             // -- out of line -------------------------------------------------------
             asm.bindOutOfLine(slowPath);
-            checkSubtype(asm, objHub, objHub, hub);
-            asm.jeq(falseSucc, objHub, asm.o(null));
+            checkSubtype(asm, result, objHub, hub);
+            asm.jeq(falseSucc, result, asm.b(false));
             asm.jmp(trueSucc);
 
             return asm.finishTemplate("instanceof");
