@@ -60,12 +60,12 @@ public class TargetMethodAssembler {
 
     private List<ExceptionInfo> exceptionInfoList;
 
-    public TargetMethodAssembler(TargetDescription target, CodeCacheProvider runtime, FrameMap frameMap, AbstractAssembler asm, FrameContext frameContext, CompilationResult compilationResult) {
+    public TargetMethodAssembler(TargetDescription target, CodeCacheProvider runtime, FrameMap frameMap, AbstractAssembler asm, FrameContext frameContext) {
         this.target = target;
         this.runtime = runtime;
         this.frameMap = frameMap;
         this.asm = asm;
-        this.compilationResult = compilationResult;
+        this.compilationResult = new CompilationResult();
         this.frameContext = frameContext;
     }
 
