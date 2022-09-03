@@ -298,8 +298,7 @@ public class PartialEvaluator {
                     lastDirectCallNode = null;
                     if (decision != null && decision.isInline()) {
                         inlining.push(decision);
-                        JavaConstant assumption = snippetReflection.forObject(decision.getTarget().getNodeRewritingAssumption());
-                        builder.getAssumptions().record(new AssumptionValidAssumption(assumption));
+                        builder.getAssumptions().record(new AssumptionValidAssumption((JavaConstant) decision.getTarget().getNodeRewritingAssumption()));
                         return createStandardInlineInfo(callInlinedMethod);
                     }
                 }
