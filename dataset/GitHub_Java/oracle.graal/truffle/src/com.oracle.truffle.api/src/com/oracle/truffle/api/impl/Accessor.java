@@ -289,6 +289,7 @@ public abstract class Accessor {
 
         conditionallyInitDebugger();
         conditionallyInitInterop();
+        conditionallyInitEngine();
         conditionallyInitJavaInterop();
         conditionallyInitInstrumentation();
         if (TruffleOptions.TraceASTJSON) {
