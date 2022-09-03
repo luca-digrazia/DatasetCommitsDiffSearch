@@ -83,7 +83,6 @@ import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.MergeNode;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ParameterNode;
 import org.graalvm.compiler.nodes.PhiNode;
 import org.graalvm.compiler.nodes.PiNode.Placeholder;
@@ -751,7 +750,7 @@ public class SnippetTemplate {
                         nodeReplacements.put(parameter, placeholder);
                         placeholders[i] = placeholder;
                     } else if (args.info.isNonNullParameter(i)) {
-                        parameter.setStamp(parameter.stamp(NodeView.DEFAULT).join(StampFactory.objectNonNull()));
+                        parameter.setStamp(parameter.stamp().join(StampFactory.objectNonNull()));
                     }
                 }
             }
@@ -786,7 +785,7 @@ public class SnippetTemplate {
                             if (usage instanceof LoadIndexedNode) {
                                 LoadIndexedNode loadIndexed = (LoadIndexedNode) usage;
                                 debug.dump(DebugContext.INFO_LEVEL, snippetCopy, "Before replacing %s", loadIndexed);
-                                LoadSnippetVarargParameterNode loadSnippetParameter = snippetCopy.add(new LoadSnippetVarargParameterNode(params, loadIndexed.index(), loadIndexed.stamp(NodeView.DEFAULT)));
+                                LoadSnippetVarargParameterNode loadSnippetParameter = snippetCopy.add(new LoadSnippetVarargParameterNode(params, loadIndexed.index(), loadIndexed.stamp()));
                                 snippetCopy.replaceFixedWithFixed(loadIndexed, loadSnippetParameter);
                                 debug.dump(DebugContext.INFO_LEVEL, snippetCopy, "After replacing %s", loadIndexed);
                             } else if (usage instanceof StoreIndexedNode) {
@@ -830,7 +829,7 @@ public class SnippetTemplate {
             for (Node node : snippetCopy.getNodes()) {
                 if (node instanceof ValueNode) {
                     ValueNode valueNode = (ValueNode) node;
-                    if (valueNode.stamp(NodeView.DEFAULT) == PlaceholderStamp.singleton()) {
+                    if (valueNode.stamp() == PlaceholderStamp.singleton()) {
                         curPlaceholderStampedNodes.add(valueNode);
                     }
                 }
@@ -1503,7 +1502,7 @@ public class SnippetTemplate {
     private void updateStamps(ValueNode replacee, UnmodifiableEconomicMap<Node, Node> duplicates) {
         for (ValueNode node : placeholderStampedNodes) {
             ValueNode dup = (ValueNode) duplicates.get(node);
-            Stamp replaceeStamp = replacee.stamp(NodeView.DEFAULT);
+            Stamp replaceeStamp = replacee.stamp();
             if (node instanceof Placeholder) {
                 Placeholder placeholderDup = (Placeholder) dup;
                 placeholderDup.makeReplacement(replaceeStamp);
