@@ -38,6 +38,7 @@ import com.sun.c1x.debug.*;
 import com.sun.c1x.globalstub.*;
 import com.sun.c1x.graph.*;
 import com.sun.c1x.ir.*;
+import com.sun.c1x.ir.Value.Flag;
 import com.sun.c1x.lir.*;
 import com.sun.c1x.opt.*;
 import com.sun.c1x.util.*;
@@ -204,8 +205,6 @@ public abstract class LIRGenerator extends ValueVisitor {
 
         this.operands = new OperandPool(compilation.target);
 
-        new PhiSimplifier(ir);
-
         // mark the liveness of all instructions if it hasn't already been done by the optimizer
         LivenessMarker livenessMarker = new LivenessMarker(ir);
         C1XMetrics.LiveHIRInstructions += livenessMarker.liveCount();
@@ -222,6 +221,22 @@ public abstract class LIRGenerator extends ValueVisitor {
         public DeoptimizationStub(FrameState state) {
             info = new LIRDebugInfo(state, null);
         }
+    }
+
+    public final void emitGuard(Guard x) {
+        FrameState state = x.stateBefore();
+        assert state != null : "deoptimize instruction always needs a state";
+
+        if (deoptimizationStubs == null) {
+            deoptimizationStubs = new ArrayList<DeoptimizationStub>();
+        }
+
+        // (tw) TODO: Try to reuse an existing stub if possible.
+        // It is only allowed if there are no LIR instructions in between that can modify registers.
+
+        DeoptimizationStub stub = new DeoptimizationStub(state);
+        deoptimizationStubs.add(stub);
+        lir.branch(x.condition.negate(), stub.label, stub.info);
     }
 
     public void doBlock(BlockBegin block) {
@@ -352,6 +367,14 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     @Override
+    public void visitNewObjectArrayClone(NewObjectArrayClone x) {
+        XirArgument length = toXirArgument(x.length());
+        XirArgument referenceArray = toXirArgument(x.referenceArray());
+        XirSnippet snippet = xir.genNewObjectArrayClone(site(x), length, referenceArray);
+        emitXir(snippet, x, stateFor(x), null, true);
+    }
+
+    @Override
     public void visitNewMultiArray(NewMultiArray x) {
         XirArgument[] dims = new XirArgument[x.dimensions().length];
 
@@ -408,6 +431,13 @@ public abstract class LIRGenerator extends ValueVisitor {
     public void visitGoto(Goto x) {
         setNoResult(x);
 
+        if (currentBlock.next() instanceof OsrEntry) {
+            // need to free up storage used for OSR entry point
+            CiValue osrBuffer = currentBlock.next().operand();
+            callRuntime(CiRuntimeCall.OSRMigrationEnd, null, osrBuffer);
+            emitXir(xir.genSafepoint(site(x)), x, stateFor(x, x.stateAfter()), null, false);
+        }
+
         // emit phi-instruction moves after safepoint since this simplifies
         // describing the state at the safepoint.
         moveToPhi(x.stateAfter());
@@ -439,6 +469,90 @@ public abstract class LIRGenerator extends ValueVisitor {
 
         lir.cmp(i.condition(), left, right);
         lir.cmove(i.condition(), tVal, fVal, reg);
+    }
+
+    @Override
+    public void visitIntrinsic(Intrinsic x) {
+        Value[] vals = x.arguments();
+        XirSnippet snippet;
+
+        switch (x.intrinsic()) {
+            case java_lang_Float$intBitsToFloat:
+            case java_lang_Double$doubleToRawLongBits:
+            case java_lang_Double$longBitsToDouble:
+            case java_lang_Float$floatToRawIntBits: {
+                visitFPIntrinsics(x);
+                return;
+            }
+
+            case java_lang_System$currentTimeMillis: {
+                assert x.numberOfArguments() == 0 : "wrong type";
+                CiValue reg = callRuntimeWithResult(CiRuntimeCall.JavaTimeMillis, null, (CiValue[]) null);
+                CiValue result = createResultVariable(x);
+                lir.move(reg, result);
+                return;
+            }
+
+            case java_lang_System$nanoTime: {
+                assert x.numberOfArguments() == 0 : "wrong type";
+                CiValue reg = callRuntimeWithResult(CiRuntimeCall.JavaTimeNanos, null, (CiValue[]) null);
+                CiValue result = createResultVariable(x);
+                lir.move(reg, result);
+                return;
+            }
+
+            case java_lang_Object$init:
+                visitRegisterFinalizer(x);
+                return;
+
+            case java_lang_Math$log:   // fall through
+            case java_lang_Math$log10: // fall through
+            case java_lang_Math$abs:   // fall through
+            case java_lang_Math$sqrt:  // fall through
+            case java_lang_Math$tan:   // fall through
+            case java_lang_Math$sin:   // fall through
+            case java_lang_Math$cos:
+                genMathIntrinsic(x);
+                return;
+
+            case sun_misc_Unsafe$compareAndSwapObject:
+                genCompareAndSwap(x, CiKind.Object);
+                return;
+            case sun_misc_Unsafe$compareAndSwapInt:
+                genCompareAndSwap(x, CiKind.Int);
+                return;
+            case sun_misc_Unsafe$compareAndSwapLong:
+                genCompareAndSwap(x, CiKind.Long);
+                return;
+
+            case java_lang_Thread$currentThread:
+                snippet = xir.genCurrentThread(site(x));
+                if (snippet != null) {
+                    emitXir(snippet, x, null, null, true);
+                    return;
+                }
+                break;
+
+            case java_lang_Object$getClass:
+                snippet = xir.genGetClass(site(x), toXirArgument(vals[0]));
+                if (snippet != null) {
+                    emitXir(snippet, x, stateFor(x), null, true);
+                    return;
+                }
+                break;
+        }
+
+
+        XirArgument[] args = new XirArgument[vals.length];
+        for (int i = 0; i < vals.length; i++) {
+            args[i] = toXirArgument(vals[i]);
+        }
+        snippet = xir.genIntrinsic(site(x), args, x.target());
+        if (snippet != null) {
+            emitXir(snippet, x, x.stateBefore() == null ? null : stateFor(x), null, true);
+            return;
+        }
+        x.setOperand(emitInvokeKnown(x.target(), x.stateBefore(), vals));
     }
 
     @Override
@@ -495,6 +609,28 @@ public abstract class LIRGenerator extends ValueVisitor {
             lir.callIndirect(target, resultOperand, argList, info, snippet.marks, pointerSlots);
         }
 
+        if (resultOperand.isLegal()) {
+            CiValue result = createResultVariable(x);
+            lir.move(resultOperand, result);
+        }
+    }
+
+    @Override
+    public void visitTemplateCall(TemplateCall x) {
+        CiValue resultOperand = resultOperandFor(x.kind);
+        List<CiValue> argList;
+        if (x.receiver() != null) {
+            CiCallingConvention cc = compilation.frameMap().getCallingConvention(new CiKind[] {CiKind.Object}, JavaCall);
+            argList = visitInvokeArguments(cc, new Value[] {x.receiver()}, null);
+        } else {
+            argList = new ArrayList<CiValue>();
+        }
+
+        if (x.address() != null) {
+            CiValue callAddress = load(x.address());
+            argList.add(callAddress);
+        }
+        lir.templateCall(resultOperand, argList);
         if (resultOperand.isLegal()) {
             CiValue result = createResultVariable(x);
             lir.move(resultOperand, result);
@@ -599,6 +735,15 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     @Override
+    public void visitOsrEntry(OsrEntry x) {
+        // construct our frame and model the production of incoming pointer
+        // to the OSR buffer.
+        lir.osrEntry(osrBufferPointer());
+        CiValue result = createResultVariable(x);
+        lir.move(osrBufferPointer(), result);
+    }
+
+    @Override
     public void visitPhi(Phi i) {
         Util.shouldNotReachHere();
     }
@@ -667,12 +812,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             if (canBeConstant) {
                 return item.instruction.operand();
             } else {
-                CiKind kind = var.kind;
-                if (kind == CiKind.Byte || kind == CiKind.Boolean) {
-                    item.loadByteItem();
-                } else {
-                    item.loadItem();
-                }
+                item.loadItem(var.kind);
                 return item.result();
             }
         }
@@ -903,6 +1043,142 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
     }
 
+    @Override
+    public void visitUnsafeGetObject(UnsafeGetObject x) {
+        CiKind kind = x.unsafeOpKind;
+
+        CiValue off = load(x.offset());
+        CiValue src = load(x.object());
+
+        CiValue reg = createResultVariable(x);
+
+        if (x.isVolatile()) {
+            vma.preVolatileRead();
+        }
+        genGetObjectUnsafe(reg, src, off, kind, x.isVolatile());
+        if (x.isVolatile()) {
+            vma.postVolatileRead();
+        }
+    }
+
+    @Override
+    public void visitUnsafeGetRaw(UnsafeGetRaw x) {
+        LIRItem idx = new LIRItem(this);
+        CiValue base = load(x.base());
+        if (x.hasIndex()) {
+            idx.setInstruction(x.index());
+            idx.loadNonconstant();
+        }
+
+        CiValue reg = createResultVariable(x);
+
+        int log2scale = 0;
+        if (x.hasIndex()) {
+            assert x.index().kind.isInt() : "should not find non-int index";
+            log2scale = x.log2Scale();
+        }
+
+        assert !x.hasIndex() || idx.instruction == x.index() : "should match";
+
+        CiKind dstKind = x.unsafeOpKind;
+        CiValue indexOp = idx.result();
+
+        CiAddress addr = null;
+        if (indexOp.isConstant()) {
+            assert log2scale == 0 : "must not have a scale";
+            CiConstant constantIndexOp = (CiConstant) indexOp;
+            addr = new CiAddress(dstKind, base, constantIndexOp.asInt());
+        } else {
+
+            if (compilation.target.arch.isX86()) {
+                addr = new CiAddress(dstKind, base, indexOp, CiAddress.Scale.fromInt(2 ^ log2scale), 0);
+
+            } else if (compilation.target.arch.isSPARC()) {
+                if (indexOp.isIllegal() || log2scale == 0) {
+                    addr = new CiAddress(dstKind, base, indexOp);
+                } else {
+                    CiValue tmp = newVariable(CiKind.Int);
+                    lir.shiftLeft(indexOp, log2scale, tmp);
+                    addr = new CiAddress(dstKind, base, tmp);
+                }
+
+            } else {
+                Util.shouldNotReachHere();
+            }
+        }
+
+        if (x.mayBeUnaligned() && (dstKind == CiKind.Long || dstKind == CiKind.Double)) {
+            lir.unalignedMove(addr, reg);
+        } else {
+            lir.move(addr, reg);
+        }
+    }
+
+    @Override
+    public void visitUnsafePrefetchRead(UnsafePrefetchRead x) {
+        visitUnsafePrefetch(x, false);
+    }
+
+    @Override
+    public void visitUnsafePrefetchWrite(UnsafePrefetchWrite x) {
+        visitUnsafePrefetch(x, true);
+    }
+
+    @Override
+    public void visitUnsafePutObject(UnsafePutObject x) {
+        CiKind kind = x.unsafeOpKind;
+        LIRItem data = new LIRItem(x.value(), this);
+
+        CiValue src = load(x.object());
+        data.loadItem(kind);
+        CiValue off = load(x.offset());
+
+        setNoResult(x);
+
+        if (x.isVolatile()) {
+            vma.preVolatileWrite();
+        }
+        genPutObjectUnsafe(src, off, data.result(), kind, x.isVolatile());
+        if (x.isVolatile()) {
+            vma.postVolatileWrite();
+        }
+    }
+
+    @Override
+    public void visitUnsafePutRaw(UnsafePutRaw x) {
+        int log2scale = 0;
+        CiKind kind = x.unsafeOpKind;
+
+        if (x.hasIndex()) {
+            assert x.index().kind.isInt() : "should not find non-int index";
+            log2scale = x.log2scale();
+        }
+
+        LIRItem value = new LIRItem(x.value(), this);
+        LIRItem idx = new LIRItem(this);
+
+        CiValue base = load(x.base());
+        if (x.hasIndex()) {
+            idx.setInstruction(x.index());
+            idx.loadItem();
+        }
+
+        value.loadItem(kind);
+
+        setNoResult(x);
+
+        CiValue indexOp = idx.result();
+        if (log2scale != 0) {
+            // temporary fix (platform dependent code without shift on Intel would be better)
+            indexOp = newVariable(CiKind.Int);
+            lir.move(idx.result(), indexOp);
+            lir.shiftLeft(indexOp, log2scale, indexOp);
+        }
+
+        CiValue addr = new CiAddress(x.unsafeOpKind, base, indexOp);
+        lir.move(value.result(), addr);
+    }
+
     private void blockDoEpilog(BlockBegin block) {
         if (C1XOptions.PrintIRWithLIR) {
             TTY.println();
@@ -991,9 +1267,17 @@ public abstract class LIRGenerator extends ValueVisitor {
         return operand;
     }
 
-    @Override
-    public void visitRegisterFinalizer(RegisterFinalizer x) {
-        CiValue receiver = load(x.object());
+    private void visitFPIntrinsics(Intrinsic x) {
+        assert x.numberOfArguments() == 1 : "wrong type";
+        CiValue reg = createResultVariable(x);
+        CiValue value = load(x.argumentAt(0));
+        CiValue tmp = forceToSpill(value, x.kind, false);
+        lir.move(tmp, reg);
+    }
+
+    private void visitRegisterFinalizer(Intrinsic x) {
+        assert x.numberOfArguments() == 1 : "wrong type";
+        CiValue receiver = load(x.argumentAt(0));
         LIRDebugInfo info = stateFor(x, x.stateBefore());
         callRuntime(CiRuntimeCall.RegisterFinalizer, info, receiver);
         setNoResult(x);
@@ -1023,6 +1307,21 @@ public abstract class LIRGenerator extends ValueVisitor {
             }
         }
         lir.jump(defaultSux);
+    }
+
+    private void visitUnsafePrefetch(UnsafePrefetch x, boolean isStore) {
+        LIRItem src = new LIRItem(x.object(), this);
+        LIRItem off = new LIRItem(x.offset(), this);
+
+        src.loadItem();
+        if (!(off.result().isConstant() && canInlineAsConstant(x.offset()))) {
+            off.loadItem();
+        }
+
+        setNoResult(x);
+
+        CiAddress addr = genAddress(src.result(), off.result(), 0, 0, CiKind.Byte);
+        lir.prefetch(addr, isStore);
     }
 
     protected void arithmeticOpFpu(int code, CiValue result, CiValue left, CiValue right, CiValue tmp) {
@@ -1282,7 +1581,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         if (suxVal instanceof Phi) {
             Phi phi = (Phi) suxVal;
             // curVal can be null without phi being null in conjunction with inlining
-            if (phi.isLive() && !phi.isDeadPhi() && curVal != null && curVal != phi) {
+            if (phi.isLive() && curVal != null && curVal != phi) {
                 assert curVal.isLive() : "value not live: " + curVal + ", suxVal=" + suxVal;
                 assert !phi.isIllegal() : "illegal phi cannot be marked as live";
                 if (curVal instanceof Phi) {
@@ -1356,7 +1655,6 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     private CiValue operandForPhi(Phi phi) {
-        assert !phi.isDeadPhi();
         if (phi.operand().isIllegal()) {
             // allocate a variable for this phi
             CiVariable operand = newVariable(phi.kind);
@@ -1521,9 +1819,6 @@ public abstract class LIRGenerator extends ValueVisitor {
      * @param instruction an instruction that produces a result value
      */
     protected CiValue makeOperand(Value instruction) {
-        if (instruction == null) {
-            return CiValue.IllegalValue;
-        }
         assert instruction.isLive();
         CiValue operand = instruction.operand();
         if (operand.isIllegal()) {
@@ -1584,6 +1879,10 @@ public abstract class LIRGenerator extends ValueVisitor {
     protected abstract void genGetObjectUnsafe(CiValue dest, CiValue src, CiValue offset, CiKind kind, boolean isVolatile);
 
     protected abstract void genPutObjectUnsafe(CiValue src, CiValue offset, CiValue data, CiKind kind, boolean isVolatile);
+
+    protected abstract void genCompareAndSwap(Intrinsic x, CiKind kind);
+
+    protected abstract void genMathIntrinsic(Intrinsic x);
 
     /**
      * Implements site-specific information for the XIR interface.
@@ -1647,10 +1946,57 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     }
 
+    public void arrayCopy(RiType type, ArrayCopy arrayCopy, XirSnippet snippet) {
+        emitXir(snippet, arrayCopy, stateFor(arrayCopy), null, false);
+    }
+
+    @Override
+    public void visitArrayCopy(ArrayCopy arrayCopy) {
+        Value src = arrayCopy.src();
+        Value dest = arrayCopy.dest();
+        Value srcPos = arrayCopy.srcPos();
+        Value destPos = arrayCopy.destPos();
+        Value length = arrayCopy.length();
+        RiType srcType = src.declaredType();
+        RiType destType = dest.declaredType();
+        if ((srcType != null && srcType.isArrayClass()) || (destType != null && destType.isArrayClass())) {
+            RiType type = (srcType == null) ? destType : srcType;
+            if ((srcType == null || destType == null || srcType.kind() != destType.kind()) && type.kind() != CiKind.Object) {
+                TypeEqualityCheck typeCheck = new TypeEqualityCheck(src, dest, arrayCopy.stateBefore(), Condition.EQ);
+                visitTypeEqualityCheck(typeCheck);
+            }
+            boolean inputsSame = (src == dest);
+            boolean inputsDifferent = !inputsSame && (src.checkFlag(Flag.ResultIsUnique) || dest.checkFlag(Flag.ResultIsUnique));
+            boolean needsStoreCheck = type.componentType().kind() == CiKind.Object && destType != srcType;
+            if (!needsStoreCheck) {
+                arrayCopy.setFlag(Flag.NoStoreCheck);
+            }
+            XirSnippet snippet = xir.genArrayCopy(site(arrayCopy), toXirArgument(src), toXirArgument(srcPos), toXirArgument(dest), toXirArgument(destPos), toXirArgument(length), type.componentType(), inputsSame, inputsDifferent);
+            arrayCopy(type, arrayCopy, snippet);
+            return;
+        }
+        arrayCopySlow(arrayCopy);
+    }
+
+    private void arrayCopySlow(ArrayCopy arrayCopy) {
+        emitInvokeKnown(arrayCopy.arrayCopyMethod, arrayCopy.stateBefore(), arrayCopy.src(), arrayCopy.srcPos(), arrayCopy.dest(), arrayCopy.destPos(), arrayCopy.length());
+    }
+
     private CiValue emitInvokeKnown(RiMethod method, FrameState stateBefore, Value... args) {
         boolean isStatic = Modifier.isStatic(method.accessFlags());
         Invoke invoke = new Invoke(isStatic ? Bytecodes.INVOKESTATIC : Bytecodes.INVOKESPECIAL, method.signature().returnKind(), args, isStatic, method, null, stateBefore);
         visitInvoke(invoke);
         return invoke.operand();
+    }
+
+    @Override
+    public void visitTypeEqualityCheck(TypeEqualityCheck typeEqualityCheck) {
+        Value x = typeEqualityCheck.left();
+        Value y = typeEqualityCheck.right();
+
+        CiValue leftValue = emitXir(xir.genGetClass(site(typeEqualityCheck), toXirArgument(x)), typeEqualityCheck, stateFor(typeEqualityCheck), null, false);
+        CiValue rightValue = emitXir(xir.genGetClass(site(typeEqualityCheck), toXirArgument(y)), typeEqualityCheck, stateFor(typeEqualityCheck), null, false);
+        lir.cmp(typeEqualityCheck.condition.negate(), leftValue, rightValue);
+        emitGuard(typeEqualityCheck);
     }
 }
