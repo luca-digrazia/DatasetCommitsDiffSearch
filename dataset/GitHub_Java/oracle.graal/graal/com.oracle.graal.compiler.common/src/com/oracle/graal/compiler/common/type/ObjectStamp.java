@@ -42,7 +42,7 @@ public class ObjectStamp extends AbstractObjectStamp {
     }
 
     @Override
-    public LIRKind getLIRKind(LIRKindTool tool) {
+    public PlatformKind getPlatformKind(PlatformKindTool tool) {
         return tool.getObjectKind();
     }
 
@@ -63,14 +63,5 @@ public class ObjectStamp extends AbstractObjectStamp {
             return true;
         }
         return false;
-    }
-
-    @Override
-    public Constant asConstant() {
-        if (alwaysNull()) {
-            return Constant.NULL_OBJECT;
-        } else {
-            return null;
-        }
     }
 }
