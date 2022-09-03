@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Map;
 import java.util.Properties;
+import java.util.ServiceLoader;
 
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionDescriptors;
@@ -106,7 +107,7 @@ public class HotSpotGraalOptionValues implements OptionValuesAccess {
         EconomicMap<OptionKey<?>, Object> values = OptionValues.newOptionMap();
         try (InitTimer t = timer("InitializeOptions")) {
 
-            Iterable<OptionDescriptors> loader = OptionsParser.getOptionsLoader();
+            ServiceLoader<OptionDescriptors> loader = ServiceLoader.load(OptionDescriptors.class, OptionDescriptors.class.getClassLoader());
             Properties savedProps = getSavedProperties();
             String optionsFile = savedProps.getProperty(GRAAL_OPTIONS_FILE_PROPERTY_NAME);
 
