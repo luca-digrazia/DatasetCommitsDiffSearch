@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.calc.*;
@@ -214,7 +213,7 @@ public class ConditionalEliminationPhase extends Phase {
         }
 
         @Override
-        public void afterSplit(AbstractBeginNode node) {
+        public void afterSplit(BeginNode node) {
         }
 
         @Override
@@ -356,7 +355,7 @@ public class ConditionalEliminationPhase extends Phase {
             }
         }
 
-        private void registerControlSplitInfo(Node pred, AbstractBeginNode begin) {
+        private void registerControlSplitInfo(Node pred, BeginNode begin) {
             assert pred != null && begin != null;
 
             if (pred instanceof IfNode) {
@@ -462,8 +461,8 @@ public class ConditionalEliminationPhase extends Phase {
 
         @Override
         protected void node(FixedNode node) {
-            if (node instanceof AbstractBeginNode) {
-                AbstractBeginNode begin = (AbstractBeginNode) node;
+            if (node instanceof BeginNode) {
+                BeginNode begin = (BeginNode) node;
                 Node pred = node.predecessor();
 
                 if (pred != null) {
@@ -494,56 +493,16 @@ public class ConditionalEliminationPhase extends Phase {
             } else if (node instanceof IfNode) {
                 IfNode ifNode = (IfNode) node;
                 LogicNode compare = ifNode.condition();
-
-                LogicNode replacement = null;
-                ValueNode replacementAnchor = null;
-                AbstractBeginNode survivingSuccessor = null;
-                if (state.trueConditions.containsKey(compare)) {
-                    replacement = trueConstant;
-                    replacementAnchor = state.trueConditions.get(compare);
-                    survivingSuccessor = ifNode.trueSuccessor();
-                } else if (state.falseConditions.containsKey(compare)) {
-                    replacement = falseConstant;
-                    replacementAnchor = state.falseConditions.get(compare);
-                    survivingSuccessor = ifNode.falseSuccessor();
-                } else {
-                    replacement = evaluateCondition(compare, trueConstant, falseConstant);
-                    if (replacement != null) {
-                        if (replacement == trueConstant) {
-                            survivingSuccessor = ifNode.trueSuccessor();
-                        } else {
-                            assert replacement == falseConstant;
-                            survivingSuccessor = ifNode.falseSuccessor();
-                        }
-                    }
-                }
+                LogicNode replacement = evaluateCondition(compare, trueConstant, falseConstant);
 
                 if (replacement != null) {
-                    NodeIterable<Node> anchored = survivingSuccessor.anchored();
-                    if (!anchored.isEmpty() && replacementAnchor == null) {
-                        // Cannot simplify an IfNode unless we have a new anchor point
-                        // for any nodes currently anchored to the surviving branch
-                    } else {
-                        if (!anchored.isEmpty()) {
-                            // Ideally we'd simply want to re-anchor to replacementAnchor. However,
-                            // this can cause guards currently anchored to the surviving branch
-                            // to float too high in the graph. So, we insert a new anchor between
-                            // the guards and replacementAnchor.
-                            ValueAnchorNode valueAnchor = graph.add(new ValueAnchorNode());
-                            for (Node a : anchored.snapshot()) {
-                                a.replaceFirstInput(survivingSuccessor, valueAnchor);
-                            }
-                            valueAnchor.addAnchoredNode(replacementAnchor);
-                            graph.addBeforeFixed(ifNode, valueAnchor);
-                        }
-                        ifNode.setCondition(replacement);
-                        if (compare.usages().isEmpty()) {
-                            GraphUtil.killWithUnusedFloatingInputs(compare);
-                        }
+                    ifNode.setCondition(replacement);
+                    if (compare.usages().isEmpty()) {
+                        GraphUtil.killWithUnusedFloatingInputs(compare);
                     }
                 }
-            } else if (node instanceof AbstractEndNode) {
-                AbstractEndNode endNode = (AbstractEndNode) node;
+            } else if (node instanceof EndNode) {
+                EndNode endNode = (EndNode) node;
                 for (PhiNode phi : endNode.merge().phis()) {
                     int index = endNode.merge().phiPredecessorIndex(endNode);
                     ValueNode value = phi.valueAt(index);
@@ -563,4 +522,5 @@ public class ConditionalEliminationPhase extends Phase {
             }
         }
     }
+
 }
