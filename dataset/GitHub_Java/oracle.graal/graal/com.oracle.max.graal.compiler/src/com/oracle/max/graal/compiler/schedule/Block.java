@@ -69,12 +69,12 @@ public class Block {
                 this.anchor = (Anchor) firstNode;
             } else if (firstNode == firstNode.graph().start()) {
                 StartNode start = (StartNode) firstNode;
-                if (start.next() instanceof Anchor) {
-                    this.anchor = (Anchor) start.next();
+                if (start.start() instanceof Anchor) {
+                    this.anchor = (Anchor) start.start();
                 } else {
                     Anchor a = new Anchor(firstNode.graph());
-                    a.setNext((FixedNode) firstNode.graph().start().next());
-                    firstNode.graph().start().setNext(a);
+                    a.setNext((FixedNode) firstNode.graph().start().start());
+                    firstNode.graph().start().setStart(a);
                     this.anchor = a;
                 }
             } else if (firstNode instanceof Merge) {

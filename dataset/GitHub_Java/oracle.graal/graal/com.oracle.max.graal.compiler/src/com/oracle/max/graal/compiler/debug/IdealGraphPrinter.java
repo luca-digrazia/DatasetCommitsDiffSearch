@@ -123,16 +123,16 @@ public class IdealGraphPrinter {
         IdentifyBlocksPhase schedule = null;
         try {
             schedule = new IdentifyBlocksPhase(true);
-            schedule.apply(graph, false);
+            schedule.apply(graph);
         } catch (Throwable t) {
             // nothing to do here...
             //t.printStackTrace();
         }
         List<Loop> loops = null;
         try {
-            LoopUtil.computeLoops(graph);
+            loops = LoopUtil.computeLoops(graph);
         } catch (Throwable t) {
-
+            t.printStackTrace();
         }
 
         stream.println("  <nodes>");
