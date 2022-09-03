@@ -73,7 +73,7 @@ public class HotSpotNmethod extends HotSpotInstalledCode {
 
     @Override
     public void invalidate() {
-        graalRuntime().getCompilerToVM().invalidateInstalledCode(this);
+        graalRuntime().getCompilerToVM().invalidateInstalledCode(codeBlob);
     }
 
     @Override
