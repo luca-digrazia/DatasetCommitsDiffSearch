@@ -55,17 +55,11 @@ final class ToPrimitiveNode extends Node {
         return new ToPrimitiveNode();
     }
 
-    Integer toInteger(Object value) {
-        Object attr;
-        if (value instanceof TruffleObject) {
-            attr = unbox((TruffleObject) value);
-        } else {
-            attr = value;
-        }
-        return toInt(attr);
+    Object toPrimitive(Object value, Class<?> requestedType) {
+        return toPrimitive(value, requestedType, 0);
     }
 
-    Object toPrimitive(Object value, Class<?> requestedType) {
+    Object toPrimitive(Object value, Class<?> requestedType, int conversionLevel) {
         Object attr;
         if (value instanceof JavaObject) {
             attr = ((JavaObject) value).obj;
@@ -105,6 +99,16 @@ final class ToPrimitiveNode extends Node {
                 String str = (String) attr;
                 if (str.length() == 1) {
                     return str.charAt(0);
+                }
+            } else {
+                if (conversionLevel > 0) {
+                    Integer safeChar = toInt(attr);
+                    if (safeChar != null) {
+                        int v = safeChar;
+                        if (v >= 0 && v < 65536) {
+                            return (char) v;
+                        }
+                    }
                 }
             }
         } else if (requestedType == String.class || requestedType == CharSequence.class) {
