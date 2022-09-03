@@ -54,30 +54,20 @@ public interface CompilerToVM {
     boolean hasBalancedMonitors(long metaspaceMethod);
 
     /**
-     * Determines if a given metaspace Method can be inlined. A method may not be inlinable for a
-     * number of reasons such as:
+     * Determines if a given metaspace Method object is compilable. A method may not be compilable
+     * for a number of reasons such as:
      * <ul>
-     * <li>a CompileOracle directive may prevent inlining or compilation of this methods</li>
+     * <li>a CompileOracle directive may prevent compilation of methods</li>
      * <li>the method may have a bytecode breakpoint set</li>
      * <li>the method may have other bytecode features that require special handling by the VM</li>
      * </ul>
      * 
-     * @param metaspaceMethod the metaspace Method object to query
-     * @return true if the method can be inlined
-     */
-    boolean canInlineMethod(long metaspaceMethod);
-
-    /**
-     * Determines if a given metaspace Method should be inlined at any cost. This could be because:
-     * <ul>
-     * <li>a CompileOracle directive may forces inlining of this methods</li>
-     * <li>an annotation forces inlining of this method</li>
-     * </ul>
+     * A non-compilable method should not be inlined.
      * 
      * @param metaspaceMethod the metaspace Method object to query
-     * @return true if the method should be inlined
+     * @return true if the method is compilable
      */
-    boolean shouldInlineMethod(long metaspaceMethod);
+    boolean isMethodCompilable(long metaspaceMethod);
 
     /**
      * Used to implement {@link ResolvedJavaType#findUniqueConcreteMethod(ResolvedJavaMethod)}.
@@ -274,11 +264,4 @@ public interface CompilerToVM {
      * Generate a unique id to identify the result of the compile.
      */
     int allocateCompileId(HotSpotResolvedJavaMethod method, int entryBCI);
-
-    /**
-     * Gets the names of the supported GPU architectures.
-     * 
-     * @return a comma separated list of names
-     */
-    String getGPUs();
 }

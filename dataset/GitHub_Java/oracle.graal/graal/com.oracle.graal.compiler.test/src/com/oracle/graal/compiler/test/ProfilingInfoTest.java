@@ -23,6 +23,7 @@
 package com.oracle.graal.compiler.test;
 
 import java.io.*;
+import java.lang.reflect.*;
 
 import org.junit.*;
 
@@ -306,15 +307,17 @@ public class ProfilingInfoTest extends GraalCompilerTest {
     }
 
     private ProfilingInfo profile(boolean resetProfile, int executions, String methodName, Object... args) {
-        ResolvedJavaMethod javaMethod = getResolvedJavaMethod(methodName);
-        Assert.assertTrue(javaMethod.isStatic());
+        Method method = getMethod(methodName);
+        Assert.assertTrue(Modifier.isStatic(method.getModifiers()));
+
+        ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(method);
         if (resetProfile) {
             javaMethod.reprofile();
         }
 
         for (int i = 0; i < executions; ++i) {
             try {
-                invoke(javaMethod, null, args);
+                method.invoke(null, args);
             } catch (Throwable e) {
                 Assert.fail("method should not throw an exception: " + e.toString());
             }
@@ -327,7 +330,7 @@ public class ProfilingInfoTest extends GraalCompilerTest {
     }
 
     private void resetProfile(String methodName) {
-        ResolvedJavaMethod javaMethod = getResolvedJavaMethod(methodName);
+        ResolvedJavaMethod javaMethod = getMetaAccess().lookupJavaMethod(getMethod(methodName));
         javaMethod.reprofile();
     }
 }

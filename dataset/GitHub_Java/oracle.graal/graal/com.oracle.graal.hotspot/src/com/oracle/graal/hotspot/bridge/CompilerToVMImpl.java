@@ -53,6 +53,9 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native boolean hasBalancedMonitors(long metaspaceMethod);
 
     @Override
+    public native boolean isMethodCompilable(long metaspaceMethod);
+
+    @Override
     public native long findUniqueConcreteMethod(long metaspaceMethod);
 
     @Override
@@ -169,10 +172,4 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native boolean isMature(long method);
 
     public native int allocateCompileId(HotSpotResolvedJavaMethod method, int entryBCI);
-
-    public native String getGPUs();
-
-    public native boolean canInlineMethod(long metaspaceMethod);
-
-    public native boolean shouldInlineMethod(long metaspaceMethod);
 }
