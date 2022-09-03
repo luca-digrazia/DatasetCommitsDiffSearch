@@ -157,27 +157,6 @@ public class SLJavaInteropTest {
         assertEquals("Called with OK and FineWell\n", os.toString("UTF-8"));
     }
 
-    @Test
-    public void sumPairs() {
-        String scriptText = "function values(sum, k, v) {\n" + //
-                        "  obj = new();\n" + //
-                        "  obj.key = k;\n" + //
-                        "  obj.value = v;\n" + //
-                        "  sum.sum(obj);\n" + //
-                        "}\n"; //
-        Source script = Source.newBuilder(scriptText).name("Test").mimeType("application/x-sl").build();
-        engine.eval(script);
-        PolyglotEngine.Value fn = engine.findGlobalSymbol("values");
-
-        Sum javaSum = new Sum();
-        Object sum = JavaInterop.asTruffleValue(javaSum);
-        fn.execute(sum, "one", 1);
-        fn.execute(sum, "two", 2);
-        fn.execute(sum, "three", 3);
-
-        assertEquals(6, javaSum.sum);
-    }
-
     interface PassInArray {
         void call(Object[] arr);
     }
@@ -188,19 +167,5 @@ public class SLJavaInteropTest {
 
     interface PassInArgAndVarArg {
         void call(Object first, Object... arr);
-    }
-
-    public interface Pair {
-        String key();
-
-        int value();
-    }
-
-    public static class Sum {
-        int sum;
-
-        public void sum(Pair p) {
-            sum += p.value();
-        }
     }
 }
