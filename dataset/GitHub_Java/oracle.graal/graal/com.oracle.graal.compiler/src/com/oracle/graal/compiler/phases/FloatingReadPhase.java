@@ -153,7 +153,6 @@ public class FloatingReadPhase extends Phase {
             } else {
                 floatingRead = graph.unique(new FloatingReadNode(readNode.object(), readNode.location(), getLocationForRead(readNode), readNode.stamp(), readNode.dependencies()));
             }
-            floatingRead.setNullCheck(readNode.getNullCheck());
             ValueAnchorNode anchor = null;
             for (GuardNode guard : readNode.dependencies().filter(GuardNode.class)) {
                 if (anchor == null) {
