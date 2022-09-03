@@ -39,7 +39,7 @@ public class LoopBeginNode extends MergeNode implements IterableNodeType, LIRLow
     private double loopFrequency;
     private int nextEndIndex;
     private int unswitches;
-    @OptionalInput(InputType.Guard) private GuardingNode overflowGuard;
+    @Input(InputType.Guard) private GuardingNode overflowGuard;
 
     public LoopBeginNode() {
         loopFrequency = 1;
@@ -243,10 +243,10 @@ public class LoopBeginNode extends MergeNode implements IterableNodeType, LIRLow
             long increment = NO_INCREMENT;
             if (input != null && input instanceof IntegerAddNode) {
                 IntegerAddNode add = (IntegerAddNode) input;
-                if (add.getX() == phi && add.getY().isConstant()) {
-                    increment = add.getY().asConstant().asLong();
-                } else if (add.getY() == phi && add.getX().isConstant()) {
-                    increment = add.getX().asConstant().asLong();
+                if (add.x() == phi && add.y().isConstant()) {
+                    increment = add.y().asConstant().asLong();
+                } else if (add.y() == phi && add.x().isConstant()) {
+                    increment = add.x().asConstant().asLong();
                 }
             } else if (input == phi) {
                 increment = 0;
