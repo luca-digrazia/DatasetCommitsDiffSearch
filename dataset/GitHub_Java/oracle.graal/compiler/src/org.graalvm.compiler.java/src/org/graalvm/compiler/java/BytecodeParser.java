@@ -262,7 +262,6 @@ import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.LUDICROU
 import static org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_DURING_PARSING;
 import static org.graalvm.compiler.nodes.type.StampTool.isPointerNonNull;
 
-import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -1930,15 +1929,9 @@ public class BytecodeParser implements GraphBuilderContext {
         }
 
         boolean check(boolean pluginResult) {
-            if (pluginResult) {
-                /*
-                 * If lastInstr is null, even if this method has a non-void return type, the method
-                 * doesn't return a value, it probably throws an exception.
-                 */
+            if (pluginResult == true) {
                 int expectedStackSize = beforeStackSize + resultType.getSlotCount();
-                assert lastInstr == null || expectedStackSize == frameState.stackSize() : error("plugin manipulated the stack incorrectly: expected=%d, actual=%d", expectedStackSize,
-                                frameState.stackSize());
-
+                assert expectedStackSize == frameState.stackSize() : error("plugin manipulated the stack incorrectly: expected=%d, actual=%d", expectedStackSize, frameState.stackSize());
                 NodeIterable<Node> newNodes = graph.getNewNodes(mark);
                 assert !needsNullCheck || isPointerNonNull(args[0].stamp(NodeView.DEFAULT)) : error("plugin needs to null check the receiver of %s: receiver=%s", targetMethod.format("%H.%n(%p)"),
                                 args[0]);
@@ -4343,8 +4336,7 @@ public class BytecodeParser implements GraphBuilderContext {
     /**
      * Returns true if an explicit exception check should be emitted.
      */
-    @Override
-    public boolean needsExplicitException() {
+    protected boolean needsExplicitException() {
         BytecodeExceptionMode exceptionMode = graphBuilderConfig.getBytecodeExceptionMode();
         if (exceptionMode == BytecodeExceptionMode.CheckAll || StressExplicitExceptionCode.getValue(options)) {
             return true;
@@ -4352,35 +4344,6 @@ public class BytecodeParser implements GraphBuilderContext {
             return profilingInfo.getExceptionSeen(bci()) == TriState.TRUE;
         }
         return false;
-    }
-
-    @Override
-    public AbstractBeginNode genExplicitExceptionEdge(Class<? extends Exception> exceptionClass) {
-        // Backup original context
-        FixedWithNextNode originalLastInstr = lastInstr;
-        Constructor<? extends Exception> constructor;
-        try {
-            constructor = exceptionClass.getConstructor();
-        } catch (NoSuchMethodException e) {
-            // Failed exception edge
-            return null;
-        }
-
-        BeginNode exceptionEdge = new BeginNode();
-        lastInstr = graph.add(exceptionEdge);
-
-        // Instantiate an exception
-        genNewInstance(metaAccess.lookupJavaType(exceptionClass));
-        frameState.stackOp(DUP);
-        genInvokeSpecial(metaAccess.lookupJavaMethod(constructor));
-
-        // Generate exception dispatch
-        AbstractBeginNode exceptionDispatch = handleException(frameState.pop(JavaKind.Object), bci(), false);
-        lastInstr.setNext(exceptionDispatch);
-
-        // Restore original context
-        lastInstr = originalLastInstr;
-        return exceptionEdge;
     }
 
     protected void genPutField(int cpi, int opcode) {
