@@ -56,10 +56,6 @@ final class ToPrimitiveNode extends Node {
     }
 
     Object toPrimitive(Object value, Class<?> requestedType) {
-        return toPrimitive(value, requestedType, 0);
-    }
-
-    Object toPrimitive(Object value, Class<?> requestedType, int conversionLevel) {
         Object attr;
         if (value instanceof JavaObject) {
             attr = ((JavaObject) value).obj;
@@ -101,14 +97,9 @@ final class ToPrimitiveNode extends Node {
                     return str.charAt(0);
                 }
             } else {
-                if (conversionLevel > 0) {
-                    Integer safeChar = toInt(value);
-                    if (safeChar != null) {
-                        int v = safeChar;
-                        if (v >= 0 && v < 65536) {
-                            return (char) v;
-                        }
-                    }
+                Short safeChar = toShort(value);
+                if (safeChar != null) {
+                    return (char) (short) safeChar;
                 }
             }
         } else if (requestedType == String.class || requestedType == CharSequence.class) {
@@ -195,7 +186,7 @@ final class ToPrimitiveNode extends Node {
         return null;
     }
 
-    private static Integer toInt(Object value) {
+    private static Object toInt(Object value) {
         if (value instanceof Integer) {
             Integer i = (Integer) value;
             return i;
