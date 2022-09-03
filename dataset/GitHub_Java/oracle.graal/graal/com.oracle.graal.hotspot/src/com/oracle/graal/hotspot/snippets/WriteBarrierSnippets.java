@@ -68,7 +68,6 @@ public class WriteBarrierSnippets implements SnippetsInterface {
             base = base.add(Word.unsigned(cardTableStart()));
         }
         base.writeWord(displacement, Word.zero());
-        WriteBarrierStubCall.call(object);
     }
 
     @Snippet
