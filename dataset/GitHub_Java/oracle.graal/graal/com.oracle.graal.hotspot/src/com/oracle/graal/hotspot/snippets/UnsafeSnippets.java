@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.hotspot.snippets;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.util.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.snippets.*;
@@ -48,222 +47,206 @@ public class UnsafeSnippets implements SnippetsInterface {
     }
 
     public Object getObject(Object o, long offset) {
-        return UnsafeLoadNode.load(o, 0, offset, Kind.Object);
+        return UnsafeLoadNode.load(o, 0, offset, CiKind.Object);
     }
 
     public Object getObjectVolatile(Object o, long offset) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_READ);
         Object result = getObject(o, offset);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
     public void putObject(Object o, long offset, Object x) {
-        UnsafeStoreNode.store(o, 0, offset, x, Kind.Object);
+        UnsafeStoreNode.store(o, 0, offset, x, CiKind.Object);
     }
 
     public void putObjectVolatile(Object o, long offset, Object x) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putObject(o, offset, x);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
     public int getInt(Object o, long offset) {
-        Integer value = UnsafeLoadNode.load(o, 0, offset, Kind.Int);
+        Integer value = UnsafeLoadNode.load(o, 0, offset, CiKind.Int);
         return value;
     }
 
     public int getIntVolatile(Object o, long offset) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_READ);
         int result = getInt(o, offset);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
     public void putInt(Object o, long offset, int x) {
-        UnsafeStoreNode.store(o, 0, offset, x, Kind.Int);
+        UnsafeStoreNode.store(o, 0, offset, x, CiKind.Int);
     }
 
     public void putIntVolatile(Object o, long offset, int x) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putInt(o, offset, x);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
     public boolean getBoolean(Object o, long offset) {
         @JavacBug(id = 6995200)
-        Boolean result = UnsafeLoadNode.load(o, 0, offset, Kind.Boolean);
+        Boolean result = UnsafeLoadNode.load(o, 0, offset, CiKind.Boolean);
         return result;
     }
 
     public boolean getBooleanVolatile(Object o, long offset) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_READ);
         boolean result = getBoolean(o, offset);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
     public void putBoolean(Object o, long offset, boolean x) {
-        UnsafeStoreNode.store(o, 0, offset, x, Kind.Boolean);
+        UnsafeStoreNode.store(o, 0, offset, x, CiKind.Boolean);
     }
 
     public void putBooleanVolatile(Object o, long offset, boolean x) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putBoolean(o, offset, x);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
     public byte getByte(Object o, long offset) {
         @JavacBug(id = 6995200)
-        Byte result = UnsafeLoadNode.load(o, 0, offset, Kind.Byte);
+        Byte result = UnsafeLoadNode.load(o, 0, offset, CiKind.Byte);
         return result;
     }
 
     public byte getByteVolatile(Object o, long offset) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_READ);
         byte result = getByte(o, offset);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
     public void putByte(Object o, long offset, byte x) {
-        UnsafeStoreNode.store(o, 0, offset, x, Kind.Byte);
+        UnsafeStoreNode.store(o, 0, offset, x, CiKind.Byte);
     }
 
     public void putByteVolatile(Object o, long offset, byte x) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putByte(o, offset, x);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
     public short getShort(Object o, long offset) {
         @JavacBug(id = 6995200)
-        Short result = UnsafeLoadNode.load(o, 0, offset, Kind.Short);
+        Short result = UnsafeLoadNode.load(o, 0, offset, CiKind.Short);
         return result;
     }
 
     public short getShortVolatile(Object o, long offset) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_READ);
         short result = getShort(o, offset);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
     public void putShort(Object o, long offset, short x) {
-        UnsafeStoreNode.store(o, 0, offset, x, Kind.Short);
+        UnsafeStoreNode.store(o, 0, offset, x, CiKind.Short);
     }
 
     public void putShortVolatile(Object o, long offset, short x) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putShort(o, offset, x);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
     public char getChar(Object o, long offset) {
         @JavacBug(id = 6995200)
-        Character result = UnsafeLoadNode.load(o, 0, offset, Kind.Char);
+        Character result = UnsafeLoadNode.load(o, 0, offset, CiKind.Char);
         return result;
     }
 
     public char getCharVolatile(Object o, long offset) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_READ);
         char result = getChar(o, offset);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
     public void putChar(Object o, long offset, char x) {
-        UnsafeStoreNode.store(o, 0, offset, x, Kind.Char);
+        UnsafeStoreNode.store(o, 0, offset, x, CiKind.Char);
     }
 
     public void putCharVolatile(Object o, long offset, char x) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putChar(o, offset, x);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
     public long getLong(Object o, long offset) {
         @JavacBug(id = 6995200)
-        Long result = UnsafeLoadNode.load(o, 0, offset, Kind.Long);
+        Long result = UnsafeLoadNode.load(o, 0, offset, CiKind.Long);
         return result;
     }
 
     public long getLongVolatile(Object o, long offset) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_READ);
         long result = getLong(o, offset);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
     public void putLong(Object o, long offset, long x) {
-        UnsafeStoreNode.store(o, 0, offset, x, Kind.Long);
+        UnsafeStoreNode.store(o, 0, offset, x, CiKind.Long);
     }
 
     public void putLongVolatile(Object o, long offset, long x) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putLong(o, offset, x);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
     public float getFloat(Object o, long offset) {
         @JavacBug(id = 6995200)
-        Float result = UnsafeLoadNode.load(o, 0, offset, Kind.Float);
+        Float result = UnsafeLoadNode.load(o, 0, offset, CiKind.Float);
         return result;
     }
 
     public float getFloatVolatile(Object o, long offset) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_READ);
         float result = getFloat(o, offset);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
     public void putFloat(Object o, long offset, float x) {
-        UnsafeStoreNode.store(o, 0, offset, x, Kind.Float);
+        UnsafeStoreNode.store(o, 0, offset, x, CiKind.Float);
     }
 
     public void putFloatVolatile(Object o, long offset, float x) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putFloat(o, offset, x);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 
     public double getDouble(Object o, long offset) {
         @JavacBug(id = 6995200)
-        Double result = UnsafeLoadNode.load(o, 0, offset, Kind.Double);
+        Double result = UnsafeLoadNode.load(o, 0, offset, CiKind.Double);
         return result;
     }
 
     public double getDoubleVolatile(Object o, long offset) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_READ);
         double result = getDouble(o, offset);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_READ);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_READ);
         return result;
     }
 
     public void putDouble(Object o, long offset, double x) {
-        UnsafeStoreNode.store(o, 0, offset, x, Kind.Double);
+        UnsafeStoreNode.store(o, 0, offset, x, CiKind.Double);
     }
 
     public void putDoubleVolatile(Object o, long offset, double x) {
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
+        MembarNode.get(MemoryBarriers.JMM_PRE_VOLATILE_WRITE);
         putDouble(o, offset, x);
-        MembarNode.memoryBarrier(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
-    }
-
-    public void putInt(long address, int value) {
-        DirectStoreNode.store(address, value);
-    }
-
-    public void putLong(long address, long value) {
-        DirectStoreNode.store(address, value);
-    }
-
-    public int getInt(long address) {
-        return DirectReadNode.read(address, Kind.Int);
-    }
-
-    public long getLong(long address) {
-        return DirectReadNode.read(address, Kind.Long);
+        MembarNode.get(MemoryBarriers.JMM_POST_VOLATILE_WRITE);
     }
 }

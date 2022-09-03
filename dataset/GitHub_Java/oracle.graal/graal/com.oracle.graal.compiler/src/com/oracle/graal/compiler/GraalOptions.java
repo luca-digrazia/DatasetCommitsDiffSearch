@@ -84,7 +84,6 @@ public final class GraalOptions {
     public static int     MatureExecutionsTypeProfile        = 1;
 
     // comilation queue
-    public static int     TimedBootstrap                     = -1;
     public static boolean PriorityCompileQueue               = ____;
     public static int     SlowQueueCutoff                    = 100000;
     public static boolean SlowCompileThreads                 = ____;
@@ -143,7 +142,6 @@ public final class GraalOptions {
     public static boolean PrintAssembly                      = ____;
     public static boolean PrintCodeBytes                     = ____;
     public static int     PrintAssemblyBytesPerLine          = 16;
-    public static boolean PrintBailout                       = ____;
     public static int     TraceLinearScanLevel               = 0;
     public static boolean TraceRegisterAllocation            = false;
     public static int     TraceLIRGeneratorLevel             = 0;

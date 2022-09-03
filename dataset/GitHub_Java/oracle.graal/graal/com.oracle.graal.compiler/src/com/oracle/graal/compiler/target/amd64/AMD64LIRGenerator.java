@@ -74,7 +74,7 @@ import com.oracle.graal.nodes.java.*;
 /**
  * This class implements the X86-specific portion of the LIR generator.
  */
-public abstract class AMD64LIRGenerator extends LIRGenerator {
+public class AMD64LIRGenerator extends LIRGenerator {
 
     private static final CiRegisterValue RAX_I = AMD64.rax.asValue(CiKind.Int);
     private static final CiRegisterValue RAX_L = AMD64.rax.asValue(CiKind.Long);
@@ -97,6 +97,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     public AMD64LIRGenerator(Graph graph, RiRuntime runtime, CiTarget target, FrameMap frameMap, RiResolvedMethod method, LIR lir, RiXirGenerator xir) {
         super(graph, runtime, target, frameMap, method, lir, xir);
+        lir.methodEndMarker = new AMD64MethodEndStub();
         lir.spillMoveFactory = new AMD64SpillMoveFactory();
     }
 
