@@ -28,17 +28,18 @@ import static com.oracle.max.graal.alloc.util.ValueUtil.*;
 import java.util.*;
 
 import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.lir.*;
+import com.oracle.max.graal.compiler.lir.LIRInstruction.OperandFlag;
+import com.oracle.max.graal.compiler.lir.LIRInstruction.OperandMode;
 import com.oracle.max.graal.compiler.lir.LIRInstruction.ValueProcedure;
+import com.oracle.max.graal.compiler.lir.LIRPhiMapping.PhiValueProcedure;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
 
 public final class LIRVerifier {
     private final LIR lir;
     private final FrameMap frameMap;
-    private final RiRegisterConfig registerConfig;
 
     private final boolean beforeRegisterAllocation;
 
@@ -57,21 +58,31 @@ public final class LIRVerifier {
     }
 
     private boolean isAllocatableRegister(CiValue value) {
-        return isRegister(value) && registerConfig.getAttributesMap()[asRegister(value).number].isAllocatable;
+        return isRegister(value) && frameMap.registerConfig.getAttributesMap()[asRegister(value).number].isAllocatable;
     }
 
+    public static boolean verify(final LIRInstruction op) {
+        ValueProcedure allowedProc = new ValueProcedure() { @Override public CiValue doValue(CiValue value, OperandMode mode, EnumSet<OperandFlag> flags) { return allowed(op, value, mode, flags); } };
 
-    public static boolean verify(boolean beforeRegisterAllocation, LIR lir, FrameMap frameMap, RiRegisterConfig registerConfig) {
-        LIRVerifier verifier = new LIRVerifier(beforeRegisterAllocation, lir, frameMap, registerConfig);
+        op.forEachInput(allowedProc);
+        op.forEachAlive(allowedProc);
+        op.forEachState(allowedProc);
+        op.forEachTemp(allowedProc);
+        op.forEachOutput(allowedProc);
+        return true;
+    }
+
+    public static boolean verify(boolean beforeRegisterAllocation, LIR lir, FrameMap frameMap) {
+        LIRVerifier verifier = new LIRVerifier(beforeRegisterAllocation, lir, frameMap);
         verifier.verify();
         return true;
     }
 
-    private LIRVerifier(boolean beforeRegisterAllocation, LIR lir, FrameMap frameMap, RiRegisterConfig registerConfig) {
+
+    private LIRVerifier(boolean beforeRegisterAllocation, LIR lir, FrameMap frameMap) {
         this.beforeRegisterAllocation = beforeRegisterAllocation;
         this.lir = lir;
         this.frameMap = frameMap;
-        this.registerConfig = registerConfig;
         this.blockLiveOut = new BitSet[lir.linearScanOrder().size()];
         this.variableDefinitions = new Object[lir.numVariables()];
     }
@@ -81,12 +92,13 @@ public final class LIRVerifier {
 
     private LIRBlock curBlock;
     private Object curInstruction;
+    private BitSet curRegistersDefined;
 
     private void verify() {
-        ValueProcedure useProc =    new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return use(value); } };
-        ValueProcedure tempProc =   new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return def(value, true); } };
-        ValueProcedure outputProc = new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return def(value, false); } };
+        PhiValueProcedure useProc = new PhiValueProcedure() { @Override public CiValue doValue(CiValue value, OperandMode mode, EnumSet<OperandFlag> flags) { return use(value, mode, flags); } };
+        ValueProcedure defProc =    new ValueProcedure() {    @Override public CiValue doValue(CiValue value, OperandMode mode, EnumSet<OperandFlag> flags) { return def(value, mode, flags); } };
 
+        curRegistersDefined = new BitSet();
         for (LIRBlock block : lir.linearScanOrder()) {
             curBlock = block;
             curVariablesLive = new BitSet();
@@ -96,13 +108,10 @@ public final class LIRVerifier {
                 curVariablesLive.or(liveOutFor(block.dominator()));
             }
 
-            if (beforeRegisterAllocation) {
-                if (block.phis != null) {
-                    curInstruction = block.phis;
-                    block.phis.forEachOutput(outputProc);
-                }
-            } else {
-                assert block.phis == null;
+            if (block.phis != null) {
+                assert beforeRegisterAllocation;
+                curInstruction = block.phis;
+                block.phis.forEachOutput(defProc);
             }
 
             for (LIRInstruction op : block.lir()) {
@@ -110,24 +119,37 @@ public final class LIRVerifier {
 
                 op.forEachInput(useProc);
                 if (op.hasCall()) {
-                    for (CiRegister register : registerConfig.getCallerSaveRegisters()) {
+                    for (CiRegister register : frameMap.registerConfig.getCallerSaveRegisters()) {
                         curRegistersLive[register.number] = null;
                     }
                 }
+                curRegistersDefined.clear();
                 op.forEachAlive(useProc);
                 op.forEachState(useProc);
-                op.forEachTemp(tempProc);
-                op.forEachOutput(outputProc);
+                op.forEachTemp(defProc);
+                op.forEachOutput(defProc);
 
                 curInstruction = null;
+            }
+
+            for (LIRBlock sux : block.getLIRSuccessors()) {
+                if (sux.phis != null) {
+                    assert beforeRegisterAllocation;
+                    curInstruction = sux.phis;
+                    sux.phis.forEachInput(block, useProc);
+                }
             }
 
             setLiveOutFor(block, curVariablesLive);
         }
     }
 
-    private CiValue use(CiValue value) {
-        if (beforeRegisterAllocation && isVariable(value)) {
+    private CiValue use(CiValue value, OperandMode mode, EnumSet<OperandFlag> flags) {
+        allowed(curInstruction, value, mode, flags);
+
+        if (isVariable(value)) {
+            assert beforeRegisterAllocation;
+
             int variableIdx = asVariable(value).index;
             if (!curVariablesLive.get(variableIdx)) {
                 TTY.println("block %s  instruction %s", curBlock, curInstruction);
@@ -139,32 +161,28 @@ public final class LIRVerifier {
                 throw Util.shouldNotReachHere();
             }
 
-        } else if (beforeRegisterAllocation && isAllocatableRegister(value)) {
+        } else if (isAllocatableRegister(value)) {
             int regNum = asRegister(value).number;
-            if (curRegistersLive[regNum] != value) {
+            if (mode == OperandMode.Alive) {
+                curRegistersDefined.set(regNum);
+            }
+
+            if (beforeRegisterAllocation && curRegistersLive[regNum] != value) {
                 TTY.println("block %s  instruction %s", curBlock, curInstruction);
                 TTY.println("live registers: %s", Arrays.toString(curRegistersLive));
                 TTY.println("ERROR: Use of fixed register %s that is not defined in this block", value);
                 throw Util.shouldNotReachHere();
             }
-        } else if (isRegister(value)) {
-            // Register usage cannot be checked.
-        } else if (isStackSlot(value)) {
-            // TODO check if stack slot is allowed for this operand.
-        } else if (isConstant(value)) {
-            // TODO check if constant is allowed for this operand.
-        } else if (value == CiValue.IllegalValue) {
-            // TODO check if illegal is allowed for this operand.
-        } else {
-            TTY.println("block %s  instruction %s", curBlock, curInstruction);
-            TTY.println("Unexpected value: %s %s", value.getClass().getSimpleName(), value);
-            throw Util.shouldNotReachHere();
         }
         return value;
     }
 
-    private CiValue def(CiValue value, boolean isTemp) {
-        if (beforeRegisterAllocation && isVariable(value)) {
+    private CiValue def(CiValue value, OperandMode mode, EnumSet<OperandFlag> flags) {
+        allowed(curInstruction, value, mode, flags);
+
+        if (isVariable(value)) {
+            assert beforeRegisterAllocation;
+
             int variableIdx = asVariable(value).index;
             if (variableDefinitions[variableIdx] != null) {
                 TTY.println("block %s  instruction %s", curBlock, curInstruction);
@@ -176,26 +194,41 @@ public final class LIRVerifier {
             assert curInstruction != null;
             variableDefinitions[variableIdx] = curInstruction;
             assert !curVariablesLive.get(variableIdx);
-            if (!isTemp) {
+            if (mode == OperandMode.Output) {
                 curVariablesLive.set(variableIdx);
             }
 
-        } else if (beforeRegisterAllocation && isAllocatableRegister(value)) {
+        } else if (isAllocatableRegister(value)) {
             int regNum = asRegister(value).number;
-            if (isTemp) {
-                curRegistersLive[regNum] = null;
-            } else {
-                curRegistersLive[regNum] = value;
+            if (curRegistersDefined.get(regNum)) {
+                TTY.println("block %s  instruction %s", curBlock, curInstruction);
+                TTY.println("ERROR: Same register defined twice in the same instruction: %s", value);
+                throw Util.shouldNotReachHere();
             }
-        } else if (isRegister(value)) {
-            // Register definition cannot be checked.
-        } else if (isStackSlot(value)) {
-            // TODO check if stack slot is allowed for this operand.
-        } else {
-            TTY.println("block %s  instruction %s", curBlock, curInstruction);
-            TTY.println("Unexpected value: %s %s", value.getClass().getSimpleName(), value);
-            throw Util.shouldNotReachHere();
+            curRegistersDefined.set(regNum);
+
+            if (beforeRegisterAllocation) {
+                if (mode == OperandMode.Output) {
+                    curRegistersLive[regNum] = value;
+                } else {
+                    curRegistersLive[regNum] = null;
+                }
+            }
         }
         return value;
+    }
+
+    private static CiValue allowed(Object op, CiValue value, OperandMode mode, EnumSet<OperandFlag> flags) {
+        if ((isVariable(value)  && flags.contains(OperandFlag.Register)) ||
+            (isRegister(value)  && flags.contains(OperandFlag.Register)) ||
+            (isStackSlot(value) && flags.contains(OperandFlag.Stack)) ||
+            (isConstant(value)  && flags.contains(OperandFlag.Constant) && mode != OperandMode.Output) ||
+            (isIllegal(value)   && flags.contains(OperandFlag.Illegal))) {
+            return value;
+        }
+        TTY.println("instruction %s", op);
+        TTY.println("mode: %s  flags: %s", mode, flags);
+        TTY.println("Unexpected value: %s %s", value.getClass().getSimpleName(), value);
+        throw Util.shouldNotReachHere();
     }
 }
