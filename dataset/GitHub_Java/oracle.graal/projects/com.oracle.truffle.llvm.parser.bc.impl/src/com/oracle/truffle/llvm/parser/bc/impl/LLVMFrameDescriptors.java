@@ -40,46 +40,46 @@ import java.util.Set;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.AllocateInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.BinaryOperationInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.BranchInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.CallInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.CastInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.CompareInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ConditionalBranchInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ExtractElementInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ExtractValueInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.GetElementPointerInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.IndirectBranchInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.InsertElementInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.InsertValueInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.LoadInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.PhiInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ReturnInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.SelectInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ShuffleVectorInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.StoreInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.SwitchInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.SwitchOldInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.UnreachableInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.ValueInstruction;
-import com.oracle.truffle.llvm.parser.base.model.symbols.instructions.VoidCallInstruction;
 import com.oracle.truffle.llvm.parser.bc.impl.LLVMControlFlowAnalysis.LLVMControlFlow;
 
+import com.oracle.truffle.llvm.parser.bc.impl.util.LLVMBitcodeTypeHelper;
 import com.oracle.truffle.llvm.parser.bc.impl.util.LLVMFrameIDs;
-import com.oracle.truffle.llvm.parser.base.model.blocks.InstructionBlock;
-import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDeclaration;
-import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDefinition;
-import com.oracle.truffle.llvm.parser.base.model.functions.FunctionParameter;
-import com.oracle.truffle.llvm.parser.base.model.visitors.FunctionVisitor;
-import com.oracle.truffle.llvm.parser.base.model.globals.GlobalAlias;
-import com.oracle.truffle.llvm.parser.base.model.globals.GlobalConstant;
-import com.oracle.truffle.llvm.parser.base.model.globals.GlobalVariable;
-import com.oracle.truffle.llvm.parser.base.model.visitors.InstructionVisitor;
-import com.oracle.truffle.llvm.parser.base.model.Model;
-import com.oracle.truffle.llvm.parser.base.model.visitors.ModelVisitor;
-import com.oracle.truffle.llvm.parser.base.model.types.MetaType;
-import com.oracle.truffle.llvm.parser.base.model.types.Type;
+import uk.ac.man.cs.llvm.ir.model.InstructionBlock;
+import uk.ac.man.cs.llvm.ir.model.FunctionDeclaration;
+import uk.ac.man.cs.llvm.ir.model.FunctionDefinition;
+import uk.ac.man.cs.llvm.ir.model.FunctionParameter;
+import uk.ac.man.cs.llvm.ir.model.FunctionVisitor;
+import uk.ac.man.cs.llvm.ir.model.GlobalAlias;
+import uk.ac.man.cs.llvm.ir.model.GlobalConstant;
+import uk.ac.man.cs.llvm.ir.model.GlobalVariable;
+import uk.ac.man.cs.llvm.ir.model.InstructionVisitor;
+import uk.ac.man.cs.llvm.ir.model.Model;
+import uk.ac.man.cs.llvm.ir.model.ModelVisitor;
+import uk.ac.man.cs.llvm.ir.model.elements.AllocateInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.BinaryOperationInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.BranchInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.CallInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.CastInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.CompareInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.ConditionalBranchInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.ExtractElementInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.ExtractValueInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.GetElementPointerInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.IndirectBranchInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.InsertElementInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.InsertValueInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.LoadInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.PhiInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.ReturnInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.SelectInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.ShuffleVectorInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.StoreInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.SwitchInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.SwitchOldInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.UnreachableInstruction;
+import uk.ac.man.cs.llvm.ir.model.elements.VoidCallInstruction;
+import uk.ac.man.cs.llvm.ir.types.MetaType;
+import uk.ac.man.cs.llvm.ir.types.Type;
 
 public final class LLVMFrameDescriptors {
 
@@ -159,7 +159,7 @@ public final class LLVMFrameDescriptors {
             frame.addFrameSlot(LLVMFrameIDs.STACK_ADDRESS_FRAME_SLOT_ID, FrameSlotKind.Object);
 
             for (FunctionParameter parameter : method.getParameters()) {
-                frame.addFrameSlot(parameter.getName(), parameter.getType().getFrameSlotKind());
+                frame.addFrameSlot(parameter.getName(), LLVMBitcodeTypeHelper.toFrameSlotKind(parameter.getType()));
             }
 
             LLVMFrameDescriptorsFunctionVisitor visitor = new LLVMFrameDescriptorsFunctionVisitor(frame, cfg.dependencies(method.getName()));
@@ -272,12 +272,12 @@ public final class LLVMFrameDescriptors {
 
         @Override
         public void visit(AllocateInstruction allocate) {
-            findOrAddFrameSlot(allocate);
+            frame.findOrAddFrameSlot(allocate.getName(), LLVMBitcodeTypeHelper.toFrameSlotKind(allocate.getType()));
         }
 
         @Override
         public void visit(BinaryOperationInstruction operation) {
-            findOrAddFrameSlot(operation);
+            frame.findOrAddFrameSlot(operation.getName(), LLVMBitcodeTypeHelper.toFrameSlotKind(operation.getType()));
         }
 
         @Override
@@ -286,17 +286,17 @@ public final class LLVMFrameDescriptors {
 
         @Override
         public void visit(CallInstruction call) {
-            findOrAddFrameSlot(call);
+            frame.findOrAddFrameSlot(call.getName(), LLVMBitcodeTypeHelper.toFrameSlotKind(call.getType()));
         }
 
         @Override
         public void visit(CastInstruction cast) {
-            findOrAddFrameSlot(cast);
+            frame.findOrAddFrameSlot(cast.getName(), LLVMBitcodeTypeHelper.toFrameSlotKind(cast.getType()));
         }
 
         @Override
         public void visit(CompareInstruction compare) {
-            findOrAddFrameSlot(compare);
+            frame.findOrAddFrameSlot(compare.getName(), LLVMBitcodeTypeHelper.toFrameSlotKind(compare.getType()));
         }
 
         @Override
@@ -305,17 +305,17 @@ public final class LLVMFrameDescriptors {
 
         @Override
         public void visit(ExtractElementInstruction extract) {
-            findOrAddFrameSlot(extract);
+            frame.findOrAddFrameSlot(extract.getName(), LLVMBitcodeTypeHelper.toFrameSlotKind(extract.getType()));
         }
 
         @Override
         public void visit(ExtractValueInstruction extract) {
-            findOrAddFrameSlot(extract);
+            frame.findOrAddFrameSlot(extract.getName(), LLVMBitcodeTypeHelper.toFrameSlotKind(extract.getType()));
         }
 
         @Override
         public void visit(GetElementPointerInstruction gep) {
-            findOrAddFrameSlot(gep);
+            frame.findOrAddFrameSlot(gep.getName(), LLVMBitcodeTypeHelper.toFrameSlotKind(gep.getType()));
         }
 
         @Override
@@ -324,22 +324,22 @@ public final class LLVMFrameDescriptors {
 
         @Override
         public void visit(InsertElementInstruction insert) {
-            findOrAddFrameSlot(insert);
+            frame.findOrAddFrameSlot(insert.getName(), LLVMBitcodeTypeHelper.toFrameSlotKind(insert.getType()));
         }
 
         @Override
         public void visit(InsertValueInstruction insert) {
-            findOrAddFrameSlot(insert);
+            frame.findOrAddFrameSlot(insert.getName(), LLVMBitcodeTypeHelper.toFrameSlotKind(insert.getType()));
         }
 
         @Override
         public void visit(LoadInstruction load) {
-            findOrAddFrameSlot(load);
+            frame.findOrAddFrameSlot(load.getName(), LLVMBitcodeTypeHelper.toFrameSlotKind(load.getType()));
         }
 
         @Override
         public void visit(PhiInstruction phi) {
-            findOrAddFrameSlot(phi);
+            frame.findOrAddFrameSlot(phi.getName(), LLVMBitcodeTypeHelper.toFrameSlotKind(phi.getType()));
         }
 
         @Override
@@ -348,12 +348,12 @@ public final class LLVMFrameDescriptors {
 
         @Override
         public void visit(SelectInstruction select) {
-            findOrAddFrameSlot(select);
+            frame.findOrAddFrameSlot(select.getName(), LLVMBitcodeTypeHelper.toFrameSlotKind(select.getType()));
         }
 
         @Override
         public void visit(ShuffleVectorInstruction shuffle) {
-            findOrAddFrameSlot(shuffle);
+            frame.findOrAddFrameSlot(shuffle.getName(), LLVMBitcodeTypeHelper.toFrameSlotKind(shuffle.getType()));
         }
 
         @Override
@@ -374,10 +374,6 @@ public final class LLVMFrameDescriptors {
 
         @Override
         public void visit(VoidCallInstruction call) {
-        }
-
-        private void findOrAddFrameSlot(ValueInstruction val) {
-            frame.findOrAddFrameSlot(val.getName(), val.getType().getFrameSlotKind());
         }
     }
 }
