@@ -65,7 +65,11 @@ public final class SLStatementWrapperNode extends SLStatementNode implements Wra
     }
 
     public Probe getProbe() {
-        return probeNode.getProbe();
+        try {
+            return probeNode.getProbe();
+        } catch (IllegalStateException e) {
+            throw new IllegalStateException("A lite-Probed wrapper has no explicit Probe");
+        }
     }
 
     @Override

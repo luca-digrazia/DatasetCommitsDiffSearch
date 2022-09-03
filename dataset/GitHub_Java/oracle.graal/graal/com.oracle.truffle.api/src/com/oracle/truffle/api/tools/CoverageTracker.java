@@ -27,11 +27,13 @@ package com.oracle.truffle.api.tools;
 import java.io.*;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.concurrent.atomic.*;
 
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.instrument.impl.*;
 import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.nodes.Node.Child;
 import com.oracle.truffle.api.source.*;
 
 /**
@@ -158,7 +160,7 @@ public final class CoverageTracker extends InstrumentationTool {
                 curSource = source;
                 curLineTable = new Long[source.getLineCount()];
             }
-            curLineTable[lineNo - 1] = entry.getValue().count;
+            curLineTable[lineNo - 1] = entry.getValue().count.longValue();
         }
         if (curSource != null) {
             result.put(curSource, curLineTable);
@@ -204,7 +206,7 @@ public final class CoverageTracker extends InstrumentationTool {
             while (curLineNo < lineNo) {
                 displayLine(out, null, curSource, curLineNo++);
             }
-            displayLine(out, entry.getValue(), curSource, curLineNo++);
+            displayLine(out, entry.getValue().count, curSource, curLineNo++);
         }
         if (curSource != null) {
             while (curLineNo <= curSource.getLineCount()) {
@@ -213,11 +215,11 @@ public final class CoverageTracker extends InstrumentationTool {
         }
     }
 
-    private static void displayLine(PrintStream out, CoverageRecord record, Source source, int lineNo) {
-        if (record == null) {
+    private static void displayLine(PrintStream out, AtomicLong value, Source source, int lineNo) {
+        if (value == null) {
             out.format("%14s", " ");
         } else {
-            out.format("(%12d)", record.count);
+            out.format("(%12d)", value.longValue());
         }
         out.format(" %3d: ", lineNo);
         out.println(source.getCode(lineNo));
@@ -225,25 +227,33 @@ public final class CoverageTracker extends InstrumentationTool {
 
     /**
      * A listener for events at each instrumented AST location. This listener counts
-     * "execution calls" to the instrumented node.
+     * "execution calls" to the instrumented node and is <em>stateful</em>. State in listeners must
+     * be considered carefully since ASTs, along with all instrumentation (including event listener
+     * such as this) are routinely cloned by the Truffle runtime. AST cloning is <em>shallow</em>
+     * (for non- {@link Child} nodes), so in this case the actual count <em>is shared</em> among all
+     * the clones; the count is also held in a table indexed by source line.
+     * <p>
+     * In contrast, a primitive field would <em>not</em> be shared among clones and resulting counts
+     * would not be accurate.
      */
-    private final class CoverageRecord extends DefaultEventListener {
+    private final class CoverageEventListener extends DefaultEventListener {
 
-        private final SourceSection srcSection; // The text of the code being counted
-        private Instrument instrument;  // The attached Instrument, in case need to remove.
-        private long count = 0;
+        /**
+         * Shared by all clones of the associated instrument and by the table of counters for the
+         * line.
+         */
+        private final AtomicLong count;
 
-        CoverageRecord(SourceSection srcSection) {
-            this.srcSection = srcSection;
+        CoverageEventListener(AtomicLong count) {
+            this.count = count;
         }
 
         @Override
         public void enter(Node node, VirtualFrame vFrame) {
             if (isEnabled()) {
-                count++;
+                count.getAndIncrement();
             }
         }
-
     }
 
     private static final class LineLocationEntryComparator implements Comparator<Entry<LineLocation, CoverageRecord>> {
@@ -272,22 +282,34 @@ public final class CoverageTracker extends InstrumentationTool {
                     if (record != null) {
                         // Another node starts on same line; count only the first (textually)
                         if (srcSection.getCharIndex() > record.srcSection.getCharIndex()) {
-                            // Existing record, corresponds to code earlier on line
+                            // Record already in place, corresponds to code earlier on line
                             return;
                         } else {
-                            // Existing record, corresponds to code at a later position; replace it
+                            // Record already in place, corresponds to later code; replace it
                             record.instrument.dispose();
                         }
                     }
-
-                    final CoverageRecord coverage = new CoverageRecord(srcSection);
-                    final Instrument instrument = Instrument.create(coverage, CoverageTracker.class.getSimpleName());
-                    coverage.instrument = instrument;
+                    final AtomicLong count = new AtomicLong();
+                    final CoverageEventListener eventListener = new CoverageEventListener(count);
+                    final Instrument instrument = Instrument.create(eventListener, CoverageTracker.class.getSimpleName());
                     instruments.add(instrument);
                     probe.attach(instrument);
-                    coverageMap.put(lineLocation, coverage);
+                    coverageMap.put(lineLocation, new CoverageRecord(srcSection, instrument, count));
                 }
             }
+        }
+    }
+
+    private class CoverageRecord {
+
+        final SourceSection srcSection; // The text of the code being counted
+        final Instrument instrument;  // The attached Instrument, in case need to remove.
+        final AtomicLong count;
+
+        CoverageRecord(SourceSection srcSection, Instrument instrument, AtomicLong count) {
+            this.srcSection = srcSection;
+            this.instrument = instrument;
+            this.count = count;
         }
     }
 
