@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -93,20 +91,17 @@ public abstract class SectionName {
     // not a typo!
     public static final SectionName APPLE_NAMESPACE = new ProgbitsSectionName("apple_namespac");
     public static final SectionName APPLE_OBJC = new ProgbitsSectionName("apple_objc");
-    public static final SectionName LLVM_STACKMAPS = new ProgbitsSectionName("llvm_stackmaps");
 
     private static final SectionName[] myValues;
 
     static {
-        myValues = new SectionName[]{DATA, RODATA, TEXT, BSS, APPLE_NAMES, APPLE_TYPES, APPLE_NAMESPACE, APPLE_OBJC, LLVM_STACKMAPS};
+        myValues = new SectionName[]{DATA, RODATA, TEXT, BSS, APPLE_NAMES, APPLE_TYPES, APPLE_NAMESPACE, APPLE_OBJC};
     }
 
     private static String getFormatPrefix(ObjectFile.Format f) {
         switch (f) {
             case ELF:
                 return ".";
-            case PECOFF:
-                return "";
             case MACH_O:
                 return "__";
             default:
@@ -146,7 +141,8 @@ public abstract class SectionName {
              * format-dependent names, for all formats.
              */
             for (Format f : ObjectFile.Format.values()) {
-                NAMES_MAP.put(name.getFormatDependentName(f), name);
+                SectionName replaced = NAMES_MAP.put(name.getFormatDependentName(f), name);
+                assert replaced == null;
             }
         }
     }

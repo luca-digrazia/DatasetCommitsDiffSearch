@@ -86,8 +86,6 @@ public abstract class NativeBootImage extends AbstractBootImage {
 
     private static final long RWDATA_CGLOBALS_PARTITION_OFFSET = 0;
 
-    public static final String DEFAULT_HEADER_FILE_NAME = "graal_isolate.h";
-
     @Override
     public Section getTextSection() {
         assert textSection != null;
@@ -124,12 +122,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
             writer.appendln("#ifndef " + imageHeaderGuard);
             writer.appendln("#define " + imageHeaderGuard);
 
-            String preamblePath = NativeImageOptions.PreamblePath.getValue();
-            if (preamblePath != null) {
-                NativeImageHeaderPreamble.read(preamblePath).forEach(writer::appendln);
-            } else {
-                writer.appendln("#include <" + DEFAULT_HEADER_FILE_NAME + ">");
-            }
+            NativeImageHeaderPreamble.read().forEach(writer::appendln);
 
             if (NativeImageOptions.getCStandard() != CStandards.C89) {
                 writer.appendln("#include <stdbool.h>");
@@ -207,10 +200,6 @@ public abstract class NativeBootImage extends AbstractBootImage {
         return data instanceof CEntryPointData && ((CEntryPointData) data).getPublishAs() == Publish.SymbolAndHeader;
     }
 
-    private ObjectFile.Symbol defineDataSymbol(String name, Element section, long position) {
-        return objectFile.createDefinedSymbol(name, section, position, wordSize, false, true);
-    }
-
     /**
      * Create the image sections for code, constants, and the heap.
      */
@@ -226,8 +215,8 @@ public abstract class NativeBootImage extends AbstractBootImage {
             final int roConstantsSize = codeCache.getAlignedConstantsSize();
             final int cglobalsSize = ConfigurationValues.getObjectLayout().alignUp(cGlobals.getSize());
 
-            long roSectionSize = roConstantsSize;
-            long rwSectionSize = cglobalsSize;
+            int roSectionSize = roConstantsSize;
+            int rwSectionSize = cglobalsSize;
             if (!SubstrateOptions.UseHeapBaseRegister.getValue()) {
                 roSectionSize += heap.getReadOnlySectionSize();
                 rwSectionSize += heap.getWritableSectionSize();
@@ -252,20 +241,20 @@ public abstract class NativeBootImage extends AbstractBootImage {
             rwDataSection = objectFile.newProgbitsSection(rwDataSectionName, objectFile.getPageSize(), true, false, rwDataImpl);
 
             // Define symbols for the sections.
-            objectFile.createDefinedSymbol(textSection.getName(), textSection, 0, 0, false, false);
-            objectFile.createDefinedSymbol("__svm_text_end", textSection, codeCache.getCodeCacheSize(), 0, false, true);
-            objectFile.createDefinedSymbol(roDataSection.getName(), roDataSection, 0, 0, false, false);
-            objectFile.createDefinedSymbol(rwDataSection.getName(), rwDataSection, 0, 0, false, false);
+            objectFile.createDefinedSymbol(textSection.getName(), textSection.getElement(), 0, 0, false, false);
+            objectFile.createDefinedSymbol("__svm_text_end", textSection.getElement(), codeCache.getCodeCacheSize(), 0, false, true);
+            objectFile.createDefinedSymbol(roDataSection.getName(), roDataSection.getElement(), 0, 0, false, false);
+            objectFile.createDefinedSymbol(rwDataSection.getName(), rwDataSection.getElement(), 0, 0, false, false);
 
             final long constantsPartitionOffset = 0L;
             final long roConstantsEndOffset = constantsPartitionOffset + roConstantsSize;
             final long rwGlobalsEndOffset = RWDATA_CGLOBALS_PARTITION_OFFSET + ConfigurationValues.getObjectLayout().alignUp(cGlobals.getSize());
 
-            final RelocatableBuffer heapSectionBuffer;
-            final ProgbitsSectionImpl heapSectionImpl;
+            RelocatableBuffer heapSectionBuffer = null;
+            ProgbitsSectionImpl heapSectionImpl = null;
             if (SubstrateOptions.UseHeapBaseRegister.getValue()) {
                 boolean writable = !SubstrateOptions.SpawnIsolates.getValue();
-                final long heapSize = heap.getReadOnlySectionSize() + heap.getWritableSectionSize();
+                int heapSize = heap.getReadOnlySectionSize() + heap.getWritableSectionSize();
 
                 heapSectionBuffer = RelocatableBuffer.factory("heap", heapSize, objectFile.getByteOrder());
                 heapSectionImpl = new BasicProgbitsSectionImpl(heapSectionBuffer.getBytes());
@@ -274,11 +263,9 @@ public abstract class NativeBootImage extends AbstractBootImage {
 
                 heap.setReadOnlySection(heapSection.getName(), 0);
                 heap.setWritableSection(heapSection.getName(), heap.getReadOnlySectionSize());
-                defineDataSymbol(PosixIsolates.IMAGE_HEAP_BEGIN_SYMBOL_NAME, heapSection, 0);
-                defineDataSymbol(PosixIsolates.IMAGE_HEAP_END_SYMBOL_NAME, heapSection, heapSize);
+                objectFile.createDefinedDataSymbol(PosixIsolates.IMAGE_HEAP_BEGIN_SYMBOL_NAME, heapSection.getElement(), 0);
+                objectFile.createDefinedDataSymbol(PosixIsolates.IMAGE_HEAP_END_SYMBOL_NAME, heapSection.getElement(), heapSize);
             } else {
-                heapSectionBuffer = null;
-                heapSectionImpl = null;
                 heap.setReadOnlySection(roDataSection.getName(), roConstantsEndOffset);
                 heap.setWritableSection(rwDataSection.getName(), rwGlobalsEndOffset);
             }
@@ -289,9 +276,8 @@ public abstract class NativeBootImage extends AbstractBootImage {
             // - The constants go at the beginning of the read-only data section.
             codeCache.writeConstants(roDataBuffer);
             // - Non-heap global data goes at the beginning of the read-write data section.
-            cGlobals.writeData(rwDataBuffer, (offset, symbolName) -> defineDataSymbol(symbolName, rwDataSection, offset + RWDATA_CGLOBALS_PARTITION_OFFSET));
-            defineDataSymbol(CGlobalDataInfo.CGLOBALDATA_BASE_SYMBOL_NAME, rwDataSection, RWDATA_CGLOBALS_PARTITION_OFFSET);
-
+            cGlobals.writeData(rwDataBuffer, (offset, symbolName) -> objectFile.createDefinedDataSymbol(symbolName, rwDataSection, Math.toIntExact(offset + RWDATA_CGLOBALS_PARTITION_OFFSET)));
+            objectFile.createDefinedDataSymbol(CGlobalDataInfo.CGLOBALDATA_BASE_SYMBOL_NAME, rwDataSection.getElement(), Math.toIntExact(RWDATA_CGLOBALS_PARTITION_OFFSET));
             // - Write the heap, either to its own section, or to the ro and rw data sections.
             if (heapSectionBuffer != null) {
                 heap.writeHeap(debug, heapSectionBuffer, heapSectionBuffer);
@@ -422,7 +408,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
             sectionImpl.markRelocationSite(offset, info.getRelocationSize(), info.getRelocationKind(), rwDataSection.getName(), false, addend);
             if (dataInfo.isSymbolReference()) { // create relocation for referenced symbol
                 if (objectFile.getSymbolTable().getSymbol(data.symbolName) == null) {
-                    objectFile.createUndefinedSymbol(data.symbolName, 0, true);
+                    objectFile.createUndefinedSymbol(data.symbolName, true);
                 }
                 ProgbitsSectionImpl baseSectionImpl = (ProgbitsSectionImpl) rwDataSection.getImpl();
                 int offsetInSection = Math.toIntExact(RWDATA_CGLOBALS_PARTITION_OFFSET + dataInfo.getOffset());
@@ -672,13 +658,8 @@ public abstract class NativeBootImage extends AbstractBootImage {
             return getContent();
         }
 
-        private void defineMethodSymbol(String name, Element section, HostedMethod method, CompilationResult result) {
-            final int size = result == null ? 0 : result.getTargetCodeSize();
-            objectFile.createDefinedSymbol(name, section, method.getCodeAddressOffset(), size, true, true);
-        }
-
         @SuppressWarnings("try")
-        private void writeTextSection(DebugContext debug, final Section textSection, final List<HostedMethod> entryPoints) {
+        public void writeTextSection(DebugContext debug, final Section textSection, final List<HostedMethod> entryPoints) {
             try (Indent indent = debug.logAndIndent("TextImpl.writeTextSection")) {
                 /*
                  * Write the text content. For slightly complicated reasons, we now call
@@ -735,7 +716,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
                     } else {
                         methodsBySignature.put(signatureString, current);
                     }
-                    defineMethodSymbol(symName, textSection, current, ent.getValue());
+                    objectFile.createDefinedSymbol(symName, textSection, current.getCodeAddressOffset(), ent.getValue().getTargetCode().length, true, true);
                 }
                 // 2. fq without return type -- only for entry points!
                 for (Map.Entry<String, HostedMethod> ent : methodsBySignature.entrySet()) {
@@ -750,13 +731,15 @@ public abstract class NativeBootImage extends AbstractBootImage {
                     if (entryPointIndex != -1) {
                         final String mangledSignature = mangleName(ent.getKey());
                         assert mangledSignature.equals(globalSymbolNameForMethod(method));
-                        defineMethodSymbol(mangledSignature, textSection, method, null);
+                        final CompilationResult methodWithSignature = codeCache.getCompilations().get(method);
+                        objectFile.createDefinedSymbol(mangledSignature, textSection, method.getCodeAddressOffset(), 0, true, true);
 
                         // 3. Also create @CEntryPoint linkage names in this case
                         if (cEntryData != null) {
                             assert !cEntryData.getSymbolName().isEmpty();
                             // no need for mangling: name must already be a valid external name
-                            defineMethodSymbol(cEntryData.getSymbolName(), textSection, method, codeCache.getCompilations().get(method));
+                            objectFile.createDefinedSymbol(cEntryData.getSymbolName(), textSection, method.getCodeAddressOffset(),
+                                            methodWithSignature.getTargetCode().length, true, true);
                         }
                     }
                 }
