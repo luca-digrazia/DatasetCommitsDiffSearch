@@ -32,11 +32,10 @@ import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.ServiceLoader;
 
 import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.options.GraalJarsOptionDescriptorsProvider;
 import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionDescriptors;
 import com.oracle.graal.options.OptionType;
 import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.options.OptionsParser;
@@ -125,9 +124,9 @@ public abstract class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFa
     private static synchronized void initializeOptions() {
         if (!optionsInitialized) {
             try (InitTimer t = timer("InitializeOptions")) {
-                ServiceLoader<OptionDescriptors> loader = ServiceLoader.load(OptionDescriptors.class, OptionDescriptors.class.getClassLoader());
-
                 boolean jdk8OrEarlier = System.getProperty("java.specification.version").compareTo("1.9") < 0;
+                GraalJarsOptionDescriptorsProvider odp = jdk8OrEarlier ? GraalJarsOptionDescriptorsProvider.create() : null;
+
                 Properties savedProps = getSavedProperties(jdk8OrEarlier);
                 String optionsFile = savedProps.getProperty(GRAAL_OPTIONS_FILE_PROPERTY_NAME);
 
@@ -142,7 +141,7 @@ public abstract class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFa
                                 optionSettings.put((String) e.getKey(), (String) e.getValue());
                             }
                             try {
-                                OptionsParser.parseOptions(optionSettings, null, loader);
+                                OptionsParser.parseOptions(optionSettings, null, odp, null);
                             } catch (Throwable e) {
                                 throw new InternalError("Error parsing an option from " + graalOptions, e);
                             }
@@ -165,7 +164,7 @@ public abstract class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFa
                     }
                 }
 
-                OptionsParser.parseOptions(optionSettings, null, loader);
+                OptionsParser.parseOptions(optionSettings, null, odp, null);
             }
             optionsInitialized = true;
         }
