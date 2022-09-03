@@ -91,11 +91,12 @@ public final class ForeignAccess {
      * @throws IllegalStateException if any error occurred while accessing the <code>receiver</code>
      *             object
      */
-    @SuppressWarnings("deprecation")
-    @Deprecated
     public static Object execute(Node foreignNode, VirtualFrame frame, TruffleObject receiver, Object... arguments) {
-        ForeignObjectAccessHeadNode fn = (ForeignObjectAccessHeadNode) foreignNode;
-        return fn.executeForeign(frame, receiver, arguments);
+        try {
+            return send(foreignNode, frame, receiver, arguments);
+        } catch (InteropException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /**

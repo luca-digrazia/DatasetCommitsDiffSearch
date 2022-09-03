@@ -45,7 +45,6 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
@@ -125,13 +124,4 @@ public abstract class SLInvokeNode extends SLExpressionNode {
             return SLNull.SINGLETON;
         }
     }
-
-    @Override
-    protected boolean isTaggedWith(Class<?> tag) {
-        if (tag == StandardTags.CallTag.class) {
-            return true;
-        }
-        return super.isTaggedWith(tag);
-    }
-
 }
