@@ -55,7 +55,6 @@ abstract class Content {
         return getCode().length();
     }
 
-    @SuppressWarnings("unused")
     void appendCode(CharSequence chars) {
         throw new UnsupportedOperationException();
     }
