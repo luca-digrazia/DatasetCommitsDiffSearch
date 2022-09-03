@@ -197,38 +197,7 @@ public class FlatNodeGenFactory {
 
     /* Whether a new class should be generated for specialization instance fields. */
     private static boolean useSpecializationClass(SpecializationData specialization) {
-        int size = 0;
-        for (CacheExpression expression : specialization.getCaches()) {
-            TypeMirror type = expression.getParameter().getType();
-            if (ElementUtils.isPrimitive(type)) {
-                switch (type.getKind()) {
-                    case BOOLEAN:
-                    case BYTE:
-                        size++;
-                        break;
-                    case CHAR:
-                    case SHORT:
-                        size += 2;
-                        break;
-                    case INT:
-                    case FLOAT:
-                        size += 4;
-                        break;
-                    case LONG:
-                    case DOUBLE:
-                        size += 8;
-                        break;
-                }
-            } else {
-                size += 4;
-            }
-        }
-        // if we exceed the size of two references we generate a class
-        if (size > 8) {
-            return true;
-        }
-        // we need a data class if we need to support multiple specialization instances
-        return specialization.getMaximumNumberOfInstances() > 1;
+        return specialization.hasMultipleInstances() && (specialization.getCaches().size() > 3 || specialization.getMaximumNumberOfInstances() > 1);
     }
 
     private static boolean needsFrame(List<SpecializationData> specializations) {
@@ -423,9 +392,7 @@ public class FlatNodeGenFactory {
                 Class<?> annotationType;
                 if (useNode) {
                     annotationType = Child.class;
-                    if (specialization.getMaximumNumberOfInstances() > 1) {
-                        cacheType.add(createNodeField(null, cacheType.asType(), "next_", Child.class));
-                    }
+                    cacheType.add(createNodeField(null, cacheType.asType(), "next_", Child.class));
 
                     CodeExecutableElement getNodeCost = new CodeExecutableElement(modifiers(PUBLIC),
                                     context.getType(NodeCost.class), "getCost");
@@ -434,9 +401,7 @@ public class FlatNodeGenFactory {
                     cacheType.add(getNodeCost);
                 } else {
                     annotationType = CompilationFinal.class;
-                    if (specialization.getMaximumNumberOfInstances() > 1) {
-                        cacheType.add(createNodeField(null, cacheType.asType(), "next_", null, FINAL));
-                    }
+                    cacheType.add(createNodeField(null, cacheType.asType(), "next_", null, FINAL));
                 }
 
                 cacheType.getEnclosedElements().addAll(fields);
@@ -1255,7 +1220,7 @@ public class FlatNodeGenFactory {
 
                 List<CodeTree> additionalChecks = new ArrayList<>();
                 for (SpecializationData specialization : reachableSpecializations) {
-                    if (useSpecializationClass(specialization) && specialization.getMaximumNumberOfInstances() > 1) {
+                    if (useSpecializationClass(specialization)) {
                         CodeTree check = builder.create().string("this.", createSpecializationFieldName(specialization), " == null || ", "this.", createSpecializationFieldName(specialization),
                                         ".next_ == null").build();
                         additionalChecks.add(check);
@@ -1906,19 +1871,19 @@ public class FlatNodeGenFactory {
                         duplicationGuard = combineTrees(" && ", assumptionGuards);
                     }
 
-                    String specializationLocalName = createSpecializationLocalName(specialization);
+                    String name = createSpecializationLocalName(specialization);
                     if (useSpecializationClass) {
                         if (specialization.getMaximumNumberOfInstances() > 1) {
                             builder.declaration("int", countName, CodeTreeBuilder.singleString("0"));
                         }
-                        builder.declaration(createSpecializationTypeName(specialization), specializationLocalName, CodeTreeBuilder.singleString(createSpecializationFieldName(specialization)));
+                        builder.declaration(createSpecializationTypeName(specialization), name, CodeTreeBuilder.singleString(createSpecializationFieldName(specialization)));
                         builder.startIf().tree(stateCheck).end().startBlock();
                         if (specialization.getMaximumNumberOfInstances() > 1) {
                             builder.startWhile();
                         } else {
                             builder.startIf();
                         }
-                        builder.string(specializationLocalName, " != null");
+                        builder.string(name, " != null");
                         builder.end();
                         builder.startBlock();
                     } else {
@@ -1939,10 +1904,10 @@ public class FlatNodeGenFactory {
 
                     if (useSpecializationClass) {
                         if (specialization.getMaximumNumberOfInstances() > 1) {
-                            builder.startStatement().string(specializationLocalName, " = ", specializationLocalName, ".next_").end();
+                            builder.startStatement().string(name, " = ", name, ".next_").end();
                             builder.statement(countName + "++");
                         } else {
-                            builder.statement(specializationLocalName + " = null");
+                            builder.statement(name + " = null");
                         }
 
                         builder.end();
@@ -2030,14 +1995,9 @@ public class FlatNodeGenFactory {
                     }
 
                     builder.startStatement();
-                    if (specialization.getMaximumNumberOfInstances() <= 1) {
-                        builder.string(createSpecializationTypeName(specialization)).string(" ");
-                    }
                     builder.string(createSpecializationLocalName(specialization), " = ");
                     builder.startNew(createSpecializationTypeName(specialization));
-                    if (specialization.getMaximumNumberOfInstances() > 1) {
-                        builder.string(createSpecializationFieldName(specialization));
-                    }
+                    builder.string(createSpecializationFieldName(specialization));
                 }
 
                 List<CodeTree> stateParameters = new ArrayList<>();
@@ -2189,7 +2149,7 @@ public class FlatNodeGenFactory {
             CodeTree guards = methodGuardAndAssertions[0];
             CodeTree guardAssertions = methodGuardAndAssertions[1];
 
-            if (useSpecializationClass && specialization.getMaximumNumberOfInstances() > 1) {
+            if (useSpecializationClass) {
                 String name = createSpecializationLocalName(specialization);
                 builder.declaration(createSpecializationTypeName(specialization), name, CodeTreeBuilder.singleString(createSpecializationFieldName(specialization)));
                 builder.startWhile();
@@ -2225,7 +2185,7 @@ public class FlatNodeGenFactory {
                 builder.end();
             }
 
-            if (useSpecializationClass && specialization.getMaximumNumberOfInstances() > 1) {
+            if (useSpecializationClass) {
                 String name = createSpecializationLocalName(specialization);
                 builder.startStatement().string(name, " = ", name, ".next_").end();
             }
