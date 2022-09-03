@@ -25,7 +25,6 @@
 package com.oracle.truffle.api.instrument;
 
 import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.instrument.InstrumentationNode.TruffleEvents;
 import com.oracle.truffle.api.nodes.*;
@@ -43,8 +42,8 @@ import com.oracle.truffle.api.source.*;
  * </ol>
  * <p>
  * Client-oriented documentation for the use of Instruments is available online at <a
- * HREF="https://wiki.openjdk.java.net/display/Graal/Listening+for+Execution+Events" >https://
- * wiki.openjdk.java.net/display/Graal/Listening+for+Execution+Events</a>
+ * HREF="https://wiki.openjdk.java.net/display/Graal/Listening+for+Execution+Events"
+ * >https://wiki.openjdk.java.net/display/Graal/Listening+for+Execution+Events</a>
  * <p>
  * The implementation of Instruments is complicated by the requirement that Truffle be able to clone
  * ASTs at any time. In particular, any instrumentation-supporting Nodes that have been attached to
@@ -472,21 +471,11 @@ public abstract class Instrument {
                     return;
                 }
                 if (result == null) {
-                    throw instrumentResultNull();
+                    throw new RuntimeException("Instrument result null: " + requiredResultType.getSimpleName() + " is required");
                 }
                 if (!(requiredResultType.isAssignableFrom(result.getClass()))) {
-                    throw instrumentResultWrongType(result);
+                    throw new RuntimeException("Instrument result " + result.toString() + " not assignable to " + requiredResultType.getSimpleName());
                 }
-            }
-
-            @TruffleBoundary
-            private RuntimeException instrumentResultNull() {
-                return new RuntimeException("Instrument result null: " + requiredResultType.getSimpleName() + " is required");
-            }
-
-            @TruffleBoundary
-            private RuntimeException instrumentResultWrongType(Object result) {
-                return new RuntimeException("Instrument result " + result.toString() + " not assignable to " + requiredResultType.getSimpleName());
             }
 
             public void returnVoid(Node node, VirtualFrame vFrame) {
