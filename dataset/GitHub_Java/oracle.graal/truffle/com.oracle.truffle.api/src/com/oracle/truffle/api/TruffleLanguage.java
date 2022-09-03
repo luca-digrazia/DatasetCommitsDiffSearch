@@ -441,11 +441,7 @@ public abstract class TruffleLanguage<C> {
         }
 
         /**
-         * Configuration arguments for this language. Arguments set
-         * {@link com.oracle.truffle.api.vm.PolyglotEngine.Builder#config when constructing the
-         * engine} are accessible via this map.
-         *
-         * @return read-only view of configuration options for this language
+         * @return arguments used to create the polyglot engine
          */
         public Map<String, Map<String, Object>> getConfig() {
             return config;
