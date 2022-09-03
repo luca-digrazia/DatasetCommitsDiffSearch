@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.compiler.gen;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.api.meta.Value.*;
 import static com.oracle.graal.lir.LIRValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
@@ -187,15 +187,15 @@ public class PhiResolver {
     private void emitMove(Value dest, Value src) {
         assert isLegal(src);
         assert isLegal(dest);
-        gen.emitMove((AllocatableValue) dest, src);
+        gen.emitMove(dest, src);
     }
 
     // Traverse assignment graph in depth first order and generate moves in post order
     // ie. two assignments: b := c, a := b start with node c:
-    // Call graph: move(c, NULL) -> move(b, c) -> move(a, b)
+    // Call graph: move(NULL, c) -> move(c, b) -> move(b, a)
     // Generates moves in this order: move b to a and move c to b
     // ie. cycle a := b, b := a start with node a
-    // Call graph: move(a, NULL) -> move(b, a) -> move(a, b)
+    // Call graph: move(NULL, a) -> move(a, b) -> move(b, a)
     // Generates moves in this order: move b to temp, move a to b, move temp to a
     private void move(PhiResolverNode dest, PhiResolverNode src) {
         if (!dest.visited) {
