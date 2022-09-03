@@ -22,11 +22,6 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_20;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_30;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_20;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_30;
-
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.hotspot.replacements.ObjectCloneNode;
 import com.oracle.graal.nodeinfo.NodeCycles;
@@ -44,9 +39,9 @@ public abstract class HotSpotNodeCostProvider extends DefaultNodeCostProvider {
             ResolvedJavaType type = StampTool.typeOrNull(((ObjectCloneNode) n).getObject());
             if (type != null) {
                 if (type.isArray()) {
-                    return SIZE_30;
+                    return NodeSize.SIZE_30;
                 } else {
-                    return SIZE_20;
+                    return NodeSize.SIZE_20;
                 }
             }
         }
@@ -59,9 +54,9 @@ public abstract class HotSpotNodeCostProvider extends DefaultNodeCostProvider {
             ResolvedJavaType type = StampTool.typeOrNull(((ObjectCloneNode) n).getObject());
             if (type != null) {
                 if (type.isArray()) {
-                    return CYCLES_30;
+                    return NodeCycles.CYCLES_30;
                 } else {
-                    return CYCLES_20;
+                    return NodeCycles.CYCLES_20;
                 }
             }
         }

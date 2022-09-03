@@ -22,14 +22,6 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_100;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_15;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_200;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_6;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_200;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_30;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_4;
-
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.hotspot.nodes.HotSpotNodeCostProvider;
 import com.oracle.graal.nodeinfo.NodeCycles;
@@ -56,18 +48,18 @@ public final class AMD64HotSpotNodeCostProvider extends HotSpotNodeCostProvider 
             switch (u.getOperation()) {
                 case LOG:
                 case LOG10:
-                    return CYCLES_15;
+                    return NodeCycles.CYCLES_15;
                 default:
                     break;
             }
         } else if (n instanceof ReturnNode) {
-            return CYCLES_6;
+            return NodeCycles.CYCLES_6;
         } else if (n instanceof ArrayEqualsNode) {
             AMD64 amd64 = (AMD64) target.arch;
             if (amd64.getFeatures().contains(CPUFeature.AVX2)) {
-                return CYCLES_200;
+                return NodeCycles.CYCLES_200;
             } else if (amd64.getFeatures().contains(CPUFeature.SSE4_1)) {
-                return CYCLES_100;
+                return NodeCycles.CYCLES_100;
             }
         }
         return super.cycles(n);
@@ -80,18 +72,18 @@ public final class AMD64HotSpotNodeCostProvider extends HotSpotNodeCostProvider 
             switch (u.getOperation()) {
                 case LOG:
                 case LOG10:
-                    return SIZE_30;
+                    return NodeSize.SIZE_30;
                 default:
                     break;
             }
         } else if (n instanceof ReturnNode) {
-            return SIZE_4;
+            return NodeSize.SIZE_4;
         } else if (n instanceof ArrayEqualsNode) {
             AMD64 amd64 = (AMD64) target.arch;
             if (amd64.getFeatures().contains(CPUFeature.AVX2)) {
-                return SIZE_200;
+                return NodeSize.SIZE_200;
             } else if (amd64.getFeatures().contains(CPUFeature.SSE4_1)) {
-                return SIZE_200;
+                return NodeSize.SIZE_200;
             }
         }
         return super.size(n);
