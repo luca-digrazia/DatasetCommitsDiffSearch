@@ -61,7 +61,7 @@ public interface HotSpotGraalRuntimeProvider extends GraalRuntime, RuntimeProvid
 
     /**
      * Gets the option values associated with this runtime that are applicable for given method.
-     *
+     * 
      * @param forMethod the method we are seeking for options for
      * @return the options - by default same as {@link #getOptions()}
      */
@@ -85,7 +85,7 @@ public interface HotSpotGraalRuntimeProvider extends GraalRuntime, RuntimeProvid
      * diagnostics are about to be generated.
      *
      * @return the directory into which diagnostics can be written or {@code null} if the directory
-     *         does not exist and could not be created or has already been deleted
+     *         does not exist and could not be created
      */
     String getOutputDirectory();
 }

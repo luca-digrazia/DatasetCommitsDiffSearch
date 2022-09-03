@@ -42,15 +42,7 @@ public class HotSpotGraalMBeanTest {
     public void registration() throws Exception {
         ObjectName name;
 
-        Field field = null;
-        try {
-            field = stopMBeanServer();
-        } catch (Exception ex) {
-            if (ex.getClass().getName().equals("java.lang.reflect.InaccessibleObjectException")) {
-                // skip on JDK9
-                return;
-            }
-        }
+        Field field = stopMBeanServer();
         assertNull("The platformMBeanServer isn't initialized now", field.get(null));
 
         HotSpotGraalMBean bean = HotSpotGraalMBean.create();

@@ -31,7 +31,6 @@ import java.util.Formattable;
 import java.util.Formatter;
 
 import org.graalvm.compiler.api.runtime.GraalJVMCICompiler;
-import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.GraalCompiler;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
@@ -81,10 +80,11 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
     private final CompilationCounters compilationCounters;
     private final BootstrapWatchDog bootstrapWatchDog;
 
-    HotSpotGraalCompiler(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalRuntimeProvider graalRuntime, OptionValues options) {
+    HotSpotGraalCompiler(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalRuntimeProvider graalRuntime) {
         this.jvmciRuntime = jvmciRuntime;
         this.graalRuntime = graalRuntime;
         // It is sufficient to have one compilation counter object per Graal compiler object.
+        OptionValues options = graalRuntime.getOptions();
         this.compilationCounters = Options.CompilationCountLimit.getValue(options) > 0 ? new CompilationCounters(options) : null;
         this.bootstrapWatchDog = graalRuntime.isBootstrapping() && !GraalDebugConfig.Options.BootstrapInitializeOnly.getValue(options) ? BootstrapWatchDog.maybeCreate(graalRuntime) : null;
     }
@@ -95,12 +95,8 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
     }
 
     @Override
-    public CompilationRequestResult compileMethod(CompilationRequest request) {
-        return compileMethod(request, true);
-    }
-
     @SuppressWarnings("try")
-    CompilationRequestResult compileMethod(CompilationRequest request, boolean installAsDefault) {
+    public CompilationRequestResult compileMethod(CompilationRequest request) {
         if (graalRuntime.isShutdown()) {
             return HotSpotCompilationRequestResult.failure(String.format("Shutdown entered"), false);
         }
@@ -127,8 +123,8 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
             }
             // Ensure a debug configuration for this thread is initialized
             DebugEnvironment.ensureInitialized(options, graalRuntime.getHostProviders().getSnippetReflection());
-            CompilationTask task = new CompilationTask(jvmciRuntime, this, hsRequest, true, installAsDefault, options);
-            CompilationRequestResult r;
+            CompilationTask task = new CompilationTask(jvmciRuntime, this, hsRequest, true, true, options);
+            CompilationRequestResult r = null;
             try (DebugConfigScope dcs = Debug.setConfig(new TopLevelDebugConfig());
                             Debug.Scope s = Debug.methodMetricsScope("HotSpotGraalCompiler", MethodMetricsRootScopeInfo.create(method), true, method)) {
                 r = task.runCompilation();
@@ -191,15 +187,14 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
     @SuppressWarnings("try")
     public StructuredGraph getIntrinsicGraph(ResolvedJavaMethod method, HotSpotProviders providers, CompilationIdentifier compilationId, OptionValues options) {
         Replacements replacements = providers.getReplacements();
-        Bytecode subst = replacements.getSubstitutionBytecode(method);
-        if (subst != null) {
-            ResolvedJavaMethod substMethod = subst.getMethod();
+        ResolvedJavaMethod substMethod = replacements.getSubstitutionMethod(method);
+        if (substMethod != null) {
             assert !substMethod.equals(method);
             StructuredGraph graph = new StructuredGraph.Builder(options, AllowAssumptions.YES).method(substMethod).compilationId(compilationId).build();
             try (Debug.Scope scope = Debug.scope("GetIntrinsicGraph", graph)) {
                 Plugins plugins = new Plugins(providers.getGraphBuilderPlugins());
                 GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault(plugins);
-                IntrinsicContext initialReplacementContext = new IntrinsicContext(method, substMethod, subst.getOrigin(), ROOT_COMPILATION);
+                IntrinsicContext initialReplacementContext = new IntrinsicContext(method, substMethod, replacements.getReplacementBytecodeProvider(), ROOT_COMPILATION);
                 new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), providers.getConstantReflection(), providers.getConstantFieldProvider(), config,
                                 OptimisticOptimizations.NONE, initialReplacementContext).apply(graph);
                 assert !graph.isFrozen();
