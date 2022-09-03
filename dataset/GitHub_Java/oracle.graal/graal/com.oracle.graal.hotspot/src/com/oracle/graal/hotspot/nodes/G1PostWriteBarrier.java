@@ -27,7 +27,7 @@ import com.oracle.graal.nodes.extended.*;
 
 public class G1PostWriteBarrier extends WriteBarrier {
 
-    private final boolean alwaysNull;
+    private boolean alwaysNull;
 
     public G1PostWriteBarrier(ValueNode object, ValueNode value, LocationNode location, boolean precise, boolean alwaysNull) {
         super(object, value, location, precise);

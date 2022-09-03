@@ -98,9 +98,7 @@ public class WriteBarrierAdditionPhase extends Phase {
             }
         } else if (barrierType == BarrierType.IMPRECISE) {
             if (useG1GC()) {
-                if (!node.isInitialization()) {
-                    addG1PreWriteBarrier(node, node.object(), null, node.location(), true, node.getNullCheck(), graph);
-                }
+                addG1PreWriteBarrier(node, node.object(), null, node.location(), true, node.getNullCheck(), graph);
                 addG1PostWriteBarrier(node, node.object(), node.value(), node.location(), false, graph);
             } else {
                 addSerialPostWriteBarrier(node, node.object(), node.value(), node.location(), false, graph);
