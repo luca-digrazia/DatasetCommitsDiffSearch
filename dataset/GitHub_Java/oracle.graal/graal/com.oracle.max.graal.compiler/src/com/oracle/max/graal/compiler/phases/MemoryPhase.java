@@ -31,7 +31,6 @@ import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.ir.Phi.*;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.graph.collections.*;
 import com.sun.cri.ci.*;
 
 public class MemoryPhase extends Phase {
@@ -233,20 +232,21 @@ public class MemoryPhase extends Phase {
         }
 
         public void replaceCheckPoint(Node loopCheckPoint) {
-            for (Node n : loopCheckPoint.usages().snapshot()) {
+            List<Node> usages = new ArrayList<Node>(loopCheckPoint.usages());
+            for (Node n : usages) {
                 replaceCheckPoint(loopCheckPoint, n);
             }
         }
 
         private void replaceCheckPoint(Node loopCheckPoint, Node n) {
             if (n instanceof ReadNode) {
-                n.replaceFirstInput(loopCheckPoint, getLocationForRead((ReadNode) n));
+                n.inputs().replace(loopCheckPoint, getLocationForRead((ReadNode) n));
             } else if (n instanceof WriteNode) {
-                n.replaceFirstInput(loopCheckPoint, getLocationForWrite((WriteNode) n));
+                n.inputs().replace(loopCheckPoint, getLocationForWrite((WriteNode) n));
             } else if (n instanceof WriteMemoryCheckpointNode) {
-                n.replaceFirstInput(loopCheckPoint, mergeForWrite);
+                n.inputs().replace(loopCheckPoint, mergeForWrite);
             } else {
-                n.replaceFirstInput(loopCheckPoint, mergeForRead);
+                n.inputs().replace(loopCheckPoint, mergeForRead);
             }
         }
     }
