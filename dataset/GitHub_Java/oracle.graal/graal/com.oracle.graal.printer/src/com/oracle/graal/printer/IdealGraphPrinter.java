@@ -28,8 +28,7 @@ import java.io.*;
 import java.util.*;
 import java.util.Map.Entry;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodeinfo.*;
@@ -140,8 +139,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
                 printProperty("name", name);
             }
             printProperty("class", node.getClass().getSimpleName());
-
-            Block block = nodeToBlock == null || nodeToBlock.isNew(node) ? null : nodeToBlock.get(node);
+            Block block = nodeToBlock == null ? null : nodeToBlock.get(node);
             if (block != null) {
                 printProperty("block", Integer.toString(block.getId()));
                 // if (!(node instanceof PhiNode || node instanceof FrameState || node instanceof
@@ -255,7 +253,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
 
         if (nodeToBlock != null) {
             for (Node n : graph.getNodes()) {
-                Block blk = nodeToBlock.isNew(n) ? null : nodeToBlock.get(n);
+                Block blk = nodeToBlock.get(n);
                 if (blk == block) {
                     nodes.add(n);
                 }

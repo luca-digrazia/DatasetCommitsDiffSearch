@@ -22,40 +22,24 @@
  */
 package com.oracle.graal.phases.common;
 
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.MetaAccessProvider;
-
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugCounter;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractDeoptimizeNode;
-import com.oracle.graal.nodes.AbstractEndNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.BeginNode;
-import com.oracle.graal.nodes.DeoptimizeNode;
-import com.oracle.graal.nodes.DynamicDeoptimizeNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.ValuePhiNode;
-import com.oracle.graal.nodes.calc.IsNullNode;
-import com.oracle.graal.nodes.extended.NullCheckNode;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.phases.BasePhase;
-import com.oracle.graal.phases.tiers.LowTierContext;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
 
-    private static final DebugCounter counterTrappingNullCheck = Debug.counter("TrappingNullCheck");
-    private static final DebugCounter counterTrappingNullCheckUnreached = Debug.counter("TrappingNullCheckUnreached");
-    private static final DebugCounter counterTrappingNullCheckDynamicDeoptimize = Debug.counter("TrappingNullCheckDynamicDeoptimize");
+    private static final DebugMetric metricTrappingNullCheck = Debug.metric("TrappingNullCheck");
+    private static final DebugMetric metricTrappingNullCheckUnreached = Debug.metric("TrappingNullCheckUnreached");
+    private static final DebugMetric metricTrappingNullCheckDynamicDeoptimize = Debug.metric("TrappingNullCheckDynamicDeoptimize");
 
     @Override
     protected void run(StructuredGraph graph, LowTierContext context) {
@@ -64,10 +48,10 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
         }
         assert graph.getGuardsStage().areFrameStatesAtDeopts();
 
-        for (DeoptimizeNode deopt : graph.getNodes(DeoptimizeNode.TYPE)) {
+        for (DeoptimizeNode deopt : graph.getNodes(DeoptimizeNode.class)) {
             tryUseTrappingNullCheck(deopt, deopt.predecessor(), deopt.reason(), deopt.getSpeculation());
         }
-        for (DynamicDeoptimizeNode deopt : graph.getNodes(DynamicDeoptimizeNode.TYPE)) {
+        for (DynamicDeoptimizeNode deopt : graph.getNodes(DynamicDeoptimizeNode.class)) {
             tryUseTrappingNullCheck(context.getMetaAccess(), deopt);
         }
     }
@@ -167,12 +151,12 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
     }
 
     private static void replaceWithTrappingNullCheck(AbstractDeoptimizeNode deopt, IfNode ifNode, LogicNode condition, DeoptimizationReason deoptimizationReason) {
-        counterTrappingNullCheck.increment();
+        metricTrappingNullCheck.increment();
         if (deopt instanceof DynamicDeoptimizeNode) {
-            counterTrappingNullCheckDynamicDeoptimize.increment();
+            metricTrappingNullCheckDynamicDeoptimize.increment();
         }
         if (deoptimizationReason == DeoptimizationReason.UnreachedCode) {
-            counterTrappingNullCheckUnreached.increment();
+            metricTrappingNullCheckUnreached.increment();
         }
         IsNullNode isNullNode = (IsNullNode) condition;
         AbstractBeginNode nonTrappingContinuation = ifNode.falseSuccessor();
@@ -197,6 +181,8 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
         }
 
         GraphUtil.killCFG(trappingContinuation);
-        GraphUtil.tryKillUnused(isNullNode);
+        if (isNullNode.hasNoUsages()) {
+            GraphUtil.killWithUnusedFloatingInputs(isNullNode);
+        }
     }
 }

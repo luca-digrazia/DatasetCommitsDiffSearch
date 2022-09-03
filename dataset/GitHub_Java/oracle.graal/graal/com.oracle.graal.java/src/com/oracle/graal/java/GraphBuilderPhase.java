@@ -47,7 +47,6 @@ import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
@@ -59,24 +58,18 @@ import com.oracle.graal.phases.tiers.*;
 public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
     private final GraphBuilderConfiguration graphBuilderConfig;
-    private final GraphBuilderPlugins graphBuilderPlugins;
 
-    public GraphBuilderPhase(GraphBuilderConfiguration config) {
-        this.graphBuilderConfig = config;
-        this.graphBuilderPlugins = new GraphBuilderPlugins();
+    public GraphBuilderPhase(GraphBuilderConfiguration graphBuilderConfig) {
+        this.graphBuilderConfig = graphBuilderConfig;
     }
 
     @Override
     protected void run(StructuredGraph graph, HighTierContext context) {
-        new Instance(context.getMetaAccess(), context.getStampProvider(), context.getAssumptions(), graphBuilderConfig, graphBuilderPlugins, context.getOptimisticOptimizations()).run(graph);
+        new Instance(context.getMetaAccess(), graphBuilderConfig, context.getOptimisticOptimizations()).run(graph);
     }
 
     public GraphBuilderConfiguration getGraphBuilderConfig() {
         return graphBuilderConfig;
-    }
-
-    public GraphBuilderPlugins getGraphBuilderPlugins() {
-        return graphBuilderPlugins;
     }
 
     public static class Instance extends Phase {
@@ -88,10 +81,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
         private ResolvedJavaMethod rootMethod;
 
         private final GraphBuilderConfiguration graphBuilderConfig;
-        private final GraphBuilderPlugins graphBuilderPlugins;
         private final OptimisticOptimizations optimisticOpts;
-        private final StampProvider stampProvider;
-        private final Assumptions assumptions;
 
         /**
          * Gets the graph being processed by this builder.
@@ -100,19 +90,11 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             return currentGraph;
         }
 
-        public Instance(MetaAccessProvider metaAccess, StampProvider stampProvider, Assumptions assumptions, GraphBuilderConfiguration graphBuilderConfig, GraphBuilderPlugins graphBuilderPlugins,
-                        OptimisticOptimizations optimisticOpts) {
+        public Instance(MetaAccessProvider metaAccess, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts) {
             this.graphBuilderConfig = graphBuilderConfig;
             this.optimisticOpts = optimisticOpts;
             this.metaAccess = metaAccess;
-            this.stampProvider = stampProvider;
-            this.assumptions = assumptions;
-            this.graphBuilderPlugins = graphBuilderPlugins;
             assert metaAccess != null;
-        }
-
-        public Instance(MetaAccessProvider metaAccess, StampProvider stampProvider, Assumptions assumptions, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts) {
-            this(metaAccess, stampProvider, assumptions, graphBuilderConfig, null, optimisticOpts);
         }
 
         @Override
@@ -161,7 +143,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
         }
 
-        public class BytecodeParser extends AbstractBytecodeParser<ValueNode, HIRFrameStateBuilder> implements GraphBuilderContext {
+        public class BytecodeParser extends AbstractBytecodeParser<ValueNode, HIRFrameStateBuilder> {
 
             private BciBlock[] loopHeaders;
             private LocalLiveness liveness;
@@ -770,53 +752,38 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                         args[0] = TypeProfileProxyNode.proxify(args[0], profile);
                     }
                 }
-                if (GraalOptions.InlineDuringParsing.getValue() && invokeKind.isDirect()) {
 
-                    if (graphBuilderPlugins != null) {
-                        GraphBuilderPlugin plugin = graphBuilderPlugins.getPlugin(targetMethod);
-                        if (plugin != null) {
-                            int beforeStackSize = frameState.stackSize;
-                            if (plugin.handleInvocation(this, args)) {
-                                // System.out.println("used plugin: " + plugin);
-                                assert beforeStackSize - resultType.getSlotCount() == frameState.stackSize;
-                                return;
+                if (GraalOptions.InlineDuringParsing.getValue() && invokeKind.isDirect() && targetMethod.canBeInlined() && targetMethod.hasBytecodes()) {
+                    if (targetMethod.getCode().length <= GraalOptions.TrivialInliningSize.getValue() && currentDepth < GraalOptions.InlineDuringParsingMaxDepth.getValue() &&
+                                    graphBuilderConfig.shouldInlineTrivial()) {
+                        BytecodeParser parser = new BytecodeParser(metaAccess, targetMethod, graphBuilderConfig, optimisticOpts, StructuredGraph.INVOCATION_ENTRY_BCI);
+                        final FrameState[] lazyFrameState = new FrameState[1];
+                        HIRFrameStateBuilder startFrameState = new HIRFrameStateBuilder(targetMethod, currentGraph, () -> {
+                            if (lazyFrameState[0] == null) {
+                                lazyFrameState[0] = frameState.create(bci());
                             }
-                            assert beforeStackSize == frameState.stackSize;
+                            return lazyFrameState[0];
+                        });
+                        startFrameState.initializeFromArgumentsArray(args);
+                        parser.build(currentDepth + 1, this.lastInstr, startFrameState);
+
+                        FixedWithNextNode calleeBeforeReturnNode = parser.getBeforeReturnNode();
+                        this.lastInstr = calleeBeforeReturnNode;
+                        if (calleeBeforeReturnNode != null) {
+                            ValueNode calleeReturnValue = parser.getReturnValue();
+                            if (calleeReturnValue != null) {
+                                frameState.push(calleeReturnValue.getKind().getStackKind(), calleeReturnValue);
+                            }
                         }
-                    }
 
-                    if (targetMethod.canBeInlined() && targetMethod.hasBytecodes()) {
-                        if (targetMethod.getCode().length <= GraalOptions.TrivialInliningSize.getValue() && currentDepth < GraalOptions.InlineDuringParsingMaxDepth.getValue() &&
-                                        graphBuilderConfig.shouldInlineTrivial()) {
-                            BytecodeParser parser = new BytecodeParser(metaAccess, targetMethod, graphBuilderConfig, optimisticOpts, StructuredGraph.INVOCATION_ENTRY_BCI);
-                            final FrameState[] lazyFrameState = new FrameState[1];
-                            HIRFrameStateBuilder startFrameState = new HIRFrameStateBuilder(targetMethod, currentGraph, () -> {
-                                if (lazyFrameState[0] == null) {
-                                    lazyFrameState[0] = frameState.create(bci());
-                                }
-                                return lazyFrameState[0];
-                            });
-                            startFrameState.initializeFromArgumentsArray(args);
-                            parser.build(currentDepth + 1, this.lastInstr, startFrameState);
-
-                            FixedWithNextNode calleeBeforeReturnNode = parser.getBeforeReturnNode();
-                            this.lastInstr = calleeBeforeReturnNode;
-                            if (calleeBeforeReturnNode != null) {
-                                ValueNode calleeReturnValue = parser.getReturnValue();
-                                if (calleeReturnValue != null) {
-                                    frameState.push(calleeReturnValue.getKind().getStackKind(), calleeReturnValue);
-                                }
-                            }
-
-                            FixedWithNextNode calleeBeforeUnwindNode = parser.getBeforeUnwindNode();
-                            if (calleeBeforeUnwindNode != null) {
-                                ValueNode calleeUnwindValue = parser.getUnwindValue();
-                                assert calleeUnwindValue != null;
-                                calleeBeforeUnwindNode.setNext(handleException(calleeUnwindValue, bci()));
-                            }
-
-                            return;
+                        FixedWithNextNode calleeBeforeUnwindNode = parser.getBeforeUnwindNode();
+                        if (calleeBeforeUnwindNode != null) {
+                            ValueNode calleeUnwindValue = parser.getUnwindValue();
+                            assert calleeUnwindValue != null;
+                            calleeBeforeUnwindNode.setNext(handleException(calleeUnwindValue, bci()));
                         }
+
+                        return;
                     }
                 }
 
@@ -970,7 +937,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 throw GraalInternalError.shouldNotReachHere("Can not append Node of type: " + v.getClass().getName());
             }
 
-            public <T extends ControlSinkNode> T append(T fixed) {
+            private <T extends ControlSinkNode> T append(T fixed) {
                 assert !fixed.isAlive() && !fixed.isDeleted() : "instruction should not have been appended yet";
                 assert lastInstr.next() == null : "cannot append instruction to instruction which isn't end (" + lastInstr + "->" + lastInstr.next() + ")";
                 T added = currentGraph.add(fixed);
@@ -979,7 +946,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 return added;
             }
 
-            public <T extends ControlSplitNode> T append(T fixed) {
+            private <T extends ControlSplitNode> T append(T fixed) {
                 assert !fixed.isAlive() && !fixed.isDeleted() : "instruction should not have been appended yet";
                 assert lastInstr.next() == null : "cannot append instruction to instruction which isn't end (" + lastInstr + "->" + lastInstr.next() + ")";
                 T added = currentGraph.add(fixed);
@@ -988,7 +955,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 return added;
             }
 
-            public <T extends FixedWithNextNode> T append(T fixed) {
+            protected <T extends FixedWithNextNode> T append(T fixed) {
                 assert !fixed.isAlive() && !fixed.isDeleted() : "instruction should not have been appended yet";
                 assert lastInstr.next() == null : "cannot append instruction to instruction which isn't end (" + lastInstr + "->" + lastInstr.next() + ")";
                 T added = currentGraph.add(fixed);
@@ -997,7 +964,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 return added;
             }
 
-            public <T extends FloatingNode> T append(T v) {
+            private <T extends FloatingNode> T append(T v) {
                 assert !(v instanceof ConstantNode);
                 T added = currentGraph.unique(v);
                 return added;
@@ -1487,22 +1454,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
                 ValueNode ifNode = negate ? genIfNode(condition, falseSuccessor, trueSuccessor, 1 - probability) : genIfNode(condition, trueSuccessor, falseSuccessor, probability);
                 append(ifNode);
-            }
-
-            public StampProvider getStampProvider() {
-                return stampProvider;
-            }
-
-            public MetaAccessProvider getMetaAccess() {
-                return metaAccess;
-            }
-
-            public Assumptions getAssumptions() {
-                return assumptions;
-            }
-
-            public void push(Kind kind, ValueNode value) {
-                frameState.push(kind, value);
             }
 
         }
