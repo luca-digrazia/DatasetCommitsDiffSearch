@@ -26,7 +26,6 @@ import static com.oracle.graal.asm.amd64.AMD64AsmOptions.*;
 
 import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 
 /**
  * This class implements commonly used X86 code patterns.
@@ -256,7 +255,7 @@ public class AMD64MacroAssembler extends AMD64Assembler {
     private AMD64Address trigPrologue(Register value) {
         assert value.getRegisterCategory() == AMD64.XMM;
         AMD64Address tmp = new AMD64Address(AMD64.rsp);
-        subq(AMD64.rsp, target.arch.getSizeInBytes(Kind.Double));
+        subq(AMD64.rsp, 8);
         movsd(tmp, value);
         fld_d(tmp);
         return tmp;
@@ -266,7 +265,7 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         assert dest.getRegisterCategory() == AMD64.XMM;
         fstp_d(tmp);
         movsd(dest, tmp);
-        addq(AMD64.rsp, target.arch.getSizeInBytes(Kind.Double));
+        addq(AMD64.rsp, 8);
     }
 
     /**

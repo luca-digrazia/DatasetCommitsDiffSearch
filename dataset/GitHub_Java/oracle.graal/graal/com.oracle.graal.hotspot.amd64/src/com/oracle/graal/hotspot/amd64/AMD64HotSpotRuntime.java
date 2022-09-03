@@ -24,6 +24,8 @@ package com.oracle.graal.hotspot.amd64;
 
 import static com.oracle.graal.amd64.AMD64.*;
 import static com.oracle.graal.hotspot.HotSpotBackend.*;
+import static com.oracle.graal.hotspot.nodes.MonitorEnterStubCall.*;
+import static com.oracle.graal.hotspot.nodes.MonitorExitStubCall.*;
 import static com.oracle.graal.hotspot.nodes.VMErrorNode.*;
 import static com.oracle.graal.hotspot.nodes.WriteBarrierPostStubCall.*;
 import static com.oracle.graal.hotspot.nodes.WriteBarrierPreStubCall.*;
@@ -62,6 +64,12 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                 /* arg0: exception */ rax.asValue(Kind.Object),
                /* arg1: exceptionPc */ rdx.asValue(word));
 
+        addRuntimeCall(MONITORENTER, config.monitorEnterStub,
+                /*        temps */ null,
+                /*          ret */ ret(Kind.Void),
+                /* arg0: object */ javaCallingConvention(Kind.Object,
+                /* arg1:   lock */                       word));
+
        addRuntimeCall(WBPRECALL, config.wbPreCallStub,
                 /*        temps */ null,
                 /*          ret */ ret(Kind.Void),
@@ -71,6 +79,12 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                 /*        temps */ null,
                 /*          ret */ ret(Kind.Void),
                 /* arg0: object */ javaCallingConvention(Kind.Object, word));
+
+        addRuntimeCall(MONITOREXIT, config.monitorExitStub,
+                /*        temps */ null,
+                /*          ret */ ret(Kind.Void),
+                /* arg0: object */ javaCallingConvention(Kind.Object,
+                /* arg1:   lock */                       word));
 
         addRuntimeCall(VM_ERROR, config.vmErrorStub,
                 /*        temps */ null,
