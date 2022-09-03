@@ -55,6 +55,11 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
     private boolean isInitialized;
     private ResolvedJavaType arrayOfType;
 
+    /**
+     * Initial value for the mark word in a new object of this type.
+     */
+    private long initialMarkWord;
+
     private HotSpotResolvedJavaType() {
         throw new GraalInternalError(HotSpotResolvedJavaType.class + " should only be created from C++ code");
     }
@@ -280,8 +285,10 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
         return klassOopCache;
     }
 
+    private static final int SECONDARY_SUPER_CACHE_OFFSET = HotSpotGraalRuntime.getInstance().getConfig().secondarySuperCacheOffset;
+
     public boolean isPrimaryType() {
-        return HotSpotGraalRuntime.getInstance().getConfig().secondarySuperCacheOffset != superCheckOffset;
+        return SECONDARY_SUPER_CACHE_OFFSET != superCheckOffset;
     }
 
     public int superCheckOffset() {
@@ -289,6 +296,6 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
     }
 
     public long initialMarkWord() {
-        return HotSpotGraalRuntime.getInstance().getCompilerToVM().JavaType_initialMarkWord(this);
+        return initialMarkWord;
     }
 }

@@ -40,44 +40,49 @@ public final class HotSpotTypePrimitive extends HotSpotJavaType implements Resol
 
     public HotSpotTypePrimitive(Kind kind) {
         this.kind = kind;
-        this.name = String.valueOf(Character.toUpperCase(kind.getTypeChar()));
+        this.name = String.valueOf(Character.toUpperCase(kind.typeChar));
         this.klassOop = new HotSpotKlassOop(this);
     }
 
     @Override
-    public int getModifiers() {
+    public int accessFlags() {
         assert kind != null && kind.toJavaClass() != null;
         return Modifier.ABSTRACT | Modifier.FINAL | Modifier.PUBLIC;
     }
 
     @Override
-    public ResolvedJavaType getArrayClass() {
+    public ResolvedJavaType arrayOf() {
         return (ResolvedJavaType) HotSpotGraalRuntime.getInstance().getCompilerToVM().getPrimitiveArrayType(kind);
     }
 
     @Override
-    public ResolvedJavaType getComponentType() {
+    public ResolvedJavaType componentType() {
         return null;
     }
 
     @Override
-    public ResolvedJavaType getExactType() {
+    public ResolvedJavaType exactType() {
         return this;
     }
 
     @Override
-    public ResolvedJavaType getSuperclass() {
+    public ResolvedJavaType superType() {
         return null;
     }
 
     @Override
-    public ResolvedJavaType findLeastCommonAncestor(ResolvedJavaType otherType) {
+    public ResolvedJavaType leastCommonAncestor(ResolvedJavaType otherType) {
         return null;
     }
 
     @Override
     public Constant getEncoding(Representation r) {
         throw GraalInternalError.unimplemented("HotSpotTypePrimitive.getEncoding");
+    }
+
+    @Override
+    public Kind getRepresentationKind(Representation r) {
+        return kind;
     }
 
     @Override
@@ -121,12 +126,12 @@ public final class HotSpotTypePrimitive extends HotSpotJavaType implements Resol
     }
 
     @Override
-    public Kind getKind() {
+    public Kind kind() {
         return kind;
     }
 
     @Override
-    public ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method) {
+    public ResolvedJavaMethod resolveMethodImpl(ResolvedJavaMethod method) {
         return null;
     }
 
@@ -136,17 +141,17 @@ public final class HotSpotTypePrimitive extends HotSpotJavaType implements Resol
     }
 
     @Override
-    public ResolvedJavaType findUniqueConcreteSubtype() {
+    public ResolvedJavaType uniqueConcreteSubtype() {
         return this;
     }
 
     @Override
-    public ResolvedJavaMethod findUniqueConcreteMethod(ResolvedJavaMethod method) {
+    public ResolvedJavaMethod uniqueConcreteMethod(ResolvedJavaMethod method) {
         return null;
     }
 
     @Override
-    public ResolvedJavaField[] getDeclaredFields() {
+    public ResolvedJavaField[] declaredFields() {
         return new ResolvedJavaField[0];
     }
 
@@ -168,9 +173,5 @@ public final class HotSpotTypePrimitive extends HotSpotJavaType implements Resol
     @Override
     public HotSpotKlassOop klassOop() {
         return klassOop;
-    }
-
-    @Override
-    public void initialize() {
     }
 }
