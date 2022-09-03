@@ -35,13 +35,11 @@ import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 
 /**
- * A handle on a context of a set of Truffle languages. This context handle is designed to be used
- * by Truffle guest language implementations. The Truffle context can be used to create inner
- * contexts for isolated execution of guest language code.
- * <p>
- * A {@link TruffleContext context} consists of a {@link TruffleLanguage#createContext(Env) language
- * context} instance for each {@link Env#getLanguages() installed language}. The current language
- * context is {@link TruffleLanguage#createContext(Env) created} eagerly and can be accessed using a
+ * An inner language environment/context {@link Env#newContextBuilder() created} by a Truffle
+ * language. A {@link TruffleContext context} consists of a
+ * {@link TruffleLanguage#createContext(Env) language context} instance for each
+ * {@link Env#getLanguages() installed language}. The current language context is
+ * {@link TruffleLanguage#createContext(Env) created} eagerly and can be accessed using a
  * {@link ContextReference context reference} or statically with
  * {@link TruffleLanguage#getCurrentContext(Class)} after the context was
  * {@link TruffleContext#enter() entered}.
@@ -63,7 +61,7 @@ public final class TruffleContext implements AutoCloseable {
     static final TruffleContext EMPTY = new TruffleContext();
 
     private static ThreadLocal<List<Object>> assertStack;
-    final Object impl;
+    private final Object impl;
 
     TruffleContext(TruffleLanguage.Env env, Map<String, Object> config) {
         this.impl = AccessAPI.engineAccess().createInternalContext(env.getVMObject(), config);

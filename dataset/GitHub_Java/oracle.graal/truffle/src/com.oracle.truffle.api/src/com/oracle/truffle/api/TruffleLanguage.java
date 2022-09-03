@@ -272,10 +272,9 @@ public abstract class TruffleLanguage<C> {
      * initialized and for example making
      * {@link Env#parse(com.oracle.truffle.api.source.Source, java.lang.String...) calls into other
      * languages} and assuming your language is already initialized and others can see it would be
-     * wrong - until you return from this method, the initialization isn't over. The same is true
-     * for instrumentation, the instruments can not receive any meta data about code executed during
-     * context creation. Should there be a need to perform complex initialization, do it by
-     * overriding the {@link #initializeContext(java.lang.Object)} method.
+     * wrong - until you return from this method, the initialization isn't over. Should there be a
+     * need to perform complex initialization, do it by overriding the
+     * {@link #initializeContext(java.lang.Object)} method.
      *
      * @param env the environment the language is supposed to operate in
      * @return internal data of the language in given environment
@@ -824,7 +823,6 @@ public abstract class TruffleLanguage<C> {
      */
     public static final class Env {
 
-        private static final Object UNSET_CONTEXT = new Object();
         private final Object vmObject; // PolyglotEngine.Language
         private final LanguageInfo language;
         private final TruffleLanguage<Object> spi;
@@ -835,8 +833,7 @@ public abstract class TruffleLanguage<C> {
         private final OptionValues options;
         private final String[] applicationArguments;
         private List<Object> services;
-        @CompilationFinal private volatile Object context = UNSET_CONTEXT;
-        @CompilationFinal private volatile Assumption contextUnchangedAssumption = Truffle.getRuntime().createAssumption("Language context unchanged");
+        @CompilationFinal private Object context;
         @CompilationFinal private volatile boolean initialized = false;
         @CompilationFinal private volatile Assumption initializedUnchangedAssumption = Truffle.getRuntime().createAssumption("Language context initialized unchanged");
 
@@ -1202,41 +1199,21 @@ public abstract class TruffleLanguage<C> {
         }
 
         Object findExportedSymbol(String globalName, boolean onlyExplicit) {
-            Object c = getContext();
-            if (c != UNSET_CONTEXT) {
-                return spi.findExportedSymbol(c, globalName, onlyExplicit);
-            } else {
-                return null;
-            }
+            return spi.findExportedSymbol(context, globalName, onlyExplicit);
         }
 
         Object getLanguageGlobal() {
-            Object c = getContext();
-            if (c != UNSET_CONTEXT) {
-                return spi.getLanguageGlobal(c);
-            } else {
-                return null;
-            }
+            return spi.getLanguageGlobal(context);
         }
 
         Object findMetaObject(Object obj) {
-            Object c = getContext();
-            if (c != UNSET_CONTEXT) {
-                final Object rawValue = AccessAPI.engineAccess().findOriginalObject(obj);
-                return spi.findMetaObject(c, rawValue);
-            } else {
-                return null;
-            }
+            final Object rawValue = AccessAPI.engineAccess().findOriginalObject(obj);
+            return spi.findMetaObject(context, rawValue);
         }
 
         SourceSection findSourceLocation(Object obj) {
-            Object c = getContext();
-            if (c != UNSET_CONTEXT) {
-                final Object rawValue = AccessAPI.engineAccess().findOriginalObject(obj);
-                return spi.findSourceLocation(c, rawValue);
-            } else {
-                return null;
-            }
+            final Object rawValue = AccessAPI.engineAccess().findOriginalObject(obj);
+            return spi.findSourceLocation(context, rawValue);
         }
 
         boolean isObjectOfLanguage(Object obj) {
@@ -1245,12 +1222,7 @@ public abstract class TruffleLanguage<C> {
         }
 
         void dispose() {
-            Object c = getContext();
-            if (c != UNSET_CONTEXT) {
-                spi.disposeContext(c);
-            } else {
-                throw new IllegalStateException("Disposing while context has not been set yet.");
-            }
+            spi.disposeContext(context);
         }
 
         void postInit() {
@@ -1278,26 +1250,12 @@ public abstract class TruffleLanguage<C> {
         }
 
         String toStringIfVisible(Object value, boolean checkVisibility) {
-            Object c = getContext();
-            if (c != UNSET_CONTEXT) {
-                if (checkVisibility) {
-                    if (!spi.isVisible(c, value)) {
-                        return null;
-                    }
+            if (checkVisibility) {
+                if (!spi.isVisible(context, value)) {
+                    return null;
                 }
-                return spi.toString(c, value);
-            } else {
-                return null;
             }
-        }
-
-        private Object getContext() {
-            if (contextUnchangedAssumption.isValid()) {
-                return context;
-            } else {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                return context;
-            }
+            return spi.toString(context, value);
         }
 
     }
@@ -1386,21 +1344,12 @@ public abstract class TruffleLanguage<C> {
 
         @Override
         public Object lookupSymbol(Env env, String globalName) {
-            if (env.context != Env.UNSET_CONTEXT) {
-                return env.spi.lookupSymbol(env.context, globalName);
-            } else {
-                return null;
-            }
+            return env.spi.lookupSymbol(env.context, globalName);
         }
 
         @Override
         public Object getContext(Env env) {
-            Object c = env.getContext();
-            if (c != Env.UNSET_CONTEXT) {
-                return c;
-            } else {
-                return null;
-            }
+            return env.context;
         }
 
         @Override
@@ -1415,17 +1364,8 @@ public abstract class TruffleLanguage<C> {
             LinkedHashSet<Object> collectedServices = new LinkedHashSet<>();
             AccessAPI.instrumentAccess().collectEnvServices(collectedServices, API.nodes().getEngineObject(language), language);
             env.services = new ArrayList<>(collectedServices);
+            env.context = env.getSpi().createContext(env);
             return env;
-        }
-
-        @Override
-        public Object createEnvContext(Env env) {
-            Object context = env.getSpi().createContext(env);
-            env.context = context;
-            Assumption contextUnchanged = env.contextUnchangedAssumption;
-            env.contextUnchangedAssumption = Truffle.getRuntime().createAssumption("Language context unchanged");
-            contextUnchanged.invalidate();
-            return context;
         }
 
         @Override
