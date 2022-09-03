@@ -171,10 +171,10 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
                 return null;
             }
             if (callerBytecodePosition == null) {
+                ensureOuterStateDecoded(caller);
+                ensureExceptionStateDecoded(caller);
                 JavaConstant constantReceiver = caller.invokeData == null ? null : caller.invokeData.constantReceiver;
-                NodeSourcePosition callerPosition = caller.getCallerBytecodePosition();
-                NodeSourcePosition invokePosition = invokeData.invoke.asNode().getNodeSourcePosition();
-                callerBytecodePosition = invokePosition != null ? invokePosition.addCaller(constantReceiver, callerPosition) : callerPosition;
+                callerBytecodePosition = new NodeSourcePosition(constantReceiver, FrameState.toSourcePosition(caller.outerState), caller.method, invokeData.invoke.bci());
             }
             return callerBytecodePosition;
         }
