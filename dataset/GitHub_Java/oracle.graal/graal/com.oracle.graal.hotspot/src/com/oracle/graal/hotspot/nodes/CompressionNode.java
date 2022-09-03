@@ -74,11 +74,12 @@ public class CompressionNode extends UnaryNode implements ConvertNode, LIRLowera
     }
 
     private static Constant compress(Constant c, CompressEncoding encoding) {
-        if (JavaConstant.NULL_POINTER.equals(c)) {
+        if (JavaConstant.NULL_OBJECT.equals(c)) {
             return HotSpotCompressedNullConstant.COMPRESSED_NULL;
         } else if (c instanceof HotSpotObjectConstant) {
             return ((HotSpotObjectConstant) c).compress();
         } else if (c instanceof HotSpotMetaspaceConstant) {
+            assert ((HotSpotMetaspaceConstant) c).stamp().getStackKind() == Kind.Long;
             return ((HotSpotMetaspaceConstant) c).compress(encoding);
         } else {
             throw GraalInternalError.shouldNotReachHere("invalid constant input for compress op: " + c);
@@ -87,10 +88,11 @@ public class CompressionNode extends UnaryNode implements ConvertNode, LIRLowera
 
     private static Constant uncompress(Constant c, CompressEncoding encoding) {
         if (HotSpotCompressedNullConstant.COMPRESSED_NULL.equals(c)) {
-            return JavaConstant.NULL_POINTER;
+            return JavaConstant.NULL_OBJECT;
         } else if (c instanceof HotSpotObjectConstant) {
             return ((HotSpotObjectConstant) c).uncompress();
         } else if (c instanceof HotSpotMetaspaceConstant) {
+            assert ((HotSpotMetaspaceConstant) c).stamp().getStackKind() == Kind.Int;
             return ((HotSpotMetaspaceConstant) c).uncompress(encoding);
         } else {
             throw GraalInternalError.shouldNotReachHere("invalid constant input for uncompress op: " + c);
@@ -98,7 +100,7 @@ public class CompressionNode extends UnaryNode implements ConvertNode, LIRLowera
     }
 
     @Override
-    public Constant convert(Constant c, ConstantReflectionProvider constantReflection) {
+    public Constant convert(Constant c) {
         switch (op) {
             case Compress:
                 return compress(c, encoding);
@@ -110,7 +112,7 @@ public class CompressionNode extends UnaryNode implements ConvertNode, LIRLowera
     }
 
     @Override
-    public Constant reverse(Constant c, ConstantReflectionProvider constantReflection) {
+    public Constant reverse(Constant c) {
         switch (op) {
             case Compress:
                 return uncompress(c, encoding);
@@ -132,9 +134,10 @@ public class CompressionNode extends UnaryNode implements ConvertNode, LIRLowera
                 if (input instanceof ObjectStamp) {
                     // compressed oop
                     return NarrowOopStamp.compressed((ObjectStamp) input, encoding);
-                } else if (input instanceof KlassPointerStamp) {
-                    // compressed klass pointer
-                    return ((KlassPointerStamp) input).compressed(encoding);
+                } else if (input instanceof IntegerStamp) {
+                    // compressed metaspace pointer
+                    assert PrimitiveStamp.getBits(input) == 64;
+                    return StampFactory.forInteger(32);
                 }
                 break;
             case Uncompress:
@@ -142,10 +145,10 @@ public class CompressionNode extends UnaryNode implements ConvertNode, LIRLowera
                     // oop
                     assert encoding.equals(((NarrowOopStamp) input).getEncoding());
                     return ((NarrowOopStamp) input).uncompressed();
-                } else if (input instanceof KlassPointerStamp) {
+                } else if (input instanceof IntegerStamp) {
                     // metaspace pointer
-                    assert encoding.equals(((KlassPointerStamp) input).getEncoding());
-                    return ((KlassPointerStamp) input).uncompressed();
+                    assert PrimitiveStamp.getBits(input) == 32;
+                    return StampFactory.forInteger(64);
                 }
                 break;
         }
@@ -159,7 +162,7 @@ public class CompressionNode extends UnaryNode implements ConvertNode, LIRLowera
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
         if (forValue.isConstant()) {
-            return ConstantNode.forConstant(stamp(), convert(forValue.asConstant(), tool.getConstantReflection()), tool.getMetaAccess());
+            return ConstantNode.forConstant(stamp(), convert(forValue.asJavaConstant()), tool.getMetaAccess());
         } else if (forValue instanceof CompressionNode) {
             CompressionNode other = (CompressionNode) forValue;
             if (op != other.op && encoding.equals(other.encoding)) {
@@ -174,7 +177,7 @@ public class CompressionNode extends UnaryNode implements ConvertNode, LIRLowera
         HotSpotLIRGenerator hsGen = (HotSpotLIRGenerator) gen.getLIRGeneratorTool();
         boolean nonNull;
         if (getValue().stamp() instanceof AbstractObjectStamp) {
-            nonNull = StampTool.isPointerNonNull(getValue().stamp());
+            nonNull = StampTool.isObjectNonNull(getValue().stamp());
         } else {
             // metaspace pointers are never null
             nonNull = true;
