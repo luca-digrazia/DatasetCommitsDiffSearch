@@ -22,42 +22,64 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
-import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-@NodeInfo(nameTemplate = "RuntimeCall#{p#descriptor/s}")
+@NodeInfo(nameTemplate = "RuntimeCall#{p#call/s}")
 public final class RuntimeCallNode extends AbstractCallNode implements LIRLowerable {
 
-    private final Descriptor descriptor;
+    private final RuntimeCall call;
 
-    public RuntimeCallNode(Descriptor descriptor, ValueNode... arguments) {
-        super(StampFactory.forKind(Kind.fromJavaClass(descriptor.getResultType())), arguments);
-        this.descriptor = descriptor;
+    public RuntimeCall call() {
+        return call;
     }
 
-    public Descriptor getDescriptor() {
-        return descriptor;
+    public RuntimeCallNode(RuntimeCall call) {
+        this(call, new ValueNode[0]);
+    }
+
+    public RuntimeCallNode(RuntimeCall call, ValueNode... arguments) {
+        super(StampFactory.forKind(call.getResultKind()), arguments);
+        this.call = call;
     }
 
     @Override
     public boolean hasSideEffect() {
-        return descriptor.hasSideEffect();
+        return call.hasSideEffect();
     }
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        gen.visitRuntimeCall(this);
+        gen.emitRuntimeCall(this);
     }
 
     @Override
     public String toString(Verbosity verbosity) {
         if (verbosity == Verbosity.Name) {
-            return super.toString(verbosity) + "#" + descriptor;
+            return super.toString(verbosity) + "#" + call;
         }
         return super.toString(verbosity);
+    }
+
+    // specialized on return type (instead of public static <T> T performCall) until boxing/unboxing is sorted out in intrinsification
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static <S> double callDouble(@ConstantNodeParameter RuntimeCall call, S arg1) {
+        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static long callLong(@ConstantNodeParameter RuntimeCall call) {
+        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static void runtimeCall(@ConstantNodeParameter RuntimeCall call) {
+        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
     }
 }
