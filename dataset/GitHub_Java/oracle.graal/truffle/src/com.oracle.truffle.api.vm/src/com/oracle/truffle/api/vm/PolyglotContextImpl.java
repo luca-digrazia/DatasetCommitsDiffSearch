@@ -84,12 +84,12 @@ class PolyglotContextImpl extends AbstractContextImpl implements VMObject {
         super(engine.impl);
         this.applicationArguments = applicationArguments;
 
-        if (out == null || out == INSTRUMENT.getOut(engine.out)) {
+        if (out == null) {
             this.out = engine.out;
         } else {
             this.out = INSTRUMENT.createDelegatingOutput(out, engine.out);
         }
-        if (err == null || err == INSTRUMENT.getOut(engine.err)) {
+        if (err == null) {
             this.err = engine.err;
         } else {
             this.err = INSTRUMENT.createDelegatingOutput(err, engine.err);

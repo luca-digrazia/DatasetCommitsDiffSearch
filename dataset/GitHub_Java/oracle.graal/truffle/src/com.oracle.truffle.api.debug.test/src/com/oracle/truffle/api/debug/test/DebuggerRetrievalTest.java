@@ -29,7 +29,7 @@ import java.util.Collections;
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
-import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Value;
 import org.junit.Assert;
 import org.junit.Test;
@@ -46,14 +46,14 @@ public class DebuggerRetrievalTest {
 
     @Test
     public void testFromLanguage() {
-        Value debuggerValue = Context.create(LanguageThatNeedsDebugger.ID).lookup(LanguageThatNeedsDebugger.ID, "debugger");
+        Value debuggerValue = Engine.create().getLanguage(LanguageThatNeedsDebugger.ID).createContext().lookup("debugger");
         Assert.assertTrue(debuggerValue.asBoolean());
     }
 
     @Test
     public void testFromInstrument() {
         InstrumentThatNeedsDebugger.haveDebugger = false;
-        Context.newBuilder().option(InstrumentThatNeedsDebugger.ID + ".dbg", "").build();
+        Engine.newBuilder().setOption(InstrumentThatNeedsDebugger.ID + ".dbg", "").build();
         Assert.assertTrue(InstrumentThatNeedsDebugger.haveDebugger);
     }
 

@@ -248,11 +248,6 @@ public abstract class Accessor {
             return new DelegatingOutputStream(out, delegate);
         }
 
-        @SuppressWarnings("static-method")
-        public final OutputStream getOut(DispatchOutputStream out) {
-            return out.getOut();
-        }
-
         public abstract OptionDescriptors describeOptions(Object instrumentationHandler, Object key, String requiredGroup);
 
     }
