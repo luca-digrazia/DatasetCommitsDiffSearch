@@ -22,28 +22,23 @@
  */
 package com.oracle.graal.compiler.gen;
 
-import com.oracle.jvmci.code.ValueUtil;
-import com.oracle.jvmci.code.StackSlot;
-import com.oracle.jvmci.code.CallingConvention;
-import com.oracle.jvmci.meta.Value;
-import com.oracle.jvmci.meta.Kind;
-import com.oracle.jvmci.meta.LIRKind;
-import com.oracle.jvmci.meta.AllocatableValue;
-import com.oracle.jvmci.meta.PlatformKind;
-import com.oracle.jvmci.meta.JavaConstant;
-
-import static com.oracle.jvmci.code.ValueUtil.*;
-import static com.oracle.jvmci.debug.JVMCIDebugConfig.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.compiler.GraalDebugConfig.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.lir.LIR.*;
 
 import java.util.*;
 import java.util.Map.Entry;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.match.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
@@ -59,25 +54,22 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.debug.Debug.Scope;
 
 /**
  * This class traverses the HIR instructions and generates LIR instructions from them.
  */
 @MatchableNode(nodeClass = ConstantNode.class, shareable = true)
 @MatchableNode(nodeClass = FloatConvertNode.class, inputs = {"value"})
-@MatchableNode(nodeClass = FloatingReadNode.class, inputs = {"address"})
+@MatchableNode(nodeClass = FloatingReadNode.class, inputs = {"object", "location"})
 @MatchableNode(nodeClass = IfNode.class, inputs = {"condition"})
 @MatchableNode(nodeClass = SubNode.class, inputs = {"x", "y"})
 @MatchableNode(nodeClass = LeftShiftNode.class, inputs = {"x", "y"})
 @MatchableNode(nodeClass = NarrowNode.class, inputs = {"value"})
-@MatchableNode(nodeClass = ReadNode.class, inputs = {"address"})
+@MatchableNode(nodeClass = ReadNode.class, inputs = {"object", "location"})
 @MatchableNode(nodeClass = ReinterpretNode.class, inputs = {"value"})
 @MatchableNode(nodeClass = SignExtendNode.class, inputs = {"value"})
 @MatchableNode(nodeClass = UnsignedRightShiftNode.class, inputs = {"x", "y"})
-@MatchableNode(nodeClass = WriteNode.class, inputs = {"address", "value"})
+@MatchableNode(nodeClass = WriteNode.class, inputs = {"object", "location", "value"})
 @MatchableNode(nodeClass = ZeroExtendNode.class, inputs = {"value"})
 @MatchableNode(nodeClass = AndNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = FloatEqualsNode.class, inputs = {"x", "y"}, commutative = true)
@@ -92,6 +84,7 @@ import com.oracle.jvmci.debug.Debug.Scope;
 @MatchableNode(nodeClass = OrNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = XorNode.class, inputs = {"x", "y"}, commutative = true)
 @MatchableNode(nodeClass = PiNode.class, inputs = {"object"})
+@MatchableNode(nodeClass = ConstantLocationNode.class, shareable = true)
 public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGenerationDebugContext {
 
     private final NodeMap<Value> nodeOperands;
@@ -202,21 +195,17 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     }
 
     protected LIRKind getExactPhiKind(PhiNode phi) {
-        // TODO (je): maybe turn this into generator-style instead of allocating an ArrayList.
-        ArrayList<LIRKind> values = new ArrayList<>(phi.valueCount());
+        ArrayList<Value> values = new ArrayList<>(phi.valueCount());
         for (int i = 0; i < phi.valueCount(); i++) {
             ValueNode node = phi.valueAt(i);
             Value value = node instanceof ConstantNode ? ((ConstantNode) node).asJavaConstant() : getOperand(node);
             if (value != null) {
-                values.add(value.getLIRKind());
+                values.add(value);
             } else {
-                assert node instanceof ConstantNode || isPhiInputFromBackedge(phi, i) : String.format("Input %s to phi node %s is not yet available although it is not coming from a loop back edge",
-                                node, phi);
-                // non-java constant -> get Kind from stamp.
-                values.add(getLIRGeneratorTool().getLIRKind(node.stamp()));
+                assert isPhiInputFromBackedge(phi, i) : String.format("Input %s to phi node %s is not yet available although it is not coming from a loop back edge", node, phi);
             }
         }
-        LIRKind derivedKind = LIRKind.merge(values);
+        LIRKind derivedKind = LIRKind.merge(values.toArray(new Value[values.size()]));
         assert verifyPHIKind(derivedKind, gen.getLIRKind(phi.stamp()));
         return derivedKind;
     }
@@ -303,10 +292,10 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
                         if (!peephole(valueNode)) {
                             try {
                                 doRoot(valueNode);
-                            } catch (JVMCIError e) {
-                                throw GraalGraphJVMCIError.transformAndAddContext(e, valueNode);
+                            } catch (GraalInternalError e) {
+                                throw GraalGraphInternalError.transformAndAddContext(e, valueNode);
                             } catch (Throwable e) {
-                                throw new GraalGraphJVMCIError(e).addContext(valueNode);
+                                throw new GraalGraphInternalError(e).addContext(valueNode);
                             }
                         }
                     } else if (ComplexMatchValue.INTERIOR_MATCH.equals(operand)) {
@@ -334,7 +323,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
                      * If we have more than one successor, we cannot just use the first one. Since
                      * successors are unordered, this would be a random choice.
                      */
-                    throw new JVMCIError("Block without BlockEndOp: " + block.getEndNode());
+                    throw new GraalInternalError("Block without BlockEndOp: " + block.getEndNode());
                 }
                 gen.emitJump(getLIRBlock((FixedNode) successors.first()));
             }
@@ -396,7 +385,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         } else if (node instanceof ArithmeticLIRLowerable) {
             ((ArithmeticLIRLowerable) node).generate(this, gen);
         } else {
-            throw JVMCIError.shouldNotReachHere("node is not LIRLowerable: " + node);
+            throw GraalInternalError.shouldNotReachHere("node is not LIRLowerable: " + node);
         }
     }
 
@@ -495,7 +484,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         } else if (node instanceof IntegerTestNode) {
             emitIntegerTestBranch((IntegerTestNode) node, trueSuccessor, falseSuccessor, trueSuccessorProbability);
         } else {
-            throw JVMCIError.unimplemented(node.toString());
+            throw GraalInternalError.unimplemented(node.toString());
         }
     }
 
@@ -540,7 +529,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
             IntegerTestNode test = (IntegerTestNode) node;
             return gen.emitIntegerTestMove(operand(test.getX()), operand(test.getY()), trueValue, falseValue);
         } else {
-            throw JVMCIError.unimplemented(node.toString());
+            throw GraalInternalError.unimplemented(node.toString());
         }
     }
 
@@ -565,7 +554,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         } else if (callTarget instanceof IndirectCallTargetNode) {
             emitIndirectCall((IndirectCallTargetNode) callTarget, result, parameters, AllocatableValue.NONE, callState);
         } else {
-            throw JVMCIError.shouldNotReachHere();
+            throw GraalInternalError.shouldNotReachHere();
         }
 
         if (isLegal(result)) {
@@ -593,7 +582,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
                 result[j] = operand;
                 j++;
             } else {
-                throw JVMCIError.shouldNotReachHere("I thought we no longer have null entries for two-slot types...");
+                throw GraalInternalError.shouldNotReachHere("I thought we no longer have null entries for two-slot types...");
             }
         }
         return result;
