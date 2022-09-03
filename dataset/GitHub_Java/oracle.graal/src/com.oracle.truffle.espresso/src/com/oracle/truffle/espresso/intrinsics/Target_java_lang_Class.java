@@ -64,7 +64,7 @@ public class Target_java_lang_Class {
                     @Type(String.class) StaticObject name) {
 
         String hostName = MetaUtil.toInternalName(Meta.toHost(name));
-        return EspressoLanguage.getCurrentContext().getRegistries().resolveWithBootClassLoader(TypeDescriptors.forPrimitive(JavaKind.fromTypeString(hostName))).mirror();
+        return EspressoLanguage.getCurrentContext().getRegistries().resolve(TypeDescriptors.forPrimitive(JavaKind.fromTypeString(hostName)), null).mirror();
     }
 
     @Intrinsic(hasReceiver = true)
@@ -76,7 +76,7 @@ public class Target_java_lang_Class {
     public static @Type(Class.class) StaticObject forName0(
                     @Type(String.class) StaticObject name,
                     boolean initialize,
-                    @Type(ClassLoader.class) StaticObject loader,
+                    @Type(ClassLoader.class) Object loader,
                     @Type(Class.class) StaticObject caller) {
 
         assert loader != null;
@@ -91,7 +91,7 @@ public class Target_java_lang_Class {
         }
 
         try {
-            Klass klass = context.getRegistries().resolve(context.getTypeDescriptors().make(typeDesc), loader);
+            Klass klass = context.getRegistries().resolve(context.getTypeDescriptors().make(typeDesc), loader == StaticObject.NULL ? null : loader);
             if (initialize) {
                 meta(klass).safeInitialize();
             }
@@ -114,7 +114,13 @@ public class Target_java_lang_Class {
 
     @Intrinsic(hasReceiver = true)
     public static @Type(ClassLoader.class) StaticObject getClassLoader0(@Type(Class.class) StaticObjectClass self) {
-        return self.getMirror().getClassLoader();
+        Object cl = self.getMirror().getClassLoader();
+        // Boot class loader.
+        if (cl == null) {
+            return StaticObject.NULL;
+        }
+        // Guest-defined class loader.
+        return (StaticObject) cl;
     }
 
     @Intrinsic(hasReceiver = true)
