@@ -28,7 +28,7 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
-public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
+public class ControlFlowGraph {
 
     public final StructuredGraph graph;
 
@@ -200,7 +200,7 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
     // Connect blocks (including loop backward edges), but ignoring dead code (blocks with id < 0).
     private void connectBlocks() {
         for (Block block : reversePostOrder) {
-            List<Block> predecessors = new ArrayList<>(4);
+            List<Block> predecessors = new ArrayList<>();
             for (Node predNode : block.getBeginNode().cfgPredecessors()) {
                 Block predBlock = nodeToBlock.get(predNode);
                 if (predBlock.id >= 0) {
@@ -217,7 +217,7 @@ public class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
             }
             block.predecessors = predecessors;
 
-            List<Block> successors = new ArrayList<>(4);
+            List<Block> successors = new ArrayList<>();
             for (Node suxNode : block.getEndNode().cfgSuccessors()) {
                 Block suxBlock = nodeToBlock.get(suxNode);
                 assert suxBlock.id >= 0;
