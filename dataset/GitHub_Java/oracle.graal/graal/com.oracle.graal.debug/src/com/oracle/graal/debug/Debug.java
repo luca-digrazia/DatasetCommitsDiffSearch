@@ -30,7 +30,6 @@ import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-import com.oracle.graal.debug.DelegatingDebugConfig.Level;
 import com.oracle.graal.debug.internal.*;
 
 /**
@@ -319,7 +318,7 @@ public class Debug {
         for (Object obj : context()) {
             context.add(obj);
         }
-        return Debug.sandbox("forceLog", new DelegatingDebugConfig().override(Level.LOG, Integer.MAX_VALUE).enable(LOG_METHOD), context.toArray());
+        return Debug.sandbox("forceLog", new DelegatingDebugConfig().enable(LOG).enable(LOG_METHOD), context.toArray());
     }
 
     /**
