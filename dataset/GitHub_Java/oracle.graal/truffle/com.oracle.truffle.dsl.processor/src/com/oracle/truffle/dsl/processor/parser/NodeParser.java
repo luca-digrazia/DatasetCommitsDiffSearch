@@ -62,11 +62,10 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.NodeFields;
-import com.oracle.truffle.api.dsl.Introspectable;
+import com.oracle.truffle.api.dsl.ShortCircuit;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.dsl.internal.DSLOptions;
-import com.oracle.truffle.api.dsl.internal.DSLOptions.DSLGenerator;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.dsl.processor.CompileErrorException;
@@ -101,9 +100,7 @@ import com.oracle.truffle.dsl.processor.model.TypeSystemData;
 @DSLOptions
 public class NodeParser extends AbstractParser<NodeData> {
 
-    @SuppressWarnings("deprecation") public static final List<Class<? extends Annotation>> ANNOTATIONS = Arrays.asList(Fallback.class, TypeSystemReference.class,
-                    com.oracle.truffle.api.dsl.ShortCircuit.class, Specialization.class,
-                    NodeChild.class,
+    public static final List<Class<? extends Annotation>> ANNOTATIONS = Arrays.asList(Fallback.class, TypeSystemReference.class, ShortCircuit.class, Specialization.class, NodeChild.class,
                     NodeChildren.class);
 
     @Override
@@ -200,14 +197,6 @@ public class NodeParser extends AbstractParser<NodeData> {
             return node;
         }
 
-        AnnotationMirror reflectable = findFirstAnnotation(lookupTypes, Introspectable.class);
-        if (reflectable != null) {
-            node.setReflectable(true);
-            if (node.getTypeSystem().getOptions().defaultGenerator() != DSLGenerator.FLAT) {
-                node.addError(reflectable, null, "Reflection is not supported by the used DSL layout. Only the flat DSL layout supports reflection.");
-            }
-        }
-
         node.getFields().addAll(parseFields(lookupTypes, members));
         node.getChildren().addAll(parseChildren(lookupTypes, members));
         node.getChildExecutions().addAll(parseExecutions(node.getFields(), node.getChildren(), members));
@@ -216,6 +205,10 @@ public class NodeParser extends AbstractParser<NodeData> {
         initializeExecutableTypes(node);
         initializeImportGuards(node, lookupTypes, members);
         initializeChildren(node);
+
+        if (node.hasErrors()) {
+            return node; // error sync point
+        }
 
         if (node.hasErrors()) {
             return node; // error sync point
@@ -498,11 +491,10 @@ public class NodeParser extends AbstractParser<NodeData> {
         return fields;
     }
 
-    @SuppressWarnings("deprecation")
     private List<NodeChildData> parseChildren(final List<TypeElement> typeHierarchy, List<? extends Element> elements) {
         Set<String> shortCircuits = new HashSet<>();
         for (ExecutableElement method : ElementFilter.methodsIn(elements)) {
-            AnnotationMirror mirror = ElementUtils.findAnnotationMirror(processingEnv, method, com.oracle.truffle.api.dsl.ShortCircuit.class);
+            AnnotationMirror mirror = ElementUtils.findAnnotationMirror(processingEnv, method, ShortCircuit.class);
             if (mirror != null) {
                 shortCircuits.add(ElementUtils.getAnnotationValue(String.class, mirror, "value"));
             }
@@ -581,13 +573,12 @@ public class NodeParser extends AbstractParser<NodeData> {
         return filteredChildren;
     }
 
-    @SuppressWarnings("deprecation")
     private List<NodeExecutionData> parseExecutions(List<NodeFieldData> fields, List<NodeChildData> children, List<? extends Element> elements) {
         // pre-parse short circuits
         Set<String> shortCircuits = new HashSet<>();
         List<ExecutableElement> methods = ElementFilter.methodsIn(elements);
         for (ExecutableElement method : methods) {
-            AnnotationMirror mirror = ElementUtils.findAnnotationMirror(processingEnv, method, com.oracle.truffle.api.dsl.ShortCircuit.class);
+            AnnotationMirror mirror = ElementUtils.findAnnotationMirror(processingEnv, method, ShortCircuit.class);
             if (mirror != null) {
                 shortCircuits.add(ElementUtils.getAnnotationValue(String.class, mirror, "value"));
             }
@@ -933,12 +924,12 @@ public class NodeParser extends AbstractParser<NodeData> {
         initializeOrder(node);
         initializePolymorphism(node); // requires specializations
         initializeReachability(node);
-        initializeReplaces(node);
-        resolveReplaces(node);
+        initializeContains(node);
+        resolveContains(node);
 
         List<SpecializationData> specializations = node.getSpecializations();
         for (SpecializationData cur : specializations) {
-            for (SpecializationData contained : cur.getReplaces()) {
+            for (SpecializationData contained : cur.getContains()) {
                 if (contained != cur) {
                     contained.getExcludedBy().add(cur);
                 }
@@ -996,27 +987,25 @@ public class NodeParser extends AbstractParser<NodeData> {
         }
     }
 
-    private static void initializeReplaces(NodeData node) {
+    private static void initializeContains(NodeData node) {
         for (SpecializationData specialization : node.getSpecializations()) {
-            Set<SpecializationData> resolvedSpecializations = specialization.getReplaces();
+            Set<SpecializationData> resolvedSpecializations = specialization.getContains();
             resolvedSpecializations.clear();
-            Set<String> includeNames = specialization.getReplacesNames();
+            Set<String> includeNames = specialization.getContainsNames();
             for (String includeName : includeNames) {
                 // TODO reduce complexity of this lookup.
                 SpecializationData foundSpecialization = lookupSpecialization(node, includeName);
 
-                AnnotationValue value = ElementUtils.getAnnotationValue(specialization.getMarkerAnnotation(), "replaces");
-                if (value == null) {
-                    // TODO remove if deprecated api was removed.
-                    value = ElementUtils.getAnnotationValue(specialization.getMarkerAnnotation(), "contains");
-                }
                 if (foundSpecialization == null) {
+                    AnnotationValue value = ElementUtils.getAnnotationValue(specialization.getMarkerAnnotation(), "contains");
                     specialization.addError(value, "The referenced specialization '%s' could not be found.", includeName);
                 } else {
                     if (foundSpecialization.compareTo(specialization) > 0) {
+                        AnnotationValue value = ElementUtils.getAnnotationValue(specialization.getMarkerAnnotation(), "contains");
                         if (foundSpecialization.compareTo(specialization) > 0) {
-                            specialization.addError(value, "The replaced specialization '%s' must be declared before the replacing specialization.", includeName);
+                            specialization.addError(value, "The contained specialization '%s' must be declared before the containing specialization.", includeName);
                         }
+
                     }
                     resolvedSpecializations.add(foundSpecialization);
                 }
@@ -1024,15 +1013,15 @@ public class NodeParser extends AbstractParser<NodeData> {
         }
     }
 
-    private void resolveReplaces(NodeData node) {
+    private void resolveContains(NodeData node) {
         // flatten transitive includes
         for (SpecializationData specialization : node.getSpecializations()) {
-            if (specialization.getReplaces().isEmpty()) {
+            if (specialization.getContains().isEmpty()) {
                 continue;
             }
             Set<SpecializationData> foundSpecializations = new HashSet<>();
             collectIncludes(specialization, foundSpecializations, new HashSet<SpecializationData>());
-            specialization.getReplaces().addAll(foundSpecializations);
+            specialization.getContains().addAll(foundSpecializations);
         }
     }
 
@@ -1050,12 +1039,12 @@ public class NodeParser extends AbstractParser<NodeData> {
     private void collectIncludes(SpecializationData specialization, Set<SpecializationData> found, Set<SpecializationData> visited) {
         if (visited.contains(specialization)) {
             // circle found
-            specialization.addError("Circular replaced specialization '%s' found.", specialization.createReferenceName());
+            specialization.addError("Circular contained specialization '%s' found.", specialization.createReferenceName());
             return;
         }
         visited.add(specialization);
 
-        for (SpecializationData included : specialization.getReplaces()) {
+        for (SpecializationData included : specialization.getContains()) {
             collectIncludes(included, found, new HashSet<>(visited));
             found.add(included);
         }
@@ -1512,7 +1501,6 @@ public class NodeParser extends AbstractParser<NodeData> {
         node.getSpecializations().add(polymorphic);
     }
 
-    @SuppressWarnings("deprecation")
     private void initializeShortCircuits(NodeData node) {
         Map<String, List<ShortCircuitData>> groupedShortCircuits = groupShortCircuits(node.getShortCircuits());
 
@@ -1527,7 +1515,7 @@ public class NodeParser extends AbstractParser<NodeData> {
             List<ShortCircuitData> availableCircuits = groupedShortCircuits.get(valueName);
 
             if (availableCircuits == null || availableCircuits.isEmpty()) {
-                node.addError("@%s method for short cut value '%s' required.", com.oracle.truffle.api.dsl.ShortCircuit.class.getSimpleName(), valueName);
+                node.addError("@%s method for short cut value '%s' required.", ShortCircuit.class.getSimpleName(), valueName);
                 valid = false;
                 continue;
             }
@@ -1557,7 +1545,7 @@ public class NodeParser extends AbstractParser<NodeData> {
             }
 
             if (genericCircuit == null) {
-                node.addError("No generic @%s method available for short cut value '%s'.", com.oracle.truffle.api.dsl.ShortCircuit.class.getSimpleName(), valueName);
+                node.addError("No generic @%s method available for short cut value '%s'.", ShortCircuit.class.getSimpleName(), valueName);
                 valid = false;
                 continue;
             }
