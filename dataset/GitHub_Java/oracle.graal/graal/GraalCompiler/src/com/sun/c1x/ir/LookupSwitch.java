@@ -78,16 +78,9 @@ public final class LookupSwitch extends Switch {
         int l = numberOfCases();
         for (int i = 0; i < l; i++) {
             INSTRUCTION.advance(out);
-            out.printf("case %5d: B%d%n", keyAt(i), blockSuccessors().get(i));
+            out.printf("case %5d: B%d%n", keyAt(i), blockSuccessors().get(i).blockID);
         }
         INSTRUCTION.advance(out);
         out.print("default   : ").print(defaultSuccessor());
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        LookupSwitch x = new LookupSwitch(null, Arrays.asList(new Instruction[numberOfCases() + 1]), keys.clone(), into);
-        x.setNonNull(isNonNull());
-        return x;
     }
 }

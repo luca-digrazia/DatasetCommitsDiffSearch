@@ -24,7 +24,6 @@ package com.sun.c1x.ir;
 
 import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
-import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
 
 /**
@@ -39,11 +38,10 @@ public final class Goto extends BlockEnd {
      * Constructs a new Goto instruction.
      * @param succ the successor block of the goto
      * @param stateAfter the frame state at the end of this block
-     * @param isSafepoint {@code true} if the goto should be considered a safepoint (e.g. backward branch)
      * @param graph
      */
-    public Goto(BlockBegin succ, FrameState stateAfter, boolean isSafepoint, Graph graph) {
-        super(CiKind.Illegal, stateAfter, isSafepoint, 1, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    public Goto(Instruction succ, Graph graph) {
+        super(CiKind.Illegal, 1, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setBlockSuccessor(0, succ);
     }
 
@@ -54,9 +52,6 @@ public final class Goto extends BlockEnd {
 
     @Override
     public void print(LogStream out) {
-        out.print("goto B").print(defaultSuccessor().blockID);
-        if (isSafepoint()) {
-            out.print(" (safepoint)");
-        }
+        out.print("goto ").print(defaultSuccessor());
     }
 }

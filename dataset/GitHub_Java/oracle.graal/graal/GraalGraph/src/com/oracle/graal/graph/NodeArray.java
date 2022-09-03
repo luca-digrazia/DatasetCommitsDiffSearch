@@ -141,10 +141,4 @@ public class NodeArray extends AbstractList<Node> {
     public int size() {
         return nodes.length;
     }
-
-    public void clearAll() {
-        for (int i = 0; i < nodes.length; i++) {
-            set(i, Node.Null);
-        }
-    }
 }

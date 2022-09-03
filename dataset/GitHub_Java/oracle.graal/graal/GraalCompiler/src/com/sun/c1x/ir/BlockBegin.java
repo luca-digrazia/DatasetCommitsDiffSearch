@@ -37,7 +37,8 @@ import com.sun.cri.ci.*;
  */
 public final class BlockBegin extends StateSplit {
 
-    private static final int INPUT_COUNT = 0;
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_STATE_BEFORE = 0;
 
     private static final int SUCCESSOR_COUNT = 0;
 
@@ -134,7 +135,7 @@ public final class BlockBegin extends StateSplit {
             ArrayList<BlockBegin> excBlocks = new ArrayList<BlockBegin>();
             while (inst != null) {
                 if (inst instanceof ExceptionEdgeInstruction) {
-                    excBlocks.add((BlockBegin) ((ExceptionEdgeInstruction) inst).exceptionEdge());
+                    excBlocks.add(((ExceptionEdgeInstruction) inst).exceptionEdge());
                 }
                 inst = inst.next();
             }
@@ -174,12 +175,12 @@ public final class BlockBegin extends StateSplit {
         if (end() != null) {
             builder.append(" -> ");
             boolean hasSucc = false;
-            for (Instruction s : end().blockSuccessors()) {
+            for (BlockBegin s : end().blockSuccessors()) {
                 if (hasSucc) {
                     builder.append(", ");
                 }
                 builder.append("#");
-                builder.append(s.id());
+                builder.append(s.blockID);
                 hasSucc = true;
             }
         }

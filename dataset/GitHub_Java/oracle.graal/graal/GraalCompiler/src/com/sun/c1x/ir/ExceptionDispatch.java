@@ -114,10 +114,10 @@ public final class ExceptionDispatch extends BlockEnd {
         print("instanceof").
         print(' ').
         print(catchType().name()).
-        print(" then ").
-        print(blockSuccessors().get(1).toString()).
+        print(" then B").
+        print(blockSuccessors().get(1).blockID).
         print(" else B").
-        print(blockSuccessors().get(0).toString());
+        print(blockSuccessors().get(0).blockID);
     }
 
     @Override
@@ -125,10 +125,5 @@ public final class ExceptionDispatch extends BlockEnd {
         return "Dispatch " + catchType().name();
     }
 
-    @Override
-    public Node copy(Graph into) {
-        ExceptionDispatch x = new ExceptionDispatch(null, null, null, catchType, into);
-        x.setNonNull(isNonNull());
-        return x;
-    }
+
 }

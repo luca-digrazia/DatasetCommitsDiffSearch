@@ -35,7 +35,8 @@ public abstract class BlockEnd extends Instruction {
 
     private static final int INPUT_COUNT = 0;
 
-    private static final int SUCCESSOR_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 1;
+    private static final int SUCCESSOR_STATE_AFTER = 0;
     private final int blockSuccessorCount;
 
     @Override
@@ -58,7 +59,7 @@ public abstract class BlockEnd extends Instruction {
 
     public Instruction setBlockSuccessor(int index, Instruction n) {
         assert index >= 0 && index < blockSuccessorCount;
-//        assert n == null || n instanceof BlockBegin : "only BlockBegins, for now... " + n.getClass();
+        assert n == null || n instanceof BlockBegin : "only BlockBegins, for now... " + n.getClass();
         return (BlockBegin) successors().set(super.successorCount() + SUCCESSOR_COUNT + index, n);
     }
 

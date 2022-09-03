@@ -80,16 +80,9 @@ public final class TableSwitch extends Switch {
         int l = numberOfCases();
         for (int i = 0; i < l; i++) {
             INSTRUCTION.advance(out);
-            out.printf("case %5d: B%d%n", lowKey() + i, blockSuccessors().get(i));
+            out.printf("case %5d: B%d%n", lowKey() + i, blockSuccessors().get(i).blockID);
         }
         INSTRUCTION.advance(out);
         out.print("default   : ").print(defaultSuccessor());
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        TableSwitch x = new TableSwitch(null, Arrays.asList(new Instruction[numberOfCases() + 1]), lowKey, into);
-        x.setNonNull(isNonNull());
-        return x;
     }
 }
