@@ -182,19 +182,20 @@ public abstract class PartialEvaluator {
     }
 
     @SuppressWarnings("unused")
-    public StructuredGraph createGraph(DebugContext debug, final OptimizedCallTarget callTarget, TruffleInlining inliningDecision, ResolvedJavaMethod rootMethod,
-                    AllowAssumptions allowAssumptions, CompilationIdentifier compilationId, CancellableCompileTask task) {
+    public StructuredGraph createGraph(DebugContext debug, final OptimizedCallTarget callTarget, TruffleInlining inliningDecision, ResolvedJavaMethod rootMethod, AllowAssumptions allowAssumptions,
+                    CompilationIdentifier compilationId, CancellableCompileTask task) {
         return createGraph(debug, callTarget, inliningDecision, rootForCallTarget(callTarget), allowAssumptions, compilationId, callTarget.getSpeculationLog(), task);
     }
 
-    public StructuredGraph createGraph(DebugContext debug, final OptimizedCallTarget callTarget, TruffleInlining inliningDecision,
-                    AllowAssumptions allowAssumptions, CompilationIdentifier compilationId, CancellableCompileTask task) {
+    public StructuredGraph createGraph(DebugContext debug, final OptimizedCallTarget callTarget, TruffleInlining inliningDecision, AllowAssumptions allowAssumptions,
+                    CompilationIdentifier compilationId,
+                    CancellableCompileTask task) {
         return createGraph(debug, callTarget, inliningDecision, rootForCallTarget(callTarget), allowAssumptions, compilationId, callTarget.getSpeculationLog(), task);
     }
 
     @SuppressWarnings("try")
-    public StructuredGraph createGraph(DebugContext debug, final OptimizedCallTarget callTarget, TruffleInlining inliningDecision, ResolvedJavaMethod rootMethod,
-                    AllowAssumptions allowAssumptions, CompilationIdentifier compilationId, SpeculationLog log, CancellableCompileTask task) {
+    public StructuredGraph createGraph(DebugContext debug, final OptimizedCallTarget callTarget, TruffleInlining inliningDecision, ResolvedJavaMethod rootMethod, AllowAssumptions allowAssumptions,
+                                       CompilationIdentifier compilationId, SpeculationLog log, CancellableCompileTask task) {
 
         String name = callTarget.toString();
         OptionValues options = TruffleCompilerOptions.getOptions();
@@ -561,7 +562,9 @@ public abstract class PartialEvaluator {
         TruffleInliningDecision decision = inlining.findByCall(callNode);
         if (decision == null) {
             PerformanceInformationHandler.reportDecisionIsNull(target, callNode);
-        } else if (decision.getTarget() != decision.getProfile().getCallNode().getCurrentCallTarget()) {
+        }
+
+        if (decision != null && decision.getTarget() != decision.getProfile().getCallNode().getCurrentCallTarget()) {
             PerformanceInformationHandler.reportCallTargetChanged(target, callNode, decision);
             return null;
         }

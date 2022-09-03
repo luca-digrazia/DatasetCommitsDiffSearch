@@ -49,7 +49,6 @@ import org.graalvm.compiler.graph.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
@@ -233,7 +232,7 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ResolvedJavaType frameType = stamp(NodeView.DEFAULT).javaType(tool.getMetaAccessProvider());
+        ResolvedJavaType frameType = stamp().javaType(tool.getMetaAccessProvider());
         ResolvedJavaField[] frameFields = frameType.getInstanceFields(true);
 
         ResolvedJavaField descriptorField = findField(frameFields, "descriptor");
