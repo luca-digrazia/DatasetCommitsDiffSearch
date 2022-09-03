@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot.meta;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodes.*;
@@ -37,11 +36,9 @@ public interface HotSpotLoweringProvider extends LoweringProvider {
 
     void initialize(HotSpotProviders providers, HotSpotVMConfig config);
 
-    int arrayScalingFactor(Kind kind);
+    int getScalingFactor(Kind kind);
 
     IndexedLocationNode createArrayLocation(Graph graph, Kind elementKind, ValueNode index, boolean initialization);
-
-    Stamp loadStamp(Stamp stamp, Kind kind);
 
     ValueNode implicitLoadConvert(StructuredGraph graph, Kind kind, ValueNode value);
 
