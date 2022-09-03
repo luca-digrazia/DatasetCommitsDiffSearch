@@ -98,7 +98,7 @@ public final class TypeReference {
         if (type == null) {
             return null;
         }
-        ResolvedJavaType exactType = type.isLeaf() ? type : null;
+        ResolvedJavaType exactType = type.asExactType();
         if (exactType == null && assumptions != null) {
             Assumptions.AssumptionResult<ResolvedJavaType> leafConcreteSubtype = type.findLeafConcreteSubtype();
             if (leafConcreteSubtype != null && leafConcreteSubtype.canRecordTo(assumptions)) {
@@ -147,7 +147,7 @@ public final class TypeReference {
                 // Returns Object[].class
                 return type.getSuperclass().getArrayClass();
             }
-            if (type.isInterface()) {
+            if (type.isInterface() && !type.isTrustedInterfaceType()) {
                 return null;
             }
         }

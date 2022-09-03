@@ -22,9 +22,8 @@
  */
 package com.oracle.graal.compiler.common.type;
 
-import com.oracle.graal.debug.GraalError;
-
 import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -179,11 +178,6 @@ public class StampFactory {
         return new IntegerStamp(bits, newLowerBound, newUpperBound, limit.downMask() | maskStamp.downMask(), limit.upMask() & maskStamp.upMask());
     }
 
-    public static IntegerStamp forIntegerWithMask(int bits, long newLowerBound, long newUpperBound, long newDownMask, long newUpMask) {
-        IntegerStamp limit = StampFactory.forInteger(bits, newLowerBound, newUpperBound);
-        return new IntegerStamp(bits, newLowerBound, newUpperBound, limit.downMask() | newDownMask, limit.upMask() & newUpMask);
-    }
-
     public static IntegerStamp forInteger(int bits) {
         return new IntegerStamp(bits, CodeUtil.minValue(bits), CodeUtil.maxValue(bits), 0, CodeUtil.mask(bits));
     }
@@ -247,7 +241,7 @@ public class StampFactory {
                     return objectNonNull();
                 }
             default:
-                throw new GraalError("unexpected kind: %s", kind);
+                throw new JVMCIError("unexpected kind: %s", kind);
         }
     }
 
@@ -272,15 +266,15 @@ public class StampFactory {
         return objectAlwaysNullStamp;
     }
 
-    public static ObjectStamp object(TypeReference type) {
+    public static Stamp object(TypeReference type) {
         return object(type, false);
     }
 
-    public static ObjectStamp objectNonNull(TypeReference type) {
+    public static Stamp objectNonNull(TypeReference type) {
         return object(type, true);
     }
 
-    public static ObjectStamp object(TypeReference type, boolean nonNull) {
+    public static Stamp object(TypeReference type, boolean nonNull) {
         if (type == null) {
             return new ObjectStamp(null, false, nonNull, false);
         } else {
