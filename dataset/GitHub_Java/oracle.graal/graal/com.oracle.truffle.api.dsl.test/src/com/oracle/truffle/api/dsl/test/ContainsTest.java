@@ -100,7 +100,7 @@ public class ContainsTest {
             return a == 0;
         }
 
-        @Specialization(guards = "isZero(a)")
+        @Specialization(guards = "isZero")
         int f1(int a) {
             return a + 1;
         }
@@ -142,16 +142,17 @@ public class ContainsTest {
             return a > 0;
         }
 
+        @Implies("isGreaterZero")
         static boolean isOne(int a) {
             return a == 1;
         }
 
-        @Specialization(guards = {"isOne(a)"})
+        @Specialization(guards = {"isOne"})
         int f1(int a) {
             return a + 1;
         }
 
-        @Specialization(contains = "f1", guards = {"isGreaterZero(a)"})
+        @Specialization(contains = "f1", guards = {"isGreaterZero"})
         int f2(int a) {
             if (a == 1) {
                 return 2;
@@ -189,16 +190,21 @@ public class ContainsTest {
     @NodeChild("a")
     abstract static class Contains4 extends ValueNode {
 
+        static boolean isGreaterEqualZero(int a) {
+            return a >= 0;
+        }
+
+        @Implies("isGreaterEqualZero")
         static boolean isOne(int a) {
             return a == 1;
         }
 
-        @Specialization(guards = "isOne(a)")
+        @Specialization(guards = {"isOne"})
         int f0(int a) {
             return 1;
         }
 
-        @Specialization(contains = "f0", guards = "a >= 0")
+        @Specialization(contains = "f0", guards = {"isGreaterEqualZero"})
         int f1(int a) {
             return a;
         }
@@ -323,7 +329,7 @@ public class ContainsTest {
             return a;
         }
 
-        @ExpectError({"Specialization is not reachable. It is shadowed by f0(double)."})
+        @ExpectError({"Specialization is not reachable. It is shadowed by f0(double).", "The contained specialization 'f0' is not fully compatible.%"})
         @Specialization(contains = "f0")
         int f1(int a) { // implicit type
             return a;
@@ -337,6 +343,7 @@ public class ContainsTest {
             return a;
         }
 
+        @ExpectError("The contained specialization 'f0' is not fully compatible.%")
         @Specialization(contains = "f0")
         Object f1(int a, Object b) {
             return a;
@@ -350,6 +357,7 @@ public class ContainsTest {
             return a;
         }
 
+        @ExpectError("The contained specialization 'f0' is not fully compatible.%")
         @Specialization(contains = "f0")
         Object f1(int a, double b) { // implicit type
             return a;
@@ -362,7 +370,7 @@ public class ContainsTest {
             return true;
         }
 
-        @Specialization(guards = "g1()")
+        @Specialization(guards = "g1")
         Object f0() {
             return null;
         }
@@ -384,8 +392,8 @@ public class ContainsTest {
             return null;
         }
 
-        @ExpectError({"Specialization is not reachable. It is shadowed by f0()."})
-        @Specialization(guards = "g1()", contains = "f0")
+        @ExpectError({"Specialization is not reachable. It is shadowed by f0().", "The contained specialization 'f0' is not fully compatible.%"})
+        @Specialization(guards = "g1", contains = "f0")
         Object f1() {
             return null;
         }
@@ -397,12 +405,13 @@ public class ContainsTest {
             return true;
         }
 
-        @Specialization(guards = "g1()")
+        @Specialization(guards = "g1")
         Object f0() {
             return null;
         }
 
-        @Specialization(guards = "!g1()", contains = "f0")
+        @ExpectError({"The contained specialization 'f0' is not fully compatible.%"})
+        @Specialization(guards = "!g1", contains = "f0")
         Object f1() {
             return null;
         }
@@ -418,12 +427,13 @@ public class ContainsTest {
             return true;
         }
 
-        @Specialization(guards = "g1()")
+        @Specialization(guards = "g1")
         Object f0() {
             return null;
         }
 
-        @Specialization(guards = "g2()", contains = "f0")
+        @ExpectError({"The contained specialization 'f0' is not fully compatible.%"})
+        @Specialization(guards = "g2", contains = "f0")
         Object f1() {
             return null;
         }
@@ -431,6 +441,7 @@ public class ContainsTest {
 
     abstract static class ContainsGuard5 extends ValueNode {
 
+        @Implies("g2")
         boolean g1() {
             return true;
         }
@@ -439,12 +450,12 @@ public class ContainsTest {
             return true;
         }
 
-        @Specialization(guards = "g1()")
+        @Specialization(guards = "g1")
         Object f0() {
             return null;
         }
 
-        @Specialization(guards = "g2()", contains = "f0")
+        @Specialization(guards = "g2", contains = "f0")
         Object f1() {
             return null;
         }
@@ -452,6 +463,7 @@ public class ContainsTest {
 
     abstract static class ContainsGuard6 extends ValueNode {
 
+        @Implies("!g2")
         boolean g1() {
             return true;
         }
@@ -460,12 +472,12 @@ public class ContainsTest {
             return true;
         }
 
-        @Specialization(guards = "g1()")
+        @Specialization(guards = "g1")
         Object f0() {
             return null;
         }
 
-        @Specialization(guards = "!g2()", contains = "f0")
+        @Specialization(guards = "!g2", contains = "f0")
         Object f1() {
             return null;
         }
@@ -481,12 +493,84 @@ public class ContainsTest {
             return true;
         }
 
-        @Specialization(guards = {"g1()", "g2()"})
+        @Specialization(guards = {"g1", "g2"})
         Object f0() {
             return null;
         }
 
-        @Specialization(guards = "g2()", contains = "f0")
+        @Specialization(guards = "g2", contains = "f0")
+        Object f1() {
+            return null;
+        }
+    }
+
+    @NodeAssumptions("a1")
+    abstract static class ContainsAssumption1 extends ValueNode {
+
+        @Specialization(assumptions = "a1")
+        Object f0() {
+            return null;
+        }
+
+        @Specialization(contains = "f0")
+        Object f1() {
+            return null;
+        }
+    }
+
+    @NodeAssumptions("a1")
+    abstract static class ContainsAssumption2 extends ValueNode {
+
+        @Specialization
+        Object f0() {
+            return null;
+        }
+
+        @ExpectError({"Specialization is not reachable. It is shadowed by f0().", "The contained specialization 'f0' is not fully compatible.%"})
+        @Specialization(contains = "f0", assumptions = "a1")
+        Object f1() {
+            return null;
+        }
+    }
+
+    @NodeAssumptions({"a1", "a2"})
+    abstract static class ContainsAssumption3 extends ValueNode {
+
+        @Specialization(assumptions = "a1")
+        Object f0() {
+            return null;
+        }
+
+        @ExpectError({"The contained specialization 'f0' is not fully compatible.%"})
+        @Specialization(contains = "f0", assumptions = "a2")
+        Object f1() {
+            return null;
+        }
+    }
+
+    @NodeAssumptions({"a1", "a2"})
+    abstract static class ContainsAssumption4 extends ValueNode {
+
+        @Specialization(assumptions = {"a1", "a2"})
+        Object f0() {
+            return null;
+        }
+
+        @Specialization(contains = "f0", assumptions = "a1")
+        Object f1() {
+            return null;
+        }
+    }
+
+    @NodeAssumptions({"a1", "a2"})
+    abstract static class ContainsAssumption5 extends ValueNode {
+
+        @Specialization(assumptions = {"a2", "a1"})
+        Object f0() {
+            return null;
+        }
+
+        @Specialization(contains = "f0", assumptions = "a1")
         Object f1() {
             return null;
         }
@@ -535,12 +619,20 @@ public class ContainsTest {
     @NodeChild("a")
     static class PolymorphicToMonomorphic0 extends ValueNode {
 
-        @Specialization(guards = "a == 1")
+        boolean isOne(int a) {
+            return a == 1;
+        }
+
+        boolean isTwo(int a) {
+            return a == 2;
+        }
+
+        @Specialization(guards = "isOne")
         int do1(int a) {
             return a;
         }
 
-        @Specialization(guards = "a == 2")
+        @Specialization(guards = "isTwo")
         int do2(int a) {
             return a;
         }
