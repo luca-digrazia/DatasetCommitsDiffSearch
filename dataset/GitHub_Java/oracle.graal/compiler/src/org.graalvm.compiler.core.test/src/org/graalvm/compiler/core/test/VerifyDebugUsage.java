@@ -78,7 +78,7 @@ public class VerifyDebugUsage extends VerifyPhase<PhaseContext> {
     MetaAccessProvider metaAccess;
 
     @Override
-    protected void verify(StructuredGraph graph, PhaseContext context) {
+    protected boolean verify(StructuredGraph graph, PhaseContext context) {
         metaAccess = context.getMetaAccess();
         ResolvedJavaType debugType = metaAccess.lookupJavaType(DebugContext.class);
         ResolvedJavaType nodeType = metaAccess.lookupJavaType(Node.class);
@@ -108,6 +108,7 @@ public class VerifyDebugUsage extends VerifyPhase<PhaseContext> {
                 }
             }
         }
+        return true;
     }
 
     private void verifyParameters(MethodCallTargetNode callTarget, StructuredGraph callerGraph, NodeInputList<? extends ValueNode> args, ResolvedJavaType stringType, int startArgIdx) {
@@ -149,8 +150,7 @@ public class VerifyDebugUsage extends VerifyPhase<PhaseContext> {
                     "org.graalvm.compiler.truffle.compiler.TruffleCompilerImpl.compilePEGraph",
                     "org.graalvm.compiler.core.test.VerifyDebugUsageTest$ValidDumpUsagePhase.run",
                     "org.graalvm.compiler.core.test.VerifyDebugUsageTest$InvalidConcatDumpUsagePhase.run",
-                    "org.graalvm.compiler.core.test.VerifyDebugUsageTest$InvalidDumpUsagePhase.run",
-                    "org.graalvm.compiler.hotspot.SymbolicSnippetEncoder.verifySnippetEncodeDecode"));
+                    "org.graalvm.compiler.core.test.VerifyDebugUsageTest$InvalidDumpUsagePhase.run"));
 
     /**
      * The set of methods allowed to call a {@code Debug.dump(...)} method with the {@code level}
@@ -166,7 +166,6 @@ public class VerifyDebugUsage extends VerifyPhase<PhaseContext> {
                     "org.graalvm.compiler.phases.BasePhase.dumpAfter",
                     "org.graalvm.compiler.replacements.ReplacementsImpl$GraphMaker.makeGraph",
                     "org.graalvm.compiler.replacements.SnippetTemplate.instantiate",
-                    "org.graalvm.compiler.replacements.SnippetTemplate.<init>",
                     "org.graalvm.compiler.hotspot.SymbolicSnippetEncoder.verifySnippetEncodeDecode"));
 
     private void verifyParameters(StructuredGraph callerGraph, MethodCallTargetNode debugCallTarget, List<? extends ValueNode> args, ResolvedJavaType stringType, int startArgIdx,
