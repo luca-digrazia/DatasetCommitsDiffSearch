@@ -96,7 +96,7 @@ public class GraphUtil {
         node.safeDelete();
 
         for (FloatingNode in : floatingInputs) {
-            if (in.isAlive() && in.usages().isEmpty()) {
+            if (in.usages().isEmpty()) {
                 killUnusedFloatingInputs(in);
             }
         }
