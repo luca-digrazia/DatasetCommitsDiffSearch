@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -103,13 +101,11 @@ public class AMD64AddressNode extends AddressNode implements Simplifiable, LIRLo
         AllocatableValue baseValue = base == null ? Value.ILLEGAL : tool.asAllocatable(gen.operand(base));
         AllocatableValue indexValue = index == null ? Value.ILLEGAL : tool.asAllocatable(gen.operand(index));
 
-        AllocatableValue baseReference = base == null ? null : LIRKind.derivedBaseFromValue(baseValue);
+        AllocatableValue baseReference = LIRKind.derivedBaseFromValue(baseValue);
         AllocatableValue indexReference;
         if (index == null) {
             indexReference = null;
         } else if (scale.equals(Scale.Times1)) {
-            indexReference = LIRKind.derivedBaseFromValue(indexValue);
-        } else if (LIRKind.isScalarCompressedReference(indexValue.getValueKind())) {
             indexReference = LIRKind.derivedBaseFromValue(indexValue);
         } else {
             if (LIRKind.isValue(indexValue)) {
