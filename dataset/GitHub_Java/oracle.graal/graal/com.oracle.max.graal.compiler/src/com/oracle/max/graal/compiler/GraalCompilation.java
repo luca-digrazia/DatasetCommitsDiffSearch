@@ -170,7 +170,7 @@ public final class GraalCompilation {
         map.build();
         if (compiler.isObserved()) {
             String label = CiUtil.format("BlockListBuilder %f %r %H.%n(%p)", method, true);
-            compiler.fireCompilationEvent(new CompilationEvent(this, label, map, method.codeSize()));
+            compiler.fireCompilationEvent(new CompilationEvent(this, label, map, method.code().length));
         }
         stats.bytecodeCount += method.code().length;
         return map;
@@ -206,7 +206,7 @@ public final class GraalCompilation {
             targetMethod = emitCode();
 
             if (GraalOptions.Meter) {
-                GraalMetrics.BytecodesCompiled += method.codeSize();
+                GraalMetrics.BytecodesCompiled += method.code().length;
             }
         } catch (CiBailout b) {
             return new CiResult(null, b, stats);
@@ -214,11 +214,7 @@ public final class GraalCompilation {
             if (GraalOptions.BailoutOnException) {
                 return new CiResult(null, new CiBailout("Exception while compiling: " + method, t), stats);
             } else {
-                if (t instanceof RuntimeException) {
-                    throw (RuntimeException) t;
-                } else {
-                    throw new RuntimeException(t);
-                }
+                throw new RuntimeException(t);
             }
         } finally {
             if (compiler.isObserved()) {
