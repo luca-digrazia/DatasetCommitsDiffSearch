@@ -25,44 +25,48 @@
 package com.oracle.truffle.api.utilities;
 
 import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.nodes.*;
 
 /**
- * A {@link CompilationFinal} value combined with an {@link Assumption} to notify when it changes.
- * Note that you should be careful that modifications to this value do not cause deoptimization
- * loops. This could be by using a value that is monotonic.
+ * An assumption that combines two other assumptions. A check on this assumption checks both of the
+ * child assumptions.
  */
-public class AssumedValue<T> {
+public class UnionAssumption implements Assumption {
 
-    @CompilationFinal private T value;
-    private final CyclicAssumption assumption;
+    private final String name;
+    private final Assumption first;
+    private final Assumption second;
 
-    public AssumedValue(String name, T initialValue) {
-        assumption = new CyclicAssumption(name);
-        value = initialValue;
+    public UnionAssumption(String name, Assumption first, Assumption second) {
+        this.name = name;
+        this.first = first;
+        this.second = second;
     }
 
-    /**
-     * Get the current value, updating it if it has been {@link #set}. The compiler may be able to
-     * make this method return a constant value, but still accommodate mutation.
-     */
-    public T get() {
-        try {
-            assumption.getAssumption().check();
-        } catch (InvalidAssumptionException e) {
-            // No need to rewrite anything - just pick up the new value
-        }
-
-        return value;
+    public UnionAssumption(Assumption first, Assumption second) {
+        this(null, first, second);
     }
 
-    /**
-     * Set a new value, which will be picked up the next time {@link #get} is called.
-     */
-    public void set(T newValue) {
-        value = newValue;
-        assumption.invalidate();
+    @Override
+    public void check() throws InvalidAssumptionException {
+        first.check();
+        second.check();
+    }
+
+    @Override
+    public void invalidate() {
+        first.invalidate();
+        second.invalidate();
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public boolean isValid() {
+        return first.isValid() && second.isValid();
     }
 
 }

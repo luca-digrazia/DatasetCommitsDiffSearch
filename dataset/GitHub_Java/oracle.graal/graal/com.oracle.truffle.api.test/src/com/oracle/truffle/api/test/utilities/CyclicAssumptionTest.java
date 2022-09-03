@@ -23,29 +23,40 @@
 package com.oracle.truffle.api.test.utilities;
 
 import static org.junit.Assert.*;
+
 import org.junit.*;
 
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.utilities.*;
 
-public class AlwaysValidAssumptionTest {
-
-    @Test
-    public void testCheck() throws InvalidAssumptionException {
-        final AlwaysValidAssumption assumption = new AlwaysValidAssumption();
-        assumption.check();
-    }
+public class CyclicAssumptionTest {
 
     @Test
     public void testIsValid() {
-        final AlwaysValidAssumption assumption = new AlwaysValidAssumption();
-        assertTrue(assumption.isValid());
+        final CyclicAssumption assumption = new CyclicAssumption("cyclic-assumption");
+        assertTrue(assumption.getAssumption().isValid());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
-    public void testCannotInvalidate() {
-        final AlwaysValidAssumption assumption = new AlwaysValidAssumption();
-        assumption.invalidate();
+    @Test
+    public void testInvalidate() {
+        final CyclicAssumption cyclicAssumption = new CyclicAssumption("cyclic-assumption");
+
+        final Assumption firstAssumption = cyclicAssumption.getAssumption();
+        assertEquals("cyclic-assumption", firstAssumption.getName());
+        assertTrue(firstAssumption.isValid());
+
+        cyclicAssumption.invalidate();
+
+        assertFalse(firstAssumption.isValid());
+
+        final Assumption secondAssumption = cyclicAssumption.getAssumption();
+        assertEquals("cyclic-assumption", secondAssumption.getName());
+        assertTrue(secondAssumption.isValid());
+
+        cyclicAssumption.invalidate();
+
+        assertFalse(firstAssumption.isValid());
+        assertFalse(secondAssumption.isValid());
     }
 
 }
