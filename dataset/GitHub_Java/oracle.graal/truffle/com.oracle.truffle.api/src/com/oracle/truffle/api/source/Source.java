@@ -32,11 +32,6 @@ import java.nio.charset.*;
 import java.util.*;
 
 import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.TruffleLanguage.Registration;
-import java.nio.file.Files;
-import java.nio.file.spi.FileTypeDetector;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * Representation of a guest language source code unit and its contents. Sources originate in
@@ -92,7 +87,6 @@ import java.util.logging.Logger;
  * <p>
  */
 public abstract class Source {
-    private static final Logger LOG = Logger.getLogger(Source.class.getName());
 
     // TODO (mlvdv) consider canonicalizing and reusing SourceSection instances
     // TOOD (mlvdv) connect SourceSections into a spatial tree for fast geometric lookup
@@ -380,8 +374,7 @@ public abstract class Source {
     private Source() {
     }
 
-    private String mimeType;
-    private TextMap textMap;
+    private TextMap textMap = null;
 
     abstract void reset();
 
@@ -409,8 +402,6 @@ public abstract class Source {
 
     /**
      * The URL if the source is retrieved via URL.
-     * 
-     * @return URL or <code>null</code>
      */
     public abstract URL getURL();
 
@@ -641,50 +632,7 @@ public abstract class Source {
         return TextMap.fromString(code);
     }
 
-    /**
-     * Associates the source with specified MIME type. The mime type may be used to select the right
-     * {@link Registration Truffle language} to use to execute the returned source. The value of
-     * MIME type can be obtained via {@link #getMimeType()} method.
-     *
-     * @param mime mime type to use
-     * @return new (identical) source, just associated {@link #getMimeType()}
-     */
-    public final Source withMimeType(String mime) {
-        try {
-            Source another = (Source) clone();
-            another.mimeType = mime;
-            return another;
-        } catch (CloneNotSupportedException ex) {
-            throw new IllegalStateException(ex);
-        }
-    }
-
-    /**
-     * MIME type that is associated with this source. By default file extensions known to the system
-     * are used to determine the MIME type (via registered {@link FileTypeDetector} classes), yet
-     * one can directly {@link #withMimeType(java.lang.String) provide a MIME type} to each source.
-     *
-     * @return MIME type of this source or <code>null</code>, if unknown
-     */
-    public String getMimeType() {
-        if (mimeType == null) {
-            mimeType = findMimeType();
-        }
-        return mimeType;
-    }
-
-    String findMimeType() {
-        return null;
-    }
-
-    final boolean equalMime(Source other) {
-        if (mimeType == null) {
-            return other.mimeType == null;
-        }
-        return mimeType.equals(other.mimeType);
-    }
-
-    private static final class LiteralSource extends Source implements Cloneable {
+    private static final class LiteralSource extends Source {
 
         private final String description;
         private final String code;
@@ -743,14 +691,14 @@ public abstract class Source {
             }
             if (obj instanceof LiteralSource) {
                 LiteralSource other = (LiteralSource) obj;
-                return description.equals(other.description) && code.equals(other.code) && equalMime(other);
+                return description.equals(other.description) && code.equals(other.code);
             }
             return false;
         }
     }
 
-    private static final class AppendableLiteralSource extends Source implements Cloneable {
-        private final String description;
+    private static final class AppendableLiteralSource extends Source {
+        private String description;
         final List<CharSequence> codeList = new ArrayList<>();
 
         public AppendableLiteralSource(String description) {
@@ -808,7 +756,7 @@ public abstract class Source {
 
     }
 
-    private static final class FileSource extends Source implements Cloneable {
+    private static final class FileSource extends Source {
 
         private final File file;
         private final String name; // Name used originally to describe the source
@@ -888,29 +836,13 @@ public abstract class Source {
         }
 
         @Override
-        String findMimeType() {
-            if (file.getName().endsWith(".c")) {
-                return "text/x-c";
-            } else if (file.getName().endsWith(".R") || file.getName().endsWith(".r")) {
-                return "application/x-r";
-            } else {
-                try {
-                    return Files.probeContentType(file.toPath());
-                } catch (IOException ex) {
-                    LOG.log(Level.SEVERE, null, ex);
-                }
-            }
-            return null;
-        }
-
-        @Override
         public boolean equals(Object obj) {
             if (this == obj) {
                 return true;
             }
             if (obj instanceof FileSource) {
                 FileSource other = (FileSource) obj;
-                return path.equals(other.path) && equalMime(other);
+                return path.equals(other.path);
             }
             return false;
         }
@@ -922,7 +854,7 @@ public abstract class Source {
     }
 
     // TODO (mlvdv) if we keep this, hoist a superclass in common with FileSource.
-    private static final class ClientManagedFileSource extends Source implements Cloneable {
+    private static final class ClientManagedFileSource extends Source {
 
         private final File file;
         private final String name; // Name used originally to describe the source
@@ -976,22 +908,6 @@ public abstract class Source {
         }
 
         @Override
-        String findMimeType() {
-            if (file.getName().endsWith(".c")) {
-                return "text/x-c";
-            } else if (file.getName().endsWith(".R") || file.getName().endsWith(".r")) {
-                return "application/x-r";
-            } else {
-                try {
-                    return Files.probeContentType(file.toPath());
-                } catch (IOException ex) {
-                    LOG.log(Level.SEVERE, null, ex);
-                }
-            }
-            return null;
-        }
-
-        @Override
         public int hashCode() {
             return path.hashCode();
         }
@@ -1003,7 +919,7 @@ public abstract class Source {
             }
             if (obj instanceof ClientManagedFileSource) {
                 ClientManagedFileSource other = (ClientManagedFileSource) obj;
-                return path.equals(other.path) && equalMime(other);
+                return path.equals(other.path);
             }
             return false;
         }
@@ -1014,7 +930,7 @@ public abstract class Source {
         }
     }
 
-    private static final class URLSource extends Source implements Cloneable {
+    private static final class URLSource extends Source {
 
         private static final Map<URL, WeakReference<URLSource>> urlToSource = new HashMap<>();
 
@@ -1030,16 +946,12 @@ public abstract class Source {
 
         private final URL url;
         private final String name;
-        private String code;  // A cache of the source contents
+        private String code = null;  // A cache of the source contents
 
         public URLSource(URL url, String name) throws IOException {
             this.url = url;
             this.name = name;
-            URLConnection c = url.openConnection();
-            if (super.mimeType == null) {
-                super.mimeType = c.getContentType();
-            }
-            code = read(new InputStreamReader(c.getInputStream()));
+            code = read(new InputStreamReader(url.openStream()));
         }
 
         @Override
@@ -1077,7 +989,7 @@ public abstract class Source {
         }
     }
 
-    private static final class SubSource extends Source implements Cloneable {
+    private static final class SubSource extends Source {
         private final Source base;
         private final int baseIndex;
         private final int subLength;
@@ -1132,7 +1044,7 @@ public abstract class Source {
         }
     }
 
-    private static final class BytesSource extends Source implements Cloneable {
+    private static final class BytesSource extends Source {
 
         private final String name;
         private final byte[] bytes;
