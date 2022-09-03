@@ -368,13 +368,13 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
                 return lookupType(cpi, opcode);
             case String:
                 Object string = runtime().getCompilerToVM().resolvePossiblyCachedConstantInPool(metaspaceConstantPool, cpi);
-                return HotSpotObjectConstant.forObject(string);
+                return Constant.forObject(string);
             case MethodHandle:
             case MethodHandleInError:
             case MethodType:
             case MethodTypeInError:
                 Object obj = runtime().getCompilerToVM().resolveConstantInPool(metaspaceConstantPool, cpi);
-                return HotSpotObjectConstant.forObject(obj);
+                return Constant.forObject(obj);
             default:
                 throw GraalInternalError.shouldNotReachHere("unknown constant pool tag " + tag);
         }
@@ -394,15 +394,10 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
     }
 
     @Override
-    public Constant lookupAppendix(int cpi, int opcode) {
+    public Object lookupAppendix(int cpi, int opcode) {
         assert Bytecodes.isInvoke(opcode);
         final int index = toConstantPoolIndex(cpi, opcode);
-        Object result = runtime().getCompilerToVM().lookupAppendixInPool(metaspaceConstantPool, index);
-        if (result == null) {
-            return null;
-        } else {
-            return HotSpotObjectConstant.forObject(result);
-        }
+        return runtime().getCompilerToVM().lookupAppendixInPool(metaspaceConstantPool, index);
     }
 
     /**
